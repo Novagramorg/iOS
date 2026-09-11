@@ -236,7 +236,7 @@ struct ProxyServerSettingsControllerState: Equatable {
             case .web:
                 // Deliberately not MTProxySecret.parse: that accepts `ee` and domain
                 // secret forms the WEB transport cannot carry.
-                if canonicalWebProxyHost(self.host) == nil || parseWebProxySecret(self.secret) == nil {
+                if canonicalWebProxyAddress(self.host) == nil || parseWebProxySecret(self.secret) == nil {
                     return false
                 }
         }
@@ -287,7 +287,7 @@ func proxyServerSettings(with state: ProxyServerSettingsControllerState) -> Prox
         return nil
     }
     if case .web = state.mode {
-        return makeWebProxySettings(host: state.host, secret: state.secret)
+        return makeWebProxySettings(address: state.host, secret: state.secret)
     }
     guard let port = Int32(state.port) else {
         return nil
@@ -312,6 +312,7 @@ public func proxyServerSettingsController(context: AccountContext, currentSettin
 
 func proxyServerSettingsController(sharedContext: SharedAccountContext, context: AccountContext? = nil, presentationData: PresentationData, updatedPresentationData: Signal<PresentationData, NoError>, accountManager: AccountManager<TelegramAccountManagerTypes>, network: Network, currentSettings: ProxyServerSettings?) -> ViewController {
     var currentMode: ProxyServerSettingsControllerMode = .socks5
+    var currentAddress: String?
     var currentUsername: String?
     var currentPassword: String?
     var currentSecret: String?
@@ -325,7 +326,10 @@ func proxyServerSettingsController(sharedContext: SharedAccountContext, context:
             case let .mtp(secret):
                 currentSecret = hexString(secret)
                 currentMode = .mtp
-            case let .web(secret):
+            case let .web(secret, _):
+                // The editor's server field holds the whole `host/base-path` address, so the
+                // base path survives a round trip through it.
+                currentAddress = currentSettings.webProxyAddress
                 currentSecret = webProxySecretString(secret)
                 currentMode = .web
         }
@@ -342,7 +346,7 @@ func proxyServerSettingsController(sharedContext: SharedAccountContext, context:
         }
     }
 
-    let initialState = ProxyServerSettingsControllerState(mode: currentMode, host: currentSettings?.host ?? "", port: (currentSettings?.port).flatMap { "\($0)" } ?? "", username: currentUsername ?? "", password: currentPassword ?? "", secret: currentSecret ?? "")
+    let initialState = ProxyServerSettingsControllerState(mode: currentMode, host: currentAddress ?? currentSettings?.host ?? "", port: (currentSettings?.port).flatMap { "\($0)" } ?? "", username: currentUsername ?? "", password: currentPassword ?? "", secret: currentSecret ?? "")
     let stateValue = Atomic(value: initialState)
     let statePromise = ValuePromise(initialState, ignoreRepeated: true)
     let updateState: ((ProxyServerSettingsControllerState) -> ProxyServerSettingsControllerState) -> Void = { f in
@@ -372,8 +376,9 @@ func proxyServerSettingsController(sharedContext: SharedAccountContext, context:
                     case let .mtp(secret):
                         state.mode = .mtp
                         state.secret = hexString(secret)
-                    case let .web(secret):
+                    case let .web(secret, _):
                         state.mode = .web
+                        state.host = pasteboardSettings.webProxyAddress ?? pasteboardSettings.host
                         state.secret = webProxySecretString(secret)
                 }
                 return state

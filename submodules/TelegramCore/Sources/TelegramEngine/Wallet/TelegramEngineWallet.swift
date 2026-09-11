@@ -20,8 +20,32 @@ public extension TelegramEngine {
             return _internal_getWalletGaslessInfo(account: self.account)
         }
 
-        public func sendTransfer(dataNormal: Data, dataGasless: Data? = nil) -> Signal<WalletSentTransfer, WalletSendTransferError> {
-            return _internal_sendWalletTransfer(account: self.account, dataNormal: dataNormal, dataGasless: dataGasless)
+        public func sendTransfer(dataNormal: Data, dataGasless: Data? = nil, pendingMessage: WalletPendingTransferMessageReference? = nil) -> Signal<WalletSentTransfer, WalletSendTransferError> {
+            return _internal_sendWalletTransfer(account: self.account, dataNormal: dataNormal, dataGasless: dataGasless, pendingMessage: pendingMessage)
+        }
+
+        public func createPendingTransferMessage(peerId: EnginePeer.Id, operationId: String, amount: Int64, address: String, comment: String?, commentEncrypted: Bool, timestamp: Int32) -> Signal<WalletPendingTransferMessageReference?, NoError> {
+            return _internal_createPendingWalletTransferMessage(account: self.account, peerId: peerId, operationId: operationId, amount: amount, address: address, comment: comment, commentEncrypted: commentEncrypted, timestamp: timestamp)
+        }
+
+        public func acceptPendingTransferMessage(_ reference: WalletPendingTransferMessageReference, transfer: WalletSentTransfer, receivedAt: Int32) -> Signal<Void, NoError> {
+            return _internal_acceptPendingWalletTransferMessage(postbox: self.account.postbox, reference: reference, transfer: transfer, receivedAt: receivedAt)
+        }
+
+        public func removePendingTransferMessage(_ reference: WalletPendingTransferMessageReference) -> Signal<Void, NoError> {
+            return _internal_removePendingWalletTransferMessage(postbox: self.account.postbox, reference: reference)
+        }
+
+        public func resolvePendingTransferMessage(_ reference: WalletPendingTransferMessageReference, chainTraceId: String) -> Signal<Void, NoError> {
+            return _internal_resolvePendingWalletTransferMessage(postbox: self.account.postbox, reference: reference, chainTraceId: chainTraceId)
+        }
+
+        public func resolvePendingTransferMessage(_ reference: WalletPendingTransferMessageReference, transactionId: String, failed: Bool = false) -> Signal<Void, NoError> {
+            return _internal_resolvePendingWalletTransferMessage(postbox: self.account.postbox, reference: reference, transactionId: transactionId, failed: failed)
+        }
+
+        public func hasUnresolvedPendingTransferMessage(_ reference: WalletPendingTransferMessageReference) -> Signal<Bool, NoError> {
+            return _internal_hasUnresolvedPendingWalletTransferMessage(postbox: self.account.postbox, reference: reference)
         }
 
         public func getTransactionsByIDs(ids: [String]) -> Signal<WalletTransactions, WalletGetTransactionsError> {

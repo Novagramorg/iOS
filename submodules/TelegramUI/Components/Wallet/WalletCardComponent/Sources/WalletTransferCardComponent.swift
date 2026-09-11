@@ -16,6 +16,8 @@ public final class WalletTransferCardComponent: Component {
     public let fiatCurrency: WalletContext.FiatCurrency
     public let fiatRate: WalletContext.FiatRate?
     public let dateTimeFormat: PresentationDateTimeFormat
+    public let amountText: String?
+    public let recipientTitle: String?
     public let infoPressed: () -> Void
 
     public init(
@@ -24,6 +26,8 @@ public final class WalletTransferCardComponent: Component {
         fiatCurrency: WalletContext.FiatCurrency,
         fiatRate: WalletContext.FiatRate?,
         dateTimeFormat: PresentationDateTimeFormat,
+        amountText: String? = nil,
+        recipientTitle: String? = nil,
         infoPressed: @escaping () -> Void = {}
     ) {
         self.amount = amount
@@ -31,6 +35,8 @@ public final class WalletTransferCardComponent: Component {
         self.fiatCurrency = fiatCurrency
         self.fiatRate = fiatRate
         self.dateTimeFormat = dateTimeFormat
+        self.amountText = amountText
+        self.recipientTitle = recipientTitle
         self.infoPressed = infoPressed
     }
 
@@ -40,6 +46,8 @@ public final class WalletTransferCardComponent: Component {
             && lhs.fiatCurrency == rhs.fiatCurrency
             && lhs.fiatRate == rhs.fiatRate
             && lhs.dateTimeFormat == rhs.dateTimeFormat
+            && lhs.amountText == rhs.amountText
+            && lhs.recipientTitle == rhs.recipientTitle
     }
 
     public final class View: UIView {
@@ -83,7 +91,7 @@ public final class WalletTransferCardComponent: Component {
 
             self.layer.cornerRadius = 20.0 * width / 336.0
 
-            let formattedAmount = formatTonAmountText(
+            let formattedAmount = component.amountText ?? formatTonAmountText(
                 component.amount,
                 dateTimeFormat: component.dateTimeFormat,
                 maxDecimalPositions: 9
@@ -91,7 +99,8 @@ public final class WalletTransferCardComponent: Component {
 
             let amountIntegralText: String
             let amountFractionalText: String
-            if component.amount == 0 {
+            let isTextAmount = component.amountText?.unicodeScalars.contains(where: CharacterSet.letters.contains) == true
+            if isTextAmount || (component.amount == 0 && component.amountText == nil) {
                 amountIntegralText = formattedAmount
                 amountFractionalText = ""
             } else if let decimalRange = formattedAmount.range(of: component.dateTimeFormat.decimalSeparator) {
@@ -161,7 +170,7 @@ public final class WalletTransferCardComponent: Component {
                     ),
                     color: secondaryColor,
                     items: [
-                        AnimatedTextComponent.Item(id: "gramCurrency", content: .text("GRAM"))
+                        AnimatedTextComponent.Item(id: "gramCurrency", content: .text(isTextAmount ? "" : "GRAM"))
                     ],
                     noDelay: true
                 )),
@@ -223,7 +232,7 @@ public final class WalletTransferCardComponent: Component {
             }
 
             let secondaryText: String
-            if let fiatRate = component.fiatRate {
+            if let fiatRate = component.fiatRate, component.amountText == nil {
                 secondaryText = formatTonFiatValue(
                     component.amount,
                     divide: true,
@@ -270,7 +279,7 @@ public final class WalletTransferCardComponent: Component {
                 transition: transition,
                 component: AnyComponent(MultilineTextComponent(
                     text: .plain(NSAttributedString(
-                        string: formattedWalletTransferAddress(component.recipient),
+                        string: component.recipientTitle ?? formattedWalletTransferAddress(component.recipient),
                         font: Font.with(size: 13.0 * scale, design: .monospace, weight: .semibold),
                         textColor: .white
                     )),

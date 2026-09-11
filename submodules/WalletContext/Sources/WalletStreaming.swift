@@ -254,7 +254,8 @@ enum WalletStreamingParsedEvent: Sendable, Equatable {
     case transactionsChanged(
         traceId: String,
         finality: WalletStreamingFinality,
-        transactions: [WalletContext.Transaction]
+        transactions: [WalletContext.Transaction],
+        evidence: [WalletStreamingTransferEvidence] = []
     )
     case traceInvalidated(traceId: String)
 }
@@ -329,7 +330,7 @@ struct WalletStreamingRefreshTracker {
             self.finalizedBalance = balance
             self.remainingRetryCount = 2
             return true
-        case let .transactionsChanged(traceId, finality, _):
+        case let .transactionsChanged(traceId, finality, _, _):
             guard finality == .finalized, self.finalizedTraceIds.insert(traceId).inserted else { return false }
             self.invalidatedTraceIds.remove(traceId)
             self.remember(traceId)
@@ -415,6 +416,8 @@ enum WalletStreamingEventParser {
     }
 
     private struct StreamingMessage: Decodable {
+        struct Content: Decodable { let hash: String? }
+        let message_content: Content?
         let source: String?
         let destination: String?
         let value: String?
@@ -422,6 +425,15 @@ enum WalletStreamingEventParser {
     }
 
     private struct StreamingTransaction: Decodable {
+        struct Description: Decodable {
+            struct Phase: Decodable { let success: Bool? }
+            let aborted: Bool?
+            let compute_ph: Phase?
+            let action: Phase?
+        }
+        let emulated: Bool?
+        let description: Description?
+        let traceId: String?
         let account: String
         let hash: String
         let lt: String
@@ -435,6 +447,8 @@ enum WalletStreamingEventParser {
             case hash
             case lt
             case now
+            case emulated, description
+            case traceId = "trace_id"
             case totalFees = "total_fees"
             case inMessage = "in_msg"
             case outMessages = "out_msgs"
@@ -442,15 +456,7 @@ enum WalletStreamingEventParser {
     }
 
     private struct TransactionsChange: Decodable {
-        let finality: String
-        let traceExternalHashNorm: String
         let transactions: [StreamingTransaction]
-
-        enum CodingKeys: String, CodingKey {
-            case finality
-            case traceExternalHashNorm = "trace_external_hash_norm"
-            case transactions
-        }
     }
 
     private struct TransactionsHeader: Decodable {
@@ -477,12 +483,13 @@ enum WalletStreamingEventParser {
         }
     }
 
-    static func parse(_ data: Data, expectedRawAddress: String) -> WalletStreamingParsedEvent? {
+    static func parse(_ data: Data, expectedRawAddress: String, log: ((String) -> Void)? = nil) -> WalletStreamingParsedEvent? {
         guard data.count <= walletStreamingMaximumFrameBytes else {
+            log?("reason=frame_too_large bytes=\(data.count)")
             return nil
         }
         let decoder = JSONDecoder()
-        guard let envelope = try? decoder.decode(Envelope.self, from: data) else {
+        guard let envelope = self.decode(Envelope.self, from: data, decoder: decoder, log: log) else {
             return nil
         }
         if envelope.status == "subscribed" {
@@ -494,41 +501,107 @@ enum WalletStreamingEventParser {
         let expected = expectedRawAddress.lowercased()
         switch envelope.type {
         case "account_state_change":
-            guard let value = try? decoder.decode(AccountStateChange.self, from: data) else {
+            guard let value = self.decode(AccountStateChange.self, from: data, decoder: decoder, log: log) else {
                 return nil
             }
-            guard value.account.lowercased() == expected,
-                  let finality = self.finality(value.finality),
-                  finality != .pending,
-                  let balance = self.unsignedInt64(value.state.balance) else {
+            guard value.account.lowercased() == expected else {
+                log?("reason=account_mismatch account=\(value.account) expected=\(expected)")
+                return nil
+            }
+            guard let finality = self.finality(value.finality), finality != .pending else {
+                log?("reason=unsupported_account_finality finality=\(value.finality)")
+                return nil
+            }
+            guard let balance = self.unsignedInt64(value.state.balance) else {
+                log?("reason=invalid_balance")
                 return nil
             }
             return .accountStateChanged(balance: balance, finality: finality)
         case "transactions":
-            guard let header = try? decoder.decode(TransactionsHeader.self, from: data),
-                  !header.traceExternalHashNorm.isEmpty,
-                  let finality = self.finality(header.finality),
-                  header.transactions.contains(where: { $0.account.lowercased() == expected }) else {
+            guard let header = self.decode(TransactionsHeader.self, from: data, decoder: decoder, log: log) else {
+                return nil
+            }
+            guard !header.traceExternalHashNorm.isEmpty else {
+                log?("reason=missing_trace_hash")
+                return nil
+            }
+            guard let finality = self.finality(header.finality) else {
+                log?("reason=unsupported_transaction_finality finality=\(header.finality)")
+                return nil
+            }
+            guard header.transactions.contains(where: { $0.account.lowercased() == expected }) else {
+                log?("reason=no_matching_account expected=\(expected) trace_id=\(header.traceExternalHashNorm) transaction_count=\(header.transactions.count)")
                 return nil
             }
             // Finalized changes still need authoritative history when their payload
             // cannot be represented by the lightweight streaming transaction model.
-            let value = try? decoder.decode(TransactionsChange.self, from: data)
+            let value = self.decode(TransactionsChange.self, from: data, decoder: decoder, log: log)
             let matchingTransactions = value?.transactions.filter { $0.account.lowercased() == expected } ?? []
+            var transactions: [WalletContext.Transaction] = []
+            var evidence: [WalletStreamingTransferEvidence] = []
+            for value in matchingTransactions {
+                guard let transaction = self.transaction(value, walletRawAddress: expected, finality: finality, log: log) else {
+                    continue
+                }
+                transactions.append(transaction)
+                guard transaction.direction == .outgoing, transaction.status != .failed,
+                      let bodyHash = value.inMessage?.message_content?.hash,
+                      value.inMessage?.destination?.lowercased() == expected,
+                      value.inMessage?.bounced != true,
+                      value.description?.aborted == false,
+                      value.description?.compute_ph?.success == true,
+                      value.description?.action?.success == true,
+                      value.emulated == false || finality == .pending else { continue }
+                evidence.append(WalletStreamingTransferEvidence(
+                    walletAddress: value.account, bodyHash: bodyHash,
+                    chainTraceId: value.traceId, transaction: transaction
+                ))
+            }
             return .transactionsChanged(
                 traceId: header.traceExternalHashNorm,
                 finality: finality,
-                transactions: matchingTransactions.compactMap {
-                    self.transaction($0, walletRawAddress: expected, finality: finality)
-                }
+                transactions: transactions,
+                evidence: evidence
             )
         case "trace_invalidated":
-            guard let value = try? decoder.decode(TraceInvalidated.self, from: data),
-                  !value.traceExternalHashNorm.isEmpty else {
+            guard let value = self.decode(TraceInvalidated.self, from: data, decoder: decoder, log: log) else {
+                return nil
+            }
+            guard !value.traceExternalHashNorm.isEmpty else {
+                log?("reason=missing_trace_hash")
                 return nil
             }
             return .traceInvalidated(traceId: value.traceExternalHashNorm)
         default:
+            log?("reason=unsupported_envelope type=\(envelope.type ?? "nil") status=\(envelope.status ?? "nil")")
+            return nil
+        }
+    }
+
+    private static func decode<T: Decodable>(_ type: T.Type, from data: Data, decoder: JSONDecoder, log: ((String) -> Void)?) -> T? {
+        do {
+            return try decoder.decode(type, from: data)
+        } catch {
+            let reason: String
+            let path: [CodingKey]
+            switch error {
+            case let DecodingError.keyNotFound(key, context):
+                reason = "missing_key"
+                path = context.codingPath + [key]
+            case let DecodingError.valueNotFound(_, context):
+                reason = "missing_value"
+                path = context.codingPath
+            case let DecodingError.typeMismatch(_, context):
+                reason = "type_mismatch"
+                path = context.codingPath
+            case let DecodingError.dataCorrupted(context):
+                reason = "invalid_data"
+                path = context.codingPath
+            default:
+                reason = "unknown"
+                path = []
+            }
+            log?("reason=decode_failed model=\(type) detail=\(reason) path=\(path.map(\.stringValue).joined(separator: "."))")
             return nil
         }
     }
@@ -552,13 +625,15 @@ enum WalletStreamingEventParser {
     private static func transaction(
         _ value: StreamingTransaction,
         walletRawAddress: String,
-        finality: WalletStreamingFinality
+        finality: WalletStreamingFinality,
+        log: ((String) -> Void)?
     ) -> WalletContext.Transaction? {
         guard !value.hash.isEmpty,
               !value.lt.isEmpty,
               value.lt.allSatisfy(\.isNumber),
               let timestamp = Int32(exactly: value.now),
               let fee = self.unsignedInt64(value.totalFees) else {
+            log?("reason=invalid_transaction_metadata transaction_hash=\(value.hash) lt=\(value.lt)")
             return nil
         }
 
@@ -600,14 +675,21 @@ enum WalletStreamingEventParser {
                 bounced: message.bounced == true
             ))
         }
-        guard candidates.count == 1, let candidate = candidates.first else {
+        // An internal signed request can fund gas in in_msg and send TON in
+        // out_msgs. Present the single outgoing transfer, not the gas funding.
+        let outgoing = candidates.filter { $0.direction == .outgoing }
+        let supported = outgoing.isEmpty ? candidates : outgoing
+        guard supported.count == 1, let candidate = supported.first,
+              value.outMessages.count <= 1 else {
+            log?("reason=unsupported_transfer_count transaction_hash=\(value.hash) incoming=\(candidates.filter { $0.direction == .incoming }.count) outgoing=\(candidates.filter { $0.direction == .outgoing }.count)")
             return nil
         }
 
         let status: WalletContext.Transaction.Status
-        if candidate.bounced {
+        if candidate.bounced || value.description?.aborted == true
+            || value.description?.compute_ph?.success == false || value.description?.action?.success == false {
             status = .failed
-        } else if finality == .pending {
+        } else if finality == .pending || value.emulated == true {
             status = .pending
         } else {
             status = .completed
@@ -636,27 +718,6 @@ enum WalletStreamingEventParser {
             return false
         }
         return envelope.error?.isEmpty == false
-    }
-
-    static func diagnosticLabel(_ data: Data) -> String {
-        guard data.count <= walletStreamingMaximumFrameBytes,
-              let envelope = try? JSONDecoder().decode(Envelope.self, from: data) else {
-            return "malformed"
-        }
-        if let status = envelope.status {
-            switch status {
-            case "subscribed": return "subscribed"
-            case "pong": return "pong"
-            default: return "other_status"
-            }
-        }
-        switch envelope.type {
-        case "account_state_change": return "account_state_change_unmatched"
-        case "transactions": return "transactions_unmatched"
-        case "trace_invalidated": return "trace_invalidated_invalid"
-        case .some: return "unknown_type"
-        case nil: return "missing_type"
-        }
     }
 }
 
@@ -689,7 +750,7 @@ struct WalletStreamingPresentationOverlay {
             self.revision &+= 1
             self.balance = BalanceValue(revision: self.revision, value: balance, updatedAt: updatedAt)
             return true
-        case let .transactionsChanged(traceId, finality, transactions):
+        case let .transactionsChanged(traceId, finality, transactions, _):
             if let current = self.traces[traceId], current.finality.rawValue > finality.rawValue {
                 return false
             }
@@ -1082,12 +1143,14 @@ actor WalletToncenterStreamingClient {
         self.transport = transport
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
+        let subscriptionId = UUID().uuidString.lowercased()
         let subscription = try encoder.encode(WalletStreamingSubscribeRequest(
             addresses: [rawAddress],
-            id: UUID().uuidString.lowercased()
+            id: subscriptionId
         ))
         let ping = try encoder.encode(WalletStreamingPingRequest())
         try await transport.connect(subscription: subscription)
+        self.logger.log("event=wallet_stream_subscription_sent subscription_id=\(subscriptionId) account=\(rawAddress)")
 
         let pingInterval = self.configuration.pingInterval
         let inactivityTimeout = self.configuration.inactivityTimeout
@@ -1142,9 +1205,9 @@ actor WalletToncenterStreamingClient {
                 self.logger.log("event=wallet_stream_server_rejected")
                 throw WalletStreamingError.invalidResponse
             }
-            guard let event = WalletStreamingEventParser.parse(data, expectedRawAddress: rawAddress) else {
-                let label = WalletStreamingEventParser.diagnosticLabel(data)
-                self.logger.log("event=wallet_stream_event_ignored kind=\(label)")
+            guard let event = WalletStreamingEventParser.parse(data, expectedRawAddress: rawAddress, log: {
+                logger.log("event=wallet_stream_parse \($0)")
+            }) else {
                 continue
             }
             if case .subscribed = event {
@@ -1165,6 +1228,130 @@ actor WalletToncenterStreamingClient {
         return nowNanoseconds >= lastConnectionActivityNanoseconds
             && nowNanoseconds - lastConnectionActivityNanoseconds >= timeoutNanoseconds
     }
+}
+
+struct WalletStreamingTransferEvidence: Equatable, Sendable {
+    let walletAddress: String
+    let bodyHash: String
+    let chainTraceId: String?
+    let transaction: WalletContext.Transaction
+}
+
+private func walletStreamingHash(_ hash: String?) -> Data? {
+    guard let hash, hash.utf8.count == 44,
+          let data = Data(base64Encoded: hash), data.count == 32 else { return nil }
+    return data
+}
+
+func walletHistoryTransactionForPending(_ pending: WalletContext.PendingTransfer, transactions: [WalletContext.Transaction]) -> WalletContext.Transaction? {
+    let matches = transactions.filter {
+        ($0.presentationId == "pending:\(pending.id)" || (pending.transactionHash != nil && $0.transactionHash == pending.transactionHash))
+            && !$0.id.isEmpty
+            && ($0.status == .failed || ($0.status == .completed && $0.transactionHash != nil))
+            && $0.direction == .outgoing
+            && $0.peer.address.map { walletEngineAddressesEqual($0, pending.recipient) } == true
+    }
+    return matches.count == 1 ? matches.first : nil
+}
+
+func walletPendingTransfersMatchingBodies(
+    _ pending: [WalletContext.PendingTransfer],
+    walletAddress: String,
+    traceId: String,
+    finality: WalletStreamingFinality,
+    evidence: [WalletStreamingTransferEvidence]
+) -> [WalletContext.PendingTransfer] {
+    guard walletStreamingHash(traceId) != nil else {
+        return pending
+    }
+    func matches(_ pending: WalletContext.PendingTransfer, _ evidence: WalletStreamingTransferEvidence) -> Bool {
+        guard pending.collectibleAddress == nil,
+              let data = pending.streamingData,
+              let bodyHash = walletStreamingHash(evidence.bodyHash),
+              walletEngineAddressesEqual(walletAddress, evidence.walletAddress),
+              evidence.transaction.direction == .outgoing,
+              evidence.transaction.status != .failed,
+              let recipient = evidence.transaction.peer.address,
+              walletEngineAddressesEqual(pending.recipient, recipient) else { return false }
+        return [data.normalBodyHash, data.gaslessBodyHash].contains { walletStreamingHash($0) == bodyHash }
+    }
+    return pending.map { transfer in
+        let candidates = evidence.filter { matches(transfer, $0) }
+        guard candidates.count == 1, let match = candidates.first,
+              pending.filter({ matches($0, match) }).count == 1 else {
+            return transfer
+        }
+        if transfer.status == .confirmed,
+           finality == .pending || transfer.transactionHash != match.transaction.transactionHash {
+            return transfer
+        }
+        var streamingData = transfer.streamingData
+        streamingData?.traceId = traceId
+        var updated = transfer
+        updated.streamingData = streamingData
+        guard finality != .pending, match.transaction.status == .completed,
+              walletStreamingHash(match.transaction.transactionHash) != nil else {
+            return updated
+        }
+        if let chainTraceId = walletStreamingHash(match.chainTraceId) {
+            if let previous = streamingData?.chainTraceId, walletStreamingHash(previous) != chainTraceId {
+                return transfer
+            }
+            streamingData?.chainTraceId = chainTraceId.base64EncodedString()
+        }
+        return WalletContext.PendingTransfer(
+            id: transfer.id, recipient: transfer.recipient, amount: transfer.amount,
+            comment: transfer.comment, commentEncrypted: transfer.commentEncrypted,
+            collectibleAddress: transfer.collectibleAddress, normalizedHash: transfer.normalizedHash,
+            sentTransfer: transfer.sentTransfer, pendingMessage: transfer.pendingMessage,
+            streamingData: streamingData, fee: transfer.fee,
+            transactionHash: match.transaction.transactionHash, transactionLt: match.transaction.logicalTime,
+            uiExpiresAt: transfer.uiExpiresAt, createdAt: transfer.createdAt, status: .confirmed
+        )
+    }
+}
+
+func walletPendingTransfersReconciledWithHistory(
+    _ pendingTransfers: [WalletContext.PendingTransfer],
+    transactions: [WalletContext.Transaction],
+    streamingTransactionHashes: (String) -> [String]?
+) -> WalletContextImpl.PendingTransferHistoryReconciliation {
+    let authoritativeHashes = Set(transactions.compactMap(\.transactionHash))
+    guard !authoritativeHashes.isEmpty else {
+        return WalletContextImpl.PendingTransferHistoryReconciliation(
+            pendingTransfers: pendingTransfers,
+            resolvedStreamingTraceIds: [],
+            removedPendingCount: 0
+        )
+    }
+    var remaining: [WalletContext.PendingTransfer] = []
+    remaining.reserveCapacity(pendingTransfers.count)
+    var resolvedStreamingTraceIds = Set<String>()
+    for pending in pendingTransfers {
+        if let transactionHash = pending.transactionHash,
+           authoritativeHashes.contains(transactionHash) {
+            if let traceId = pending.streamingTraceId {
+                resolvedStreamingTraceIds.insert(traceId)
+            }
+            continue
+        }
+        guard let traceId = pending.streamingTraceId,
+              pending.streamingData == nil || pending.status == .confirmed,
+              let streamingHashes = streamingTransactionHashes(traceId) else {
+            remaining.append(pending)
+            continue
+        }
+        if streamingHashes.allSatisfy(authoritativeHashes.contains) {
+            resolvedStreamingTraceIds.insert(traceId)
+        } else {
+            remaining.append(pending)
+        }
+    }
+    return WalletContextImpl.PendingTransferHistoryReconciliation(
+        pendingTransfers: remaining,
+        resolvedStreamingTraceIds: resolvedStreamingTraceIds,
+        removedPendingCount: pendingTransfers.count - remaining.count
+    )
 }
 
 extension WalletContextImpl {
@@ -1256,24 +1443,29 @@ extension WalletContextImpl {
                 self.streamingConnectionState = .disconnected
             case .pong:
                 break
-            case let .accountStateChanged(_, finality):
+            case .accountStateChanged:
                 let changed = self.streamingPresentationOverlay.apply(
                     event,
                     updatedAt: currentWalletTimestamp()
                 )
                 if changed {
-                    self.logger.log("event=wallet_stream_overlay_applied kind=account_state_change finality=\(finality.diagnosticName) changed=1")
                     self.publishPresentationState()
                 }
                 if self.streamingRefreshTracker.requiresRefresh(event) {
                     self.scheduleStreamingRefresh(generation: generation, rawAddress: rawAddress)
                 }
-            case let .transactionsChanged(traceId, finality, transactions):
-                if self.streamingRefreshTracker.hasFinalizedTrace(traceId) {
-                    continue
-                }
+            case let .transactionsChanged(traceId, finality, transactions, evidence):
                 if finality == .pending,
                    self.expiredPendingStreamingTraceIds.contains(traceId) {
+                    continue
+                }
+                let pending = self.reconcileStreamingPendingTransfers(
+                    traceId: traceId, finality: finality, evidence: evidence, walletAddress: rawAddress
+                )
+                if self.streamingRefreshTracker.hasFinalizedTrace(traceId) {
+                    let changed = pending != self.currentState.pendingTransfers
+                        && self.streamingPresentationOverlay.apply(event, updatedAt: currentWalletTimestamp())
+                    self.applyStreamingPendingTransfers(pending, overlayChanged: changed)
                     continue
                 }
                 if finality != .pending {
@@ -1286,10 +1478,7 @@ extension WalletContextImpl {
                     .transactionsChanged(traceId: traceId, finality: finality, transactions: filteredTransactions),
                     updatedAt: currentWalletTimestamp()
                 )
-                if changed {
-                    self.logger.log("event=wallet_stream_overlay_applied kind=transactions finality=\(finality.diagnosticName) transaction_count=\(filteredTransactions.count) changed=1")
-                    self.publishPresentationState()
-                }
+                self.applyStreamingPendingTransfers(pending, overlayChanged: changed)
                 if self.streamingRefreshTracker.requiresRefresh(event) {
                     self.scheduleStreamingRefresh(generation: generation, rawAddress: rawAddress)
                 }
@@ -1302,7 +1491,6 @@ extension WalletContextImpl {
                     updatedAt: currentWalletTimestamp()
                 )
                 if changed {
-                    self.logger.log("event=wallet_stream_overlay_applied kind=trace_invalidated changed=1")
                     self.publishPresentationState()
                 }
                 if self.streamingRefreshTracker.requiresRefresh(event, knownTrace: knownTrace) {
@@ -1332,6 +1520,7 @@ extension WalletContextImpl {
         self.streamingRefreshTask?.cancel()
         self.streamingRefreshTask = nil
         self.streamingRefreshTaskId = nil
+        self.streamingRefreshScope = []
         self.streamingAddress = nil
         self.streamingGeneration = nil
         self.streamingConnectionState = .inactive
@@ -1343,22 +1532,24 @@ extension WalletContextImpl {
         }
     }
 
-    func retryStreamingSynchronizationIfNeeded() {
-        guard self.streamingRefreshTask == nil,
-              self.streamingConnectionState == .subscribed,
+    func retryStreamingSynchronizationIfNeeded(scope: WalletSynchronizationScope) {
+        guard self.streamingConnectionState == .subscribed,
               let generation = self.streamingGeneration,
-              let rawAddress = self.streamingAddress,
-              self.streamingRefreshTracker.takeRetry() else { return }
-        self.scheduleStreamingRefresh(generation: generation, rawAddress: rawAddress, delay: 3_000_000_000)
+              let rawAddress = self.streamingAddress else { return }
+        if self.streamingRefreshTask == nil {
+            guard self.streamingRefreshTracker.takeRetry() else { return }
+        }
+        self.scheduleStreamingRefresh(generation: generation, rawAddress: rawAddress, scope: scope, delay: 3_000_000_000)
     }
 
-    private func scheduleStreamingRefresh(generation: UInt64, rawAddress: String, delay: UInt64 = 1_000_000_000) {
-        guard self.streamingRefreshTask == nil,
-              self.activationGeneration == generation,
+    private func scheduleStreamingRefresh(generation: UInt64, rawAddress: String, scope: WalletSynchronizationScope = [.account, .transactions], delay: UInt64 = 1_000_000_000) {
+        guard self.activationGeneration == generation,
               self.streamingGeneration == generation,
               self.streamingAddress == rawAddress else {
             return
         }
+        self.streamingRefreshScope.formUnion(scope)
+        guard self.streamingRefreshTask == nil else { return }
         let taskId = UUID()
         self.streamingRefreshTaskId = taskId
         self.streamingRefreshTask = Task { [weak self] in
@@ -1376,6 +1567,7 @@ extension WalletContextImpl {
             if self.streamingRefreshTaskId == taskId {
                 self.streamingRefreshTask = nil
                 self.streamingRefreshTaskId = nil
+                self.streamingRefreshScope = []
             }
         }
         do {
@@ -1392,8 +1584,60 @@ extension WalletContextImpl {
               self.walletScreenCount > 0 || !self.currentState.pendingTransfers.isEmpty else {
             return
         }
+        let scope = self.streamingRefreshScope
         self.streamingRefreshTask = nil
         self.streamingRefreshTaskId = nil
-        self.requestSynchronization(scope: [.account, .transactions])
+        self.streamingRefreshScope = []
+        self.requestSynchronization(scope: scope)
+    }
+
+    func applyStreamingPendingTransfers(_ pending: [PendingTransfer], overlayChanged: Bool) {
+        let reconciliation = self.pendingTransfers(pending, reconcilingWith: self.currentState.transactions.items)
+        let removed = self.streamingPresentationOverlay.clearTransactions(
+            through: self.streamingPresentationOverlay.revision,
+            presentIn: self.currentState.transactions.items,
+            resolvedTraceIds: reconciliation.resolvedStreamingTraceIds
+        )
+        let previousState = self.currentState
+        self.replaceState(
+            phase: self.currentState.phase, balance: self.currentState.balance,
+            transactions: self.currentState.transactions, pendingTransfers: reconciliation.pendingTransfers,
+            activeOperation: self.currentState.activeOperation
+        )
+        if previousState == self.currentState && (overlayChanged || removed != 0) {
+            self.publishPresentationState()
+        }
+    }
+
+    func resolveStreamingPendingMessage(_ pending: PendingTransfer) {
+        guard pending.status == .confirmed,
+              let reference = pending.pendingMessage,
+              let chainTraceId = pending.streamingData?.chainTraceId else { return }
+        let _ = self.engine.wallet.resolvePendingTransferMessage(reference, chainTraceId: chainTraceId).start()
+    }
+
+    func reconcileStreamingPendingTransfers(traceId: String, finality: WalletStreamingFinality, evidence: [WalletStreamingTransferEvidence], walletAddress: String) -> [PendingTransfer] {
+        let activeIds = Set(self.currentState.pendingTransfers.map(\.id))
+        let awaitingChatTrace = self.outgoingTransactionPresentationIdentities.values.compactMap { identity -> PendingTransfer? in
+            let pending = identity.pendingTransfer
+            guard !activeIds.contains(pending.id), pending.status == .confirmed,
+                  pending.pendingMessage != nil, pending.streamingData?.chainTraceId == nil else { return nil }
+            return pending
+        }
+        let original = self.currentState.pendingTransfers + awaitingChatTrace
+        let updated = walletPendingTransfersMatchingBodies(
+            original, walletAddress: walletAddress,
+            traceId: traceId, finality: finality, evidence: evidence
+        )
+        for (previous, transfer) in zip(original, updated) where previous != transfer {
+            if let previousTrace = previous.streamingTraceId, previousTrace != transfer.streamingTraceId {
+                let expired = self.streamingPresentationOverlay.expirePendingTraces([previousTrace])
+                self.expiredPendingStreamingTraceIds.formUnion(expired.suppressedTraceIds)
+            }
+            self.logger.log("event=wallet_pending_body_matched operation_id=\(transfer.id) trace_id=\(traceId) finality=\(finality.diagnosticName) transaction_hash=\(transfer.transactionHash ?? "nil") chain_trace_id=\(transfer.streamingData?.chainTraceId ?? "nil")")
+            self.resolveStreamingPendingMessage(transfer)
+        }
+        self.rememberOutgoingTransactionPresentationIdentities(Array(updated.dropFirst(self.currentState.pendingTransfers.count)))
+        return Array(updated.prefix(self.currentState.pendingTransfers.count))
     }
 }

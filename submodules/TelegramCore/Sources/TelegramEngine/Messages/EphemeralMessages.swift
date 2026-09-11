@@ -253,11 +253,11 @@ private func outgoingEphemeralMessage(from updates: Api.Updates, prepared: Prepa
             let message = updateNewEphemeralMessageData.message
             if case let .ephemeralMessage(messageData) = message {
                 if prepared.isWelcomeTemplate {
-                    if (messageData.flags & (1 << 5)) != 0 && messageData.peerId?.peerId == prepared.peerId {
+                    if (messageData.flags & (1 << 5)) != 0 && message.peerId == prepared.peerId {
                         return message
                     }
                 } else {
-                    if (messageData.flags & (1 << 0)) != 0 && messageData.peerId?.peerId == prepared.peerId && messageData.fromId.peerId == accountPeerId && PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(messageData.receiverId)) == prepared.botPeerId {
+                    if (messageData.flags & (1 << 0)) != 0 && message.peerId == prepared.peerId && messageData.fromId.peerId == accountPeerId && PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(messageData.receiverId)) == prepared.botPeerId {
                         return message
                     }
                 }

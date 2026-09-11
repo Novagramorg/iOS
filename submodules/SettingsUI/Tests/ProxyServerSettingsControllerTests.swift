@@ -12,12 +12,12 @@ final class ProxyServerSettingsControllerTests: XCTestCase {
     func testModeDerivationCoversEveryConnection() {
         XCTAssertEqual(proxyServerSettingsControllerMode(for: .socks5(username: "u", password: "p")), .socks5)
         XCTAssertEqual(proxyServerSettingsControllerMode(for: .mtp(secret: Data(repeating: 1, count: 16))), .mtp)
-        XCTAssertEqual(proxyServerSettingsControllerMode(for: .web(secret: self.webSecret)), .web)
+        XCTAssertEqual(proxyServerSettingsControllerMode(for: .web(secret: self.webSecret, path: "")), .web)
     }
 
     /// Regression: a saved WEB server used to load as .mtp and be rewritten to .mtp on save.
     func testEditingAWebServerWithoutChangesPreservesIt() throws {
-        let original = ProxyServerSettings(host: "proxy.example.com", port: 443, connection: .web(secret: self.webSecret))
+        let original = ProxyServerSettings(host: "proxy.example.com", port: 443, connection: .web(secret: self.webSecret, path: ""))
         let state = ProxyServerSettingsControllerState(
             mode: proxyServerSettingsControllerMode(for: original.connection),
             host: original.host,
@@ -28,7 +28,31 @@ final class ProxyServerSettingsControllerTests: XCTestCase {
         )
         let saved = try XCTUnwrap(proxyServerSettings(with: state))
         XCTAssertEqual(saved, original)
-        XCTAssertEqual(saved.connection, .web(secret: self.webSecret))
+        XCTAssertEqual(saved.connection, .web(secret: self.webSecret, path: ""))
+    }
+
+    /// The editor's server field carries the whole `host/base-path` address, so a
+    /// prefixed relay survives a no-change edit too (BASE_PATH.md §1).
+    func testEditingAWebServerWithABasePathPreservesIt() throws {
+        let original = ProxyServerSettings(host: "proxy.example.com", port: 443, connection: .web(secret: self.webSecret, path: "dobry-cola-super-app"))
+        let state = ProxyServerSettingsControllerState(
+            mode: proxyServerSettingsControllerMode(for: original.connection),
+            host: try XCTUnwrap(original.webProxyAddress),
+            port: "\(original.port)",
+            username: "",
+            password: "",
+            secret: webProxySecretString(self.webSecret)
+        )
+        XCTAssertTrue(state.isComplete)
+        XCTAssertEqual(proxyServerSettings(with: state), original)
+    }
+
+    func testWebModeAcceptsAnAddressWithABasePath() throws {
+        let state = ProxyServerSettingsControllerState(mode: .web, host: "PROXY.EXAMPLE.COM/My-App/", port: "", username: "", password: "", secret: self.secretHex)
+        XCTAssertTrue(state.isComplete)
+        let saved = try XCTUnwrap(proxyServerSettings(with: state))
+        XCTAssertEqual(saved.host, "proxy.example.com")
+        XCTAssertEqual(saved.webProxyAddress, "proxy.example.com/My-App")
     }
 
     func testWebModeIgnoresPortAndPinsIt() throws {
@@ -60,7 +84,7 @@ final class ProxyServerSettingsControllerTests: XCTestCase {
     }
 
     func testWebModeRejectsNonCanonicalHosts() {
-        for host in ["proxy.example.com:8443", "user@proxy.example.com", "127.0.0.1", ""] {
+        for host in ["proxy.example.com:8443", "user@proxy.example.com", "127.0.0.1", "", "proxy.example.com//a", "proxy.example.com/a.b", "/slug"] {
             let state = ProxyServerSettingsControllerState(mode: .web, host: host, port: "", username: "", password: "", secret: self.secretHex)
             XCTAssertFalse(state.isComplete, "expected \(host) to be rejected")
             XCTAssertNil(proxyServerSettings(with: state))

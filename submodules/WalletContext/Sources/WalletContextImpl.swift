@@ -14,7 +14,6 @@ actor WalletContextImpl {
     typealias TonConnectPermission = WalletContext.TonConnectPermission
     typealias TonConnectRequest = WalletContext.TonConnectRequest
     typealias TonConnectOperationRequest = WalletContext.TonConnectOperationRequest
-    typealias TonConnectPresentation = WalletContext.TonConnectPresentation
     typealias FatalStorageError = WalletContext.FatalStorageError
     typealias SynchronizationError = WalletContext.SynchronizationError
     typealias Resource<Value: Equatable & Sendable> = WalletContext.Resource<Value>
@@ -53,6 +52,7 @@ actor WalletContextImpl {
         let presentationId: String
         var traceId: String?
         var transactionHash: String?
+        let pendingTransfer: PendingTransfer
     }
 
     let engine: TelegramEngine
@@ -64,16 +64,22 @@ actor WalletContextImpl {
     let output: WalletContextOutput
     var currentState: State
     var transferMinAmount = WalletConfiguration.defaultValue.transferMinAmount
+    var transferGaslessMinAmount = WalletConfiguration.defaultValue.transferGaslessMinAmount
     var storedState = WalletStoredState()
     var serverWalletState: TelegramCore.WalletState?
     var pendingInitialServerWalletState: (state: TelegramCore.WalletState, refreshIfStreamingUnavailable: Bool)?
     var deferredServerWalletState: (state: TelegramCore.WalletState, refreshIfStreamingUnavailable: Bool)?
     var serverStateRefreshRequested = false
+    var serverStateMutationRevision: UInt64 = 0
+    var serverStateNeedsActivation = false
     var transactionHistory = WalletTransactionHistory()
     var preparedTransfers: [String: PreparedEngineTransferRecord] = [:]
     var deferredSynchronizationScope: WalletSynchronizationScope = []
     var preparedRecoveryPhraseImportRecordId: String?
     var tonConnectCoordinator: WalletTonConnectCoordinator?
+    var pendingTonConnectLinks: [String] = []
+    var currentTonConnectState: WalletContext.TonConnectState = .empty
+    var latestTonConnectStateRevision: (generation: UInt64, revision: UInt64)?
     var peerByWalletAddress: [String: EnginePeer] = [:]
     var outgoingTransactionPresentationIdentities: [String: OutgoingTransactionPresentationIdentity] = [:]
 
@@ -114,6 +120,9 @@ actor WalletContextImpl {
     var pendingTransferExpirationTask: Task<Void, Never>?
     var pendingTransferExpirationTaskId: UUID?
     var pendingTransferExpirationDeadline: Int32?
+    var walletTransferResolutions: [String: WalletTransferResolution] = [:]
+    var walletTransferResolutionTask: Task<Void, Never>?
+    var walletTransferResolutionScheduledAt: Int32?
     var fiatRefreshTask: Task<Void, Never>?
     var fiatRefreshTaskId: UUID?
     var gaslessInfoTask: Task<Void, Never>?
@@ -124,6 +133,7 @@ actor WalletContextImpl {
     var streamingTask: Task<Void, Never>?
     var streamingRefreshTask: Task<Void, Never>?
     var streamingRefreshTaskId: UUID?
+    var streamingRefreshScope: WalletSynchronizationScope = []
     var streamingAddress: String?
     var streamingGeneration: UInt64?
     var streamingConnectionState: WalletStreamingConnectionState = .inactive
@@ -178,6 +188,7 @@ actor WalletContextImpl {
         self.pollingTask?.cancel()
         self.walletStateFallbackRefreshTask?.cancel()
         self.pendingTransferExpirationTask?.cancel()
+        self.cancelWalletTransferResolution()
         self.cancelFiatRatesRefresh()
         self.gaslessInfoTask?.cancel()
         self.streamingTask?.cancel()
@@ -202,17 +213,27 @@ actor WalletContextImpl {
         self.isApplicationInForeground = foreground
         self.isAccountCurrent = accountIsCurrent
         self.isNetworkAvailable = networkAvailable
+        if let coordinator = self.tonConnectCoordinator {
+            Task { await coordinator.setEnvironment(presentationEnabled: foreground && accountIsCurrent,
+                networkEnabled: foreground && accountIsCurrent && networkAvailable, revision: revision) }
+        } else {
+            self.currentTonConnectState = WalletContext.TonConnectState(sessions: self.currentTonConnectState.sessions,
+                active: self.currentTonConnectState.active, presentationEnabled: foreground && accountIsCurrent,
+                diagnostic: self.currentTonConnectState.diagnostic)
+            self.output.publish(tonConnect: self.currentTonConnectState)
+        }
         if becameForeground {
             self.pendingScreenSynchronizationScope.formUnion(self.visibleScreenSynchronizationScope)
         }
         self.evaluateRuntimeDemand(refreshIfPollingBecomesActive: !wasNetworkUsable)
     }
 
-    func updateWalletConfiguration(transferMinAmount: Int64, revision: UInt64) {
+    func updateWalletConfiguration(_ configuration: WalletConfiguration, revision: UInt64) {
         guard !self.isShutdown else { return }
         guard revision > self.latestWalletConfigurationRevision else { return }
         self.latestWalletConfigurationRevision = revision
-        self.transferMinAmount = transferMinAmount
+        self.transferMinAmount = configuration.transferMinAmount
+        self.transferGaslessMinAmount = configuration.transferGaslessMinAmount
     }
 
     func updateTwoStepAuthRequirement(_ required: Bool?, revision: UInt64) {
@@ -294,7 +315,6 @@ actor WalletContextImpl {
             self.requestGaslessInfo()
             self.requestServerWalletState(forceRefreshAfterCurrent: self.serverWalletState != nil)
         }
-        // Queue another pass when a screen opens during an existing request.
         self.requestSynchronization(scope: openedScope)
         self.evaluateRuntimeDemand()
     }
@@ -349,7 +369,7 @@ actor WalletContextImpl {
                 isLoadingMore: false,
                 error: nil
             ),
-            pendingTransfers: storedState.pendingTransfers,
+            pendingTransfers: storedState.pendingTransfers.map(walletPendingTransferAfterRestart),
             activeOperation: nil,
             fiat: FiatState(
                 selectedCurrency: storedState.selectedFiatCurrency,
@@ -374,6 +394,7 @@ actor WalletContextImpl {
     func evaluateRuntimeDemand(refreshIfPollingBecomesActive: Bool = false) {
         self.evaluateStreamingDemand()
         self.evaluatePollingDemand(refreshIfBecomingActive: refreshIfPollingBecomesActive)
+        self.evaluateWalletTransferResolution()
         self.evaluateFiatRatesDemand()
         guard self.canUseNetworkRuntime else {
             self.cancelGaslessInfoRequest()
@@ -387,7 +408,7 @@ actor WalletContextImpl {
             return
         }
         self.resumeDeferredSynchronizationIfNeeded()
-        if self.serverWalletState == nil {
+        if self.needsServerWalletStateRefresh {
             self.requestServerWalletState()
         }
         if refreshIfPollingBecomesActive, self.walletScreenCount > 0 {
@@ -401,6 +422,11 @@ actor WalletContextImpl {
             && self.isApplicationInForeground
             && self.isAccountCurrent
             && self.isNetworkAvailable
+    }
+
+    private var needsServerWalletStateRefresh: Bool {
+        (self.serverWalletState == nil || self.serverStateNeedsActivation)
+            && self.currentState.activeOperation?.defersServerWalletState != true
     }
 
     func requestServerWalletState(forceRefreshAfterCurrent: Bool = false) {
@@ -417,6 +443,8 @@ actor WalletContextImpl {
     }
 
     private func performServerWalletStateRequest() async {
+        let revision = self.serverStateMutationRevision
+        let generation = self.activationGeneration
         defer {
             self.serverStateTask = nil
             if self.serverStateRefreshRequested {
@@ -429,6 +457,14 @@ actor WalletContextImpl {
                 self.engine.wallet.getState()
             )
             try Task.checkCancellation()
+            guard !self.isShutdown,
+                  self.serverStateMutationRevision == revision,
+                  self.activationGeneration == generation else {
+                if self.needsServerWalletStateRefresh {
+                    self.serverStateRefreshRequested = true
+                }
+                return
+            }
             var promotedReplacement = false
             let isMutatingReplacementCandidate = self.preparedRecoveryPhraseImportRecordId != nil
                 || self.currentState.activeOperation?.defersServerWalletState == true
@@ -443,15 +479,26 @@ actor WalletContextImpl {
                     try await self.runtime.discardReplacementAfterAuthoritativeEmptyState()
                 }
             }
+            // Promotion consumes the candidate even if a newer state arrived while awaiting it.
+            if promotedReplacement {
+                self.serverStateNeedsActivation = true
+            }
+            try Task.checkCancellation()
+            guard !self.isShutdown,
+                  self.serverStateMutationRevision == revision,
+                  self.activationGeneration == generation else {
+                if self.needsServerWalletStateRefresh {
+                    self.serverStateRefreshRequested = true
+                }
+                return
+            }
             self.serverStateRetryTask?.cancel()
             self.serverStateRetryTask = nil
             self.applyServerWalletState(value, forceActivation: promotedReplacement)
         } catch is CancellationError {
         } catch {
             self.logger.error("wallet_state_failed", error)
-            if self.serverWalletState == nil {
-                self.scheduleServerStateRetry()
-            }
+            self.scheduleServerStateRetry()
         }
     }
 
@@ -460,6 +507,8 @@ actor WalletContextImpl {
         forceActivation: Bool = false,
         refreshIfStreamingUnavailable: Bool = false
     ) {
+        self.serverStateMutationRevision &+= 1
+        self.serverStateNeedsActivation = self.serverStateNeedsActivation || forceActivation
         if self.currentState.activeOperation?.defersServerWalletState == true {
             let shouldRefreshIfStreamingUnavailable = refreshIfStreamingUnavailable
                 || (self.deferredServerWalletState?.refreshIfStreamingUnavailable ?? false)
@@ -473,7 +522,7 @@ actor WalletContextImpl {
         if case let .ready(backupEnabled, _, _, address, publicKey, _) = value, !backupEnabled {
             self.completeAppliedKeyRotationIfBackupDisabled(address: address, publicKey: publicKey)
         }
-        if !forceActivation,
+        if !self.serverStateNeedsActivation,
            case let .ready(backupEnabled, canExportPhrase, canEnableBackup, address, publicKey, _) = value,
            case let .wallet(currentInfo) = self.currentState.phase,
            walletEngineAddressesEqual(currentInfo.address, address),
@@ -497,6 +546,7 @@ actor WalletContextImpl {
             }
             return
         }
+        self.serverStateNeedsActivation = false
         let shouldClearExpiredPendingTraceIds: Bool
         switch value {
         case .empty:
@@ -521,6 +571,8 @@ actor WalletContextImpl {
         self.streamingRefreshTracker = WalletStreamingRefreshTracker()
         self.activationGeneration &+= 1
         self.stopStreaming()
+        self.cancelWalletTransferResolution()
+        self.walletTransferResolutions.removeAll()
         self.cancelWalletStateFallbackRefresh()
         if let activeOperationId = self.activeOperationId {
             self.output.cancelOperation(id: activeOperationId)
@@ -540,6 +592,8 @@ actor WalletContextImpl {
             self.transactionHistory.reset()
             let previousCoordinator = self.tonConnectCoordinator
             self.tonConnectCoordinator = nil
+            self.currentTonConnectState = .empty
+            self.output.publish(tonConnect: .empty)
             self.activationTask = Task { [runtime = self.runtime] in
                 guard !Task.isCancelled else { return }
                 await previousCoordinator?.shutdown()
@@ -562,6 +616,8 @@ actor WalletContextImpl {
             let previousBalance = isSameCachedIdentity ? self.currentState.balance.currentValue : nil
             let previousCoordinator = self.tonConnectCoordinator
             self.tonConnectCoordinator = nil
+            self.currentTonConnectState = .empty
+            self.output.publish(tonConnect: .empty)
             self.observationTask?.cancel()
             self.observationTask = nil
             self.cancelSynchronization()
@@ -665,8 +721,6 @@ actor WalletContextImpl {
                         serverPublicKey: publicKey
                     )
                 } catch {
-                    // Automatic recovery is best-effort. Password, transport,
-                    // or invalid backup data leave the wallet read-only.
                     self.logger.error("wallet_automatic_phrase_install_failed", error)
                     activation = try await self.runtime.activate(
                         serverAddress: address,
@@ -705,12 +759,12 @@ actor WalletContextImpl {
                     storage: self.storage,
                     logger: self.logger,
                     recordId: activation.snapshot.recordId,
-                    event: { [weak self] event in
-                        await self?.handleTonConnectEvent(event)
+                    event: { [weak self] event, revision in
+                        await self?.handleTonConnectState(event, generation: generation, revision: revision)
                     }
                 )
                 self.tonConnectCoordinator = coordinator
-                Task { await coordinator.restore() }
+                Task { [weak self] in await self?.restoreTonConnect(coordinator, generation: generation) }
             }
             self.resumeDeferredSynchronizationIfNeeded()
             if self.hasActiveWalletRefreshDemand {
@@ -871,6 +925,8 @@ actor WalletContextImpl {
                 collectibleAddress: current.collectibleAddress,
                 normalizedHash: current.normalizedHash,
                 sentTransfer: current.sentTransfer,
+                pendingMessage: current.pendingMessage,
+                streamingData: current.streamingData,
                 fee: current.fee,
                 transactionHash: send.phase == .confirmed
                     ? (send.resolution?.transactionHash ?? current.transactionHash)
@@ -889,6 +945,10 @@ actor WalletContextImpl {
         case .replaced, .sequenceNumberConsumed, .expired, .superseded, .failed, .cancelled:
             self.logger.log("event=wallet_pending_transfer_terminal_failure phase=\(send.phase)")
             let removed = values.remove(at: index)
+            self.walletTransferResolutions[removed.id] = nil
+            if let pendingMessage = removed.pendingMessage {
+                let _ = self.engine.wallet.removePendingTransferMessage(pendingMessage).start()
+            }
             self.requestSynchronization(scope: removed.collectibleAddress == nil ? [.account, .transactions] : .all, force: true)
         case .idle, .validating, .authorizing, .preparing, .persisting, .readyToSubmit, .submitting, .handedOff:
             break
@@ -901,42 +961,9 @@ actor WalletContextImpl {
         reconcilingWith transactions: [Transaction]
     ) -> PendingTransferHistoryReconciliation {
         self.rememberOutgoingTransactionPresentationIdentities(pendingTransfers)
-        let authoritativeHashes = Set(transactions.compactMap(\.transactionHash))
-        guard !authoritativeHashes.isEmpty else {
-            return PendingTransferHistoryReconciliation(
-                pendingTransfers: pendingTransfers,
-                resolvedStreamingTraceIds: [],
-                removedPendingCount: 0
-            )
-        }
-        var remaining: [PendingTransfer] = []
-        remaining.reserveCapacity(pendingTransfers.count)
-        var resolvedStreamingTraceIds = Set<String>()
-        for pending in pendingTransfers {
-            if let transactionHash = pending.transactionHash,
-               authoritativeHashes.contains(transactionHash) {
-                if let traceId = pending.streamingTraceId {
-                    resolvedStreamingTraceIds.insert(traceId)
-                }
-                continue
-            }
-            guard let traceId = pending.streamingTraceId,
-                  let streamingHashes = self.streamingPresentationOverlay.transactionHashes(
-                    forTraceId: traceId
-                  ) else {
-                remaining.append(pending)
-                continue
-            }
-            if streamingHashes.allSatisfy(authoritativeHashes.contains) {
-                resolvedStreamingTraceIds.insert(traceId)
-            } else {
-                remaining.append(pending)
-            }
-        }
-        return PendingTransferHistoryReconciliation(
-            pendingTransfers: remaining,
-            resolvedStreamingTraceIds: resolvedStreamingTraceIds,
-            removedPendingCount: pendingTransfers.count - remaining.count
+        return walletPendingTransfersReconciledWithHistory(
+            pendingTransfers, transactions: transactions,
+            streamingTransactionHashes: { self.streamingPresentationOverlay.transactionHashes(forTraceId: $0) }
         )
     }
 
@@ -1016,13 +1043,25 @@ actor WalletContextImpl {
         fiat: FiatState? = nil,
         gaslessInfo: Resource<WalletGaslessInfo>? = nil
     ) {
+        defer { self.evaluateWalletTransferResolution() }
         let expirationResult = self.removingExpiredPendingTransfers(
             pendingTransfers,
             now: currentWalletTimestamp()
         )
         let pendingTransfers = expirationResult.pendingTransfers
-        let presentationIdentitiesChanged = self.rememberOutgoingTransactionPresentationIdentities(
-            pendingTransfers
+        let presentationIdentitiesChanged = self.rememberOutgoingTransactionPresentationIdentities(pendingTransfers)
+        var presentationIds: [String: String] = [:]
+        for item in self.currentState.transactions.items where item.presentationId != item.id {
+            if let hash = item.transactionHash { presentationIds[hash] = item.presentationId }
+        }
+        presentationIds.merge(self.outgoingTransactionPresentationIds().byTransactionHash) { _, new in new }
+        let transactions = TransactionsState(
+            items: transactions.items.map { transaction in
+                walletTransactionWithPresentationId(transaction, presentationId:
+                    transaction.transactionHash.flatMap { presentationIds[$0] } ?? transaction.presentationId)
+            },
+            offset: transactions.offset, canLoadMore: transactions.canLoadMore,
+            isLoadingMore: transactions.isLoadingMore, error: transactions.error
         )
         let value = State(
             phase: phase,
@@ -1165,7 +1204,7 @@ actor WalletContextImpl {
     }
 
     @discardableResult
-    private func rememberOutgoingTransactionPresentationIdentities(
+    func rememberOutgoingTransactionPresentationIdentities(
         _ pendingTransfers: [PendingTransfer]
     ) -> Bool {
         var changed = false
@@ -1174,11 +1213,13 @@ actor WalletContextImpl {
             let updated = OutgoingTransactionPresentationIdentity(
                 presentationId: current?.presentationId ?? "pending:\(pending.id)",
                 traceId: pending.streamingTraceId ?? current?.traceId,
-                transactionHash: pending.transactionHash ?? current?.transactionHash
+                transactionHash: pending.transactionHash ?? current?.transactionHash,
+                pendingTransfer: pending
             )
             if current?.presentationId != updated.presentationId
                 || current?.traceId != updated.traceId
-                || current?.transactionHash != updated.transactionHash {
+                || current?.transactionHash != updated.transactionHash
+                || current?.pendingTransfer != updated.pendingTransfer {
                 self.outgoingTransactionPresentationIdentities[pending.id] = updated
                 changed = true
             }
@@ -1288,10 +1329,30 @@ actor WalletContextImpl {
         }
     }
 
+    func persistPendingTransferBeforeSend(_ pending: PendingTransfer, generation: UInt64) async throws {
+        guard !self.isShutdown, self.activationGeneration == generation,
+              self.currentState.pendingTransfers.contains(where: { $0.id == pending.id }) else { throw WalletError.unavailable }
+        self.replaceState(
+            phase: self.currentState.phase, balance: self.currentState.balance,
+            transactions: self.currentState.transactions,
+            pendingTransfers: self.currentState.pendingTransfers.map { $0.id == pending.id ? pending : $0 },
+            activeOperation: self.currentState.activeOperation
+        )
+        guard await self.storedStateWriter.storeAndWait(self.storedState, revision: self.storedStateMutationRevision),
+              !self.isShutdown, self.activationGeneration == generation,
+              self.currentState.pendingTransfers.contains(where: { $0.id == pending.id }) else { throw WalletError.unavailable }
+    }
+
+    func latestPendingTransfer(_ fallback: PendingTransfer) -> PendingTransfer {
+        return self.currentState.pendingTransfers.first(where: { $0.id == fallback.id })
+            ?? self.outgoingTransactionPresentationIdentities[fallback.id]?.pendingTransfer
+            ?? fallback
+    }
+
     func scheduleServerStateRetry() {
         guard self.serverStateRetryTask == nil,
               self.canUseNetworkRuntime,
-              self.serverWalletState == nil else {
+              self.needsServerWalletStateRefresh else {
             return
         }
         self.serverStateRetryTask = Task { [weak self] in
@@ -1302,11 +1363,11 @@ actor WalletContextImpl {
     private func performServerStateRetryDelay() async {
         try? await Task.sleep(nanoseconds: 5_000_000_000)
         guard !Task.isCancelled,
-              !self.isShutdown,
-              self.serverWalletState == nil else {
+              !self.isShutdown else {
             return
         }
         self.serverStateRetryTask = nil
+        guard self.needsServerWalletStateRefresh else { return }
         self.requestServerWalletState()
     }
 
@@ -1420,12 +1481,34 @@ actor WalletContextImpl {
         self.walletStateFallbackRefreshTaskId = nil
     }
 
-    func handleTonConnectEvent(_ event: WalletTonConnectEvent) {
-        switch event {
-        case let .connect(value): self.output.publish(presentation: .request(value))
-        case let .operation(value): self.output.publish(presentation: .operation(value))
-        case let .dismiss(id): self.output.publish(presentation: .dismiss(requestId: id))
-        case let .error(value): self.output.publish(presentation: .error(value))
+    func handleTonConnectState(_ state: WalletContext.TonConnectState, generation: UInt64, revision: UInt64) {
+        guard !self.isShutdown, self.activationGeneration == generation else { return }
+        if let previous = self.latestTonConnectStateRevision, previous.generation == generation, previous.revision >= revision { return }
+        self.latestTonConnectStateRevision = (generation, revision)
+        self.currentTonConnectState = state
+        self.output.publish(tonConnect: state)
+    }
+
+    func reportTonConnectFailure(_ failure: TonConnectFailure) {
+        let state = WalletContext.TonConnectState(sessions: self.currentTonConnectState.sessions,
+            active: self.currentTonConnectState.active,
+            presentationEnabled: self.isApplicationInForeground && self.isAccountCurrent,
+            diagnostic: TonConnectDiagnostic(id: UUID(), failure: failure))
+        self.currentTonConnectState = state
+        self.output.publish(tonConnect: state)
+    }
+
+    func restoreTonConnect(_ coordinator: WalletTonConnectCoordinator, generation: UInt64) async {
+        await coordinator.setEnvironment(presentationEnabled: self.isApplicationInForeground && self.isAccountCurrent,
+            networkEnabled: self.isApplicationInForeground && self.isAccountCurrent && self.isNetworkAvailable,
+            revision: self.latestEnvironmentRevision)
+        await coordinator.restore()
+        guard !self.isShutdown, self.activationGeneration == generation else { return }
+        let links = self.pendingTonConnectLinks
+        self.pendingTonConnectLinks = []
+        for link in links {
+            guard self.activationGeneration == generation else { return }
+            await self.processTonConnectUrl(link)
         }
     }
 

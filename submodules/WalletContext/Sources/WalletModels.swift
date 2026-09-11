@@ -1,7 +1,7 @@
 import Foundation
 import TelegramCore
 
-let walletPendingTransferUILifetime: Int32 = 60
+let walletPendingTransferUILifetime: Int32 = 90
 
 func walletPendingTransferUIExpirationTimestamp(from timestamp: Int32) -> Int32 {
     return Int32(clamping: Int64(timestamp) + Int64(walletPendingTransferUILifetime))
@@ -241,12 +241,14 @@ public extension WalletContext {
             public let kind: String
             public let succeeded: Bool
             public let accounts: [String]
+            public let detailsJson: String
 
-            public init(id: String, kind: String, succeeded: Bool, accounts: [String]) {
+            public init(id: String, kind: String, succeeded: Bool, accounts: [String], detailsJson: String = "{}") {
                 self.id = id
                 self.kind = kind
                 self.succeeded = succeeded
                 self.accounts = accounts
+                self.detailsJson = detailsJson
             }
         }
 
@@ -292,11 +294,31 @@ public extension WalletContext {
         }
     }
 
-    enum TonConnectPresentation: Sendable {
-        case request(TonConnectRequest)
-        case operation(TonConnectOperationRequest)
-        case dismiss(requestId: String)
-        case error(String)
+    typealias TonConnectSession = TonConnectSessionInfo
+    typealias TonConnectDecisionResult = TonConnectDecision
+    typealias TonConnectReturn = TonConnectReturnTarget
+
+    struct TonConnectActiveRequest: Equatable, Sendable {
+        public enum Content: Equatable, Sendable {
+            case connect(TonConnectRequest)
+            case operation(TonConnectOperationRequest)
+        }
+        public let content: Content
+        public let status: TonConnectActiveInteraction.Status
+        public var id: String {
+            switch self.content {
+            case let .connect(value): return value.id
+            case let .operation(value): return value.id
+            }
+        }
+    }
+
+    struct TonConnectState: Equatable, Sendable {
+        public let sessions: [TonConnectSession]
+        public let active: TonConnectActiveRequest?
+        public let presentationEnabled: Bool
+        public let diagnostic: TonConnectDiagnostic?
+        static let empty = TonConnectState(sessions: [], active: nil, presentationEnabled: false, diagnostic: nil)
     }
 
     enum FatalStorageError: Error, Equatable, Sendable {
@@ -611,6 +633,20 @@ public extension WalletContext {
     }
 
     struct PendingTransfer: Codable, Equatable, Sendable {
+        public struct StreamingData: Codable, Equatable, Sendable {
+            public let normalBodyHash: String?
+            public let gaslessBodyHash: String?
+            public var traceId: String?
+            public var chainTraceId: String?
+
+            public init(normalBodyHash: String?, gaslessBodyHash: String?, traceId: String? = nil, chainTraceId: String? = nil) {
+                self.normalBodyHash = normalBodyHash
+                self.gaslessBodyHash = gaslessBodyHash
+                self.traceId = traceId
+                self.chainTraceId = chainTraceId
+            }
+        }
+
         public enum Status: Int32, Codable, Equatable, Sendable {
             case broadcasting = 0
             case pending = 1
@@ -621,16 +657,16 @@ public extension WalletContext {
         public let id: String
         public let recipient: String
         public let amount: Int64
-        /// Encrypted comments are stored as BOCs, never as the draft plaintext.
         public let comment: String?
         public let commentEncrypted: Bool
         public let collectibleAddress: String?
         public let normalizedHash: String?
         public let sentTransfer: WalletSentTransfer?
+        public let pendingMessage: WalletPendingTransferMessageReference?
+        public var streamingData: StreamingData?
 
-        /// Streaming uses the engine's normalized hash, not the server's message hash.
         public var streamingTraceId: String? {
-            return self.normalizedHash
+            return self.streamingData?.traceId ?? (self.sentTransfer?.gasless == true ? nil : self.normalizedHash)
         }
 
         public let fee: Int64?
@@ -649,6 +685,8 @@ public extension WalletContext {
             collectibleAddress: String? = nil,
             normalizedHash: String? = nil,
             sentTransfer: WalletSentTransfer? = nil,
+            pendingMessage: WalletPendingTransferMessageReference? = nil,
+            streamingData: StreamingData? = nil,
             fee: Int64? = nil,
             transactionHash: String? = nil,
             transactionLt: String? = nil,
@@ -664,6 +702,8 @@ public extension WalletContext {
             self.collectibleAddress = collectibleAddress
             self.normalizedHash = normalizedHash
             self.sentTransfer = sentTransfer
+            self.pendingMessage = pendingMessage
+            self.streamingData = streamingData
             self.fee = fee
             self.transactionHash = transactionHash
             self.transactionLt = transactionLt
@@ -683,6 +723,8 @@ public extension WalletContext {
                 collectibleAddress: try container.decodeIfPresent(String.self, forKey: .collectibleAddress),
                 normalizedHash: try container.decodeIfPresent(String.self, forKey: .normalizedHash),
                 sentTransfer: try container.decodeIfPresent(WalletSentTransfer.self, forKey: .sentTransfer),
+                pendingMessage: try container.decodeIfPresent(WalletPendingTransferMessageReference.self, forKey: .pendingMessage),
+                streamingData: try container.decodeIfPresent(StreamingData.self, forKey: .streamingData),
                 fee: try container.decodeIfPresent(Int64.self, forKey: .fee),
                 transactionHash: try container.decodeIfPresent(String.self, forKey: .transactionHash),
                 transactionLt: try container.decodeIfPresent(String.self, forKey: .transactionLt),

@@ -1143,6 +1143,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                             }
                             return true
                         case let .gramTransfer(amount, peerAddress, transactionId, messageComment, commentEncrypted):
+                            let pendingTransfer = message.attributes.compactMap { $0 as? PendingWalletTransferMessageAttribute }.first
                             let direction: WalletContext.Transaction.Direction
                             if message.effectivelyIncoming(self.context.account.peerId) {
                                 direction = .incoming
@@ -1169,20 +1170,29 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
 
                             let logicalTime = transactionId.split(separator: ":", maxSplits: 1).first.map(String.init) ?? transactionId
                             let transaction = WalletContext.Transaction(
-                                id: transactionId,
-                                logicalTime: logicalTime,
+                                id: pendingTransfer.map { "pending:\($0.operationId)" } ?? transactionId,
+                                logicalTime: pendingTransfer == nil ? logicalTime : "0",
                                 timestamp: message.timestamp,
                                 direction: direction,
-                                amount: amount,
+                                amount: pendingTransfer == nil ? amount : -amount,
                                 fee: 0,
                                 peer: peer,
                                 comment: comment,
-                                commentEncrypted: commentEncrypted
+                                commentEncrypted: commentEncrypted,
+                                status: pendingTransfer == nil ? .completed : .pending
                             )
-                            self.push(self.context.sharedContext.makeWalletTransactionScreen(
-                                context: self.context,
-                                transaction: transaction
-                            ))
+                            if pendingTransfer != nil, let walletContext = self.context.walletContext {
+                                self.push(self.context.sharedContext.makeWalletTransactionScreen(
+                                    context: self.context,
+                                    walletContext: walletContext,
+                                    transaction: transaction
+                                ))
+                            } else {
+                                self.push(self.context.sharedContext.makeWalletTransactionScreen(
+                                    context: self.context,
+                                    transaction: transaction
+                                ))
+                            }
                             return true
                         case let .setChatTheme(chatTheme):
                             switch chatTheme {

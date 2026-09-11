@@ -92,21 +92,42 @@ extension WalletContextImpl {
     func restoreTransferReceipts(recordId: String, walletAddress: String, generation: UInt64) async {
         do {
             let receipts = try await self.storage.loadTransferReceipts()
-            guard !Task.isCancelled, !self.isShutdown, self.activationGeneration == generation else { return }
+            guard !Task.isCancelled, !self.isShutdown, self.activationGeneration == generation else {
+                return
+            }
             var pending = self.currentState.pendingTransfers
             for receipt in receipts where receipt.recordId == recordId && walletEngineAddressesEqual(receipt.walletAddress, walletAddress) {
                 self.applyGaslessQuota(receipt.transfer, receivedAt: receipt.receivedAt)
-                guard walletPendingTransferUIExpirationTimestamp(from: receipt.receivedAt) > currentWalletTimestamp() else { continue }
+                if let pendingMessage = receipt.pendingTransfer.pendingMessage {
+                    let _ = self.engine.wallet.acceptPendingTransferMessage(pendingMessage, transfer: receipt.transfer, receivedAt: receipt.receivedAt).start()
+                }
                 let existing = pending.first { $0.id == receipt.pendingTransfer.id }
-                guard let recovered = acceptedWalletEngineSubmission(
-                    pending: existing ?? receipt.pendingTransfer,
-                    messageHash: existing?.normalizedHash,
+                var source = existing ?? receipt.pendingTransfer
+                if source.status != .confirmed, receipt.pendingTransfer.status == .confirmed {
+                    source = receipt.pendingTransfer
+                }
+                if source.streamingData == nil {
+                    source.streamingData = receipt.pendingTransfer.streamingData
+                }
+                guard let recovered = acceptedWalletTransferSubmission(
+                    pending: source,
+                    messageHash: existing?.normalizedHash ?? receipt.pendingTransfer.normalizedHash,
                     phase: existing?.status == .confirmed ? .confirmed : .submitted,
                     acceptedAt: receipt.receivedAt,
                     sentTransfer: receipt.transfer
                 ) else { continue }
+                self.trackWalletTransferResolution(recovered, receivedAt: receipt.receivedAt)
+                if walletHistoryTransactionForPending(recovered, transactions: self.currentState.transactions.items) != nil {
+                    pending.removeAll { $0.id == recovered.id }
+                    self.resolveStreamingPendingMessage(recovered)
+                    continue
+                }
+                guard walletPendingTransferUIExpirationTimestamp(from: receipt.receivedAt) > currentWalletTimestamp() else { continue }
                 pending.removeAll { $0.id == recovered.id }
                 pending.append(recovered)
+            }
+            for transfer in pending {
+                self.resolveStreamingPendingMessage(transfer)
             }
             let reconciliation = self.pendingTransfers(pending, reconcilingWith: self.currentState.transactions.items)
             self.replaceState(
@@ -118,6 +139,10 @@ extension WalletContextImpl {
             )
         } catch {
             self.logger.error("wallet_transfer_receipts_restore_failed", error)
+        }
+        guard !Task.isCancelled, !self.isShutdown, self.activationGeneration == generation else { return }
+        for transfer in self.currentState.pendingTransfers {
+            self.trackWalletTransferResolution(transfer)
         }
     }
 }

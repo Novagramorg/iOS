@@ -16,12 +16,10 @@ struct WalletEngineStagedWallet: Equatable, Sendable {
 struct WalletEngineSendExecution: @unchecked Sendable {
     let result: SendResult
     let didRecreateClient: Bool
-    let receipt: WalletEngineTransferReceipt?
 
-    init(result: SendResult, didRecreateClient: Bool, receipt: WalletEngineTransferReceipt? = nil) {
+    init(result: SendResult, didRecreateClient: Bool) {
         self.result = result
         self.didRecreateClient = didRecreateClient
-        self.receipt = receipt
     }
 }
 
@@ -64,7 +62,6 @@ actor WalletEngineRuntime {
     private var clientRevision: UInt64 = 0
     private var descriptor: WalletDescriptor?
     private var transientReplacementDescriptor: WalletDescriptor?
-    private var tonConnectSession: TonConnectSession?
     private var ffiBusy = false
     private var userInitiatedFfiWaiters: [CheckedContinuation<Void, Never>] = []
     private var backgroundFfiWaiters: [CheckedContinuation<Void, Never>] = []
@@ -75,7 +72,7 @@ actor WalletEngineRuntime {
         self.engine = engine
         self.logger = logger
         self.platformHost = WalletEnginePlatformHost(storage: storage, logger: logger)
-        self.statuslessHost = WalletEngineStatuslessHost(engine: engine, storage: storage, logger: logger)
+        self.statuslessHost = WalletEngineStatuslessHost(engine: engine, logger: logger)
         self.lifecycle = WalletLifecycle(platformHost: self.platformHost)
     }
 
@@ -287,7 +284,6 @@ actor WalletEngineRuntime {
         guard serverPublicKey.count == 32 else {
             throw WalletContext.WalletError.storage(.identityMismatch)
         }
-        self.tonConnectSession = nil
         try await self.shutdownClient()
 
         let stored = try await self.storage.loadDescriptor()
@@ -453,38 +449,27 @@ actor WalletEngineRuntime {
         }
     }
 
-    func send(pendingTransfer: WalletContext.PendingTransfer, intent: SendIntent, useWalletTransferApi: Bool) async throws -> WalletEngineSendExecution {
-        try await self.withFfi(priority: .userInitiated, cancellation: .send) {
+    func prepareTransfer(operationId: String, intent: SendIntent) async throws -> (recordId: String, data: WalletEngineFFI.PreparedTransfer) {
+        try await self.withFfi(priority: .userInitiated) {
             try await self.ensureKeyRotationAllowsSigning()
             guard let config = self.clientConfig else {
                 throw WalletContext.WalletError.unavailable
             }
-            let request = SendRequest(
-                operationId: pendingTransfer.id,
-                force: false,
+            let data = try await self.requireClient().prepareTransfer(request: PrepareTransferRequest(
+                operationId: operationId,
                 intent: intent
-            )
-            // Keep the selected route for the entire operation, including client recreation.
-            let submission: WalletEngineTransferSubmission? = useWalletTransferApi ? WalletEngineTransferSubmission(
-                recordId: config.recordId,
-                walletAddress: config.address,
-                pendingTransfer: pendingTransfer
-            ) : nil
-            return try await self.sendRecoveringStuckClient(transferSubmission: submission) { client in
-                try await client.send(request: request)
-            }
+            ))
+            return (config.recordId, data)
         }
     }
 
-    func transferReceipt(operationId: String) async -> WalletEngineTransferReceipt? {
-        guard let recordId = self.clientConfig?.recordId else { return nil }
-        do {
-            return try await self.storage.loadTransferReceipts().last {
-                $0.recordId == recordId && $0.pendingTransfer.id == operationId
+    func send(operationId: String, intent: SendIntent) async throws -> WalletEngineSendExecution {
+        try await self.withFfi(priority: .userInitiated, cancellation: .send) {
+            try await self.ensureKeyRotationAllowsSigning()
+            let request = SendRequest(operationId: operationId, force: false, intent: intent)
+            return try await self.sendRecoveringStuckClient { client in
+                try await client.send(request: request)
             }
-        } catch {
-            self.logger.error("wallet_transfer_receipt_load_failed", error)
-            return nil
         }
     }
 
@@ -832,8 +817,25 @@ actor WalletEngineRuntime {
         }
     }
 
-    func tonConnectAccount() async throws -> TonConnectAccountInfo {
+    func tonConnectIdentity(recordId: String) async throws -> TonConnectWalletIdentity {
         try await self.withFfi {
+            guard let descriptor = self.descriptor, descriptor.recordId == recordId else { throw WalletContext.WalletError.unavailable }
+            let account = try self.lifecycle.tonConnectAccount(descriptor: descriptor)
+            return TonConnectWalletIdentity(recordId: recordId, address: account.address, network: account.network)
+        }
+    }
+
+    private func validateTonConnectWallet(_ wallet: TonConnectWalletIdentity) throws {
+        guard let descriptor = self.descriptor, descriptor.recordId == wallet.recordId else { throw WalletContext.WalletError.unavailable }
+        let account = try self.lifecycle.tonConnectAccount(descriptor: descriptor)
+        guard walletEngineAddressesEqual(account.address, wallet.address), account.network == wallet.network else {
+            throw WalletContext.WalletError.unavailable
+        }
+    }
+
+    func tonConnectAccount(wallet: TonConnectWalletIdentity) async throws -> TonConnectAccountInfo {
+        try await self.withFfi {
+            try self.validateTonConnectWallet(wallet)
             guard let descriptor = self.descriptor else {
                 throw WalletContext.WalletError.unavailable
             }
@@ -842,11 +844,13 @@ actor WalletEngineRuntime {
     }
 
     func signTonConnectProof(
+        wallet: TonConnectWalletIdentity,
         domain: String,
         timestamp: UInt64,
         payload: String
     ) async throws -> TonConnectProofSignature {
         try await self.withFfi {
+            try self.validateTonConnectWallet(wallet)
             try await self.ensureKeyRotationAllowsSigning()
             guard let descriptor = self.descriptor else {
                 throw WalletContext.WalletError.unavailable
@@ -860,27 +864,31 @@ actor WalletEngineRuntime {
         }
     }
 
-    func previewTonConnect(_ request: SendRequest) async throws -> SendPreview {
+    func previewTonConnect(_ request: SendRequest, wallet: TonConnectWalletIdentity) async throws -> SendPreview {
         try await self.withFfi(priority: .userInitiated, cancellation: .sendPreview) {
-            try await self.requireClient().previewTonConnect(request: request)
+            try self.validateTonConnectWallet(wallet)
+            return try await self.requireClient().previewTonConnect(request: request)
         }
     }
 
-    func previewSignMessage(_ request: SignMessageRequest) async throws -> SignMessagePreview {
+    func previewSignMessage(_ request: SignMessageRequest, wallet: TonConnectWalletIdentity) async throws -> SignMessagePreview {
         try await self.withFfi(priority: .userInitiated, cancellation: .sendPreview) {
-            try await self.requireClient().previewSignMessage(request: SendPreviewRequest(intent: request.intent))
+            try self.validateTonConnectWallet(wallet)
+            return try await self.requireClient().previewSignMessage(request: SendPreviewRequest(intent: request.intent))
         }
     }
 
-    func sendTonConnect(_ request: SendRequest) async throws -> SendResult {
+    func sendTonConnect(_ request: SendRequest, wallet: TonConnectWalletIdentity) async throws -> SendResult {
         try await self.withFfi(priority: .userInitiated, cancellation: .send) {
+            try self.validateTonConnectWallet(wallet)
             try await self.ensureKeyRotationAllowsSigning()
             return try await self.requireClient().send(request: request)
         }
     }
 
-    func signMessage(_ request: SignMessageRequest) async throws -> SignMessageResult {
+    func signMessage(_ request: SignMessageRequest, wallet: TonConnectWalletIdentity) async throws -> SignMessageResult {
         try await self.withFfi(priority: .userInitiated, cancellation: .send) {
+            try self.validateTonConnectWallet(wallet)
             try await self.ensureKeyRotationAllowsSigning()
             return try await self.requireClient().signMessage(request: request)
         }
@@ -891,105 +899,11 @@ actor WalletEngineRuntime {
             try await self.withFfi {
                 await self.discardTransientReplacementUnlocked()
                 await self.platformHost.removeAllTransientProtectedSecrets()
-                self.tonConnectSession = nil
                 try await self.shutdownClient()
             }
         } catch {
             self.logger.error("wallet_engine_shutdown_failed", error)
         }
-    }
-
-    func restoreTonConnectSession(persisted: String, config: TonConnectSessionConfig) async throws -> TonConnectSessionPhase {
-        try await self.withFfi {
-            let session = try tonConnectSessionRestore(persisted: persisted, config: config)
-            self.tonConnectSession = session
-            return try session.phase()
-        }
-    }
-
-    func startTonConnectSession(link: String, config: TonConnectSessionConfig) async throws -> TonConnectConnectPrompt {
-        try await self.withFfi {
-            let session = try tonConnectSessionFromLink(link: link, config: config)
-            guard let prompt = try session.connectPrompt() else {
-                throw WalletContext.WalletError.unavailable
-            }
-            self.tonConnectSession = session
-            return prompt
-        }
-    }
-
-    func tonConnectPhase() async throws -> TonConnectSessionPhase {
-        try await self.withFfi { try self.requireTonConnectSession().phase() }
-    }
-
-    func tonConnectPrompt() async throws -> TonConnectConnectPrompt? {
-        try await self.withFfi { try self.requireTonConnectSession().connectPrompt() }
-    }
-
-    func tonConnectPendingRequests(now: UInt64) async throws -> [TonConnectIncomingRequest] {
-        try await self.withFfi { try self.requireTonConnectSession().pendingRequests(now: now) }
-    }
-
-    func tonConnectPendingPost() async throws -> TonConnectPreparedPost? {
-        try await self.withFfi { try self.requireTonConnectSession().pendingPost() }
-    }
-
-    func tonConnectPersisted() async throws -> String {
-        try await self.withFfi { try self.requireTonConnectSession().persisted() }
-    }
-
-    func tonConnectApprove(account: TonConnectAccountInfo, proof: TonConnectProofReply?, device: TonConnectDevice) async throws -> TonConnectPreparedPost {
-        try await self.withFfi {
-            try self.requireTonConnectSession().approveConnect(account: account, proof: proof, device: device)
-        }
-    }
-
-    func tonConnectReject(message: String) async throws -> TonConnectPreparedPost {
-        try await self.withFfi { try self.requireTonConnectSession().rejectConnect(message: message) }
-    }
-
-    func tonConnectPrepareSendSuccess(requestId: String, signedBoc: String) async throws -> TonConnectPreparedPost {
-        try await self.withFfi {
-            try self.requireTonConnectSession().prepareSendSuccess(requestId: requestId, signedBoc: signedBoc)
-        }
-    }
-
-    func tonConnectPrepareSignSuccess(requestId: String, internalBoc: String) async throws -> TonConnectPreparedPost {
-        try await self.withFfi {
-            try self.requireTonConnectSession().prepareSignMessageSuccess(requestId: requestId, internalBoc: internalBoc)
-        }
-    }
-
-    func tonConnectPrepareDisconnectSuccess(requestId: String) async throws -> TonConnectPreparedPost {
-        try await self.withFfi {
-            try self.requireTonConnectSession().prepareDisconnectSuccess(requestId: requestId)
-        }
-    }
-
-    func tonConnectPrepareError(requestId: String, code: TonConnectRpcErrorCode, message: String) async throws -> TonConnectPreparedPost {
-        try await self.withFfi {
-            try self.requireTonConnectSession().prepareError(requestId: requestId, code: code, message: message)
-        }
-    }
-
-    func tonConnectBeginEventsSubscription() async throws -> String {
-        try await self.withFfi { try self.requireTonConnectSession().beginEventsSubscription() }
-    }
-
-    func tonConnectIngestSseChunk(_ chunk: Data, now: UInt64) async throws -> [TonConnectIncomingRequest] {
-        try await self.withFfi {
-            try self.requireTonConnectSession().ingestSseChunk(chunk: chunk, now: now)
-        }
-    }
-
-    func tonConnectCompletePendingPost() async throws {
-        try await self.withFfi { try self.requireTonConnectSession().completePendingPost() }
-    }
-
-    func clearTonConnectSession() async {
-        await self.acquireFfi()
-        self.tonConnectSession = nil
-        self.releaseFfi()
     }
 
     private func recoverKeyRotationAfterActivation(
@@ -1051,15 +965,13 @@ actor WalletEngineRuntime {
     }
 
     private func sendRecoveringStuckClient(
-        transferSubmission: WalletEngineTransferSubmission? = nil,
         _ operation: (WalletClient) async throws -> SendResult
     ) async throws -> WalletEngineSendExecution {
         let client = try self.requireClient()
         do {
             return WalletEngineSendExecution(
-                result: try await self.performSend(client, transferSubmission: transferSubmission, operation: operation),
-                didRecreateClient: false,
-                receipt: await self.receiptForSubmission(transferSubmission)
+                result: try await operation(client),
+                didRecreateClient: false
             )
         } catch {
             guard walletEngineIsSendAlreadyInProgress(error) else {
@@ -1074,7 +986,6 @@ actor WalletEngineRuntime {
             self.client = nil
             let replacementStatuslessHost = WalletEngineStatuslessHost(
                 engine: self.engine,
-                storage: self.storage,
                 logger: self.logger
             )
             let replacement: WalletClient
@@ -1091,33 +1002,10 @@ actor WalletEngineRuntime {
             self.client = replacement
             self.clientRevision &+= 1
             return WalletEngineSendExecution(
-                result: try await self.performSend(replacement, transferSubmission: transferSubmission, operation: operation),
-                didRecreateClient: true,
-                receipt: await self.receiptForSubmission(transferSubmission)
+                result: try await operation(replacement),
+                didRecreateClient: true
             )
         }
-    }
-
-    private func performSend(
-        _ client: WalletClient,
-        transferSubmission: WalletEngineTransferSubmission?,
-        operation: (WalletClient) async throws -> SendResult
-    ) async throws -> SendResult {
-        let host = self.statuslessHost
-        await host.setTransferSubmission(transferSubmission)
-        do {
-            let result = try await operation(client)
-            await host.setTransferSubmission(nil)
-            return result
-        } catch {
-            await host.setTransferSubmission(nil)
-            throw error
-        }
-    }
-
-    private func receiptForSubmission(_ submission: WalletEngineTransferSubmission?) async -> WalletEngineTransferReceipt? {
-        guard let submission else { return nil }
-        return await self.transferReceipt(operationId: submission.pendingTransfer.id)
     }
 
     private func ensureKeyRotationAllowsSigning() async throws {
@@ -1131,13 +1019,6 @@ actor WalletEngineRuntime {
             throw WalletContext.WalletError.unavailable
         }
         return client
-    }
-
-    private func requireTonConnectSession() throws -> TonConnectSession {
-        guard let session = self.tonConnectSession else {
-            throw WalletContext.WalletError.unavailable
-        }
-        return session
     }
 
     private func withFfi<Value>(

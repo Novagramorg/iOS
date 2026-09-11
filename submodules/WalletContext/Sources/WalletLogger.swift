@@ -177,6 +177,7 @@ func synchronizationError(_ error: Error?) -> WalletContext.SynchronizationError
 
 func walletError(_ error: Error) -> WalletContext.WalletError {
     if let value = error as? WalletContext.WalletError { return value }
+    if let value = error as? TonConnectFailure { return .engine(value.message) }
     if let value = error as? WalletContext.SynchronizationError {
         switch value {
         case .network, .timeout, .http: return .network

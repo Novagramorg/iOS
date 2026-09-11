@@ -726,6 +726,7 @@ private final class WalletReceiveSheetContent: Component {
     let address: String
     let containerHeight: CGFloat
     let isPurchaseInProgress: Bool
+    let isOpeningPurchase: Bool
     let animateOut: ActionSlot<Action<Void>>
     let getController: () -> ViewController?
     let buy: () -> Void
@@ -735,6 +736,7 @@ private final class WalletReceiveSheetContent: Component {
         address: String,
         containerHeight: CGFloat,
         isPurchaseInProgress: Bool,
+        isOpeningPurchase: Bool,
         animateOut: ActionSlot<Action<Void>>,
         getController: @escaping () -> ViewController?,
         buy: @escaping () -> Void
@@ -743,6 +745,7 @@ private final class WalletReceiveSheetContent: Component {
         self.address = address
         self.containerHeight = containerHeight
         self.isPurchaseInProgress = isPurchaseInProgress
+        self.isOpeningPurchase = isOpeningPurchase
         self.animateOut = animateOut
         self.getController = getController
         self.buy = buy
@@ -759,6 +762,9 @@ private final class WalletReceiveSheetContent: Component {
             return false
         }
         if lhs.isPurchaseInProgress != rhs.isPurchaseInProgress {
+            return false
+        }
+        if lhs.isOpeningPurchase != rhs.isOpeningPurchase {
             return false
         }
         return true
@@ -1130,7 +1136,8 @@ private final class WalletReceiveSheetContent: Component {
                     ),
                     content: AnyComponentWithIdentity(id: "buy", component: AnyComponent(buyContent)),
                     isEnabled: !component.isPurchaseInProgress,
-                    displaysProgress: component.isPurchaseInProgress,
+                    tintWhenDisabled: false,
+                    displaysProgress: component.isOpeningPurchase,
                     action: { [weak self] in
                         self?.component?.buy()
                     }
@@ -1439,7 +1446,7 @@ private final class WalletReceiveSheetComponent: CombinedComponent {
 
         private var isLoadingProviders = true
         private var isWalletAvailable = false
-        private var isOpeningPurchase = false
+        fileprivate var isOpeningPurchase = false
 
         fileprivate var isPurchaseInProgress: Bool {
             return self.isLoadingProviders || self.isOpeningPurchase
@@ -1606,6 +1613,7 @@ private final class WalletReceiveSheetComponent: CombinedComponent {
                         address: address,
                         containerHeight: context.availableSize.height,
                         isPurchaseInProgress: componentState.isPurchaseInProgress,
+                        isOpeningPurchase: componentState.isOpeningPurchase,
                         animateOut: animateOut,
                         getController: controller,
                         buy: { [weak componentState] in

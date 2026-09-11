@@ -8,6 +8,7 @@ swift_library(
     ]),
     copts = [
         "-warnings-as-errors",
+        "-enable-testing",
     ],
     deps = [
       "//third-party/wallet-engine:WalletEngineFFI",
@@ -20,4 +21,3 @@ swift_library(
         "//visibility:public",
     ],
 )
-

@@ -332,7 +332,7 @@ public enum ResolvedUrl {
     case stickerPack(name: String, type: StickerPackUrlType)
     case instantView(TelegramMediaWebpage, String?)
     case proxy(host: String, port: Int32, username: String?, password: String?, secret: Data?)
-    case webProxy(host: String, secret: Data)
+    case webProxy(host: String, path: String, secret: Data)
     case join(String)
     case joinCall(String)
     case localization(String)

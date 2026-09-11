@@ -83,12 +83,14 @@ actor WalletEngineStorage {
     private let secretService: String
     private let journalService: String
     private let tonConnectService: String
+    private let legacyTonConnectService: String
 
     init(namespace: String) {
         self.descriptorService = "org.telegram.ton-wallet.engine.v2.descriptor.\(namespace)"
         self.secretService = "org.telegram.ton-wallet.engine.v2.secret.\(namespace)"
         self.journalService = "org.telegram.ton-wallet.engine.v2.journal.\(namespace)"
-        self.tonConnectService = "org.telegram.ton-wallet.engine.v2.ton-connect.\(namespace)"
+        self.legacyTonConnectService = "org.telegram.ton-wallet.engine.v2.ton-connect.\(namespace)"
+        self.tonConnectService = "org.telegram.ton-wallet.ton-connect.sessions.v1.\(namespace)"
     }
 
     func loadDescriptor() throws -> WalletEngineDescriptorRecord? {
@@ -339,16 +341,37 @@ actor WalletEngineStorage {
         try self.remove(service: self.descriptorService, account: "key-rotation")
     }
 
-    func loadTonConnectSession(recordId: String) throws -> Data? {
-        try self.read(service: self.tonConnectService, account: recordId)
+    func loadSessions(recordId: String) throws -> [Data] {
+        // Legacy single-session records cannot be restored by this registry.
+        try self.remove(service: self.legacyTonConnectService, account: recordId)
+        var query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: self.tonConnectService,
+            kSecAttrSynchronizable as String: false,
+            kSecReturnAttributes as String: true,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitAll
+        ]
+        query[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        if status == errSecItemNotFound { return [] }
+        guard status == errSecSuccess, let items = result as? [[String: Any]] else {
+            throw WalletEngineStorageError.keychainStatus(status)
+        }
+        let prefix = recordId + "/"
+        return items.compactMap { item -> Data? in
+            guard let account = item[kSecAttrAccount as String] as? String, account.hasPrefix(prefix) else { return nil }
+            return item[kSecValueData as String] as? Data
+        }
     }
 
-    func saveTonConnectSession(_ data: Data, recordId: String) throws {
-        try self.write(data, service: self.tonConnectService, account: recordId)
+    func saveSession(_ data: Data, recordId: String, sessionId: String) throws {
+        try self.write(data, service: self.tonConnectService, account: recordId + "/" + sessionId)
     }
 
-    func removeTonConnectSession(recordId: String) throws {
-        try self.remove(service: self.tonConnectService, account: recordId)
+    func removeSession(recordId: String, sessionId: String) throws {
+        try self.remove(service: self.tonConnectService, account: recordId + "/" + sessionId)
     }
 
     func readProtectedSecret(_ request: ProtectedSecretRead) throws -> Data {
@@ -617,3 +640,5 @@ func sanitizedWalletEngineDiagnostic(_ value: String) -> String {
             .prefix(256)
     )
 }
+
+extension WalletEngineStorage: TonConnectSessionStorage {}

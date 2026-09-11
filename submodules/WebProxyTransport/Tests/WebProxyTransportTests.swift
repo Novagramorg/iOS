@@ -54,19 +54,109 @@ final class WebProxyTransportTests: XCTestCase {
         }
     }
 
+    private func plainSecret() throws -> Data {
+        return try XCTUnwrap(WebProxyConfiguration.parseSecret("000102030405060708090a0b0c0d0e0f"))
+    }
+
+    private func paddedSecret() throws -> Data {
+        return try XCTUnwrap(WebProxyConfiguration.parseSecret("dd000102030405060708090a0b0c0d0e0f"))
+    }
+
     func testCapabilityVectors() throws {
         let plain = try XCTUnwrap(WebProxyConfiguration(
             host: "PROXY.EXAMPLE.COM",
-            secret: try XCTUnwrap(WebProxyConfiguration.parseSecret("000102030405060708090a0b0c0d0e0f"))
+            secret: try self.plainSecret()
         ))
         XCTAssertEqual(plain.host, "proxy.example.com")
+        XCTAssertEqual(plain.path, "")
         XCTAssertEqual(plain.bridgeCapability(), "MHLEY5PmW1GWqJkSrlmJpvJUiLhBH_QKy6yKg8a0JPk")
 
         let padded = try XCTUnwrap(WebProxyConfiguration(
             host: "proxy.example.com",
-            secret: try XCTUnwrap(WebProxyConfiguration.parseSecret("dd000102030405060708090a0b0c0d0e0f"))
+            secret: try self.paddedSecret()
         ))
         XCTAssertEqual(padded.bridgeCapability(), "IpJrt3e7sKtzPyoXy6w-Zj6GGEvsvclN66JzQEfPYLA")
+
+        let prefixed = try XCTUnwrap(WebProxyConfiguration(
+            host: "PROXY.EXAMPLE.COM",
+            path: "dobry-cola-super-app",
+            secret: try self.plainSecret()
+        ))
+        XCTAssertEqual(prefixed.address, "proxy.example.com/dobry-cola-super-app")
+        XCTAssertEqual(prefixed.bridgeCapability(), "hHz99Xs93EN1j91G9gpNepXwGNNt5YdAFkEVk_LlqdQ")
+
+        let prefixedPadded = try XCTUnwrap(WebProxyConfiguration(
+            host: "proxy.example.com",
+            path: "dobry-cola-super-app",
+            secret: try self.paddedSecret()
+        ))
+        XCTAssertEqual(prefixedPadded.bridgeCapability(), "TGUkZaevsavLbHvlNWipnRoYxgzZ51ioWvbxgGT3wHo")
+    }
+
+    func testCapabilityIsBoundToThePath() throws {
+        let secret = try self.plainSecret()
+        let capability: (String) throws -> String = { path in
+            try XCTUnwrap(WebProxyConfiguration(host: "proxy.example.com", path: path, secret: secret)).bridgeCapability()
+        }
+        let root = try capability("")
+        let first = try capability("dobry-cola-super-app")
+        let second = try capability("other-app")
+        let nested = try capability("dobry-cola-super-app/v2")
+        let uppercased = try capability("Dobry-Cola-Super-App")
+        XCTAssertEqual(Set([root, first, second, nested, uppercased]).count, 5)
+    }
+
+    func testAddressParsing() throws {
+        let parsed = try XCTUnwrap(WebProxyConfiguration.canonicalAddress(" Proxy.Example.COM/My-App "))
+        XCTAssertEqual(parsed.host, "proxy.example.com")
+        XCTAssertEqual(parsed.path, "My-App")
+
+        XCTAssertEqual(WebProxyConfiguration.canonicalAddress("proxy.example.com/slug/")?.path, "slug")
+        XCTAssertEqual(WebProxyConfiguration.canonicalAddress("proxy.example.com/")?.path, "")
+        XCTAssertEqual(WebProxyConfiguration.canonicalAddress("proxy.example.com")?.path, "")
+        XCTAssertEqual(WebProxyConfiguration.canonicalAddress("proxy.example.com/a/b/c")?.path, "a/b/c")
+        XCTAssertEqual(WebProxyConfiguration.canonicalAddress("proxy.example.com/a_b-9")?.path, "a_b-9")
+
+        let invalid = [
+            "/slug",
+            "proxy.example.com//a",
+            "proxy.example.com//",
+            "proxy.example.com/a//b",
+            "proxy.example.com/-a",
+            "proxy.example.com/_a",
+            "proxy.example.com/a%2Fb",
+            "proxy.example.com/a.b",
+            "proxy.example.com/.",
+            "proxy.example.com/..",
+            "proxy.example.com/a b",
+            "proxy.example.com/\u{e4}",
+            "proxy.example.com/a/" + String(repeating: "b", count: 128),
+            "proxy.example.com:8443/slug",
+            "127.0.0.1/slug"
+        ]
+        for value in invalid {
+            XCTAssertNil(WebProxyConfiguration.canonicalAddress(value), value)
+        }
+
+        XCTAssertEqual(WebProxyConfiguration.canonicalPath(String(repeating: "a", count: 128)), String(repeating: "a", count: 128))
+        XCTAssertNil(WebProxyConfiguration.canonicalPath(String(repeating: "a", count: 129)))
+    }
+
+    func testBridgeURLUsesTheBase() throws {
+        let nonce = String(repeating: "A", count: 43)
+        let root = try XCTUnwrap(WebProxyConfiguration(host: "proxy.example.com", secret: try self.plainSecret()))
+        XCTAssertEqual(root.base, "/")
+        XCTAssertEqual(
+            root.bridgeURL(nonce: nonce)?.absoluteString,
+            "https://proxy.example.com/?bridge=MHLEY5PmW1GWqJkSrlmJpvJUiLhBH_QKy6yKg8a0JPk#android=\(nonce)"
+        )
+
+        let prefixed = try XCTUnwrap(WebProxyConfiguration(host: "proxy.example.com", path: "dobry-cola-super-app", secret: try self.plainSecret()))
+        XCTAssertEqual(prefixed.base, "/dobry-cola-super-app/")
+        XCTAssertEqual(
+            prefixed.bridgeURL(nonce: nonce)?.absoluteString,
+            "https://proxy.example.com/dobry-cola-super-app/?bridge=hHz99Xs93EN1j91G9gpNepXwGNNt5YdAFkEVk_LlqdQ#android=\(nonce)"
+        )
     }
 
     func testSecretAndHostValidation() {
@@ -79,6 +169,46 @@ final class WebProxyTransportTests: XCTestCase {
         XCTAssertEqual(WebProxyConfiguration.canonicalHost("Example.COM"), "example.com")
         XCTAssertEqual(WebProxyConfiguration.canonicalHost("BÜCHER.example"), "xn--bcher-kva.example")
         XCTAssertNil(WebProxyConfiguration.canonicalHost("127.0.0.1"))
+        XCTAssertNil(WebProxyConfiguration.canonicalHost("127.1"))
+        XCTAssertNil(WebProxyConfiguration.canonicalHost("0x7f.1"))
+        XCTAssertNil(WebProxyConfiguration.canonicalHost("0177.0.0.1"))
+        XCTAssertNil(WebProxyConfiguration.canonicalHost("1.2.3"))
+        XCTAssertNil(WebProxyConfiguration.canonicalHost("proxy.example.com/slug"))
+        XCTAssertEqual(WebProxyConfiguration.canonicalHost("3com.example"), "3com.example")
+    }
+
+    func testMarkedSecretRoundTrip() throws {
+        // BASE_PATH.md §3: `{ printf '\x70'; printf <secret> } | base64 | tr '+/' '-_' | tr -d '=\n'`
+        let vector = try XCTUnwrap(WebProxyConfiguration.parseMarkedSecret("cIVhlEBk_HMMv6RHNWLY7Fk"))
+        XCTAssertTrue(vector.isMarked)
+        XCTAssertEqual(vector.secret.map { String(format: "%02x", $0) }.joined(), "8561944064fc730cbfa4473562d8ec59")
+        XCTAssertEqual(WebProxyConfiguration.linkSecretString(vector.secret, path: "phcf2vfe7zgbrslg"), "cIVhlEBk_HMMv6RHNWLY7Fk")
+        XCTAssertEqual(WebProxyConfiguration.linkSecretString(vector.secret, path: ""), "8561944064fc730cbfa4473562d8ec59")
+
+        for hex in ["000102030405060708090a0b0c0d0e0f", "dd000102030405060708090a0b0c0d0e0f"] {
+            let secret = try XCTUnwrap(WebProxyConfiguration.parseSecret(hex))
+            let marked = WebProxyConfiguration.linkSecretString(secret, path: "slug")
+            let decoded = try XCTUnwrap(WebProxyConfiguration.parseMarkedSecret(marked))
+            XCTAssertTrue(decoded.isMarked)
+            XCTAssertEqual(decoded.secret, secret)
+            // The plain form decodes to the same bytes and reports itself unmarked.
+            XCTAssertEqual(try XCTUnwrap(WebProxyConfiguration.parseMarkedSecret(hex)).isMarked, false)
+        }
+
+        // A marked secret never changes the capability: the marker is a link encoding.
+        let plain = try XCTUnwrap(WebProxyConfiguration(host: "proxy.example.com", path: "dobry-cola-super-app", secret: try self.plainSecret()))
+        let viaMarker = try XCTUnwrap(WebProxyConfiguration(
+            host: "proxy.example.com",
+            path: "dobry-cola-super-app",
+            secret: try XCTUnwrap(WebProxyConfiguration.parseSecret("cAABAgMEBQYHCAkKCwwNDg8"))
+        ))
+        XCTAssertEqual(plain, viaMarker)
+        XCTAssertEqual(viaMarker.bridgeCapability(), "hHz99Xs93EN1j91G9gpNepXwGNNt5YdAFkEVk_LlqdQ")
+
+        // 0xDD is never the marker, and a marker with a non-secret remainder is rejected.
+        XCTAssertEqual(try XCTUnwrap(WebProxyConfiguration.parseSecret("dd000102030405060708090a0b0c0d0e0f")).count, 17)
+        XCTAssertNil(WebProxyConfiguration.parseSecret("70000102030405060708090a0b0c0d"))
+        XCTAssertNil(WebProxyConfiguration.parseSecret(""))
     }
 
     func testFrameGoldenVectorAndFragmentation() throws {

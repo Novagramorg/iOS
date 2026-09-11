@@ -136,7 +136,7 @@ public enum ParsedInternalUrl {
     case joinCall(String)
     case localization(String)
     case proxy(host: String, port: Int32, username: String?, password: String?, secret: Data?)
-    case webProxy(host: String, secret: Data)
+    case webProxy(host: String, path: String, secret: Data)
     case internalInstantView(url: String)
     case confirmationCode(Int)
     case cancelAccountReset(phone: String, hash: String)
@@ -226,9 +226,8 @@ public func parseInternalUrl(sharedContext: SharedAccountContext, context: Accou
                             }
                         }
                         if let server, let secret,
-                           let canonicalHost = canonicalWebProxyHost(server),
-                           let secretData = parseWebProxySecret(secret) {
-                            return .webProxy(host: canonicalHost, secret: secretData)
+                           let link = parseWebProxyLinkComponents(address: server, secret: secret) {
+                            return .webProxy(host: link.host, path: link.path, secret: link.secret)
                         }
                         return nil
                     }
@@ -1273,8 +1272,8 @@ private func resolveInternalUrl(context: AccountContext, url: ParsedInternalUrl)
             return .single(.result(.localization(identifier)))
         case let .proxy(host, port, username, password, secret):
             return .single(.result(.proxy(host: host, port: port, username: username, password: password, secret: secret)))
-        case let .webProxy(host, secret):
-            return .single(.result(.webProxy(host: host, secret: secret)))
+        case let .webProxy(host, path, secret):
+            return .single(.result(.webProxy(host: host, path: path, secret: secret)))
         case let .internalInstantView(url):
             return resolveInstantViewUrl(account: context.account, url: url)
             |> map { result in

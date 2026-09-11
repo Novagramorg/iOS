@@ -290,7 +290,7 @@ private final class ProxyServerPreviewSheetContent: CombinedComponent {
                 id: "server",
                 title: strings.SocksProxySetup_Hostname,
                 component: AnyComponent(
-                    MultilineTextComponent(text: .plain(NSAttributedString(string: component.server.host, font: tableFont, textColor: tableTextColor)))
+                    MultilineTextComponent(text: .plain(NSAttributedString(string: component.server.webProxyAddress ?? component.server.host, font: tableFont, textColor: tableTextColor)))
                 )
             ))
             

@@ -1520,6 +1520,7 @@ private final class WalletTransactionContentComponent: Component {
             let explorerUrl = walletTransactionExplorerUrl(id: transaction.transactionHash ?? transaction.id)
             //TODO:localize
             let viewInExplorer = "View In Explorer"
+            let whatIsGram = "What is Gram?"
             let item = ContextMenuActionItem(
                 text: viewInExplorer,
                 icon: { theme in
@@ -1536,10 +1537,30 @@ private final class WalletTransactionContentComponent: Component {
                     }
                 }
             )
+            var items: [ContextMenuItem] = [.action(item)]
+            if transaction.currency == .ton && transaction.collectible == nil {
+                items.append(.action(ContextMenuActionItem(
+                    text: whatIsGram,
+                    icon: { theme in
+                        return generateTintedImage(
+                            image: UIImage(bundleImageName: "Chat/Context Menu/Help"),
+                            color: theme.contextMenu.primaryColor
+                        )
+                    },
+                    action: { [weak controller] _, dismiss in
+                        dismiss(.default)
+                        controller?.push(component.context.sharedContext.makeWalletInfoScreen(
+                            context: component.context,
+                            mode: .gram,
+                            completion: nil
+                        ))
+                    }
+                )))
+            }
             let contextController = makeContextController(
                 presentationData: component.context.sharedContext.currentPresentationData.with { $0 },
                 source: .reference(WalletTransactionContextReferenceContentSource(sourceView: sourceView)),
-                items: .single(ContextController.Items(content: .list([.action(item)]))),
+                items: .single(ContextController.Items(content: .list(items))),
                 gesture: nil
             )
             controller.presentInGlobalOverlay(contextController)

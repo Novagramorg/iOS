@@ -19,7 +19,7 @@ final class ProxySettingsTests: XCTestCase {
 
     func testWebProxyRoundTrip() throws {
         let secret = Data((0 ..< 16).map(UInt8.init))
-        let settings = ProxyServerSettings(host: "proxy.example.com", port: 8443, connection: .web(secret: secret))
+        let settings = ProxyServerSettings(host: "proxy.example.com", port: 8443, connection: .web(secret: secret, path: ""))
         XCTAssertEqual(settings.port, 443)
         let data = try JSONEncoder().encode(settings)
         XCTAssertEqual(try JSONDecoder().decode(ProxyServerSettings.self, from: data), settings)
@@ -32,12 +32,42 @@ final class ProxySettingsTests: XCTestCase {
         XCTAssertTrue(mtSettings.webProxy)
     }
 
+    func testWebProxyWithBasePathUsesItsOwnDiscriminator() throws {
+        let secret = Data((0 ..< 16).map(UInt8.init))
+        let rooted = ProxyServerSettings(host: "proxy.example.com", port: 443, connection: .web(secret: secret, path: ""))
+        let prefixed = ProxyServerSettings(host: "proxy.example.com", port: 443, connection: .web(secret: secret, path: "dobry-cola-super-app"))
+
+        XCTAssertEqual(try discriminator(prefixed.connection), 3)
+        XCTAssertNotEqual(rooted, prefixed)
+        XCTAssertNotEqual(prefixed, ProxyServerSettings(host: "proxy.example.com", port: 443, connection: .web(secret: secret, path: "other-app")))
+
+        let data = try JSONEncoder().encode(prefixed)
+        XCTAssertEqual(try JSONDecoder().decode(ProxyServerSettings.self, from: data), prefixed)
+        XCTAssertEqual(prefixed.port, 443)
+        XCTAssertEqual(prefixed.webProxyAddress, "proxy.example.com/dobry-cola-super-app")
+        XCTAssertEqual(rooted.webProxyAddress, "proxy.example.com")
+
+        let legacy = Data(#"{"_t":2,"secret":"AAECAwQFBgcICQoLDA0ODw=="}"#.utf8)
+        XCTAssertEqual(try JSONDecoder().decode(ProxyServerConnection.self, from: legacy), .web(secret: secret, path: ""))
+
+        XCTAssertEqual(prefixed.mtProxySettings.ip, "proxy.example.com")
+        XCTAssertEqual(prefixed.mtProxySettings.port, 443)
+    }
+
     func testWebProxyValidationAndNormalization() throws {
-        let settings = try XCTUnwrap(makeWebProxySettings(host: "PROXY.EXAMPLE.COM", secret: "000102030405060708090a0b0c0d0e0f"))
+        let settings = try XCTUnwrap(makeWebProxySettings(address: "PROXY.EXAMPLE.COM", secret: "000102030405060708090a0b0c0d0e0f"))
         XCTAssertEqual(settings.host, "proxy.example.com")
         XCTAssertEqual(settings.port, 443)
-        XCTAssertNil(makeWebProxySettings(host: "proxy.example.com:8443", secret: "000102030405060708090a0b0c0d0e0f"))
-        XCTAssertNil(makeWebProxySettings(host: "proxy.example.com", secret: "00"))
+        XCTAssertNil(makeWebProxySettings(address: "proxy.example.com:8443", secret: "000102030405060708090a0b0c0d0e0f"))
+        XCTAssertNil(makeWebProxySettings(address: "proxy.example.com", secret: "00"))
+
+        // Hand entry takes a plain secret with a base path. Only a *link* must carry the
+        // marked form - see testWebProxyLinksCarryTheBasePath - because only a link can be
+        // handed to a client that does not understand base paths.
+        let prefixed = try XCTUnwrap(makeWebProxySettings(address: "Proxy.Example.COM/My-App/", secret: "000102030405060708090a0b0c0d0e0f"))
+        XCTAssertEqual(prefixed.host, "proxy.example.com")
+        XCTAssertEqual(prefixed.webProxyAddress, "proxy.example.com/My-App")
+        XCTAssertNil(makeWebProxySettings(address: "proxy.example.com//My-App", secret: "000102030405060708090a0b0c0d0e0f"))
     }
 
     func testWebProxyLinksAreStrictAndCanonical() throws {
@@ -52,7 +82,8 @@ final class ProxySettingsTests: XCTestCase {
         XCTAssertNil(parseWebProxySettingsLink("https://t.me/webproxy?server=proxy.example.com&secret=\(secret)&extra=1"))
         XCTAssertNil(parseWebProxySettingsLink("https://t.me:8443/webproxy?server=proxy.example.com&secret=\(secret)"))
         XCTAssertNil(parseWebProxySettingsLink("https://user@t.me/webproxy?server=proxy.example.com&secret=\(secret)"))
-        XCTAssertNil(parseWebProxySettingsLink("tg://webproxy?server=proxy.example.com%2Fpath&secret=\(secret)"))
+        XCTAssertNil(parseWebProxySettingsLink("tg://webproxy?server=proxy.example.com%2F%2Fpath&secret=\(secret)"))
+        XCTAssertNil(parseWebProxySettingsLink("tg://webproxy?server=proxy.example.com%2Fpa.th&secret=\(secret)"))
         XCTAssertNil(parseWebProxySettingsLink("tg://webproxy?server=proxy.example.com&secret=00"))
 
         let idna = try XCTUnwrap(parseWebProxySettingsLink("tg://webproxy?server=BÜCHER.example&secret=\(secret)"))
@@ -73,7 +104,7 @@ final class ProxySettingsTests: XCTestCase {
     func testWebProxyLinkAcceptsADdPaddedSecret() throws {
         let secret = "dd000102030405060708090a0b0c0d0e0f"
         let web = try XCTUnwrap(parseWebProxySettingsLink("tg://webproxy?server=proxy.example.com&secret=\(secret)"))
-        XCTAssertEqual(web.connection, .web(secret: Data([0xdd] + (0 ..< 16).map(UInt8.init))))
+        XCTAssertEqual(web.connection, .web(secret: Data([0xdd] + (0 ..< 16).map(UInt8.init)), path: ""))
     }
 
     /// ANDROID.md: "`host` is accepted as a legacy input alias, but generated links
@@ -83,7 +114,7 @@ final class ProxySettingsTests: XCTestCase {
         let viaHost = try XCTUnwrap(parseWebProxySettingsLink("https://t.me/webproxy?host=tproxy.remindbot.ai&secret=\(secret)"))
         XCTAssertEqual(viaHost.host, "tproxy.remindbot.ai")
         XCTAssertEqual(viaHost.port, 443)
-        XCTAssertEqual(viaHost.connection, .web(secret: try XCTUnwrap(parseWebProxySecret(secret))))
+        XCTAssertEqual(viaHost.connection, .web(secret: try XCTUnwrap(parseWebProxySecret(secret)), path: ""))
         XCTAssertEqual(webProxySecretString(try XCTUnwrap(parseWebProxySecret(secret))), secret)
 
         let viaServer = try XCTUnwrap(parseWebProxySettingsLink("https://t.me/webproxy?server=tproxy.remindbot.ai&secret=\(secret)"))
@@ -99,6 +130,58 @@ final class ProxySettingsTests: XCTestCase {
         XCTAssertNil(parseWebProxySettingsLink("https://t.me/webproxy?host=a.example.com&server=b.example.com&secret=\(secret)"))
         XCTAssertNil(parseWebProxySettingsLink("https://t.me/webproxy?host=a.example.com&host=b.example.com&secret=\(secret)"))
         XCTAssertNil(parseWebProxySettingsLink("https://t.me/webproxy?host=a.example.com&secret=\(secret)&extra=1"))
+    }
+
+    func testWebProxyLinksCarryTheBasePath() throws {
+        let plain = "000102030405060708090a0b0c0d0e0f"
+        let marked = "cAABAgMEBQYHCAkKCwwNDg8"
+        let settings = try XCTUnwrap(parseWebProxySettingsLink("tg://webproxy?server=PROXY.EXAMPLE.COM%2Fdobry-cola-super-app&secret=\(marked)"))
+        XCTAssertEqual(settings.webProxyAddress, "proxy.example.com/dobry-cola-super-app")
+        XCTAssertEqual(settings.port, 443)
+        XCTAssertEqual(settings.connection, .web(secret: Data(0 ..< 16), path: "dobry-cola-super-app"))
+        XCTAssertEqual(
+            webProxySettingsLink(settings),
+            "https://t.me/webproxy?server=proxy.example.com%2Fdobry-cola-super-app&secret=\(marked)"
+        )
+        XCTAssertEqual(parseWebProxySettingsLink(try XCTUnwrap(webProxySettingsLink(settings))), settings)
+
+        let cased = try XCTUnwrap(parseWebProxySettingsLink("tg://webproxy?server=proxy.example.com%2FMy-App&secret=\(marked)"))
+        XCTAssertEqual(cased.webProxyAddress, "proxy.example.com/My-App")
+        XCTAssertNotEqual(cased, settings)
+
+        // A path-bearing link must use the marked form; the plain hex there is rejected so
+        // that no link exists which an older client would take for a pathless proxy on an
+        // empty host (BASE_PATH.md §3).
+        XCTAssertNil(parseWebProxySettingsLink("tg://webproxy?server=proxy.example.com%2Fdobry-cola-super-app&secret=\(plain)"))
+        // A root link keeps the plain secret, and still accepts the marked form.
+        XCTAssertEqual(
+            webProxySettingsLink(try XCTUnwrap(parseWebProxySettingsLink("tg://webproxy?server=proxy.example.com&secret=\(marked)"))),
+            "https://t.me/webproxy?server=proxy.example.com&secret=\(plain)"
+        )
+    }
+
+    /// The exact derivation `deploy/install.sh` performs, pinned by BASE_PATH.md §3.
+    func testMarkedSecretVector() throws {
+        let settings = try XCTUnwrap(parseWebProxySettingsLink("tg://webproxy?server=example.com%2Fphcf2vfe7zgbrslg&secret=cIVhlEBk_HMMv6RHNWLY7Fk"))
+        XCTAssertEqual(settings.webProxyAddress, "example.com/phcf2vfe7zgbrslg")
+        guard case let .web(secret, _) = settings.connection else {
+            return XCTFail("expected .web, got \(settings.connection)")
+        }
+        XCTAssertEqual(webProxySecretString(secret), "8561944064fc730cbfa4473562d8ec59")
+    }
+
+    func testMarkedSecretDecoding() throws {
+        // 0x70 || 16-byte secret, and 0x70 || dd || 16-byte secret.
+        XCTAssertEqual(parseWebProxySecret("cAABAgMEBQYHCAkKCwwNDg8"), Data(0 ..< 16))
+        XCTAssertEqual(parseWebProxySecret("cN0AAQIDBAUGBwgJCgsMDQ4P"), Data([0xdd] + (0 ..< 16).map(UInt8.init)))
+        // Unmarked forms still decode as themselves.
+        XCTAssertEqual(parseWebProxySecret("000102030405060708090a0b0c0d0e0f"), Data(0 ..< 16))
+        XCTAssertEqual(parseWebProxySecret("AAECAwQFBgcICQoLDA0ODw"), Data(0 ..< 16))
+        // 0xDD is never the marker: a 17-byte dd secret stays a 17-byte dd secret.
+        XCTAssertEqual(parseWebProxySecret("dd000102030405060708090a0b0c0d0e0f")?.count, 17)
+        // The transport carries neither an `ee` secret nor a stray marker with the wrong length.
+        XCTAssertNil(parseWebProxySecret("ee000102030405060708090a0b0c0d0e0f"))
+        XCTAssertNil(parseWebProxySecret("70000102030405060708090a0b0c0d"))
     }
 
     private func discriminator(_ connection: ProxyServerConnection) throws -> Int {

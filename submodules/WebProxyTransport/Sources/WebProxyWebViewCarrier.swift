@@ -295,7 +295,8 @@ final class WebProxyWebViewCarrier: NSObject, WKNavigationDelegate, WKUIDelegate
               url.scheme?.lowercased() == "https",
               url.host?.lowercased() == self.configuration.host,
               url.port == nil || url.port == 443,
-              url.path == "/" else { return false }
+              let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              components.percentEncodedPath == self.configuration.base else { return false }
         return true
     }
 

@@ -568,8 +568,8 @@ func openResolvedUrlImpl(
         
             let controller = ProxyServerPreviewScreen(context: context, server: server)
             navigationController?.pushViewController(controller)
-        case let .webProxy(host, secret):
-            let server = ProxyServerSettings(host: host, port: 443, connection: .web(secret: secret))
+        case let .webProxy(host, path, secret):
+            let server = ProxyServerSettings(host: host, port: 443, connection: .web(secret: secret, path: path))
 
             dismissInput()
 

@@ -194,9 +194,7 @@ func walletPendingTransferTransaction(
     }
     let status: WalletContext.Transaction.Status
     switch pending.status {
-    case .broadcasting:
-        return nil
-    case .pending, .submissionUnknown:
+    case .broadcasting, .pending, .submissionUnknown:
         status = .pending
     case .confirmed:
         status = .completed
@@ -451,77 +449,10 @@ func loadWalletTransactionHistoryPages(
     }
 }
 
-struct WalletEngineTransferSubmission: Sendable {
-    let recordId: String
-    let walletAddress: String
-    let pendingTransfer: WalletContext.PendingTransfer
-}
-
 struct WalletEngineTransferReceipt: Codable, Equatable, Sendable {
     let recordId: String
     let walletAddress: String
     let pendingTransfer: WalletContext.PendingTransfer
     let receivedAt: Int32
     let transfer: WalletSentTransfer
-}
-
-func walletTransferSubmissionData(_ request: HttpRequest) throws -> Data? {
-    guard request.method == .post,
-          let url = URLComponents(string: request.url),
-          url.path == "/api/v2/jsonRPC",
-          let object = try? JSONSerialization.jsonObject(with: request.body),
-          let body = object as? [String: Any],
-          body["method"] as? String == "sendBoc" else {
-        return nil
-    }
-    guard let params = body["params"] as? [String: Any],
-          let encoded = params["boc"] as? String,
-          encoded.utf8.count <= ((16 * 1024 + 2) / 3) * 4,
-          let data = Data(base64Encoded: encoded),
-          !data.isEmpty, data.count <= 16 * 1024 else {
-        throw WalletSendTransferError.invalidData
-    }
-    return data
-}
-
-func walletTransferSubmissionRejection(_ error: WalletSendTransferError) -> Data? {
-    let description: String
-    switch error {
-    case .invalidData:
-        description = "WALLET_TRANSFER_DATA_INVALID"
-    case .sendFailed:
-        description = "WALLET_TRANSFER_SEND_FAILED"
-    case .network, .generic:
-        return nil
-    }
-    return Data("{\"ok\":false,\"code\":400,\"error\":\"\(description)\"}".utf8)
-}
-
-let walletTransferSubmissionAccepted = Data("{\"result\":{\"@type\":\"ok\"}}".utf8)
-
-func walletPerformTransferSubmission(
-    _ request: HttpRequest,
-    submission: WalletEngineTransferSubmission?,
-    send: (Data) async throws -> WalletSentTransfer,
-    persist: (WalletEngineTransferReceipt) async throws -> Void,
-    now: () -> Int32
-) async throws -> Data? {
-    guard let submission else { return nil }
-    do {
-        guard let data = try walletTransferSubmissionData(request) else { return nil }
-        let transfer = try await send(data)
-        try await persist(WalletEngineTransferReceipt(
-            recordId: submission.recordId,
-            walletAddress: submission.walletAddress,
-            pendingTransfer: submission.pendingTransfer,
-            receivedAt: now(),
-            transfer: transfer
-        ))
-        return walletTransferSubmissionAccepted
-    } catch let error as WalletSendTransferError {
-        if let rejection = walletTransferSubmissionRejection(error) {
-            return rejection
-        }
-        throw error
-    }
 }

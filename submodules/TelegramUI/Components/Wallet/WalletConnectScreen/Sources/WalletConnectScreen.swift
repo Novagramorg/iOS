@@ -714,6 +714,7 @@ public final class WalletConnectScreen: ViewControllerComponentContainer {
     private let context: AccountContext
     private let applicationName: String
     private let cancelled: () -> Void
+    public var tonConnectClosed: (() -> Void)?
     private var finishResult: WalletConnectFinishResult?
 
     public init(
@@ -802,7 +803,10 @@ public final class WalletConnectScreen: ViewControllerComponentContainer {
                 callback()
                 return
             }
-            self.dismiss(completion: callback)
+            self.dismiss(completion: {
+                callback()
+                self.tonConnectClosed?()
+            })
         }
 
         if animated, let animateOut {
@@ -812,8 +816,10 @@ public final class WalletConnectScreen: ViewControllerComponentContainer {
         } else if animated {
             dismissController()
         } else {
-            self.dismiss(animated: false, completion: nil)
-            callback()
+            self.dismiss(animated: false, completion: {
+                callback()
+                self.tonConnectClosed?()
+            })
         }
     }
 

@@ -66,6 +66,7 @@ struct WalletStoredTransaction: Codable, Equatable, Sendable {
     }
 
     let id: String
+    let presentationId: String?
     let transactionHash: String?
     let logicalTime: String
     let timestamp: Int32
@@ -84,6 +85,7 @@ struct WalletStoredTransaction: Codable, Equatable, Sendable {
 
     init(_ transaction: WalletContext.Transaction) {
         self.id = transaction.id
+        self.presentationId = transaction.presentationId
         self.transactionHash = transaction.transactionHash
         self.logicalTime = transaction.logicalTime
         self.timestamp = transaction.timestamp
@@ -130,6 +132,7 @@ struct WalletStoredTransaction: Codable, Equatable, Sendable {
         }
         return WalletContext.Transaction(
             id: self.id,
+            presentationId: self.presentationId,
             transactionHash: self.transactionHash,
             logicalTime: self.logicalTime,
             timestamp: self.timestamp,
@@ -227,6 +230,8 @@ actor WalletStoredStateWriter {
     private var isShutdown = false
     private var latestRevision: UInt64 = 0
     private var pendingMutation: Mutation?
+    private var completedRevision: UInt64 = 0
+    private var waiters: [(revision: UInt64, continuation: CheckedContinuation<Bool, Never>)] = []
 
     init(engine: TelegramEngine) {
         self.engine = engine
@@ -246,12 +251,24 @@ actor WalletStoredStateWriter {
         self.beginWritingIfNeeded()
     }
 
+    func storeAndWait(_ state: WalletStoredState, revision: UInt64) async -> Bool {
+        guard !self.isShutdown else { return false }
+        self.enqueue(state, revision: revision)
+        if self.completedRevision >= revision { return true }
+        return await withCheckedContinuation { continuation in
+            self.waiters.append((revision, continuation))
+        }
+    }
+
     func shutdown() {
         self.isShutdown = true
         self.pendingMutation = nil
         self.currentDisposable?.dispose()
         self.currentDisposable = nil
         self.isWriting = false
+        let waiters = self.waiters
+        self.waiters.removeAll()
+        for waiter in waiters { waiter.continuation.resume(returning: false) }
     }
 
     private func beginWritingIfNeeded() {
@@ -260,6 +277,7 @@ actor WalletStoredStateWriter {
         }
         self.pendingMutation = nil
         self.isWriting = true
+        let revision = self.latestRevision
         let disposable = MetaDisposable()
         self.currentDisposable = disposable
         disposable.set((self.engine.preferences.update(
@@ -277,14 +295,18 @@ actor WalletStoredStateWriter {
             }
         )).start(completed: { [weak self] in
             Task {
-                await self?.writingCompleted()
+                await self?.writingCompleted(revision: revision)
             }
         }))
     }
 
-    private func writingCompleted() {
+    private func writingCompleted(revision: UInt64) {
         self.currentDisposable = nil
         self.isWriting = false
+        self.completedRevision = max(self.completedRevision, revision)
+        let completed = self.waiters.filter { $0.revision <= self.completedRevision }
+        self.waiters.removeAll { $0.revision <= self.completedRevision }
+        for waiter in completed { waiter.continuation.resume(returning: true) }
         self.beginWritingIfNeeded()
     }
 }
