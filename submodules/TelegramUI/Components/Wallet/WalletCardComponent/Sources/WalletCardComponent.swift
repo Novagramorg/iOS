@@ -13,6 +13,12 @@ import TelegramPresentationData
 import TelegramStringFormatting
 import WalletContext
 
+private final class WalletCardTransformView: UIView {
+    override class var layerClass: AnyClass {
+        return CATransformLayer.self
+    }
+}
+
 public final class WalletCardComponent: Component {
     public let balance: Int64?
     public let fiatCurrency: WalletContext.FiatCurrency
@@ -78,14 +84,23 @@ public final class WalletCardComponent: Component {
         private let shadowView = UIView()
         private let backgroundView = WalletCardBackgroundView()
         private let foregroundView = UIControl()
+        private let scrollShadingLayer = CAGradientLayer()
         private let balanceTransitionView = UIView()
         private weak var balanceTransitionContainer: UIView?
 
-        private let primaryBalanceCollapseContainerView = UIView()
-        private let secondaryBalanceCollapseContainerView = UIView()
-        private let primaryBalanceContainerView = UIView()
-        private let secondaryBalanceContainerView = UIView()
+        private let primaryBalanceCollapseContainerView = WalletCardTransformView()
+        private let secondaryBalanceCollapseContainerView = WalletCardTransformView()
+        private let primaryBalanceContainerView = WalletCardTransformView()
+        private let secondaryBalanceContainerView = WalletCardTransformView()
 
+        public private(set) var renderedCardFrame: CGRect = .zero
+        public var renderedCardBottomEdge: (left: CGPoint, right: CGPoint) {
+            let bounds = self.foregroundView.bounds
+            return (
+                left: self.foregroundView.convert(CGPoint(x: bounds.minX, y: bounds.maxY), to: self),
+                right: self.foregroundView.convert(CGPoint(x: bounds.maxX, y: bounds.maxY), to: self)
+            )
+        }
         public private(set) var gramIconFrame: CGRect = .zero
         public private(set) var primaryBalanceSourceFrame: CGRect = .zero
         public private(set) var secondaryBalanceSourceFrame: CGRect = .zero
@@ -97,6 +112,13 @@ public final class WalletCardComponent: Component {
         private var balanceTransitionFraction: CGFloat = 0.0
         private var balanceCollapseFraction: CGFloat = 0.0
         private var balanceScrollTransform = CATransform3DIdentity
+        private var balanceSourceTransform = CATransform3DIdentity
+        private var scrollTransform = CATransform3DIdentity
+
+        private var scrollPitchFraction: CGFloat {
+            let pitch = max(0.0, atan2(self.scrollTransform.m23, self.scrollTransform.m22))
+            return max(0.0, min(1.0, pitch / (CGFloat.pi / 3.0)))
+        }
 
         private let integralBalance = ComponentView<Empty>()
         private let fractionalBalance = ComponentView<Empty>()
@@ -130,6 +152,7 @@ public final class WalletCardComponent: Component {
         private var idleTiltY = 0.0
         private var elapsedTime = 0.0
         private var currentSize = CGSize.zero
+        private var isScrollVisible = true
 
         private var component: WalletCardComponent?
 
@@ -152,6 +175,18 @@ public final class WalletCardComponent: Component {
             self.foregroundView.layer.masksToBounds = false
             self.foregroundView.layer.allowsEdgeAntialiasing = true
             self.addSubview(self.foregroundView)
+
+            self.scrollShadingLayer.startPoint = CGPoint(x: 0.5, y: 0.0)
+            self.scrollShadingLayer.endPoint = CGPoint(x: 0.5, y: 1.0)
+            self.scrollShadingLayer.colors = [
+                UIColor(rgb: 0x001e4d, alpha: 0.22).cgColor,
+                UIColor(rgb: 0x001e4d, alpha: 0.03).cgColor
+            ]
+            self.scrollShadingLayer.locations = [0.0, 1.0]
+            self.scrollShadingLayer.opacity = 0.0
+            self.scrollShadingLayer.masksToBounds = true
+            self.scrollShadingLayer.allowsEdgeAntialiasing = true
+            self.foregroundView.layer.addSublayer(self.scrollShadingLayer)
 
             self.balanceTransitionView.isUserInteractionEnabled = false
             self.balanceTransitionView.clipsToBounds = false
@@ -253,6 +288,12 @@ public final class WalletCardComponent: Component {
             self.foregroundView.bounds = CGRect(origin: .zero, size: size)
             self.foregroundView.layer.anchorPoint = CGPoint(x: 0.5, y: 0.5)
             self.foregroundView.layer.position = CGPoint(x: size.width * 0.5, y: size.height * 0.5)
+
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            self.scrollShadingLayer.frame = self.foregroundView.bounds
+            self.scrollShadingLayer.cornerRadius = cornerRadius
+            CATransaction.commit()
 
             for collapseContainerView in [self.primaryBalanceCollapseContainerView, self.secondaryBalanceCollapseContainerView] {
                 ComponentTransition.immediate.setBounds(
@@ -533,7 +574,6 @@ public final class WalletCardComponent: Component {
                     )
                 )
             }
-
             let qrSize = self.qrButton.update(
                 transition: transition,
                 component: AnyComponent(PlainButtonComponent(
@@ -669,6 +709,7 @@ public final class WalletCardComponent: Component {
 
         private func updateAnimationState() {
             guard self.component?.isVisible == true,
+                  self.isScrollVisible,
                   self.window != nil,
                   UIApplication.shared.applicationState == .active else {
                 self.stopAnimation()
@@ -750,6 +791,22 @@ public final class WalletCardComponent: Component {
             }
         }
 
+        public func updateScrollVisibility(_ isVisible: Bool) {
+            guard self.isScrollVisible != isVisible else {
+                return
+            }
+            self.isScrollVisible = isVisible
+            self.updateAnimationState()
+        }
+
+        public func updateScrollTransform(_ transform: CATransform3D) {
+            guard !CATransform3DEqualToTransform(self.scrollTransform, transform) else {
+                return
+            }
+            self.scrollTransform = transform
+            self.renderCurrentFrame(notifyBalanceGeometry: false)
+        }
+
         public func updateOverscroll(distance: CGFloat) {
             let pitch = -Self.maxOverscrollPitch * Double(min(1.0, max(0.0, distance) / 120.0))
             guard self.overscrollPitch != pitch else {
@@ -772,6 +829,7 @@ public final class WalletCardComponent: Component {
             foregroundView.addSubview(self.secondaryBalanceCollapseContainerView)
             if container == nil {
                 self.balanceTransitionView.removeFromSuperview()
+                self.updateScrollTransform(CATransform3DIdentity)
                 self.updateBalanceTransition(
                     primaryFrame: nil,
                     secondaryFrame: nil,
@@ -796,7 +854,14 @@ public final class WalletCardComponent: Component {
             ComponentTransition.immediate.setPosition(view: self.balanceTransitionView, position: self.foregroundView.layer.position)
 
             let fraction = 1.0 - max(0.0, min(1.0, self.balanceCollapseFraction))
-            var transform = CATransform3DConcat(self.foregroundView.layer.transform, self.balanceScrollTransform)
+            var sourceTransform = self.balanceSourceTransform
+            if !CATransform3DIsIdentity(self.balanceScrollTransform) {
+                sourceTransform.m13 = 0.0
+                sourceTransform.m23 = 0.0
+                sourceTransform.m33 = 1.0
+                sourceTransform.m43 = 0.0
+            }
+            var transform = CATransform3DConcat(sourceTransform, self.balanceScrollTransform)
             transform.m11 = 1.0 + (transform.m11 - 1.0) * fraction
             transform.m12 *= fraction
             transform.m13 *= fraction
@@ -848,10 +913,61 @@ public final class WalletCardComponent: Component {
                 collapsedFrame: secondaryCollapsedFrame,
                 collapseFraction: collapseFraction
             )
-            if let currencyView = self.currency.view {
-                transition.setAlpha(view: currencyView, alpha: 1.0 - fraction)
+            if let balanceTransitionContainer = self.balanceTransitionContainer,
+               let primaryFrame, !primaryFrame.isEmpty,
+               let secondaryFrame, !secondaryFrame.isEmpty,
+               primaryCollapsedFrame == nil, secondaryCollapsedFrame == nil {
+                let renderedFrame = self.primaryBalanceContainerView.convert(self.primaryBalanceContainerView.bounds, to: balanceTransitionContainer).union(
+                    self.secondaryBalanceContainerView.convert(self.secondaryBalanceContainerView.bounds, to: balanceTransitionContainer)
+                )
+                let targetFrame = primaryFrame.union(secondaryFrame)
+                ComponentTransition.immediate.setPosition(
+                    view: self.balanceTransitionView,
+                    position: CGPoint(
+                        x: self.balanceTransitionView.layer.position.x + targetFrame.midX - renderedFrame.midX,
+                        y: self.balanceTransitionView.layer.position.y + targetFrame.midY - renderedFrame.midY
+                    )
+                )
             }
+            self.updateCardScrollAppearance()
             self.updateProjectedBalanceFrames()
+        }
+
+        private func updateCardScrollAppearance() {
+            let detailsFraction = max(0.0, min(1.0, (self.balanceTransitionFraction - 0.3) / 0.3))
+            let easedDetailsFraction = detailsFraction * detailsFraction * (3.0 - 2.0 * detailsFraction)
+            let detailsAlpha = 1.0 - easedDetailsFraction
+            for view in [self.name.view, self.qrButton.view, self.address.view, self.addressOutline.view] {
+                if let view {
+                    ComponentTransition.immediate.setAlpha(view: view, alpha: detailsAlpha)
+                    view.layer.removeAnimation(forKey: "filters.gaussianBlur.inputRadius")
+                    if easedDetailsFraction > 0.0 {
+                        ComponentTransition.immediate.setBlur(layer: view.layer, radius: easedDetailsFraction * 8.0)
+                    } else {
+                        view.layer.filters = nil
+                    }
+                }
+            }
+            if let currencyView = self.currency.view {
+                let fadeFraction = min(1.0, self.balanceTransitionFraction / 0.25)
+                let alpha = 1.0 - fadeFraction * fadeFraction * (3.0 - 2.0 * fadeFraction)
+                ComponentTransition.immediate.setAlpha(view: currencyView, alpha: alpha)
+            }
+
+            let pitchFraction = self.scrollPitchFraction
+            let shadingFraction = pitchFraction * pitchFraction * (3.0 - 2.0 * pitchFraction)
+
+            let liftProgress = max(0.0, min(1.0, (self.currentScale - 1.0) / 0.02))
+            let easedLiftProgress = liftProgress * liftProgress * (3.0 - 2.0 * liftProgress)
+            let liftShadowOpacity = Self.maximumLiftShadowOpacity * Float(easedLiftProgress)
+            let shadowWave = sin(CGFloat.pi * self.balanceTransitionFraction)
+            let scrollShadowOpacity = Float(0.12 * shadowWave * shadowWave)
+
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            self.scrollShadingLayer.opacity = Float(shadingFraction)
+            self.shadowView.layer.shadowOpacity = max(liftShadowOpacity, scrollShadowOpacity)
+            CATransaction.commit()
         }
 
         private func updateBalanceContainer(
@@ -882,7 +998,26 @@ public final class WalletCardComponent: Component {
                 foregroundView = self.foregroundView
                 coordinateView = self
             }
-            let targetFrameInForeground = foregroundView.convert(targetFrame, from: coordinateView)
+            let targetFrameInForeground: CGRect
+            if self.balanceTransitionContainer != nil && collapsedFrame == nil {
+                let sourceFrame = self.projectedFrame(baseFrame, transform: self.balanceSourceTransform)
+                let fraction = max(0.0, min(1.0, collapseFraction))
+                let referenceSize = CGSize(
+                    width: sourceFrame.width + (baseFrame.width - sourceFrame.width) * fraction,
+                    height: sourceFrame.height + (baseFrame.height - sourceFrame.height) * fraction
+                )
+                let size = CGSize(
+                    width: targetFrame.width * baseFrame.width / referenceSize.width,
+                    height: targetFrame.height * baseFrame.height / referenceSize.height
+                )
+                let center = foregroundView.convert(targetFrame.center, from: coordinateView)
+                targetFrameInForeground = CGRect(
+                    origin: CGPoint(x: center.x - size.width * 0.5, y: center.y - size.height * 0.5),
+                    size: size
+                )
+            } else {
+                targetFrameInForeground = foregroundView.convert(targetFrame, from: coordinateView)
+            }
             let scaleX = targetFrameInForeground.width / baseFrame.width
             let scaleY = targetFrameInForeground.height / baseFrame.height
             ComponentTransition.immediate.setPosition(
@@ -925,17 +1060,17 @@ public final class WalletCardComponent: Component {
             if self.primaryBalanceBaseFrame.isEmpty {
                 self.primaryBalanceSourceFrame = .zero
             } else {
-                self.primaryBalanceSourceFrame = self.foregroundView.convert(
+                self.primaryBalanceSourceFrame = self.projectedFrame(
                     self.primaryBalanceBaseFrame,
-                    to: self
+                    transform: self.balanceSourceTransform
                 )
             }
             if self.secondaryBalanceBaseFrame.isEmpty {
                 self.secondaryBalanceSourceFrame = .zero
             } else {
-                self.secondaryBalanceSourceFrame = self.foregroundView.convert(
+                self.secondaryBalanceSourceFrame = self.projectedFrame(
                     self.secondaryBalanceBaseFrame,
-                    to: self
+                    transform: self.balanceSourceTransform
                 )
             }
             if self.gramIconContentFrame.isEmpty {
@@ -988,7 +1123,7 @@ public final class WalletCardComponent: Component {
             return perspectiveTransform
         }
 
-        private func renderCurrentFrame() {
+        private func renderCurrentFrame(notifyBalanceGeometry: Bool = true) {
             guard self.currentSize.width > 0.0, self.currentSize.height > 0.0 else {
                 return
             }
@@ -1014,14 +1149,22 @@ public final class WalletCardComponent: Component {
                 )
             }
 
+            self.balanceSourceTransform = perspectiveTransform
+            if !CATransform3DIsIdentity(self.scrollTransform) {
+                perspectiveTransform.m13 = 0.0
+                perspectiveTransform.m23 = 0.0
+                perspectiveTransform.m33 = 1.0
+                perspectiveTransform.m43 = 0.0
+                perspectiveTransform = CATransform3DConcat(perspectiveTransform, self.scrollTransform)
+            }
+
             CATransaction.begin()
             CATransaction.setDisableActions(true)
             self.shadowView.layer.transform = perspectiveTransform
             self.foregroundView.layer.transform = perspectiveTransform
-            let liftProgress = max(0.0, min(1.0, (self.currentScale - 1.0) / 0.02))
-            let easedLiftProgress = liftProgress * liftProgress * (3.0 - 2.0 * liftProgress)
-            self.shadowView.layer.shadowOpacity = Self.maximumLiftShadowOpacity * Float(easedLiftProgress)
             CATransaction.commit()
+            self.updateCardScrollAppearance()
+            self.renderedCardFrame = self.foregroundView.convert(self.foregroundView.bounds, to: self)
             self.updateBalanceTransitionGeometry()
             self.backgroundView.updateFallbackTransform(perspectiveTransform)
 
@@ -1030,45 +1173,55 @@ public final class WalletCardComponent: Component {
             self.updateProjectedBalanceFrames()
 
             let additionalIdleGain = Self.highlightIdleGain - 1.0
+            let highlightFraction = min(1.0, self.scrollPitchFraction / 0.64)
+            let easedHighlightFraction = highlightFraction * highlightFraction * (3.0 - 2.0 * highlightFraction)
+            let scrollHighlightPitch = Double(easedHighlightFraction) * Self.maxPitch
             self.backgroundView.render(
                 time: self.elapsedTime,
-                highlightTiltX: Self.clamp(self.currentHighlightX + self.overscrollPitch, maxPitch + 0.03) + self.idleTiltX * additionalIdleGain,
+                highlightTiltX: Self.clamp(self.currentHighlightX + self.overscrollPitch + scrollHighlightPitch, maxPitch + 0.03) + self.idleTiltX * additionalIdleGain,
                 highlightTiltY: self.currentHighlightY + self.idleTiltY * additionalIdleGain,
                 surfaceTiltX: Self.clamp(self.currentDepthX + self.overscrollPitch, maxPitch + 0.03),
                 surfaceTiltY: self.currentDepthY,
                 quad: projectedQuad
             )
 
-            if self.balanceTransitionFraction > 0.0 && self.balanceTransitionFraction < 1.0 {
+            if notifyBalanceGeometry && self.balanceTransitionFraction > 0.0 && self.balanceTransitionFraction < 1.0 {
                 self.balanceGeometryUpdated?()
             }
         }
 
+        private func projectedFrame(_ frame: CGRect, transform: CATransform3D) -> CGRect {
+            let topLeft = self.projectedPoint(CGPoint(x: frame.minX, y: frame.minY), transform: transform).point
+            let topRight = self.projectedPoint(CGPoint(x: frame.maxX, y: frame.minY), transform: transform).point
+            let bottomLeft = self.projectedPoint(CGPoint(x: frame.minX, y: frame.maxY), transform: transform).point
+            let bottomRight = self.projectedPoint(CGPoint(x: frame.maxX, y: frame.maxY), transform: transform).point
+            let minX = min(min(topLeft.x, topRight.x), min(bottomLeft.x, bottomRight.x))
+            let maxX = max(max(topLeft.x, topRight.x), max(bottomLeft.x, bottomRight.x))
+            let minY = min(min(topLeft.y, topRight.y), min(bottomLeft.y, bottomRight.y))
+            let maxY = max(max(topLeft.y, topRight.y), max(bottomLeft.y, bottomRight.y))
+            return CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+        }
+
+        private func projectedPoint(_ point: CGPoint, transform: CATransform3D) -> (point: CGPoint, w: CGFloat) {
+            let anchor = CGPoint(x: self.currentSize.width * 0.5, y: self.currentSize.height * 0.5)
+            let x = point.x - anchor.x
+            let y = point.y - anchor.y
+            let transformedX = x * transform.m11 + y * transform.m21 + transform.m41
+            let transformedY = x * transform.m12 + y * transform.m22 + transform.m42
+            let transformedW = x * transform.m14 + y * transform.m24 + transform.m44
+            let safeW = abs(transformedW) < 0.0001 ? 0.0001 : transformedW
+            return (
+                CGPoint(x: anchor.x + transformedX / safeW, y: anchor.y + transformedY / safeW),
+                safeW
+            )
+        }
+
         private func projectedQuad(for transform: CATransform3D) -> WalletCardProjectedQuad {
             let sourceBounds = CGRect(origin: .zero, size: self.currentSize)
-            let anchor = CGPoint(x: sourceBounds.midX, y: sourceBounds.midY)
-            let position = anchor
-
-            func project(_ point: CGPoint) -> (point: CGPoint, w: CGFloat) {
-                let x = point.x - anchor.x
-                let y = point.y - anchor.y
-                let transformedX = x * transform.m11 + y * transform.m21 + transform.m41
-                let transformedY = x * transform.m12 + y * transform.m22 + transform.m42
-                let transformedW = x * transform.m14 + y * transform.m24 + transform.m44
-                let safeW = abs(transformedW) < 0.0001 ? 0.0001 : transformedW
-                return (
-                    CGPoint(
-                        x: position.x + transformedX / safeW,
-                        y: position.y + transformedY / safeW
-                    ),
-                    safeW
-                )
-            }
-
-            let topLeft = project(CGPoint(x: sourceBounds.minX, y: sourceBounds.minY))
-            let topRight = project(CGPoint(x: sourceBounds.maxX, y: sourceBounds.minY))
-            let bottomLeft = project(CGPoint(x: sourceBounds.minX, y: sourceBounds.maxY))
-            let bottomRight = project(CGPoint(x: sourceBounds.maxX, y: sourceBounds.maxY))
+            let topLeft = self.projectedPoint(CGPoint(x: sourceBounds.minX, y: sourceBounds.minY), transform: transform)
+            let topRight = self.projectedPoint(CGPoint(x: sourceBounds.maxX, y: sourceBounds.minY), transform: transform)
+            let bottomLeft = self.projectedPoint(CGPoint(x: sourceBounds.minX, y: sourceBounds.maxY), transform: transform)
+            let bottomRight = self.projectedPoint(CGPoint(x: sourceBounds.maxX, y: sourceBounds.maxY), transform: transform)
 
             func clipPosition(_ projected: (point: CGPoint, w: CGFloat)) -> SIMD4<Float> {
                 let padding = WalletCardBackgroundView.projectionPadding
