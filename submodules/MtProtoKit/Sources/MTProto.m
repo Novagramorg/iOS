@@ -32,6 +32,7 @@
 
 #import <MtProtoKit/MTSerialization.h>
 #import <MtProtoKit/MTEncryption.h>
+#import <MtProtoKit/MTQuickAck.h>
 
 #import <MtProtoKit/MTTimer.h>
 
@@ -1577,9 +1578,7 @@ static const NSUInteger MTMaxUnacknowledgedMessageCount = 64;
     MTMessageEncryptionKey *encryptionKey = [MTMessageEncryptionKey messageEncryptionKeyV2ForAuthKey:authKeyData messageKey:messageKey toClient:false];
 
     if (quickAckId != NULL) {
-        int32_t nQuickAckId = 0;
-        memcpy(&nQuickAckId, msgKeyLarge, 4);
-        *quickAckId = nQuickAckId & 0x7fffffff;
+        *quickAckId = MTQuickAckTokenFromMsgKeyLarge(msgKeyLarge);
     }
 
     if (encryptionKey == nil) {

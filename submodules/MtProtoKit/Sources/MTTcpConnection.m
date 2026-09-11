@@ -13,6 +13,7 @@
 #import <Security/SecRandom.h>
 
 #import <MtProtoKit/MTInternalId.h>
+#import <MtProtoKit/MTQuickAck.h>
 
 #import <MtProtoKit/MTContext.h>
 #import <MtProtoKit/MTApiEnvironment.h>
@@ -1932,10 +1933,8 @@ struct ctr_state {
         [data getBytes:&length length:4];
         
         if ((length & 0x80000000) == 0x80000000) {
-            int32_t ackId = length;
-            ackId &= ((uint32_t)0xffffffff ^ (uint32_t)(((uint32_t)1) << 31));
-            ackId = (int32_t)OSSwapInt32(ackId);
-            
+            int32_t ackId = MTQuickAckTokenFromIntermediateWord(length);
+
             id<MTTcpConnectionDelegate> delegate = _delegate;
             if ([delegate respondsToSelector:@selector(tcpConnectionReceivedQuickAck:quickAck:)])
                 [delegate tcpConnectionReceivedQuickAck:self quickAck:ackId];
@@ -2010,11 +2009,10 @@ struct ctr_state {
             [packetData getBytes:&header length:4];
             if (header == 0xffffffff) {
                 if (packetData.length >= 8) {
-                    int32_t ackId = 0;
-                    [packetData getBytes:&ackId range:NSMakeRange(4, 4)];
-                    ackId &= ((uint32_t)0xffffffff ^ (uint32_t)(((uint32_t)1) << 31));
-                    ackId = (int32_t)OSSwapInt32(ackId);
-                    
+                    int32_t ackWord = 0;
+                    [packetData getBytes:&ackWord range:NSMakeRange(4, 4)];
+                    int32_t ackId = MTQuickAckTokenFromIntermediateWord(ackWord);
+
                     id<MTTcpConnectionDelegate> delegate = _delegate;
                     if ([delegate respondsToSelector:@selector(tcpConnectionReceivedQuickAck:quickAck:)]) {
                         [delegate tcpConnectionReceivedQuickAck:self quickAck:ackId];
@@ -2048,12 +2046,11 @@ struct ctr_state {
         NSAssert(data.length == 3, @"data length should be equal to 3");
 #endif
         
-        int32_t ackId = 0;
-        ((uint8_t *)&ackId)[0] = _quickAckByte;
-        memcpy(((uint8_t *)&ackId) + 1, data.bytes, 3);
-        ackId = (int32_t)OSSwapInt32(ackId);
-        ackId &= ((uint32_t)0xffffffff ^ (uint32_t)(((uint32_t)1) << 31));
-        
+        uint8_t ackBytes[4];
+        ackBytes[0] = _quickAckByte;
+        memcpy(ackBytes + 1, data.bytes, 3);
+        int32_t ackId = MTQuickAckTokenFromAbridgedBytes(ackBytes);
+
         id<MTTcpConnectionDelegate> delegate = _delegate;
         if ([delegate respondsToSelector:@selector(tcpConnectionReceivedQuickAck:quickAck:)])
             [delegate tcpConnectionReceivedQuickAck:self quickAck:ackId];
