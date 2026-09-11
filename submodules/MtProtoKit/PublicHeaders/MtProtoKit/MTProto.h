@@ -93,6 +93,23 @@
 // Exposed for tests.
 + (NSData *)_encryptedTransportDataForPaddedPlaintext:(NSData *)plaintext authKey:(MTDatacenterAuthKey *)authKey quickAckId:(int32_t *)quickAckId;
 
+// Verifies and decrypts a server → client MTProto 2.0 frame
+// (auth_key_id ‖ msg_key ‖ AES-IGE(plaintext)) with a single output allocation.
+// Returns the padded plaintext (32-byte header, body, padding), or nil when the
+// key id or msg_key does not match, message_data_length does not fit, or the
+// padding after the body is not 12..1024 bytes. Trailing bytes beyond the last
+// 16-byte block are ignored. Exposed for tests.
++ (NSData *)_decryptedPayloadForIncomingTransportData:(NSData *)transportData authKey:(MTDatacenterAuthKey *)authKey;
+
+// Splits a decrypted payload into its header fields and the body that follows
+// them. With `unauthorized` the handshake layout is expected
+// (auth_key_id = 0 ‖ message_id ‖ message_data_length); otherwise
+// salt ‖ session_id ‖ message_id ‖ seq_no ‖ message_data_length. Returns false
+// when the header is truncated or, in unauthorized mode, when auth_key_id is
+// not 0 or the declared length is below 4. Every out-parameter must be
+// non-NULL. Exposed for tests.
++ (bool)_readIncomingPayload:(NSData *)data unauthorized:(bool)unauthorized salt:(int64_t *)salt sessionId:(int64_t *)sessionId messageId:(int64_t *)messageId seqNo:(int32_t *)seqNo topMessageSize:(int32_t *)topMessageSize body:(NSData **)body;
+
 - (void)simulateDisconnection;
 
 - (MTTransport *)takeConnectionForReusing;

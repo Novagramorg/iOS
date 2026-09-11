@@ -78,17 +78,18 @@ public func makeWebProxySettings(address: String, secret: String) -> ProxyServer
 /// `host/path` to an empty host and offer to connect to a pathless proxy. Hand entry in the
 /// editor is not bound by it - the hazard is specific to a shared link - so
 /// `makeWebProxySettings(address:secret:)` stays lenient.
-/// The strict `webproxy` query rule, so that every entry point accepts exactly the same
-/// set of links. `host` is a legacy input alias for `server` (ANDROID.md); generated links
-/// always use `server`, and exactly one of the two may appear alongside exactly one
-/// `secret` and nothing else. Keeping this in one place matters: when `UrlHandling` had its
-/// own laxer loop, a link with both `server` and `host` was rejected in the proxy editor and
-/// accepted from a chat, resolving to whichever came last.
+/// The `webproxy` query rule, so that every entry point accepts exactly the same set of
+/// links. `host` is a legacy input alias for `server` (ANDROID.md); generated links always
+/// use `server`, and exactly one of the two must appear alongside exactly one `secret`.
+/// Items with any other name are ignored, so a trailing `&`, which `URLComponents` keeps
+/// as an empty-name item, or a tracking parameter does not make a shared link dead.
+/// Keeping this in one place matters: when `UrlHandling` had its own laxer loop, a link
+/// with both `server` and `host` was rejected in the proxy editor and accepted from a
+/// chat, resolving to whichever came last.
 public func parseWebProxyLinkQueryItems(_ items: [URLQueryItem]) -> (host: String, path: String, secret: Data)? {
     let hostItems = items.filter { $0.name == "server" || $0.name == "host" }
     let secretItems = items.filter { $0.name == "secret" }
-    guard items.count == 2,
-          hostItems.count == 1,
+    guard hostItems.count == 1,
           secretItems.count == 1,
           let address = hostItems[0].value,
           let secret = secretItems[0].value else {

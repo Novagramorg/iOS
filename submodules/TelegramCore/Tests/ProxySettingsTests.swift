@@ -79,7 +79,9 @@ final class ProxySettingsTests: XCTestCase {
         XCTAssertEqual(parseWebProxySettingsLink(try XCTUnwrap(webProxySettingsLink(settings))), settings)
 
         XCTAssertNil(parseWebProxySettingsLink("https://t.me/webproxy?server=proxy.example.com&server=other.example.com&secret=\(secret)"))
-        XCTAssertNil(parseWebProxySettingsLink("https://t.me/webproxy?server=proxy.example.com&secret=\(secret)&extra=1"))
+        // Unknown items and a trailing "&" are ignored rather than making the link dead.
+        XCTAssertEqual(parseWebProxySettingsLink("https://t.me/webproxy?server=proxy.example.com&secret=\(secret)&extra=1"), settings)
+        XCTAssertEqual(parseWebProxySettingsLink("https://t.me/webproxy?server=proxy.example.com&secret=\(secret)&"), settings)
         XCTAssertNil(parseWebProxySettingsLink("https://t.me:8443/webproxy?server=proxy.example.com&secret=\(secret)"))
         XCTAssertNil(parseWebProxySettingsLink("https://user@t.me/webproxy?server=proxy.example.com&secret=\(secret)"))
         XCTAssertNil(parseWebProxySettingsLink("tg://webproxy?server=proxy.example.com%2F%2Fpath&secret=\(secret)"))
@@ -126,10 +128,10 @@ final class ProxySettingsTests: XCTestCase {
         // Emitted links still use `server`, never `host`.
         XCTAssertEqual(webProxySettingsLink(viaHost), "https://t.me/webproxy?server=tproxy.remindbot.ai&secret=\(secret)")
 
-        // The alias must not loosen the strictness the other tests pin.
+        // The alias must not loosen the one-address rule the other tests pin.
         XCTAssertNil(parseWebProxySettingsLink("https://t.me/webproxy?host=a.example.com&server=b.example.com&secret=\(secret)"))
         XCTAssertNil(parseWebProxySettingsLink("https://t.me/webproxy?host=a.example.com&host=b.example.com&secret=\(secret)"))
-        XCTAssertNil(parseWebProxySettingsLink("https://t.me/webproxy?host=a.example.com&secret=\(secret)&extra=1"))
+        XCTAssertEqual(parseWebProxySettingsLink("https://t.me/webproxy?host=a.example.com&secret=\(secret)&extra=1")?.host, "a.example.com")
     }
 
     func testWebProxyLinksCarryTheBasePath() throws {
@@ -175,10 +177,21 @@ final class ProxySettingsTests: XCTestCase {
             URLQueryItem(name: "secret", value: secret)
         ])?.host, "proxy.example.com")
 
+        // Unknown items are ignored: a tracking parameter, or the empty-name item
+        // URLComponents produces for a trailing "&", must not make a shared link dead.
+        for items in [
+            [URLQueryItem(name: "server", value: "a.example.com"), URLQueryItem(name: "secret", value: secret), URLQueryItem(name: "extra", value: "1")],
+            [URLQueryItem(name: "utm_source", value: "x"), URLQueryItem(name: "server", value: "a.example.com"), URLQueryItem(name: "secret", value: secret)],
+            try XCTUnwrap(URLComponents(string: "tg://webproxy?server=a.example.com&secret=\(secret)&")?.queryItems)
+        ] {
+            XCTAssertEqual(parseWebProxyLinkQueryItems(items)?.host, "a.example.com", "\(items)")
+        }
+
+        // Duplicated or missing address/secret items are still rejected.
         for items in [
             [URLQueryItem(name: "server", value: "a.example.com"), URLQueryItem(name: "secret", value: secret), URLQueryItem(name: "host", value: "evil.example.com")],
             [URLQueryItem(name: "server", value: "a.example.com"), URLQueryItem(name: "server", value: "evil.example.com"), URLQueryItem(name: "secret", value: secret)],
-            [URLQueryItem(name: "server", value: "a.example.com"), URLQueryItem(name: "secret", value: secret), URLQueryItem(name: "extra", value: "1")],
+            [URLQueryItem(name: "server", value: "a.example.com"), URLQueryItem(name: "secret", value: secret), URLQueryItem(name: "secret", value: secret)],
             [URLQueryItem(name: "server", value: "a.example.com")],
             [URLQueryItem(name: "secret", value: secret)],
             []

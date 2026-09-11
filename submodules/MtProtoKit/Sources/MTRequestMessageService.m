@@ -1089,7 +1089,9 @@
 {
     for (MTRequest *request in _requests)
     {
-        if (request.requestContext != nil && request.requestContext.quickAckId == quickAckId)
+        // A context only carries a real token once its transaction id is known;
+        // before that quickAckId is 0, which is also a valid 31-bit token.
+        if (request.requestContext != nil && request.requestContext.transactionId != nil && request.requestContext.quickAckId == quickAckId)
         {
             if (request.acknowledgementReceived != nil)
                 request.acknowledgementReceived();

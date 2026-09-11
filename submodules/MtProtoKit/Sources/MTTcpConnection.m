@@ -1866,10 +1866,22 @@ struct ctr_state {
 - (void)processReceivedData:(NSData *)rawData tag:(int)tag networkType:(int32_t)networkType {
     _lastNetworkType = networkType;
     
-    NSMutableData *decryptedData = [[NSMutableData alloc] initWithLength:rawData.length];
-    [_incomingAesCtr encryptIn:rawData.bytes out:decryptedData.mutableBytes len:rawData.length];
-    
-    NSData *data = decryptedData;
+    NSMutableData *decryptedData = nil;
+    NSUInteger decryptOffset = 0;
+    if (tag == MTTcpReadTagPacketBody && _packetHead != nil) {
+        // A large packet arrives as a 128-byte head (already decrypted, used for
+        // progress tokens) followed by the rest. Decrypt the rest straight after the
+        // head so the packet never has to be reassembled with a second copy.
+        decryptOffset = _packetHead.length;
+        decryptedData = [[NSMutableData alloc] initWithLength:decryptOffset + rawData.length];
+        memcpy(decryptedData.mutableBytes, _packetHead.bytes, decryptOffset);
+        _packetHead = nil;
+    } else {
+        decryptedData = [[NSMutableData alloc] initWithLength:rawData.length];
+    }
+    [_incomingAesCtr encryptIn:rawData.bytes out:((uint8_t *)decryptedData.mutableBytes) + decryptOffset len:rawData.length];
+
+    NSMutableData *data = decryptedData;
     
     if (tag == MTTcpReadTagPacketShortLength) {
 #ifdef DEBUG
@@ -1989,18 +2001,11 @@ struct ctr_state {
         _packetHeadDecodeToken = -1;
         _packetProgressToken = nil;
         
-        NSData *packetData = data;
-        if (_packetHead != nil) {
-            NSMutableData *combinedData = [[NSMutableData alloc] initWithCapacity:_packetHead.length + data.length];
-            [combinedData appendData:_packetHead];
-            [combinedData appendData:data];
-            packetData = combinedData;
-            _packetHead = nil;
-        }
-        
+        // `data` already holds head + rest for large packets (see the decrypt above).
+        NSMutableData *packetData = data;
+
         if (packetData.length % 4 != 0) {
-            int32_t realLength = ((int32_t)packetData.length) & (~3);
-            packetData = [packetData subdataWithRange:NSMakeRange(0, (NSUInteger)realLength)];
+            [packetData setLength:packetData.length & ~((NSUInteger)3)];
         }
         
         bool ignorePacket = false;
