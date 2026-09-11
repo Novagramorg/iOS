@@ -196,93 +196,93 @@ private enum DebugControllerEntry: ItemListNodeEntry {
         case .coreListChatBackend:
             return 19
         case .forceRLottieBackend:
-            return 105
-        case .crashOnSlowQueries:
             return 20
-        case .crashOnMemoryPressure:
+        case .crashOnSlowQueries:
             return 21
-        case .clearTips:
+        case .crashOnMemoryPressure:
             return 22
-        case .resetNotifications:
+        case .clearTips:
             return 23
-        case .crash:
+        case .resetNotifications:
             return 24
-        case .fillLocalSavedMessageCache:
+        case .crash:
             return 25
-        case .resetDatabase:
+        case .fillLocalSavedMessageCache:
             return 26
-        case .resetDatabaseAndCache:
+        case .resetDatabase:
             return 27
-        case .resetHoles:
+        case .resetDatabaseAndCache:
             return 28
-        case .resetTagHoles:
+        case .resetHoles:
             return 29
-        case .reindexUnread:
+        case .resetTagHoles:
             return 30
-        case .resetCacheIndex:
+        case .reindexUnread:
             return 31
-        case .reindexCache:
+        case .resetCacheIndex:
             return 32
-        case .resetBiometricsData:
+        case .reindexCache:
             return 33
-        case .optimizeDatabase:
+        case .resetBiometricsData:
             return 34
-        case .photoPreview:
+        case .optimizeDatabase:
             return 35
-        case .knockoutWallpaper:
+        case .photoPreview:
             return 36
-        case .experimentalCompatibility:
+        case .knockoutWallpaper:
             return 37
-        case .enableDebugDataDisplay:
+        case .experimentalCompatibility:
             return 38
-        case .fakeGlass:
+        case .enableDebugDataDisplay:
             return 39
-        case .forceClearGlass:
+        case .fakeGlass:
             return 40
-        case .debugRipple:
+        case .forceClearGlass:
             return 41
-        case .debugRichText:
+        case .debugRipple:
             return 42
-        case .browserExperiment:
+        case .debugRichText:
             return 43
-        case .allForumsHaveTabs:
+        case .browserExperiment:
             return 44
-        case .enableReactionOverrides:
+        case .allForumsHaveTabs:
             return 45
-        case .restorePurchases:
+        case .enableReactionOverrides:
             return 46
-        case .logTranslationRecognition:
+        case .restorePurchases:
             return 47
-        case .resetTranslationStates:
+        case .logTranslationRecognition:
             return 48
-        case .compressedEmojiCache:
+        case .resetTranslationStates:
             return 49
-        case .storiesJpegExperiment:
+        case .compressedEmojiCache:
             return 50
-        case .disableReloginTokens:
+        case .storiesJpegExperiment:
             return 51
-        case .checkSerializedData:
+        case .disableReloginTokens:
             return 52
-        case .enableQuickReactionSwitch:
+        case .checkSerializedData:
             return 53
-        case .liveStreamV2:
+        case .enableQuickReactionSwitch:
             return 54
-        case .experimentalCallMute:
+        case .liveStreamV2:
             return 55
-        case .groupCallReferenceEngine:
+        case .experimentalCallMute:
             return 56
-        case .playerV2:
+        case .groupCallReferenceEngine:
             return 57
-        case .devRequests:
+        case .playerV2:
             return 58
-        case .pwa:
+        case .devRequests:
             return 59
-        case .enableLocalTranslation:
+        case .pwa:
             return 60
-        case .enableUpdates:
+        case .enableLocalTranslation:
             return 61
+        case .enableUpdates:
+            return 62
         case let .preferredVideoCodec(index, _, _, _):
-            return 62 + index
+            return 63 + index
         case .disableVideoAspectScaling:
             return 100
         case .enableNetworkFramework:
