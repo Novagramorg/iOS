@@ -49,6 +49,15 @@ void MTRawSha256(void const *inData, NSUInteger length, void *outData)
     CC_SHA256(inData, (CC_LONG)length, outData);
 }
 
+void MTRawSha256TwoParts(void const *part1, NSUInteger length1, void const *part2, NSUInteger length2, void *outData)
+{
+    CC_SHA256_CTX context;
+    CC_SHA256_Init(&context);
+    CC_SHA256_Update(&context, part1, (CC_LONG)length1);
+    CC_SHA256_Update(&context, part2, (CC_LONG)length2);
+    CC_SHA256_Final(outData, &context);
+}
+
 #if defined(_MSC_VER)
 
 #define FORCE_INLINE    __forceinline

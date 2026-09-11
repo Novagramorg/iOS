@@ -13,6 +13,8 @@ NSData * _Nonnull MTSha1(NSData * _Nonnull data);
 NSData * _Nonnull MTSubdataSha1(NSData * _Nonnull data, NSUInteger offset, NSUInteger length);
     
 NSData * _Nonnull MTSha256(NSData * _Nonnull data);
+// SHA-256 over the concatenation part1 ‖ part2 without materializing it. outData must hold 32 bytes.
+void MTRawSha256TwoParts(void const * _Nonnull part1, NSUInteger length1, void const * _Nonnull part2, NSUInteger length2, void * _Nonnull outData);
     
 void MTRawSha1(void const * _Nonnull inData, NSUInteger length, void * _Nonnull outData);
 void MTRawSha256(void const * _Nonnull inData, NSUInteger length, void * _Nonnull outData);
