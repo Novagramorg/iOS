@@ -355,6 +355,23 @@ public final class ResizableSheetComponent<ChildEnvironmentType: Sendable & Equa
             }
         }
 
+        public func scrollToBottom(transition: ComponentTransition) {
+            guard let component = self.component, !component.isFullscreen else {
+                return
+            }
+            let bottomOffset = max(
+                -self.scrollView.adjustedContentInset.top,
+                self.scrollView.contentSize.height + self.scrollView.adjustedContentInset.bottom - self.scrollView.bounds.height
+            )
+            guard self.scrollView.bounds.minY != bottomOffset else {
+                return
+            }
+            self.ignoreScrolling = true
+            transition.setBoundsOrigin(view: self.scrollView, origin: CGPoint(x: self.scrollView.bounds.minX, y: bottomOffset))
+            self.ignoreScrolling = false
+            self.updateScrolling(transition: transition)
+        }
+
         public override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
             if !self.bounds.contains(point) {
                 return nil

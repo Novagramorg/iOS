@@ -10,6 +10,7 @@ swift_library(
         "-warnings-as-errors",
     ],
     deps = [
+        "//submodules/PasscodeCore",
         "//submodules/AccountContext",
         "//submodules/ComponentFlow",
         "//submodules/Components/MultilineTextComponent",

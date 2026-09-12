@@ -888,6 +888,8 @@ public extension WalletContext {
         case proofInvalid
         case proofExpired
         case keyRotationFailed
+        case backupDisableNeedsConfirmation(PreparedBackupDisable)
+        case preparedBackupDisableExpired
         case commentTooLong
         case commentEncryptionRecipientUnavailable
         case commentEncryptionFailed

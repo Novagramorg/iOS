@@ -16,6 +16,10 @@ import ZipArchive
 import WebKit
 import InAppPurchaseManager
 import TelegramVoip
+import ComponentFlow
+import AlertComponent
+import AlertCheckComponent
+import WalletContext
 
 @objc private final class DebugControllerMailComposeDelegate: NSObject, MFMailComposeViewControllerDelegate {
     public func mailComposeController(_ controller: MFMailComposeViewController, didFinishWith result: MFMailComposeResult, error: Error?) {
@@ -31,6 +35,7 @@ private final class DebugControllerArguments {
     let pushController: (ViewController) -> Void
     let getRootController: () -> UIViewController?
     let getNavigationController: () -> NavigationController?
+    var isTestingPasscodeMigration = false
     
     init(sharedContext: SharedAccountContext, context: AccountContext?, mailComposeDelegate: DebugControllerMailComposeDelegate, presentController: @escaping (ViewController, ViewControllerPresentationArguments?) -> Void, pushController: @escaping (ViewController) -> Void, getRootController: @escaping () -> UIViewController?, getNavigationController: @escaping () -> NavigationController?) {
         self.sharedContext = sharedContext
@@ -41,6 +46,67 @@ private final class DebugControllerArguments {
         self.getRootController = getRootController
         self.getNavigationController = getNavigationController
     }
+}
+
+private func presentPasscodeMigrationTest(arguments: DebugControllerArguments) {
+    guard arguments.sharedContext.applicationBindings.isMainApp, !arguments.isTestingPasscodeMigration else {
+        return
+    }
+
+    let presentationData = arguments.sharedContext.currentPresentationData.with { $0 }
+    let checkState = AlertCheckComponent.ExternalState()
+    let actionsEnabled = ValuePromise<Bool>(true, ignoreRepeated: true)
+    var hasSelectedPasscode = false
+    let test: (PostboxAccessChallengeData) -> Void = { challenge in
+        guard !hasSelectedPasscode, !arguments.isTestingPasscodeMigration else {
+            return
+        }
+        hasSelectedPasscode = true
+        arguments.isTestingPasscodeMigration = true
+        actionsEnabled.set(false)
+        let isLocked = checkState.value
+
+        let signal = updatePresentationPasscodeSettingsInteractively(accountManager: arguments.sharedContext.accountManager, { _ in
+            return .defaultSettings
+        })
+        |> mapToSignalPromotingError { _ -> Signal<Never, Error> in
+            return arguments.sharedContext.accountManager._internalTestPasscodeMigration(challenge, prepare: { commitAndCrash in
+                try _internalResetLocalSecretsForPasscodeMigrationTest(then: commitAndCrash)
+            }, crash: {
+                try arguments.sharedContext.appLockContext._internalCrashForPasscodeMigrationTest(isLocked: isLocked)
+            })
+        }
+        let _ = (signal
+        |> deliverOnMainQueue).start(error: { error in
+            arguments.isTestingPasscodeMigration = false
+            let controller = textAlertController(sharedContext: arguments.sharedContext, title: "Test Passcode Migration Failed", text: "Preparation failed. Local passcode or wallet data may already have been removed.\n\n\(error.localizedDescription)", actions: [
+                TextAlertAction(type: .genericAction, title: presentationData.strings.Common_OK, action: {})
+            ])
+            arguments.presentController(controller, nil)
+        })
+    }
+
+    let controller = AlertScreen(
+        configuration: AlertScreen.Configuration(actionAlignment: .vertical),
+        content: [
+            AnyComponentWithIdentity(id: "title", component: AnyComponent(AlertTitleComponent(title: "test passcode migration"))),
+            AnyComponentWithIdentity(id: "lock", component: AnyComponent(AlertCheckComponent(title: "Lock on next launch", initialValue: true, externalState: checkState)))
+        ],
+        actions: [
+            .init(title: "6-digits (123456)", action: {
+                test(.numericalPassword(value: "123456"))
+            }, isEnabled: actionsEnabled.get()),
+            .init(title: "4-digits (1234)", action: {
+                test(.numericalPassword(value: "1234"))
+            }, isEnabled: actionsEnabled.get()),
+            .init(title: "alphanumeric (qwerty)", action: {
+                test(.plaintextPassword(value: "qwerty"))
+            }, isEnabled: actionsEnabled.get()),
+            .init(title: presentationData.strings.Common_Cancel, isEnabled: actionsEnabled.get())
+        ],
+        updatedPresentationData: (presentationData, arguments.sharedContext.presentationData)
+    )
+    arguments.presentController(controller, nil)
 }
 
 private enum DebugControllerSection: Int32 {
@@ -78,6 +144,7 @@ private enum DebugControllerEntry: ItemListNodeEntry {
     case clearTips(PresentationTheme)
     case resetNotifications
     case crash(PresentationTheme)
+    case testPasscodeMigration
     case fillLocalSavedMessageCache
     case resetDatabase(PresentationTheme)
     case resetDatabaseAndCache(PresentationTheme)
@@ -139,7 +206,7 @@ private enum DebugControllerEntry: ItemListNodeEntry {
             return DebugControllerSection.web.rawValue
         case .keepChatNavigationStack, .skipReadHistory, .alwaysDisplayTyping, .debugRatingLayout, .crashOnSlowQueries, .crashOnMemoryPressure:
             return DebugControllerSection.experiments.rawValue
-        case .clearTips, .resetNotifications, .crash, .fillLocalSavedMessageCache, .resetDatabase, .resetDatabaseAndCache, .resetHoles, .resetTagHoles, .reindexUnread, .resetCacheIndex, .reindexCache, .resetBiometricsData, .optimizeDatabase, .photoPreview, .knockoutWallpaper, .compressedEmojiCache, .storiesJpegExperiment, .checkSerializedData, .enableQuickReactionSwitch, .experimentalCompatibility, .enableDebugDataDisplay, .fakeGlass, .forceClearGlass, .debugRipple, .debugRichText, .coreListChatBackend, .browserExperiment, .allForumsHaveTabs, .enableReactionOverrides, .restorePurchases, .disableReloginTokens, .liveStreamV2, .experimentalCallMute, .groupCallReferenceEngine, .playerV2, .devRequests, .enableUpdates, .pwa, .enableLocalTranslation:
+        case .clearTips, .resetNotifications, .crash, .testPasscodeMigration, .fillLocalSavedMessageCache, .resetDatabase, .resetDatabaseAndCache, .resetHoles, .resetTagHoles, .reindexUnread, .resetCacheIndex, .reindexCache, .resetBiometricsData, .optimizeDatabase, .photoPreview, .knockoutWallpaper, .compressedEmojiCache, .storiesJpegExperiment, .checkSerializedData, .enableQuickReactionSwitch, .experimentalCompatibility, .enableDebugDataDisplay, .fakeGlass, .forceClearGlass, .debugRipple, .debugRichText, .coreListChatBackend, .browserExperiment, .allForumsHaveTabs, .enableReactionOverrides, .restorePurchases, .disableReloginTokens, .liveStreamV2, .experimentalCallMute, .groupCallReferenceEngine, .playerV2, .devRequests, .enableUpdates, .pwa, .enableLocalTranslation:
             return DebugControllerSection.experiments.rawValue
         case .logTranslationRecognition, .resetTranslationStates:
             return DebugControllerSection.translation.rawValue
@@ -204,92 +271,94 @@ private enum DebugControllerEntry: ItemListNodeEntry {
             return 23
         case .crash:
             return 24
-        case .fillLocalSavedMessageCache:
+        case .testPasscodeMigration:
             return 25
-        case .resetDatabase:
+        case .fillLocalSavedMessageCache:
             return 26
-        case .resetDatabaseAndCache:
+        case .resetDatabase:
             return 27
-        case .resetHoles:
+        case .resetDatabaseAndCache:
             return 28
-        case .resetTagHoles:
+        case .resetHoles:
             return 29
-        case .reindexUnread:
+        case .resetTagHoles:
             return 30
-        case .resetCacheIndex:
+        case .reindexUnread:
             return 31
-        case .reindexCache:
+        case .resetCacheIndex:
             return 32
-        case .resetBiometricsData:
+        case .reindexCache:
             return 33
-        case .optimizeDatabase:
+        case .resetBiometricsData:
             return 34
-        case .photoPreview:
+        case .optimizeDatabase:
             return 35
-        case .knockoutWallpaper:
+        case .photoPreview:
             return 36
-        case .experimentalCompatibility:
+        case .knockoutWallpaper:
             return 37
-        case .enableDebugDataDisplay:
+        case .experimentalCompatibility:
             return 38
-        case .fakeGlass:
+        case .enableDebugDataDisplay:
             return 39
-        case .forceClearGlass:
+        case .fakeGlass:
             return 40
-        case .debugRipple:
+        case .forceClearGlass:
             return 41
-        case .debugRichText:
+        case .debugRipple:
             return 42
-        case .browserExperiment:
+        case .debugRichText:
             return 43
-        case .allForumsHaveTabs:
+        case .browserExperiment:
             return 44
-        case .enableReactionOverrides:
+        case .allForumsHaveTabs:
             return 45
-        case .restorePurchases:
+        case .enableReactionOverrides:
             return 46
-        case .logTranslationRecognition:
+        case .restorePurchases:
             return 47
-        case .resetTranslationStates:
+        case .logTranslationRecognition:
             return 48
-        case .compressedEmojiCache:
+        case .resetTranslationStates:
             return 49
-        case .storiesJpegExperiment:
+        case .compressedEmojiCache:
             return 50
-        case .disableReloginTokens:
+        case .storiesJpegExperiment:
             return 51
-        case .checkSerializedData:
+        case .disableReloginTokens:
             return 52
-        case .enableQuickReactionSwitch:
+        case .checkSerializedData:
             return 53
-        case .liveStreamV2:
+        case .enableQuickReactionSwitch:
             return 54
-        case .experimentalCallMute:
+        case .liveStreamV2:
             return 55
-        case .groupCallReferenceEngine:
+        case .experimentalCallMute:
             return 56
-        case .playerV2:
+        case .groupCallReferenceEngine:
             return 57
-        case .devRequests:
+        case .playerV2:
             return 58
-        case .pwa:
+        case .devRequests:
             return 59
-        case .enableLocalTranslation:
+        case .pwa:
             return 60
-        case .enableUpdates:
+        case .enableLocalTranslation:
             return 61
+        case .enableUpdates:
+            return 62
         case let .preferredVideoCodec(index, _, _, _):
-            return 62 + index
+            return 63 + index
         case .disableVideoAspectScaling:
-            return 100
-        case .enableNetworkFramework:
             return 101
-        case .enableNetworkExperiments:
+        case .enableNetworkFramework:
             return 102
-        case .hostInfo:
+        case .enableNetworkExperiments:
             return 103
-        case .versionInfo:
+        case .hostInfo:
             return 104
+        case .versionInfo:
+            return 105
         }
     }
     
@@ -1054,6 +1123,10 @@ private enum DebugControllerEntry: ItemListNodeEntry {
             return ItemListActionItem(presentationData: presentationData, systemStyle: .glass, title: "Crash", kind: .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: {
                 preconditionFailure()
             })
+        case .testPasscodeMigration:
+            return ItemListActionItem(presentationData: presentationData, systemStyle: .glass, title: "Test Passcode Migration", kind: .destructive, alignment: .natural, sectionId: self.section, style: .blocks, action: {
+                presentPasscodeMigrationTest(arguments: arguments)
+            })
         case .fillLocalSavedMessageCache:
             return ItemListActionItem(presentationData: presentationData, systemStyle: .glass, title: "Reload Saved Messages", kind: .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: {
                 guard let context = arguments.context else {
@@ -1604,6 +1677,11 @@ private func debugControllerEntries(context: AccountContext?, sharedContext: Sha
         entries.append(.resetNotifications)
     }
     entries.append(.crash(presentationData.theme))
+    #if DEBUG
+    if isMainApp {
+        entries.append(.testPasscodeMigration)
+    }
+    #endif
     entries.append(.fillLocalSavedMessageCache)
     entries.append(.resetDatabase(presentationData.theme))
     entries.append(.resetDatabaseAndCache(presentationData.theme))

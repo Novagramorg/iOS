@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 import UIKit
 import TelegramCore
 import Display
@@ -12,8 +13,9 @@ import ImageBlur
 import FastBlur
 import AppLockState
 import PassKit
+import PasscodeCore
 
-private func isLocked(passcodeSettings: PresentationPasscodeSettings, state: LockState, isApplicationActive: Bool) -> Bool {
+private func isLocked(passcodeSettings: PresentationPasscodeSettings, state: LockState) -> Bool {
     if state.isManuallyLocked {
         return true
     } else if let autolockTimeout = passcodeSettings.autolockTimeout {
@@ -89,14 +91,19 @@ public final class AppLockContextImpl: AppLockContext {
     private let autolockTimeout = ValuePromise<Int32?>(nil, ignoreRepeated: true)
     private let autolockReportTimeout = ValuePromise<Int32?>(nil, ignoreRepeated: true)
     
-    private let isCurrentlyLockedPromise = Promise<Bool>()
+    private let lockStatus = AppLockStatus()
+    public var isPasscodeLocked: Signal<Bool, NoError> {
+        return self.lockStatus.isPasscodeLocked
+    }
+
     public var isCurrentlyLocked: Signal<Bool, NoError> {
-        return self.isCurrentlyLockedPromise.get()
-        |> distinctUntilChanged
+        return self.lockStatus.isCurrentlyLocked
     }
     
     private var lastActiveTimestamp: Double?
     private var lastActiveValue: Bool = false
+    private var suppressCoveringViewUntilActive = false
+    private var suppressAutomaticBiometrics = false
     
     public init(rootPath: String, window: Window1?, rootController: UIViewController?, applicationBindings: TelegramApplicationBindings, accountManager: AccountManager<TelegramAccountManagerTypes>, presentationDataSignal: Signal<PresentationData, NoError>, lockIconInitialFrame: @escaping () -> CGRect?) {
         assert(Queue.mainQueue().isCurrent())
@@ -120,18 +127,23 @@ public final class AppLockContextImpl: AppLockContext {
             accountManager.sharedData(keys: Set([ApplicationSpecificSharedDataKeys.presentationPasscodeSettings])),
             presentationDataSignal,
             applicationBindings.applicationIsActive,
+            applicationBindings.applicationInForeground,
             self.currentState.get()
         )
-        |> deliverOnMainQueue).startStrict(next: { [weak self] accessChallengeData, sharedData, presentationData, appInForeground, state in
+        |> deliverOnMainQueue).startStrict(next: { [weak self] accessChallengeData, sharedData, presentationData, isApplicationActive, isApplicationInForeground, state in
             guard let strongSelf = self else {
                 return
             }
             
             let passcodeSettings: PresentationPasscodeSettings = sharedData.entries[ApplicationSpecificSharedDataKeys.presentationPasscodeSettings]?.get(PresentationPasscodeSettings.self) ?? .defaultSettings
+
+            if !isApplicationInForeground {
+                strongSelf.suppressAutomaticBiometrics = false
+            }
             
             let timestamp = CFAbsoluteTimeGetCurrent()
             var becameActiveRecently = false
-            if appInForeground {
+            if isApplicationActive {
                 if !strongSelf.lastActiveValue {
                     strongSelf.lastActiveValue = true
                     strongSelf.lastActiveTimestamp = timestamp
@@ -149,6 +161,18 @@ public final class AppLockContextImpl: AppLockContext {
             } else {
                 strongSelf.lastActiveValue = false
             }
+
+            if isApplicationActive || !isApplicationInForeground {
+                strongSelf.suppressCoveringViewUntilActive = false
+            } else if !strongSelf.suppressCoveringViewUntilActive {
+                strongSelf.window?.forEachViewController { controller in
+                    if let controller = controller as? PasscodeEntryController, controller.isNodeLoaded, controller.view.window != nil {
+                        strongSelf.suppressCoveringViewUntilActive = true
+                        return false
+                    }
+                    return true
+                }
+            }
             
             var shouldDisplayCoveringView = false
             var isCurrentlyLocked = false
@@ -162,11 +186,11 @@ public final class AppLockContextImpl: AppLockContext {
                 strongSelf.autolockTimeout.set(nil)
                 strongSelf.autolockReportTimeout.set(nil)
             } else {
-                if let _ = passcodeSettings.autolockTimeout, !appInForeground {
+                if let _ = passcodeSettings.autolockTimeout, !isApplicationActive, !strongSelf.suppressCoveringViewUntilActive {
                     shouldDisplayCoveringView = true
                 }
                 
-                if !appInForeground {
+                if !isApplicationActive {
                     if let autolockTimeout = passcodeSettings.autolockTimeout {
                         strongSelf.autolockReportTimeout.set(autolockTimeout)
                     } else if state.isManuallyLocked {
@@ -180,7 +204,7 @@ public final class AppLockContextImpl: AppLockContext {
                 
                 strongSelf.autolockTimeout.set(passcodeSettings.autolockTimeout)
                 
-                if isLocked(passcodeSettings: passcodeSettings, state: state, isApplicationActive: appInForeground) {
+                if isLocked(passcodeSettings: passcodeSettings, state: state) {
                     isCurrentlyLocked = true
                     
                     let biometrics: PasscodeEntryControllerBiometricsMode
@@ -191,21 +215,21 @@ public final class AppLockContextImpl: AppLockContext {
                     }
                     
                     if let passcodeController = strongSelf.passcodeController {
-                        if becameActiveRecently, case .enabled = biometrics, appInForeground {
+                        if becameActiveRecently, !strongSelf.suppressAutomaticBiometrics, case .enabled = biometrics, isApplicationActive {
                             passcodeController.requestBiometrics()
                         }
                         passcodeController.ensureInputFocused()
                     } else {
-                        let passcodeController = PasscodeEntryController(applicationBindings: strongSelf.applicationBindings, accountManager: strongSelf.accountManager, appLockContext: strongSelf, presentationData: presentationData, presentationDataSignal: strongSelf.presentationDataSignal, statusBarHost: window?.statusBarHost, challengeData: accessChallengeData.data, biometrics: biometrics, arguments: PasscodeEntryControllerPresentationArguments(animated: !becameActiveRecently, lockIconInitialFrame: {
+                        let passcodeController = PasscodeEntryController(applicationBindings: strongSelf.applicationBindings, accountManager: strongSelf.accountManager, appLockContext: strongSelf, presentationData: presentationData, presentationDataSignal: strongSelf.presentationDataSignal, statusBarHost: window?.statusBarHost, challengeData: accessChallengeData.data, biometrics: biometrics, arguments: PasscodeEntryControllerPresentationArguments(animated: !becameActiveRecently || strongSelf.suppressAutomaticBiometrics, lockIconInitialFrame: {
                             if let lockViewFrame = lockIconInitialFrame() {
                                 return lockViewFrame
                             } else {
                                 return CGRect()
                             }
                         }))
-                        if becameActiveRecently, appInForeground {
-                            passcodeController.presentationCompleted = { [weak passcodeController] in
-                                if case .enabled = biometrics {
+                        if becameActiveRecently, !strongSelf.suppressAutomaticBiometrics, isApplicationActive {
+                            passcodeController.presentationCompleted = { [weak self, weak passcodeController] in
+                                if case .enabled = biometrics, self?.suppressAutomaticBiometrics == false {
                                     passcodeController?.requestBiometrics()
                                 }
                                 passcodeController?.ensureInputFocused()
@@ -229,8 +253,8 @@ public final class AppLockContextImpl: AppLockContext {
                 }
             }
             
-            strongSelf.updateTimestampRenewTimer(shouldRun: appInForeground && !isCurrentlyLocked)
-            strongSelf.isCurrentlyLockedPromise.set(.single(!appInForeground || isCurrentlyLocked))
+            strongSelf.updateTimestampRenewTimer(shouldRun: isApplicationActive && !isCurrentlyLocked)
+            strongSelf.lockStatus.update(isPasscodeLocked: isCurrentlyLocked, isApplicationActive: isApplicationActive, isApplicationInForeground: isApplicationInForeground)
             
             if shouldDisplayCoveringView {
                 if strongSelf.coveringView == nil, let window = strongSelf.window {
@@ -321,6 +345,20 @@ public final class AppLockContextImpl: AppLockContext {
         }
     }
     
+    public func _internalCrashForPasscodeMigrationTest(isLocked: Bool) throws -> Never {
+        var writeError: Error?
+        self.syncQueue.sync {
+            do {
+                let data = try JSONEncoder().encode(LockState(isManuallyLocked: isLocked))
+                try data.write(to: URL(fileURLWithPath: appLockStatePath(rootPath: self.rootPath)), options: .atomic)
+                abort()
+            } catch {
+                writeError = error
+            }
+        }
+        throw writeError!
+    }
+
     public var invalidAttempts: Signal<AccessChallengeAttempts?, NoError> {
         return self.currentState.get()
         |> map { state in
@@ -343,7 +381,10 @@ public final class AppLockContextImpl: AppLockContext {
     }
     
     public func lock() {
+        PasscodeSession.setApplicationAvailable(false)
         self.updateLockState { state in
+            // Face ID may still send active events after the user manually locks.
+            self.suppressAutomaticBiometrics = true
             var state = state
             state.isManuallyLocked = true
             return state

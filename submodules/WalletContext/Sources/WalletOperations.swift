@@ -1,3 +1,4 @@
+import PasscodeCore
 import Foundation
 import SwiftSignalKit
 import TelegramCore
@@ -20,6 +21,20 @@ func walletPreviewNeedsSeqnoRetry(_ error: Error) -> Bool {
         of: #"\bEmulationExternalNotAccepted:\s*133\b(?!\.[0-9])"#,
         options: .regularExpression
     ) != nil
+}
+
+func walletKeyRotationPreparationIsExpired(_ error: Error, seqno: UInt32) -> Bool {
+    guard let error = error as? WalletClientError else { return false }
+    let diagnostic: String
+    switch error {
+    case let .SendPreviewFailed(value), let .SendFailed(value): diagnostic = value
+    default: return false
+    }
+    // Upstream exposes these validation failures as diagnostics rather than separate error cases.
+    if diagnostic == "transfer expiration timestamp is not after fresh provider time" { return true }
+    let prefix = "prepared BOC seqno \(seqno) does not match current wallet seqno "
+    guard diagnostic.hasPrefix(prefix), let current = UInt32(diagnostic.dropFirst(prefix.count)) else { return false }
+    return current != seqno
 }
 
 func acceptedWalletTransferSubmission(
@@ -114,6 +129,19 @@ func stageRecoveryPhraseImport(
 }
 
 public extension WalletContext {
+    func beginWalletFlow(reason: String) -> Signal<PasscodeSession, WalletError> {
+        self.signal(
+            name: "begin_wallet_flow",
+            deliverWhenAvailable: true,
+            discardResult: { [authorization = self.authorization] in authorization.finish($0) },
+            validateResult: { [authorization = self.authorization] in
+                try authorization.validate($0, requireAvailable: false)
+            }
+        ) { impl, operationId in
+            try await impl.beginWalletFlow(reason: reason, operationId: operationId)
+        }
+    }
+
     static func isTonConnectUrl(_ value: String) -> Bool {
         (try? TonConnectLink(value)) != nil
     }
@@ -219,36 +247,37 @@ public extension WalletContext {
         detectMnemonicSchemes(words: normalizedEngineMnemonic(words)).contains(.rotation)
     }
 
-    func createWallet(password: String? = nil) -> Signal<WalletInfo, WalletError> {
-        self.signal(name: "creating", cancelOnDispose: false) { impl, operationId in
-            try await impl.createWallet(password: password, operationId: operationId)
+    func createWallet(password: String? = nil, session: PasscodeSession? = nil) -> Signal<WalletInfo, WalletError> {
+        self.signal(name: "creating", cancelOnDispose: false, deliverWhenAvailable: session?.lifetime == .ownerManaged) { impl, operationId in
+            try await impl.createWallet(password: password, session: session, operationId: operationId)
         }
     }
 
-    func importWallet(words: [String], password: String? = nil) -> Signal<WalletInfo, WalletError> {
-        self.signal(name: "importing", cancelOnDispose: false) { impl, operationId in
-            try await impl.importWallet(words: words, password: password, operationId: operationId)
+    func importWallet(words: [String], password: String? = nil, session: PasscodeSession? = nil) -> Signal<WalletInfo, WalletError> {
+        self.signal(name: "importing", cancelOnDispose: false, deliverWhenAvailable: session?.lifetime == .ownerManaged) { impl, operationId in
+            try await impl.importWallet(words: words, password: password, session: session, operationId: operationId)
         }
     }
 
-    func recoveryPhrase(password: String? = nil) -> Signal<[String], WalletError> {
-        self.signal(name: "recovering_phrase", cancelOnDispose: false) { impl, operationId in
-            try await impl.recoveryPhrase(password: password, operationId: operationId)
+    func recoveryPhrase(password: String? = nil, session: PasscodeSession? = nil) -> Signal<[String], WalletError> {
+        self.signal(name: "recovering_phrase", cancelOnDispose: false, deliverWhenAvailable: session?.lifetime == .ownerManaged) { impl, operationId in
+            try await impl.recoveryPhrase(password: password, session: session, operationId: operationId)
         }
     }
 
-    func prepareRecoveryPhraseImport(words: [String]) -> Signal<PreparedRecoveryPhraseImport, WalletError> {
-        self.signal(name: "preparing_recovery_phrase_import") { impl, operationId in
-            try await impl.prepareRecoveryPhraseImport(words: words, operationId: operationId)
+    func prepareRecoveryPhraseImport(words: [String], session: PasscodeSession? = nil) -> Signal<PreparedRecoveryPhraseImport, WalletError> {
+        self.signal(name: "preparing_recovery_phrase_import", deliverWhenAvailable: session?.lifetime == .ownerManaged) { impl, operationId in
+            try await impl.prepareRecoveryPhraseImport(words: words, session: session, operationId: operationId)
         }
     }
 
     func completeRecoveryPhraseImport(
         _ prepared: PreparedRecoveryPhraseImport,
-        password: String? = nil
+        password: String? = nil,
+        session: PasscodeSession? = nil
     ) -> Signal<WalletInfo, WalletError> {
-        self.signal(name: "completing_recovery_phrase_import", cancelOnDispose: false) { impl, operationId in
-            try await impl.completeRecoveryPhraseImport(prepared, password: password, operationId: operationId)
+        self.signal(name: "completing_recovery_phrase_import", cancelOnDispose: false, deliverWhenAvailable: session?.lifetime == .ownerManaged) { impl, operationId in
+            try await impl.completeRecoveryPhraseImport(prepared, password: password, session: session, operationId: operationId)
         }
     }
 
@@ -258,32 +287,81 @@ public extension WalletContext {
         }
     }
 
-    func enableBackup(password: String? = nil) -> Signal<WalletInfo, WalletError> {
-        self.signal(name: "enabling_backup", cancelOnDispose: false) { impl, operationId in
-            try await impl.enableBackup(password: password, operationId: operationId)
+    func enableBackup(password: String? = nil, session: PasscodeSession? = nil) -> Signal<WalletInfo, WalletError> {
+        self.signal(name: "enabling_backup", cancelOnDispose: false, deliverWhenAvailable: session?.lifetime == .ownerManaged) { impl, operationId in
+            try await impl.enableBackup(password: password, session: session, operationId: operationId)
         }
     }
 
-    func prepareDisableBackup() -> Signal<PreparedBackupDisable, WalletError> {
-        self.signal(name: "preparing_backup_disable") { impl, operationId in
-            try await impl.prepareDisableBackup(operationId: operationId)
+    func prepareDisableBackup(session: PasscodeSession? = nil) -> Signal<PreparedBackupDisable, WalletError> {
+        self.signal(name: "preparing_backup_disable", deliverWhenAvailable: session?.lifetime == .ownerManaged) { impl, operationId in
+            try await impl.prepareDisableBackup(session: session, operationId: operationId)
         }
     }
 
-    func disableBackup(_ prepared: PreparedBackupDisable, password: String? = nil) -> Signal<WalletInfo, WalletError> {
-        self.signal(name: "disabling_backup", cancelOnDispose: false) { impl, operationId in
-            try await impl.disableBackup(prepared, password: password, operationId: operationId)
+    func refreshPreparedBackupDisable(_ prepared: PreparedBackupDisable, session: PasscodeSession? = nil) -> Signal<PreparedBackupDisable, WalletError> {
+        self.signal(name: "refreshing_backup_disable", deliverWhenAvailable: session?.lifetime == .ownerManaged) { impl, operationId in
+            try await impl.refreshPreparedBackupDisable(prepared, session: session, operationId: operationId)
         }
     }
 
-    func prepareTransfer(address: String, amount: Int64, sendAll: Bool = false, comment: String?, commentEncrypted: Bool = false) -> Signal<PreparedTransfer, WalletError> {
-        self.signal(name: "preparing_transfer") { impl, operationId in
+    func disableBackup(_ prepared: PreparedBackupDisable, password: String? = nil, session: PasscodeSession? = nil) -> Signal<WalletInfo, WalletError> {
+        self.signal(name: "disabling_backup", cancelOnDispose: false, deliverWhenAvailable: session?.lifetime == .ownerManaged) { impl, operationId in
+            try await impl.disableBackup(prepared, password: password, session: session, operationId: operationId)
+        }
+    }
+
+    func discardPreparedBackupDisable(_ prepared: PreparedBackupDisable) {
+        Task { [impl = self.impl] in await impl.discardPreparedBackupAuthorization(id: prepared.id) }
+    }
+
+    func beginCommentEncryptionSession() -> Signal<PasscodeSession, WalletError> {
+        self.signal(
+            name: "begin_comment_encryption_session",
+            discardResult: { [authorization = self.authorization] session in
+                authorization.finish(session)
+            },
+            validateResult: { session in
+                guard session.isValid else { throw PasscodeError.staleAuthorization }
+            }
+        ) { impl, operationId in
+            try await impl.beginCommentEncryptionSession(operationId: operationId)
+        }
+    }
+
+    func adoptCommentEncryptionSession(_ prepared: PreparedTransfer) -> Signal<PasscodeSession?, WalletError> {
+        self.signal(
+            name: "adopt_comment_encryption_session",
+            discardResult: { [impl = self.impl, authorization = self.authorization] session in
+                authorization.finish(session)
+                Task { await impl.discardCommentEncryptionTransfer(prepared, sessionId: session?.id) }
+            },
+            discardOnCancel: { [impl = self.impl] in
+                // Cancellation can precede adoption; only discard an unclaimed record here.
+                Task { await impl.discardCommentEncryptionTransfer(prepared, sessionId: nil) }
+            },
+            validateResult: { session in
+                if let session, !session.isValid { throw PasscodeError.staleAuthorization }
+            }
+        ) { impl, _ in
+            try await impl.adoptCommentEncryptionSession(prepared)
+        }
+    }
+
+    func prepareTransfer(address: String, amount: Int64, sendAll: Bool = false, comment: String?, commentEncrypted: Bool = false, session: PasscodeSession? = nil) -> Signal<PreparedTransfer, WalletError> {
+        self.signal(
+            name: "preparing_transfer",
+            discardResult: { [impl = self.impl] prepared in
+                Task { await impl.discardPreparedTransfer(prepared) }
+            }
+        ) { impl, operationId in
             try await impl.prepareTransfer(
                 address: address,
                 amount: amount,
                 sendAll: sendAll,
                 comment: comment,
                 commentEncrypted: commentEncrypted,
+                session: session,
                 operationId: operationId
             )
         }
@@ -300,7 +378,12 @@ public extension WalletContext {
         collectible: Collectible,
         comment: String?
     ) -> Signal<PreparedTransfer, WalletError> {
-        self.signal(name: "preparing_transfer") { impl, operationId in
+        self.signal(
+            name: "preparing_transfer",
+            discardResult: { [impl = self.impl] prepared in
+                Task { await impl.discardPreparedTransfer(prepared) }
+            }
+        ) { impl, operationId in
             try await impl.prepareCollectibleTransfer(
                 address: address,
                 collectible: collectible,
@@ -313,10 +396,11 @@ public extension WalletContext {
     func submitTransfer(
         _ prepared: PreparedTransfer,
         recipientPeerId: EnginePeer.Id? = nil,
-        pendingMessageCreated: (@MainActor @Sendable () -> Void)? = nil
+        pendingMessageCreated: (@MainActor @Sendable () -> Void)? = nil,
+        session: PasscodeSession? = nil
     ) -> Signal<PendingTransfer, WalletError> {
         self.signal(name: "submitting_transfer", cancelOnDispose: false) { impl, operationId in
-            try await impl.submitTransfer(prepared, recipientPeerId: recipientPeerId, pendingMessageCreated: pendingMessageCreated, operationId: operationId)
+            try await impl.submitTransfer(prepared, recipientPeerId: recipientPeerId, pendingMessageCreated: pendingMessageCreated, session: session, operationId: operationId)
         }
     }
 
@@ -340,6 +424,15 @@ public extension WalletContext {
 }
 
 extension WalletContextImpl {
+    func beginWalletFlow(reason: String, operationId: UUID) async throws -> PasscodeSession {
+        guard !self.isShutdown else { throw WalletError.unavailable }
+        return try await self.authorization.beginSession(id: operationId, reason: reason, lifetime: .ownerManaged)
+    }
+
+    func discardPreparedBackupAuthorization(id: String) {
+        self.authorization.finish(self.preparedAuthorizations.removeValue(forKey: "backup:" + id))
+    }
+
     private func replaceWalletWithImportedCandidate(
         recordId: String,
         publicKey: Data,
@@ -418,7 +511,9 @@ extension WalletContextImpl {
               let coordinator = self.tonConnectCoordinator else {
             throw WalletError.unavailable
         }
-        try await coordinator.approveConnection(id: id)
+        let grant = try await self.authorization.authorize(id: UUID(), reason: "Connect wallet")
+        defer { self.authorization.finish(grant) }
+        try await self.authorization.withSession(grant) { try await coordinator.approveConnection(id: id) }
     }
 
     func approveTonConnectOperation(id: String) async throws {
@@ -428,7 +523,9 @@ extension WalletContextImpl {
               let coordinator = self.tonConnectCoordinator else {
             throw WalletError.unavailable
         }
-        try await coordinator.approveOperation(id: id)
+        let grant = try await self.authorization.authorize(id: UUID(), reason: "Confirm wallet operation")
+        defer { self.authorization.finish(grant) }
+        try await self.authorization.withSession(grant) { try await coordinator.approveOperation(id: id) }
         self.requestSynchronization(scope: .all, force: true)
     }
 
@@ -452,50 +549,44 @@ extension WalletContextImpl {
         )
     }
 
-    func createWallet(password: String?, operationId: UUID) async throws -> WalletInfo {
-        return try await self.performOperation(.creating, operationId: operationId) {
+    func createWallet(password: String?, session: PasscodeSession? = nil, operationId: UUID) async throws -> WalletInfo {
+        return try await self.performOperation(.creating, operationId: operationId, session: session) {
             let state = try await WalletSignalRequestContext<TelegramCore.WalletState>().run(
                 self.engine.wallet.replaceWallet(replacement: .new, password: password)
             )
             let identity = try walletServerIdentity(state)
             let generation = await self.prepareForRuntimeIdentityChange()
-            let words: [String]
             do {
-                words = try await exportWalletSecretPhrase(
+                let words = try await exportWalletSecretPhrase(
                     engine: self.engine,
                     password: password,
                     expectedPublicKey: identity.publicKey
                 )
+                let staged = try await self.runtime.stageReplacement(words: words)
+                guard walletEngineAddressesEqual(staged.address, identity.address),
+                      staged.publicKey == identity.publicKey else {
+                    await self.discardReplacementForCleanup(recordId: staged.recordId)
+                    throw WalletError.storage(.identityMismatch)
+                }
+                let activation = try await self.runtime.commitReplacement(
+                    recordId: staged.recordId,
+                    serverAddress: identity.address,
+                    serverPublicKey: identity.publicKey
+                )
+                return self.installRuntimeActivation(state: state, activation: activation, generation: generation)
             } catch {
+                self.logger.error("wallet_created_local_setup_failed", error)
                 let activation = try await self.runtime.activate(
                     serverAddress: identity.address,
                     serverPublicKey: identity.publicKey
                 )
-                _ = self.installRuntimeActivation(state: state, activation: activation, generation: generation)
-                throw error
+                return self.installRuntimeActivation(state: state, activation: activation, generation: generation)
             }
-            let staged = try await self.runtime.stageReplacement(words: words)
-            guard walletEngineAddressesEqual(staged.address, identity.address),
-                  staged.publicKey == identity.publicKey else {
-                await self.discardReplacementForCleanup(recordId: staged.recordId)
-                let activation = try await self.runtime.activate(
-                    serverAddress: identity.address,
-                    serverPublicKey: identity.publicKey
-                )
-                _ = self.installRuntimeActivation(state: state, activation: activation, generation: generation)
-                throw WalletError.storage(.identityMismatch)
-            }
-            let activation = try await self.runtime.commitReplacement(
-                recordId: staged.recordId,
-                serverAddress: identity.address,
-                serverPublicKey: identity.publicKey
-            )
-            return self.installRuntimeActivation(state: state, activation: activation, generation: generation)
         }
     }
 
-    func importWallet(words: [String], password: String?, operationId: UUID) async throws -> WalletInfo {
-        return try await self.performOperation(.importing, operationId: operationId) {
+    func importWallet(words: [String], password: String?, session: PasscodeSession? = nil, operationId: UUID) async throws -> WalletInfo {
+        return try await self.performOperation(.importing, operationId: operationId, session: session) {
             let normalizedWords = normalizedEngineMnemonic(words)
             guard detectMnemonicSchemes(words: normalizedWords).contains(.rotation) else {
                 throw WalletError.invalidMnemonic
@@ -541,8 +632,8 @@ extension WalletContextImpl {
         }
     }
 
-    func recoveryPhrase(password: String?, operationId: UUID) async throws -> [String] {
-        return try await self.performOperation(.recoveringPhrase, operationId: operationId) {
+    func recoveryPhrase(password: String?, session: PasscodeSession? = nil, operationId: UUID) async throws -> [String] {
+        return try await self.performOperation(.recoveringPhrase, operationId: operationId, session: session) {
             guard case let .wallet(info) = self.currentState.phase, info.canRevealPhrase else {
                 throw WalletError.unavailable
             }
@@ -594,8 +685,8 @@ extension WalletContextImpl {
         }
     }
 
-    func prepareRecoveryPhraseImport(words: [String], operationId: UUID) async throws -> PreparedRecoveryPhraseImport {
-        return try await self.performOperation(.preparingRecoveryPhraseImport, operationId: operationId) {
+    func prepareRecoveryPhraseImport(words: [String], session: PasscodeSession? = nil, operationId: UUID) async throws -> PreparedRecoveryPhraseImport {
+        return try await self.performOperation(.preparingRecoveryPhraseImport, operationId: operationId, session: session) {
             guard let state = self.serverWalletState else {
                 throw WalletError.noWallet
             }
@@ -614,9 +705,10 @@ extension WalletContextImpl {
     func completeRecoveryPhraseImport(
         _ prepared: PreparedRecoveryPhraseImport,
         password: String?,
+        session: PasscodeSession? = nil,
         operationId: UUID
     ) async throws -> WalletInfo {
-        return try await self.performOperation(.completingRecoveryPhraseImport, operationId: operationId) {
+        return try await self.performOperation(.completingRecoveryPhraseImport, operationId: operationId, session: session) {
             guard let currentServerState = self.serverWalletState else {
                 throw WalletError.noWallet
             }
@@ -741,6 +833,7 @@ extension WalletContextImpl {
     }
 
     func discardRecoveryPhraseImport(_ prepared: PreparedRecoveryPhraseImport) async throws {
+        self.authorization.finish(self.preparedAuthorizations.removeValue(forKey: "import:" + prepared.recordId))
         guard !self.isShutdown else { throw WalletError.unavailable }
         if self.preparedRecoveryPhraseImportRecordId == prepared.recordId {
             self.preparedRecoveryPhraseImportRecordId = nil
@@ -748,8 +841,8 @@ extension WalletContextImpl {
         try await self.runtime.discardReplacement(recordId: prepared.recordId)
     }
 
-    func enableBackup(password: String?, operationId: UUID) async throws -> WalletInfo {
-        return try await self.performOperation(.enablingBackup, operationId: operationId) {
+    func enableBackup(password: String?, session: PasscodeSession? = nil, operationId: UUID) async throws -> WalletInfo {
+        return try await self.performOperation(.enablingBackup, operationId: operationId, session: session) {
             guard case let .wallet(info) = self.currentState.phase,
                   info.canSign,
                   info.canEnableBackup else {
@@ -770,8 +863,8 @@ extension WalletContextImpl {
         }
     }
 
-    func prepareDisableBackup(operationId: UUID) async throws -> PreparedBackupDisable {
-        return try await self.performOperation(.preparingBackupDisable, operationId: operationId) {
+    func prepareDisableBackup(session: PasscodeSession? = nil, operationId: UUID) async throws -> PreparedBackupDisable {
+        return try await self.performOperation(.preparingBackupDisable, operationId: operationId, session: session) {
             guard case let .wallet(info) = self.currentState.phase,
                   info.canSign,
                   info.backupEnabled else {
@@ -821,63 +914,134 @@ extension WalletContextImpl {
                 }
             }
 
-            let expiresAt = currentWalletTimestamp() + 300
-            let prepared = try await self.runtime.prepareKeyRotation(validUntil: UInt64(expiresAt))
-            let words = prepared.replacementRecoveryPhrase.phrase
-                .split(whereSeparator: { $0.isWhitespace })
-                .map(String.init)
-            guard words.count == 24,
-                  prepared.newPublicKey.count == 32,
-                  prepared.validUntil == UInt64(expiresAt),
-                  !prepared.signedBoc.isEmpty else {
-                throw WalletError.engine("Wallet engine returned invalid key-rotation material")
-            }
-            let id = UUID().uuidString.lowercased()
-            let preview = try await self.runtime.previewKeyRotation(
-                operationId: id,
-                signedBoc: prepared.signedBoc,
-                seqno: prepared.seqno,
-                validUntil: prepared.validUntil
-            )
-            guard preview.messageBocBase64 == prepared.signedBoc,
-                  preview.validUntil == prepared.validUntil,
-                  !preview.emulation.isIncomplete,
-                  let networkFeeNanograms = Int64(preview.emulation.walletFeesNanograms) else {
-                throw WalletError.previewFailed
-            }
-            return PreparedBackupDisable(
-                id: id,
-                walletAddress: info.address,
-                walletPublicKey: info.publicKey,
-                words: words,
-                newPublicKey: prepared.newPublicKey,
-                signedBoc: prepared.signedBoc,
-                seqno: prepared.seqno,
-                expiresAt: expiresAt,
-                networkFeeNanograms: networkFeeNanograms,
-                keyRotationPhase: .prepared
+            return try await self.prepareBackupDisableMaterial(
+                id: UUID().uuidString.lowercased(), info: info
             )
         }
+    }
+
+    private func prepareBackupDisableMaterial(id: String, info: WalletInfo) async throws -> PreparedBackupDisable {
+        let expiresAt = currentWalletTimestamp() + 300
+        let prepared = try await self.runtime.prepareKeyRotation(validUntil: UInt64(expiresAt))
+        let words = prepared.replacementRecoveryPhrase.phrase
+            .split(whereSeparator: { $0.isWhitespace })
+            .map(String.init)
+        guard words.count == 24,
+              prepared.newPublicKey.count == 32,
+              prepared.validUntil == UInt64(expiresAt),
+              !prepared.signedBoc.isEmpty else {
+            throw WalletError.engine("Wallet engine returned invalid key-rotation material")
+        }
+        let preview = try await self.runtime.previewKeyRotation(
+            operationId: id,
+            signedBoc: prepared.signedBoc,
+            seqno: prepared.seqno,
+            validUntil: prepared.validUntil
+        )
+        guard preview.messageBocBase64 == prepared.signedBoc,
+              preview.validUntil == prepared.validUntil,
+              !preview.emulation.isIncomplete,
+              let networkFeeNanograms = Int64(preview.emulation.walletFeesNanograms) else {
+            throw WalletError.previewFailed
+        }
+        return PreparedBackupDisable(
+            id: id,
+            walletAddress: info.address,
+            walletPublicKey: info.publicKey,
+            words: words,
+            newPublicKey: prepared.newPublicKey,
+            signedBoc: prepared.signedBoc,
+            seqno: prepared.seqno,
+            expiresAt: expiresAt,
+            networkFeeNanograms: networkFeeNanograms,
+            keyRotationPhase: .prepared
+        )
+    }
+
+    func refreshPreparedBackupDisable(_ prepared: PreparedBackupDisable, session: PasscodeSession? = nil, operationId: UUID) async throws -> PreparedBackupDisable {
+        try await self.performOperation(.preparingBackupDisable, operationId: operationId, session: session) {
+            try await self.refreshBackupDisableMaterial(prepared)
+        }
+    }
+
+    private func refreshBackupDisableMaterial(_ prepared: PreparedBackupDisable) async throws -> PreparedBackupDisable {
+        guard case let .wallet(info) = self.currentState.phase, info.canSign,
+              info.address == prepared.walletAddress, info.publicKey == prepared.walletPublicKey else {
+            throw WalletError.unavailable
+        }
+        if let rotation = try await self.runtime.keyRotationRecord() {
+            guard rotation.operationId == prepared.id else { throw WalletError.operationInProgress }
+            guard walletEngineAddressesEqual(rotation.walletAddress, prepared.walletAddress),
+                  rotation.walletPublicKey.map({ String(format: "%02x", $0) }).joined() == prepared.walletPublicKey,
+                  rotation.newPublicKey == prepared.newPublicKey else {
+                throw WalletError.storage(.identityMismatch)
+            }
+            return prepared
+        }
+        if !info.backupEnabled {
+            guard try await self.runtime.revealRecoveryPhrase() == prepared.words else {
+                throw WalletError.storage(.identityMismatch)
+            }
+            return prepared
+        }
+        guard prepared.expiresAt > currentWalletTimestamp() else {
+            throw WalletError.preparedBackupDisableExpired
+        }
+        let preview = try await self.runtime.previewKeyRotation(
+            operationId: prepared.id,
+            signedBoc: prepared.signedBoc,
+            seqno: prepared.seqno,
+            validUntil: UInt64(prepared.expiresAt)
+        )
+        guard preview.messageBocBase64 == prepared.signedBoc,
+              preview.validUntil == UInt64(prepared.expiresAt),
+              !preview.emulation.isIncomplete,
+              let fee = Int64(preview.emulation.walletFeesNanograms) else {
+            throw WalletError.previewFailed
+        }
+        if let balance = self.currentState.balance.currentValue, balance < fee {
+            throw WalletError.insufficientBalance(required: fee)
+        }
+        return PreparedBackupDisable(
+            id: prepared.id, walletAddress: prepared.walletAddress, walletPublicKey: prepared.walletPublicKey,
+            words: prepared.words, newPublicKey: prepared.newPublicKey, signedBoc: prepared.signedBoc,
+            seqno: prepared.seqno, expiresAt: prepared.expiresAt, networkFeeNanograms: fee,
+            keyRotationPhase: prepared.keyRotationPhase
+        )
     }
 
     func disableBackup(
         _ prepared: PreparedBackupDisable,
         password: String?,
+        session: PasscodeSession? = nil,
         operationId: UUID
     ) async throws -> WalletInfo {
-        return try await self.performOperation(.disablingBackup, operationId: operationId) {
+        return try await self.performOperation(.disablingBackup, operationId: operationId, session: session) {
             guard case let .wallet(info) = self.currentState.phase,
                   info.canSign,
                   info.address == prepared.walletAddress,
-                  info.publicKey == prepared.walletPublicKey,
-                  info.backupEnabled else {
+                  info.publicKey == prepared.walletPublicKey else {
                 throw WalletError.unavailable
             }
 
+            if !info.backupEnabled {
+                _ = try await self.refreshBackupDisableMaterial(prepared)
+                try await self.runtime.completeKeyRotationAfterBackupDisabled(operationId: prepared.id)
+                return info
+            }
+
+            var prepared = prepared
             var rotation = try await self.runtime.keyRotationRecord()
             if rotation == nil {
+                let refreshed = try await self.refreshBackupDisableMaterial(prepared)
+                guard refreshed.networkFeeNanograms == prepared.networkFeeNanograms else {
+                    throw WalletError.backupDisableNeedsConfirmation(refreshed)
+                }
+                prepared = refreshed
+                guard prepared.expiresAt > currentWalletTimestamp() else {
+                    throw WalletError.preparedBackupDisableExpired
+                }
                 guard prepared.keyRotationPhase == .prepared,
-                      prepared.expiresAt > currentWalletTimestamp(),
                       prepared.newPublicKey.count == 32,
                       !prepared.signedBoc.isEmpty else {
                     throw WalletError.unavailable
@@ -899,9 +1063,13 @@ extension WalletContextImpl {
                         currentRotation = try await self.runtime.keyRotationRecord()
                     } catch {
                         self.logger.error("wallet_key_rotation_recovery_read_failed", error)
-                        currentRotation = nil
+                        throw sendError
                     }
                     if currentRotation == nil {
+                        if sendError as? WalletError == .preparedBackupDisableExpired
+                            || walletKeyRotationPreparationIsExpired(sendError, seqno: prepared.seqno) {
+                            throw WalletError.preparedBackupDisableExpired
+                        }
                         throw WalletError.keyRotationFailed
                     }
                     throw sendError
@@ -978,15 +1146,54 @@ extension WalletContextImpl {
         }
     }
 
+    func beginCommentEncryptionSession(operationId: UUID) async throws -> PasscodeSession {
+        guard !self.isShutdown,
+              case let .wallet(info) = self.currentState.phase, info.canSign else {
+            throw WalletError.unavailable
+        }
+        let generation = self.activationGeneration
+        let session = try await self.authorization.beginSession(id: operationId, reason: "Encrypt wallet comment")
+        do {
+            try Task.checkCancellation()
+            guard !self.isShutdown, self.activationGeneration == generation else { throw WalletError.unavailable }
+            try self.authorization.validate(session)
+            return session
+        } catch {
+            self.authorization.finish(session)
+            throw error
+        }
+    }
+
+    func adoptCommentEncryptionSession(_ prepared: PreparedTransfer) throws -> PasscodeSession? {
+        try Task.checkCancellation()
+        guard !self.isShutdown, prepared.commentEncrypted,
+              case let .wallet(info) = self.currentState.phase,
+              var record = self.preparedTransfers[prepared.id], record.transfer == prepared,
+              record.walletAddress == info.address, record.sessionId == nil else { return nil }
+        let existing = self.preparedAuthorizations.removeValue(forKey: "transfer:" + prepared.id)
+        guard let session = try self.authorization.adoptSession(existing) else { return nil }
+        record.sessionId = session.id
+        self.preparedTransfers[prepared.id] = record
+        return session
+    }
+
+    func discardCommentEncryptionTransfer(_ prepared: PreparedTransfer, sessionId: UUID?) {
+        guard let record = self.preparedTransfers[prepared.id], record.transfer == prepared,
+              record.sessionId == sessionId else { return }
+        self.discardPreparedTransfer(prepared)
+    }
+
     func prepareTransfer(
         address: String,
         amount: Int64,
         sendAll: Bool,
         comment: String?,
         commentEncrypted: Bool,
+        session: PasscodeSession? = nil,
         operationId: UUID
     ) async throws -> PreparedTransfer {
-        return try await self.performOperation(.preparingTransfer, operationId: operationId) {
+        guard session == nil || commentEncrypted else { throw WalletError.unavailable }
+        return try await self.performOperation(.preparingTransfer, operationId: operationId, requiresAuthorization: commentEncrypted, session: session) {
             guard case let .wallet(info) = self.currentState.phase,
                   info.canSign else {
                 throw WalletError.unavailable
@@ -1083,7 +1290,8 @@ extension WalletContextImpl {
             self.preparedTransfers[transfer.id] = PreparedEngineTransferRecord(
                 walletAddress: info.address,
                 transfer: transfer,
-                request: .send(intent)
+                request: .send(intent),
+                sessionId: session?.id
             )
             self.removeExpiredPreparedTransfers()
             return transfer
@@ -1180,9 +1388,17 @@ extension WalletContextImpl {
         _ prepared: PreparedTransfer,
         recipientPeerId: EnginePeer.Id? = nil,
         pendingMessageCreated: (@MainActor @Sendable () -> Void)? = nil,
+        session: PasscodeSession? = nil,
         operationId: UUID
     ) async throws -> PendingTransfer {
-        return try await self.performOperation(.submittingTransfer, operationId: operationId) {
+        if let session {
+            guard let record = self.preparedTransfers[prepared.id],
+                  record.transfer == prepared, record.sessionId == session.id else { throw PasscodeError.staleAuthorization }
+            try self.authorization.validate(session, boundTo: record.sessionId)
+        } else if self.preparedTransfers[prepared.id]?.sessionId != nil {
+            throw PasscodeError.authenticationRequired
+        }
+        return try await self.performOperation(.submittingTransfer, operationId: operationId, authorizationId: "transfer:" + prepared.id, session: session) {
             guard case let .wallet(info) = self.currentState.phase,
                   info.canSign,
                   let record = self.preparedTransfers[prepared.id],
@@ -1380,6 +1596,7 @@ extension WalletContextImpl {
     }
 
     func discardPreparedTransfer(_ prepared: PreparedTransfer) {
+        self.authorization.finish(self.preparedAuthorizations.removeValue(forKey: "transfer:" + prepared.id))
         guard let record = self.preparedTransfers[prepared.id], record.transfer == prepared else {
             return
         }
@@ -1701,9 +1918,16 @@ extension WalletContextImpl {
     func performOperation<Value: Sendable>(
         _ activeOperation: ActiveOperation,
         operationId: UUID,
+        requiresAuthorization: Bool? = nil,
+        authorizationId: String? = nil,
+        session borrowedSession: PasscodeSession? = nil,
         _ operation: () async throws -> Value
     ) async throws -> Value {
         try Task.checkCancellation()
+        if let borrowedSession {
+            try await borrowedSession.waitUntilAvailable()
+            try self.authorization.validate(borrowedSession)
+        }
         guard !self.isShutdown else {
             throw WalletError.unavailable
         }
@@ -1726,6 +1950,7 @@ extension WalletContextImpl {
              .disablingBackup, .loadingMoreTransactions, .loadingMoreCollectibles:
             break
         }
+        let initialActivationGeneration = self.activationGeneration
         self.activeOperationId = operationId
         self.replaceState(
             phase: self.currentState.phase,
@@ -1735,6 +1960,10 @@ extension WalletContextImpl {
             activeOperation: activeOperation
         )
         defer {
+            if self.activationGeneration != initialActivationGeneration {
+                self.authorization.invalidate(preservingResultFor: operationId)
+                self.preparedAuthorizations.removeAll()
+            }
             if self.activeOperationId == operationId {
                 self.activeOperationId = nil
                 self.replaceState(
@@ -1752,11 +1981,71 @@ extension WalletContextImpl {
                 self.scheduleAutomaticPhraseRecoveryIfNeeded()
             }
         }
-        return try await operation()
+        let needsAuthorization: Bool
+        switch activeOperation {
+        case .loadingMoreTransactions, .loadingMoreCollectibles, .preparingTransfer:
+            needsAuthorization = false
+        default:
+            needsAuthorization = true
+        }
+        var session = borrowedSession
+        let authorizationGeneration = borrowedSession != nil || (requiresAuthorization ?? needsAuthorization)
+            ? try self.authorization.operationGeneration(requireAvailable: borrowedSession?.lifetime != .ownerManaged) : nil
+        if let borrowedSession {
+            try self.authorization.validate(borrowedSession)
+        } else if let authorizationId, let existing = self.preparedAuthorizations.removeValue(forKey: authorizationId) {
+            if (try? self.authorization.validate(existing)) != nil { session = existing }
+            else { self.authorization.finish(existing) }
+        }
+        if session == nil, requiresAuthorization ?? needsAuthorization {
+            session = try await self.authorization.authorize(id: operationId, reason: String(describing: activeOperation))
+        }
+        var retained = false
+        defer { if borrowedSession == nil && !retained { self.authorization.finish(session) } }
+        if activeOperation == .submittingTransfer {
+            if let authorizationGeneration {
+                try self.authorization.validateGeneration(authorizationGeneration, requireAvailable: session?.lifetime != .ownerManaged)
+            }
+            if let session { try self.authorization.validate(session) }
+        }
+        let result = try await self.authorization.withSession(session) { try await operation() }
+        do {
+            if activeOperation != .submittingTransfer {
+                try Task.checkCancellation()
+                let requireAvailable = session?.lifetime != .ownerManaged
+                if let authorizationGeneration {
+                    try self.authorization.validateGeneration(authorizationGeneration, requireAvailable: requireAvailable)
+                }
+                if let session { try self.authorization.validate(session, requireAvailable: requireAvailable) }
+            }
+        } catch {
+            if let prepared = result as? PreparedTransfer {
+                self.discardPreparedTransfer(prepared)
+            } else if let prepared = result as? PreparedRecoveryPhraseImport {
+                if self.preparedRecoveryPhraseImportRecordId == prepared.recordId {
+                    self.preparedRecoveryPhraseImportRecordId = nil
+                }
+                await self.discardReplacementForCleanup(recordId: prepared.recordId)
+            }
+            throw error
+        }
+        if borrowedSession == nil, let session {
+            let flowId: String?
+            if let prepared = result as? PreparedTransfer { flowId = "transfer:" + prepared.id }
+            else { flowId = nil }
+            if let flowId {
+                self.authorization.finish(self.preparedAuthorizations.updateValue(session, forKey: flowId))
+                retained = true
+            }
+        }
+        return result
     }
 
     func removeExpiredPreparedTransfers() {
         let now = currentWalletTimestamp()
+        for (id, record) in self.preparedTransfers where record.transfer.expiresAt <= now {
+            self.authorization.finish(self.preparedAuthorizations.removeValue(forKey: "transfer:" + id))
+        }
         self.preparedTransfers = self.preparedTransfers.filter { $0.value.transfer.expiresAt > now }
     }
 

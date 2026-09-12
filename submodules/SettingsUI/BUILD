@@ -142,6 +142,8 @@ swift_library(
         "//submodules/TelegramUI/Components/ListSectionComponent",
         "//submodules/TelegramUI/Components/ListActionItemComponent",
         "//submodules/Utils/DeviceModel",
+        "//submodules/PasscodeCore",
+        "//submodules/WalletContext",
     ],
     visibility = [
         "//visibility:public",

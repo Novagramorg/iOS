@@ -3,7 +3,7 @@ import TelegramCore
 import SwiftSignalKit
 import WalletEngineFFI
 
-let walletTransactionFetchLimit = 50
+let walletTransactionFetchLimit = 25
 
 struct WalletPeerAddressMapping: @unchecked Sendable {
     let peer: EnginePeer

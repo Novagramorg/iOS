@@ -518,9 +518,10 @@ private final class WalletTransferSheetComponent: CombinedComponent {
                             animated: true,
                             animateOut: animateOut
                         )
-                    case .failure:
+                    case let .failure(error):
                         self.isConfirming = false
                         self.updated(transition: .easeInOut(duration: 0.2))
+                        guard error != .authorizationCancelled else { return }
                         guard let controller = getController() else {
                             return
                         }

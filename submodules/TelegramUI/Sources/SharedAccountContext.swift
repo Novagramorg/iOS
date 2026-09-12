@@ -16,6 +16,7 @@ import LegacyUI
 import ChatListUI
 import PeerInfoUI
 import SettingsUI
+import PasscodeUI
 import UrlHandling
 import LegacyMediaPickerUI
 import LocalMediaResources
@@ -80,6 +81,7 @@ import WalletScreen
 import WalletReceiveScreen
 import WalletImportScreen
 import WalletSettingsScreen
+import WalletAppsScreen
 import WalletWordsScreen
 import WalletInfoScreen
 import WalletConnectScreen
@@ -4185,8 +4187,15 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         return WalletSettingsScreen(context: context, walletContext: walletContext)
     }
 
-    public func makeWalletWordsScreen(context: AccountContext, words: [String], verify: Bool, completion: (() -> Void)?) -> ViewController {
-        return WalletWordsScreen(context: context, words: words, verify: verify, completion: completion)
+    public func makeWalletAppsScreen(context: AccountContext) -> ViewController {
+        guard let walletContext = context.walletContext else {
+            preconditionFailure("Wallet is only available in the main account context")
+        }
+        return WalletAppsScreen(context: context, walletContext: walletContext)
+    }
+
+    public func makeWalletWordsScreen(context: AccountContext, words: [String], verify: Bool, dismissOnBackgroundOrLock: Bool = false, completion: (() -> Void)?) -> ViewController {
+        return WalletWordsScreen(context: context, words: words, verify: verify, dismissOnBackgroundOrLock: dismissOnBackgroundOrLock, completion: completion)
     }
 
     public func makeWalletWordsScreen(context: AccountContext, words: [String], mode: WalletWordsScreenMode, completion: (() -> Void)?) -> ViewController {

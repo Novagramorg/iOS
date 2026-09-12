@@ -15,24 +15,29 @@ import PasscodeUI
 import TelegramStringFormatting
 import TelegramIntents
 import ContextUI
+import PasscodeCore
+import WalletContext
 
 private final class PasscodeOptionsControllerArguments {
     let turnPasscodeOff: () -> Void
     let changePasscode: () -> Void
     let changePasscodeTimeout: () -> Void
     let changeTouchId: (Bool) -> Void
+    let changeWalletProtection: (Bool, Bool) -> Void
     
-    init(turnPasscodeOff: @escaping () -> Void, changePasscode: @escaping () -> Void, changePasscodeTimeout: @escaping () -> Void, changeTouchId: @escaping (Bool) -> Void) {
+    init(turnPasscodeOff: @escaping () -> Void, changePasscode: @escaping () -> Void, changePasscodeTimeout: @escaping () -> Void, changeTouchId: @escaping (Bool) -> Void, changeWalletProtection: @escaping (Bool, Bool) -> Void) {
         self.turnPasscodeOff = turnPasscodeOff
         self.changePasscode = changePasscode
         self.changePasscodeTimeout = changePasscodeTimeout
         self.changeTouchId = changeTouchId
+        self.changeWalletProtection = changeWalletProtection
     }
 }
 
 private enum PasscodeOptionsSection: Int32 {
     case setting
     case options
+    case wallet
 }
 
 public enum PasscodeOptionsEntryTag: ItemListItemTag, Equatable {
@@ -55,6 +60,11 @@ private enum PasscodeOptionsEntry: ItemListNodeEntry {
     case changePasscode(PresentationTheme, String)
     case settingInfo(PresentationTheme, String)
     
+    case telegramHeader(PresentationTheme, String)
+    case walletHeader(PresentationTheme, String)
+    case walletPasscode(PresentationTheme, String, Bool, Bool)
+    case walletBiometrics(PresentationTheme, String, Bool, Bool)
+    case walletInfo(PresentationTheme, String)
     case autoLock(PresentationTheme, String, String)
     case touchId(PresentationTheme, String, Bool)
     
@@ -62,8 +72,10 @@ private enum PasscodeOptionsEntry: ItemListNodeEntry {
         switch self {
             case .togglePasscode, .changePasscode, .settingInfo:
                 return PasscodeOptionsSection.setting.rawValue
-            case .autoLock, .touchId:
+            case .telegramHeader, .autoLock, .touchId:
                 return PasscodeOptionsSection.options.rawValue
+            case .walletHeader, .walletPasscode, .walletBiometrics, .walletInfo:
+                return PasscodeOptionsSection.wallet.rawValue
         }
     }
     
@@ -75,15 +87,34 @@ private enum PasscodeOptionsEntry: ItemListNodeEntry {
                 return 1
             case .settingInfo:
                 return 2
-            case .autoLock:
-                return 3
-            case .touchId:
-                return 4
+            case .telegramHeader: return 3
+            case .autoLock: return 4
+            case .touchId: return 5
+            case .walletHeader: return 6
+            case .walletPasscode: return 7
+            case .walletBiometrics: return 8
+            case .walletInfo: return 9
         }
     }
     
     static func ==(lhs: PasscodeOptionsEntry, rhs: PasscodeOptionsEntry) -> Bool {
         switch lhs {
+            case let .telegramHeader(theme, text):
+                if case let .telegramHeader(otherTheme, otherText) = rhs { return theme === otherTheme && text == otherText }
+                return false
+            case let .walletHeader(theme, text):
+                if case let .walletHeader(otherTheme, otherText) = rhs { return theme === otherTheme && text == otherText }
+                return false
+            case let .walletInfo(theme, text):
+                if case let .walletInfo(otherTheme, otherText) = rhs { return theme === otherTheme && text == otherText }
+                return false
+            case let .walletPasscode(theme, text, value, enabled):
+                if case let .walletPasscode(otherTheme, otherText, otherValue, otherEnabled) = rhs { return theme === otherTheme && text == otherText && value == otherValue && enabled == otherEnabled }
+                return false
+            case let .walletBiometrics(theme, text, value, enabled):
+                if case let .walletBiometrics(otherTheme, otherText, otherValue, otherEnabled) = rhs { return theme === otherTheme && text == otherText && value == otherValue && enabled == otherEnabled }
+                return false
+
             case let .togglePasscode(lhsTheme, lhsText, lhsValue):
                 if case let .togglePasscode(rhsTheme, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsText == rhsText, lhsValue == rhsValue {
                     return true
@@ -124,11 +155,22 @@ private enum PasscodeOptionsEntry: ItemListNodeEntry {
     func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
         let arguments = arguments as! PasscodeOptionsControllerArguments
         switch self {
-            case let .togglePasscode(_, title, value):
+            case let .telegramHeader(_, text), let .walletHeader(_, text):
+                return ItemListSectionHeaderItem(presentationData: presentationData, text: text, sectionId: self.section)
+            case let .walletInfo(_, text):
+                return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
+            case let .walletPasscode(_, title, value, enabled):
+                return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: title, value: value, enableInteractiveChanges: false, enabled: enabled, sectionId: self.section, style: .blocks, updated: { value in
+                    arguments.changeWalletProtection(false, value)
+                })
+            case let .walletBiometrics(_, title, value, enabled):
+                return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: title, value: value, enableInteractiveChanges: false, enabled: enabled, sectionId: self.section, style: .blocks, updated: { value in
+                    arguments.changeWalletProtection(true, value)
+                })
+
+            case let .togglePasscode(_, title, _):
                 return ItemListActionItem(presentationData: presentationData, systemStyle: .glass, title: title, kind: .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: {
-                    if value {
-                        arguments.turnPasscodeOff()
-                    }
+                    arguments.turnPasscodeOff()
                 }, tag: PasscodeOptionsEntryTag.togglePasscode)
             case let .changePasscode(_, title):
                 return ItemListActionItem(presentationData: presentationData, systemStyle: .glass, title: title, kind: .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: {
@@ -149,9 +191,25 @@ private enum PasscodeOptionsEntry: ItemListNodeEntry {
 }
 
 private struct PasscodeOptionsControllerState: Equatable {
-    static func ==(lhs: PasscodeOptionsControllerState, rhs: PasscodeOptionsControllerState) -> Bool {
-        return true
+    var protection: WalletProtectionSettings?
+    var protectionLoaded = false
+    var protectionUnavailable = true
+    var canUseBiometrics = false
+    var faceID = false
+}
+
+private final class PasscodeOptionsListController: ItemListController {
+    var sessionState: PasscodeSettingsSessionState?
+
+    override func viewWillLeaveNavigation() {
+        super.viewWillLeaveNavigation()
+        if let navigation = self.navigationController as? NavigationController,
+           !navigation.viewControllers.contains(where: { $0 === self }) {
+            self.sessionState?.close()
+        }
     }
+
+    deinit { self.sessionState?.close() }
 }
 
 private final class PasscodeOptionsContextReferenceContentSource: ContextReferenceContentSource {
@@ -211,14 +269,17 @@ private func autolockStringForTimeout(strings: PresentationStrings, timeout: Int
 private func passcodeOptionsControllerEntries(presentationData: PresentationData, state: PasscodeOptionsControllerState, passcodeOptionsData: PasscodeOptionsData) -> [PasscodeOptionsEntry] {
     var entries: [PasscodeOptionsEntry] = []
     
-    switch passcodeOptionsData.accessChallenge {
+    let challenge = state.protection.map { $0.passcode.map { accessChallengeData(reference: $0) } ?? PostboxAccessChallengeData.none } ?? passcodeOptionsData.accessChallenge
+    switch challenge {
         case .none:
             entries.append(.togglePasscode(presentationData.theme, presentationData.strings.PasscodeSettings_TurnPasscodeOn, false))
             entries.append(.settingInfo(presentationData.theme, presentationData.strings.PasscodeSettings_Help))
-        case .numericalPassword, .plaintextPassword:
+        case .numericalPassword, .plaintextPassword, .secured:
             entries.append(.togglePasscode(presentationData.theme, presentationData.strings.PasscodeSettings_TurnPasscodeOff, true))
             entries.append(.changePasscode(presentationData.theme, presentationData.strings.PasscodeSettings_ChangePasscode))
             entries.append(.settingInfo(presentationData.theme, presentationData.strings.PasscodeSettings_Help))
+            //TODO:localize
+            entries.append(.telegramHeader(presentationData.theme, "Lock Telegram".uppercased()))
             entries.append(.autoLock(presentationData.theme, presentationData.strings.PasscodeSettings_AutoLock, autolockStringForTimeout(strings: presentationData.strings, timeout: passcodeOptionsData.presentationSettings.autolockTimeout)))
             if let biometricAuthentication = LocalAuth.biometricAuthentication {
                 switch biometricAuthentication {
@@ -228,21 +289,36 @@ private func passcodeOptionsControllerEntries(presentationData: PresentationData
                         entries.append(.touchId(presentationData.theme, presentationData.strings.PasscodeSettings_UnlockWithFaceId, passcodeOptionsData.presentationSettings.enableBiometrics))
                 }
             }
+            //TODO:localize
+            entries.append(.walletHeader(presentationData.theme, "Lock Wallet".uppercased()))
+            let protectionEnabled = state.protection?.enabled == true
+            
+            let controlsEnabled = !state.protectionUnavailable
+            //TODO:localize
+            entries.append(.walletPasscode(presentationData.theme, "Confirm with Passcode", protectionEnabled, controlsEnabled))
+            if protectionEnabled && (state.canUseBiometrics || state.protection?.biometricsEnabled == true) {
+                //TODO:localize
+                let title = state.faceID ? "Confirm with Face ID" : "Confirm with Touch ID"
+                entries.append(.walletBiometrics(presentationData.theme, title, state.protection?.biometricsEnabled == true, controlsEnabled))
+            }
+            //TODO:localize
+            entries.append(.walletInfo(presentationData.theme, "Required when sending funds or confirming other sensitive Wallet actions."))
     }
     
     return entries
 }
 
-public func passcodeOptionsController(context: AccountContext, focusOnItemTag: PasscodeOptionsEntryTag? = nil) -> ViewController {
-    let initialState = PasscodeOptionsControllerState()
+public func passcodeOptionsController(context: AccountContext, focusOnItemTag: PasscodeOptionsEntryTag? = nil, settingsSession: PasscodeSession? = nil) -> ViewController {
+    var currentState = PasscodeOptionsControllerState()
+    let initialState = currentState
+    let sessionState = PasscodeSettingsSessionState(session: settingsSession)
     
     let statePromise = ValuePromise(initialState, ignoreRepeated: true)
     
-    var presentControllerImpl: ((ViewController, ViewControllerPresentationArguments) -> Void)?
+    var presentControllerImpl: ((ViewController, ViewControllerPresentationArguments?) -> Void)?
     var presentInGlobalOverlayImpl: ((ViewController) -> Void)?
     var pushControllerImpl: ((ViewController) -> Void)?
     var popControllerImpl: (() -> Void)?
-    var replaceTopControllerImpl: ((ViewController, Bool) -> Void)?
     var findAutolockReferenceNode: (() -> ItemListDisclosureItemNode?)?
     var currentAutolockTimeout: Int32?
     
@@ -257,86 +333,299 @@ public func passcodeOptionsController(context: AccountContext, focusOnItemTag: P
         return PasscodeOptionsData(accessChallenge: accessChallenge, presentationSettings: passcodeSettings)
     })
     
+    var activeBiometricContext: LAContext?
+    var isControllerAvailable: () -> Bool = { false }
+    var isControllerOnTop: () -> Bool = { false }
+    let updateState: () -> Void = {
+        statePromise.set(currentState)
+    }
+    let presentProtectionError: () -> Void = {
+        let strings = context.sharedContext.currentPresentationData.with { $0 }.strings
+        //TODO:localize
+        presentControllerImpl?(textAlertController(context: context, title: nil, text: "Couldn't update wallet protection. Please try again.", actions: [TextAlertAction(type: .defaultAction, title: strings.Common_OK, action: {})]), ViewControllerPresentationArguments(presentationAnimation: .modalSheet))
+    }
+    var refreshGeneration: UInt64 = 0
+    let refreshProtection: (Bool) -> Void = { reportError in
+        refreshGeneration &+= 1
+        let generation = refreshGeneration
+        let biometricContext = LAContext()
+        let canUseBiometrics = biometricContext.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: nil)
+        let faceID = biometricContext.biometryType == .faceID
+        DispatchQueue.global(qos: .userInitiated).async {
+            let result = Result { try walletProtectionSettings() }
+            DispatchQueue.main.async {
+                guard generation == refreshGeneration else { return }
+                currentState.protectionLoaded = true
+                currentState.canUseBiometrics = canUseBiometrics
+                currentState.faceID = faceID
+                switch result {
+                case let .success(settings):
+                    currentState.protection = settings
+                    currentState.protectionUnavailable = false
+                case .failure:
+                    currentState.protectionUnavailable = true
+                    if reportError && isControllerAvailable() { presentProtectionError() }
+                }
+                updateState()
+            }
+        }
+    }
+    actionsDisposable.add(PasscodeCredentialStore.shared.changes.start(next: { _ in
+        refreshProtection(false)
+    }))
+    let accountId = context.account.id
+    actionsDisposable.add((combineLatest(
+        context.sharedContext.applicationBindings.applicationInForeground,
+        context.sharedContext.appLockContext.isPasscodeLocked,
+        context.sharedContext.activeAccountContexts |> map { primary, _, _ in primary?.account.id == accountId }
+    ) |> deliverOnMainQueue).start(next: { foreground, locked, current in
+        sessionState.updateEnvironment(foreground: foreground, locked: locked, currentAccount: current)
+        if !foreground || locked || !current {
+            activeBiometricContext?.invalidate()
+            activeBiometricContext = nil
+        }
+        updateState()
+    }))
+
+    let changeWalletProtection: (Bool, Bool) -> Void = { biometrics, enabled in
+        guard !currentState.protectionUnavailable, let operation = sessionState.beginOperation() else { return }
+        let generation = sessionState.generation
+        updateState()
+        let finish: (Error?) -> Void = { error in
+            guard sessionState.accepts(operation: operation) else { return }
+            activeBiometricContext = nil
+            sessionState.finish(operation: operation)
+            updateState()
+            refreshProtection(false)
+            if let error, (error as? PasscodeError) != .cancelled { presentProtectionError() }
+        }
+        let perform: (PasscodeSession) -> Void = { session in
+            guard sessionState.accepts(operation: operation) else { return }
+            let authenticationContext = LAContext()
+            //TODO:localize
+            authenticationContext.localizedReason = "Enable biometrics for your wallets"
+            authenticationContext.localizedFallbackTitle = ""
+            authenticationContext.touchIDAuthenticationAllowableReuseDuration = 0
+            activeBiometricContext = authenticationContext
+            DispatchQueue.global(qos: .userInitiated).async {
+                let result = Result {
+                    if biometrics {
+                        try setWalletBiometricsEnabled(enabled, session: session, context: authenticationContext)
+                    } else {
+                        try setWalletProtectionEnabled(enabled, session: session)
+                    }
+                }
+                authenticationContext.invalidate()
+                DispatchQueue.main.async {
+                    switch result {
+                    case .success: finish(nil)
+                    case let .failure(error): finish(error)
+                    }
+                }
+            }
+        }
+        let authenticate: () -> Void = {
+            guard sessionState.accepts(operation: operation) else { return }
+            weak var authenticationController: ViewController?
+            if let controller = settingsPasscodeSessionController(context: context, completion: { result in
+                switch result {
+                case let .success(session):
+                    guard sessionState.accepts(operation: operation),
+                          let navigation = authenticationController?.navigationController as? NavigationController,
+                          navigation.topViewController === authenticationController,
+                          sessionState.replaceSession(session, generation: generation) else { session.invalidate(); return }
+                    let _ = navigation.popViewController(animated: true)
+                    perform(session)
+                case .failure: finish(nil)
+                }
+            }) {
+                authenticationController = controller
+                pushControllerImpl?(controller)
+            }
+        }
+        if let session = sessionState.session {
+            DispatchQueue.global(qos: .userInitiated).async {
+                let result = Result { try PasscodeCredentialStore.shared.validate(session, scope: .settings) }
+                DispatchQueue.main.async {
+                    guard sessionState.accepts(operation: operation) else { return }
+                    switch result {
+                    case .success: perform(session)
+                    case let .failure(error):
+                        if let error = error as? PasscodeError, error == .staleAuthorization || error == .authenticationRequired { authenticate() }
+                        else { finish(error) }
+                    }
+                }
+            }
+        } else { authenticate() }
+    }
+
+    func withSettingsSession(
+        operation: UInt64,
+        proceed: @escaping (PasscodeSession, ViewController?) -> Void,
+        failed: @escaping (Error?) -> Void
+    ) {
+        guard sessionState.accepts(operation: operation), isControllerOnTop() else { failed(nil); return }
+        let generation = sessionState.generation
+        let authenticate: () -> Void = {
+            guard sessionState.accepts(operation: operation), isControllerOnTop() else { failed(nil); return }
+            weak var authenticationController: ViewController?
+            if let controller = settingsPasscodeSessionController(context: context, completion: { result in
+                switch result {
+                case let .success(session):
+                    guard sessionState.accepts(operation: operation),
+                          let authenticationController,
+                          let navigation = authenticationController.navigationController as? NavigationController,
+                          navigation.topViewController === authenticationController,
+                          sessionState.replaceSession(session, generation: generation) else {
+                        session.invalidate()
+                        failed(nil)
+                        return
+                    }
+                    proceed(session, authenticationController)
+                case .failure:
+                    failed(nil)
+                }
+            }) {
+                authenticationController = controller
+                guard sessionState.accepts(operation: operation) else { return }
+                pushControllerImpl?(controller)
+            }
+        }
+        if let session = sessionState.session {
+            DispatchQueue.global(qos: .userInitiated).async {
+                let result = Result { try PasscodeCredentialStore.shared.validate(session, scope: .settings) }
+                DispatchQueue.main.async {
+                    guard sessionState.accepts(operation: operation), isControllerOnTop() else { failed(nil); return }
+                    switch result {
+                    case .success:
+                        proceed(session, nil)
+                    case let .failure(error):
+                        if let error = error as? PasscodeError, error == .staleAuthorization || error == .authenticationRequired {
+                            authenticate()
+                        } else {
+                            failed(error)
+                        }
+                    }
+                }
+            }
+        } else {
+            authenticate()
+        }
+    }
+
     let arguments = PasscodeOptionsControllerArguments(turnPasscodeOff: {
-        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-        let actionSheet = ActionSheetController(presentationData: presentationData)
-        actionSheet.setItemGroups([ActionSheetItemGroup(items: [
-            ActionSheetButtonItem(title: presentationData.strings.PasscodeSettings_TurnPasscodeOff, color: .destructive, action: { [weak actionSheet, passcodeOptionsDataPromise] in
-                actionSheet?.dismissAnimated()
-                
-                let challenge = PostboxAccessChallengeData.none
-                let _ = context.sharedContext.accountManager.transaction({ transaction -> Void in
-                    transaction.setAccessChallengeData(challenge)
-                }).start()
-                
-                let _ = (passcodeOptionsDataPromise.get() |> take(1)).start(next: { [weak passcodeOptionsDataPromise] data in
-                    passcodeOptionsDataPromise?.set(.single(data.withUpdatedAccessChallenge(challenge)))
+        guard !sessionState.isUpdating else {
+            return
+        }
+        let current: WalletProtectionSettings
+        do {
+            current = try walletProtectionSettings()
+        }
+        catch {
+            presentProtectionError();
+            return
+        }
+        let generation = sessionState.generation
+        if current.passcode == nil {
+            pushControllerImpl?(applicationPasscodeSetupController(context: context, session: nil, change: false, settingsSessionCompleted: { session in
+                sessionState.replaceSession(session, generation: generation)
+            }, completion: { reference in
+                guard sessionState.accepts(generation: generation) else { return }
+                let _ = (passcodeOptionsDataPromise.get() |> take(1)).start(next: { data in
+                    passcodeOptionsDataPromise.set(.single(data.withUpdatedAccessChallenge(accessChallengeData(reference: reference))))
                 })
-                
-                var innerReplaceTopControllerImpl: ((ViewController, Bool) -> Void)?
-                let controller = PrivacyIntroController(context: context, mode: .passcode, proceedAction: {
-                    let setupController = PasscodeSetupController(context: context, mode: .setup(change: false, .digits6))
-                    setupController.complete = { passcode, numerical in
-                        let _ = (context.sharedContext.accountManager.transaction({ transaction -> Void in
-                            var data = transaction.getAccessChallengeData()
-                            if numerical {
-                                data = PostboxAccessChallengeData.numericalPassword(value: passcode)
-                            } else {
-                                data = PostboxAccessChallengeData.plaintextPassword(value: passcode)
+                popControllerImpl?()
+            }))
+            return
+        }
+        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+        //TODO:localize
+        let warning = current.enabled
+            ? "This will also turn off passcode and biometric protection for every wallet on this device."
+            : presentationData.strings.PasscodeSettings_TurnPasscodeOff
+        let alert = textAlertController(context: context, title: presentationData.strings.PasscodeSettings_TurnPasscodeOff, text: warning, actions: [
+            TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {}),
+            TextAlertAction(type: .destructiveAction, title: presentationData.strings.PasscodeSettings_TurnPasscodeOff, action: {
+                guard sessionState.accepts(generation: generation), let operation = sessionState.beginOperation() else { return }
+                updateState()
+                let finish: (Error?) -> Void = { error in
+                    guard sessionState.accepts(operation: operation) else { return }
+                    sessionState.finish(operation: operation)
+                    updateState()
+                    refreshProtection(false)
+                    if let error, (error as? PasscodeError) != .cancelled { presentProtectionError() }
+                }
+                withSettingsSession(operation: operation, proceed: { session, authenticationController in
+                    if let authenticationController,
+                       let navigation = authenticationController.navigationController as? NavigationController {
+                        let _ = navigation.popViewController(animated: true)
+                    }
+                    DispatchQueue.global(qos: .userInitiated).async {
+                        let result = Result { try PasscodeCredentialStore.shared.disablePasscode(session: session) }
+                        let _ = (context.sharedContext.accountManager.transaction { transaction -> PostboxAccessChallengeData in
+                            transaction.getAccessChallengeData()
+                        } |> deliverOnMainQueue).start(next: { challenge in
+                            guard sessionState.accepts(operation: operation), isControllerAvailable() else { return }
+                            sessionState.finish(operation: operation)
+                            if case .none = challenge { sessionState.invalidate() }
+                            updateState()
+                            refreshProtection(false)
+                            let generation = sessionState.generation
+                            let _ = (passcodeOptionsDataPromise.get() |> take(1)).start(next: { data in
+                                guard sessionState.accepts(generation: generation), isControllerAvailable() else { return }
+                                passcodeOptionsDataPromise.set(.single(data.withUpdatedAccessChallenge(challenge)))
+                            })
+                            if case let .failure(error) = result, (error as? PasscodeError) != .cancelled {
+                                presentProtectionError()
                             }
-                            transaction.setAccessChallengeData(data)
-                            
-                            updatePresentationPasscodeSettingsInternal(transaction: transaction, { $0.withUpdatedAutolockTimeout(1 * 60 * 60).withUpdatedBiometricsDomainState(LocalAuth.evaluatedPolicyDomainState) })
-                        }) |> deliverOnMainQueue).start(next: { _ in
-                        }, error: { _ in
-                        }, completed: {
-                            innerReplaceTopControllerImpl?(passcodeOptionsController(context: context), true)
                         })
                     }
-                    innerReplaceTopControllerImpl?(setupController, true)
-                    innerReplaceTopControllerImpl = { [weak setupController] c, animated in
-                        (setupController?.navigationController as? NavigationController)?.replaceTopController(c, animated: animated)
-                    }
-                })
-                replaceTopControllerImpl?(controller, false)
-                innerReplaceTopControllerImpl = { [weak controller] c, animated in
-                    (controller?.navigationController as? NavigationController)?.replaceTopController(c, animated: animated)
-                }
+                }, failed: finish)
             })
-            ]), ActionSheetItemGroup(items: [
-                ActionSheetButtonItem(title: presentationData.strings.Common_Cancel, color: .accent, font: .bold, action: { [weak actionSheet] in
-                    actionSheet?.dismissAnimated()
-                })
-            ])])
-        presentControllerImpl?(actionSheet, ViewControllerPresentationArguments(presentationAnimation: .modalSheet))
+        ])
+        presentControllerImpl?(alert, nil)
     }, changePasscode: {
-        let _ = (context.sharedContext.accountManager.transaction({ transaction -> Bool in
-            switch transaction.getAccessChallengeData() {
-                case .none, .numericalPassword:
-                    return true
-                case .plaintextPassword:
-                    return false
-            }
-        })
-        |> deliverOnMainQueue).start(next: { isSimple in
-            let setupController = PasscodeSetupController(context: context, mode: .setup(change: true, .digits6))
-            setupController.complete = { passcode, numerical in
-                let _ = (context.sharedContext.accountManager.transaction({ transaction -> Void in
-                    var data = transaction.getAccessChallengeData()
-                    if numerical {
-                        data = PostboxAccessChallengeData.numericalPassword(value: passcode)
-                    } else {
-                        data = PostboxAccessChallengeData.plaintextPassword(value: passcode)
-                    }
-                    transaction.setAccessChallengeData(data)
-                }) |> deliverOnMainQueue).start(next: { _ in
-                }, error: { _ in
-                }, completed: {
-                    popControllerImpl?()
+        guard let operation = sessionState.beginOperation() else { return }
+        let generation = sessionState.generation
+        updateState()
+        let finish: (Error?) -> Void = { error in
+            guard sessionState.accepts(operation: operation) else { return }
+            sessionState.finish(operation: operation)
+            updateState()
+            if let error, (error as? PasscodeError) != .cancelled { presentProtectionError() }
+        }
+        withSettingsSession(operation: operation, proceed: { session, authenticationController in
+            weak var setupController: ViewController?
+            let controller = applicationPasscodeSetupController(context: context, session: session, change: true, ownsAuthorizationSession: false, settingsSessionCompleted: { session in
+                guard sessionState.accepts(operation: operation) else { session.invalidate(); return }
+                sessionState.replaceSession(session, generation: generation)
+            }, cancelled: {
+                finish(nil)
+            }, completion: { reference in
+                guard sessionState.accepts(operation: operation),
+                      let setupController,
+                      let navigation = setupController.navigationController as? NavigationController,
+                      navigation.topViewController === setupController else {
+                    finish(nil)
+                    return
+                }
+                sessionState.finish(operation: operation)
+                updateState()
+                let _ = (passcodeOptionsDataPromise.get() |> take(1)).start(next: { data in
+                    guard sessionState.accepts(generation: generation), isControllerAvailable() else { return }
+                    passcodeOptionsDataPromise.set(.single(data.withUpdatedAccessChallenge(accessChallengeData(reference: reference))))
                 })
+                let _ = navigation.popViewController(animated: true)
+            })
+            setupController = controller
+            guard sessionState.accepts(operation: operation) else { return }
+            if let authenticationController,
+               let navigation = authenticationController.navigationController as? NavigationController {
+                navigation.replaceTopController(controller, animated: true)
+            } else {
+                pushControllerImpl?(controller)
             }
-            pushControllerImpl?(setupController)
-        })
+        }, failed: finish)
     }, changePasscodeTimeout: {
         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
         let setAction: (Int32?) -> Void = { [passcodeOptionsDataPromise] value in
@@ -396,21 +685,49 @@ public func passcodeOptionsController(context: AccountContext, focusOnItemTag: P
                 return current.withUpdatedEnableBiometrics(value)
             }).start()
         })
+    }, changeWalletProtection: { biometrics, enabled in
+        changeWalletProtection(biometrics, enabled)
     })
     
     let signal = combineLatest(context.sharedContext.presentationData, statePromise.get(), passcodeOptionsDataPromise.get()) |> deliverOnMainQueue
-        |> map { presentationData, state, passcodeOptionsData -> (ItemListControllerState, (ItemListNodeState, Any)) in
-            currentAutolockTimeout = passcodeOptionsData.presentationSettings.autolockTimeout
+    |> filter { _, state, _ in state.protectionLoaded }
+    |> map { presentationData, state, passcodeOptionsData -> (ItemListControllerState, (ItemListNodeState, Any)) in
+        currentAutolockTimeout = passcodeOptionsData.presentationSettings.autolockTimeout
 
-            let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text(presentationData.strings.PasscodeSettings_Title), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back), animateChanges: false)
-            let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: passcodeOptionsControllerEntries(presentationData: presentationData, state: state, passcodeOptionsData: passcodeOptionsData), style: .blocks, ensureVisibleItemTag: focusOnItemTag, emptyStateItem: nil, animateChanges: false)
-            
-            return (controllerState, (listState, arguments))
-        } |> afterDisposed {
-            actionsDisposable.dispose()
+        let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text(presentationData.strings.PasscodeSettings_Title), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back), animateChanges: false)
+        let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: passcodeOptionsControllerEntries(presentationData: presentationData, state: state, passcodeOptionsData: passcodeOptionsData), style: .blocks, ensureVisibleItemTag: focusOnItemTag, emptyStateItem: nil, animateChanges: true)
+        
+        return (controllerState, (listState, arguments))
+    } |> afterDisposed {
+        actionsDisposable.dispose()
+        sessionState.close()
+        activeBiometricContext?.invalidate()
     }
     
-    let controller = ItemListController(context: context, state: signal)
+    let controller = PasscodeOptionsListController(context: context, state: signal)
+    controller.sessionState = sessionState
+    isControllerAvailable = { [weak controller] in
+        guard let controller, let navigation = controller.navigationController as? NavigationController else { return false }
+        return navigation.viewControllers.contains(where: { $0 === controller })
+    }
+    isControllerOnTop = { [weak controller] in
+        guard let controller, let navigation = controller.navigationController as? NavigationController else { return false }
+        return navigation.topViewController === controller
+    }
+    controller.didAppear = { firstTime in
+        if firstTime {
+            if currentState.protectionUnavailable { presentProtectionError() }
+        } else {
+            refreshProtection(true)
+        }
+    }
+    controller.didDisappear = { [weak controller] _ in
+        guard let controller else { return }
+        if !isControllerAvailable() || controller.isBeingDismissed {
+            sessionState.close()
+            activeBiometricContext?.invalidate()
+        }
+    }
     presentControllerImpl = { [weak controller] c, p in
         if let controller = controller {
             controller.present(c, in: .window(.root), with: p)
@@ -424,9 +741,6 @@ public func passcodeOptionsController(context: AccountContext, focusOnItemTag: P
     }
     popControllerImpl = { [weak controller] in
         let _ = (controller?.navigationController as? NavigationController)?.popViewController(animated: true)
-    }
-    replaceTopControllerImpl = { [weak controller] c, animated in
-        (controller?.navigationController as? NavigationController)?.replaceTopController(c, animated: animated)
     }
     findAutolockReferenceNode = { [weak controller] in
         return controller?.itemNode(forTag: PasscodeOptionsEntryTag.autolock) as? ItemListDisclosureItemNode
@@ -446,130 +760,36 @@ public func passcodeOptionsController(context: AccountContext, focusOnItemTag: P
         }
     }
     
+    refreshProtection(false)
     return controller
 }
 
-public func passcodeOptionsAccessController(context: AccountContext, animateIn: Bool = true, pushController: ((ViewController) -> Void)?, completion: @escaping (Bool) -> Void) -> Signal<ViewController?, NoError> {
+public func passcodeOptionsAccessController(context: AccountContext, replaceController: @escaping (ViewController) -> Void, authorizationCompleted: @escaping (Result<PasscodeSession, PasscodeError>) -> Void) -> Signal<ViewController?, NoError> {
     return context.sharedContext.accountManager.transaction { transaction -> PostboxAccessChallengeData in
-        return transaction.getAccessChallengeData()
+        transaction.getAccessChallengeData()
     }
     |> deliverOnMainQueue
     |> map { challenge -> ViewController? in
         if case .none = challenge {
+            weak var introController: PrivacyIntroController?
+            var didProceed = false
             let controller = PrivacyIntroController(context: context, mode: .passcode, proceedAction: {
-                let setupController = PasscodeSetupController(context: context, mode: .setup(change: false, .digits6))
-                setupController.complete = { passcode, numerical in
-                    let _ = (context.sharedContext.accountManager.transaction({ transaction -> Void in
-                        var data = transaction.getAccessChallengeData()
-                        if numerical {
-                            data = PostboxAccessChallengeData.numericalPassword(value: passcode)
-                        } else {
-                            data = PostboxAccessChallengeData.plaintextPassword(value: passcode)
-                        }
-                        transaction.setAccessChallengeData(data)
-                        
-                        updatePresentationPasscodeSettingsInternal(transaction: transaction, { $0.withUpdatedAutolockTimeout(1 * 60 * 60).withUpdatedBiometricsDomainState(LocalAuth.evaluatedPolicyDomainState) })
-                    }) |> deliverOnMainQueue).start(next: { _ in
-                    }, error: { _ in
-                    }, completed: {
-                        completion(true)
-                        deleteAllSendMessageIntents()
-                    })
+                guard !didProceed, let introController,
+                      let navigation = introController.navigationController as? NavigationController,
+                      navigation.topViewController === introController else {
+                    return
                 }
-                pushController?(setupController)
+                didProceed = true
+                let setupController = applicationPasscodeSetupController(context: context, session: nil, change: false, settingsSessionCompleted: { session in
+                    authorizationCompleted(.success(session))
+                }, cancelled: { authorizationCompleted(.failure(.cancelled)) }, completion: { _ in
+                    deleteAllSendMessageIntents()
+                })
+                replaceController(setupController)
             })
-            return controller
-        } else {
-            let controller = PasscodeSetupController(context: context, mode: .entry(challenge))
-            controller.check = { passcode in
-                var succeed = false
-                switch challenge {
-                    case .none:
-                        succeed = true
-                    case let .numericalPassword(code):
-                        succeed = passcode == normalizeArabicNumeralString(code, type: .western)
-                    case let .plaintextPassword(code):
-                        succeed = passcode == code
-                }
-                if succeed {
-                    completion(true)
-                }
-                return succeed
-            }
+            introController = controller
             return controller
         }
-    }
-}
-
-public func passcodeEntryController(
-    context: AccountContext,
-    animateIn: Bool = true,
-    modalPresentation: Bool = false,
-    completion: @escaping (Bool) -> Void
-) -> Signal<ViewController?, NoError> {
-    return passcodeEntryController(
-        accountManager: context.sharedContext.accountManager,
-        applicationBindings: context.sharedContext.applicationBindings,
-        presentationData: context.sharedContext.currentPresentationData.with { $0 },
-        updatedPresentationData: context.sharedContext.presentationData,
-        statusBarHost: context.sharedContext.mainWindow?.statusBarHost,
-        appLockContext: context.sharedContext.appLockContext,
-        animateIn: animateIn,
-        modalPresentation: modalPresentation,
-        completion: completion
-    )
-}
-    
-public func passcodeEntryController(
-    accountManager: AccountManager<TelegramAccountManagerTypes>,
-    applicationBindings: TelegramApplicationBindings,
-    presentationData: PresentationData,
-    updatedPresentationData: Signal<PresentationData, NoError>,
-    statusBarHost: StatusBarHost?,
-    appLockContext: AppLockContext,
-    animateIn: Bool = true,
-    modalPresentation: Bool = false,
-    completion: @escaping (Bool) -> Void
-) -> Signal<ViewController?, NoError> {
-    return accountManager.transaction { transaction -> PostboxAccessChallengeData in
-        return transaction.getAccessChallengeData()
-    }
-    |> mapToSignal { accessChallengeData -> Signal<(PostboxAccessChallengeData, PresentationPasscodeSettings?), NoError> in
-        return accountManager.transaction { transaction -> (PostboxAccessChallengeData, PresentationPasscodeSettings?) in
-            let passcodeSettings = transaction.getSharedData(ApplicationSpecificSharedDataKeys.presentationPasscodeSettings)?.get(PresentationPasscodeSettings.self)
-            return (accessChallengeData, passcodeSettings)
-        }
-    }
-    |> deliverOnMainQueue
-    |> map { (challenge, passcodeSettings) -> ViewController? in
-        if case .none = challenge {
-            completion(true)
-            return nil
-        } else {
-            let biometrics: PasscodeEntryControllerBiometricsMode
-            #if targetEnvironment(simulator)
-            biometrics = .enabled(nil)
-            #else
-            if let passcodeSettings = passcodeSettings, passcodeSettings.enableBiometrics {
-                biometrics = .enabled(applicationBindings.isMainApp ? passcodeSettings.biometricsDomainState : passcodeSettings.shareBiometricsDomainState)
-            } else {
-                biometrics = .none
-            }
-            #endif
-            let controller = PasscodeEntryController(applicationBindings: applicationBindings, accountManager: accountManager, appLockContext: appLockContext, presentationData: presentationData, presentationDataSignal: updatedPresentationData, statusBarHost: statusBarHost, challengeData: challenge, biometrics: biometrics, arguments: PasscodeEntryControllerPresentationArguments(animated: false, fadeIn: true, cancel: {
-                completion(false)
-            }, modalPresentation: modalPresentation))
-            controller.presentationCompleted = { [weak controller] in
-                Queue.mainQueue().after(0.5, { [weak controller] in
-                    controller?.requestBiometrics()
-                })
-            }
-            controller.completed = { [weak controller] in
-                controller?.dismiss(completion: {
-                    completion(true)
-                })
-            }
-            return controller
-        }
+        return settingsPasscodeSessionController(context: context, completion: authorizationCompleted)
     }
 }

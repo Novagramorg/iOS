@@ -171,10 +171,12 @@ public func logoutOptionsController(context: AccountContext, navigationControlle
             }
         })
     }, setPasscode: {
-        let _ = passcodeOptionsAccessController(context: context, pushController: { controller in
+        let _ = passcodeOptionsAccessController(context: context, replaceController: { controller in
             replaceTopControllerImpl?(controller)
-        }, completion: { _ in
-            replaceTopControllerImpl?(passcodeOptionsController(context: context))
+        }, authorizationCompleted: { result in
+            guard case let .success(session) = result else { return }
+            guard let replaceTopControllerImpl else { session.invalidate(); return }
+            replaceTopControllerImpl(passcodeOptionsController(context: context, settingsSession: session))
         }).start(next: { controller in
             if let controller = controller {
                 pushControllerImpl?(controller)
@@ -274,7 +276,7 @@ public func logoutOptionsController(context: AccountContext, navigationControlle
     |> map { presentationData, accessChallengeData -> (ItemListControllerState, (ItemListNodeState, Any)) in
         var hasPasscode = false
         switch accessChallengeData.data {
-            case .numericalPassword, .plaintextPassword:
+            case .numericalPassword, .plaintextPassword, .secured:
                 hasPasscode = true
             default:
                 break
@@ -303,4 +305,3 @@ public func logoutOptionsController(context: AccountContext, navigationControlle
     
     return controller
 }
-

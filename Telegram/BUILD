@@ -1020,6 +1020,7 @@ swift_library(
     ],
     deps = [
         "//submodules/TelegramUI",
+        "//submodules/PasscodeCore",
         "//submodules/TelegramUI/Components/ShareExtensionContext"
     ],
 )
@@ -1107,6 +1108,7 @@ swift_library(
     ],
     deps = [
         "//submodules/TelegramUI:TelegramUI",
+        "//submodules/PasscodeCore",
         ":NotificationContentExtensionLink",
     ],
 )
@@ -1211,6 +1213,7 @@ swift_library(
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
         "//submodules/Postbox:Postbox",
         "//submodules/TelegramCore:TelegramCore",
+        "//submodules/PasscodeCore",
         "//submodules/OpenSSLEncryptionProvider:OpenSSLEncryptionProvider",
         "//Telegram:GeneratedSources",
     ],
@@ -1352,6 +1355,7 @@ swift_library(
         "//submodules/BuildConfig:BuildConfig",
         "//submodules/OpenSSLEncryptionProvider:OpenSSLEncryptionProvider",
         "//submodules/AppLockState:AppLockState",
+        "//submodules/PasscodeCore",
         "//Telegram:GeneratedSources",
         "//submodules/WidgetItems:WidgetItems",
     ],

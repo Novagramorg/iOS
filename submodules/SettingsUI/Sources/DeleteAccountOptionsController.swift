@@ -265,10 +265,12 @@ public func deleteAccountOptionsController(context: AccountContext, navigationCo
     }, setPasscode: {
         context.engine.accountData.addAppLogEvent(type: "deactivate.options_passcode_tap")
         
-        let _ = passcodeOptionsAccessController(context: context, pushController: { controller in
+        let _ = passcodeOptionsAccessController(context: context, replaceController: { controller in
             replaceTopControllerImpl?(controller, false)
-        }, completion: { _ in
-            replaceTopControllerImpl?(passcodeOptionsController(context: context), false)
+        }, authorizationCompleted: { result in
+            guard case let .success(session) = result else { return }
+            guard let replaceTopControllerImpl else { session.invalidate(); return }
+            replaceTopControllerImpl(passcodeOptionsController(context: context, settingsSession: session), false)
         }).start(next: { controller in
             if let controller = controller {
                 pushControllerImpl?(controller)
@@ -414,7 +416,7 @@ public func deleteAccountOptionsController(context: AccountContext, navigationCo
 
         var hasPasscode = false
         switch accessChallengeData.data {
-            case .numericalPassword, .plaintextPassword:
+            case .numericalPassword, .plaintextPassword, .secured:
                 hasPasscode = true
             default:
                 break
@@ -468,4 +470,3 @@ public func deleteAccountOptionsController(context: AccountContext, navigationCo
 
     return controller
 }
-

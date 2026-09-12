@@ -1,5 +1,6 @@
 import Foundation
 import Security
+import PasscodeCore
 import WalletEngineFFI
 
 struct WalletEngineDescriptorRecord: Codable, Equatable, Sendable {
@@ -79,6 +80,7 @@ actor WalletEngineStorage {
         let payload: Data
     }
 
+    let namespace: String
     private let descriptorService: String
     private let secretService: String
     private let journalService: String
@@ -86,8 +88,9 @@ actor WalletEngineStorage {
     private let legacyTonConnectService: String
 
     init(namespace: String) {
+        self.namespace = namespace
         self.descriptorService = "org.telegram.ton-wallet.engine.v2.descriptor.\(namespace)"
-        self.secretService = "org.telegram.ton-wallet.engine.v2.secret.\(namespace)"
+        self.secretService = WalletVault.service(namespace: namespace)
         self.journalService = "org.telegram.ton-wallet.engine.v2.journal.\(namespace)"
         self.legacyTonConnectService = "org.telegram.ton-wallet.engine.v2.ton-connect.\(namespace)"
         self.tonConnectService = "org.telegram.ton-wallet.ton-connect.sessions.v1.\(namespace)"
@@ -136,7 +139,7 @@ actor WalletEngineStorage {
         if let existing = try self.loadReplacementCandidate(), existing != descriptor {
             throw WalletEngineStorageError.corrupted
         }
-        try self.write(secret, service: self.secretService, account: secretRef)
+        try self.write(WalletVault.encrypt(secret, namespace: self.namespace), service: self.secretService, account: secretRef)
         do {
             try self.saveReplacementCandidate(descriptor)
         } catch let saveError {
@@ -191,7 +194,7 @@ actor WalletEngineStorage {
         let rollbackSecretRef = "wallet:\(descriptor.recordId):key-rotation-rollback:\(operationId)"
         let candidateSecretRef = "wallet:\(descriptor.recordId):key-rotation-candidate:\(operationId)"
         try self.write(currentSecret, service: self.secretService, account: rollbackSecretRef)
-        try self.write(candidateSecret, service: self.secretService, account: candidateSecretRef)
+        try self.write(WalletVault.encrypt(candidateSecret, namespace: self.namespace), service: self.secretService, account: candidateSecretRef)
         let record = WalletEngineKeyRotationRecord(
             operationId: operationId,
             recordId: descriptor.recordId,
@@ -228,7 +231,7 @@ actor WalletEngineStorage {
               !candidate.isEmpty else {
             throw WalletEngineStorageError.corrupted
         }
-        return candidate
+        return try WalletVault.decrypt(candidate, namespace: self.namespace)
     }
 
     func markKeyRotationChainApplied(
@@ -353,6 +356,7 @@ actor WalletEngineStorage {
             kSecMatchLimit as String: kSecMatchLimitAll
         ]
         query[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+        query[kSecAttrAccessGroup as String] = try WalletVault.keychainAccessGroup()
         var result: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
         if status == errSecItemNotFound { return [] }
@@ -375,26 +379,31 @@ actor WalletEngineStorage {
     }
 
     func readProtectedSecret(_ request: ProtectedSecretRead) throws -> Data {
-        guard let data = try self.read(service: self.secretService, account: request.secretRef.value),
-              !data.isEmpty else {
+        guard let data = try self.read(service: self.secretService, account: request.secretRef.value) else {
             throw protectedSecretFailure(.notFound, "Protected secret was not found")
         }
-        return data
+        return try WalletVault.decrypt(data, namespace: self.namespace)
     }
 
     func containsProtectedSecret(_ secretRef: ProtectedSecretRef) throws -> Bool {
-        guard let data = try self.read(service: self.secretService, account: secretRef.value) else {
-            return false
-        }
-        return !data.isEmpty
+        try WalletVault.migrate(namespace: self.namespace, account: secretRef.value)
+        var query = try self.baseQuery(service: self.secretService, account: secretRef.value)
+        query[kSecReturnAttributes as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        if status == errSecItemNotFound { return false }
+        guard status == errSecSuccess else { throw WalletEngineStorageError.keychainStatus(status) }
+        return true
     }
 
     func storeProtectedSecret(_ request: ProtectedSecretStore) throws {
         guard !request.secretRef.value.isEmpty, !request.bytes.isEmpty else {
             throw protectedSecretFailure(.policyViolation, "Protected secret is empty")
         }
-        // App policy intentionally ignores requireUserPresence.
-        try self.write(request.bytes, service: self.secretService, account: request.secretRef.value)
+        // Product policy is enforced by the vault, including the explicit opt-out.
+        let envelope = try WalletVault.encrypt(request.bytes, namespace: self.namespace)
+        try self.write(envelope, service: self.secretService, account: request.secretRef.value)
     }
 
     func deleteProtectedSecret(_ secretRef: ProtectedSecretRef) throws {
@@ -453,17 +462,19 @@ actor WalletEngineStorage {
         }
     }
 
-    private func baseQuery(service: String, account: String) -> [String: Any] {
-        [
+    private func baseQuery(service: String, account: String) throws -> [String: Any] {
+        return [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
-            kSecAttrSynchronizable as String: false
+            kSecAttrSynchronizable as String: false,
+            kSecAttrAccessGroup as String: try WalletVault.keychainAccessGroup()
         ]
     }
 
     private func read(service: String, account: String) throws -> Data? {
-        var query = self.baseQuery(service: service, account: account)
+        if service == self.secretService { try WalletVault.migrate(namespace: self.namespace, account: account) }
+        var query = try self.baseQuery(service: service, account: account)
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
         var item: CFTypeRef?
@@ -478,7 +489,9 @@ actor WalletEngineStorage {
     }
 
     private func write(_ data: Data, service: String, account: String) throws {
-        let query = self.baseQuery(service: service, account: account)
+        // Complete an interrupted legacy migration before replacing this slot.
+        if service == self.secretService { try WalletVault.migrate(namespace: self.namespace, account: account) }
+        let query = try self.baseQuery(service: service, account: account)
         let updateStatus = SecItemUpdate(
             query as CFDictionary,
             [kSecValueData as String: data] as CFDictionary
@@ -499,7 +512,8 @@ actor WalletEngineStorage {
     }
 
     private func remove(service: String, account: String) throws {
-        let status = SecItemDelete(self.baseQuery(service: service, account: account) as CFDictionary)
+        if service == self.secretService { try WalletVault.removeLegacy(namespace: self.namespace, account: account) }
+        let status = SecItemDelete(try self.baseQuery(service: service, account: account) as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else {
             throw WalletEngineStorageError.keychainStatus(status)
         }
@@ -509,6 +523,10 @@ actor WalletEngineStorage {
 actor WalletEnginePlatformHost: WalletPlatformHost {
     let storage: WalletEngineStorage
     private let logger: WalletLogger
+    private var authorization: PasscodeSession?
+
+    func setAuthorization(_ grant: PasscodeSession?) { self.authorization = grant }
+
     private var captureNextProtectedSecret = false
     private var transientProtectedSecrets: [String: Data] = [:]
 
@@ -529,8 +547,11 @@ actor WalletEnginePlatformHost: WalletPlatformHost {
         self.captureNextProtectedSecret = false
     }
 
-    func transientProtectedSecret(secretRef: ProtectedSecretRef) -> Data? {
-        self.transientProtectedSecrets[secretRef.value]
+    func transientProtectedSecret(secretRef: ProtectedSecretRef) throws -> Data? {
+        try WalletAuthorizationScope.$session.withValue(self.authorization) {
+            guard let envelope = self.transientProtectedSecrets[secretRef.value] else { return nil }
+            return try WalletVault.decrypt(envelope, namespace: self.storage.namespace)
+        }
     }
 
     func containsTransientProtectedSecret(secretRef: ProtectedSecretRef) -> Bool {
@@ -547,37 +568,52 @@ actor WalletEnginePlatformHost: WalletPlatformHost {
     }
 
     func readProtectedSecret(request: ProtectedSecretRead) async throws -> Data {
-        if let data = self.transientProtectedSecrets[request.secretRef.value] {
-            return data
-        }
         do {
-            return try await self.storage.readProtectedSecret(request)
+            if let authorization = self.authorization { try await authorization.waitUntilAvailable() }
+            return try await WalletAuthorizationScope.$session.withValue(self.authorization) {
+                _ = try WalletVault.access(namespace: self.storage.namespace)
+                if let data = self.transientProtectedSecrets[request.secretRef.value] {
+                    return try WalletVault.decrypt(data, namespace: self.storage.namespace)
+                }
+                return try await self.storage.readProtectedSecret(request)
+            }
         } catch let error as ProtectedSecretHostError {
-            self.logger.error("wallet_protected_secret_read_failed", error)
             throw error
+        } catch let error as PasscodeError {
+            switch error {
+            case .cancelled, .staleAuthorization:
+                throw protectedSecretFailure(.cancelled, "Authorization was cancelled")
+            case .authenticationRequired, .invalidCode, .cooldown:
+                throw protectedSecretFailure(.authenticationFailed, "Authorization is required")
+            default:
+                throw protectedSecretFailure(.unavailable, "Protected storage is unavailable")
+            }
         } catch {
-            self.logger.error("wallet_protected_secret_read_failed", error)
-            throw protectedSecretFailure(.unavailable, String(describing: error))
+            throw protectedSecretFailure(.unavailable, "Protected storage is unavailable")
         }
     }
 
     func storeProtectedSecret(request: ProtectedSecretStore) async throws {
-        if self.captureNextProtectedSecret {
-            self.captureNextProtectedSecret = false
-            guard !request.secretRef.value.isEmpty, !request.bytes.isEmpty else {
-                throw protectedSecretFailure(.policyViolation, "Protected secret is empty")
-            }
-            self.transientProtectedSecrets[request.secretRef.value] = request.bytes
-            return
-        }
         do {
-            try await self.storage.storeProtectedSecret(request)
+            if let authorization = self.authorization { try await authorization.waitUntilAvailable() }
+            try await WalletAuthorizationScope.$session.withValue(self.authorization) {
+                // Engine presence requests use the app's configured wallet policy,
+                // including PIN authorization and the explicit unprotected choice.
+                _ = try WalletVault.access(namespace: self.storage.namespace)
+                if self.captureNextProtectedSecret {
+                    self.captureNextProtectedSecret = false
+                    guard !request.secretRef.value.isEmpty, !request.bytes.isEmpty else {
+                        throw protectedSecretFailure(.policyViolation, "Protected secret is empty")
+                    }
+                    self.transientProtectedSecrets[request.secretRef.value] = try WalletVault.encrypt(request.bytes, namespace: self.storage.namespace)
+                    return
+                }
+                try await self.storage.storeProtectedSecret(request)
+            }
         } catch let error as ProtectedSecretHostError {
-            self.logger.error("wallet_protected_secret_store_failed", error)
             throw error
         } catch {
-            self.logger.error("wallet_protected_secret_store_failed", error)
-            throw protectedSecretFailure(.unavailable, String(describing: error))
+            throw protectedSecretFailure(.unavailable, "Protected storage is unavailable")
         }
     }
 

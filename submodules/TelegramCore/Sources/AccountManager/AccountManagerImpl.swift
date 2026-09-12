@@ -8,6 +8,36 @@ public protocol AccountManagerTypes {
 
 public typealias SharedPreferencesEntry = PreferencesEntry
 
+private enum AccountManagerPasscodeMigrationTestError: LocalizedError {
+    case unsupportedAccountManager
+    case invalidAccessChallenge
+
+    var errorDescription: String? {
+        switch self {
+        case .unsupportedAccountManager:
+            return "Passcode migration tests require a writable, persistent account manager."
+        case .invalidAccessChallenge:
+            return "Passcode migration tests require a legacy passcode."
+        }
+    }
+}
+
+public struct AccountManagerAccessChallenge {
+    public let prepare: (Bool) throws -> Void
+    public let resolve: (PostboxAccessChallengeData?, Bool) throws -> PostboxAccessChallengeData?
+    public let finishInitialization: () throws -> Void
+
+    public init(
+        prepare: @escaping (Bool) throws -> Void,
+        resolve: @escaping (PostboxAccessChallengeData?, Bool) throws -> PostboxAccessChallengeData?,
+        finishInitialization: @escaping () throws -> Void
+    ) {
+        self.prepare = prepare
+        self.resolve = resolve
+        self.finishInitialization = finishInitialization
+    }
+}
+
 public struct AccountManagerModifier<Types: AccountManagerTypes> {
     public let getRecords: () -> [AccountRecord<Types.Attribute>]
     public let updateRecord: (AccountRecordId, (AccountRecord<Types.Attribute>?) -> (AccountRecord<Types.Attribute>?)) -> Void
@@ -38,6 +68,8 @@ final class AccountManagerImpl<Types: AccountManagerTypes> {
     private let temporarySessionId: Int64
     private let guardValueBox: ValueBox?
     private let valueBox: ValueBox
+    private let canCleanPasscodeMetadata: Bool
+    private let resolveAccessChallenge: (PostboxAccessChallengeData?, Bool) throws -> PostboxAccessChallengeData?
     
     private var tables: [Table] = []
     
@@ -76,7 +108,7 @@ final class AccountManagerImpl<Types: AccountManagerTypes> {
         }
     }
     
-    fileprivate init?(queue: Queue, basePath: String, isTemporary: Bool, isReadOnly: Bool, useCaches: Bool, removeDatabaseOnError: Bool, temporarySessionId: Int64) {
+    fileprivate init?(queue: Queue, basePath: String, isTemporary: Bool, isReadOnly: Bool, useCaches: Bool, removeDatabaseOnError: Bool, temporarySessionId: Int64, accessChallenge: AccountManagerAccessChallenge) {
         let startTime = CFAbsoluteTimeGetCurrent()
         
         self.queue = queue
@@ -84,6 +116,8 @@ final class AccountManagerImpl<Types: AccountManagerTypes> {
         self.atomicStatePath = "\(basePath)/atomic-state"
         self.loginTokensPath = "\(basePath)/login-tokens"
         self.temporarySessionId = temporarySessionId
+        self.canCleanPasscodeMetadata = !isReadOnly && !isTemporary
+        self.resolveAccessChallenge = accessChallenge.resolve
         let _ = try? FileManager.default.createDirectory(atPath: basePath, withIntermediateDirectories: true, attributes: nil)
         guard let guardValueBox = SqliteValueBox(basePath: basePath + "/guard_db", queue: queue, isTemporary: isTemporary, isReadOnly: false, useCaches: useCaches, removeDatabaseOnError: removeDatabaseOnError, encryptionParameters: nil, upgradeProgress: { _ in }) else {
             postboxLog("Could not open guard value box at \(basePath + "/guard_db")")
@@ -116,6 +150,15 @@ final class AccountManagerImpl<Types: AccountManagerTypes> {
         self.legacyRecordTable = AccountManagerRecordTable<Types.Attribute>(valueBox: self.valueBox, table: AccountManagerRecordTable<Types.Attribute>.tableSpec(1), useCaches: useCaches)
         self.sharedDataTable = AccountManagerSharedDataTable(valueBox: self.valueBox, table: AccountManagerSharedDataTable.tableSpec(2), useCaches: useCaches)
         self.noticeTable = NoticeTable(valueBox: self.valueBox, table: NoticeTable.tableSpec(3), useCaches: useCaches)
+
+        let isFreshInstallation = !FileManager.default.fileExists(atPath: self.atomicStatePath)
+            && self.legacyRecordTable.getRecords().isEmpty
+            && self.legacyMetadataTable.getAccessChallengeData() == .none
+        do {
+            try accessChallenge.prepare(isFreshInstallation)
+        } catch {
+            postboxLog("Access challenge installation initialization deferred")
+        }
         
         do {
             let data = try Data(contentsOf: URL(fileURLWithPath: self.atomicStatePath))
@@ -157,6 +200,25 @@ final class AccountManagerImpl<Types: AccountManagerTypes> {
             self.syncAtomicStateToFile()
         }
         
+        do {
+            let allowMigration = !isReadOnly && !isTemporary
+            let migrated = try self.resolveAccessChallenge(self.currentAtomicState.accessChallengeData, allowMigration)
+            if allowMigration {
+                if let migrated, migrated != self.currentAtomicState.accessChallengeData || migrated != self.legacyMetadataTable.getAccessChallengeData() {
+                    self.valueBox.begin()
+                    self.legacyMetadataTable.setAccessChallengeData(migrated)
+                    self.valueBox.commit()
+                    self.currentAtomicState.accessChallengeData = migrated
+                    self.syncAtomicStateToFile()
+                }
+                self.cleanPasscodeMetadataIfNeeded()
+                try accessChallenge.finishInitialization()
+            }
+        } catch {
+            // An unavailable credential must not remove the existing lock.
+            postboxLog("AccountManager: access challenge credential migration deferred")
+        }
+
         postboxLog("AccountManager: currentAccountId = \(String(describing: currentAtomicState.currentRecordId))")
         
         self.tables.append(self.legacyMetadataTable)
@@ -227,8 +289,22 @@ final class AccountManagerImpl<Types: AccountManagerTypes> {
             let updated = f(self.sharedDataTable.get(key: key))
             self.sharedDataTable.set(key: key, value: updated, updatedKeys: &self.currentUpdatedSharedDataKeys)
         }, getAccessChallengeData: {
-            return self.legacyMetadataTable.getAccessChallengeData()
-        }, setAccessChallengeData: { data in
+            let current = self.legacyMetadataTable.getAccessChallengeData()
+            if let migrated = try? self.resolveAccessChallenge(current, true), migrated != current {
+                self.legacyMetadataTable.setAccessChallengeData(migrated)
+                self.currentAtomicState.accessChallengeData = migrated
+                self.currentAtomicStateUpdated = true
+                self.currentUpdatedAccessChallengeData = migrated
+                return migrated
+            }
+            return current
+        }, setAccessChallengeData: { proposed in
+            guard let data = try? self.resolveAccessChallenge(nil, false) else {
+                return
+            }
+            guard data == proposed else {
+                return
+            }
             self.currentUpdatedAccessChallengeData = data
             self.currentAtomicStateUpdated = true
             self.legacyMetadataTable.setAccessChallengeData(data)
@@ -270,7 +346,76 @@ final class AccountManagerImpl<Types: AccountManagerTypes> {
             return EmptyDisposable
         }
     }
+
+    fileprivate func testPasscodeMigration(
+        _ legacy: PostboxAccessChallengeData,
+        prepare: (_ commitAndCrash: () throws -> Never) throws -> Never,
+        crash: @escaping () throws -> Never
+    ) throws -> Never {
+        assert(self.queue.isCurrent())
+        guard self.canCleanPasscodeMetadata else {
+            throw AccountManagerPasscodeMigrationTestError.unsupportedAccountManager
+        }
+        switch legacy {
+        case .numericalPassword, .plaintextPassword:
+            break
+        case .none, .secured:
+            throw AccountManagerPasscodeMigrationTestError.invalidAccessChallenge
+        }
+
+        let atomicState = AccountManagerAtomicState<Types>(
+            records: self.currentAtomicState.records,
+            currentRecordId: self.currentAtomicState.currentRecordId,
+            currentAuthRecord: self.currentAtomicState.currentAuthRecord,
+            accessChallengeData: legacy
+        )
+        let atomicStateData = try JSONEncoder().encode(atomicState)
+
+        self.valueBox.begin()
+        var transactionOpen = true
+        defer {
+            if transactionOpen {
+                self.valueBox.commit()
+            }
+        }
+
+        return try prepare {
+            precondition(transactionOpen)
+            do {
+                try FileManager.default.removeItem(atPath: self.basePath + "/passcode-v1-metadata-clean")
+            } catch let error as NSError where error.domain == NSCocoaErrorDomain && error.code == NSFileNoSuchFileError {
+            }
+
+            try atomicStateData.write(to: URL(fileURLWithPath: self.atomicStatePath), options: .atomic)
+            self.legacyMetadataTable.setAccessChallengeData(legacy)
+            self.currentAtomicState = atomicState
+            self.valueBox.commit()
+            transactionOpen = false
+
+            return try crash()
+        }
+    }
     
+    private func cleanPasscodeMetadataIfNeeded() {
+        guard self.canCleanPasscodeMetadata else { return }
+        let marker = self.basePath + "/passcode-v1-metadata-clean"
+        guard !FileManager.default.fileExists(atPath: marker) else {
+            return
+        }
+        switch self.currentAtomicState.accessChallengeData {
+        case .numericalPassword, .plaintextPassword:
+            return
+        case .none, .secured:
+            break
+        }
+        guard let _ = try? self.resolveAccessChallenge(nil, false) else {
+            return
+        }
+
+        (self.valueBox as? SqliteValueBox)?.vacuum()
+        try? Data([1]).write(to: URL(fileURLWithPath: marker), options: .atomic)
+    }
+
     private func syncAtomicStateToFile() {
         if let data = try? JSONEncoder().encode(self.currentAtomicState) {
             if let _ = try? data.write(to: URL(fileURLWithPath: self.atomicStatePath), options: [.atomic]) {
@@ -543,7 +688,7 @@ public final class AccountManager<Types: AccountManagerTypes> {
         return AccountManagerImpl<Types>.getCurrentRecords(basePath: basePath)
     }
     
-    public init(basePath: String, isTemporary: Bool, isReadOnly: Bool, useCaches: Bool, removeDatabaseOnError: Bool) {
+    public init(basePath: String, isTemporary: Bool, isReadOnly: Bool, useCaches: Bool, removeDatabaseOnError: Bool, accessChallenge: AccountManagerAccessChallenge) {
         self.queue = sharedQueue
         self.basePath = basePath
         var temporarySessionId: Int64 = 0
@@ -551,7 +696,7 @@ public final class AccountManager<Types: AccountManagerTypes> {
         self.temporarySessionId = temporarySessionId
         let queue = self.queue
         self.impl = QueueLocalObject(queue: queue, generate: {
-            if let value = AccountManagerImpl<Types>(queue: queue, basePath: basePath, isTemporary: isTemporary, isReadOnly: isReadOnly, useCaches: useCaches, removeDatabaseOnError: removeDatabaseOnError, temporarySessionId: temporarySessionId) {
+            if let value = AccountManagerImpl<Types>(queue: queue, basePath: basePath, isTemporary: isTemporary, isReadOnly: isReadOnly, useCaches: useCaches, removeDatabaseOnError: removeDatabaseOnError, temporarySessionId: temporarySessionId, accessChallenge: accessChallenge) {
                 return value
             } else {
                 postboxLogSync()
@@ -572,6 +717,23 @@ public final class AccountManager<Types: AccountManagerTypes> {
                 }))
             }
             return disposable
+        }
+    }
+
+    public func _internalTestPasscodeMigration(
+        _ legacy: PostboxAccessChallengeData,
+        prepare: @escaping (_ commitAndCrash: () throws -> Never) throws -> Never,
+        crash: @escaping () throws -> Never
+    ) -> Signal<Never, Error> {
+        return Signal { subscriber in
+            self.impl.with { impl in
+                do {
+                    try impl.testPasscodeMigration(legacy, prepare: prepare, crash: crash)
+                } catch {
+                    subscriber.putError(error)
+                }
+            }
+            return EmptyDisposable
         }
     }
     

@@ -283,6 +283,48 @@ private func tonApiRequestError(_ error: MTRpcError) -> TonApiRequestError {
     return TonApiRequestError(code: error.errorCode, description: error.errorDescription)
 }
 
+private struct CachedExistingWaltBalance: Codable {
+    let hasBalance: Bool
+}
+
+func _internal_getExistingWaltBalance(account: Account) -> Signal<Bool, NoError> {
+    let cacheId = ItemCacheEntryId(collectionId: Namespaces.CachedItemCollection.cachedExistingWaltBalance, key: ValueBoxKey(length: 0))
+    return account.postbox.transaction { transaction -> CachedExistingWaltBalance? in
+        return transaction.retrieveItemCacheEntry(id: cacheId)?.get(CachedExistingWaltBalance.self)
+    }
+    |> mapToSignal { cachedBalance -> Signal<Bool, NoError> in
+        let cached: Signal<Bool, NoError>
+        if let cachedBalance {
+            cached = .single(cachedBalance.hasBalance)
+        } else {
+            cached = .complete()
+        }
+
+        let updated = account.network.request(Api.functions.wallet.getExistingWaltBalance())
+        |> map { result -> Bool in
+            switch result {
+            case .boolTrue:
+                return true
+            case .boolFalse:
+                return false
+            }
+        }
+        |> `catch` { _ -> Signal<Bool, NoError> in
+            return .complete()
+        }
+        |> mapToSignal { hasBalance -> Signal<Bool, NoError> in
+            return account.postbox.transaction { transaction -> Bool in
+                if let entry = CodableEntry(CachedExistingWaltBalance(hasBalance: hasBalance)) {
+                    transaction.putItemCacheEntry(id: cacheId, entry: entry)
+                }
+                return hasBalance
+            }
+        }
+        return cached |> then(updated)
+    }
+    |> distinctUntilChanged
+}
+
 func _internal_getWalletState(account: Account) -> Signal<WalletState, WalletGetStateError> {
     return account.network.request(Api.functions.wallet.getState())
     |> mapError { _ -> WalletGetStateError in

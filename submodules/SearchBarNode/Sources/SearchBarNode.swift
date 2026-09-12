@@ -1021,7 +1021,7 @@ public class SearchBarNode: ASDisplayNode, UITextFieldDelegate {
     
     private var isAnimatingOut: Bool = false
     
-    public init(theme: SearchBarNodeTheme, presentationTheme: PresentationTheme, preferClearGlass: Bool = false, strings: PresentationStrings, fieldStyle: SearchBarStyle = .legacy, icon: Icon = .loupe, forceSeparator: Bool = false, displayBackground: Bool = true, cancelText: String? = nil) {
+    public init(theme: SearchBarNodeTheme, presentationTheme: PresentationTheme, preferClearGlass: Bool = false, strings: PresentationStrings, fieldStyle: SearchBarStyle = .legacy, icon: Icon = .loupe, forceSeparator: Bool = false, displayBackground: Bool = true, cancelText: String? = nil, hasOwnGlassContainer: Bool = true) {
         self.presentationTheme = presentationTheme
         self.preferClearGlass = preferClearGlass
         
@@ -1030,7 +1030,7 @@ public class SearchBarNode: ASDisplayNode, UITextFieldDelegate {
         self.cancelText = cancelText
         self.icon = icon
         
-        self.inlineSearchPlaceholder = SearchBarPlaceholderNode(fieldStyle: .glass)
+        self.inlineSearchPlaceholder = SearchBarPlaceholderNode(fieldStyle: .glass, hasOwnGlassContainer: hasOwnGlassContainer)
                 
         self.backgroundNode = NavigationBackgroundNode(color: theme.background)
         self.backgroundNode.isUserInteractionEnabled = false
@@ -1301,8 +1301,22 @@ public class SearchBarNode: ASDisplayNode, UITextFieldDelegate {
         let targetFrame = CGRect(origin: CGPoint(x: leftInset + 16.0, y: 0.0), size: CGSize(width: max(0.0, boundingSize.width - 16.0 * 2.0 - leftInset - rightInset), height: 44.0))
         let transition: ContainedViewLayoutTransition = .animated(duration: duration, curve: timingFunction == kCAMediaTimingFunctionSpring ? .spring : .easeInOut)
         takenSearchPlaceholderContentView.frame = sourceFrame
+        let backgroundView = node.backgroundView
+        let sourceBackgroundFrame = backgroundView.convert(backgroundView.bounds, to: self.view)
         transition.updateFrame(view: takenSearchPlaceholderContentView, frame: targetFrame)
         takenSearchPlaceholderContentView.update(size: targetFrame.size, isActive: true, additionalPlaceholderInset: self.textField.tokensInsetWidth, transition: transition)
+        let targetBackgroundFrame = backgroundView.convert(backgroundView.bounds, to: self.view)
+        let verticalOffset = sourceBackgroundFrame.midY - targetBackgroundFrame.midY
+
+        // Keep the input contents aligned with the background while preserving their layout frames.
+        transition.animatePositionAdditive(layer: self.textField.layer, offset: CGPoint(
+            x: sourceBackgroundFrame.minX - targetBackgroundFrame.minX,
+            y: verticalOffset
+        ))
+        transition.animatePositionAdditive(layer: self.clearButton.layer, offset: CGPoint(
+            x: sourceBackgroundFrame.maxX - targetBackgroundFrame.maxX,
+            y: verticalOffset
+        ))
         
         /*let initialTextBackgroundFrame = node.view.convert(node.backgroundView.frame, to: self.view)
         

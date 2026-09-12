@@ -12,8 +12,11 @@ swift_library(
     deps = [
         "//submodules/Display",
         "//submodules/AccountContext",
+        "//submodules/SSignalKit/SwiftSignalKit",
+        "//submodules/WalletContext",
         "//submodules/Markdown",
         "//submodules/TelegramPresentationData",
+        "//submodules/TelegramStringFormatting",
         "//submodules/TextFormat",
         "//submodules/ComponentFlow",
         "//submodules/Components/ViewControllerComponent",

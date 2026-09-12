@@ -1,3 +1,6 @@
+import PasscodeCore
+import PasscodeUI
+import LocalAuthentication
 import Foundation
 import SwiftSignalKit
 import UIKit
@@ -361,7 +364,8 @@ public final class AccountContextImpl: AccountContext {
                     }
                     return data.currentPasswordDerivation != nil
                 }
-                |> distinctUntilChanged
+                |> distinctUntilChanged,
+                applicationIsPasscodeLocked: sharedContext.appLockContext.isPasscodeLocked
             )
             self.giftAuctionsManager = GiftAuctionsManager(account: account)
         } else {
@@ -633,6 +637,21 @@ public final class AccountContextImpl: AccountContext {
         )
 
         if let walletContext = self.walletContext {
+            walletContext.setAuthorizationPresenter { [weak self] request in
+                guard let self else { throw PasscodeError.cancelled }
+                let settings = try walletProtectionSettings()
+                let authenticateBiometrics: ((LAContext) throws -> PasscodeSession)?
+                if settings.enabled && settings.biometricsEnabled {
+                    authenticateBiometrics = { context in
+                        try authenticateWalletBiometrics(namespace: request.namespace, lifetime: request.lifetime, context: context)
+                    }
+                } else {
+                    authenticateBiometrics = nil
+                }
+                //TODO:localize
+                let reason = "Confirm access to your wallet"
+                return try await requestPasscodeAuthentication(context: self, scope: .resource(namespace: request.namespace), lifetime: request.lifetime, biometricReason: reason, authenticateBiometrics: authenticateBiometrics)
+            }
             self.tonConnectPresentationDisposable = (walletContext.tonConnectState
             |> deliverOnMainQueue).start(next: { [weak self, weak walletContext] presentation in
                 guard let self, let walletContext else {

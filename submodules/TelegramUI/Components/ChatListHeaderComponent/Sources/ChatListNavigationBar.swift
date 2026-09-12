@@ -73,6 +73,7 @@ public final class ChatListNavigationBar: Component {
     public let accessoryPanelContainerHeight: CGFloat
     public let hasEdgeEffect: Bool
     public let edgeEffectColor: UIColor?
+    public let hasOwnGlassContainer: Bool
     public let activateSearch: (NavigationBarSearchContentNode) -> Void
     public let openStatusSetup: (UIView) -> Void
     public let allowAutomaticOrder: () -> Void
@@ -98,6 +99,7 @@ public final class ChatListNavigationBar: Component {
         accessoryPanelContainerHeight: CGFloat,
         hasEdgeEffect: Bool = true,
         edgeEffectColor: UIColor? = nil,
+        hasOwnGlassContainer: Bool = true,
         activateSearch: @escaping (NavigationBarSearchContentNode) -> Void,
         openStatusSetup: @escaping (UIView) -> Void,
         allowAutomaticOrder: @escaping () -> Void
@@ -122,6 +124,7 @@ public final class ChatListNavigationBar: Component {
         self.accessoryPanelContainerHeight = accessoryPanelContainerHeight
         self.hasEdgeEffect = hasEdgeEffect
         self.edgeEffectColor = edgeEffectColor
+        self.hasOwnGlassContainer = hasOwnGlassContainer
         self.activateSearch = activateSearch
         self.openStatusSetup = openStatusSetup
         self.allowAutomaticOrder = allowAutomaticOrder
@@ -188,6 +191,9 @@ public final class ChatListNavigationBar: Component {
         if lhs.edgeEffectColor != rhs.edgeEffectColor {
             return false
         }
+        if lhs.hasOwnGlassContainer != rhs.hasOwnGlassContainer {
+            return false
+        }
         return true
     }
     
@@ -204,8 +210,13 @@ public final class ChatListNavigationBar: Component {
 
     public final class View: UIView {
         private let edgeEffectView: EdgeEffectView
+
+        // Layout remains in navigation bar coordinates when this view is hosted externally.
+        public var edgeEffectBackgroundView: UIView {
+            return self.edgeEffectView
+        }
         
-        private let headerBackgroundContainer: GlassBackgroundContainerView
+        private var headerBackgroundContainer: UIView
         public let headerContent = ComponentView<Empty>()
         
         public private(set) var searchContentNode: NavigationBarSearchContentNode?
@@ -215,6 +226,7 @@ public final class ChatListNavigationBar: Component {
         private var scrollTheme: PresentationTheme?
         private var scrollStrings: PresentationStrings?
         private var scrollSearch: Search?
+        private var scrollHasOwnGlassContainer: Bool?
         
         private var currentLayout: CurrentLayout?
         private var rawScrollOffset: CGFloat?
@@ -247,7 +259,7 @@ public final class ChatListNavigationBar: Component {
         override public init(frame: CGRect) {
             self.edgeEffectView = EdgeEffectView()
             
-            self.headerBackgroundContainer = GlassBackgroundContainerView()
+            self.headerBackgroundContainer = SparseContainerView()
             self.headerBackgroundContainer.layer.anchorPoint = CGPoint()
             
             self.bottomContentsContainer = UIView()
@@ -306,9 +318,11 @@ public final class ChatListNavigationBar: Component {
             let searchPresentationUpdated = component.theme !== self.scrollTheme
                 || component.strings !== self.scrollStrings
                 || component.search != self.scrollSearch
+                || component.hasOwnGlassContainer != self.scrollHasOwnGlassContainer
             self.scrollTheme = component.theme
             self.scrollStrings = component.strings
             self.scrollSearch = component.search
+            self.scrollHasOwnGlassContainer = component.hasOwnGlassContainer
             
             let searchOffsetDistance: CGFloat = ChatListNavigationBar.searchScrollHeight
             
@@ -339,6 +353,10 @@ public final class ChatListNavigationBar: Component {
             var embeddedSearchBarExpansionHeight: CGFloat = 0.0
             var searchFrameValue: CGRect?
             if let search = component.search {
+                if let searchContentNode = self.searchContentNode, searchContentNode.hasOwnGlassContainer != component.hasOwnGlassContainer {
+                    searchContentNode.view.removeFromSuperview()
+                    self.searchContentNode = nil
+                }
                 let searchContentNode: NavigationBarSearchContentNode
                 if let current = self.searchContentNode {
                     searchContentNode = current
@@ -361,6 +379,7 @@ public final class ChatListNavigationBar: Component {
                         compactPlaceholder: placeholder,
                         displayGlassBackgroundWhenInactive: search.displayGlassBackgroundWhenInactive,
                         alignPlaceholderToLeftWhenInactive: search.alignPlaceholderToLeftWhenInactive,
+                        hasOwnGlassContainer: component.hasOwnGlassContainer,
                         activate: { [weak self] in
                             guard let self, let component = self.component, let searchContentNode = self.searchContentNode else {
                                 return
@@ -519,13 +538,35 @@ public final class ChatListNavigationBar: Component {
             }
             let headerContentFrame = CGRect(origin: CGPoint(x: 0.0, y: headerContentY), size: headerContentSize)
             if let headerContentView = self.headerContent.view {
-                if headerContentView.superview == nil {
-                    headerContentView.layer.anchorPoint = CGPoint()
+                if component.hasOwnGlassContainer != (self.headerBackgroundContainer is GlassBackgroundContainerView) {
+                    let previousContainer = self.headerBackgroundContainer
+                    let container: UIView = component.hasOwnGlassContainer ? GlassBackgroundContainerView() : SparseContainerView()
+                    container.layer.anchorPoint = CGPoint()
+                    container.bounds = previousContainer.bounds
+                    container.center = previousContainer.center
+                    if let superview = previousContainer.superview {
+                        superview.insertSubview(container, aboveSubview: previousContainer)
+                    }
+                    self.headerBackgroundContainer = container
+                    previousContainer.removeFromSuperview()
+                }
+                if self.headerBackgroundContainer.superview == nil {
                     self.addSubview(self.headerBackgroundContainer)
-                    self.headerBackgroundContainer.contentView.addSubview(headerContentView)
+                }
+                let headerContainerContentView: UIView
+                if let glassContainer = self.headerBackgroundContainer as? GlassBackgroundContainerView {
+                    headerContainerContentView = glassContainer.contentView
+                } else {
+                    headerContainerContentView = self.headerBackgroundContainer
+                }
+                if headerContentView.superview !== headerContainerContentView {
+                    headerContentView.layer.anchorPoint = CGPoint()
+                    headerContainerContentView.addSubview(headerContentView)
                 }
                 transition.setFrameWithAdditivePosition(view: self.headerBackgroundContainer, frame: headerContentFrame)
-                self.headerBackgroundContainer.update(size: headerContentFrame.size, isDark: component.theme.overallDarkAppearance, transition: transition)
+                if let glassContainer = self.headerBackgroundContainer as? GlassBackgroundContainerView {
+                    glassContainer.update(size: headerContentFrame.size, isDark: component.theme.overallDarkAppearance, transition: transition)
+                }
                 transition.setFrameWithAdditivePosition(view: headerContentView, frame: CGRect(origin: CGPoint(), size: headerContentFrame.size))
                 
                 if (component.activeSearch != nil) != (headerContentView.alpha == 0.0) {
@@ -669,6 +710,7 @@ public final class ChatListNavigationBar: Component {
                     accessoryPanelContainerHeight: component.accessoryPanelContainerHeight,
                     hasEdgeEffect: component.hasEdgeEffect,
                     edgeEffectColor: component.edgeEffectColor,
+                    hasOwnGlassContainer: component.hasOwnGlassContainer,
                     activateSearch: component.activateSearch,
                     openStatusSetup: component.openStatusSetup,
                     allowAutomaticOrder: component.allowAutomaticOrder

@@ -1,3 +1,4 @@
+import PasscodeCore
 import Foundation
 import TelegramCore
 import WalletEngineFFI
@@ -93,6 +94,8 @@ private func walletContextErrorKind(_ error: Error) -> String? {
         case .proofInvalid: return "proof_invalid"
         case .proofExpired: return "proof_expired"
         case .keyRotationFailed: return "key_rotation_failed"
+        case .backupDisableNeedsConfirmation: return "backup_disable_needs_confirmation"
+        case .preparedBackupDisableExpired: return "prepared_backup_disable_expired"
         case .commentTooLong: return "comment_too_long"
         case .commentEncryptionRecipientUnavailable: return "comment_encryption_recipient_unavailable"
         case .commentEncryptionFailed: return "comment_encryption_failed"
@@ -176,6 +179,12 @@ func synchronizationError(_ error: Error?) -> WalletContext.SynchronizationError
 }
 
 func walletError(_ error: Error) -> WalletContext.WalletError {
+    if let value = error as? PasscodeError {
+        switch value {
+        case .cancelled, .staleAuthorization: return .authorizationCancelled
+        default: return .unavailable
+        }
+    }
     if let value = error as? WalletContext.WalletError { return value }
     if let value = error as? TonConnectFailure { return .engine(value.message) }
     if let value = error as? WalletContext.SynchronizationError {

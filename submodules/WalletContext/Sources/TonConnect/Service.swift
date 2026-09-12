@@ -164,7 +164,11 @@ public actor TonConnectService {
 
     public func disconnectAll() async {
         let ids = Array(self.sessions.keys)
-        for id in ids { await self.disconnect(sessionId: id) }
+        await withTaskGroup(of: Void.self) { group in
+            for id in ids {
+                group.addTask { await self.disconnect(sessionId: id) }
+            }
+        }
     }
 
     public func dismissDiagnostic(id: UUID) async {

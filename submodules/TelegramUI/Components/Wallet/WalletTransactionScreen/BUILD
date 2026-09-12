@@ -37,6 +37,7 @@ swift_library(
         "//submodules/TelegramUI/Components/TextFieldComponent",
         "//submodules/TelegramUI/Components/ButtonComponent",
         "//submodules/TelegramUI/Components/PlainButtonComponent",
+        "//submodules/TelegramUI/Components/LottieComponent",
         "//submodules/TelegramUI/Components/Gifts/TableComponent",
         "//submodules/TelegramUI/Components/GlassBarButtonComponent",
         "//submodules/TelegramUI/Components/GlassControls",
@@ -48,6 +49,7 @@ swift_library(
         "//submodules/TelegramUI/Components/Wallet/WalletSendScreen",
         "//submodules/TooltipUI",
         "//submodules/UndoUI",
+        "//submodules/PasscodeCore",
     ],
     visibility = [
         "//visibility:public",

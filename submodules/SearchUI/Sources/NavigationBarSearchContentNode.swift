@@ -29,6 +29,7 @@ public class NavigationBarSearchContentNode: NavigationBarContentNode {
     public var theme: PresentationTheme?
     public var placeholder: String
     public var compactPlaceholder: String
+    public let hasOwnGlassContainer: Bool
     private let inline: Bool
     private var displayGlassBackgroundWhenInactive: Bool
     private var alignPlaceholderToLeftWhenInactive: Bool
@@ -41,15 +42,16 @@ public class NavigationBarSearchContentNode: NavigationBarContentNode {
 
     private var validLayout: (CGSize, CGFloat, CGFloat)?
     
-    public init(theme: PresentationTheme, placeholder: String, compactPlaceholder: String? = nil, inline: Bool = false, displayGlassBackgroundWhenInactive: Bool = false, alignPlaceholderToLeftWhenInactive: Bool = false, activate: @escaping () -> Void) {
+    public init(theme: PresentationTheme, placeholder: String, compactPlaceholder: String? = nil, inline: Bool = false, displayGlassBackgroundWhenInactive: Bool = false, alignPlaceholderToLeftWhenInactive: Bool = false, hasOwnGlassContainer: Bool = true, activate: @escaping () -> Void) {
         self.theme = theme
         self.placeholder = placeholder
         self.compactPlaceholder = compactPlaceholder ?? placeholder
+        self.hasOwnGlassContainer = hasOwnGlassContainer
         self.inline = inline
         self.displayGlassBackgroundWhenInactive = displayGlassBackgroundWhenInactive
         self.alignPlaceholderToLeftWhenInactive = alignPlaceholderToLeftWhenInactive
         
-        self.placeholderNode = SearchBarPlaceholderNode(fieldStyle: .glass)
+        self.placeholderNode = SearchBarPlaceholderNode(fieldStyle: .glass, hasOwnGlassContainer: hasOwnGlassContainer)
         self.placeholderNode.labelNode.displaysAsynchronously = false
         
         super.init()

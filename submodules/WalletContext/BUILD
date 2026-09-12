@@ -16,6 +16,7 @@ swift_library(
       "//submodules/TelegramCore",
       "//submodules/TelegramUIPreferences",
       "//submodules/WalletBackupCrypto",
+      "//submodules/PasscodeCore",
     ],
     visibility = [
         "//visibility:public",

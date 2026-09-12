@@ -1264,10 +1264,12 @@ public func privacyAndSecurityController(
             }
         }))
     }, openPasscode: {
-        let _ = passcodeOptionsAccessController(context: context, pushController: { controller in
+        let _ = passcodeOptionsAccessController(context: context, replaceController: { controller in
             replaceTopControllerImpl?(controller)
-        }, completion: { _ in
-            replaceTopControllerImpl?(passcodeOptionsController(context: context))
+        }, authorizationCompleted: { result in
+            guard case let .success(session) = result else { return }
+            guard let replaceTopControllerImpl else { session.invalidate(); return }
+            replaceTopControllerImpl(passcodeOptionsController(context: context, settingsSession: session))
         }).start(next: { controller in
             if let controller = controller {
                 pushControllerImpl?(controller, true)

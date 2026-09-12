@@ -23,26 +23,30 @@ fileprivate enum WalletConnectFinishResult {
     case connected
 }
 
-final class WalletConnectAppIconComponent: Component {
+public final class WalletConnectAppIconComponent: Component {
     let applicationName: String
     let url: String?
+    let size: CGFloat
+    let cornerRadius: CGFloat?
 
-    init(applicationName: String, url: String?) {
+    public init(applicationName: String, url: String?, size: CGFloat = 88.0, cornerRadius: CGFloat? = nil) {
         self.applicationName = applicationName
         self.url = url
+        self.size = size
+        self.cornerRadius = cornerRadius
     }
 
-    static func ==(lhs: WalletConnectAppIconComponent, rhs: WalletConnectAppIconComponent) -> Bool {
-        return lhs.applicationName == rhs.applicationName && lhs.url == rhs.url
+    public static func ==(lhs: WalletConnectAppIconComponent, rhs: WalletConnectAppIconComponent) -> Bool {
+        return lhs.applicationName == rhs.applicationName && lhs.url == rhs.url && lhs.size == rhs.size && lhs.cornerRadius == rhs.cornerRadius
     }
 
-    final class View: UIView {
+    public final class View: UIView {
         private let imageView = UIImageView()
         private let fallbackLabel = UILabel()
         private var currentUrl: String?
         private var task: URLSessionDataTask?
 
-        override init(frame: CGRect) {
+        public override init(frame: CGRect) {
             super.init(frame: frame)
 
             self.clipsToBounds = true
@@ -55,7 +59,7 @@ final class WalletConnectAppIconComponent: Component {
             self.addSubview(self.imageView)
         }
 
-        required init?(coder: NSCoder) {
+        required public init?(coder: NSCoder) {
             fatalError("init(coder:) has not been implemented")
         }
 
@@ -64,8 +68,9 @@ final class WalletConnectAppIconComponent: Component {
         }
 
         func update(component: WalletConnectAppIconComponent, availableSize: CGSize) -> CGSize {
-            let size = CGSize(width: min(availableSize.width, 88.0), height: min(availableSize.height, 88.0))
-            self.layer.cornerRadius = size.height / 2.0
+            let size = CGSize(width: min(availableSize.width, component.size), height: min(availableSize.height, component.size))
+            self.layer.cornerRadius = component.cornerRadius ?? size.height / 2.0
+            self.fallbackLabel.font = Font.bold(min(40.0, size.height * 0.5))
             self.imageView.frame = CGRect(origin: .zero, size: size)
             self.fallbackLabel.frame = CGRect(origin: .zero, size: size)
             self.fallbackLabel.text = component.applicationName.first.map { String($0).uppercased() }
@@ -106,11 +111,11 @@ final class WalletConnectAppIconComponent: Component {
         }
     }
 
-    func makeView() -> View {
+    public func makeView() -> View {
         return View(frame: .zero)
     }
 
-    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+    public func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
         return view.update(component: self, availableSize: availableSize)
     }
 }

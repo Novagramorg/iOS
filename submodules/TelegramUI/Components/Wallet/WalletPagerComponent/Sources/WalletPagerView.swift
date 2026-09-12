@@ -16,11 +16,10 @@ public final class WalletPagerView: UIView, UIScrollViewDelegate {
     private var indexUpdated: ((Int) -> Void)?
     private var draggingBegan: ((Int) -> Void)?
     private var previousIsDisplaying = false
-    private var lastReportedIndex: Int?
+    private var currentItemId: String?
     private var isUpdating = false
     private var ignoreContentOffsetChange = false
     private var isSwiping = false
-    private var lastScrollTime: TimeInterval = 0.0
 
     public override init(frame: CGRect) {
         self.dimView = UIView()
@@ -49,15 +48,12 @@ public final class WalletPagerView: UIView, UIScrollViewDelegate {
         fatalError("init(coder:) has not been implemented")
     }
 
-    private func reportCurrentIndex(force: Bool = false) {
+    private func reportCurrentIndex() {
         guard !self.pagerState.itemIds.isEmpty, self.pagerState.layout.isValid else {
             return
         }
         let index = self.pagerState.layout.currentIndex(at: self.scrollView.contentOffset.x)
-        if force || self.lastReportedIndex != index {
-            self.lastReportedIndex = index
-            self.indexUpdated?(index)
-        }
+        self.indexUpdated?(index)
     }
 
     public func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
@@ -65,69 +61,93 @@ public final class WalletPagerView: UIView, UIScrollViewDelegate {
             return
         }
         self.isSwiping = true
-        self.lastScrollTime = CACurrentMediaTime()
         self.draggingBegan?(self.pagerState.layout.currentIndex(at: scrollView.contentOffset.x))
     }
 
     public func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
         if !decelerate {
-            self.isSwiping = false
-            self.reportCurrentIndex(force: true)
+            self.finishScrolling()
         }
     }
 
     public func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+        self.finishScrolling()
+    }
+
+    private func finishScrolling() {
+        guard self.isSwiping else {
+            return
+        }
         self.isSwiping = false
-        self.reportCurrentIndex(force: true)
+        let wasUpdating = self.isUpdating
+        self.isUpdating = true
+        self.updatePages(transition: .immediate)
+        self.isUpdating = wasUpdating
+        self.reportCurrentIndex()
     }
 
     public func scrollViewDidScroll(_ scrollView: UIScrollView) {
         guard !self.ignoreContentOffsetChange, !self.isUpdating else {
             return
         }
-        if self.isSwiping {
-            self.lastScrollTime = CACurrentMediaTime()
-        }
         self.isUpdating = true
-        self.updateVisiblePages(transition: .immediate)
+        // Prepared pages move with the scroll view without any component updates.
+        // A long or interrupted gesture may expose a page outside the prepared set.
+        for index in self.pagerState.layout.visibleIndices(at: scrollView.contentOffset.x) {
+            if self.itemViews[self.pagerState.itemIds[index]] == nil {
+                self.updatePage(at: index, transition: .immediate)
+            }
+        }
         self.isUpdating = false
-        self.reportCurrentIndex()
     }
 
-    private func updateVisiblePages(transition: ComponentTransition) {
+    private func updatePage(at index: Int, transition: ComponentTransition) {
         guard let environment = self.environment, let makeContent = self.makeContent else {
             return
         }
         let layout = self.pagerState.layout
+        let id = self.pagerState.itemIds[index]
+        let itemView: ComponentHostView<EnvironmentType>
+        var itemTransition = transition
+        if let current = self.itemViews[id] {
+            itemView = current
+        } else {
+            itemTransition = transition.withAnimation(.none)
+            itemView = ComponentHostView<EnvironmentType>()
+            self.itemViews[id] = itemView
+            self.scrollView.addSubview(itemView)
+        }
+
+        let _ = itemView.update(
+            transition: itemTransition,
+            component: makeContent(index, id == self.currentItemId),
+            environment: { environment[EnvironmentType.self] },
+            containerSize: layout.size
+        )
+        itemView.frame = layout.itemFrame(at: index)
+    }
+
+    private func updatePages(transition: ComponentTransition) {
+        let layout = self.pagerState.layout
         let offset = self.scrollView.contentOffset.x
-        let currentIndex = layout.currentIndex(at: offset)
-        let isSwipingActive = self.isSwiping || CACurrentMediaTime() - self.lastScrollTime < 0.5
+        if !self.isSwiping, layout.isValid, !self.pagerState.itemIds.isEmpty {
+            self.currentItemId = self.pagerState.itemIds[layout.currentIndex(at: offset)]
+        }
+
+        var indices = Set(self.isSwiping ? layout.visibleIndices(at: offset) : layout.preloadedIndices(at: offset))
+        if self.isSwiping, layout.isValid {
+            // External data and layout changes still update retained pages in place.
+            // Keep the same presentation owner until the gesture has finished.
+            for id in self.itemViews.keys {
+                if let index = self.pagerState.index(forId: id) {
+                    indices.insert(index)
+                }
+            }
+        }
         var validIds = Set<String>()
-
-        for index in layout.candidateIndices(at: offset, isSwipingActive: isSwipingActive) {
-            guard layout.isVisible(at: index, offset: offset, isSwipingActive: isSwipingActive) else {
-                continue
-            }
-            let id = self.pagerState.itemIds[index]
-            validIds.insert(id)
-            let itemView: ComponentHostView<EnvironmentType>
-            var itemTransition = transition
-            if let current = self.itemViews[id] {
-                itemView = current
-            } else {
-                itemTransition = transition.withAnimation(.none)
-                itemView = ComponentHostView<EnvironmentType>()
-                self.itemViews[id] = itemView
-                self.scrollView.addSubview(itemView)
-            }
-
-            let _ = itemView.update(
-                transition: itemTransition,
-                component: makeContent(index, index == currentIndex),
-                environment: { environment[EnvironmentType.self] },
-                containerSize: layout.size
-            )
-            itemView.frame = layout.itemFrame(at: index)
+        for index in indices.sorted() {
+            validIds.insert(self.pagerState.itemIds[index])
+            self.updatePage(at: index, transition: transition)
         }
 
         var removeIds: [String] = []
@@ -152,9 +172,13 @@ public final class WalletPagerView: UIView, UIScrollViewDelegate {
         draggingBegan: @escaping (Int) -> Void
     ) -> CGSize {
         let wasUpdating = self.isUpdating
+        var shouldReportIndex = false
         self.isUpdating = true
         defer {
             self.isUpdating = wasUpdating
+            if shouldReportIndex {
+                self.reportCurrentIndex()
+            }
         }
 
         let wasInitialized = self.pagerState.isInitialized
@@ -184,7 +208,7 @@ public final class WalletPagerView: UIView, UIScrollViewDelegate {
             self.scrollView.contentOffset = CGPoint(x: targetOffset, y: 0.0)
             self.ignoreContentOffsetChange = false
         }
-        self.updateVisiblePages(transition: transition)
+        self.updatePages(transition: transition)
 
         if let _ = transition.userData(ViewControllerComponentContainer.AnimateInTransition.self) {
             self.dimView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.3)
@@ -194,9 +218,7 @@ public final class WalletPagerView: UIView, UIScrollViewDelegate {
         }
         self.previousIsDisplaying = environment[EnvironmentType.self].value.isVisible
 
-        if !wasInitialized && self.pagerState.isInitialized {
-            self.reportCurrentIndex(force: true)
-        }
+        shouldReportIndex = !wasInitialized && self.pagerState.isInitialized
         return availableSize
     }
 }

@@ -2,6 +2,7 @@ import UIKit
 import AsyncDisplayKit
 import Display
 import TelegramCore
+import PasscodeCore
 import SwiftSignalKit
 import Postbox
 import TelegramPresentationData
@@ -13,6 +14,7 @@ import PeerInfoUI
 import ShareItems
 import ShareItemsImpl
 import SettingsUI
+import PasscodeUI
 import OpenSSLEncryptionProvider
 import AppLock
 import Intents
@@ -187,8 +189,10 @@ public class ShareRootControllerImpl {
     private var mainWindow: Window1?
     private var currentShareController: ShareController?
     private var currentPasscodeController: ViewController?
+    private var isDismissed = false
     
     private let disposable = MetaDisposable()
+    private let passcodeDisposable = MetaDisposable()
     private var observer1: AnyObject?
     private var observer2: AnyObject?
     
@@ -219,6 +223,7 @@ public class ShareRootControllerImpl {
     
     deinit {
         self.disposable.dispose()
+        self.passcodeDisposable.dispose()
         if let observer = self.observer1 {
             NotificationCenter.default.removeObserver(observer)
         }
@@ -235,7 +240,11 @@ public class ShareRootControllerImpl {
     }
     
     public func viewWillDisappear() {
+        self.isDismissed = true
         self.disposable.dispose()
+        self.passcodeDisposable.dispose()
+        self.currentPasscodeController?.dismiss()
+        self.currentPasscodeController = nil
     }
     
     public func viewDidLayoutSubviews(view: UIView, traitCollection: UITraitCollection) {
@@ -290,7 +299,7 @@ public class ShareRootControllerImpl {
             }, forceOrientation: { _ in
             })
             
-            let accountManager = AccountManager<TelegramAccountManagerTypes>(basePath: rootPath + "/accounts-metadata", isTemporary: true, isReadOnly: false, useCaches: false, removeDatabaseOnError: false)
+            let accountManager: AccountManager<TelegramAccountManagerTypes> = setupAccountManager(basePath: rootPath + "/accounts-metadata", isTemporary: true, isReadOnly: false, useCaches: false, removeDatabaseOnError: false)
             initializeAccountManagement()
             
             do {
@@ -700,7 +709,8 @@ public class ShareRootControllerImpl {
                         }*/
                         
                         cancelImpl = { [weak shareController] in
-                            shareController?.dismiss(completion: { [weak self] in
+                            let controller: ViewController? = shareController
+                            controller?.dismiss(completion: { [weak self] in
                                 //inForeground.set(false)
                                 self?.getExtensionContext()?.completeRequest(returningItems: nil, completionHandler: nil)
                             })
@@ -918,7 +928,7 @@ public class ShareRootControllerImpl {
                     modalPresentation = false
                 }
                 
-                let _ = passcodeEntryController(
+                self?.passcodeDisposable.set(passcodeEntryController(
                     accountManager: accountManager,
                     applicationBindings: applicationBindings,
                     presentationData: environment.presentationData,
@@ -927,18 +937,19 @@ public class ShareRootControllerImpl {
                     appLockContext: appLockContext,
                     animateIn: true,
                     modalPresentation: modalPresentation,
-                    completion: { value in
+                    completion: { [weak self] value in
+                        guard let self, !self.isDismissed else { return }
                         if value {
                             displayShare()
                         } else {
-                            Queue.mainQueue().after(0.5, {
+                            Queue.mainQueue().after(0.5, { [weak self] in
                                 //inForeground.set(false)
                                 self?.getExtensionContext()?.completeRequest(returningItems: nil, completionHandler: nil)
                             })
                         }
                     }
                 ).start(next: { controller in
-                    guard let strongSelf = self, let controller = controller else {
+                    guard let strongSelf = self, !strongSelf.isDismissed, let controller = controller else {
                         return
                     }
                     
@@ -947,7 +958,7 @@ public class ShareRootControllerImpl {
                     }
                     strongSelf.currentPasscodeController = controller
                     strongSelf.mainWindow?.present(controller, on: .root)
-                })
+                }))
             }
             
             self.disposable.set(applicationInterface.start(next: { _, _, _, _ in }, error: { [weak self] error in

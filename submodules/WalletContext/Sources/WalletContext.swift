@@ -1,3 +1,4 @@
+import PasscodeCore
 import Foundation
 import SwiftSignalKit
 import TelegramCore
@@ -43,6 +44,7 @@ struct WalletScreenDemand: Sendable {
     var collectiblesCount = 0
     var walletOpenRevision: UInt64 = 0
     var collectiblesOpenRevision: UInt64 = 0
+    var gaslessInfoRequests = Set<UUID>()
     var balanceRequests = Set<UUID>()
     var revision: UInt64 = 0
 
@@ -75,6 +77,8 @@ struct WalletScreenDemand: Sendable {
 public final class WalletContext {
     static let useWalletTransferApi = true
 
+    let authorization: WalletAuthorizationContext
+    private let credentialChangesDisposable = MetaDisposable()
     let impl: WalletContextImpl
     let logger: WalletLogger
     private let output: WalletContextOutput
@@ -91,6 +95,10 @@ public final class WalletContext {
     private let subscriberDemand = Atomic<WalletSubscriberDemand>(value: WalletSubscriberDemand())
     private let walletScreenDemand = Atomic<WalletScreenDemand>(value: WalletScreenDemand())
     let fiatCurrencyRevision = Atomic<UInt64>(value: 0)
+
+    public func setAuthorizationPresenter(_ presenter: @escaping @Sendable (WalletAuthorizationRequest) async throws -> PasscodeSession) {
+        self.authorization.setPresenter(presenter)
+    }
 
     public var state: Signal<State, NoError> {
         Signal { [weak self] subscriber in
@@ -143,6 +151,14 @@ public final class WalletContext {
         return self.beginScreenUpdates(collectiblesOnly: true)
     }
 
+    public func beginGaslessInfoUpdates() -> Disposable {
+        let id = UUID()
+        self.updateScreenDemand { $0.gaslessInfoRequests.insert(id) }
+        return ActionDisposable { [weak self] in
+            self?.updateScreenDemand { $0.gaslessInfoRequests.remove(id) }
+        }
+    }
+
     public func refreshBalance() -> Disposable {
         let id = UUID()
         self.updateScreenDemand { $0.balanceRequests.insert(id) }
@@ -192,6 +208,7 @@ public final class WalletContext {
         accountIsCurrent: Signal<Bool, NoError>,
         networkAvailable: Signal<Bool, NoError>,
         twoStepAuthRequired: Signal<Bool?, NoError> = .single(nil),
+        applicationIsPasscodeLocked: Signal<Bool, NoError> = .single(false),
         log: @escaping (String) -> Void = { Logger.shared.log("WalletContext", $0) }
     ) {
         let initialState = State(
@@ -207,9 +224,12 @@ public final class WalletContext {
             cancelOperation: { operationTaskRegistry.cancel(id: $0) }
         )
         let logger = WalletLogger(log)
+        let authorization = WalletAuthorizationContext(namespace: storageNamespace)
+        self.authorization = authorization
         let impl = WalletContextImpl(
             engine: engine,
             storageNamespace: storageNamespace,
+            authorization: authorization,
             initialState: initialState,
             output: output,
             logger: logger
@@ -218,6 +238,9 @@ public final class WalletContext {
         self.logger = logger
         self.impl = impl
         self.operationTaskRegistry = operationTaskRegistry
+        self.credentialChangesDisposable.set(PasscodeCredentialStore.shared.changes.start(next: { [weak authorization] _ in
+            authorization?.invalidate()
+        }))
 
         self.walletConfigurationDisposable.set((engine.data.subscribe(
             TelegramEngine.EngineData.Item.Configuration.App()
@@ -259,9 +282,12 @@ public final class WalletContext {
         self.environmentDisposable.set(combineLatest(
             applicationInForeground |> distinctUntilChanged,
             accountIsCurrent |> distinctUntilChanged,
-            networkAvailable |> distinctUntilChanged
-        ).start(next: { [weak self] foreground, current, network in
+            networkAvailable |> distinctUntilChanged,
+            applicationIsPasscodeLocked |> distinctUntilChanged
+        ).start(next: { [weak self] foreground, current, network, locked in
             guard let self else { return }
+            authorization.setAvailable(foreground && current && !locked)
+            if !current { authorization.invalidate() }
             let revision = self.environmentRevision.modify { value in
                 let next = value &+ 1
                 return next
@@ -303,6 +329,8 @@ public final class WalletContext {
     }
 
     deinit {
+        self.authorization.invalidate()
+        self.credentialChangesDisposable.dispose()
         self.environmentDisposable.dispose()
         self.walletConfigurationDisposable.dispose()
         self.walletStateUpdatesDisposable.dispose()
@@ -318,6 +346,10 @@ public final class WalletContext {
     func signal<Value: Sendable>(
         name: String,
         cancelOnDispose: Bool = true,
+        deliverWhenAvailable: Bool = false,
+        discardResult: (@Sendable (Value) -> Void)? = nil,
+        discardOnCancel: (@Sendable () -> Void)? = nil,
+        validateResult: (@Sendable (Value) throws -> Void)? = nil,
         operation: @escaping @Sendable (WalletContextImpl, UUID) async throws -> Value
     ) -> Signal<Value, WalletError> {
         let source = Signal<Value, WalletError> { [weak self] subscriber in
@@ -330,28 +362,117 @@ public final class WalletContext {
             let registry = self.operationTaskRegistry
             let logger = self.logger
             let impl = self.impl
+            let authorization = self.authorization
+            let deliveryCancellation = WalletOperationCancellation()
+            let lock = NSRecursiveLock()
+            var cancelled = false
+            var delivered = false
+            var pending: Result<Value, WalletError>?
+            let discard: (Result<Value, WalletError>) -> Void = { result in
+                if case let .success(value) = result { discardResult?(value) }
+            }
+            let enqueue: (Result<Value, WalletError>) -> Bool = { result in
+                lock.lock(); defer { lock.unlock() }
+                guard !cancelled else { return false }
+                pending = result
+                return true
+            }
+            let receive: (Result<Value, WalletError>, UInt64) async throws -> Void = { result, generation in
+                while true {
+                    if deliverWhenAvailable { try await authorization.waitUntilAvailable(generation: generation) }
+                    let finished = await withCheckedContinuation { continuation in
+                        Queue.mainQueue().async {
+                            lock.lock(); defer { lock.unlock() }
+                            guard !cancelled, let result = pending else { continuation.resume(returning: true); return }
+                            if deliverWhenAvailable && !authorization.isAvailable {
+                                continuation.resume(returning: false)
+                                return
+                            }
+                            pending = nil
+                            do {
+                                if deliverWhenAvailable { try authorization.validateGeneration(generation, requireAvailable: false) }
+                                switch result {
+                                case let .success(value):
+                                    try validateResult?(value)
+                                    // Ownership passes before the subscriber can dispose from its callback.
+                                    delivered = true
+                                    subscriber.putNext(value)
+                                    subscriber.putCompletion()
+                                case let .failure(error):
+                                    subscriber.putError(error)
+                                }
+                            } catch {
+                                discard(result)
+                                subscriber.putError(walletError(error))
+                            }
+                            continuation.resume(returning: true)
+                        }
+                    }
+                    if finished { return }
+                }
+            }
+            let cancelDelivery: () -> Void = {
+                Queue.mainQueue().async {
+                    lock.lock(); defer { lock.unlock() }
+                    guard !cancelled else { return }
+                    if let result = pending { pending = nil; discard(result) }
+                    subscriber.putError(.authorizationCancelled)
+                }
+            }
+            if deliverWhenAvailable { authorization.beginResultDelivery(id: operationId) }
             registry.register(id: operationId, cancellation: cancellation)
             let task = Task {
                 defer {
                     registry.remove(id: operationId)
+                    if deliverWhenAvailable { authorization.finishResultDelivery(id: operationId) }
                 }
+                let result: Result<Value, WalletError>
                 do {
-                    let value = try await operation(impl, operationId)
                     try Task.checkCancellation()
-                    subscriber.putNext(value)
-                    subscriber.putCompletion()
+                    let value = try await operation(impl, operationId)
+                    if Task.isCancelled {
+                        discardResult?(value)
+                        throw CancellationError()
+                    }
+                    result = .success(value)
                 } catch let error as CancellationError {
                     logger.error("wallet_operation_cancelled", error, context: "operation=\(name)")
-                    subscriber.putError(.unavailable)
+                    result = .failure(.authorizationCancelled)
                 } catch {
                     logger.error("wallet_operation_failed", error, context: "operation=\(name)")
-                    subscriber.putError(walletError(error))
+                    result = .failure(walletError(error))
+                }
+                let deliver: () async -> Void = {
+                    guard enqueue(result) else { discard(result); return }
+                    do {
+                        let generation = deliverWhenAvailable ? try authorization.resultDeliveryGeneration(id: operationId) : 0
+                        try await receive(result, generation)
+                    } catch {
+                        cancelDelivery()
+                    }
+                }
+                if deliverWhenAvailable {
+                    let delivery = Task { await deliver() }
+                    deliveryCancellation.setTask(delivery)
+                    await delivery.value
+                } else {
+                    await deliver()
                 }
             }
             cancellation.setTask(task)
             return ActionDisposable {
+                lock.lock(); defer { lock.unlock() }
+                cancelled = true
+                deliveryCancellation.cancel()
                 if cancelOnDispose {
                     registry.cancel(id: operationId)
+                }
+                if !delivered {
+                    if let result = pending {
+                        pending = nil
+                        discard(result)
+                    }
+                    discardOnCancel?()
                 }
             }
         }

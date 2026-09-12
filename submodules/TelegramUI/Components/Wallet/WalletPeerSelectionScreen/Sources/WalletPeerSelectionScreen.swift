@@ -14,6 +14,7 @@ import ContactsPeerItem
 import ComponentFlow
 import ViewControllerComponent
 import ChatListHeaderComponent
+import GlassBackgroundComponent
 import SearchBarNode
 import QrCodeUI
 import MultilineTextComponent
@@ -352,6 +353,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
 
     final class View: UIView {
         private var contentListNode: ContentListNode?
+        private let navigationGlassContainer = GlassBackgroundContainerView()
         private let navigationBarView = ComponentView<Empty>()
         private var navigationHeight: CGFloat?
         private var searchBarNode: SearchBarNode?
@@ -404,6 +406,8 @@ private final class WalletPeerSelectionScreenComponent: Component {
                 self?.openRecipient()
             }
             self.addSubview(self.recipientView)
+
+            self.addSubview(self.navigationGlassContainer)
 
             NotificationCenter.default.addObserver(
                 self,
@@ -593,7 +597,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
             self.navigationButtonsFieldAlpha = placeholderNode.labelNode.alpha
 
             let searchFieldView = placeholderNode.backgroundView
-            let searchFieldFrame = searchFieldView.convert(searchFieldView.bounds, to: self)
+            let searchFieldFrame = searchFieldView.convert(searchFieldView.bounds, to: self.navigationGlassContainer.contentView)
             guard !searchFieldFrame.isEmpty else {
                 return
             }
@@ -987,6 +991,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
                     accessoryPanelContainer: nil,
                     accessoryPanelContainerHeight: 0.0,
                     edgeEffectColor: theme.list.modalPlainBackgroundColor,
+                    hasOwnGlassContainer: false,
                     activateSearch: { [weak self] _ in
                         guard let self else {
                             return
@@ -1008,7 +1013,12 @@ private final class WalletPeerSelectionScreenComponent: Component {
                     navigationBarView.deferScrollApplication = true
                 }
                 if navigationBarView.superview == nil {
-                    self.addSubview(navigationBarView)
+                    self.navigationGlassContainer.contentView.addSubview(navigationBarView)
+                }
+                let edgeEffectBackgroundView = navigationBarView.edgeEffectBackgroundView
+                if edgeEffectBackgroundView.superview !== self {
+                    edgeEffectBackgroundView.isUserInteractionEnabled = false
+                    self.insertSubview(edgeEffectBackgroundView, belowSubview: self.navigationGlassContainer)
                 }
                 transition.setFrame(view: navigationBarView, frame: CGRect(origin: CGPoint(), size: navigationBarSize))
                 return navigationBarSize.height
@@ -1073,6 +1083,9 @@ private final class WalletPeerSelectionScreenComponent: Component {
             self.environment = environment
             self.state = state
 
+            transition.setFrame(view: self.navigationGlassContainer, frame: CGRect(origin: .zero, size: availableSize))
+            self.navigationGlassContainer.update(size: availableSize, isDark: environment.theme.overallDarkAppearance, transition: transition)
+
             if self.peers == nil && self.chatListDisposable == nil {
                 self.chatListDisposable = (component.context.engine.messages.chatList(
                     group: .root,
@@ -1136,7 +1149,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
             self.navigationHeight = navigationHeight
 
             if self.scanQrButton.superview == nil {
-                self.addSubview(self.scanQrButton)
+                self.navigationGlassContainer.contentView.addSubview(self.scanQrButton)
             }
             self.scanQrButton.setImage(
                 generateTintedImage(
@@ -1198,7 +1211,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
                 if let pasteButtonView = self.pasteButton.view {
                     if pasteButtonView.superview == nil {
                         pasteButtonView.alpha = 0.0
-                        self.addSubview(pasteButtonView)
+                        self.navigationGlassContainer.contentView.addSubview(pasteButtonView)
                     }
                     ComponentTransition.immediate.setFrame(
                         view: pasteButtonView,
@@ -1231,7 +1244,8 @@ private final class WalletPeerSelectionScreenComponent: Component {
                         presentationTheme: environment.theme,
                         strings: environment.strings,
                         fieldStyle: .glass,
-                        displayBackground: false
+                        displayBackground: false,
+                        hasOwnGlassContainer: false
                     )
                     searchBarNode.placeholderString = NSAttributedString(
                         string: "Name or wallet address",
@@ -1260,13 +1274,10 @@ private final class WalletPeerSelectionScreenComponent: Component {
                     }
                 }
 
-                var searchBarFrame = CGRect(
-                    origin: CGPoint(x: 0.0, y: navigationHeight - 52.0),
+                let searchBarFrame = CGRect(
+                    origin: CGPoint(x: 0.0, y: environment.statusBarHeight + 16.0),
                     size: CGSize(width: availableSize.width, height: 54.0)
                 )
-                if isModal {
-                    searchBarFrame.origin.y += 2.0
-                }
                 searchBarNode.updateThemeAndStrings(
                     theme: SearchBarNodeTheme(theme: environment.theme, hasSeparator: false),
                     presentationTheme: environment.theme,
@@ -1280,7 +1291,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
                 )
                 searchBarTransition.setFrame(view: searchBarNode.view, frame: searchBarFrame)
                 if searchBarNode.view.superview == nil {
-                    self.addSubview(searchBarNode.view)
+                    self.navigationGlassContainer.contentView.addSubview(searchBarNode.view)
                     if case let .curve(duration, curve) = transition.animation,
                        let navigationBarView = self.navigationBarView.view as? ChatListNavigationBar.View,
                        let placeholderNode = navigationBarView.searchContentNode?.placeholderNode {

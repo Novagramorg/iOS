@@ -47,11 +47,12 @@ final class PasscodeSetupControllerNode: ASDisplayNode {
     }
     
     var selectPasscodeMode: (() -> Void)?
-    var checkPasscode: ((String) -> Bool)?
+    var checkPasscode: ((String) -> Void)?
     var complete: ((String, Bool) -> Void)?
     var updateNextAction: ((Bool) -> Void)?
     
     private let hapticFeedback = HapticFeedback()
+    private var authenticationInputEnabled = true
     
     private var validLayout: (ContainerViewLayout, CGFloat)?
     private var maxBottomInset: CGFloat?
@@ -73,11 +74,10 @@ final class PasscodeSetupControllerNode: ASDisplayNode {
         let passcodeType: PasscodeEntryFieldType
         switch self.mode {
             case let .entry(challenge):
-                switch challenge {
-                    case let .numericalPassword(value):
-                        passcodeType = value.count == 6 ? .digits6 : .digits4
-                    default:
-                        passcodeType = .alphanumeric
+                switch challenge.passcodeKind {
+                case .digits4: passcodeType = .digits4
+                case .digits6: passcodeType = .digits6
+                default: passcodeType = .alphanumeric
                 }
             case .setup:
                 passcodeType = .digits6
@@ -188,6 +188,7 @@ final class PasscodeSetupControllerNode: ASDisplayNode {
     }
     
     func activateNext() {
+        guard self.authenticationInputEnabled else { return }
         guard !self.currentPasscode.isEmpty else {
             self.animateError()
             return
@@ -195,9 +196,7 @@ final class PasscodeSetupControllerNode: ASDisplayNode {
         
         switch self.mode {
             case .entry:
-                if !(self.checkPasscode?(self.currentPasscode) ?? false) {
-                    self.animateError()
-                }
+                self.checkPasscode?(self.currentPasscode)
             case .setup:
                 if let previousPasscode = self.previousPasscode {
                     if self.currentPasscode == previousPasscode {
@@ -262,6 +261,7 @@ final class PasscodeSetupControllerNode: ASDisplayNode {
     }
     
     func activateInput() {
+        guard self.authenticationInputEnabled else { return }
         self.inputFieldNode.activateInput()
         
         UIAccessibility.post(notification: UIAccessibility.Notification.announcement, argument: self.titleNode.attributedText?.string)
@@ -272,6 +272,31 @@ final class PasscodeSetupControllerNode: ASDisplayNode {
         self.inputFieldNode.layer.addShakeAnimation(amplitude: -30.0, duration: 0.5, count: 6, decay: true)
         
         self.hapticFeedback.error()
+    }
+
+    func updateAuthenticationState(_ state: SettingsPasscodeAuthentication.State) {
+        self.authenticationInputEnabled = state == .ready
+        self.inputFieldNode.isInputEnabled = self.authenticationInputEnabled
+        self.inputFieldNode.isUserInteractionEnabled = self.authenticationInputEnabled
+        let message: String?
+        switch state {
+        case .ready: message = ""
+        case .cooldown:
+            message = self.presentationData.strings.PasscodeSettings_TryAgainIn1Minute
+            self.inputFieldNode.reset(animated: false)
+        case .checking: message = nil
+        case .finished:
+            message = ""
+            self.inputFieldNode.reset(animated: false)
+            self.view.endEditing(true)
+        }
+        if let message {
+            self.subtitleNode.attributedText = NSAttributedString(string: message, font: Font.regular(16.0), textColor: self.presentationData.theme.list.itemPrimaryTextColor)
+            self.subtitleNode.isHidden = message.isEmpty
+            if let validLayout = self.validLayout {
+                self.containerLayoutUpdated(validLayout.0, navigationBarHeight: validLayout.1, transition: .immediate)
+            }
+        }
     }
     
     @objc func modePressed() {

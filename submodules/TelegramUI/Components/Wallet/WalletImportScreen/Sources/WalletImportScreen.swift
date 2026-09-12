@@ -1,3 +1,4 @@
+import PasscodeCore
 import Foundation
 import UIKit
 import Display
@@ -371,9 +372,12 @@ private final class WalletImportScreenComponent: Component {
         private var environment: EnvironmentType?
         private var component: WalletImportScreenComponent?
         private let operationDisposable = MetaDisposable()
+        private var flowSession: PasscodeSession?
+        private var flowGeneration: UInt64 = 0
         private let discardDisposable = MetaDisposable()
         private var isImporting = false
         private var activePreparedRecoveryPhraseImport: WalletContext.PreparedRecoveryPhraseImport?
+        private var preparedImportWords: [String]?
         private var didCompleteVerification = false
         private var words = Array(repeating: "", count: 12)
         private var isImportPhraseValid = false
@@ -524,6 +528,7 @@ private final class WalletImportScreenComponent: Component {
         }
 
         deinit {
+            self.flowSession?.invalidate()
             if let prepared = self.activePreparedRecoveryPhraseImport,
                let walletContext = self.component?.walletContext {
                 let _ = walletContext.discardRecoveryPhraseImport(prepared).start()
@@ -532,6 +537,32 @@ private final class WalletImportScreenComponent: Component {
             self.titleTransformContainer.removeFromSuperview()
             self.operationDisposable.dispose()
             self.discardDisposable.dispose()
+        }
+
+        fileprivate func endWalletFlow() {
+            self.flowGeneration &+= 1
+            self.operationDisposable.set(nil)
+            self.flowSession?.invalidate()
+            self.flowSession = nil
+            if let prepared = self.activePreparedRecoveryPhraseImport {
+                self.discardPreparedRecoveryPhraseImport(prepared)
+            }
+        }
+
+        private func walletFlowAuthorization() -> Signal<PasscodeSession, WalletContext.WalletError> {
+            guard let component = self.component else { return .fail(.authorizationCancelled) }
+            if let session = self.flowSession, session.isValid {
+                return .single(session)
+            }
+            let generation = self.flowGeneration
+            return component.walletContext.beginWalletFlow(reason: "importWallet")
+            |> deliverOnMainQueue
+            |> mapToSignal { [weak self] session -> Signal<PasscodeSession, WalletContext.WalletError> in
+                guard let self, self.flowGeneration == generation else { session.invalidate(); return .fail(.authorizationCancelled) }
+                self.flowSession?.invalidate()
+                self.flowSession = session
+                return .single(session)
+            }
         }
 
         @objc private func pasteboardDidChange(_ notification: Notification) {
@@ -914,7 +945,7 @@ private final class WalletImportScreenComponent: Component {
             controller.present(textAlertController(
                 context: component.context,
                 title: "Invalid Recovery Phrase",
-                text: "Check the recovery phrase and try again.",
+                text: "Check the order of your words.\nOnly recovery phrase created by a **TWallet-based wallet** can be imported here.",
                 actions: [TextAlertAction(type: .defaultAction, title: "OK", action: {
                 })]
             ), in: .window(.root))
@@ -1012,6 +1043,13 @@ private final class WalletImportScreenComponent: Component {
                 return
             }
             if component.mode == .enterRecoveryPhrase {
+                if let prepared = self.activePreparedRecoveryPhraseImport, self.preparedImportWords == words {
+                    switch prepared.disposition {
+                    case .currentWallet: self.completeRecoveryPhraseImport(prepared, password: nil)
+                    case .replacement: self.authorizeRecoveryPhraseReplacement(prepared)
+                    }
+                    return
+                }
                 self.prepareRecoveryPhraseImport(words: words)
                 return
             }
@@ -1025,10 +1063,14 @@ private final class WalletImportScreenComponent: Component {
                 present: { [weak controller] alert in
                     controller?.present(alert, in: .window(.root))
                 },
-                operation: { password in
-                    component.walletContext.importWallet(words: words, password: password)
+                operation: { [weak self] password -> Signal<WalletContext.WalletInfo, WalletContext.WalletError> in
+                    guard let self else { return .fail(.authorizationCancelled) }
+                    return self.walletFlowAuthorization() |> mapToSignal { session in
+                        component.walletContext.importWallet(words: words, password: password, session: session)
+                    }
                 },
                 next: { [weak self] _ in
+                    self?.endWalletFlow()
                     if let completion = component.completion {
                         completion()
                     } else {
@@ -1047,12 +1089,27 @@ private final class WalletImportScreenComponent: Component {
             }
             self.isImporting = true
             self.componentState?.updated(transition: .easeInOut(duration: 0.2))
-            self.operationDisposable.set((component.walletContext.prepareRecoveryPhraseImport(words: words)
+            let cleanup: Signal<Void, WalletContext.WalletError>
+            if let previous = self.activePreparedRecoveryPhraseImport {
+                cleanup = component.walletContext.discardRecoveryPhraseImport(previous)
+                self.activePreparedRecoveryPhraseImport = nil
+                self.preparedImportWords = nil
+            } else {
+                cleanup = .single(())
+            }
+            self.operationDisposable.set((cleanup
+            |> mapToSignal { [weak self] _ -> Signal<PasscodeSession, WalletContext.WalletError> in
+                self?.walletFlowAuthorization() ?? .fail(.authorizationCancelled)
+            }
+            |> mapToSignal { session in
+                component.walletContext.prepareRecoveryPhraseImport(words: words, session: session)
+            }
             |> deliverOnMainQueue).start(next: { [weak self] prepared in
                 guard let self else {
                     return
                 }
                 self.activePreparedRecoveryPhraseImport = prepared
+                self.preparedImportWords = words
                 switch prepared.disposition {
                 case .currentWallet:
                     self.completeRecoveryPhraseImport(prepared, password: nil)
@@ -1076,12 +1133,13 @@ private final class WalletImportScreenComponent: Component {
                 text: "This recovery phrase belongs to a different wallet. Replacing the current wallet will remove access to it on this device. Make sure you’ve saved its recovery phrase before continuing.",
                 actions: [
                     TextAlertAction(type: .genericAction, title: "Cancel", action: { [weak self] in
-                        self?.discardPreparedRecoveryPhraseImport(prepared)
+                        self?.endWalletFlow()
                     }),
                     TextAlertAction(type: .destructiveAction, title: "Replace", action: { [weak self] in
                         self?.authorizeRecoveryPhraseReplacement(prepared)
                     })
-                ]
+                ],
+                dismissOnOutsideTap: false
             ), in: .window(.root))
         }
 
@@ -1096,8 +1154,11 @@ private final class WalletImportScreenComponent: Component {
                 present: { [weak controller] alert in
                     controller?.present(alert, in: .window(.root))
                 },
-                operation: { password in
-                    component.walletContext.completeRecoveryPhraseImport(prepared, password: password)
+                operation: { [weak self] password -> Signal<WalletContext.WalletInfo, WalletContext.WalletError> in
+                    guard let self else { return .fail(.authorizationCancelled) }
+                    return self.walletFlowAuthorization() |> mapToSignal { session in
+                        component.walletContext.completeRecoveryPhraseImport(prepared, password: password, session: session)
+                    }
                 },
                 next: { [weak self] _ in
                     self?.finishRecoveryPhraseImport()
@@ -1105,8 +1166,6 @@ private final class WalletImportScreenComponent: Component {
                 failed: { [weak self] error in
                     if error == .authorizationCancelled {
                         self?.discardPreparedRecoveryPhraseImport(prepared)
-                    } else {
-                        self?.activePreparedRecoveryPhraseImport = nil
                     }
                     self?.finishImportWithError(error: error)
                 }
@@ -1120,14 +1179,15 @@ private final class WalletImportScreenComponent: Component {
             guard let component = self.component else {
                 return
             }
-            self.operationDisposable.set((component.walletContext.completeRecoveryPhraseImport(
-                prepared,
-                password: password
-            )
+            self.isImporting = true
+            self.componentState?.updated(transition: .easeInOut(duration: 0.2))
+            self.operationDisposable.set((self.walletFlowAuthorization()
+            |> mapToSignal { session in
+                component.walletContext.completeRecoveryPhraseImport(prepared, password: password, session: session)
+            }
             |> deliverOnMainQueue).start(next: { [weak self] _ in
                 self?.finishRecoveryPhraseImport()
             }, error: { [weak self] error in
-                self?.activePreparedRecoveryPhraseImport = nil
                 self?.finishImportWithError(error: error)
             }))
         }
@@ -1137,6 +1197,7 @@ private final class WalletImportScreenComponent: Component {
                 return
             }
             self.activePreparedRecoveryPhraseImport = nil
+            self.preparedImportWords = nil
             self.discardDisposable.set(component.walletContext.discardRecoveryPhraseImport(prepared).start())
         }
 
@@ -1145,6 +1206,8 @@ private final class WalletImportScreenComponent: Component {
                 return
             }
             self.activePreparedRecoveryPhraseImport = nil
+            self.preparedImportWords = nil
+            self.endWalletFlow()
             self.isImporting = false
             self.componentState?.updated(transition: .easeInOut(duration: 0.2))
             if let completion = component.completion {
@@ -1158,6 +1221,7 @@ private final class WalletImportScreenComponent: Component {
             self.isImporting = false
             self.componentState?.updated(transition: .easeInOut(duration: 0.2))
             guard error != .authorizationCancelled else {
+                self.endWalletFlow()
                 return
             }
             guard let component = self.component, let controller = self.environment?.controller() else {
@@ -1890,5 +1954,12 @@ public final class WalletImportScreen: ViewControllerComponentContainer {
 
     required public init(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    override public func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        if self.navigationController?.viewControllers.contains(where: { $0 === self }) != true {
+            (self.node.hostView.componentView as? WalletImportScreenComponent.View)?.endWalletFlow()
+        }
     }
 }

@@ -39,27 +39,24 @@ struct WalletPagerLayout {
         return Int(max(0.0, min(CGFloat(self.itemCount - 1), round(offset / self.itemStride))))
     }
 
-    func candidateIndices(at offset: CGFloat, isSwipingActive: Bool) -> Range<Int> {
+    func preloadedIndices(at offset: CGFloat) -> Range<Int> {
         guard self.itemCount > 0, self.isValid, offset.isFinite else {
             return 0 ..< 0
         }
-        let radius = self.size.width * 0.75 * (isSwipingActive ? 1.5 : 0.5)
-        // Include a margin on either side, then apply the original visibility predicate.
-        // This also preserves its floating-point behavior at exact page boundaries.
-        let lower = floor((offset - self.itemSpacing * 0.5 - radius) / self.itemStride) - 1.0
-        let upper = ceil((offset - self.itemSpacing * 0.5 + radius) / self.itemStride) + 2.0
+        let index = self.currentIndex(at: offset)
+        return max(0, index - 1) ..< min(self.itemCount, index + 2)
+    }
+
+    func visibleIndices(at offset: CGFloat) -> Range<Int> {
+        guard self.itemCount > 0, self.isValid, offset.isFinite else {
+            return 0 ..< 0
+        }
+        // Only include pages that overlap the scroll view's actual viewport.
+        let lower = floor((offset - self.itemSpacing * 0.5 - self.size.width) / self.itemStride) + 1.0
+        let upper = ceil((offset + self.scrollFrame.width - self.itemSpacing * 0.5) / self.itemStride)
         let lowerIndex = Int(max(0.0, min(CGFloat(self.itemCount), lower)))
         let upperIndex = Int(max(0.0, min(CGFloat(self.itemCount), upper)))
         return lowerIndex ..< upperIndex
-    }
-
-    func isVisible(at index: Int, offset: CGFloat, isSwipingActive: Bool) -> Bool {
-        guard self.isValid, offset.isFinite else {
-            return false
-        }
-        let viewportCenter = offset + self.size.width * 0.5
-        let position = (self.itemFrame(at: index).midX - viewportCenter) / (self.size.width * 0.75)
-        return abs(position) <= (isSwipingActive ? 1.5 : 0.5)
     }
 }
 
@@ -75,6 +72,10 @@ struct WalletPagerState {
     private(set) var layout = WalletPagerLayout(itemCount: 0, size: .zero, itemSpacing: 0.0)
     private(set) var isInitialized = false
     private var anchor: Anchor?
+
+    func index(forId id: String) -> Int? {
+        return self.indexById[id]
+    }
 
     // Only external data/layout updates enter this path. Scrolling reads the cached layout and IDs.
     mutating func update(

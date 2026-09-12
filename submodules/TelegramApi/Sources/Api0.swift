@@ -1172,6 +1172,10 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[572241380] = { return Api.TodoCompletion.parse_todoCompletion($0) }
     dict[-878074577] = { return Api.TodoItem.parse_todoItem($0) }
     dict[1236871718] = { return Api.TodoList.parse_todoList($0) }
+    dict[-789421124] = { return Api.TonConnectManifest.parse_tonConnectManifest($0) }
+    dict[1478780131] = { return Api.TonConnectNextEventId.parse_tonConnectNextEventId($0) }
+    dict[-1568552143] = { return Api.TonConnectRequest.parse_tonConnectRequest($0) }
+    dict[308631238] = { return Api.TonConnectSession.parse_tonConnectSession($0) }
     dict[-305282981] = { return Api.TopPeer.parse_topPeer($0) }
     dict[-39945236] = { return Api.TopPeerCategory.parse_topPeerCategoryBotsApp($0) }
     dict[1814361053] = { return Api.TopPeerCategory.parse_topPeerCategoryBotsGuestChat($0) }
@@ -1346,6 +1350,8 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-440534818] = { return Api.Update.parse_updateUserStatus($0) }
     dict[706199388] = { return Api.Update.parse_updateUserTyping($0) }
     dict[1791226538] = { return Api.Update.parse_updateWalletState($0) }
+    dict[-772898407] = { return Api.Update.parse_updateWalletTonConnectPendingDisconnect($0) }
+    dict[1352896014] = { return Api.Update.parse_updateWalletTonConnectSession($0) }
     dict[335872721] = { return Api.Update.parse_updateWebBrowserException($0) }
     dict[-1013306658] = { return Api.Update.parse_updateWebBrowserSettings($0) }
     dict[2139689491] = { return Api.Update.parse_updateWebPage($0) }
@@ -1746,6 +1752,9 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-1713105145] = { return Api.wallet.ProofChallenge.parse_proofChallenge($0) }
     dict[-422514943] = { return Api.wallet.SecretPhraseParts.parse_secretPhraseParts($0) }
     dict[1882463590] = { return Api.wallet.SentTransfer.parse_sentTransfer($0) }
+    dict[1271436947] = { return Api.wallet.TonConnectChallenge.parse_tonConnectChallenge($0) }
+    dict[-2050952924] = { return Api.wallet.TonConnectPending.parse_tonConnectPending($0) }
+    dict[236939414] = { return Api.wallet.TonConnectSessions.parse_tonConnectSessions($0) }
     dict[1126356389] = { return Api.wallet.Transactions.parse_transactions($0) }
     return dict
 }()
@@ -2559,6 +2568,14 @@ public extension Api {
             _1.serialize(buffer, boxed)
         case let _1 as Api.TodoList:
             _1.serialize(buffer, boxed)
+        case let _1 as Api.TonConnectManifest:
+            _1.serialize(buffer, boxed)
+        case let _1 as Api.TonConnectNextEventId:
+            _1.serialize(buffer, boxed)
+        case let _1 as Api.TonConnectRequest:
+            _1.serialize(buffer, boxed)
+        case let _1 as Api.TonConnectSession:
+            _1.serialize(buffer, boxed)
         case let _1 as Api.TopPeer:
             _1.serialize(buffer, boxed)
         case let _1 as Api.TopPeerCategory:
@@ -3072,6 +3089,12 @@ public extension Api {
         case let _1 as Api.wallet.SecretPhraseParts:
             _1.serialize(buffer, boxed)
         case let _1 as Api.wallet.SentTransfer:
+            _1.serialize(buffer, boxed)
+        case let _1 as Api.wallet.TonConnectChallenge:
+            _1.serialize(buffer, boxed)
+        case let _1 as Api.wallet.TonConnectPending:
+            _1.serialize(buffer, boxed)
+        case let _1 as Api.wallet.TonConnectSessions:
             _1.serialize(buffer, boxed)
         case let _1 as Api.wallet.Transactions:
             _1.serialize(buffer, boxed)

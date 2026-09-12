@@ -16,6 +16,10 @@ public extension TelegramEngine {
             return _internal_getWalletState(account: self.account)
         }
 
+        public func getExistingWaltBalance() -> Signal<Bool, NoError> {
+            return _internal_getExistingWaltBalance(account: self.account)
+        }
+
         public func getGaslessInfo() -> Signal<WalletGaslessInfo, WalletGetGaslessInfoError> {
             return _internal_getWalletGaslessInfo(account: self.account)
         }

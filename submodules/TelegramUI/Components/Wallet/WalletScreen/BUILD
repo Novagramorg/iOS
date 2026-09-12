@@ -41,6 +41,7 @@ swift_library(
         "//submodules/SettingsUI",
         "//submodules/TelegramUI/Components/Wallet/WalletCardComponent",
         "//submodules/WalletContext",
+        "//submodules/PasscodeCore",
         "//submodules/TelegramUI/Components/Wallet/WalletPeerSelectionScreen",
         "//submodules/TelegramUI/Components/Wallet/WalletSendScreen",
         "//submodules/TelegramUI/Components/Wallet/WalletCollectibleItemComponent",

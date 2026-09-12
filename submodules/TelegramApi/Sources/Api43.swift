@@ -14863,6 +14863,20 @@ public extension Api.functions.wallet {
     }
 }
 public extension Api.functions.wallet {
+    static func getExistingWaltBalance() -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Bool>) {
+        let buffer = Buffer()
+        buffer.appendInt32(1653032675)
+        return (FunctionDescription(name: "wallet.getExistingWaltBalance", parameters: []), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Bool? in
+            let reader = BufferReader(buffer)
+            var result: Api.Bool?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.Bool
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.wallet {
     static func getGaslessInfo() -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.wallet.GaslessInfo>) {
         let buffer = Buffer()
         buffer.appendInt32(1217780107)
@@ -15012,6 +15026,167 @@ public extension Api.functions.wallet {
             var result: Api.wallet.SentTransfer?
             if let signature = reader.readInt32() {
                 result = Api.parse(reader, signature: signature) as? Api.wallet.SentTransfer
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.wallet {
+    static func tonConnectClaimRequest(flags: Int32, sessionId: Int64, msgId: Int64, appRequestId: Int64, challengeAnswer: Buffer?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Bool>) {
+        let buffer = Buffer()
+        buffer.appendInt32(-710310773)
+        serializeInt32(flags, buffer: buffer, boxed: false)
+        serializeInt64(sessionId, buffer: buffer, boxed: false)
+        serializeInt64(msgId, buffer: buffer, boxed: false)
+        serializeInt64(appRequestId, buffer: buffer, boxed: false)
+        if Int(flags) & Int(1 << 0) != 0 {
+            serializeBytes(challengeAnswer!, buffer: buffer, boxed: false)
+        }
+        return (FunctionDescription(name: "wallet.tonConnectClaimRequest", parameters: [("flags", ConstructorParameterDescription(flags)), ("sessionId", ConstructorParameterDescription(sessionId)), ("msgId", ConstructorParameterDescription(msgId)), ("appRequestId", ConstructorParameterDescription(appRequestId)), ("challengeAnswer", ConstructorParameterDescription(challengeAnswer))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Bool? in
+            let reader = BufferReader(buffer)
+            var result: Api.Bool?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.Bool
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.wallet {
+    static func tonConnectCloseSession(sessionId: Int64, body: Buffer) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Bool>) {
+        let buffer = Buffer()
+        buffer.appendInt32(-1715353029)
+        serializeInt64(sessionId, buffer: buffer, boxed: false)
+        serializeBytes(body, buffer: buffer, boxed: false)
+        return (FunctionDescription(name: "wallet.tonConnectCloseSession", parameters: [("sessionId", ConstructorParameterDescription(sessionId)), ("body", ConstructorParameterDescription(body))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Bool? in
+            let reader = BufferReader(buffer)
+            var result: Api.Bool?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.Bool
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.wallet {
+    static func tonConnectCreateSession(dappClientId: String, manifestUrl: String) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.TonConnectSession>) {
+        let buffer = Buffer()
+        buffer.appendInt32(-862777274)
+        serializeString(dappClientId, buffer: buffer, boxed: false)
+        serializeString(manifestUrl, buffer: buffer, boxed: false)
+        return (FunctionDescription(name: "wallet.tonConnectCreateSession", parameters: [("dappClientId", ConstructorParameterDescription(dappClientId)), ("manifestUrl", ConstructorParameterDescription(manifestUrl))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.TonConnectSession? in
+            let reader = BufferReader(buffer)
+            var result: Api.TonConnectSession?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.TonConnectSession
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.wallet {
+    static func tonConnectGetPending(flags: Int32, dappClientId: String?, sessionId: Int64?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.wallet.TonConnectPending>) {
+        let buffer = Buffer()
+        buffer.appendInt32(296673381)
+        serializeInt32(flags, buffer: buffer, boxed: false)
+        if Int(flags) & Int(1 << 0) != 0 {
+            serializeString(dappClientId!, buffer: buffer, boxed: false)
+        }
+        if Int(flags) & Int(1 << 1) != 0 {
+            serializeInt64(sessionId!, buffer: buffer, boxed: false)
+        }
+        return (FunctionDescription(name: "wallet.tonConnectGetPending", parameters: [("flags", ConstructorParameterDescription(flags)), ("dappClientId", ConstructorParameterDescription(dappClientId)), ("sessionId", ConstructorParameterDescription(sessionId))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.wallet.TonConnectPending? in
+            let reader = BufferReader(buffer)
+            var result: Api.wallet.TonConnectPending?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.wallet.TonConnectPending
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.wallet {
+    static func tonConnectGetSessions() -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.wallet.TonConnectSessions>) {
+        let buffer = Buffer()
+        buffer.appendInt32(-1476414098)
+        return (FunctionDescription(name: "wallet.tonConnectGetSessions", parameters: []), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.wallet.TonConnectSessions? in
+            let reader = BufferReader(buffer)
+            var result: Api.wallet.TonConnectSessions?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.wallet.TonConnectSessions
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.wallet {
+    static func tonConnectNextEventId(sessionId: Int64) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.TonConnectNextEventId>) {
+        let buffer = Buffer()
+        buffer.appendInt32(2002612804)
+        serializeInt64(sessionId, buffer: buffer, boxed: false)
+        return (FunctionDescription(name: "wallet.tonConnectNextEventId", parameters: [("sessionId", ConstructorParameterDescription(sessionId))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.TonConnectNextEventId? in
+            let reader = BufferReader(buffer)
+            var result: Api.TonConnectNextEventId?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.TonConnectNextEventId
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.wallet {
+    static func tonConnectRegisterKey(sessionId: Int64, clientId: String) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.wallet.TonConnectChallenge>) {
+        let buffer = Buffer()
+        buffer.appendInt32(864800540)
+        serializeInt64(sessionId, buffer: buffer, boxed: false)
+        serializeString(clientId, buffer: buffer, boxed: false)
+        return (FunctionDescription(name: "wallet.tonConnectRegisterKey", parameters: [("sessionId", ConstructorParameterDescription(sessionId)), ("clientId", ConstructorParameterDescription(clientId))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.wallet.TonConnectChallenge? in
+            let reader = BufferReader(buffer)
+            var result: Api.wallet.TonConnectChallenge?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.wallet.TonConnectChallenge
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.wallet {
+    static func tonConnectSubmitConnectResult(flags: Int32, sessionId: Int64, challengeAnswer: Buffer, body: Buffer, traceId: String?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Bool>) {
+        let buffer = Buffer()
+        buffer.appendInt32(-1027602567)
+        serializeInt32(flags, buffer: buffer, boxed: false)
+        serializeInt64(sessionId, buffer: buffer, boxed: false)
+        serializeBytes(challengeAnswer, buffer: buffer, boxed: false)
+        serializeBytes(body, buffer: buffer, boxed: false)
+        if Int(flags) & Int(1 << 1) != 0 {
+            serializeString(traceId!, buffer: buffer, boxed: false)
+        }
+        return (FunctionDescription(name: "wallet.tonConnectSubmitConnectResult", parameters: [("flags", ConstructorParameterDescription(flags)), ("sessionId", ConstructorParameterDescription(sessionId)), ("challengeAnswer", ConstructorParameterDescription(challengeAnswer)), ("body", ConstructorParameterDescription(body)), ("traceId", ConstructorParameterDescription(traceId))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Bool? in
+            let reader = BufferReader(buffer)
+            var result: Api.Bool?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.Bool
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.wallet {
+    static func tonConnectSubmitResponse(flags: Int32, sessionId: Int64, msgId: Int64, body: Buffer, traceId: String?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Bool>) {
+        let buffer = Buffer()
+        buffer.appendInt32(1160311613)
+        serializeInt32(flags, buffer: buffer, boxed: false)
+        serializeInt64(sessionId, buffer: buffer, boxed: false)
+        serializeInt64(msgId, buffer: buffer, boxed: false)
+        serializeBytes(body, buffer: buffer, boxed: false)
+        if Int(flags) & Int(1 << 0) != 0 {
+            serializeString(traceId!, buffer: buffer, boxed: false)
+        }
+        return (FunctionDescription(name: "wallet.tonConnectSubmitResponse", parameters: [("flags", ConstructorParameterDescription(flags)), ("sessionId", ConstructorParameterDescription(sessionId)), ("msgId", ConstructorParameterDescription(msgId)), ("body", ConstructorParameterDescription(body)), ("traceId", ConstructorParameterDescription(traceId))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Bool? in
+            let reader = BufferReader(buffer)
+            var result: Api.Bool?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.Bool
             }
             return result
         })

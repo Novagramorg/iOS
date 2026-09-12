@@ -906,12 +906,14 @@ public enum CreateGroupMode {
 }
 
 public protocol AppLockContext: AnyObject {
+    var isPasscodeLocked: Signal<Bool, NoError> { get }
     var invalidAttempts: Signal<AccessChallengeAttempts?, NoError> { get }
     var autolockDeadline: Signal<Int32?, NoError> { get }
     
     func lock()
     func unlock()
     func failedUnlockAttempt()
+    func _internalCrashForPasscodeMigrationTest(isLocked: Bool) throws -> Never
 }
 
 public protocol RecentSessionsController: AnyObject {
@@ -1578,7 +1580,8 @@ public protocol SharedAccountContext: AnyObject {
     func makeWalletReceiveScreen(context: AccountContext, address: String) -> ViewController
     func makeWalletImportScreen(context: AccountContext, mode: WalletImportScreenMode, completion: (() -> Void)?) -> ViewController
     func makeWalletSettingsScreen(context: AccountContext) -> ViewController
-    func makeWalletWordsScreen(context: AccountContext, words: [String], verify: Bool, completion: (() -> Void)?) -> ViewController
+    func makeWalletAppsScreen(context: AccountContext) -> ViewController
+    func makeWalletWordsScreen(context: AccountContext, words: [String], verify: Bool, dismissOnBackgroundOrLock: Bool, completion: (() -> Void)?) -> ViewController
     func makeWalletWordsScreen(context: AccountContext, words: [String], mode: WalletWordsScreenMode, completion: (() -> Void)?) -> ViewController
     func makeWalletInfoScreen(context: AccountContext, mode: WalletInfoScreenMode, completion: (() -> Void)?) -> ViewController
     func makeWalletConnectScreen(context: AccountContext, walletContext: WalletContext, request: WalletContext.TonConnectRequest, cancelled: @escaping () -> Void, connect: @escaping (@escaping (Result<Void, WalletContext.WalletError>) -> Void) -> Void) -> ViewController

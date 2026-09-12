@@ -220,6 +220,14 @@ API_AVAILABLE(ios(10))
     return bundleSeedID;
 }
 
++ (NSString * _Nullable)keychainAccessGroupForBaseAppBundleId:(NSString * _Nonnull)baseAppBundleId {
+    NSString *bundleSeedId = [self bundleSeedId];
+    if (bundleSeedId.length == 0 || baseAppBundleId.length == 0) {
+        return nil;
+    }
+    return [bundleSeedId stringByAppendingFormat:@".%@", baseAppBundleId];
+}
+
 + (NSData * _Nullable)applicationSecretTag:(bool)isCheckKey {
     if (isCheckKey) {
         return [[telegramApplicationSecretKey stringByAppendingString:@"_check"] dataUsingEncoding:NSUTF8StringEncoding];

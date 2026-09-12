@@ -291,6 +291,164 @@ public extension Api.wallet {
     }
 }
 public extension Api.wallet {
+    enum TonConnectChallenge: TypeConstructorDescription {
+        public class Cons_tonConnectChallenge: TypeConstructorDescription {
+            public var challenge: Buffer
+            public var eventId: Int64
+            public init(challenge: Buffer, eventId: Int64) {
+                self.challenge = challenge
+                self.eventId = eventId
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("tonConnectChallenge", [("challenge", ConstructorParameterDescription(self.challenge)), ("eventId", ConstructorParameterDescription(self.eventId))])
+            }
+        }
+        case tonConnectChallenge(Cons_tonConnectChallenge)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .tonConnectChallenge(let _data):
+                if boxed {
+                    buffer.appendInt32(1271436947)
+                }
+                serializeBytes(_data.challenge, buffer: buffer, boxed: false)
+                serializeInt64(_data.eventId, buffer: buffer, boxed: false)
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .tonConnectChallenge(let _data):
+                return ("tonConnectChallenge", [("challenge", ConstructorParameterDescription(_data.challenge)), ("eventId", ConstructorParameterDescription(_data.eventId))])
+            }
+        }
+
+        public static func parse_tonConnectChallenge(_ reader: BufferReader) -> TonConnectChallenge? {
+            var _1: Buffer?
+            _1 = parseBytes(reader)
+            var _2: Int64?
+            _2 = reader.readInt64()
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.wallet.TonConnectChallenge.tonConnectChallenge(Cons_tonConnectChallenge(challenge: _1!, eventId: _2!))
+            }
+            else {
+                return nil
+            }
+        }
+    }
+}
+public extension Api.wallet {
+    enum TonConnectPending: TypeConstructorDescription {
+        public class Cons_tonConnectPending: TypeConstructorDescription {
+            public var session: Api.TonConnectSession
+            public var requests: [Api.TonConnectRequest]
+            public init(session: Api.TonConnectSession, requests: [Api.TonConnectRequest]) {
+                self.session = session
+                self.requests = requests
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("tonConnectPending", [("session", ConstructorParameterDescription(self.session)), ("requests", ConstructorParameterDescription(self.requests))])
+            }
+        }
+        case tonConnectPending(Cons_tonConnectPending)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .tonConnectPending(let _data):
+                if boxed {
+                    buffer.appendInt32(-2050952924)
+                }
+                _data.session.serialize(buffer, true)
+                buffer.appendInt32(481674261)
+                buffer.appendInt32(Int32(_data.requests.count))
+                for item in _data.requests {
+                    item.serialize(buffer, true)
+                }
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .tonConnectPending(let _data):
+                return ("tonConnectPending", [("session", ConstructorParameterDescription(_data.session)), ("requests", ConstructorParameterDescription(_data.requests))])
+            }
+        }
+
+        public static func parse_tonConnectPending(_ reader: BufferReader) -> TonConnectPending? {
+            var _1: Api.TonConnectSession?
+            if let signature = reader.readInt32() {
+                _1 = Api.parse(reader, signature: signature) as? Api.TonConnectSession
+            }
+            var _2: [Api.TonConnectRequest]?
+            if let _ = reader.readInt32() {
+                _2 = Api.parseVector(reader, elementSignature: 0, elementType: Api.TonConnectRequest.self)
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.wallet.TonConnectPending.tonConnectPending(Cons_tonConnectPending(session: _1!, requests: _2!))
+            }
+            else {
+                return nil
+            }
+        }
+    }
+}
+public extension Api.wallet {
+    enum TonConnectSessions: TypeConstructorDescription {
+        public class Cons_tonConnectSessions: TypeConstructorDescription {
+            public var sessions: [Api.TonConnectSession]
+            public init(sessions: [Api.TonConnectSession]) {
+                self.sessions = sessions
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("tonConnectSessions", [("sessions", ConstructorParameterDescription(self.sessions))])
+            }
+        }
+        case tonConnectSessions(Cons_tonConnectSessions)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .tonConnectSessions(let _data):
+                if boxed {
+                    buffer.appendInt32(236939414)
+                }
+                buffer.appendInt32(481674261)
+                buffer.appendInt32(Int32(_data.sessions.count))
+                for item in _data.sessions {
+                    item.serialize(buffer, true)
+                }
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .tonConnectSessions(let _data):
+                return ("tonConnectSessions", [("sessions", ConstructorParameterDescription(_data.sessions))])
+            }
+        }
+
+        public static func parse_tonConnectSessions(_ reader: BufferReader) -> TonConnectSessions? {
+            var _1: [Api.TonConnectSession]?
+            if let _ = reader.readInt32() {
+                _1 = Api.parseVector(reader, elementSignature: 0, elementType: Api.TonConnectSession.self)
+            }
+            let _c1 = _1 != nil
+            if _c1 {
+                return Api.wallet.TonConnectSessions.tonConnectSessions(Cons_tonConnectSessions(sessions: _1!))
+            }
+            else {
+                return nil
+            }
+        }
+    }
+}
+public extension Api.wallet {
     enum Transactions: TypeConstructorDescription {
         public class Cons_transactions: TypeConstructorDescription {
             public var flags: Int32

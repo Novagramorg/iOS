@@ -17,6 +17,7 @@ actor Session {
     private let device: TonConnectDevice
     private let update: @Sendable (SessionUpdate) async -> Void
     private var record: TonConnectStoredSession
+    private var isDisconnectPersisted: Bool
     private var previews: [String: TonConnectPreview] = [:]
     private var interactions: [TonConnectInteraction] = []
     private var error: TonConnectFailure?
@@ -42,6 +43,7 @@ actor Session {
          update: @escaping @Sendable (SessionUpdate) async -> Void) {
         self.engine = engine
         self.record = record
+        self.isDisconnectPersisted = record.disconnectRequested
         self.storage = storage
         self.transport = transport
         self.wallet = wallet
@@ -368,6 +370,15 @@ actor Session {
         self.record.rustSession = try self.engine.persisted()
         try await self.storage.saveSession(JSONEncoder().encode(self.record), recordId: self.record.wallet.recordId, sessionId: self.record.id)
         self.dirty = false
+        let didPersistDisconnect = self.record.disconnectRequested && !self.isDisconnectPersisted
+        self.isDisconnectPersisted = self.record.disconnectRequested
+        if self.error == .storageUnavailable {
+            self.error = nil
+        }
+        if didPersistDisconnect {
+            // Access is revoked durably. UI does not have to wait for bridge delivery.
+            await self.publish()
+        }
     }
 
     private func performCancellableWork<Value: Sendable>(
@@ -499,8 +510,14 @@ actor Session {
 
     private func publish() async {
         let phase = try? self.engine.phase()
-        let status: TonConnectSessionInfo.Status = self.closing || self.record.disconnectRequested || phase == .disconnected
-            ? .disconnecting : (phase == .connected ? .connected : .connecting)
+        let status: TonConnectSessionInfo.Status
+        if self.record.disconnectRequested && !self.isDisconnectPersisted {
+            // Keep a failed local disconnect available to retry until it has been saved.
+            status = phase == .connected ? .connected : .connecting
+        } else {
+            status = self.closing || self.isDisconnectPersisted || phase == .disconnected
+                ? .disconnecting : (phase == .connected ? .connected : .connecting)
+        }
         await self.update(SessionUpdate(info: TonConnectSessionInfo(id: self.record.id, manifest: self.record.manifest,
             status: status, deliveryPending: (try? self.engine.pendingPost()) != nil, error: self.error),
             interactions: self.stopped || self.stopping || self.closing || self.record.disconnectRequested ? [] : self.interactions, removed: self.removed))

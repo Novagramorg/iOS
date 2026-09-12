@@ -1,5 +1,6 @@
 import Foundation
 import TelegramCore
+import PasscodeCore
 import WalletEngineFFI
 
 struct WalletEngineActivation: @unchecked Sendable {
@@ -127,8 +128,13 @@ actor WalletEngineRuntime {
         let recordId = UUID().uuidString.lowercased()
         do {
             return try await self.withFfi {
-                guard try await self.storage.loadReplacementCandidate() == nil else {
-                    throw WalletContext.WalletError.operationInProgress
+                if let candidate = try await self.storage.loadReplacementCandidate() {
+                    guard let descriptor = candidate.descriptor else { throw WalletContext.WalletError.storage(.corrupted) }
+                    let existing = try await self.lifecycle.revealRecoveryPhrase(descriptor: descriptor)
+                    guard normalizedEngineMnemonic(existing.phrase.split(whereSeparator: { $0.isWhitespace }).map(String.init)) == normalizedEngineMnemonic(words) else {
+                        throw WalletContext.WalletError.operationInProgress
+                    }
+                    return WalletEngineStagedWallet(recordId: candidate.recordId, address: candidate.address, publicKey: candidate.publicKey)
                 }
                 guard self.transientReplacementDescriptor == nil else {
                     throw WalletContext.WalletError.operationInProgress
@@ -177,11 +183,14 @@ actor WalletEngineRuntime {
         payload: String
     ) async throws -> Data {
         try await self.withFfi {
-            guard expectedPublicKey.count == 32,
-                  let descriptor = self.transientReplacementDescriptor,
-                  descriptor.recordId == recordId,
-                  descriptor.publicKey == expectedPublicKey,
-                  await self.platformHost.containsTransientProtectedSecret(secretRef: descriptor.secretRef) else {
+            let descriptor: WalletDescriptor?
+            if let transient = self.transientReplacementDescriptor, transient.recordId == recordId {
+                descriptor = transient
+            } else {
+                descriptor = try await self.storage.loadReplacementCandidate()?.descriptor
+            }
+            guard expectedPublicKey.count == 32, let descriptor,
+                  descriptor.recordId == recordId, descriptor.publicKey == expectedPublicKey else {
                 throw WalletContext.WalletError.storage(.identityMismatch)
             }
             let proof = try await self.lifecycle.signTonConnectProof(request: TonConnectProofSignRequest(
@@ -199,6 +208,7 @@ actor WalletEngineRuntime {
 
     func persistReplacementCandidate(recordId: String) async throws {
         try await self.withFfi {
+            if let candidate = try await self.storage.loadReplacementCandidate(), candidate.recordId == recordId { return }
             _ = try await self.materializeTransientReplacementUnlocked(recordId: recordId)
         }
     }
@@ -361,7 +371,7 @@ actor WalletEngineRuntime {
     private func materializeTransientReplacementUnlocked(recordId: String) async throws -> WalletEngineDescriptorRecord {
         guard let descriptor = self.transientReplacementDescriptor,
               descriptor.recordId == recordId,
-              let secret = await self.platformHost.transientProtectedSecret(secretRef: descriptor.secretRef),
+              let secret = try await self.platformHost.transientProtectedSecret(secretRef: descriptor.secretRef),
               !secret.isEmpty else {
             throw WalletContext.WalletError.storage(.identityMismatch)
         }
@@ -525,13 +535,23 @@ actor WalletEngineRuntime {
         validUntil: UInt64
     ) async throws -> SendPreview {
         try await self.withFfi(priority: .userInitiated, cancellation: .sendPreview) {
-            try await self.requireClient().previewSendBoc(request: SendBocRequest(
-                operationId: operationId,
-                force: false,
-                signedBoc: signedBoc,
-                seqno: seqno,
-                validUntil: validUntil
-            ))
+            guard validUntil > UInt64(max(0, currentWalletTimestamp())) else {
+                throw WalletContext.WalletError.preparedBackupDisableExpired
+            }
+            do {
+                return try await self.requireClient().previewSendBoc(request: SendBocRequest(
+                    operationId: operationId,
+                    force: false,
+                    signedBoc: signedBoc,
+                    seqno: seqno,
+                    validUntil: validUntil
+                ))
+            } catch {
+                if walletKeyRotationPreparationIsExpired(error, seqno: seqno) {
+                    throw WalletContext.WalletError.preparedBackupDisableExpired
+                }
+                throw error
+            }
         }
     }
 
@@ -591,6 +611,9 @@ actor WalletEngineRuntime {
                 case .active, .frozen, .unknown, nil:
                     throw error
                 }
+            }
+            guard validUntil > UInt64(max(0, currentWalletTimestamp())) else {
+                throw WalletContext.WalletError.preparedBackupDisableExpired
             }
             let record = try await self.storage.installKeyRotationCandidate(
                 operationId: operationId,
@@ -1026,14 +1049,21 @@ actor WalletEngineRuntime {
         cancellation: FfiCancellation = .none,
         _ operation: @escaping () async throws -> Value
     ) async throws -> Value {
+        if let session = WalletAuthorizationScope.session {
+            try await session.waitUntilAvailable()
+        }
         await self.acquireFfi(priority: priority)
         defer {
             self.activeFfiOperation = nil
             self.releaseFfi()
         }
+        if let session = WalletAuthorizationScope.session {
+            try await session.waitUntilAvailable()
+        }
         try Task.checkCancellation()
         let operationId = UUID()
         self.activeFfiOperation = (operationId, cancellation)
+        await self.platformHost.setAuthorization(WalletAuthorizationScope.session)
         let operationTask = Task { () -> Result<Value, Error> in
             do {
                 return .success(try await operation())
@@ -1048,6 +1078,7 @@ actor WalletEngineRuntime {
                 await self?.cancelActiveFfiOperation(id: operationId, cancellation: cancellation)
             }
         })
+        await self.platformHost.setAuthorization(nil)
         try Task.checkCancellation()
         return try result.get()
     }

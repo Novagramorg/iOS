@@ -14,6 +14,7 @@ import BundleIconComponent
 import MultilineTextComponent
 import ButtonComponent
 import PlainButtonComponent
+import LottieComponent
 import GlassBarButtonComponent
 import GlassControls
 import TableComponent
@@ -26,6 +27,7 @@ import TooltipUI
 import AvatarComponent
 import ShimmeringMask
 import WalletContext
+import PasscodeCore
 import WalletPagerComponent
 import WalletCollectibleHeaderComponent
 import WalletSendScreen
@@ -632,9 +634,14 @@ private final class WalletTransactionContentComponent: Component {
         private weak var commentRecoveryController: ViewController?
         private let commentDecryptionDisposable = MetaDisposable()
         private let commentAuthorizationDisposable = MetaDisposable()
+        private var restorationSession: PasscodeSession?
+        private var isRestoringCommentKey = false
+        private var commentIsVisible = true
         private let table = ComponentView<Empty>()
         private let inputBackground = ComponentView<Empty>()
         private let inputField = ComponentView<Empty>()
+        private let commentEncryptionButton = ComponentView<Empty>()
+        private var displayedCommentEncrypted: Bool?
         private let actionButton = ComponentView<Empty>()
 
         private var component: WalletTransactionContentComponent?
@@ -646,6 +653,14 @@ private final class WalletTransactionContentComponent: Component {
         private var walletContext: WalletContext?
         private var previewSource: WalletTransactionPreviewSource?
         private var previewComment: String?
+        private var previewCommentEncrypted = false
+        private var commentSession: PasscodeSession?
+        private var commentSessionGeneration: UInt64 = 0
+        private var isAuthorizingComment = false
+        private var commentSessionAvailable = true
+        private let commentSessionDisposable = MetaDisposable()
+        private let commentEnvironmentDisposable = MetaDisposable()
+        private let commentCredentialChangesDisposable = MetaDisposable()
         private var preparedTransfer: WalletContext.PreparedTransfer?
         private var displayedFee: Int64?
         private var preparedTransferNeedsRefresh = false
@@ -691,6 +706,11 @@ private final class WalletTransactionContentComponent: Component {
         }
 
         deinit {
+            self.restorationSession?.invalidate()
+            self.commentSession?.invalidate()
+            self.commentSessionDisposable.dispose()
+            self.commentEnvironmentDisposable.dispose()
+            self.commentCredentialChangesDisposable.dispose()
             self.discardCurrentPreparedTransfer()
             self.walletDisposable.dispose()
             self.transferDisposable.dispose()
@@ -710,7 +730,31 @@ private final class WalletTransactionContentComponent: Component {
             return self.previewOperation == .confirmed || self.previewOperation == .submissionUnknown
         }
 
+        private var canEditPreviewComment: Bool {
+            return self.isPreview && !self.preparingForSend && (self.previewOperation == .ready
+                || self.previewOperation == .preparing)
+        }
+
+        fileprivate var isCommentInputActive: Bool {
+            return self.isPreview && !self.isFinishedPreview
+                && (self.inputField.view as? TextFieldComponent.View)?.isActive == true
+        }
+
+        private var effectivePreviewCommentEncrypted: Bool {
+            return self.previewCommentEncrypted && self.previewComment != nil && self.previewSource?.collectible == nil
+        }
+
+        private var commentPrivacyDescription: String {
+            //TODO:localize
+            return self.previewCommentEncrypted
+                ? "Visible only to you and the recipient."
+                : "The comment is visible to everyone."
+        }
+
         private func configureMode(_ mode: WalletTransactionContentMode, walletContext: WalletContext?) {
+            self.invalidateCommentSession()
+            self.commentEnvironmentDisposable.set(nil)
+            self.commentCredentialChangesDisposable.set(nil)
             self.resetCommentDecryption()
             self.commentWalletIdentity = nil
             self.discardCurrentPreparedTransfer()
@@ -720,6 +764,8 @@ private final class WalletTransactionContentComponent: Component {
             self.walletContext = nil
             self.previewSource = nil
             self.previewComment = nil
+            self.previewCommentEncrypted = false
+            self.displayedCommentEncrypted = nil
             self.preparedTransfer = nil
             self.displayedFee = nil
             self.preparedTransferNeedsRefresh = false
@@ -740,6 +786,7 @@ private final class WalletTransactionContentComponent: Component {
                 self.walletContext = walletContext
                 self.previewSource = source
                 self.previewComment = walletTransactionComment(source.comment)
+                self.previewCommentEncrypted = source.collectible == nil && source.commentEncrypted
                 self.preparedTransfer = source.preparedTransfer
                 self.displayedFee = source.preparedTransfer?.fee
                 self.dismissSendScreen = dismissSendScreen
@@ -748,6 +795,46 @@ private final class WalletTransactionContentComponent: Component {
                 self.inputExternalState.initialText = NSAttributedString(string: source.comment ?? "")
                 self.isApplyingInput = false
 
+                if let component = self.component {
+                    let context = component.context
+                    let accountId = context.account.id
+                    self.commentEnvironmentDisposable.set((combineLatest(
+                        context.sharedContext.applicationBindings.applicationInForeground,
+                        context.sharedContext.appLockContext.isPasscodeLocked,
+                        context.sharedContext.activeAccountContexts |> map { primary, _, _ in primary?.account.id == accountId }
+                    ) |> deliverOnMainQueue).start(next: { [weak self] foreground, locked, current in
+                        guard let self else { return }
+                        self.commentSessionAvailable = foreground && !locked && current
+                        if !self.commentSessionAvailable {
+                            self.invalidateCommentSession()
+                            if !self.isUpdating {
+                                self.componentState?.updated(transition: .immediate)
+                            }
+                        }
+                    }))
+                    self.commentCredentialChangesDisposable.set(PasscodeCredentialStore.shared.changes.start(next: { [weak self] _ in
+                        self?.invalidateCommentSession()
+                        self?.componentState?.updated(transition: .immediate)
+                    }))
+                }
+                if source.commentEncrypted, let prepared = source.preparedTransfer, source.collectible == nil {
+                    let generation = self.commentSessionGeneration
+                    self.isAuthorizingComment = true
+                    self.commentSessionDisposable.set(walletContext.adoptCommentEncryptionSession(prepared).start(next: { [weak self] session in
+                        guard let self, self.commentSessionGeneration == generation, self.commentSessionAvailable else {
+                            session?.invalidate()
+                            return
+                        }
+                        self.isAuthorizingComment = false
+                        if let session { self.installCommentSession(session) }
+                        else { self.invalidateCommentSession() }
+                        self.previewCommentUpdated()
+                    }, error: { [weak self] _ in
+                        guard let self, self.commentSessionGeneration == generation else { return }
+                        self.invalidateCommentSession()
+                        self.componentState?.updated(transition: .immediate)
+                    }))
+                }
                 if source.preparedTransfer == nil {
                     let revision = self.commentRevision
                     Queue.mainQueue().justDispatch { [weak self] in
@@ -775,6 +862,9 @@ private final class WalletTransactionContentComponent: Component {
                         walletIdentity = nil
                     }
                     if self.commentWalletIdentity != walletIdentity {
+                        if self.commentWalletIdentity != nil, self.isPreview {
+                            self.invalidateCommentSession()
+                        }
                         self.resetCommentDecryption()
                         self.commentWalletIdentity = walletIdentity
                     }
@@ -819,6 +909,7 @@ private final class WalletTransactionContentComponent: Component {
         }
 
         private func close(animated: Bool = true) {
+            self.invalidateCommentSession()
             self.resetCommentDecryption()
             guard let component = self.component,
                   let controller = self.environment?.controller() else {
@@ -854,6 +945,9 @@ private final class WalletTransactionContentComponent: Component {
 
         private func resetCommentDecryption() {
             self.commentDecryptionRevision += 1
+            self.restorationSession?.invalidate()
+            self.restorationSession = nil
+            self.isRestoringCommentKey = false
             self.commentDecryptionDisposable.set(nil)
             self.commentAuthorizationDisposable.set(nil)
             self.commentDecryptionInProgress = false
@@ -868,7 +962,11 @@ private final class WalletTransactionContentComponent: Component {
             }
         }
 
-        fileprivate func commentVisibilityUpdated(_ visible: Bool) {
+        fileprivate func commentVisibilityUpdated(_ visible: Bool, leavingTransaction: Bool) {
+            self.commentIsVisible = visible
+            if leavingTransaction {
+                self.resetCommentDecryption()
+            }
             if visible, self.isImportingCommentKey {
                 self.isImportingCommentKey = false
                 self.commentRecoveryController = nil
@@ -880,7 +978,7 @@ private final class WalletTransactionContentComponent: Component {
                 } else {
                     self.resetCommentDecryption()
                 }
-            } else if !visible, !self.isImportingCommentKey {
+            } else if !visible, !self.isImportingCommentKey, !self.isRestoringCommentKey {
                 self.resetCommentDecryption()
             }
             if !self.isUpdating {
@@ -908,23 +1006,33 @@ private final class WalletTransactionContentComponent: Component {
             self.commentDecryptionInProgress = true
             self.componentState?.updated(transition: .easeInOut(duration: 0.2))
             if info.canSign {
+                self.restorationSession?.invalidate()
+                self.restorationSession = nil
+                self.isRestoringCommentKey = false
                 self.startCommentDecryption(revision: revision)
             } else if info.canExportPhrase {
+                self.isRestoringCommentKey = true
                 self.commentAuthorizationDisposable.set(performWalletAuthorizedOperation(
                     context: component.context,
                     present: { [weak controller] alert in
                         controller?.present(alert, in: .window(.root))
                     },
-                    operation: { password in
-                        walletContext.recoveryPhrase(password: password)
+                    operation: { [weak self] password -> Signal<[String], WalletContext.WalletError> in
+                        guard let self, self.commentDecryptionRevision == revision else { return .fail(.authorizationCancelled) }
+                        return self.restorationAuthorization(revision: revision)
+                        |> mapToSignal { session in walletContext.recoveryPhrase(password: password, session: session) }
                     },
                     next: { [weak self] _ in
                         guard let self, self.commentDecryptionRevision == revision else { return }
-                        self.startCommentDecryption(revision: revision)
+                        self.restorationSession?.invalidate()
+                        self.restorationSession = nil
+                        self.isRestoringCommentKey = false
+                        if self.commentIsVisible { self.startCommentDecryption(revision: revision) }
+                        else { self.resetCommentDecryption() }
                     },
                     failed: { [weak self] error in
                         guard let self, self.commentDecryptionRevision == revision else { return }
-                        self.finishCommentDecryption(error: error)
+                        self.finishCommentRestoration(error: error, revision: revision)
                     }
                 ))
             } else {
@@ -947,6 +1055,52 @@ private final class WalletTransactionContentComponent: Component {
                     dismissOnOutsideTap: false
                 ), in: .window(.root))
             }
+        }
+
+        private func restorationAuthorization(revision: Int) -> Signal<PasscodeSession, WalletContext.WalletError> {
+            guard let walletContext = self.component?.walletContext else { return .fail(.authorizationCancelled) }
+            if let session = self.restorationSession, session.isValid { return .single(session) }
+            return walletContext.beginWalletFlow(reason: "Restore wallet")
+            |> deliverOnMainQueue
+            |> mapToSignal { [weak self] session -> Signal<PasscodeSession, WalletContext.WalletError> in
+                guard let self, self.commentDecryptionRevision == revision else {
+                    session.invalidate()
+                    return .fail(.authorizationCancelled)
+                }
+                self.restorationSession?.invalidate()
+                self.restorationSession = session
+                return .single(session)
+            }
+        }
+
+        private func finishCommentRestoration(error: WalletContext.WalletError, revision: Int) {
+            if error == .authorizationCancelled {
+                self.finishCommentDecryption(error: error)
+                return
+            }
+            self.commentDecryptionInProgress = false
+            self.componentState?.updated(transition: .easeInOut(duration: 0.2))
+            guard let component = self.component, let controller = self.environment?.controller() else {
+                self.resetCommentDecryption()
+                return
+            }
+            let message = walletAuthorizationErrorMessage(error)
+            controller.present(textAlertController(
+                context: component.context,
+                title: message?.title ?? "Couldn’t Restore Wallet",
+                text: message?.text ?? "Check the network connection and try again.",
+                actions: [
+                    TextAlertAction(type: .genericAction, title: "Cancel", action: { [weak self] in
+                        guard let self, self.commentDecryptionRevision == revision else { return }
+                        self.resetCommentDecryption()
+                    }),
+                    TextAlertAction(type: .defaultAction, title: "Retry", action: { [weak self] in
+                        guard let self, self.commentDecryptionRevision == revision else { return }
+                        self.encryptedCommentPressed()
+                    })
+                ],
+                dismissOnOutsideTap: false
+            ), in: .window(.root))
         }
 
         private func importCommentKey(revision: Int) {
@@ -1027,26 +1181,147 @@ private final class WalletTransactionContentComponent: Component {
         private func inputTextUpdated() {
             guard !self.isApplyingInput,
                   !self.isUpdating,
-                  self.isPreview,
-                  self.previewOperation == .ready || (self.previewOperation == .preparing && !self.preparingForSend) else {
+                  self.canEditPreviewComment else {
                 return
             }
-            let comment = walletTransactionComment(self.inputExternalState.text.string)
-            self.previewComment = comment
-            if let preparedTransfer = self.preparedTransfer, preparedTransfer.comment == comment {
-                self.commentRevision += 1
-                self.transferDisposable.set(nil)
-                self.displayedFee = preparedTransfer.fee
-                self.previewOperation = .ready
+            self.previewComment = walletTransactionComment(self.inputExternalState.text.string)
+            self.previewCommentUpdated()
+        }
+
+        fileprivate func invalidateCommentSession() {
+            self.commentSessionGeneration &+= 1
+            self.commentSession?.invalidate()
+            self.commentSession = nil
+            self.isAuthorizingComment = false
+            self.commentSessionDisposable.set(nil)
+            // An accepted submission retains its existing completion semantics.
+            if self.previewOperation != .submitting && !self.isFinishedPreview {
+                self.preparingForSend = false
+                if self.previewCommentEncrypted {
+                    self.commentRevision += 1
+                    self.transferDisposable.set(nil)
+                    self.discardCurrentPreparedTransfer()
+                    self.displayedFee = nil
+                    self.previewOperation = .ready
+                }
+            }
+        }
+
+        private func installCommentSession(_ session: PasscodeSession) {
+            if self.commentSession !== session { self.commentSession?.invalidate() }
+            self.commentSession = session
+            guard let expiresAt = session.expiresAt else { return }
+            let delay = max(0.0, expiresAt - ProcessInfo.processInfo.systemUptime)
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self, weak session] in
+                guard let self, let session, self.commentSession === session else { return }
+                self.invalidateCommentSession()
+                self.componentState?.updated(transition: .immediate)
+            }
+        }
+
+        private func requestCommentSession(forSend: Bool) {
+            guard !self.isAuthorizingComment, self.commentSessionAvailable,
+                  let walletContext = self.walletContext else { return }
+            self.invalidateCommentSession()
+            self.commentRevision += 1
+            self.transferDisposable.set(nil)
+            self.discardCurrentPreparedTransfer()
+            self.displayedFee = nil
+            self.previewOperation = .ready
+            let generation = self.commentSessionGeneration
+            self.isAuthorizingComment = true
+            self.preparingForSend = forSend
+            self.componentState?.updated(transition: .easeInOut(duration: 0.2))
+            self.commentSessionDisposable.set(walletContext.beginCommentEncryptionSession().start(next: { [weak self] session in
+                guard let self, self.commentSessionGeneration == generation,
+                      self.commentSessionAvailable, self.walletContext === walletContext else {
+                    session.invalidate()
+                    return
+                }
+                self.isAuthorizingComment = false
+                self.installCommentSession(session)
+                self.previewCommentEncrypted = true
+                if forSend {
+                    self.commentRevision += 1
+                    self.transferDisposable.set(nil)
+                    self.prepareCurrentComment(revision: self.commentRevision, authorizeAfterPreparation: true)
+                } else {
+                    self.previewCommentUpdated()
+                    self.showCommentPrivacyTooltip()
+                }
+            }, error: { [weak self] error in
+                guard let self, self.commentSessionGeneration == generation else { return }
+                self.isAuthorizingComment = false
                 self.preparingForSend = false
                 self.componentState?.updated(transition: .easeInOut(duration: 0.2))
+                self.presentTransferError(error)
+            }))
+        }
+
+        private func commentEncryptionPressed() {
+            guard self.canEditPreviewComment,
+                  self.previewSource?.collectible == nil else { return }
+            if self.previewCommentEncrypted || self.isAuthorizingComment {
+                self.invalidateCommentSession()
+                self.previewCommentEncrypted = false
+                self.previewCommentUpdated()
+                self.showCommentPrivacyTooltip()
+            } else {
+                self.requestCommentSession(forSend: false)
+            }
+        }
+
+        private func showCommentPrivacyTooltip() {
+            guard self.canEditPreviewComment,
+                  let component = self.component,
+                  let controller = self.environment?.controller(),
+                  let buttonView = self.commentEncryptionButton.view else {
                 return
             }
+            (controller as? WalletTransactionContentController)?.dismissAllTooltips()
+
+            let sourceFrame = buttonView.convert(buttonView.bounds, to: nil).offsetBy(dx: 0.0, dy: 3.0)
+            controller.present(TooltipScreen(
+                account: component.context.account,
+                sharedContext: component.context.sharedContext,
+                text: .plain(text: self.commentPrivacyDescription),
+                location: .point(sourceFrame, .bottom),
+                displayDuration: .default,
+                shouldDismissOnTouch: { _, _ in
+                    return .dismiss(consume: false)
+                }
+            ), in: .current)
+        }
+
+        private func previewCommentUpdated() {
             self.commentRevision += 1
             let revision = self.commentRevision
             self.transferDisposable.set(nil)
             self.previewOperation = .ready
             self.preparingForSend = false
+
+            if self.isAuthorizingComment {
+                self.displayedFee = nil
+                self.componentState?.updated(transition: .easeInOut(duration: 0.2))
+                return
+            }
+            if self.previewCommentEncrypted && self.commentSession?.isValid != true {
+                self.discardCurrentPreparedTransfer()
+                self.displayedFee = nil
+                self.componentState?.updated(transition: .easeInOut(duration: 0.2))
+                return
+            }
+
+            if let preparedTransfer = self.preparedTransfer,
+               !self.preparedTransferNeedsRefresh,
+               preparedTransfer.comment == self.previewComment,
+               preparedTransfer.commentEncrypted == self.effectivePreviewCommentEncrypted,
+               TimeInterval(preparedTransfer.expiresAt) > Date().timeIntervalSince1970 {
+                self.displayedFee = preparedTransfer.fee
+                self.componentState?.updated(transition: .easeInOut(duration: 0.2))
+                return
+            }
+            self.displayedFee = nil
             self.componentState?.updated(transition: .easeInOut(duration: 0.2))
             Queue.mainQueue().after(0.4) { [weak self] in
                 guard let self, self.commentRevision == revision else {
@@ -1059,7 +1334,12 @@ private final class WalletTransactionContentComponent: Component {
         private func prepareCurrentComment(revision: Int, authorizeAfterPreparation: Bool) {
             guard let walletContext = self.walletContext,
                   let previewSource = self.previewSource,
-                  self.commentRevision == revision else {
+                  self.commentRevision == revision, !self.isAuthorizingComment else {
+                return
+            }
+            if self.previewCommentEncrypted && self.commentSession?.isValid != true {
+                self.invalidateCommentSession()
+                if authorizeAfterPreparation { self.requestCommentSession(forSend: true) }
                 return
             }
             let comment = self.previewComment
@@ -1080,10 +1360,15 @@ private final class WalletTransactionContentComponent: Component {
                     amount: self.preparedTransfer?.requestedAmount ?? previewSource.requestedAmount,
                     sendAll: self.preparedTransfer?.isSendAll ?? previewSource.isSendAll,
                     comment: comment,
-                    commentEncrypted: previewSource.commentEncrypted
+                    commentEncrypted: self.previewCommentEncrypted,
+                    session: self.previewCommentEncrypted ? self.commentSession : nil
                 )
             }
-            self.transferDisposable.set((preparation
+            self.transferDisposable.set((walletContext.state
+            |> filter { $0.activeOperation == nil }
+            |> take(1)
+            |> castError(WalletContext.WalletError.self)
+            |> mapToSignal { _ in preparation }
             |> deliverOnMainQueue).start(next: { [weak self] updatedTransfer in
                 guard let self else {
                     _ = walletContext.discardPreparedTransfer(updatedTransfer).start()
@@ -1109,7 +1394,7 @@ private final class WalletTransactionContentComponent: Component {
                     self.previewOperation = .ready
                     self.componentState?.updated(transition: .easeInOut(duration: 0.2))
                 }
-            }, error: { [weak self] _ in
+            }, error: { [weak self] error in
                 guard let self else {
                     return
                 }
@@ -1120,12 +1405,18 @@ private final class WalletTransactionContentComponent: Component {
                 self.previewOperation = .ready
                 self.preparingForSend = false
                 self.componentState?.updated(transition: .easeInOut(duration: 0.2))
-                self.presentTransferError()
+                self.presentTransferError(error)
             }))
         }
 
         private func send() {
-            guard self.isPreview, !self.preparingForSend else {
+            guard self.isPreview, !self.preparingForSend,
+                  self.previewOperation == .ready || self.previewOperation == .preparing else {
+                return
+            }
+            if self.isAuthorizingComment { return }
+            if self.previewCommentEncrypted && self.commentSession?.isValid != true {
+                self.requestCommentSession(forSend: true)
                 return
             }
             if self.previewOperation == .preparing {
@@ -1140,6 +1431,7 @@ private final class WalletTransactionContentComponent: Component {
             if let preparedTransfer = self.preparedTransfer,
                !self.preparedTransferNeedsRefresh,
                preparedTransfer.comment == comment,
+               preparedTransfer.commentEncrypted == self.effectivePreviewCommentEncrypted,
                TimeInterval(preparedTransfer.expiresAt) > Date().timeIntervalSince1970 {
                 self.authorizeAndSubmit(preparedTransfer)
             } else {
@@ -1162,7 +1454,7 @@ private final class WalletTransactionContentComponent: Component {
             }
             self.previewOperation = .submitting
             self.componentState?.updated(transition: .easeInOut(duration: 0.2))
-            self.transferDisposable.set((walletContext.submitTransfer(preparedTransfer)
+            self.transferDisposable.set((walletContext.submitTransfer(preparedTransfer, session: self.previewCommentEncrypted ? self.commentSession : nil)
             |> deliverOnMainQueue).start(next: { [weak self] pendingTransfer in
                 guard let self else {
                     return
@@ -1172,10 +1464,12 @@ private final class WalletTransactionContentComponent: Component {
                 switch pendingTransfer.status {
                 case .submissionUnknown:
                     self.previewOperation = .submissionUnknown
+                    self.invalidateCommentSession()
                     self.componentState?.updated(transition: .easeInOut(duration: 0.2))
                     self.presentSubmissionUnknown()
                 case .broadcasting, .pending, .confirmed:
                     self.previewOperation = .confirmed
+                    self.invalidateCommentSession()
                     self.componentState?.updated(transition: .easeInOut(duration: 0.25))
                     self.showSuccessIfNeeded(
                         address: pendingTransfer.recipient,
@@ -1194,7 +1488,7 @@ private final class WalletTransactionContentComponent: Component {
                 }
                 self.previewOperation = .ready
                 self.componentState?.updated(transition: .easeInOut(duration: 0.2))
-                self.presentTransferError()
+                self.presentTransferError(error)
             }))
         }
 
@@ -1253,14 +1547,28 @@ private final class WalletTransactionContentComponent: Component {
             ), in: .window(.root))
         }
 
-        private func presentTransferError() {
+        private func presentTransferError(_ error: WalletContext.WalletError) {
+            guard error != .authorizationCancelled else { return }
             guard let component = self.component, let controller = self.environment?.controller() else {
                 return
             }
             //TODO:localize
-            let title = "Transfer Failed"
-            //TODO:localize
-            let text = "The transfer could not be prepared or sent. Check the address, balance and network connection, then try again."
+            let title: String
+            let text: String
+            switch error {
+            case .commentTooLong:
+                title = "Comment Too Long"
+                text = "The encrypted comment is too long. Shorten it and try again."
+            case .commentEncryptionRecipientUnavailable:
+                title = "Couldn't Encrypt Comment"
+                text = "This user can't receive encrypted messages now."
+            case .commentEncryptionFailed:
+                title = "Couldn't Encrypt Comment"
+                text = "The comment could not be encrypted for this wallet. Check the network connection and try again."
+            default:
+                title = "Transfer Failed"
+                text = "The transfer could not be prepared or sent. Check the address, balance and network connection, then try again."
+            }
             //TODO:localize
             let ok = "OK"
             controller.present(textAlertController(
@@ -1598,8 +1906,11 @@ private final class WalletTransactionContentComponent: Component {
             (environment.controller() as? WalletTransactionContentController)?.setCloseAction(id: incomingModeId, action: { [weak self] animated in
                 self?.close(animated: animated)
             })
-            (environment.controller() as? WalletTransactionScreen)?.setCommentVisibilityAction(id: incomingModeId, action: { [weak self] visible in
-                self?.commentVisibilityUpdated(visible)
+            (environment.controller() as? WalletTransactionPreviewScreen)?.invalidateCommentSession = { [weak self] in
+                self?.invalidateCommentSession()
+            }
+            (environment.controller() as? WalletTransactionScreen)?.setCommentVisibilityAction(id: incomingModeId, action: { [weak self] visible, leavingTransaction in
+                self?.commentVisibilityUpdated(visible, leavingTransaction: leavingTransaction)
             })
 
             let theme = environment.theme
@@ -2256,11 +2567,17 @@ private final class WalletTransactionContentComponent: Component {
             contentHeight += tableSize.height
 
             let displaysInput = self.isPreview && !self.isFinishedPreview
+            let displaysCommentEncryption = displaysInput && transaction.collectible == nil
             if displaysInput {
                 contentHeight += 12.0
-                let inputWidth = max(0.0, tableSize.width - 24.0)
+                let inputWidth = tableSize.width
+                let commentEncryptionButtonSize = CGSize(width: 44.0, height: 40.0)
+                let inputFieldWidth = displaysCommentEncryption
+                    ? max(0.0, inputWidth - commentEncryptionButtonSize.width)
+                    : inputWidth
                 //TODO:localize
                 let optionalMessage = "Optional message"
+                self.inputField.parentState = state
                 let fieldSize = self.inputField.update(
                     transition: transition,
                     component: AnyComponent(TextFieldComponent(
@@ -2271,7 +2588,8 @@ private final class WalletTransactionContentComponent: Component {
                         fontSize: 17.0,
                         textColor: theme.actionSheet.inputTextColor,
                         accentColor: theme.actionSheet.controlAccentColor,
-                        insets: UIEdgeInsets(top: 10.0, left: 16.0, bottom: 10.0, right: 16.0),
+                        // TextFieldComponent adds another 8 pt, giving a total leading inset of 16 pt.
+                        insets: UIEdgeInsets(top: 10.0, left: 8.0, bottom: 10.0, right: 16.0),
                         hideKeyboard: false,
                         customInputView: nil,
                         placeholder: NSAttributedString(
@@ -2280,7 +2598,7 @@ private final class WalletTransactionContentComponent: Component {
                             textColor: theme.actionSheet.inputPlaceholderColor
                         ),
                         resetText: nil,
-                        isOneLineWhenUnfocused: true,
+                        isOneLineWhenUnfocused: false,
                         characterLimit: nil,
                         emptyLineHandling: .notAllowed,
                         formatMenuAvailability: .none,
@@ -2300,7 +2618,7 @@ private final class WalletTransactionContentComponent: Component {
                         }
                     )),
                     environment: {},
-                    containerSize: CGSize(width: inputWidth, height: 61.0)
+                    containerSize: CGSize(width: inputFieldWidth, height: .greatestFiniteMagnitude)
                 )
                 let inputSize = CGSize(width: inputWidth, height: max(40.0, fieldSize.height))
                 let inputBackgroundSize = self.inputBackground.update(
@@ -2329,14 +2647,62 @@ private final class WalletTransactionContentComponent: Component {
                         self.addSubview(fieldView)
                     }
                     transition.setFrame(view: fieldView, frame: CGRect(
-                        x: floorToScreenPixels((availableSize.width - fieldSize.width) / 2.0),
+                        x: floorToScreenPixels((availableSize.width - inputWidth) / 2.0),
                         y: contentHeight + floorToScreenPixels((inputSize.height - fieldSize.height) / 2.0) + 1.0 - UIScreenPixel,
                         width: fieldSize.width,
                         height: fieldSize.height
                     ))
                     transition.setAlpha(view: fieldView, alpha: 1.0)
-                    fieldView.isUserInteractionEnabled = self.previewOperation == .ready
-                        || (self.previewOperation == .preparing && !self.preparingForSend)
+                    fieldView.isUserInteractionEnabled = self.canEditPreviewComment
+                }
+                if displaysCommentEncryption {
+                    let commentEncrypted = self.previewCommentEncrypted
+                    let buttonSize = self.commentEncryptionButton.update(
+                        transition: transition,
+                        component: AnyComponent(PlainButtonComponent(
+                            content: AnyComponent(LottieComponent(
+                                content: LottieComponent.AppBundleContent(
+                                    name: "WalletCommentLock",
+                                    // The animation opens at frame 10 and closes again at frame 29 of 180.
+                                    frameRange: commentEncrypted ? (10.0 / 180.0 ..< 30.0 / 180.0) : (0.0 ..< 11.0 / 180.0)
+                                ),
+                                color: commentEncrypted ? theme.actionSheet.controlAccentColor : theme.actionSheet.inputPlaceholderColor,
+                                startingPosition: .end,
+                                size: CGSize(width: 24.0, height: 24.0)
+                            )),
+                            minSize: commentEncryptionButtonSize,
+                            action: { [weak self] in
+                                self?.commentEncryptionPressed()
+                            },
+                            isEnabled: self.canEditPreviewComment,
+                            animateContents: false
+                        )),
+                        environment: {},
+                        containerSize: commentEncryptionButtonSize
+                    )
+                    if let buttonView = self.commentEncryptionButton.view {
+                        if buttonView.superview == nil {
+                            self.addSubview(buttonView)
+                        }
+                        transition.setFrame(view: buttonView, frame: CGRect(
+                            x: floorToScreenPixels((availableSize.width - tableSize.width) / 2.0) + tableSize.width - buttonSize.width,
+                            y: contentHeight + floorToScreenPixels((inputSize.height - buttonSize.height) / 2.0),
+                            width: buttonSize.width,
+                            height: buttonSize.height
+                        ))
+                        transition.setAlpha(view: buttonView, alpha: 1.0)
+                        buttonView.isUserInteractionEnabled = self.canEditPreviewComment
+                        //TODO:localize
+                        buttonView.accessibilityLabel = "Comment privacy"
+                        buttonView.accessibilityValue = self.commentPrivacyDescription
+
+                        if let displayedCommentEncrypted = self.displayedCommentEncrypted,
+                           displayedCommentEncrypted != commentEncrypted,
+                           let animationView = (buttonView as? PlainButtonComponent.View)?.contentView as? LottieComponent.View {
+                            animationView.playOnce()
+                        }
+                        self.displayedCommentEncrypted = commentEncrypted
+                    }
                 }
                 contentHeight += inputSize.height
                 contentHeight += 24.0
@@ -2348,6 +2714,14 @@ private final class WalletTransactionContentComponent: Component {
                 if let fieldView = self.inputField.view {
                     transition.setAlpha(view: fieldView, alpha: 0.0)
                 }
+            }
+
+            if !displaysCommentEncryption {
+                if let buttonView = self.commentEncryptionButton.view {
+                    transition.setAlpha(view: buttonView, alpha: 0.0)
+                    buttonView.isUserInteractionEnabled = false
+                }
+                self.displayedCommentEncrypted = nil
             }
 
             let actionTitle: String
@@ -2746,6 +3120,15 @@ private final class WalletTransactionPreviewSheetComponent: CombinedComponent {
             )
             context.add(sheetComponent.position(CGPoint(x: context.availableSize.width / 2.0, y: context.availableSize.height / 2.0)))
 
+            if let sheetView = findTaggedComponentViewImpl(
+                view: context.view,
+                tag: ResizableSheetComponent<EnvironmentType>.View.Tag()
+            ) as? ResizableSheetComponent<EnvironmentType>.View,
+               let contentView = sheetView.contentViewValue as? WalletTransactionContentComponent.View,
+               contentView.isCommentInputActive {
+                sheetView.scrollToBottom(transition: context.transition)
+            }
+
             if let controller = controller(), !controller.automaticallyControlPresentationContextLayout {
                 let contentHeight = sheetExternalState.contentHeight + environment.inputHeight
                 var sideInset: CGFloat = 0.0
@@ -2844,7 +3227,7 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
     private var currentTransactionPresentationId: String?
     private var currentCloseId: String
     private var closeActions: [String: (Bool) -> Void] = [:]
-    private var commentVisibilityActions: [String: (Bool) -> Void] = [:]
+    private var commentVisibilityActions: [String: (Bool, Bool) -> Void] = [:]
     private var requestedOffset: Int?
     private var failedOffset: Int?
 
@@ -2945,13 +3328,13 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
     public override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
 
-        self.commentVisibilityActions[self.currentCloseId]?(true)
+        self.commentVisibilityActions[self.currentCloseId]?(true, false)
     }
 
     public override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         for action in self.commentVisibilityActions.values {
-            action(false)
+            action(false, false)
         }
         self.dismissAllTooltips()
     }
@@ -2960,7 +3343,14 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
         self.closeActions[id] = action
     }
 
-    fileprivate func setCommentVisibilityAction(id: String, action: @escaping (Bool) -> Void) {
+    public override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        if self.navigationController?.viewControllers.contains(where: { $0 === self }) != true {
+            for action in self.commentVisibilityActions.values { action(false, true) }
+        }
+    }
+
+    fileprivate func setCommentVisibilityAction(id: String, action: @escaping (Bool, Bool) -> Void) {
         self.commentVisibilityActions[id] = action
     }
 
@@ -3061,7 +3451,7 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
         }
         let transaction = self.transactions[index]
         if self.currentTransactionPresentationId != transaction.presentationId {
-            self.commentVisibilityActions[self.currentCloseId]?(false)
+            self.commentVisibilityActions[self.currentCloseId]?(false, true)
         }
         self.currentTransactionPresentationId = transaction.presentationId
         self.currentCloseId = walletTransactionModeId(.transaction(transaction))
@@ -3106,6 +3496,7 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
 public final class WalletTransactionPreviewScreen: ViewControllerComponentContainer, WalletTransactionContentController {
     private let currentCloseId: String
     private var closeActions: [String: (Bool) -> Void] = [:]
+    fileprivate var invalidateCommentSession: (() -> Void)?
 
     public init(
         context: AccountContext,
@@ -3183,7 +3574,25 @@ public final class WalletTransactionPreviewScreen: ViewControllerComponentContai
 
     public override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        if self.isBeingDismissed || self.isMovingFromParent || self.navigationController?.isBeingDismissed == true {
+            self.invalidateCommentSession?()
+        }
         self.dismissAllTooltips()
+    }
+
+    public override func dismiss(completion: (() -> Void)? = nil) {
+        self.invalidateCommentSession?()
+        super.dismiss(completion: completion)
+    }
+
+    public override func dismiss(animated flag: Bool, completion: (() -> Void)? = nil) {
+        self.invalidateCommentSession?()
+        super.dismiss(animated: flag, completion: completion)
+    }
+
+    public override func viewWillLeaveNavigation() {
+        self.invalidateCommentSession?()
+        super.viewWillLeaveNavigation()
     }
 
     fileprivate func setCloseAction(id: String, action: @escaping (Bool) -> Void) {

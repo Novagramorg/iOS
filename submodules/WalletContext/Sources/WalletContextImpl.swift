@@ -1,9 +1,9 @@
+import PasscodeCore
 import Foundation
 import SwiftSignalKit
 import TelegramCore
 import WalletEngineFFI
 
-private let walletStoredStateCachedItemLimit = 10
 let walletFiatRatesRefreshInterval: TimeInterval = 15 * 60
 
 actor WalletContextImpl {
@@ -40,6 +40,7 @@ actor WalletContextImpl {
         let walletAddress: String
         let transfer: PreparedTransfer
         let request: PreparedEngineTransfer
+        var sessionId: UUID? = nil
     }
 
     struct PendingTransferHistoryReconciliation {
@@ -55,6 +56,7 @@ actor WalletContextImpl {
         let pendingTransfer: PendingTransfer
     }
 
+    let authorization: WalletAuthorizationContext
     let engine: TelegramEngine
     let logger: WalletLogger
     let storage: WalletEngineStorage
@@ -74,6 +76,7 @@ actor WalletContextImpl {
     var serverStateNeedsActivation = false
     var transactionHistory = WalletTransactionHistory()
     var preparedTransfers: [String: PreparedEngineTransferRecord] = [:]
+    var preparedAuthorizations: [String: PasscodeSession] = [:]
     var deferredSynchronizationScope: WalletSynchronizationScope = []
     var preparedRecoveryPhraseImportRecordId: String?
     var tonConnectCoordinator: WalletTonConnectCoordinator?
@@ -90,6 +93,7 @@ actor WalletContextImpl {
     var stateSubscriberCount = 0
     var screenDemand = WalletScreenDemand()
     var walletScreenCount: Int { self.screenDemand.walletCount }
+    var hasGaslessInfoDemand: Bool { self.walletScreenCount > 0 || !self.screenDemand.gaslessInfoRequests.isEmpty }
     var pendingBalanceRequests = Set<UUID>()
     var pendingScreenSynchronizationScope: WalletSynchronizationScope = []
     var latestEnvironmentRevision: UInt64 = 0
@@ -153,10 +157,12 @@ actor WalletContextImpl {
     init(
         engine: TelegramEngine,
         storageNamespace: String,
+        authorization: WalletAuthorizationContext,
         initialState: State,
         output: WalletContextOutput,
         logger: WalletLogger
     ) {
+        self.authorization = authorization
         let storage = WalletEngineStorage(namespace: storageNamespace)
         self.engine = engine
         self.logger = logger
@@ -171,6 +177,8 @@ actor WalletContextImpl {
     func shutdown() async {
         guard !self.isShutdown else { return }
         self.isShutdown = true
+        self.authorization.invalidate()
+        self.preparedAuthorizations.removeAll()
         self.streamingRefreshTracker = WalletStreamingRefreshTracker()
         self.activationGeneration &+= 1
         if let activeOperationId = self.activeOperationId {
@@ -213,6 +221,14 @@ actor WalletContextImpl {
         self.isApplicationInForeground = foreground
         self.isAccountCurrent = accountIsCurrent
         self.isNetworkAvailable = networkAvailable
+        if !accountIsCurrent {
+            self.authorization.invalidate()
+            self.preparedAuthorizations.removeAll()
+            if let recordId = self.preparedRecoveryPhraseImportRecordId {
+                self.preparedRecoveryPhraseImportRecordId = nil
+                Task { await self.discardReplacementForCleanup(recordId: recordId) }
+            }
+        }
         if let coordinator = self.tonConnectCoordinator {
             Task { await coordinator.setEnvironment(presentationEnabled: foreground && accountIsCurrent,
                 networkEnabled: foreground && accountIsCurrent && networkAvailable, revision: revision) }
@@ -254,6 +270,7 @@ actor WalletContextImpl {
     }
 
     func scheduleAutomaticPhraseRecoveryIfNeeded() {
+        guard (try? walletProtectionSettings().enabled) == false else { return }
         guard self.twoStepAuthRequired == false,
               self.currentState.activeOperation == nil,
               case let .wallet(info) = self.currentState.phase,
@@ -305,14 +322,17 @@ actor WalletContextImpl {
     func updateWalletScreenDemand(_ demand: WalletScreenDemand) {
         guard !self.isShutdown, demand.revision > self.screenDemand.revision else { return }
         let openedScope = demand.openedScope(since: self.screenDemand)
+        let hasNewGaslessInfoRequests = !demand.gaslessInfoRequests.subtracting(self.screenDemand.gaslessInfoRequests).isEmpty
         let newBalanceRequests = demand.balanceRequests.subtracting(self.screenDemand.balanceRequests)
         self.pendingBalanceRequests.formUnion(newBalanceRequests)
         self.pendingBalanceRequests.formIntersection(demand.balanceRequests)
         self.screenDemand = demand
         self.pendingScreenSynchronizationScope.formUnion(openedScope)
         self.pendingScreenSynchronizationScope.formIntersection(self.visibleScreenSynchronizationScope)
-        if openedScope.contains(.transactions) {
+        if openedScope.contains(.transactions) || hasNewGaslessInfoRequests {
             self.requestGaslessInfo()
+        }
+        if openedScope.contains(.transactions) {
             self.requestServerWalletState(forceRefreshAfterCurrent: self.serverWalletState != nil)
         }
         self.requestSynchronization(scope: openedScope)
@@ -356,14 +376,14 @@ actor WalletContextImpl {
             phase: .restoring,
             balance: storedState.balance.map { .value($0, updatedAt: storedState.balanceUpdatedAt ?? 0) } ?? .idle,
             transactions: TransactionsState(
-                items: Array(cachedTransactions.prefix(walletStoredStateCachedItemLimit)),
+                items: Array(cachedTransactions.prefix(walletTransactionFetchLimit)),
                 offset: cachedTransactions.count,
                 canLoadMore: false,
                 isLoadingMore: false,
                 error: nil
             ),
             collectibles: CollectiblesState(
-                items: Array(storedState.collectibles.prefix(walletStoredStateCachedItemLimit)),
+                items: Array(storedState.collectibles.prefix(walletTransactionFetchLimit)),
                 offset: storedState.collectibles.count,
                 canLoadMore: false,
                 isLoadingMore: false,
@@ -411,7 +431,7 @@ actor WalletContextImpl {
         if self.needsServerWalletStateRefresh {
             self.requestServerWalletState()
         }
-        if refreshIfPollingBecomesActive, self.walletScreenCount > 0 {
+        if refreshIfPollingBecomesActive, self.hasGaslessInfoDemand {
             self.requestGaslessInfo()
         }
     }
@@ -578,6 +598,8 @@ actor WalletContextImpl {
             self.output.cancelOperation(id: activeOperationId)
             self.activeOperationId = nil
         }
+        self.authorization.invalidate()
+        self.preparedAuthorizations.removeAll()
         self.preparedTransfers.removeAll()
         self.deferredSynchronizationScope = []
         let generation = self.activationGeneration
@@ -664,6 +686,8 @@ actor WalletContextImpl {
             }
         }
         do {
+            let authorizationGeneration = try self.authorization.operationGeneration(requireAvailable: false)
+            try await self.authorization.waitUntilAvailable(generation: authorizationGeneration)
             await previousCoordinator?.shutdown()
             let stored = try await self.storage.loadDescriptor()
             let storedMatchesIdentity = stored.map {
@@ -682,7 +706,7 @@ actor WalletContextImpl {
             }
             let needsSecret = !hasStoredSecret
             var words: [String]?
-            if needsSecret && canExportPhrase && self.twoStepAuthRequired == false {
+            if needsSecret && canExportPhrase && self.twoStepAuthRequired == false, try !walletProtectionSettings().enabled {
                 self.automaticPhraseRecoveryAttemptRevision = self.latestTwoStepAuthRevision
                 self.automaticPhraseRecoveryAttemptAddress = address
                 self.automaticPhraseRecoveryGeneration = generation
@@ -771,11 +795,15 @@ actor WalletContextImpl {
                 let scope: WalletSynchronizationScope = [.account, .transactions]
                 self.requestSynchronization(scope: scope.subtracting(self.activeSynchronizationScope))
             }
-            if self.walletScreenCount > 0 {
+            if self.hasGaslessInfoDemand {
                 self.requestGaslessInfo()
             }
             self.scheduleAutomaticPhraseRecoveryIfNeeded()
         } catch is CancellationError {
+        } catch let error as PasscodeError where error == .cancelled || (error == .unavailable && !self.authorization.isAvailable) {
+            guard !self.isShutdown, self.activationGeneration == generation else { return }
+            self.serverStateNeedsActivation = true
+            self.evaluateRuntimeDemand(refreshIfPollingBecomesActive: false)
         } catch let error as WalletEngineStorageError {
             guard !self.isShutdown, self.activationGeneration == generation else { return }
             self.logger.error("wallet_engine_activation_failed", error)
@@ -1314,9 +1342,9 @@ actor WalletContextImpl {
         storedState.fiatRatesUpdatedAt = state.fiat.rates.lastSuccessfulAt ?? self.fiatLastSuccessfulAt
         storedState.selectedFiatCurrency = state.fiat.selectedCurrency
         storedState.transactions = state.transactions.items
-            .prefix(walletStoredStateCachedItemLimit)
+            .prefix(walletTransactionFetchLimit)
             .map(WalletStoredTransaction.init)
-        storedState.collectibles = Array(state.collectibles.items.prefix(walletStoredStateCachedItemLimit))
+        storedState.collectibles = Array(state.collectibles.items.prefix(walletTransactionFetchLimit))
         guard storedState != self.storedState else {
             return
         }

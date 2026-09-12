@@ -1,0 +1,527 @@
+import Foundation
+import UIKit
+import Display
+import AccountContext
+import WalletContext
+import WalletConnectScreen
+import SwiftSignalKit
+import TelegramPresentationData
+import ComponentFlow
+import ViewControllerComponent
+import MultilineTextComponent
+import ItemListUI
+import BundleIconComponent
+import ListSectionComponent
+import ListActionItemComponent
+import AlertComponent
+import UndoUI
+
+private func connectedAppSessions(_ sessions: [WalletContext.TonConnectSession]) -> [WalletContext.TonConnectSession] {
+    return sessions.filter { session in
+        guard session.manifest != nil else {
+            return false
+        }
+        return session.status == .connected
+    }
+}
+
+private func presentDisconnectedOverlay(context: AccountContext, controller: ViewController, text: String) {
+    controller.present(UndoOverlayController(
+        presentationData: context.sharedContext.currentPresentationData.with { $0 },
+        content: .actionSucceeded(title: nil, text: text, cancel: nil, destructive: false),
+        position: .bottom,
+        action: { _ in false }
+    ), in: .current)
+}
+
+private final class WalletAppsScreenComponent: Component {
+    typealias EnvironmentType = ViewControllerComponentContainer.Environment
+
+    let context: AccountContext
+    let walletContext: WalletContext
+
+    init(context: AccountContext, walletContext: WalletContext) {
+        self.context = context
+        self.walletContext = walletContext
+    }
+
+    static func ==(lhs: WalletAppsScreenComponent, rhs: WalletAppsScreenComponent) -> Bool {
+        return lhs.context === rhs.context && lhs.walletContext === rhs.walletContext
+    }
+
+    final class View: UIView {
+        private let scrollView = UIScrollView()
+        private let section = ComponentView<Empty>()
+        private let sessionsDisposable = MetaDisposable()
+        private let operationDisposable = MetaDisposable()
+        private var component: WalletAppsScreenComponent?
+        private var environment: EnvironmentType?
+        private weak var state: EmptyComponentState?
+        private var sessions: [WalletContext.TonConnectSession]?
+        private var operationId: UUID?
+        private var operationSessionIds = Set<String>()
+        private var operationToast: String?
+        private var operationCompletion: ((Bool) -> Void)?
+        private weak var infoController: WalletAppInfoScreen?
+        private weak var allAppsAlert: AlertScreen?
+        private var allAppsProgress: ValuePromise<Bool>?
+        private var pendingToast: String?
+        private var isUpdating = false
+        private var reconciliationScheduled = false
+        private var isDismissingAlert = false
+
+        var isDisconnecting: Bool {
+            return self.operationId != nil
+        }
+
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+            self.scrollView.showsVerticalScrollIndicator = true
+            self.scrollView.showsHorizontalScrollIndicator = false
+            self.scrollView.scrollsToTop = true
+            self.scrollView.delaysContentTouches = false
+            self.scrollView.canCancelContentTouches = true
+            self.scrollView.contentInsetAdjustmentBehavior = .never
+            self.scrollView.alwaysBounceVertical = true
+            if #available(iOS 13.0, *) {
+                self.scrollView.automaticallyAdjustsScrollIndicatorInsets = false
+            }
+            self.addSubview(self.scrollView)
+        }
+
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+
+        deinit {
+            self.sessionsDisposable.dispose()
+            self.operationDisposable.dispose()
+        }
+
+        func scrollToTop() {
+            self.scrollView.setContentOffset(.zero, animated: true)
+        }
+
+        func scheduleReconciliation() {
+            guard !self.reconciliationScheduled else {
+                return
+            }
+            self.reconciliationScheduled = true
+            Queue.mainQueue().async { [weak self] in
+                guard let self else {
+                    return
+                }
+                self.reconciliationScheduled = false
+                self.reconcilePresentations()
+            }
+        }
+
+        private func reconcilePresentations() {
+            guard !self.isDisconnecting, !self.isDismissingAlert,
+                  let component = self.component, let sessions = self.sessions,
+                  let controller = self.environment?.controller() as? WalletAppsScreen,
+                  controller.hasAppeared, !controller.isFinishing else {
+                return
+            }
+            let apps = connectedAppSessions(sessions)
+            if let infoController = self.infoController {
+                if !apps.contains(where: { $0.id == infoController.sessionId }) {
+                    infoController.dismissAnimated()
+                }
+                return
+            }
+            if apps.isEmpty {
+                if self.allAppsAlert != nil {
+                    self.dismissAllAppsAlert()
+                    return
+                }
+                let toast = self.pendingToast
+                self.pendingToast = nil
+                controller.finish(toast: toast)
+            } else if self.allAppsAlert == nil, let toast = self.pendingToast {
+                self.pendingToast = nil
+                presentDisconnectedOverlay(context: component.context, controller: controller, text: toast)
+            }
+        }
+
+        private func openApp(_ session: WalletContext.TonConnectSession) {
+            guard !self.isDisconnecting, self.infoController == nil, self.allAppsAlert == nil,
+                  let component = self.component, let manifest = session.manifest,
+                  let controller = self.environment?.controller() as? WalletAppsScreen,
+                  !controller.isFinishing,
+                  connectedAppSessions(self.sessions ?? []).contains(where: { $0.id == session.id }) else {
+                return
+            }
+            let infoController = WalletAppInfoScreen(
+                context: component.context,
+                sessionId: session.id,
+                manifest: manifest,
+                disconnect: { [weak self] completion in
+                    guard let self else {
+                        completion(false)
+                        return
+                    }
+                    //TODO:localize
+                    self.disconnect(ids: [session.id], all: false, toast: "\(manifest.name) disconnected.", completion: completion)
+                },
+                closed: { [weak self] in
+                    self?.infoController = nil
+                    self?.scheduleReconciliation()
+                }
+            )
+            self.infoController = infoController
+            controller.push(infoController)
+        }
+
+        private func presentDisconnectAllAlert() {
+            guard !self.isDisconnecting, self.allAppsAlert == nil, self.infoController == nil,
+                  connectedAppSessions(self.sessions ?? []).count > 1,
+                  let component = self.component, let controller = self.environment?.controller() else {
+                return
+            }
+            let progress = ValuePromise<Bool>(false, ignoreRepeated: true)
+            let enabled = progress.get() |> map { !$0 }
+            //TODO:localize
+            let alert = AlertScreen(
+                context: component.context,
+                configuration: AlertScreen.Configuration(actionAlignment: .vertical, dismissOnOutsideTap: false),
+                content: [
+                    AnyComponentWithIdentity(id: "title", component: AnyComponent(AlertTitleComponent(title: "Disconnect All Apps?"))),
+                    AnyComponentWithIdentity(id: "text", component: AnyComponent(AlertTextComponent(content: .plain("These apps will lose access to your wallet. You can connect them again at any time."))))
+                ],
+                actions: [
+                    AlertScreen.Action(
+                        title: "Disconnect All",
+                        type: .destructive,
+                        action: { [weak self] in
+                            guard let self else {
+                                return
+                            }
+                            let ids = Set(connectedAppSessions(self.sessions ?? []).map(\.id))
+                            self.disconnect(ids: ids, all: true, toast: "All apps disconnected.") { [weak self] succeeded in
+                                if succeeded {
+                                    self?.dismissAllAppsAlert()
+                                }
+                            }
+                        },
+                        autoDismiss: false,
+                        isEnabled: enabled,
+                        progress: progress.get()
+                    ),
+                    AlertScreen.Action(title: "Cancel", action: {}, isEnabled: enabled)
+                ]
+            )
+            self.allAppsAlert = alert
+            self.allAppsProgress = progress
+            alert.dismissed = { [weak self, weak alert] _ in
+                guard let self, self.allAppsAlert === alert else {
+                    return
+                }
+                self.allAppsAlert = nil
+                self.allAppsProgress = nil
+                self.isDismissingAlert = false
+                self.scheduleReconciliation()
+            }
+            controller.present(alert, in: .window(.root))
+        }
+
+        private func dismissAllAppsAlert() {
+            guard !self.isDismissingAlert, let alert = self.allAppsAlert else {
+                return
+            }
+            self.isDismissingAlert = true
+            alert.dismiss(completion: { [weak self, weak alert] in
+                guard let self else {
+                    return
+                }
+                if self.allAppsAlert === alert {
+                    self.allAppsAlert = nil
+                    self.allAppsProgress = nil
+                }
+                self.isDismissingAlert = false
+                self.scheduleReconciliation()
+            })
+        }
+
+        private func disconnect(ids: Set<String>, all: Bool, toast: String, completion: @escaping (Bool) -> Void) {
+            guard !self.isDisconnecting, !ids.isEmpty, let component = self.component else {
+                completion(false)
+                return
+            }
+            let operationId = UUID()
+            self.operationId = operationId
+            self.operationSessionIds = ids
+            self.operationToast = toast
+            self.operationCompletion = completion
+            self.allAppsProgress?.set(true)
+            self.environment?.controller()?.view.disablesInteractiveModalDismiss = true
+            self.state?.updated(transition: .easeInOut(duration: 0.2))
+
+            let operation: Signal<Void, NoError>
+            if all {
+                operation = component.walletContext.disconnectAllTonConnectSessions()
+            } else if let id = ids.first {
+                operation = component.walletContext.disconnectTonConnectSession(id: id)
+            } else {
+                return
+            }
+            self.operationDisposable.set((operation
+            |> mapToSignal { component.walletContext.tonConnectState |> take(1) }
+            |> deliverOnMainQueue).start(next: { [weak self] tonConnectState in
+                guard let self, self.operationId == operationId, self.component?.walletContext === component.walletContext else {
+                    return
+                }
+                self.sessions = tonConnectState.sessions
+                // NoError only means that the command returned. Check the actual session state.
+                if !self.completeAcceptedDisconnect(sessions: tonConnectState.sessions) {
+                    self.completeDisconnect(succeeded: false)
+                    // Storage failures are already presented by the account's Ton Connect coordinator.
+                    if !tonConnectState.sessions.contains(where: { ids.contains($0.id) && $0.error == .storageUnavailable }) {
+                        self.presentDisconnectError(all: all)
+                    }
+                }
+            }))
+        }
+
+        @discardableResult
+        private func completeAcceptedDisconnect(sessions: [WalletContext.TonConnectSession]) -> Bool {
+            guard self.operationId != nil else {
+                return false
+            }
+            let accepted = self.operationSessionIds.allSatisfy { id in
+                guard let session = sessions.first(where: { $0.id == id }) else {
+                    return true
+                }
+                return session.status == .disconnecting
+            }
+            if accepted {
+                self.completeDisconnect(succeeded: true)
+            }
+            return accepted
+        }
+
+        private func completeDisconnect(succeeded: Bool) {
+            let completion = self.operationCompletion
+            self.operationCompletion = nil
+            self.operationId = nil
+            self.operationSessionIds.removeAll()
+            self.allAppsProgress?.set(false)
+            self.environment?.controller()?.view.disablesInteractiveModalDismiss = false
+            if succeeded {
+                self.pendingToast = self.operationToast
+            }
+            self.operationToast = nil
+            self.state?.updated(transition: .easeInOut(duration: 0.25))
+            completion?(succeeded)
+            self.scheduleReconciliation()
+        }
+
+        private func presentDisconnectError(all: Bool) {
+            guard let component = self.component, let controller = self.environment?.controller() else {
+                return
+            }
+            //TODO:localize
+            let text = all ? "Unable to disconnect these apps. Please try again." : "Unable to disconnect this app. Please try again."
+            controller.present(AlertScreen(
+                context: component.context,
+                content: [AnyComponentWithIdentity(id: "text", component: AnyComponent(AlertTextComponent(content: .plain(text))))],
+                actions: [AlertScreen.Action(title: "OK", action: {})]
+            ), in: .window(.root))
+        }
+
+        func update(component: WalletAppsScreenComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<EnvironmentType>, transition: ComponentTransition) -> CGSize {
+            self.isUpdating = true
+            defer { self.isUpdating = false }
+            let environment = environment[EnvironmentType.self].value
+            let previousContext = self.component?.walletContext
+            self.component = component
+            self.environment = environment
+            self.state = state
+            if previousContext !== component.walletContext {
+                self.operationDisposable.set(nil)
+                self.operationId = nil
+                self.operationSessionIds.removeAll()
+                self.operationToast = nil
+                environment.controller()?.view.disablesInteractiveModalDismiss = false
+                let completion = self.operationCompletion
+                self.operationCompletion = nil
+                completion?(false)
+                self.infoController?.dismissAnimated()
+                self.allAppsProgress?.set(false)
+                self.dismissAllAppsAlert()
+                self.pendingToast = nil
+                self.sessions = nil
+                let walletContext = component.walletContext
+                self.sessionsDisposable.set((walletContext.tonConnectState
+                |> deliverOnMainQueue).start(next: { [weak self] tonConnectState in
+                    guard let self, self.component?.walletContext === walletContext else {
+                        return
+                    }
+                    if self.sessions != tonConnectState.sessions {
+                        self.sessions = tonConnectState.sessions
+                        if !self.isUpdating {
+                            self.state?.updated(transition: .easeInOut(duration: 0.25))
+                        }
+                        self.scheduleReconciliation()
+                    }
+                    self.completeAcceptedDisconnect(sessions: tonConnectState.sessions)
+                }))
+            }
+
+            let theme = environment.theme
+            self.backgroundColor = theme.list.blocksBackgroundColor
+            let apps = connectedAppSessions(self.sessions ?? [])
+            let sideInset = 16.0 + max(environment.safeInsets.left, environment.safeInsets.right)
+            var items: [AnyComponentWithIdentity<Empty>] = []
+            if apps.count > 1 {
+                //TODO:localize
+                items.append(AnyComponentWithIdentity(id: "disconnectAll", component: AnyComponent(ListActionItemComponent(
+                    theme: theme,
+                    style: .glass,
+                    title: AnyComponent(MultilineTextComponent(
+                        text: .plain(NSAttributedString(string: "Disconnect All Apps", font: Font.regular(17.0), textColor: theme.list.itemDestructiveColor)),
+                        maximumNumberOfLines: 0
+                    )),
+                    leftIcon: .custom(AnyComponentWithIdentity(id: "icon", component: AnyComponent(BundleIconComponent(name: "Item List/Icons/Hand", tintColor: theme.list.itemDestructiveColor))), false),
+                    accessory: self.isDisconnecting ? .activity : nil,
+                    action: { [weak self] _ in self?.presentDisconnectAllAlert() }
+                ))))
+            }
+            for session in apps {
+                guard let manifest = session.manifest else {
+                    continue
+                }
+                items.append(AnyComponentWithIdentity(id: session.id, component: AnyComponent(ListActionItemComponent(
+                    theme: theme,
+                    style: .glass,
+                    title: AnyComponent(VStack<Empty>([
+                        AnyComponentWithIdentity(id: "name", component: AnyComponent(MultilineTextComponent(
+                            text: .plain(NSAttributedString(string: manifest.name, font: Font.semibold(17.0), textColor: theme.list.itemPrimaryTextColor)),
+                            maximumNumberOfLines: 1
+                        ))),
+                        AnyComponentWithIdentity(id: "domain", component: AnyComponent(MultilineTextComponent(
+                            text: .plain(NSAttributedString(string: manifest.domain, font: Font.regular(15.0), textColor: theme.list.itemSecondaryTextColor)),
+                            maximumNumberOfLines: 1
+                        )))
+                    ], alignment: .left, spacing: 2.0)),
+                    contentInsets: UIEdgeInsets(top: 10.0, left: 0.0, bottom: 10.0, right: 0.0),
+                    leftIcon: .custom(AnyComponentWithIdentity(id: "icon", component: AnyComponent(WalletConnectAppIconComponent(
+                        applicationName: manifest.name,
+                        url: manifest.iconUrl,
+                        size: 30.0,
+                        cornerRadius: 9.0
+                    ))), false),
+                    accessory: .arrow,
+                    action: { [weak self] _ in self?.openApp(session) }
+                ))))
+            }
+
+            self.section.parentState = state
+            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+            let headerFont = Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize)
+            //TODO:localize
+            let connectionsHeader = "Active Connections"
+            let sectionSize = self.section.update(
+                transition: transition,
+                component: AnyComponent(ListSectionComponent(
+                    theme: theme,
+                    style: .glass,
+                    header: AnyComponent(MultilineTextComponent(
+                        text: .plain(NSAttributedString(string: connectionsHeader.uppercased(), font: headerFont, textColor: theme.list.freeTextColor)),
+                        maximumNumberOfLines: 0
+                    )),
+                    footer: AnyComponent(MultilineTextComponent(
+                        text: .plain(NSAttributedString(string: "Connected apps can see your wallet address, balance and activity. They can't move funds without your approval.", font: Font.regular(13.0), textColor: theme.list.freeTextColor)),
+                        maximumNumberOfLines: 0
+                    )),
+                    items: items,
+                    isModal: true
+                )),
+                environment: {},
+                containerSize: CGSize(width: max(1.0, availableSize.width - sideInset * 2.0), height: 10000.0)
+            )
+            let contentY = environment.navigationHeight + 32.0
+            if let sectionView = self.section.view {
+                if sectionView.superview == nil {
+                    self.scrollView.addSubview(sectionView)
+                }
+                transition.setFrame(view: sectionView, frame: CGRect(origin: CGPoint(x: sideInset, y: contentY), size: sectionSize))
+            }
+            transition.setFrame(view: self.scrollView, frame: CGRect(origin: .zero, size: availableSize))
+            let contentSize = CGSize(width: availableSize.width, height: max(availableSize.height + 1.0, contentY + sectionSize.height + 24.0 + environment.safeInsets.bottom))
+            if self.scrollView.contentSize != contentSize {
+                self.scrollView.contentSize = contentSize
+            }
+            self.scrollView.verticalScrollIndicatorInsets = UIEdgeInsets(top: environment.navigationHeight, left: 0.0, bottom: environment.safeInsets.bottom, right: 0.0)
+            return availableSize
+        }
+    }
+
+    func makeView() -> View {
+        return View(frame: .zero)
+    }
+
+    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<EnvironmentType>, transition: ComponentTransition) -> CGSize {
+        return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
+    }
+}
+
+public final class WalletAppsScreen: ViewControllerComponentContainer {
+    private let context: AccountContext
+    fileprivate var hasAppeared = false
+    fileprivate var isFinishing = false
+
+    public init(context: AccountContext, walletContext: WalletContext) {
+        self.context = context
+        super.init(
+            context: context,
+            component: WalletAppsScreenComponent(context: context, walletContext: walletContext),
+            navigationBarAppearance: .default,
+            presentationMode: .modal,
+            theme: .default
+        )
+        //TODO:localize
+        self.title = "Connected Apps"
+        self.navigationPresentation = .modal
+        self.navigationItem.leftBarButtonItem = UIBarButtonItem(title: "___close", style: .plain, target: self, action: #selector(self.closePressed))
+        self.scrollToTop = { [weak self] in
+            (self?.node.hostView.componentView as? WalletAppsScreenComponent.View)?.scrollToTop()
+        }
+    }
+
+    required public init(coder aDecoder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    public override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        self.hasAppeared = true
+        (self.node.hostView.componentView as? WalletAppsScreenComponent.View)?.scheduleReconciliation()
+    }
+
+    @objc private func closePressed() {
+        guard (self.node.hostView.componentView as? WalletAppsScreenComponent.View)?.isDisconnecting != true else {
+            return
+        }
+        self.finish(toast: nil)
+    }
+
+    fileprivate func finish(toast: String?) {
+        guard !self.isFinishing else {
+            return
+        }
+        self.isFinishing = true
+        let context = self.context
+        if let navigationController = self.navigationController as? NavigationController,
+           let index = navigationController.viewControllers.firstIndex(where: { $0 === self }) {
+            let previousController = navigationController.viewControllers.prefix(upTo: index).last as? ViewController
+            navigationController.setViewControllers(navigationController.viewControllers.filter { $0 !== self }, animated: true, completion: { [weak previousController] in
+                if let toast, let previousController {
+                    presentDisconnectedOverlay(context: context, controller: previousController, text: toast)
+                }
+            })
+        } else {
+            self.dismiss()
+        }
+    }
+}

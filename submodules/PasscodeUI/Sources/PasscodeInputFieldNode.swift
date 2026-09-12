@@ -145,6 +145,7 @@ public final class PasscodeInputFieldNode: ASDisplayNode, UITextFieldDelegate {
     private var validLayout: (CGSize, CGFloat)?
     
     public var complete: ((String) -> Void)?
+    var isInputEnabled = true
     
     public var text: String {
         return self.textFieldNode.textField.text ?? ""
@@ -357,6 +358,7 @@ public final class PasscodeInputFieldNode: ASDisplayNode, UITextFieldDelegate {
     }
     
     public func textField(_ textField: UITextField, shouldChangeCharactersIn range: NSRange, replacementString string: String) -> Bool {
+        guard self.isInputEnabled else { return false }
         let currentText = textField.text ?? ""
         let text = (currentText as NSString).replacingCharacters(in: range, with: string)
         if let maxLength = self.fieldType.maxLength, text.count > maxLength {

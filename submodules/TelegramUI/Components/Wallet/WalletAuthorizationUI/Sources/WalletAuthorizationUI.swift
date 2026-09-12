@@ -41,11 +41,18 @@ private final class WalletAuthorizedOperation<Value>: Disposable {
     }
 
     func dispose() {
+        guard !self.isDisposed else { return }
         self.isDisposed = true
         self.initialAuthorizationDisposable.dispose()
         self.authorizationRequestDisposable.dispose()
         self.operationDisposable.dispose()
         self.passwordController?.dismiss(completion: nil)
+    }
+
+    private func cancel() {
+        guard !self.isDisposed else { return }
+        self.dispose()
+        self.failed(.authorizationCancelled)
     }
 
     private func resolveInitialAuthorization() {
@@ -192,7 +199,7 @@ private final class WalletAuthorizedOperation<Value>: Disposable {
             content: content,
             actions: [
                 .init(title: "Cancel", action: { [weak self] in
-                    self?.failed(.authorizationCancelled)
+                    self?.cancel()
                 }),
                 .init(
                     title: "Continue",
@@ -209,15 +216,7 @@ private final class WalletAuthorizedOperation<Value>: Disposable {
             )
         )
         controller.dismissed = { [weak self] byOutsideTap in
-            if byOutsideTap {
-                let _ = (progress.get()
-                |> take(1)).start(next: { [weak self] inProgress in
-                    guard !inProgress else {
-                        return
-                    }
-                    self?.failed(.authorizationCancelled)
-                })
-            }
+            if byOutsideTap { self?.cancel() }
         }
         submit = { [weak self] in
             guard let self else { return }

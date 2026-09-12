@@ -605,7 +605,19 @@ private final class QrCodeScanScreenNode: ViewControllerTracingNode, ASScrollVie
         self.view.insertSubview(self.previewView, at: 0)
         self.camera.startCapture()
         
-        let throttledSignal = self.camera.detectedCodes
+        var detectedCodes = self.camera.detectedCodes
+        #if DEBUG && targetEnvironment(simulator)
+        if let code = UIPasteboard.general.string?.trimmingCharacters(in: .whitespacesAndNewlines), !code.isEmpty {
+            detectedCodes = .single([CameraCode(type: .qr, message: code, corners: [
+                CGPoint(x: 0.3, y: 0.3),
+                CGPoint(x: 0.7, y: 0.3),
+                CGPoint(x: 0.7, y: 0.7),
+                CGPoint(x: 0.3, y: 0.7)
+            ])])
+        }
+        #endif
+
+        let throttledSignal = detectedCodes
         |> mapToThrottled { next -> Signal<[CameraCode], NoError> in
             return .single(next) |> then(.complete() |> delay(0.3, queue: Queue.concurrentDefaultQueue()))
         }

@@ -2,8 +2,11 @@ import Foundation
 import UIKit
 import Display
 import AccountContext
+import SwiftSignalKit
+import WalletContext
 import Markdown
 import TelegramPresentationData
+import TelegramStringFormatting
 import TextFormat
 import ComponentFlow
 import ViewControllerComponent
@@ -38,7 +41,7 @@ private struct WalletInfoContent: Equatable {
 
 private func walletInfoContent(
     mode: WalletInfoScreenMode,
-    tonUsdRate: Double?,
+    fiatState: WalletContext.FiatState?,
     dateTimeFormat: PresentationDateTimeFormat
 ) -> WalletInfoContent {
     switch mode {
@@ -92,13 +95,14 @@ private func walletInfoContent(
         //TODO:localize
         let title = "Gram"
         let text: String
-        if let tonUsdRate, tonUsdRate.isFinite, tonUsdRate > 0.0 {
-            let usdRateText = String(format: "%0.2f", tonUsdRate).replacingOccurrences(
-                of: ".",
-                with: dateTimeFormat.decimalSeparator
+        if let fiatState, let fiatRate = fiatState.selectedRate, fiatRate.unitsPerGram.isFinite, fiatRate.unitsPerGram > 0.0 {
+            let fiatRateText = formatFiatValue(
+                fiatRate.unitsPerGram,
+                currencySymbol: fiatState.selectedCurrency.symbol,
+                dateTimeFormat: dateTimeFormat
             )
             //TODO:localize
-            text = "The native currency of the TON blockchain. **1 Gram** currently equals **\(usdRateText)\u{00a0}USD**."
+            text = "The native currency of the TON blockchain. **1 Gram** currently equals **\(fiatRateText)**."
         } else {
             //TODO:localize
             text = "The native currency of the TON blockchain."
@@ -225,8 +229,12 @@ private final class WalletInfoSheetContent: CombinedComponent {
         private let getController: () -> ViewController?
         fileprivate let playRecoveryAnimation = ActionSlot<Void>()
         private var didPlayRecoveryAnimation = false
+        fileprivate var fiatState: WalletContext.FiatState?
+        private var walletStateDisposable: Disposable?
 
         init(
+            context: AccountContext,
+            mode: WalletInfoScreenMode,
             animateOut: ActionSlot<Action<()>>,
             getController: @escaping () -> ViewController?
         ) {
@@ -234,6 +242,22 @@ private final class WalletInfoSheetContent: CombinedComponent {
             self.getController = getController
 
             super.init()
+
+            if mode == .gram, let walletContext = context.walletContext {
+                self.fiatState = walletContext.stateValue.fiat
+                self.walletStateDisposable = (walletContext.state
+                |> deliverOnMainQueue).start(next: { [weak self] walletState in
+                    guard let self, self.fiatState != walletState.fiat else {
+                        return
+                    }
+                    self.fiatState = walletState.fiat
+                    self.updated(transition: .immediate)
+                })
+            }
+        }
+
+        deinit {
+            self.walletStateDisposable?.dispose()
         }
 
         func playRecoveryAnimationIfNeeded() {
@@ -277,7 +301,12 @@ private final class WalletInfoSheetContent: CombinedComponent {
     }
 
     func makeState() -> State {
-        return State(animateOut: self.animateOut, getController: self.getController)
+        return State(
+            context: self.context,
+            mode: self.mode,
+            animateOut: self.animateOut,
+            getController: self.getController
+        )
     }
 
     static var body: Body {
@@ -294,12 +323,9 @@ private final class WalletInfoSheetContent: CombinedComponent {
             let component = context.component
             let state = context.state
             let theme = environment.theme
-            let tonUsdRate = component.context.currentAppConfiguration.with { configuration -> Double? in
-                return configuration.data?["ton_usd_rate"] as? Double
-            }
             let content = walletInfoContent(
                 mode: component.mode,
-                tonUsdRate: tonUsdRate,
+                fiatState: state.fiatState,
                 dateTimeFormat: environment.dateTimeFormat
             )
 

@@ -76,7 +76,7 @@ public final class SearchBarPlaceholderContentView: UIView {
     
     public var onCancel: (() -> Void)?
     
-    init(fieldStyle: SearchBarStyle) {
+    init(fieldStyle: SearchBarStyle, hasOwnGlassContainer: Bool) {
         self.fieldStyle = fieldStyle
         
         self.fillBackgroundColor = UIColor.white
@@ -90,7 +90,7 @@ public final class SearchBarPlaceholderContentView: UIView {
             self.glassBackgroundContainerView = nil
             self.glassBackgroundView = nil
         case .inlineNavigation, .glass:
-            self.glassBackgroundContainerView = GlassBackgroundContainerView()
+            self.glassBackgroundContainerView = hasOwnGlassContainer ? GlassBackgroundContainerView() : nil
             self.glassBackgroundView = GlassBackgroundView()
         }
         
@@ -118,9 +118,13 @@ public final class SearchBarPlaceholderContentView: UIView {
         self.plainBackgroundView.addSubview(self.plainIconNode.view)
         self.plainBackgroundView.addSubview(self.plainLabelNode.view)
         
-        if let glassBackgroundContainerView = self.glassBackgroundContainerView, let glassBackgroundView = self.glassBackgroundView {
-            self.addSubview(glassBackgroundContainerView)
-            glassBackgroundContainerView.contentView.addSubview(glassBackgroundView)
+        if let glassBackgroundView = self.glassBackgroundView {
+            if let glassBackgroundContainerView = self.glassBackgroundContainerView {
+                self.addSubview(glassBackgroundContainerView)
+                glassBackgroundContainerView.contentView.addSubview(glassBackgroundView)
+            } else {
+                self.addSubview(glassBackgroundView)
+            }
             
             glassBackgroundView.contentView.addSubview(self.iconNode.view)
             glassBackgroundView.contentView.addSubview(self.labelNode.view)
@@ -314,12 +318,17 @@ public final class SearchBarPlaceholderContentView: UIView {
             transition.updateFrame(view: self.plainBackgroundView, frame: CGRect(origin: CGPoint(), size: CGSize(width: params.constrainedSize.width, height: height)))
         }
         
-        if let glassBackgroundContainerView = self.glassBackgroundContainerView, let glassBackgroundView = self.glassBackgroundView {
-            
-            transition.updatePosition(layer: glassBackgroundContainerView.layer, position: backgroundFrame.center)
-            transition.updateBounds(layer: glassBackgroundContainerView.layer, bounds: CGRect(origin: CGPoint(), size: backgroundFrame.size))
-            
-            transition.updatePosition(layer: glassBackgroundView.layer, position: CGRect(origin: CGPoint(), size: backgroundFrame.size).center)
+        if let glassBackgroundView = self.glassBackgroundView {
+            let backgroundAlphaView: UIView
+            if let glassBackgroundContainerView = self.glassBackgroundContainerView {
+                transition.updatePosition(layer: glassBackgroundContainerView.layer, position: backgroundFrame.center)
+                transition.updateBounds(layer: glassBackgroundContainerView.layer, bounds: CGRect(origin: CGPoint(), size: backgroundFrame.size))
+                transition.updatePosition(layer: glassBackgroundView.layer, position: CGRect(origin: CGPoint(), size: backgroundFrame.size).center)
+                backgroundAlphaView = glassBackgroundContainerView
+            } else {
+                transition.updatePosition(layer: glassBackgroundView.layer, position: backgroundFrame.center)
+                backgroundAlphaView = glassBackgroundView
+            }
             transition.updateBounds(layer: glassBackgroundView.layer, bounds: CGRect(origin: CGPoint(), size: backgroundFrame.size))
             
             var backgroundAlpha: CGFloat = 1.0
@@ -329,10 +338,10 @@ public final class SearchBarPlaceholderContentView: UIView {
             if !params.isActive && !params.displayGlassBackgroundWhenInactive {
                 backgroundAlpha = 0.0
             }
-            ComponentTransition(transition).setAlpha(view: glassBackgroundContainerView, alpha: backgroundAlpha)
+            ComponentTransition(transition).setAlpha(view: backgroundAlphaView, alpha: backgroundAlpha)
             let isDark = params.backgroundColor.hsb.b < 0.5
             if params.isActive || params.displayGlassBackgroundWhenInactive {
-                glassBackgroundContainerView.update(size: backgroundFrame.size, isDark: isDark, transition: ComponentTransition(transition))
+                self.glassBackgroundContainerView?.update(size: backgroundFrame.size, isDark: isDark, transition: ComponentTransition(transition))
                 glassBackgroundView.update(size: backgroundFrame.size, cornerRadius: backgroundFrame.height * 0.5, isDark: isDark, tintColor: .init(kind: params.preferClearGlass ? .clear : .panel), isInteractive: true, transition: ComponentTransition(transition))
             }
             
@@ -496,9 +505,9 @@ public class SearchBarPlaceholderNode: ASDisplayNode {
     private var currentLayoutHeight: CGFloat?
     private var isTakenOut: Bool = false
     
-    public init(fieldStyle: SearchBarStyle = .legacy) {
+    public init(fieldStyle: SearchBarStyle = .legacy, hasOwnGlassContainer: Bool = true) {
         self.containerView = UIView()
-        self.contentView = SearchBarPlaceholderContentView(fieldStyle: fieldStyle)
+        self.contentView = SearchBarPlaceholderContentView(fieldStyle: fieldStyle, hasOwnGlassContainer: hasOwnGlassContainer)
         
         super.init()
         

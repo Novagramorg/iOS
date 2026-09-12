@@ -34,6 +34,7 @@ swift_library(
         "//submodules/TelegramUI/Components/PlainButtonComponent",
         "//submodules/QrCodeUI",
         "//submodules/WalletContext",
+        "//submodules/PasscodeCore",
         "//submodules/TelegramUI/Components/Wallet/WalletAuthorizationUI",
         "//submodules/UndoUI",
     ],

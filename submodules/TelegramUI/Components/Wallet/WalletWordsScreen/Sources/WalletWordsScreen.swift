@@ -493,18 +493,22 @@ public final class WalletWordsScreen: ViewControllerComponentContainer {
     private let completion: (() -> Void)?
     private let displayedAt = Date()
     private let idleTimerExtensionDisposable = MetaDisposable()
+    private let backgroundOrLockDisposable = MetaDisposable()
+    private var pendingAutomaticDismissal = false
+    private var automaticDismissalScheduled = false
     private var isVerifying = false
 
-    public convenience init(context: AccountContext, words: [String], verify: Bool, completion: (() -> Void)?) {
+    public convenience init(context: AccountContext, words: [String], verify: Bool, dismissOnBackgroundOrLock: Bool = false, completion: (() -> Void)?) {
         self.init(
             context: context,
             words: words,
             mode: verify ? .verify : .view,
+            dismissOnBackgroundOrLock: dismissOnBackgroundOrLock,
             completion: completion
         )
     }
 
-    public init(context: AccountContext, words: [String], mode: WalletWordsScreenMode, completion: (() -> Void)?) {
+    public init(context: AccountContext, words: [String], mode: WalletWordsScreenMode, dismissOnBackgroundOrLock: Bool = false, completion: (() -> Void)?) {
         self.context = context
         self.words = words
         self.mode = mode
@@ -523,6 +527,19 @@ public final class WalletWordsScreen: ViewControllerComponentContainer {
         self.blocksBackgroundWhenInOverlay = true
         
         self.idleTimerExtensionDisposable.set(context.sharedContext.applicationBindings.pushIdleTimerExtension())
+        if dismissOnBackgroundOrLock {
+            self.backgroundOrLockDisposable.set((combineLatest(
+                context.sharedContext.applicationBindings.applicationInForeground,
+                context.sharedContext.appLockContext.isPasscodeLocked
+            )
+            |> filter { foreground, locked in !foreground || locked }
+            |> take(1)
+            |> deliverOnMainQueue).start(next: { [weak self] _ in
+                guard let self else { return }
+                self.pendingAutomaticDismissal = true
+                self.scheduleAutomaticDismissal()
+            }))
+        }
     }
 
     required public init(coder aDecoder: NSCoder) {
@@ -530,11 +547,33 @@ public final class WalletWordsScreen: ViewControllerComponentContainer {
     }
     
     deinit {
-        self.idleTimerExtensionDisposable.dispose()   
+        self.idleTimerExtensionDisposable.dispose()
+        self.backgroundOrLockDisposable.dispose()
+    }
+
+    override public func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        self.scheduleAutomaticDismissal()
+    }
+
+    private func scheduleAutomaticDismissal() {
+        guard self.pendingAutomaticDismissal, !self.automaticDismissalScheduled else { return }
+        self.automaticDismissalScheduled = true
+        
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.automaticDismissalScheduled = false
+            if let navigation = self.navigationController as? NavigationController {
+                guard navigation.viewControllers.contains(where: { $0 === self }) else { return }
+            } else if self.presentingViewController == nil {
+                return
+            }
+            self.dismiss(animated: false)
+        }
     }
 
     fileprivate func complete() {
-        guard !self.words.isEmpty, !self.isVerifying else {
+        guard !self.pendingAutomaticDismissal, !self.words.isEmpty, !self.isVerifying else {
             return
         }
         if (self.mode == .replacement || self.mode == .backupDisable), Date().timeIntervalSince(self.displayedAt) < 10.0 {
