@@ -51,6 +51,20 @@ public enum DeviceMetrics: CaseIterable, Equatable {
     
     public static let performance = Performance()
 
+    private static let currentModelIdentifier: String? = {
+        #if targetEnvironment(simulator)
+        return ProcessInfo.processInfo.environment["SIMULATOR_MODEL_IDENTIFIER"]
+        #else
+        var systemInfo = utsname()
+        guard uname(&systemInfo) == 0 else {
+            return nil
+        }
+        return withUnsafeBytes(of: &systemInfo.machine) { bytes in
+            return String(decoding: bytes.prefix(while: { $0 != 0 }), as: UTF8.self)
+        }
+        #endif
+    }()
+
     public static var allCases: [DeviceMetrics] {
         return [
             .iPhone4,
@@ -86,12 +100,26 @@ public enum DeviceMetrics: CaseIterable, Equatable {
     }
     
     public init(screenSize: CGSize, scale: CGFloat, statusBarHeight: CGFloat, onScreenNavigationHeight: CGFloat?) {
+        self.init(screenSize: screenSize, scale: scale, statusBarHeight: statusBarHeight, onScreenNavigationHeight: onScreenNavigationHeight, modelIdentifier: DeviceMetrics.currentModelIdentifier)
+    }
+
+    init(screenSize: CGSize, scale: CGFloat, statusBarHeight: CGFloat, onScreenNavigationHeight: CGFloat?, modelIdentifier: String?) {
         var screenSize = screenSize
         if screenSize.width > screenSize.height {
             screenSize = CGSize(width: screenSize.height, height: screenSize.width)
         }
         
         let additionalSize = CGSize(width: screenSize.width, height: screenSize.height + 20.0)
+        if let modelIdentifier = modelIdentifier {
+            for device in DeviceMetrics.profiles(for: modelIdentifier) {
+                let deviceScale: CGFloat = device == .iPhoneXr ? 2.0 : 3.0
+                if scale == deviceScale && (device.screenSize == screenSize || device.screenSize == additionalSize) {
+                    self = device
+                    return
+                }
+            }
+        }
+
         for device in DeviceMetrics.allCases {
             if let _ = onScreenNavigationHeight, device.onScreenNavigationHeight(inLandscape: false, systemOnScreenNavigationHeight: nil) == nil {
                 if case .tablet = device.type {
@@ -129,6 +157,43 @@ public enum DeviceMetrics: CaseIterable, Equatable {
         
         self = .unknown(screenSize: screenSize, statusBarHeight: statusBarHeight, onScreenNavigationHeight: onScreenNavigationHeight, screenCornerRadius: screenCornerRadius)
     }
+
+    private static func profiles(for modelIdentifier: String) -> [DeviceMetrics] {
+        switch modelIdentifier {
+            case "iPhone10,3", "iPhone10,6", "iPhone11,2", "iPhone12,3":
+                return [.iPhoneX]
+            case "iPhone11,4", "iPhone11,6", "iPhone12,5":
+                return [.iPhoneXSMax]
+            case "iPhone11,8", "iPhone12,1":
+                return [.iPhoneXr]
+            case "iPhone13,1":
+                return [.iPhone12Mini]
+            case "iPhone13,2", "iPhone13,3":
+                return [.iPhone12]
+            case "iPhone13,4":
+                return [.iPhone12ProMax]
+            case "iPhone14,4":
+                return [.iPhone13Mini]
+            case "iPhone14,5", "iPhone14,7", "iPhone17,5", "iPhone18,5":
+                return [.iPhone13]
+            case "iPhone14,2":
+                return [.iPhone13Pro]
+            case "iPhone14,3", "iPhone14,8":
+                return [.iPhone13ProMax]
+            case "iPhone15,2", "iPhone15,4", "iPhone16,1", "iPhone17,3":
+                return [.iPhone14Pro, .iPhone14ProZoomed]
+            case "iPhone15,3", "iPhone15,5", "iPhone16,2", "iPhone17,4":
+                return [.iPhone14ProMax, .iPhone14ProMaxZoomed]
+            case "iPhone17,1", "iPhone18,1", "iPhone18,3":
+                return [.iPhone16Pro]
+            case "iPhone17,2", "iPhone18,2":
+                return [.iPhone16ProMax]
+            case "iPhone18,4":
+                return [.iPhoneAir]
+            default:
+                return []
+        }
+    }
     
     public var type: DeviceType {
         switch self {
@@ -156,7 +221,7 @@ public enum DeviceMetrics: CaseIterable, Equatable {
             case .iPhoneXSMax, .iPhoneXr:
                 return CGSize(width: 414.0, height: 896.0)
             case .iPhone12Mini:
-                return CGSize(width: 360.0, height: 780.0)
+                return CGSize(width: 375.0, height: 812.0)
             case .iPhone12:
                 return CGSize(width: 390.0, height: 844.0)
             case .iPhone12ProMax:
@@ -202,6 +267,51 @@ public enum DeviceMetrics: CaseIterable, Equatable {
         }
     }
     
+    public var cutoutFrame: CGRect? {
+        let size: CGSize
+        let top: CGFloat
+        switch self {
+            case .iPhoneX, .iPhoneXSMax:
+                size = CGSize(width: 223.0, height: 30.0)
+                top = 0.0
+            case .iPhoneXr:
+                size = CGSize(width: 246.0, height: 33.0)
+                top = 0.0
+            case .iPhone12Mini:
+                size = CGSize(width: 242.0, height: 34.0)
+                top = 0.0
+            case .iPhone12, .iPhone12ProMax:
+                size = CGSize(width: 222.0, height: 32.0)
+                top = 0.0
+            case .iPhone13Mini:
+                size = CGSize(width: 189.0, height: 38.0)
+                top = 0.0
+            case .iPhone13, .iPhone13Pro, .iPhone13ProMax:
+                size = CGSize(width: 176.0, height: 34.0)
+                top = 0.0
+            case .iPhone14Pro, .iPhone14ProMax:
+                size = CGSize(width: 126.0, height: 112.0 / 3.0)
+                top = 11.0
+            case .iPhone16Pro, .iPhone16ProMax:
+                size = CGSize(width: 126.0, height: 112.0 / 3.0)
+                top = 41.0 / 3.0
+            case .iPhoneAir:
+                size = CGSize(width: 126.0, height: 112.0 / 3.0)
+                top = 59.0 / 3.0
+            case .iPhone14ProZoomed, .iPhone14ProMaxZoomed:
+                let standardDevice: DeviceMetrics = self == .iPhone14ProZoomed ? .iPhone14Pro : .iPhone14ProMax
+                guard let standardFrame = standardDevice.cutoutFrame else {
+                    return nil
+                }
+                let factor = self.screenSize.width / standardDevice.screenSize.width
+                size = CGSize(width: standardFrame.width * factor, height: standardFrame.height * factor)
+                top = standardFrame.minY * factor
+            default:
+                return nil
+        }
+        return CGRect(x: (self.screenSize.width - size.width) / 2.0, y: top, width: size.width, height: size.height)
+    }
+
     public var screenCornerRadius: CGFloat {
         switch self {
             case .iPhoneX, .iPhoneXSMax:
