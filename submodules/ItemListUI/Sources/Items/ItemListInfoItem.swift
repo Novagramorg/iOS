@@ -87,6 +87,16 @@ public class InfoListItem: ListViewItem {
 }
 
 public class ItemListInfoItem: InfoListItem, ItemListItem {
+    override public var neighborDescriptor: AnyEquatable {
+        return AnyEquatable(ItemListItemNeighborDescriptor(
+            sectionId: self.sectionId,
+            isAlwaysPlain: self.isAlwaysPlain,
+            requestsNoInset: self.requestsNoInset,
+            isTextItem: false,
+            hasActiveRevealOptions: false
+        ))
+    }
+
     public let sectionId: ItemListSectionId
     
     public init(
