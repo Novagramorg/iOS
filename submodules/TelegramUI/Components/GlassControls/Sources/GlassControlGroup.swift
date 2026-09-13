@@ -74,19 +74,22 @@ public final class GlassControlGroupComponent: Component {
     public let background: Background
     public let items: [Item]
     public let minWidth: CGFloat
+    public let textHorizontalInset: CGFloat
 
     public init(
         theme: PresentationTheme,
         preferClearGlass: Bool,
         background: Background,
         items: [Item],
-        minWidth: CGFloat
+        minWidth: CGFloat,
+        textHorizontalInset: CGFloat = 10.0
     ) {
         self.theme = theme
         self.preferClearGlass = preferClearGlass
         self.background = background
         self.items = items
         self.minWidth = minWidth
+        self.textHorizontalInset = textHorizontalInset
     }
 
     public static func ==(lhs: GlassControlGroupComponent, rhs: GlassControlGroupComponent) -> Bool {
@@ -103,6 +106,9 @@ public final class GlassControlGroupComponent: Component {
             return false
         }
         if lhs.minWidth != rhs.minWidth {
+            return false
+        }
+        if lhs.textHorizontalInset != rhs.textHorizontalInset {
             return false
         }
         return true
@@ -205,7 +211,7 @@ public final class GlassControlGroupComponent: Component {
                     content = AnyComponent(MultilineTextComponent(
                         text: .plain(NSAttributedString(string: string, font: Font.medium(17.0), textColor: foregroundColor))
                     ))
-                    itemInsets.left = 10.0
+                    itemInsets.left = component.textHorizontalInset
                     itemInsets.right = itemInsets.left
                 case let .animation(name):
                     let playOnce: ActionSlot<Void>

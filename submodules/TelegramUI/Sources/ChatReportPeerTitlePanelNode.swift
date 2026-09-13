@@ -396,7 +396,7 @@ final class ChatReportPeerTitlePanelNode: ChatTitleAccessoryPanelNode {
                 let view = UIButton()
                 if case .setPhoto = button {
                     if view.image(for: []) == nil || themeUpdated {
-                        if let sourceImage = generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Camera"), color: interfaceState.theme.rootController.navigationBar.accentTextColor) {
+                        if let sourceImage = generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Camera"), color: interfaceState.theme.chat.inputPanel.panelControlColor) {
                             let image = generateImage(CGSize(width: sourceImage.size.width + 6.0, height: sourceImage.size.height), rotatedContext: { size, context in
                                 UIGraphicsPushContext(context)
                                 defer {
@@ -408,19 +408,19 @@ final class ChatReportPeerTitlePanelNode: ChatTitleAccessoryPanelNode {
                             })
                             
                             view.setImage(image?.withRenderingMode(.alwaysOriginal), for: [])
-                            view.setImage(generateTintedImage(image: image, color: interfaceState.theme.rootController.navigationBar.accentTextColor.withAlphaComponent(0.7))?.withRenderingMode(.alwaysOriginal), for: [.highlighted])
+                            view.setImage(generateTintedImage(image: image, color: interfaceState.theme.chat.inputPanel.panelControlColor.withAlphaComponent(0.7))?.withRenderingMode(.alwaysOriginal), for: [.highlighted])
                         }
                     }
                 }
                 view.setTitle(button.title(strings: interfaceState.strings), for: [])
-                view.titleLabel?.font = Font.regular(16.0)
+                view.titleLabel?.font = Font.regular(17.0)
                 switch button {
                 case .block, .reportSpam, .reportUserSpam:
                     view.setTitleColor(interfaceState.theme.chat.inputPanel.panelControlDestructiveColor, for: [])
                     view.setTitleColor(interfaceState.theme.chat.inputPanel.panelControlDestructiveColor.withAlphaComponent(0.7), for: [.highlighted])
                 default:
-                    view.setTitleColor(interfaceState.theme.rootController.navigationBar.accentTextColor, for: [])
-                    view.setTitleColor(interfaceState.theme.rootController.navigationBar.accentTextColor.withAlphaComponent(0.7), for: [.highlighted])
+                    view.setTitleColor(interfaceState.theme.chat.inputPanel.panelControlColor, for: [])
+                    view.setTitleColor(interfaceState.theme.chat.inputPanel.panelControlColor.withAlphaComponent(0.7), for: [.highlighted])
                 }
                 view.addTarget(self, action: #selector(self.buttonPressed(_:)), for: [.touchUpInside])
                 self.view.addSubview(view)

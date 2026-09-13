@@ -31,6 +31,10 @@ public func avatarPlaceholderFont(size: CGFloat) -> UIFont {
     return Font.with(size: size, design: .round, weight: .bold)
 }
 
+public func generateDeletedAccountAvatarImage(size: CGSize) -> UIImage? {
+    return generateAvatarImage(size: size, icon: deletedIcon, iconScale: size.width / 60.0, color: .blue, customColors: AvatarNode.grayscaleColors)
+}
+
 public enum AvatarNodeClipStyle {
     case none
     case round
