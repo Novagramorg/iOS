@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 import Display
 import AsyncDisplayKit
@@ -823,7 +824,7 @@ class ItemListStickerPackItemNode: ItemListRevealOptionsItemNode {
                                 if let current = strongSelf.animationNode {
                                     animationNode = current
                                 } else {
-                                    animationNode = DefaultAnimatedStickerNodeImpl()
+                                    animationNode = DefaultAnimatedStickerNodeImpl(lottieSettings: item.context.lottieRenderingSettings)
                                     animationNode.started = { [weak self] in
                                         self?.removePlaceholder(animated: false)
                                     }

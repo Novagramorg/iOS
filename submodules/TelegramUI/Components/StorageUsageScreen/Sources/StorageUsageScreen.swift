@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 import Display
 import AsyncDisplayKit
@@ -2275,7 +2276,7 @@ final class StorageUsageScreenComponent: Component {
                     clearingNode = current
                 } else {
                     animateIn = true
-                    clearingNode = StorageUsageClearProgressOverlayNode(presentationData: component.context.sharedContext.currentPresentationData.with { $0 })
+                    clearingNode = StorageUsageClearProgressOverlayNode(presentationData: component.context.sharedContext.currentPresentationData.with { $0 }, lottieSettings: component.context.lottieRenderingSettings)
                     self.clearingNode = clearingNode
                     self.addSubnode(clearingNode)
                     self.clearingDisplayTimestamp = CFAbsoluteTimeGetCurrent()
@@ -3568,12 +3569,12 @@ private class StorageUsageClearProgressOverlayNode: ASDisplayNode {
     
     private var validLayout: (CGSize, CGFloat)?
     
-    init(presentationData: PresentationData) {
+    init(presentationData: PresentationData, lottieSettings: LottieRenderingSettings) {
         self.presentationData = presentationData
         
         self.blurredView = BlurredBackgroundView(color: presentationData.theme.list.plainBackgroundColor.withMultipliedAlpha(0.7), enableBlur: true)
         
-        self.animationNode = DefaultAnimatedStickerNodeImpl()
+        self.animationNode = DefaultAnimatedStickerNodeImpl(lottieSettings: lottieSettings)
         self.animationNode.setup(source: AnimatedStickerNodeLocalFileSource(name: "ClearCache"), width: 256, height: 256, playbackMode: .loop, mode: .direct(cachePathPrefix: nil))
         self.animationNode.visibility = true
         

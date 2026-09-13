@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 import Display
 import AccountContext
@@ -191,7 +192,8 @@ public final class WalletCollectibleHeaderComponent: Component {
                         content: lottieContent,
                         startingPosition: .begin,
                         size: mediaSize,
-                        loop: false
+                        loop: false,
+                        lottieSettings: component.context.lottieRenderingSettings
                     )),
                     environment: {},
                     containerSize: mediaSize

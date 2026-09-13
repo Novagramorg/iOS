@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 import AsyncDisplayKit
 import TelegramPresentationData
@@ -284,7 +285,8 @@ private final class BadgeComponent: Component {
                     size: badgeShapeSize,
                     renderingScale: UIScreenScale,
                     loop: false,
-                    playOnce: nil
+                    playOnce: nil,
+                    lottieSettings: .noAccountFallback
                 )),
                 environment: {},
                 containerSize: badgeShapeSize
@@ -2734,7 +2736,8 @@ private final class GiftAuctionBidScreenComponent: Component {
                             ),
                             color: environment.theme.chat.inputPanel.panelControlColor,
                             size: CGSize(width: 34.0, height: 34.0),
-                            playOnce: self.moreButtonPlayOnce
+                            playOnce: self.moreButtonPlayOnce,
+                            lottieSettings: component.context.lottieRenderingSettings
                         )
                     )),
                     action: { [weak self] view in

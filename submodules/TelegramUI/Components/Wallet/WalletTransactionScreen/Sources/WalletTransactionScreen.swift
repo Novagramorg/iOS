@@ -2668,7 +2668,8 @@ private final class WalletTransactionContentComponent: Component {
                                 ),
                                 color: commentEncrypted ? theme.actionSheet.controlAccentColor : theme.actionSheet.inputPlaceholderColor,
                                 startingPosition: .end,
-                                size: CGSize(width: 24.0, height: 24.0)
+                                size: CGSize(width: 24.0, height: 24.0),
+                                lottieSettings: component.context.lottieRenderingSettings
                             )),
                             minSize: commentEncryptionButtonSize,
                             action: { [weak self] in

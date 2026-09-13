@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 import Display
 import AsyncDisplayKit
@@ -791,7 +792,7 @@ private func mappedInsertEntries(context: AccountContext, nodeInteraction: ChatL
         case let .ArchiveIntro(presentationData):
             return ListViewInsertItem(index: entry.index, previousIndex: entry.previousIndex, item: ChatListArchiveInfoItem(theme: presentationData.theme, strings: presentationData.strings), directionHint: entry.directionHint)
         case let .EmptyIntro(presentationData):
-            return ListViewInsertItem(index: entry.index, previousIndex: entry.previousIndex, item: ChatListEmptyInfoItem(theme: presentationData.theme, strings: presentationData.strings), directionHint: entry.directionHint)
+            return ListViewInsertItem(index: entry.index, previousIndex: entry.previousIndex, item: ChatListEmptyInfoItem(theme: presentationData.theme, strings: presentationData.strings, lottieSettings: context.lottieRenderingSettings), directionHint: entry.directionHint)
         case let .SectionHeader(presentationData, displayHide):
             return ListViewInsertItem(index: entry.index, previousIndex: entry.previousIndex, item: ChatListSectionHeaderItem(theme: presentationData.theme, strings: presentationData.strings, hide: displayHide ? {
                 hideChatListContacts(context: context)
@@ -1107,7 +1108,7 @@ private func mappedUpdateEntries(context: AccountContext, nodeInteraction: ChatL
             case let .ArchiveIntro(presentationData):
                 return ListViewUpdateItem(index: entry.index, previousIndex: entry.previousIndex, item: ChatListArchiveInfoItem(theme: presentationData.theme, strings: presentationData.strings), directionHint: entry.directionHint)
             case let .EmptyIntro(presentationData):
-                return ListViewUpdateItem(index: entry.index, previousIndex: entry.previousIndex, item: ChatListEmptyInfoItem(theme: presentationData.theme, strings: presentationData.strings), directionHint: entry.directionHint)
+                return ListViewUpdateItem(index: entry.index, previousIndex: entry.previousIndex, item: ChatListEmptyInfoItem(theme: presentationData.theme, strings: presentationData.strings, lottieSettings: context.lottieRenderingSettings), directionHint: entry.directionHint)
             case let .SectionHeader(presentationData, displayHide):
                 return ListViewUpdateItem(index: entry.index, previousIndex: entry.previousIndex, item: ChatListSectionHeaderItem(theme: presentationData.theme, strings: presentationData.strings, hide: displayHide ? {
                     hideChatListContacts(context: context)

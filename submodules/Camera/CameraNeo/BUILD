@@ -58,7 +58,8 @@ swift_library(
         "//submodules/GZip",
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
         "//submodules/Utils/DeviceModel",
-        "//submodules/rlottie:RLottieBinding",
+        "//submodules/LottieBinding:LottieBinding",
+        "//submodules/LottieSettings:LottieSettings",
     ],
     visibility = [
         "//visibility:public",

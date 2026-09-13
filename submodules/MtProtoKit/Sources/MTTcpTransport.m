@@ -559,7 +559,7 @@ static const NSTimeInterval MTTcpTransportSleepWatchdogTimeout = 60.0;
             return;
         
         id<MTTransportDelegate> delegate = self.delegate;
-        if ([delegate respondsToSelector:@selector(transportUpdatedDataReceiveProgress:progressToken:packetLength:progress:)])
+        if ([delegate respondsToSelector:@selector(transportActivityUpdated:)])
             [delegate transportActivityUpdated:self];
     }];
 }

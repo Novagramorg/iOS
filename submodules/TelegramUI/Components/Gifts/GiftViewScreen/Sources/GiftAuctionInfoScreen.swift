@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 import Display
 import AsyncDisplayKit
@@ -279,7 +280,8 @@ private final class GiftAuctionInfoSheetContent: CombinedComponent {
                 color: theme.list.itemCheckColors.foregroundColor,
                 startingPosition: .begin,
                 size: CGSize(width: 28.0, height: 28.0),
-                playOnce: state.playButtonAnimation
+                playOnce: state.playButtonAnimation,
+                lottieSettings: context.component.context.lottieRenderingSettings
             ))))
             buttonTitle.append(AnyComponentWithIdentity(id: 1, component: AnyComponent(ButtonTextContentComponent(
                 text: strings.Gift_Auction_Info_Understood,

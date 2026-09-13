@@ -4,6 +4,7 @@ import AsyncDisplayKit
 import Postbox
 import TelegramCore
 import SwiftSignalKit
+import WebProxyTransport
 import Display
 import TelegramPresentationData
 import TelegramCallsUI
@@ -310,6 +311,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
     private var invalidatedApsToken: Data?
     
     private let energyUsageAutomaticDisposable = MetaDisposable()
+    private var webProxyCarrierHost: WebProxyCarrierWindowHost?
     
     init(mainWindow: Window1?, sharedContainerPath: String, basePath: String, encryptionParameters: ValueBoxEncryptionParameters, accountManager: AccountManager<TelegramAccountManagerTypes>, appLockContext: AppLockContext, notificationController: NotificationContainerController?, applicationBindings: TelegramApplicationBindings, initialPresentationDataAndSettings: InitialPresentationDataAndSettings, networkArguments: NetworkInitializationArguments, hasInAppPurchases: Bool, rootPath: String, legacyBasePath: String?, apsNotificationToken: Signal<Data?, NoError>, voipNotificationToken: Signal<Data?, NoError>, firebaseSecretStream: Signal<[String: String], NoError>, setNotificationCall: @escaping (PresentationCall?) -> Void, navigateToChat: @escaping (AccountRecordId, PeerId, MessageId?, Bool) -> Void, displayUpgradeProgress: @escaping (Float?) -> Void = { _ in }, appDelegate: AppDelegate?, testingEnvironment: Bool = false) {
         assert(Queue.mainQueue().isCurrent())
@@ -842,6 +844,10 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         })
         
         if let mainWindow = mainWindow, applicationBindings.isMainApp {
+            let webProxyCarrierHost = WebProxyCarrierWindowHost(containerView: mainWindow.hostView.containerView)
+            self.webProxyCarrierHost = webProxyCarrierHost
+            WebProxyTransport.shared.setViewHost(webProxyCarrierHost)
+
             let callManager = PresentationCallManagerImpl(accountManager: self.accountManager, getDeviceAccessData: { [self] in
                 return (self.currentPresentationData.with { $0 }, { [weak self] c, a in
                     self?.presentGlobalController(c, a)

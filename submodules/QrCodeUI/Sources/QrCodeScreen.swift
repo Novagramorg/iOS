@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 import Display
 import ComponentFlow
@@ -509,9 +510,10 @@ public final class QrCodeScreen: ViewControllerComponentContainer {
                         link += "&pass=\(password.addingPercentEncoding(withAllowedCharacters: CharacterSet.urlQueryValueAllowed) ?? "")"
                     }
                 case .web:
-                    // No t.me link scheme is defined for a web proxy; a proxy/socks link would not work.
-                    // // TODO(web-proxy): confirm intended UX; stub added to restore the build after the web-proxy merge.
-                    link = ""
+                    // Always the t.me form, regardless of `externalLink`: webProxySettingsLink
+                    // only builds that one, and parseWebProxySettingsLink accepts it alongside
+                    // tg://webproxy. The public frontend has no /webproxy route yet.
+                    link = webProxySettingsLink(server) ?? ""
                 }
                 return link
             }
@@ -671,7 +673,8 @@ private final class QrCodeComponent: Component {
                     transition: .immediate,
                     component: AnyComponent(LottieComponent(
                         content: LottieComponent.AppBundleContent(name: "PlaneLogo"),
-                        loop: true
+                        loop: true,
+                        lottieSettings: .noAccountFallback
                     )),
                     environment: {},
                     containerSize: cutoutFrame.size

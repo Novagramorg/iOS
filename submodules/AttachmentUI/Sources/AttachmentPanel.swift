@@ -301,7 +301,8 @@ private final class AttachButtonComponent: CombinedComponent {
                         ),
                         tintColor: tintColor,
                         isAnimating: component.isSelected,
-                        size: CGSize(width: iconSize.width, height: iconSize.height)
+                        size: CGSize(width: iconSize.width, height: iconSize.height),
+                        lottieSettings: component.context.lottieRenderingSettings
                     ),
                     availableSize: iconSize,
                     transition: context.transition

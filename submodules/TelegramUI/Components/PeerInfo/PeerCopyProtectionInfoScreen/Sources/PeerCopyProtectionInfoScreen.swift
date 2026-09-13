@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 import Display
 import AsyncDisplayKit
@@ -116,7 +117,8 @@ private final class PeerCopyProtectionInfoSheetContent: CombinedComponent {
                 component: LottieComponent(
                     content: LottieComponent.AppBundleContent(name: "HandRestrict"),
                     loop: false,
-                    playOnce: state.playAnimation
+                    playOnce: state.playAnimation,
+                    lottieSettings: component.context.lottieRenderingSettings
                 ),
                 availableSize: CGSize(width: 120.0, height: 120.0),
                 transition: context.transition
@@ -242,7 +244,8 @@ private final class PeerCopyProtectionInfoSheetContent: CombinedComponent {
                                     content: LottieComponent.AppBundleContent(name: "premium_unlock"),
                                     color: theme.list.itemCheckColors.foregroundColor,
                                     size: CGSize(width: 30.0, height: 30.0),
-                                    playOnce: state.playButtonAnimation
+                                    playOnce: state.playButtonAnimation,
+                                    lottieSettings: component.context.lottieRenderingSettings
                                 )
                             )
                         ),

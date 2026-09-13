@@ -144,8 +144,8 @@ public final class WalletCardComponent: Component {
         private var currentCardY = 0.0
         private var currentDepthX = 0.0
         private var currentDepthY = 0.0
-        private var currentHighlightX = 0.10
-        private var currentHighlightY = -0.45
+        private var currentHighlightX = 0.0
+        private var currentHighlightY = 0.0
         private var currentScale = 1.0
         private var targetScale = 1.0
         private var idleTiltX = 0.0
@@ -158,6 +158,12 @@ public final class WalletCardComponent: Component {
 
         override public init(frame: CGRect) {
             super.init(frame: frame)
+
+            let initialIdleTilt = Self.idleTilt(at: self.elapsedTime)
+            self.idleTiltX = initialIdleTilt.x
+            self.idleTiltY = initialIdleTilt.y
+            self.currentHighlightX = initialIdleTilt.x
+            self.currentHighlightY = initialIdleTilt.y
 
             self.shadowView.isUserInteractionEnabled = false
             self.shadowView.backgroundColor = .clear
@@ -659,6 +665,13 @@ public final class WalletCardComponent: Component {
             return size
         }
 
+        private static func idleTilt(at time: Double) -> (x: Double, y: Double) {
+            return (
+                x: 0.013 * sin(time * 0.50),
+                y: 0.022 * sin(time * 0.37 + 1.6)
+            )
+        }
+
         private func displayLinkDidFire(_ frameDuration: CGFloat) {
             let deltaTime = min(max(Double(frameDuration), 0.0), 1.0 / 30.0)
             guard deltaTime > 0.0 else {
@@ -672,8 +685,7 @@ public final class WalletCardComponent: Component {
                 self.panRoll *= decay
             }
 
-            let idleX = 0.013 * sin(self.elapsedTime * 0.50)
-            let idleY = 0.022 * sin(self.elapsedTime * 0.37 + 1.6)
+            let (idleX, idleY) = Self.idleTilt(at: self.elapsedTime)
             self.idleTiltX = idleX
             self.idleTiltY = idleY
 

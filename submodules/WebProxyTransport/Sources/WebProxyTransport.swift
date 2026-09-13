@@ -11,6 +11,7 @@ public enum WebProxyCarrierStatus: Equatable {
 
 public protocol WebProxyCarrier: AnyObject {
     func apply(configuration: WebProxyConfiguration?)
+    func setViewHost(_ host: WebProxyCarrierViewHost?)
     func makeConnectionInterface(delegate: MTTcpConnectionInterfaceDelegate, delegateQueue: DispatchQueue) -> MTTcpConnectionInterface
     var statusSignal: Signal<WebProxyCarrierStatus, NoError> { get }
 }
@@ -43,6 +44,9 @@ public final class WebProxyTransport: WebProxyCarrier {
     private let statusPromise = ValuePromise<WebProxyCarrierStatus>(.inactive, ignoreRepeated: true)
 
     private var configuration: WebProxyConfiguration?
+    private var demand = WebProxyDemandSet()
+    /// Main-queue confined; never touched from `self.queue`.
+    private let viewAttachment = WebProxyViewAttachment()
     private var carrier: WebProxyWebViewCarrier?
     private var carrierState: CarrierState = .inactive
     private var generation: UInt64 = 0
@@ -76,11 +80,36 @@ public final class WebProxyTransport: WebProxyCarrier {
                 WebProxyDiagnostics.info("configuration applied")
             }
             self.configuration = configuration
-            self.stopCarrier(reportInactive: configuration == nil)
-            if configuration != nil {
+            self.stopCarrier(reportInactive: false)
+            self.retryAttempt = 0
+            self.updateCarrierActivation()
+        }
+    }
+
+    public func setViewHost(_ host: WebProxyCarrierViewHost?) {
+        DispatchQueue.main.async {
+            self.viewAttachment.setHost(host)
+        }
+    }
+
+    /// Registers or releases one holder's interest in the carrier. Idempotent per token.
+    public func setCarrierDemand(_ token: AnyHashable, wanted: Bool) {
+        self.queue.async {
+            guard self.demand.set(token, wanted: wanted) else { return }
+            if wanted {
                 self.retryAttempt = 0
-                self.startCarrier()
             }
+            self.updateCarrierActivation()
+        }
+    }
+
+    /// The carrier runs exactly while a configuration is present and someone wants it.
+    private func updateCarrierActivation() {
+        if self.configuration != nil && !self.demand.isEmpty {
+            guard self.carrierState == .inactive, self.retryWorkItem == nil else { return }
+            self.startCarrier()
+        } else {
+            self.stopCarrier(reportInactive: true)
         }
     }
 
@@ -196,12 +225,18 @@ public final class WebProxyTransport: WebProxyCarrier {
             }
             self.queue.async {
                 guard self.generation == generation, self.configuration == configuration else {
-                    DispatchQueue.main.async { carrier.invalidate() }
+                    DispatchQueue.main.async {
+                        self.viewAttachment.setWebView(nil)
+                        carrier.invalidate()
+                    }
                     return
                 }
                 self.carrier = carrier
                 WebProxyDiagnostics.info("webview carrier created")
-                DispatchQueue.main.async { carrier.start() }
+                DispatchQueue.main.async {
+                    self.viewAttachment.setWebView(carrier.hostedWebView)
+                    carrier.start()
+                }
             }
         }
     }
@@ -229,7 +264,10 @@ public final class WebProxyTransport: WebProxyCarrier {
         self.nextStreamId = 1
         self.decoder = WebProxyFrameDecoder()
         self.lastPageStatus = nil
-        DispatchQueue.main.async { carrier?.invalidate() }
+        DispatchQueue.main.async {
+            self.viewAttachment.setWebView(nil)
+            carrier?.invalidate()
+        }
         if reportInactive {
             self.statusPromise.set(.inactive)
         }
@@ -240,7 +278,7 @@ public final class WebProxyTransport: WebProxyCarrier {
         WebProxyDiagnostics.failure(reason)
         self.statusPromise.set(.failed)
         self.stopCarrier(reportInactive: false)
-        guard self.configuration != nil else { return }
+        guard self.configuration != nil, !self.demand.isEmpty else { return }
         let delay = min(30.0, pow(2.0, Double(self.retryAttempt)))
         self.retryAttempt = min(self.retryAttempt + 1, 6)
         let jitter = Double.random(in: 0 ... min(1.0, delay * 0.2))
@@ -479,6 +517,13 @@ public final class WebProxyConnectionInterface: NSObject, MTTcpConnectionInterfa
         self.transport = transport
         self.delegate = delegate
         self.delegateQueue = delegateQueue
+    }
+
+    /// Marks this as the WEB carrier so `MTTcpConnection` can pair it with
+    /// `MTSocksProxySettings.webProxy`. `connect(toHost:onPort:...)` below ignores both,
+    /// which is exactly why a connection with a real address to reach must not get one.
+    @objc public func isWebProxyCarrier() -> Bool {
+        return true
     }
 
     public func setGetLogPrefix(_ getLogPrefix: (() -> String)?) {

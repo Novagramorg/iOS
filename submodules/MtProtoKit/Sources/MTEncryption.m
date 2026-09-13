@@ -49,6 +49,15 @@ void MTRawSha256(void const *inData, NSUInteger length, void *outData)
     CC_SHA256(inData, (CC_LONG)length, outData);
 }
 
+void MTRawSha256TwoParts(void const *part1, NSUInteger length1, void const *part2, NSUInteger length2, void *outData)
+{
+    CC_SHA256_CTX context;
+    CC_SHA256_Init(&context);
+    CC_SHA256_Update(&context, part1, (CC_LONG)length1);
+    CC_SHA256_Update(&context, part2, (CC_LONG)length2);
+    CC_SHA256_Final(outData, &context);
+}
+
 #if defined(_MSC_VER)
 
 #define FORCE_INLINE    __forceinline
@@ -201,18 +210,55 @@ void MTAesEncryptBytesInplaceAndModifyIv(void *data, NSInteger length, NSData *k
     memcpy(iv, aesIv, 32);
 }
 
+// MyAesIge{En,De}crypt load and store whole 16-byte blocks through word-typed
+// pointers and assert word alignment of both buffers. Callers usually pass
+// malloc-backed buffers, which are aligned; the two helpers below bounce through
+// a temporary only when handed an odd slice (e.g. an NSData subrange), so the
+// alignment requirement is met in one place rather than at every call site.
+static bool MTIsWordAligned(void const *pointer) {
+    return (((uintptr_t)pointer) % sizeof(long)) == 0;
+}
+
+static void MTAesIgeRawWithAlignedBuffers(void const *data, void *outData, NSInteger length, void const *key, unsigned char aesIv[32], bool encrypt) {
+    void *alignedIn = NULL;
+    void *alignedOut = NULL;
+    void const *in = data;
+    void *out = outData;
+    if (!MTIsWordAligned(in)) {
+        alignedIn = malloc((size_t)length);
+        memcpy(alignedIn, data, (size_t)length);
+        in = alignedIn;
+    }
+    if (!MTIsWordAligned(out)) {
+        alignedOut = malloc((size_t)length);
+        out = alignedOut;
+    }
+
+    if (encrypt) {
+        MyAesIgeEncrypt(in, (int)length, out, key, 32, aesIv);
+    } else {
+        MyAesIgeDecrypt(in, (int)length, out, key, 32, aesIv);
+    }
+
+    if (alignedOut != NULL) {
+        memcpy(outData, alignedOut, (size_t)length);
+        free(alignedOut);
+    }
+    free(alignedIn);
+}
+
 void MTAesEncryptRaw(void const *data, void *outData, NSInteger length, void const *key, void const *iv) {
     unsigned char aesIv[32];
     memcpy(aesIv, iv, 32);
-    
-    MyAesIgeEncrypt(data, (int)length, outData, key, 32, aesIv);
+
+    MTAesIgeRawWithAlignedBuffers(data, outData, length, key, aesIv, true);
 }
 
 void MTAesDecryptRaw(void const *data, void *outData, NSInteger length, void const *key, void const *iv) {
     unsigned char aesIv[32];
     memcpy(aesIv, iv, 32);
-    
-    MyAesIgeDecrypt(data, (int)length, outData, key, 32, aesIv);
+
+    MTAesIgeRawWithAlignedBuffers(data, outData, length, key, aesIv, false);
 }
 
 void MTAesDecryptInplaceAndModifyIv(NSMutableData *data, NSData *key, NSMutableData *iv)

@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 import AsyncDisplayKit
 import Display
@@ -79,12 +80,12 @@ public class ChatMessageGiveawayBubbleContentNode: ChatMessageBubbleContentNode,
     private let animationFetchDisposable = MetaDisposable()
     private var currentAnimationSourceId: String?
     
-    required public init() {
+    required public init(lottieSettings: LottieRenderingSettings) {
         self.placeholderNode = StickerShimmerEffectNode()
         self.placeholderNode.isUserInteractionEnabled = false
         self.placeholderNode.alpha = 0.75
         
-        self.animationNode = DefaultAnimatedStickerNodeImpl()
+        self.animationNode = DefaultAnimatedStickerNodeImpl(lottieSettings: lottieSettings)
         
         self.dateAndStatusNode = ChatMessageDateAndStatusNode()
         self.prizeTitleNode = TextNode()
@@ -112,7 +113,7 @@ public class ChatMessageGiveawayBubbleContentNode: ChatMessageBubbleContentNode,
         self.buttonNode = ChatMessageAttachedContentButtonNode()
         self.channelButtons = PeerButtonsStackNode()
         
-        super.init()
+        super.init(lottieSettings: lottieSettings)
         
         self.addSubnode(self.prizeTitleNode)
         self.addSubnode(self.prizeTextNode)

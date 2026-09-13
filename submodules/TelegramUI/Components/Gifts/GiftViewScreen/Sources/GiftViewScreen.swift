@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 import Display
 import AsyncDisplayKit
@@ -5758,7 +5759,8 @@ private final class GiftViewSheetContent: CombinedComponent {
                                             name: "GiftUpgrade"
                                         ),
                                         size: CGSize(width: 30.0, height: 30.0),
-                                        loop: true
+                                        loop: true,
+                                        lottieSettings: component.context.lottieRenderingSettings
                                     )
                                 ))
                             ], spacing: 5.0))

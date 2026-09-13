@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 import Display
 import ComponentFlow
@@ -482,7 +483,8 @@ public final class MessageInputActionButtonComponent: Component {
                         content: LottieComponent.AppBundleContent(name: animationName),
                         color: .white,
                         startingPosition: startingPosition,
-                        playOnce: playOnce
+                        playOnce: playOnce,
+                        lottieSettings: component.context.lottieRenderingSettings
                     )),
                     environment: {},
                     containerSize: CGSize(width: 30.0, height: 30.0)

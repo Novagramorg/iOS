@@ -977,9 +977,9 @@ public final class OngoingCallContext {
                     case .mtp:
                         break
                     case .web:
-                        // A web proxy is secret-based (see ProxySettings.mtProxySettings) and cannot
-                        // back a VoipProxyServerWebrtc, which needs host/port/user/pass — same as .mtp.
-                        // TODO(web-proxy): confirm intended UX; stub added to restore the build after the web-proxy merge.
+                        // Calls are SOCKS5-only by design. A web proxy is secret-based (see
+                        // ProxySettings.mtProxySettings) and cannot back a VoipProxyServerWebrtc,
+                        // which needs host/port/user/pass — same as .mtp.
                         break
                     }
                 }

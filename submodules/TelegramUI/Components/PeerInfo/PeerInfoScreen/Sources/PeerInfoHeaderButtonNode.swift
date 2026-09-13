@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 import AsyncDisplayKit
 import ContextUI
@@ -224,7 +225,8 @@ final class PeerInfoHeaderButtonNode: HighlightableButtonNode {
                 component: AnyComponent(LottieComponent(
                     content: LottieComponent.AppBundleContent(name: animationName),
                     color: foregroundColor,
-                    startingPosition: seekToEnd ? .end : .begin
+                    startingPosition: seekToEnd ? .end : .begin,
+                    lottieSettings: .noAccountFallback
                 )),
                 environment: {},
                 containerSize: iconSize

@@ -243,8 +243,17 @@ private final class ProxySettingsServerItemNode: ItemListRevealOptionsItemNode {
             }
             
             let titleAttributedString = NSMutableAttributedString()
-            titleAttributedString.append(NSAttributedString(string: urlEncodedStringFromString(item.server.host), font: titleFont, textColor: item.theme.list.itemPrimaryTextColor))
-            titleAttributedString.append(NSAttributedString(string: ":\(item.server.port)", font: titleFont, textColor: item.theme.list.itemSecondaryTextColor))
+            // A WEB relay shows its whole `host/base-path` address and no port: it is
+            // always HTTPS on 443, so the number carries no information (BASE_PATH.md §1).
+            // Not urlEncodedStringFromString for the WEB address: its allowed set omits `_`,
+            // which canonicalPath explicitly permits in a base path, so `host/my_app` would
+            // render as `host/my%5Fapp`. The address is already restricted to ASCII
+            // alphanumerics, `-`, `_`, `.` and `/` by canonicalHost/canonicalPath.
+            let webProxyAddress = item.server.webProxyAddress
+            titleAttributedString.append(NSAttributedString(string: webProxyAddress ?? urlEncodedStringFromString(item.server.host), font: titleFont, textColor: item.theme.list.itemPrimaryTextColor))
+            if webProxyAddress == nil {
+                titleAttributedString.append(NSAttributedString(string: ":\(item.server.port)", font: titleFont, textColor: item.theme.list.itemSecondaryTextColor))
+            }
             let statusAttributedString = NSAttributedString(string: item.label, font: statusFont, textColor: item.labelAccent ? item.theme.list.itemAccentColor : item.theme.list.itemSecondaryTextColor)
             
             var editableControlSizeAndApply: (CGFloat, (CGFloat) -> ItemListEditableControlNode)?

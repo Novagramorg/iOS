@@ -180,6 +180,12 @@ An alternative group call implementation that uses standard WebRTC PeerConnectio
 
 **Selection in the app:** opt-in in any build through Debug Settings ▸ "Group calls: reference engine" (`ExperimentalUISettings.groupCallReferenceEngine`, read in `PresentationGroupCall.swift` when the call context is created — a running call keeps its engine), or from the server via the `ios_calls_group_reference_impl` app-config flag (non-zero turns it on; it cannot turn the debug switch off). Live streams always use the custom engine: the reference engine has no broadcast mode. Before 2026-09-04 the reference engine was the default of every DEBUG build, which is what the fixed real-call bugs above were found under.
 
+**Reference-engine calls wrote EMPTY log files until 2026-09-08.** The constructor built its
+`LogSinkImpl` and the destructor called `RemoveLogToStream` on it, but nothing ever called
+`AddLogToStream` — so every `log-<date>.log` produced by a call on this engine was zero bytes,
+and no reference-engine call could be diagnosed from a log at all. If you are looking at a bug
+report with empty call logs interleaved with populated ones, the empty ones are this engine.
+
 ### Architecture
 
 ```
@@ -198,7 +204,7 @@ GroupInstanceReferenceImpl
 |--------|-----------|---------------|
 | Transport | Manual ICE/DTLS/SRTP via GroupNetworkManager | WebRTC PeerConnection |
 | SDP | None (custom JSON protocol) | Local SDP construction, translates to/from JSON |
-| SSRC discovery | `unknownSsrcPacketReceived` on raw RTP | Audio: `GRAudioFrameTransformer` on mid=0's unsignaled receiver. Video: `ActiveVideoSsrcs` data channel message from SFU |
+| SSRC discovery | `unknownSsrcPacketReceived` on raw RTP | Audio: the signalling roster via `addSsrcs`, plus `GRAudioFrameTransformer` on mid=0's unsignaled receiver as a fallback that dies at the first renegotiation (see below). Video: `ActiveVideoSsrcs` data channel message from SFU |
 | Audio channels | Manual `IncomingAudioChannel` per SSRC | PeerConnection recvonly transceivers |
 | Audio levels | RTP header extension parsing | Per-receiver `GRAudioLevelSink` reading real PCM levels |
 | Video outgoing | Manual `cricket::VideoChannel` with direct SSRC control | PeerConnection sendonly transceiver + SDP munging for simulcast SSRCs |
@@ -226,7 +232,44 @@ GroupInstanceReferenceImpl
 5. `onRenegotiationComplete` runs `wireRemoteAudioLevelSinks()`, attaching a `GRAudioLevelSink` per receiver.
 6. Once the transceiver is negotiated, frames for X arrive at that receiver's **per-receiver** transformer, not the mid=0 tap. Measured 2026-09-04: `perRecv[...]: first Transform ssrc=... sink=ok` fires for the promoted SSRC. (This settles a contradiction that stood in this file: the claim that the unsignaled stream is promoted in place and the tap stays attached was wrong.) The per-receiver `GRAudioLevelSink` reads real PCM levels.
 
-The `colibriClass=ActiveAudioSsrcs` data-channel mechanism (test-SFU only) was removed; the tap is the single audio-discovery path. Removed-SSRC handling is the same as CustomImpl: stale recvonly transceivers stay in the SDP indefinitely; participant departures are tracked at the application layer (MTProto).
+The `colibriClass=ActiveAudioSsrcs` data-channel mechanism (test-SFU only) was removed. Removed-SSRC handling is the same as CustomImpl: stale recvonly transceivers stay in the SDP indefinitely; participant departures are tracked at the application layer (MTProto).
+
+**The mid=0 tap dies at the first renegotiation; a transport-level tap is what actually carries
+discovery (fixed 2026-09-08).** The frame-transformer tap can only fire while WebRTC is still willing
+to route an unknown SSRC to mid=0, and it stops being willing the moment this engine negotiates its
+**second receiving audio m-line**.
+`SdpOfferAnswerHandler::UpdatePayloadTypeDemuxingState` disables payload-type demuxing for a BUNDLE
+group as soon as two receiving m-lines of one kind advertise the same payload type; every audio
+m-line here advertises Opus 111 (sendrecv mid=0 + one recvonly per remote SSRC), so **the first
+discovery renegotiation trips it permanently** — it also calls `ResetUnsignaledRecvStream()` and
+clears the PT criteria. After that an unknown SSRC has no MID extension (`buildRemoteAnswer` strips
+it), no SSRC binding and no payload type to fall back on, so `RtpDemuxer` drops the packet, no
+unsignaled stream is created, and `handleDiscoveredAudioSsrc` never runs. **A participant who
+unmutes (or starts sending) after that point is inaudible for the rest of the call**, and a rejoin
+only recovers whoever happens to be transmitting during the ~250 ms before the first renegotiation —
+join a quiet room and the call can have no audio at all. CustomImpl is immune: it receives all remote
+audio on ONE channel and never adds a second m-line.
+
+Discovery therefore happens **below the demuxer**, at the ICE transport — the only point where a
+packet nothing claims is still visible, and the same place CustomImpl discovers SSRCs
+(`GroupNetworkManager`). `start()` injects `MtProtoIceTransportFactory` via
+`PeerConnectionDependencies::ice_transport_factory` with **no encryption key**, so the decorator is a
+pass-through whose only job is its `IncomingPacketObserver`: per inbound packet it checks
+`InferRtpPacketType`, matches payload type 111 (Opus is pinned in group calls, so audio is
+identifiable without parsing the payload), reads the SSRC from the cleartext RTP header — SRTP
+encrypts the payload, not the header — de-dupes under `AudioSsrcTap`, and posts
+`handleDiscoveredAudioSsrc` to the media thread. Keep it cheap; it runs on the network thread for
+every packet. With a key set (1:1 mtproto) the observer runs on the *decrypted* packet instead, so
+observation is a byproduct of the decryption pass either way.
+
+An app-side roster (`addSsrcs` from the participant list) was implemented first and rejected: this
+engine adds one recvonly m-line per SSRC and a voice chat's roster runs to thousands.
+
+CLI regression: `--mute-participants N --unmute-after S`, with **nothing signalled to the peers** at
+the unmute — they must notice the SSRC from the media alone. Before the fix a mixed group scored
+`Late unmute heard: 1/2` and the reference receiver never logged `queued discovered audio SSRC` for
+the late SSRC at all; the same late unmute with no prior renegotiation passed, which is what proved
+the trigger was the renegotiation rather than the lateness.
 
 The **discovery tap** is installed once on mid=0's receiver only. Each recvonly receiver gets its own separate transformer instance — sharing ONE instance across receivers triggers `Register{Sink,}TransformedFrameCallback` re-runs that overwrite valid registrations and misroute frames.
 

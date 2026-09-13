@@ -13,6 +13,8 @@ NSData * _Nonnull MTSha1(NSData * _Nonnull data);
 NSData * _Nonnull MTSubdataSha1(NSData * _Nonnull data, NSUInteger offset, NSUInteger length);
     
 NSData * _Nonnull MTSha256(NSData * _Nonnull data);
+// SHA-256 over the concatenation part1 ‖ part2 without materializing it. outData must hold 32 bytes.
+void MTRawSha256TwoParts(void const * _Nonnull part1, NSUInteger length1, void const * _Nonnull part2, NSUInteger length2, void * _Nonnull outData);
     
 void MTRawSha1(void const * _Nonnull inData, NSUInteger length, void * _Nonnull outData);
 void MTRawSha256(void const * _Nonnull inData, NSUInteger length, void * _Nonnull outData);
@@ -22,6 +24,8 @@ int32_t MTMurMurHash32(const void * _Nonnull bytes, int length);
 void MTAesEncryptInplace(NSMutableData * _Nonnull data, NSData * _Nonnull key, NSData * _Nonnull iv);
 void MTAesEncryptInplaceAndModifyIv(NSMutableData * _Nonnull data, NSData * _Nonnull key, NSMutableData * _Nonnull iv);
 void MTAesEncryptBytesInplaceAndModifyIv(void * _Nonnull data, NSInteger length, NSData * _Nonnull key, void * _Nonnull iv);
+// AES-256-IGE over `length` bytes (a positive multiple of 16) with a 32-byte key and
+// 32-byte IV. `data` and `outData` must not overlap; either may be unaligned.
 void MTAesEncryptRaw(void const * _Nonnull data, void * _Nonnull outData, NSInteger length, void const * _Nonnull key, void const * _Nonnull iv);
 void MTAesDecryptRaw(void const * _Nonnull data, void * _Nonnull outData, NSInteger length, void const * _Nonnull key, void const * _Nonnull iv);
 void MTAesDecryptInplaceAndModifyIv(NSMutableData * _Nonnull data, NSData * _Nonnull key, NSMutableData * _Nonnull iv);

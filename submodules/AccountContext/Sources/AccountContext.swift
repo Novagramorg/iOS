@@ -15,6 +15,7 @@ import MultiAnimationRenderer
 import Photos
 import TextFormat
 import WalletContext
+import LottieSettings
 
 public final class TelegramApplicationOpenUrlCompletion {
     public let completion: (Bool) -> Void
@@ -332,6 +333,7 @@ public enum ResolvedUrl {
     case stickerPack(name: String, type: StickerPackUrlType)
     case instantView(TelegramMediaWebpage, String?)
     case proxy(host: String, port: Int32, username: String?, password: String?, secret: Data?)
+    case webProxy(host: String, path: String, secret: Data)
     case join(String)
     case joinCall(String)
     case localization(String)
@@ -1778,6 +1780,11 @@ public protocol AccountContext: AnyObject {
     var currentContentSettings: Atomic<ContentSettings> { get }
     var currentAppConfiguration: Atomic<AppConfiguration> { get }
     var currentCountriesConfiguration: Atomic<CountriesConfiguration> { get }
+
+    /// Which Lottie rasterizer this account's renders should use. Resolved from
+    /// app configuration and the debug switch; see the implementation for the
+    /// precedence rule.
+    var lottieRenderingSettings: LottieRenderingSettings { get }
     
     var cachedGroupCallContexts: AccountGroupCallContextCache { get }
     

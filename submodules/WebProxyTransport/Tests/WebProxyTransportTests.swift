@@ -177,6 +177,40 @@ final class WebProxyTransportTests: XCTestCase {
         XCTAssertEqual(WebProxyConfiguration.canonicalHost("3com.example"), "3com.example")
     }
 
+    func testMarkedSecretRoundTrip() throws {
+        // BASE_PATH.md §3: `{ printf '\x70'; printf <secret> } | base64 | tr '+/' '-_' | tr -d '=\n'`
+        let vector = try XCTUnwrap(WebProxyConfiguration.parseMarkedSecret("cIVhlEBk_HMMv6RHNWLY7Fk"))
+        XCTAssertTrue(vector.isMarked)
+        XCTAssertEqual(vector.secret.map { String(format: "%02x", $0) }.joined(), "8561944064fc730cbfa4473562d8ec59")
+        XCTAssertEqual(WebProxyConfiguration.linkSecretString(vector.secret, path: "phcf2vfe7zgbrslg"), "cIVhlEBk_HMMv6RHNWLY7Fk")
+        XCTAssertEqual(WebProxyConfiguration.linkSecretString(vector.secret, path: ""), "8561944064fc730cbfa4473562d8ec59")
+
+        for hex in ["000102030405060708090a0b0c0d0e0f", "dd000102030405060708090a0b0c0d0e0f"] {
+            let secret = try XCTUnwrap(WebProxyConfiguration.parseSecret(hex))
+            let marked = WebProxyConfiguration.linkSecretString(secret, path: "slug")
+            let decoded = try XCTUnwrap(WebProxyConfiguration.parseMarkedSecret(marked))
+            XCTAssertTrue(decoded.isMarked)
+            XCTAssertEqual(decoded.secret, secret)
+            // The plain form decodes to the same bytes and reports itself unmarked.
+            XCTAssertEqual(try XCTUnwrap(WebProxyConfiguration.parseMarkedSecret(hex)).isMarked, false)
+        }
+
+        // A marked secret never changes the capability: the marker is a link encoding.
+        let plain = try XCTUnwrap(WebProxyConfiguration(host: "proxy.example.com", path: "dobry-cola-super-app", secret: try self.plainSecret()))
+        let viaMarker = try XCTUnwrap(WebProxyConfiguration(
+            host: "proxy.example.com",
+            path: "dobry-cola-super-app",
+            secret: try XCTUnwrap(WebProxyConfiguration.parseSecret("cAABAgMEBQYHCAkKCwwNDg8"))
+        ))
+        XCTAssertEqual(plain, viaMarker)
+        XCTAssertEqual(viaMarker.bridgeCapability(), "hHz99Xs93EN1j91G9gpNepXwGNNt5YdAFkEVk_LlqdQ")
+
+        // 0xDD is never the marker, and a marker with a non-secret remainder is rejected.
+        XCTAssertEqual(try XCTUnwrap(WebProxyConfiguration.parseSecret("dd000102030405060708090a0b0c0d0e0f")).count, 17)
+        XCTAssertNil(WebProxyConfiguration.parseSecret("70000102030405060708090a0b0c0d"))
+        XCTAssertNil(WebProxyConfiguration.parseSecret(""))
+    }
+
     func testFrameGoldenVectorAndFragmentation() throws {
         let frame = WebProxyFrame(type: .data, streamId: 0x010203, payload: Data([0xaa, 0xbb]))
         let encoded = try WebProxyFrameEncoder.encode(frame)

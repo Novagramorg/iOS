@@ -706,6 +706,7 @@ public:
         }
         
         _isStarted = true;
+        RTC_LOG(LS_WARNING) << "SharedAudioDeviceModule: audio device started";
         return true;
     }
     
@@ -750,6 +751,7 @@ public:
     }
     
     virtual void ActualStop() {
+        RTC_LOG(LS_WARNING) << "SharedAudioDeviceModule: stopping the audio device (wasStarted=" << _isStarted << ")";
         _isStarted = false;
         WrappedInstance()->StopPlayout();
         WrappedInstance()->StopRecording();
@@ -851,6 +853,9 @@ public:
             return;
         }
         if (_isStopped || _isRetryScheduled) {
+            // _isStopped is permanent: a device stopped once can never serve another call.
+            RTC_LOG(LS_WARNING) << "SharedAudioDeviceModule: start ignored (stopped=" << _isStopped
+                                << " retryScheduled=" << _isRetryScheduled << ")";
             return;
         }
         // A new activation re-arms an exhausted budget: this is the retry path for a device that
@@ -1016,6 +1021,7 @@ static std::atomic<bool> sharedCallAudioDeviceLegacyBehavior{false};
     _isAudioSessionActive = isAudioSessionActive;
     
     if (isTransition) {
+        RTC_LOG(LS_WARNING) << "SharedCallAudioDevice: audio session active -> " << isAudioSessionActive;
         if (isAudioSessionActive) {
             [[RTCAudioSession sharedInstance] audioSessionDidActivate:[AVAudioSession sharedInstance]];
         } else if (wasActive) {

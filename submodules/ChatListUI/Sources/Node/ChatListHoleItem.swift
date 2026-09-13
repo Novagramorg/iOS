@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 import AsyncDisplayKit
 import Display
@@ -301,7 +302,8 @@ class ChatListSearchEmptyFooterItemNode: ListViewItemNode {
                         size: iconSize,
                         renderingScale: nil,
                         loop: false,
-                        playOnce: nil
+                        playOnce: nil,
+                        lottieSettings: .noAccountFallback
                     )),
                     environment: {}, containerSize: iconSize
                 )

@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 import AsyncDisplayKit
 import Display
@@ -402,7 +403,7 @@ private final class TooltipScreenNode: ViewControllerTracingNode {
         self.balancedTextLayout = balancedTextLayout
         self.constrainWidth = constrainWidth
         
-        self.animatedStickerNode = DefaultAnimatedStickerNodeImpl()
+        self.animatedStickerNode = DefaultAnimatedStickerNodeImpl(lottieSettings: self.context?.lottieRenderingSettings ?? .noAccountFallback)
         switch icon {
         case .none:
             break

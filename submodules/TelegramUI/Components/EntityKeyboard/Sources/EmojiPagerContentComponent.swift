@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 import Display
 import ComponentFlow
@@ -3369,7 +3370,8 @@ public final class EmojiPagerContentComponent: Component {
                                 color: foregroundColor,
                                 startingPosition: .begin,
                                 size: CGSize(width: 30.0, height: 30.0),
-                                loop: true
+                                loop: true,
+                                lottieSettings: component.context.lottieRenderingSettings
                             ))))
                         }
 

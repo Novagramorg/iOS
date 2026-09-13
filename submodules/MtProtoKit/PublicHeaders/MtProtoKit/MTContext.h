@@ -41,6 +41,15 @@
 - (void)disconnect;
 - (void)resetDelegate;
 
+@optional
+
+/// True only for the WEB proxy carrier, which multiplexes the connection over a hidden
+/// WebView instead of opening a socket, and therefore IGNORES the host and port it is
+/// handed. `MTTcpConnection` uses that to pair the interface with
+/// `MTSocksProxySettings.webProxy`: a connection that has a real address to reach must
+/// never be given the carrier, and a WEB proxy connection must never fall back to a socket.
+- (bool)isWebProxyCarrier;
+
 @end
 
 

@@ -161,9 +161,10 @@ func settingsItems(data: PeerInfoScreenData?, context: AccountContext, presentat
             let proxyType: String
             if settings.proxySettings.enabled, let activeServer = settings.proxySettings.activeServer {
                 switch activeServer.connection {
-                // // TODO(web-proxy): confirm intended UX; stub added to restore the build after the web-proxy merge.
-                case .mtp, .web:
+                case .mtp:
                     proxyType = presentationData.strings.SocksProxySetup_ProxyTelegram
+                case .web:
+                    proxyType = presentationData.strings.SocksProxySetup_ProxyWeb
                 case .socks5:
                     proxyType = presentationData.strings.SocksProxySetup_ProxySocks5
                 }

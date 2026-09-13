@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 import Display
 import AsyncDisplayKit
@@ -15,7 +16,6 @@ import ComponentDisplayAdapters
 import WallpaperBackgroundNode
 import ReactionSelectionNode
 import EntityKeyboard
-import LottieMetal
 import TelegramAnimatedStickerNode
 import AnimatedStickerNode
 import ChatInputTextNode
@@ -1074,17 +1074,11 @@ final class ChatSendMessageContextScreenComponent: Component {
                                 let standaloneReactionAnimation: AnimatedStickerNode
                                 var effectiveScale: CGFloat = 1.0
                                 #if targetEnvironment(simulator)
-                                standaloneReactionAnimation = DirectAnimatedStickerNode()
+                                standaloneReactionAnimation = DirectAnimatedStickerNode(lottieSettings: component.context.lottieRenderingSettings)
                                 effectiveScale = 1.4
                                 #else
-                                standaloneReactionAnimation = DirectAnimatedStickerNode()
+                                standaloneReactionAnimation = DirectAnimatedStickerNode(lottieSettings: component.context.lottieRenderingSettings)
                                 effectiveScale = 1.4
-                                /*if "".isEmpty {
-                                    standaloneReactionAnimation = DirectAnimatedStickerNode()
-                                    effectiveScale = 1.4
-                                } else {
-                                    standaloneReactionAnimation = LottieMetalAnimatedStickerNode()
-                                }*/
                                 #endif
                                 
                                 standaloneReactionAnimation.isUserInteractionEnabled = false

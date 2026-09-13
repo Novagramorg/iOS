@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 import AsyncDisplayKit
 import Display
@@ -39,12 +40,12 @@ public class ChatMessageBirthdateSuggestionContentNode: ChatMessageBubbleContent
     
     private var absoluteRect: (CGRect, CGSize)?
     
-    required public init() {
+    required public init(lottieSettings: LottieRenderingSettings) {
         self.mediaBackgroundNode = NavigationBackgroundNode(color: .clear)
         self.mediaBackgroundNode.clipsToBounds = true
         self.mediaBackgroundNode.cornerRadius = 27.0
         
-        self.animationNode = DefaultAnimatedStickerNodeImpl()
+        self.animationNode = DefaultAnimatedStickerNodeImpl(lottieSettings: lottieSettings)
         
         self.subtitleNode = TextNode()
         self.subtitleNode.isUserInteractionEnabled = false
@@ -82,7 +83,7 @@ public class ChatMessageBirthdateSuggestionContentNode: ChatMessageBubbleContent
         self.buttonTitleNode.isUserInteractionEnabled = false
         self.buttonTitleNode.displaysAsynchronously = false
         
-        super.init()
+        super.init(lottieSettings: lottieSettings)
 
         self.addSubnode(self.mediaBackgroundNode)
         

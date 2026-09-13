@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 import AVFoundation
 import AsyncDisplayKit
@@ -388,7 +389,7 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
         
         if let telegramDice = self.telegramDice {
             if telegramDice.emoji == "🎰" {
-                let animationNode = SlotMachineAnimationNode(account: item.context.account)
+                let animationNode = SlotMachineAnimationNode(account: item.context.account, lottieSettings: item.context.lottieRenderingSettings)
                 if !item.message.effectivelyIncoming(item.context.account.peerId) {
                     animationNode.success = { [weak self] onlyHaptic in
                         if let strongSelf = self, let item = strongSelf.item {
@@ -398,7 +399,7 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
                 }
                 self.animationNode = animationNode
             } else {
-                let animationNode = ManagedDiceAnimationNode(context: item.context, emoji: telegramDice.emoji.strippedEmoji)
+                let animationNode = ManagedDiceAnimationNode(context: item.context, emoji: telegramDice.emoji.strippedEmoji, lottieSettings: item.context.lottieRenderingSettings)
                 if !item.message.effectivelyIncoming(item.context.account.peerId) {
                     animationNode.success = { [weak self] in
                         if let strongSelf = self, let item = strongSelf.item {
@@ -409,7 +410,7 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
                 self.animationNode = animationNode
             }
         } else {
-            let animationNode = DefaultAnimatedStickerNodeImpl(useMetalCache: false)
+            let animationNode = DefaultAnimatedStickerNodeImpl(useMetalCache: false, lottieSettings: item.context.lottieRenderingSettings)
             animationNode.started = { [weak self] in
                 if let strongSelf = self {
                     strongSelf.imageNode.alpha = 0.0
@@ -2229,7 +2230,7 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
 
         do {
             let pathPrefix = item.context.engine.resources.shortLivedResourceCachePathPrefix(id: EngineMediaResource.Id(resource.id))
-            let additionalAnimationNode = DefaultAnimatedStickerNodeImpl()
+            let additionalAnimationNode = DefaultAnimatedStickerNodeImpl(lottieSettings: item.context.lottieRenderingSettings)
             additionalAnimationNode.setup(source: source, width: Int(animationSize.width * 1.6), height: Int(animationSize.height * 1.6), playbackMode: .once, mode: .direct(cachePathPrefix: pathPrefix))
             var animationFrame: CGRect
             if isStickerEffect {

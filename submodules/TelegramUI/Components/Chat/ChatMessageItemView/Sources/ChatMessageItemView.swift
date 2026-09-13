@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 import AsyncDisplayKit
 import Display
@@ -16,7 +17,6 @@ import ChatMessageItem
 import ChatMessageTransitionNode
 import AnimatedStickerNode
 import TelegramAnimatedStickerNode
-import LottieMetal
 
 public func chatMessageItemLayoutConstants(_ constants: (ChatMessageItemLayoutConstants, ChatMessageItemLayoutConstants), params: ListViewItemLayoutParams, presentationData: ChatPresentationData) -> ChatMessageItemLayoutConstants {
     var result: ChatMessageItemLayoutConstants
@@ -1033,17 +1033,11 @@ open class ChatMessageItemView: ListViewItemNode, ChatMessageItemNodeProtocol {
             let additionalAnimationNode: AnimatedStickerNode
             var effectiveScale: CGFloat = 1.0
             #if targetEnvironment(simulator)
-            additionalAnimationNode = DirectAnimatedStickerNode()
+            additionalAnimationNode = DirectAnimatedStickerNode(lottieSettings: item.context.lottieRenderingSettings)
             effectiveScale = 1.4
             #else
-            additionalAnimationNode = DirectAnimatedStickerNode()
+            additionalAnimationNode = DirectAnimatedStickerNode(lottieSettings: item.context.lottieRenderingSettings)
             effectiveScale = 1.4
-            /*if "".isEmpty {
-                additionalAnimationNode = DirectAnimatedStickerNode()
-                effectiveScale = 1.4
-            } else {
-                additionalAnimationNode = LottieMetalAnimatedStickerNode()
-            }*/
             #endif
             additionalAnimationNode.updateLayout(size: animationSize)
             additionalAnimationNode.setup(source: source, width: Int(animationSize.width * effectiveScale), height: Int(animationSize.height * effectiveScale), playbackMode: .once, mode: .direct(cachePathPrefix: pathPrefix))

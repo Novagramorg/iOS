@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 import AsyncDisplayKit
 import Display
@@ -35,7 +36,7 @@ public class ChatMessageCallBubbleContentNode: ChatMessageBubbleContentNode {
     
     private var activeConferenceUpdateTimer: SwiftSignalKit.Timer?
     
-    required public init() {
+    required public init(lottieSettings: LottieRenderingSettings) {
         self.titleNode = TextNode()
         self.labelNode = TextNode()
         
@@ -47,7 +48,7 @@ public class ChatMessageCallBubbleContentNode: ChatMessageBubbleContentNode {
         self.buttonNode = HighlightableButtonNode()
         self.buttonNode.isAccessibilityElement = false
         
-        super.init()
+        super.init(lottieSettings: lottieSettings)
                 
         self.titleNode.isUserInteractionEnabled = false
         self.titleNode.contentMode = .topLeft

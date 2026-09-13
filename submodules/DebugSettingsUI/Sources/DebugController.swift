@@ -166,6 +166,7 @@ private enum DebugControllerEntry: ItemListNodeEntry {
     case debugRipple(Bool)
     case debugRichText(Bool)
     case coreListChatBackend(Bool)
+    case forceRLottieBackend(Bool)
     case browserExperiment(Bool)
     case allForumsHaveTabs(Bool)
     case enableReactionOverrides(Bool)
@@ -206,7 +207,7 @@ private enum DebugControllerEntry: ItemListNodeEntry {
             return DebugControllerSection.web.rawValue
         case .keepChatNavigationStack, .skipReadHistory, .alwaysDisplayTyping, .debugRatingLayout, .crashOnSlowQueries, .crashOnMemoryPressure:
             return DebugControllerSection.experiments.rawValue
-        case .clearTips, .resetNotifications, .crash, .testPasscodeMigration, .fillLocalSavedMessageCache, .resetDatabase, .resetDatabaseAndCache, .resetHoles, .resetTagHoles, .reindexUnread, .resetCacheIndex, .reindexCache, .resetBiometricsData, .optimizeDatabase, .photoPreview, .knockoutWallpaper, .compressedEmojiCache, .storiesJpegExperiment, .checkSerializedData, .enableQuickReactionSwitch, .experimentalCompatibility, .enableDebugDataDisplay, .fakeGlass, .forceClearGlass, .debugRipple, .debugRichText, .coreListChatBackend, .browserExperiment, .allForumsHaveTabs, .enableReactionOverrides, .restorePurchases, .disableReloginTokens, .liveStreamV2, .experimentalCallMute, .groupCallReferenceEngine, .playerV2, .devRequests, .enableUpdates, .pwa, .enableLocalTranslation:
+        case .clearTips, .resetNotifications, .crash, .fillLocalSavedMessageCache, .resetDatabase, .resetDatabaseAndCache, .resetHoles, .resetTagHoles, .reindexUnread, .resetCacheIndex, .reindexCache, .resetBiometricsData, .optimizeDatabase, .photoPreview, .knockoutWallpaper, .compressedEmojiCache, .storiesJpegExperiment, .checkSerializedData, .enableQuickReactionSwitch, .experimentalCompatibility, .enableDebugDataDisplay, .fakeGlass, .forceClearGlass, .debugRipple, .debugRichText, .coreListChatBackend, .forceRLottieBackend, .browserExperiment, .allForumsHaveTabs, .enableReactionOverrides, .restorePurchases, .disableReloginTokens, .liveStreamV2, .experimentalCallMute, .groupCallReferenceEngine, .playerV2, .devRequests, .enableUpdates, .pwa, .enableLocalTranslation, .testPasscodeMigration:
             return DebugControllerSection.experiments.rawValue
         case .logTranslationRecognition, .resetTranslationStates:
             return DebugControllerSection.translation.rawValue
@@ -261,94 +262,96 @@ private enum DebugControllerEntry: ItemListNodeEntry {
             return 18
         case .coreListChatBackend:
             return 19
-        case .crashOnSlowQueries:
+        case .forceRLottieBackend:
             return 20
-        case .crashOnMemoryPressure:
+        case .crashOnSlowQueries:
             return 21
-        case .clearTips:
+        case .crashOnMemoryPressure:
             return 22
-        case .resetNotifications:
+        case .clearTips:
             return 23
-        case .crash:
+        case .resetNotifications:
             return 24
-        case .testPasscodeMigration:
+        case .crash:
             return 25
-        case .fillLocalSavedMessageCache:
+        case .testPasscodeMigration:
             return 26
-        case .resetDatabase:
+        case .fillLocalSavedMessageCache:
             return 27
-        case .resetDatabaseAndCache:
+        case .resetDatabase:
             return 28
-        case .resetHoles:
+        case .resetDatabaseAndCache:
             return 29
-        case .resetTagHoles:
+        case .resetHoles:
             return 30
-        case .reindexUnread:
+        case .resetTagHoles:
             return 31
-        case .resetCacheIndex:
+        case .reindexUnread:
             return 32
-        case .reindexCache:
+        case .resetCacheIndex:
             return 33
-        case .resetBiometricsData:
+        case .reindexCache:
             return 34
-        case .optimizeDatabase:
+        case .resetBiometricsData:
             return 35
-        case .photoPreview:
+        case .optimizeDatabase:
             return 36
-        case .knockoutWallpaper:
+        case .photoPreview:
             return 37
-        case .experimentalCompatibility:
+        case .knockoutWallpaper:
             return 38
-        case .enableDebugDataDisplay:
+        case .experimentalCompatibility:
             return 39
-        case .fakeGlass:
+        case .enableDebugDataDisplay:
             return 40
-        case .forceClearGlass:
+        case .fakeGlass:
             return 41
-        case .debugRipple:
+        case .forceClearGlass:
             return 42
-        case .debugRichText:
+        case .debugRipple:
             return 43
-        case .browserExperiment:
+        case .debugRichText:
             return 44
-        case .allForumsHaveTabs:
+        case .browserExperiment:
             return 45
-        case .enableReactionOverrides:
+        case .allForumsHaveTabs:
             return 46
-        case .restorePurchases:
+        case .enableReactionOverrides:
             return 47
-        case .logTranslationRecognition:
+        case .restorePurchases:
             return 48
-        case .resetTranslationStates:
+        case .logTranslationRecognition:
             return 49
-        case .compressedEmojiCache:
+        case .resetTranslationStates:
             return 50
-        case .storiesJpegExperiment:
+        case .compressedEmojiCache:
             return 51
-        case .disableReloginTokens:
+        case .storiesJpegExperiment:
             return 52
-        case .checkSerializedData:
+        case .disableReloginTokens:
             return 53
-        case .enableQuickReactionSwitch:
+        case .checkSerializedData:
             return 54
-        case .liveStreamV2:
+        case .enableQuickReactionSwitch:
             return 55
-        case .experimentalCallMute:
+        case .liveStreamV2:
             return 56
-        case .groupCallReferenceEngine:
+        case .experimentalCallMute:
             return 57
-        case .playerV2:
+        case .groupCallReferenceEngine:
             return 58
-        case .devRequests:
+        case .playerV2:
             return 59
-        case .pwa:
+        case .devRequests:
             return 60
-        case .enableLocalTranslation:
+        case .pwa:
             return 61
-        case .enableUpdates:
+        case .enableLocalTranslation:
             return 62
+        case .enableUpdates:
+            return 63
         case let .preferredVideoCodec(index, _, _, _):
-            return 63 + index
+            return 64 + index
         case .disableVideoAspectScaling:
             return 101
         case .enableNetworkFramework:
@@ -1406,6 +1409,16 @@ private enum DebugControllerEntry: ItemListNodeEntry {
                     })
                 }).start()
             })
+        case let .forceRLottieBackend(value):
+            return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: "Lottie: force rlottie", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                let _ = arguments.sharedContext.accountManager.transaction ({ transaction in
+                    transaction.updateSharedData(ApplicationSpecificSharedDataKeys.experimentalUISettings, { settings in
+                        var settings = settings?.get(ExperimentalUISettings.self) ?? ExperimentalUISettings.defaultSettings
+                        settings.forceRLottieBackend = value
+                        return EnginePreferencesEntry(settings)
+                    })
+                }).start()
+            })
         case let .browserExperiment(value):
             return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: "Inline UI", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 let _ = arguments.sharedContext.accountManager.transaction ({ transaction in
@@ -1670,6 +1683,7 @@ private func debugControllerEntries(context: AccountContext?, sharedContext: Sha
         entries.append(.debugRatingLayout(experimentalSettings.debugRatingLayout))
     }
     entries.append(.coreListChatBackend(experimentalSettings.coreListChatBackend))
+    entries.append(.forceRLottieBackend(experimentalSettings.forceRLottieBackend))
     entries.append(.crashOnSlowQueries(presentationData.theme, experimentalSettings.crashOnLongQueries))
     entries.append(.crashOnMemoryPressure(presentationData.theme, experimentalSettings.crashOnMemoryPressure))
     if isMainApp {

@@ -18,36 +18,88 @@ public struct WebProxyConfiguration: Equatable, Hashable {
         self.secret = secret
     }
 
+    /// The marker BASE_PATH.md §3 puts in front of a base-path link's secret.
+    ///
+    /// Deliberately not `0xDD`: a client without base-path support reads a 17-byte secret
+    /// beginning with `0xDD` as an ordinary padded secret and accepts the link, having
+    /// normalized `host/path` down to an empty host. With `0x70` it instead sees a secret
+    /// it cannot classify and reports an unsupported proxy type.
+    public static let secretMarker: UInt8 = 0x70
+
     public static func isValidSecret(_ secret: Data) -> Bool {
         return secret.count == 16 || (secret.count == 17 && secret.first == 0xdd)
     }
 
-    public static func parseSecret(_ value: String) -> Data? {
+    /// Decodes a secret as written in a link or typed into the editor, reporting whether
+    /// it carried the `0x70` marker.
+    ///
+    /// BASE_PATH.md §3's inverse rule - strip a leading `0x70` from a value of at least 17
+    /// bytes - is unambiguous because a canonical secret is 16 bytes, 17 beginning with
+    /// `0xDD`, or 21+ beginning with `0xEE`.
+    public static func parseMarkedSecret(_ value: String) -> (secret: Data, isMarked: Bool)? {
         let value = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        if value.count % 2 == 0, value.allSatisfy({ $0.isHexDigit }) {
-            var result = Data()
-            result.reserveCapacity(value.count / 2)
-            var index = value.startIndex
-            while index < value.endIndex {
-                let next = value.index(index, offsetBy: 2)
-                guard let byte = UInt8(value[index ..< next], radix: 16) else {
-                    return nil
-                }
-                result.append(byte)
-                index = next
-            }
-            return isValidSecret(result) ? result : nil
+        // Hex first: a plain 32-character secret is also well-formed base64url, and hex is
+        // the canonical root form. A hex value that is not a secret still falls through, so
+        // a marked secret whose encoding happens to be all hex digits is not lost.
+        if let hex = self.hexBytes(value), let result = self.unmarkedSecret(hex) {
+            return result
         }
+        guard let bytes = self.base64UrlBytes(value) else {
+            return nil
+        }
+        return self.unmarkedSecret(bytes)
+    }
 
+    public static func parseSecret(_ value: String) -> Data? {
+        return self.parseMarkedSecret(value)?.secret
+    }
+
+    /// The link form of `secret`: plain hex at the root, `0x70`-marked base64url under a
+    /// base path. A path-bearing link must use the marked form (BASE_PATH.md §3).
+    public static func linkSecretString(_ secret: Data, path: String) -> String {
+        if path.isEmpty {
+            return secret.map { String(format: "%02x", $0) }.joined()
+        }
+        return (Data([self.secretMarker]) + secret).webProxyBase64Url
+    }
+
+    private static func unmarkedSecret(_ bytes: Data) -> (secret: Data, isMarked: Bool)? {
+        let isMarked = bytes.count >= 17 && bytes.first == self.secretMarker
+        let secret = isMarked ? Data(bytes.dropFirst()) : bytes
+        guard self.isValidSecret(secret) else {
+            return nil
+        }
+        return (secret, isMarked)
+    }
+
+    private static func hexBytes(_ value: String) -> Data? {
+        guard !value.isEmpty, value.count % 2 == 0, value.allSatisfy({ $0.isHexDigit }) else {
+            return nil
+        }
+        var result = Data()
+        result.reserveCapacity(value.count / 2)
+        var index = value.startIndex
+        while index < value.endIndex {
+            let next = value.index(index, offsetBy: 2)
+            guard let byte = UInt8(value[index ..< next], radix: 16) else {
+                return nil
+            }
+            result.append(byte)
+            index = next
+        }
+        return result
+    }
+
+    private static func base64UrlBytes(_ value: String) -> Data? {
+        guard !value.isEmpty else {
+            return nil
+        }
         var base64 = value.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
         let remainder = base64.count % 4
         if remainder != 0 {
             base64.append(String(repeating: "=", count: 4 - remainder))
         }
-        guard let result = Data(base64Encoded: base64), isValidSecret(result) else {
-            return nil
-        }
-        return result
+        return Data(base64Encoded: base64)
     }
 
     public static func canonicalHost(_ value: String) -> String? {

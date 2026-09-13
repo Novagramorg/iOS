@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 import Display
 import AsyncDisplayKit
@@ -18,10 +19,10 @@ import UnsupportedContentPill
 public final class ChatMessageUnsupportedBubbleContentNode: ChatMessageBubbleContentNode {
     private let pillView: UnsupportedContentPillView
 
-    required public init() {
+    required public init(lottieSettings: LottieRenderingSettings) {
         self.pillView = UnsupportedContentPillView()
 
-        super.init()
+        super.init(lottieSettings: lottieSettings)
 
         self.pillView.action = { [weak self] in
             guard let item = self?.item else {
