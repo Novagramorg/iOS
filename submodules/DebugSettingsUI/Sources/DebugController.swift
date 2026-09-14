@@ -20,6 +20,7 @@ import ComponentFlow
 import AlertComponent
 import AlertCheckComponent
 import WalletContext
+import CpuProfiler
 
 @objc private final class DebugControllerMailComposeDelegate: NSObject, MFMailComposeViewControllerDelegate {
     public func mailComposeController(_ controller: MFMailComposeViewController, didFinishWith result: MFMailComposeResult, error: Error?) {
@@ -119,6 +120,7 @@ private enum DebugControllerSection: Int32 {
     case videoExperiments
     case videoExperiments2
     case info
+    case profiling
 }
 
 private enum DebugControllerEntry: ItemListNodeEntry {
@@ -192,6 +194,8 @@ private enum DebugControllerEntry: ItemListNodeEntry {
     case resetTranslationStates
     case hostInfo(PresentationTheme, String)
     case versionInfo(PresentationTheme)
+    case collectCpuProfile
+    case sendProfileLogs
     
     var section: ItemListSectionId {
         switch self {
@@ -217,6 +221,8 @@ private enum DebugControllerEntry: ItemListNodeEntry {
             return DebugControllerSection.videoExperiments2.rawValue
         case .hostInfo, .versionInfo:
             return DebugControllerSection.info.rawValue
+        case .collectCpuProfile, .sendProfileLogs:
+            return DebugControllerSection.profiling.rawValue
         }
     }
     
@@ -362,6 +368,10 @@ private enum DebugControllerEntry: ItemListNodeEntry {
             return 104
         case .versionInfo:
             return 105
+        case .collectCpuProfile:
+            return 106
+        case .sendProfileLogs:
+            return 107
         }
     }
     
@@ -1645,6 +1655,123 @@ private enum DebugControllerEntry: ItemListNodeEntry {
             let bundleVersion = bundle.infoDictionary?["CFBundleShortVersionString"] ?? ""
             let bundleBuild = bundle.infoDictionary?[kCFBundleVersionKey as String] ?? ""
             return ItemListTextItem(presentationData: presentationData, text: .plain("\(bundleId)\n\(bundleVersion) (\(bundleBuild))"), sectionId: self.section)
+        case .collectCpuProfile:
+            return ItemListActionItem(presentationData: presentationData, systemStyle: .glass, title: "Collect CPU Profile (10s)", kind: .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: {
+                let presentationData = arguments.sharedContext.currentPresentationData.with { $0 }
+                let statusController = OverlayStatusController(theme: presentationData.theme, type: .loading(cancelled: nil))
+                arguments.presentController(statusController, nil)
+
+                let basePath = arguments.sharedContext.basePath
+                CpuProfiler.collectProfile(withDuration: 10.0, sampleRate: 100.0, completion: { report in
+                    statusController.dismiss()
+
+                    guard let report = report else {
+                        arguments.presentController(OverlayStatusController(theme: presentationData.theme, type: .genericSuccess("A profile is already running", false)), nil)
+                        return
+                    }
+
+                    let logsPath = basePath + "/logs/profile-logs"
+                    let _ = try? FileManager.default.createDirectory(atPath: logsPath, withIntermediateDirectories: true, attributes: nil)
+
+                    let dateFormatter = DateFormatter()
+                    dateFormatter.dateFormat = "yyyy-MM-dd_HH-mm-ss"
+                    // Logger.collectLogs() only picks up files whose name starts with "log-",
+                    // so the profile travels with Send Logs without any extra plumbing.
+                    let fileName = "log-cpu-profile-\(dateFormatter.string(from: Date())).txt"
+
+                    do {
+                        try report.write(toFile: logsPath + "/" + fileName, atomically: true, encoding: .utf8)
+                        arguments.presentController(OverlayStatusController(theme: presentationData.theme, type: .genericSuccess("Saved \(fileName). Send it with Send Profile Logs.", false)), nil)
+                    } catch let error {
+                        arguments.presentController(OverlayStatusController(theme: presentationData.theme, type: .genericSuccess("Could not save the profile: \(error.localizedDescription)", false)), nil)
+                    }
+                })
+            })
+        case .sendProfileLogs:
+            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: "Send Profile Logs", label: "", sectionId: self.section, style: .blocks, action: {
+                let logsPath = arguments.sharedContext.basePath + "/logs/profile-logs"
+                let _ = (Logger(rootPath: logsPath, basePath: logsPath).collectLogs()
+                    |> deliverOnMainQueue).start(next: { logs in
+                    let presentationData = arguments.sharedContext.currentPresentationData.with { $0 }
+                    let actionSheet = ActionSheetController(presentationData: presentationData)
+
+                    var items: [ActionSheetButtonItem] = []
+
+                    if let context = arguments.context, context.sharedContext.applicationBindings.isMainApp {
+                        items.append(ActionSheetButtonItem(title: "Via Telegram", color: .accent, action: { [weak actionSheet] in
+                            actionSheet?.dismissAnimated()
+
+                            let controller = context.sharedContext.makePeerSelectionController(PeerSelectionControllerParams(context: context, filter: [.onlyWriteable, .excludeDisabled]))
+                            controller.peerSelected = { [weak controller] peer, _ in
+                                let peerId = peer.id
+
+                                if let strongController = controller {
+                                    strongController.dismiss()
+
+                                    let lineFeed = "\n".data(using: .utf8)!
+                                    var rawLogData: Data = Data()
+                                    for (name, path) in logs {
+                                        if !rawLogData.isEmpty {
+                                            rawLogData.append(lineFeed)
+                                            rawLogData.append(lineFeed)
+                                        }
+
+                                        rawLogData.append("------ File: \(name) ------\n".data(using: .utf8)!)
+
+                                        if let data = try? Data(contentsOf: URL(fileURLWithPath: path)) {
+                                            rawLogData.append(data)
+                                        }
+                                    }
+
+                                    let tempSource = EngineTempBox.shared.tempFile(fileName: "Profiles.txt")
+                                    let tempZip = EngineTempBox.shared.tempFile(fileName: "destination.zip")
+                                    
+                                    let _ = try? rawLogData.write(to: URL(fileURLWithPath: tempSource.path))
+                                    
+                                    SSZipArchive.createZipFile(atPath: tempZip.path, withFilesAtPaths: [tempSource.path])
+
+                                    guard let gzippedData = try? Data(contentsOf: URL(fileURLWithPath: tempZip.path)) else {
+                                        return
+                                    }
+                                    
+                                    EngineTempBox.shared.dispose(tempSource)
+                                    EngineTempBox.shared.dispose(tempZip)
+
+                                    let id = Int64.random(in: Int64.min ... Int64.max)
+                                    let fileResource = LocalFileMediaResource(fileId: id, size: Int64(gzippedData.count), isSecretRelated: false)
+                                    context.engine.resources.storeResourceData(id: EngineMediaResource.Id(fileResource.id), data: gzippedData)
+
+                                    let file = TelegramMediaFile(fileId: EngineMedia.Id(namespace: Namespaces.Media.LocalFile, id: id), partialReference: nil, resource: fileResource, previewRepresentations: [], videoThumbnails: [], immediateThumbnailData: nil, mimeType: "application/text", size: Int64(gzippedData.count), attributes: [.FileName(fileName: "Profiles-iOS.txt.zip")], alternativeRepresentations: [])
+                                    let message: EnqueueMessage = .message(text: "", attributes: [], inlineStickers: [:], mediaReference: .standalone(media: file), threadId: nil, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])
+
+                                    let _ = enqueueMessages(account: context.account, peerId: peerId, messages: [message]).start()
+                                }
+                            }
+                            arguments.pushController(controller)
+                        }))
+                    }
+                    items.append(ActionSheetButtonItem(title: "Via Email", color: .accent, action: { [weak actionSheet] in
+                        actionSheet?.dismissAnimated()
+
+                        let composeController = MFMailComposeViewController()
+                        composeController.mailComposeDelegate = arguments.mailComposeDelegate
+                        composeController.setSubject("Telegram CPU Profiles")
+                        for (name, path) in logs {
+                            if let data = try? Data(contentsOf: URL(fileURLWithPath: path), options: .mappedIfSafe) {
+                                composeController.addAttachmentData(data, mimeType: "application/text", fileName: name)
+                            }
+                        }
+                        arguments.getRootController()?.present(composeController, animated: true, completion: nil)
+                    }))
+
+                    actionSheet.setItemGroups([ActionSheetItemGroup(items: items), ActionSheetItemGroup(items: [
+                        ActionSheetButtonItem(title: presentationData.strings.Common_Cancel, color: .accent, font: .bold, action: { [weak actionSheet] in
+                            actionSheet?.dismissAnimated()
+                        })
+                    ])])
+                    arguments.presentController(actionSheet, nil)
+                })
+            })
         }
     }
 }
@@ -1770,6 +1897,9 @@ private func debugControllerEntries(context: AccountContext?, sharedContext: Sha
         entries.append(.hostInfo(presentationData.theme, "Host: \(backupHostOverride)"))
     }
     entries.append(.versionInfo(presentationData.theme))
+    
+    entries.append(.collectCpuProfile)
+    entries.append(.sendProfileLogs)
     
     return entries
 }

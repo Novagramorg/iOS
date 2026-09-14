@@ -29,6 +29,7 @@ swift_library(
         "//submodules/TelegramUI/Components/AlertComponent",
         "//submodules/TelegramUI/Components/AlertComponent/AlertCheckComponent",
         "//submodules/WalletContext",
+        "//submodules/CpuProfiler:CpuProfiler",
     ],
     visibility = [
         "//visibility:public",
