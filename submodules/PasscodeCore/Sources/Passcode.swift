@@ -102,6 +102,7 @@ protocol PasscodeStorage {
     func remove(_ account: String) throws
 }
 
+@available(macOS 10.15, *)
 final class PasscodeKeychain: PasscodeStorage {
     private let environment: PasscodeEnvironment
     init(environment: PasscodeEnvironment = .shared) { self.environment = environment }
@@ -190,6 +191,7 @@ public struct PasscodeProtectionSettings: Equatable, Sendable {
     public let biometricsEnabled: Bool
 }
 
+@available(macOS 10.15, *)
 public final class PasscodeCredentialStore: @unchecked Sendable {
     public static let shared = PasscodeCredentialStore(storage: PasscodeKeychain())
 

@@ -15,6 +15,7 @@ public enum PasscodeError: Error, Equatable {
     case keychain(Int32)
 }
 
+@available(macOS 10.15, *)
 enum PasscodeCrypto {
     static let minimumIterations = 600_000
     static let maximumIterations = 3_000_000
@@ -70,6 +71,7 @@ enum PasscodeCrypto {
     }
 }
 
+@available(macOS 10.15, *)
 public final class PasscodeSession: @unchecked Sendable {
     public enum Lifetime: Equatable, Sendable {
         case standard
@@ -185,6 +187,7 @@ public final class PasscodeSession: @unchecked Sendable {
 
     /// Derive a resource key without exposing the credential's access key.
     /// Namespace binding, availability, and revocation share the key-use lock.
+    @available(macOS 11.0, *)
     public func withDerivedKey<T>(namespace: String, domain: String, _ body: (Data) throws -> T) throws -> T {
         guard !namespace.isEmpty, !domain.isEmpty else {
             throw PasscodeError.authenticationRequired
