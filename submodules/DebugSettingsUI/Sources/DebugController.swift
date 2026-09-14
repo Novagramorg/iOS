@@ -117,7 +117,6 @@ private enum DebugControllerSection: Int32 {
     case web
     case experiments
     case translation
-    case videoExperiments
     case videoExperiments2
     case info
     case profiling
@@ -185,7 +184,6 @@ private enum DebugControllerEntry: ItemListNodeEntry {
     case enableUpdates(Bool)
     case pwa(Bool)
     case enableLocalTranslation(Bool)
-    case preferredVideoCodec(Int, String, String?, Bool)
     case disableVideoAspectScaling(Bool)
     case enableNetworkFramework(Bool)
     case enableNetworkExperiments(Bool)
@@ -215,8 +213,6 @@ private enum DebugControllerEntry: ItemListNodeEntry {
             return DebugControllerSection.experiments.rawValue
         case .logTranslationRecognition, .resetTranslationStates:
             return DebugControllerSection.translation.rawValue
-        case .preferredVideoCodec:
-            return DebugControllerSection.videoExperiments.rawValue
         case .disableVideoAspectScaling, .enableNetworkFramework, .enableNetworkExperiments:
             return DebugControllerSection.videoExperiments2.rawValue
         case .hostInfo, .versionInfo:
@@ -327,37 +323,35 @@ private enum DebugControllerEntry: ItemListNodeEntry {
         case .restorePurchases:
             return 48
         case .logTranslationRecognition:
-            return 49
-        case .resetTranslationStates:
-            return 50
-        case .compressedEmojiCache:
-            return 51
-        case .storiesJpegExperiment:
-            return 52
-        case .disableReloginTokens:
-            return 53
-        case .checkSerializedData:
-            return 54
-        case .enableQuickReactionSwitch:
-            return 55
-        case .liveStreamV2:
-            return 56
-        case .experimentalCallMute:
-            return 57
-        case .groupCallReferenceEngine:
-            return 58
-        case .playerV2:
-            return 59
-        case .devRequests:
-            return 60
-        case .pwa:
-            return 61
-        case .enableLocalTranslation:
             return 62
-        case .enableUpdates:
+        case .resetTranslationStates:
             return 63
-        case let .preferredVideoCodec(index, _, _, _):
-            return 64 + index
+        case .compressedEmojiCache:
+            return 49
+        case .storiesJpegExperiment:
+            return 50
+        case .disableReloginTokens:
+            return 51
+        case .checkSerializedData:
+            return 52
+        case .enableQuickReactionSwitch:
+            return 53
+        case .liveStreamV2:
+            return 54
+        case .experimentalCallMute:
+            return 55
+        case .groupCallReferenceEngine:
+            return 56
+        case .playerV2:
+            return 57
+        case .devRequests:
+            return 58
+        case .pwa:
+            return 59
+        case .enableLocalTranslation:
+            return 60
+        case .enableUpdates:
+            return 61
         case .disableVideoAspectScaling:
             return 101
         case .enableNetworkFramework:
@@ -1583,16 +1577,6 @@ private enum DebugControllerEntry: ItemListNodeEntry {
                     })
                 }).start()
             })
-        case let .preferredVideoCodec(_, title, value, isSelected):
-            return ItemListCheckboxItem(presentationData: presentationData, systemStyle: .glass, title: title, style: .right, checked: isSelected, zeroSeparatorInsets: false, sectionId: self.section, action: {
-                let _ = arguments.sharedContext.accountManager.transaction ({ transaction in
-                    transaction.updateSharedData(ApplicationSpecificSharedDataKeys.experimentalUISettings, { settings in
-                        var settings = settings?.get(ExperimentalUISettings.self) ?? ExperimentalUISettings.defaultSettings
-                        settings.preferredVideoCodec = value
-                        return EnginePreferencesEntry(settings)
-                    })
-                }).start()
-            })
         case let .disableVideoAspectScaling(value):
             return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: "Video Cropping Optimization", value: !value, sectionId: self.section, style: .blocks, updated: { value in
                 let _ = arguments.sharedContext.accountManager.transaction ({ transaction in
@@ -1855,9 +1839,6 @@ private func debugControllerEntries(context: AccountContext?, sharedContext: Sha
         }
         entries.append(.restorePurchases(presentationData.theme))
         
-        entries.append(.logTranslationRecognition(experimentalSettings.logLanguageRecognition))
-        entries.append(.resetTranslationStates)
-                
         entries.append(.compressedEmojiCache(experimentalSettings.compressedEmojiCache))
         entries.append(.storiesJpegExperiment(experimentalSettings.storiesJpegExperiment))
         entries.append(.disableReloginTokens(experimentalSettings.disableReloginTokens))
@@ -1885,6 +1866,9 @@ private func debugControllerEntries(context: AccountContext?, sharedContext: Sha
         }
         entries.append(.enableLocalTranslation(experimentalSettings.enableLocalTranslation))
         entries.append(.enableUpdates(experimentalSettings.enableUpdates))
+        
+        entries.append(.logTranslationRecognition(experimentalSettings.logLanguageRecognition))
+        entries.append(.resetTranslationStates)
     }
 
     if isMainApp {

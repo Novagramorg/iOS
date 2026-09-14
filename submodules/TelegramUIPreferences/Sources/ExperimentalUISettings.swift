@@ -32,7 +32,6 @@ public struct ExperimentalUISettings: Codable, Equatable {
     public var chatListPhotos: Bool
     public var knockoutWallpaper: Bool
     public var foldersTabAtBottom: Bool
-    public var preferredVideoCodec: String?
     public var disableVideoAspectScaling: Bool
     public var enableVoipTcp: Bool
     public var experimentalCompatibility: Bool
@@ -89,7 +88,6 @@ public struct ExperimentalUISettings: Codable, Equatable {
             chatListPhotos: false,
             knockoutWallpaper: false,
             foldersTabAtBottom: false,
-            preferredVideoCodec: nil,
             disableVideoAspectScaling: false,
             enableVoipTcp: false,
             experimentalCompatibility: false,
@@ -144,7 +142,6 @@ public struct ExperimentalUISettings: Codable, Equatable {
         chatListPhotos: Bool,
         knockoutWallpaper: Bool,
         foldersTabAtBottom: Bool,
-        preferredVideoCodec: String?,
         disableVideoAspectScaling: Bool,
         enableVoipTcp: Bool,
         experimentalCompatibility: Bool,
@@ -196,7 +193,6 @@ public struct ExperimentalUISettings: Codable, Equatable {
         self.chatListPhotos = chatListPhotos
         self.knockoutWallpaper = knockoutWallpaper
         self.foldersTabAtBottom = foldersTabAtBottom
-        self.preferredVideoCodec = preferredVideoCodec
         self.disableVideoAspectScaling = disableVideoAspectScaling
         self.enableVoipTcp = enableVoipTcp
         self.experimentalCompatibility = experimentalCompatibility
@@ -252,7 +248,6 @@ public struct ExperimentalUISettings: Codable, Equatable {
         self.chatListPhotos = (try container.decodeIfPresent(Int32.self, forKey: "chatListPhotos") ?? 0) != 0
         self.knockoutWallpaper = (try container.decodeIfPresent(Int32.self, forKey: "knockoutWallpaper") ?? 0) != 0
         self.foldersTabAtBottom = (try container.decodeIfPresent(Int32.self, forKey: "foldersTabAtBottom") ?? 0) != 0
-        self.preferredVideoCodec = try container.decodeIfPresent(String.self.self, forKey: "preferredVideoCodec")
         self.disableVideoAspectScaling = (try container.decodeIfPresent(Int32.self, forKey: "disableVideoAspectScaling") ?? 0) != 0
         self.enableVoipTcp = (try container.decodeIfPresent(Int32.self, forKey: "enableVoipTcp") ?? 0) != 0
         self.experimentalCompatibility = (try container.decodeIfPresent(Int32.self, forKey: "experimentalCompatibility") ?? 0) != 0
@@ -308,7 +303,6 @@ public struct ExperimentalUISettings: Codable, Equatable {
         try container.encode((self.chatListPhotos ? 1 : 0) as Int32, forKey: "chatListPhotos")
         try container.encode((self.knockoutWallpaper ? 1 : 0) as Int32, forKey: "knockoutWallpaper")
         try container.encode((self.foldersTabAtBottom ? 1 : 0) as Int32, forKey: "foldersTabAtBottom")
-        try container.encodeIfPresent(self.preferredVideoCodec, forKey: "preferredVideoCodec")
         try container.encode((self.disableVideoAspectScaling ? 1 : 0) as Int32, forKey: "disableVideoAspectScaling")
         try container.encode((self.enableVoipTcp ? 1 : 0) as Int32, forKey: "enableVoipTcp")
         try container.encode((self.experimentalCompatibility ? 1 : 0) as Int32, forKey: "experimentalCompatibility")
