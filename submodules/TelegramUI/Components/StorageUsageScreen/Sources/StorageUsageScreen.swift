@@ -12,6 +12,7 @@ import PresentationDataUtils
 import AccountContext
 import TelegramCore
 import MultilineTextComponent
+import BalancedTextComponent
 import EmojiStatusComponent
 import Markdown
 import ContextUI
@@ -764,6 +765,7 @@ final class StorageUsageScreenComponent: Component {
         private let headerProgressForegroundLayer: SimpleLayer
         
         private var chartAvatarNode: AvatarNode?
+        private var chartHasData: Bool = false
         
         private var doneStatusCircle: SimpleShapeLayer?
         private var doneStatusNode: RadialStatusNode?
@@ -980,14 +982,18 @@ final class StorageUsageScreenComponent: Component {
                 transition.setBounds(view: self.headerOffsetContainer, bounds: CGRect(origin: CGPoint(x: 0.0, y: headerOffset), size: self.headerOffsetContainer.bounds.size))
                 
                 let headerContentsAlpha = offsetFraction
+                let chartContentsAlpha = self.chartHasData ? headerContentsAlpha : 0.0
                 if let chartAvatarNode = self.chartAvatarNode {
-                    transition.setAlpha(view: chartAvatarNode.view, alpha: headerContentsAlpha)
+                    transition.setAlpha(view: chartAvatarNode.view, alpha: chartContentsAlpha)
                 }
                 if let pieChartComponentView = self.pieChartView.view {
                     transition.setAlpha(view: pieChartComponentView, alpha: headerContentsAlpha)
                 }
+                if let doneStatusNode = self.doneStatusNode {
+                    transition.setAlpha(view: doneStatusNode.view, alpha: headerContentsAlpha)
+                }
                 if let chartTotalLabelView = self.chartTotalLabel.view {
-                    transition.setAlpha(view: chartTotalLabelView, alpha: headerContentsAlpha)
+                    transition.setAlpha(view: chartTotalLabelView, alpha: chartContentsAlpha)
                 }
             }
             
@@ -1369,6 +1375,7 @@ final class StorageUsageScreenComponent: Component {
                 }
             }
             
+            self.chartHasData = !listCategories.isEmpty
             listCategories.sort(by: { $0.size > $1.size })
             
             var otherListCategories: [StorageCategoriesComponent.CategoryData] = []
@@ -1475,11 +1482,11 @@ final class StorageUsageScreenComponent: Component {
                 } else {
                     doneStatusNode = RadialStatusNode(backgroundNodeColor: .clear)
                     self.doneStatusNode = doneStatusNode
-                    self.scrollView.addSubnode(doneStatusNode)
+                    self.headerOffsetContainer.addSubview(doneStatusNode.view)
                     animateIn = true
                 }
                 let doneSize = CGSize(width: 100.0, height: 100.0)
-                doneStatusNode.frame = CGRect(origin: CGPoint(x: floor((availableSize.width - doneSize.width) / 2.0), y: contentHeight), size: doneSize)
+                doneStatusNode.frame = CGRect(origin: CGPoint(x: floor((availableSize.width - doneSize.width) / 2.0), y: contentHeight + (92.0 - doneSize.height) * 0.5), size: doneSize)
                 
                 let doneStatusCircle: SimpleShapeLayer
                 if let current = self.doneStatusCircle {
@@ -1493,7 +1500,7 @@ final class StorageUsageScreenComponent: Component {
                 
                 if animateIn {
                     Queue.mainQueue().after(0.18, {
-                        doneStatusNode.transitionToState(.check(checkColor), animated: true)
+                        doneStatusNode.transitionToState(.check(checkColor, lineWidth: 6.0), animated: true)
                         doneStatusCircle.opacity = 1.0
                         doneStatusCircle.animateAlpha(from: 0.0, to: 1.0, duration: 0.12)
                     })
@@ -1670,7 +1677,6 @@ final class StorageUsageScreenComponent: Component {
                         chartAvatarNode.setPeer(context: component.context, theme: environment.theme, peer: peer, displayDimensions: avatarSize)
                     }
                 }
-                transition.setAlpha(view: chartAvatarNode.view, alpha: listCategories.isEmpty ? 0.0 : 1.0)
             } else {
                 let sizeText = dataSizeString(Int(totalSelectedCategorySize), forceDecimal: true, formatting: DataSizeStringFormatting(strings: environment.strings, decimalSeparator: "."))
                 
@@ -1709,7 +1715,6 @@ final class StorageUsageScreenComponent: Component {
                     }
                     let totalLabelFrame = CGRect(origin: CGPoint(x: pieChartFrame.minX + floor((pieChartFrame.width - chartTotalLabelSize.width) / 2.0), y: pieChartFrame.minY + floor((pieChartFrame.height - chartTotalLabelSize.height) / 2.0)), size: chartTotalLabelSize)
                     transition.setFrame(view: chartTotalLabelView, frame: totalLabelFrame)
-                    transition.setAlpha(view: chartTotalLabelView, alpha: listCategories.isEmpty ? 0.0 : 1.0)
                 }
             }
             
@@ -3560,8 +3565,8 @@ private class StorageUsageClearProgressOverlayNode: ASDisplayNode {
     
     private let blurredView: BlurredBackgroundView
     private let animationNode: AnimatedStickerNode
-    private let progressTextNode: ImmediateTextNode
-    private let descriptionTextNode: ImmediateTextNode
+    private let progressText = ComponentView<Empty>()
+    private let descriptionText = ComponentView<Empty>()
     private let progressBackgroundNode: ASDisplayNode
     private let progressForegroundNode: ASDisplayNode
     
@@ -3578,13 +3583,6 @@ private class StorageUsageClearProgressOverlayNode: ASDisplayNode {
         self.animationNode.setup(source: AnimatedStickerNodeLocalFileSource(name: "ClearCache"), width: 256, height: 256, playbackMode: .loop, mode: .direct(cachePathPrefix: nil))
         self.animationNode.visibility = true
         
-        self.progressTextNode = ImmediateTextNode()
-        self.progressTextNode.textAlignment = .center
-        
-        self.descriptionTextNode = ImmediateTextNode()
-        self.descriptionTextNode.textAlignment = .center
-        self.descriptionTextNode.maximumNumberOfLines = 0
-        
         self.progressBackgroundNode = ASDisplayNode()
         self.progressBackgroundNode.backgroundColor = self.presentationData.theme.actionSheet.controlAccentColor.withMultipliedAlpha(0.2)
         self.progressBackgroundNode.cornerRadius = 3.0
@@ -3597,8 +3595,6 @@ private class StorageUsageClearProgressOverlayNode: ASDisplayNode {
         
         self.view.addSubview(self.blurredView)
         self.addSubnode(self.animationNode)
-        self.addSubnode(self.progressTextNode)
-        self.addSubnode(self.descriptionTextNode)
         self.addSubnode(self.progressBackgroundNode)
         self.addSubnode(self.progressForegroundNode)
     }
@@ -3631,53 +3627,78 @@ private class StorageUsageClearProgressOverlayNode: ASDisplayNode {
         transition.updateFrame(view: self.blurredView, frame: CGRect(origin: CGPoint(), size: size))
         self.blurredView.update(size: size, transition: transition)
         
-        let inset: CGFloat = 24.0
+        let inset: CGFloat = 40.0
         let progressHeight: CGFloat = 6.0
         let spacing: CGFloat = 16.0
-        
-        let imageSide = min(160.0, size.height - 30.0)
-        let imageSize = CGSize(width: imageSide, height: imageSide)
-        
-        let animationFrame = CGRect(origin: CGPoint(x: floor((size.width - imageSize.width) / 2.0), y: floorToScreenPixels((size.height - imageSize.height) / 2.0) - 50.0), size: imageSize)
+        let contentWidth = max(0.0, size.width - inset * 2.0)
+        let imageSize = CGSize(width: 160.0, height: 160.0)
+
+        let descriptionTextSize = self.descriptionText.update(
+            transition: .immediate,
+            component: AnyComponent(BalancedTextComponent(
+                text: .plain(NSAttributedString(string: self.presentationData.strings.ClearCache_KeepOpenedDescription, font: Font.regular(15.0), textColor: self.presentationData.theme.actionSheet.primaryTextColor)),
+                balanced: true,
+                horizontalAlignment: .center,
+                maximumNumberOfLines: 0,
+                lineSpacing: 0.2
+            )),
+            environment: {},
+            containerSize: CGSize(width: contentWidth, height: size.height)
+        )
+
+        let progressTextTransition: ComponentTransition = self.progressText.view == nil ? .immediate : ComponentTransition(transition)
+        let progressTextSize = self.progressText.update(
+            transition: progressTextTransition,
+            component: AnyComponent(AnimatedTextComponent(
+                font: Font.with(size: 24.0, design: .regular, weight: .semibold, traits: [.monospacedNumbers]),
+                color: self.presentationData.theme.actionSheet.primaryTextColor,
+                items: [
+                    AnimatedTextComponent.Item(id: "value", content: .number(Int(self.progress * 100.0), minDigits: 1)),
+                    AnimatedTextComponent.Item(id: "suffix", content: .text("%"))
+                ],
+                noDelay: true,
+                blur: true
+            )),
+            environment: {},
+            containerSize: CGSize(width: contentWidth, height: size.height)
+        )
+
+        let topInset: CGFloat = 100.0
+        let contentBottomInset = max(bottomInset, 24.0)
+        let availableHeight = max(0.0, size.height - topInset - contentBottomInset)
+        let textContentHeight = progressTextSize.height + spacing + progressHeight + spacing + descriptionTextSize.height
+        let displayAnimation = imageSize.height + spacing + textContentHeight <= availableHeight
+        let contentHeight = textContentHeight + (displayAnimation ? imageSize.height + spacing : 0.0)
+        let contentOriginY = floorToScreenPixels(max(topInset, min(size.height * 0.5 - 24.0 - contentHeight * 0.5, size.height - contentBottomInset - contentHeight)))
+
+        let animationFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((size.width - imageSize.width) / 2.0), y: contentOriginY), size: imageSize)
         self.animationNode.frame = animationFrame
         self.animationNode.updateLayout(size: imageSize)
-        
-        var bottomInset = bottomInset
-        if bottomInset.isZero {
-            bottomInset = inset
+        self.animationNode.alpha = displayAnimation ? 1.0 : 0.0
+
+        let progressTextFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((size.width - progressTextSize.width) / 2.0), y: contentOriginY + (displayAnimation ? imageSize.height + spacing : 0.0)), size: progressTextSize)
+        if let progressTextView = self.progressText.view {
+            if progressTextView.superview == nil {
+                self.view.addSubview(progressTextView)
+            }
+            progressTextTransition.setFrame(view: progressTextView, frame: progressTextFrame)
         }
-        
-        let progressFrame = CGRect(x: inset, y: size.height - bottomInset - progressHeight, width: size.width - inset * 2.0, height: progressHeight)
+
+        let progressFrame = CGRect(x: inset, y: progressTextFrame.maxY + spacing, width: contentWidth, height: progressHeight)
         self.progressBackgroundNode.frame = progressFrame
-        let progressForegroundFrame = CGRect(x: inset, y: size.height - bottomInset - progressHeight, width: floorToScreenPixels(progressFrame.width * CGFloat(self.progress)), height: progressHeight)
+        let progressForegroundFrame = CGRect(origin: progressFrame.origin, size: CGSize(width: floorToScreenPixels(progressFrame.width * CGFloat(self.progress)), height: progressHeight))
         if !self.progressForegroundNode.frame.origin.x.isZero {
             transition.updateFrame(node: self.progressForegroundNode, frame: progressForegroundFrame, beginWithCurrentState: true)
         } else {
             self.progressForegroundNode.frame = progressForegroundFrame
         }
         
-        self.descriptionTextNode.attributedText = NSAttributedString(string: self.presentationData.strings.ClearCache_KeepOpenedDescription, font: Font.regular(15.0), textColor: self.presentationData.theme.actionSheet.secondaryTextColor)
-        let descriptionTextSize = self.descriptionTextNode.updateLayout(CGSize(width: size.width - inset * 3.0, height: size.height))
-        var descriptionTextFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((size.width - descriptionTextSize.width) / 2.0), y: animationFrame.maxY + 52.0), size: descriptionTextSize)
-        
-        let progressText: String = "\(Int(self.progress * 100.0))%"
-       
-        self.progressTextNode.attributedText = NSAttributedString(string: progressText, font: Font.with(size: 17.0, design: .regular, weight: .semibold, traits: [.monospacedNumbers]), textColor: self.presentationData.theme.actionSheet.primaryTextColor)
-        let progressTextSize = self.progressTextNode.updateLayout(size)
-        var progressTextFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((size.width - progressTextSize.width) / 2.0), y: descriptionTextFrame.minY - spacing - progressTextSize.height), size: progressTextSize)
-        
-        let availableHeight = progressTextFrame.minY
-        if availableHeight < 100.0 {
-            let offset = availableHeight / 2.0 - spacing
-            descriptionTextFrame = descriptionTextFrame.offsetBy(dx: 0.0, dy: -offset)
-            progressTextFrame = progressTextFrame.offsetBy(dx: 0.0, dy: -offset)
-            self.animationNode.alpha = 0.0
-        } else {
-            self.animationNode.alpha = 1.0
+        if let descriptionTextView = self.descriptionText.view {
+            if descriptionTextView.superview == nil {
+                self.view.addSubview(descriptionTextView)
+            }
+            descriptionTextView.frame = CGRect(origin: CGPoint(x: floorToScreenPixels((size.width - descriptionTextSize.width) / 2.0), y: progressFrame.maxY + spacing), size: descriptionTextSize)
         }
-        
-        self.progressTextNode.frame = progressTextFrame
-        self.descriptionTextNode.frame = descriptionTextFrame
     }
 }
 

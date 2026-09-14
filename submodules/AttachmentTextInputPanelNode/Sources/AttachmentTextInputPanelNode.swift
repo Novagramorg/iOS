@@ -252,6 +252,7 @@ public class AttachmentTextInputPanelNode: ASDisplayNode, TGCaptionPanelView, AS
     private let context: AccountContext
 
     private let glass: Bool
+    public let inputPanelBottomSpacing: CGFloat
     private let isCaption: Bool
     private let isAttachment: Bool
     private let customEmojiAvailable: Bool
@@ -418,10 +419,11 @@ public class AttachmentTextInputPanelNode: ASDisplayNode, TGCaptionPanelView, AS
 
     private var maxCaptionLength: Int32?
 
-    public init(context: AccountContext, presentationInterfaceState: ChatPresentationInterfaceState, glass: Bool = false, isCaption: Bool = false, isAttachment: Bool = false, isScheduledMessages: Bool = false, customEmojiAvailable: Bool, presentController: @escaping (ViewController) -> Void, presentInGlobalOverlay: @escaping (ViewController) -> Void, getNavigationController: @escaping () -> NavigationController?) {
+    public init(context: AccountContext, presentationInterfaceState: ChatPresentationInterfaceState, glass: Bool = false, isCaption: Bool = false, isAttachment: Bool = false, isScheduledMessages: Bool = false, customEmojiAvailable: Bool, presentController: @escaping (ViewController) -> Void, presentInGlobalOverlay: @escaping (ViewController) -> Void, getNavigationController: @escaping () -> NavigationController?, inputPanelBottomSpacing: CGFloat? = nil) {
         self.context = context
         self.presentationInterfaceState = presentationInterfaceState
         self.glass = glass
+        self.inputPanelBottomSpacing = inputPanelBottomSpacing ?? (glass ? 11.0 : 0.0)
         self.isCaption = isCaption
         self.isAttachment = isAttachment
         self.customEmojiAvailable = customEmojiAvailable
@@ -1069,7 +1071,7 @@ public class AttachmentTextInputPanelNode: ASDisplayNode, TGCaptionPanelView, AS
             }
         }
 
-        let inputPanelHeight = panelContentHeight + (self.glass ? 11.0 : 0.0)
+        let inputPanelHeight = panelContentHeight + self.inputPanelBottomSpacing
         var totalHeight = inputPanelHeight
         var inputMediaHeight: CGFloat = 0.0
         self.currentAdditionalInputHeight = 0.0
@@ -1904,7 +1906,7 @@ public class AttachmentTextInputPanelNode: ASDisplayNode, TGCaptionPanelView, AS
 
             let (_, textFieldHeight) = self.calculateTextFieldMetrics(width: layout.width - leftInset - rightInset - layout.additionalSideInsets.right, maxHeight: layout.textFieldMaxHeight, metrics: layout.metrics)
             let panelContentHeight = self.panelHeight(textFieldHeight: textFieldHeight, metrics: layout.metrics)
-            let totalHeight = panelContentHeight + (self.glass ? 11.0 : 0.0) + self.currentAdditionalInputHeight
+            let totalHeight = panelContentHeight + self.inputPanelBottomSpacing + self.currentAdditionalInputHeight
             if self.currentHeight != totalHeight {
                 self.updateHeight(animated)
                 self.heightUpdated?(animated)

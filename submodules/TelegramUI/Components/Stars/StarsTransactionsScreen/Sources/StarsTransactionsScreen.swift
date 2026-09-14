@@ -131,8 +131,6 @@ final class StarsTransactionsScreenComponent: Component {
         private var previousVelocityM1: CGFloat = 0.0
         private var previousVelocity: CGFloat = 0.0
         
-        private var listIsExpanded = false
-        
         private var ignoreScrolling: Bool = false
         
         private var stateDisposable: Disposable?
@@ -268,6 +266,7 @@ final class StarsTransactionsScreenComponent: Component {
             let scrollBounds = self.scrollView.bounds
             
             let isLockedAtPanels = scrollBounds.maxY == self.scrollView.contentSize.height
+            var topContentAlpha: CGFloat = 1.0
             
             if let navigationMetrics = self.navigationMetrics {
                 let topInset: CGFloat = navigationMetrics.navigationHeight - 56.0
@@ -301,6 +300,10 @@ final class StarsTransactionsScreenComponent: Component {
                 let expansionDistance: CGFloat = 32.0
                 var expansionDistanceFactor: CGFloat = abs(scrollBounds.maxY - self.scrollView.contentSize.height) / expansionDistance
                 expansionDistanceFactor = max(0.0, min(1.0, expansionDistanceFactor))
+
+                if self.panelContainer.view?.superview != nil {
+                    topContentAlpha = expansionDistanceFactor
+                }
                 
                 if let panelContainerView = self.panelContainer.view as? StarsTransactionsPanelContainerComponent.View {
                     panelContainerView.updateNavigationMergeFactor(value: 1.0 - expansionDistanceFactor, transition: transition)
@@ -316,13 +319,11 @@ final class StarsTransactionsScreenComponent: Component {
                 if let view = self.topBalanceIconView.view {
                     view.alpha = topBalanceAlpha
                 }
-                
-                let listIsExpanded = expansionDistanceFactor == 0.0
-                if listIsExpanded != self.listIsExpanded {
-                    self.listIsExpanded = listIsExpanded
-                    if !self.isUpdating {
-                        self.state?.updated(transition: .init(animation: .curve(duration: 0.25, curve: .slide)))
-                    }
+            }
+
+            for view in [self.descriptionView.view, self.proceedsView.view, self.balanceView.view, self.earnStarsSection.view, self.subscriptionsView.view] {
+                if let view {
+                    transition.setAlpha(view: view, alpha: topContentAlpha)
                 }
             }
             
@@ -814,6 +815,7 @@ final class StarsTransactionsScreenComponent: Component {
             }
             contentHeight += balanceSize.height
             contentHeight += 34.0
+            var lastSectionMaxY = balanceFrame.maxY
             
             var canJoinRefProgram = false
             if !component.starsContext.ton, let data = component.context.currentAppConfiguration.with({ $0 }).data, let value = data["starref_connect_allowed"] {
@@ -865,6 +867,7 @@ final class StarsTransactionsScreenComponent: Component {
                 }
                 contentHeight += earnStarsSectionSize.height
                 contentHeight += 44.0
+                lastSectionMaxY = earnStarsSectionFrame.maxY
             }
             
             let fontBaseDisplaySize = 17.0
@@ -1048,6 +1051,7 @@ final class StarsTransactionsScreenComponent: Component {
                 }
                 contentHeight += subscriptionsSize.height
                 contentHeight += 44.0
+                lastSectionMaxY = subscriptionsFrame.maxY
             }
             
             let initialTransactions = self.starsState?.transactions ?? []
@@ -1123,8 +1127,9 @@ final class StarsTransactionsScreenComponent: Component {
             }
             
             if !panelItems.isEmpty {
-                let panelContainerInset: CGFloat = self.listIsExpanded ? 0.0 : 16.0
-                let panelContainerCornerRadius: CGFloat = self.listIsExpanded ? 0.0 : 26.0
+                contentHeight = lastSectionMaxY + 22.0
+                let panelContainerInset: CGFloat = 16.0
+                let panelContainerCornerRadius: CGFloat = 26.0
                 
                 let panelContainerSize = self.panelContainer.update(
                     transition: panelTransition,

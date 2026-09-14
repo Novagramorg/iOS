@@ -1476,17 +1476,8 @@ public class AttachmentController: ViewController, MinimizableController {
                 hasPanel = false
             }
 
-            var panelOffset: CGFloat = 0.0
-            if case .glass = controller.style {
-                if layout.metrics.isTablet {
-                    panelOffset = 18.0
-                } else {
-                    panelOffset = 8.0
-                }
-            }
-
             let isEffecitvelyCollapsedUpdated = (self.selectionCount > 0) != (self.panel.isSelecting)
-            let panelHeight = self.panel.update(layout: containerLayout, buttons: self.controller?.buttons ?? [], isSelecting: self.selectionCount > 0, selectionCount: self.selectionCount, elevateProgress: !hasPanel && !hasButton, hideButtons: !self.isPanelVisible && self.panel.hasMediaAccessoryPanel, transition: transition)
+            let (panelHeight, panelOffset) = self.panel.update(layout: containerLayout, buttons: self.controller?.buttons ?? [], isSelecting: self.selectionCount > 0, selectionCount: self.selectionCount, elevateProgress: !hasPanel && !hasButton, hideButtons: !self.isPanelVisible && self.panel.hasMediaAccessoryPanel, transition: transition)
 
             if hasPanel || hasButton {
                 containerInsets.bottom = panelHeight + panelOffset
