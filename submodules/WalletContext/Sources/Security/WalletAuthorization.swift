@@ -188,7 +188,7 @@ final class WalletAuthorizationContext: @unchecked Sendable {
         try self.credentials.validate(session, scope: .resource(namespace: self.namespace), requireAvailable: requireAvailable)
     }
 
-    func withSession<Value>(_ session: PasscodeSession?, operation: () async throws -> Value) async throws -> Value {
+    func withSession<Value>(_ session: PasscodeSession?, operation: nonisolated(nonsending) () async throws -> Value) async throws -> Value {
         if let session {
             try await session.waitUntilAvailable()
             try self.validate(session)
