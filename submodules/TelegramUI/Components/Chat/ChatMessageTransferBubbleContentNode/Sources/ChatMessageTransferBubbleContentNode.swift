@@ -1150,12 +1150,10 @@ private func walletTransferServiceMessageString(
     //TODO:localize
     let sentYouText = " sent you "
     //TODO:localize
-    let worthPrefixText = "(worth "
+    let worthPrefixText = "("
     //TODO:localize
-    let worthSuffixText = "). "
-    //TODO:localize
-    let learnMoreText = "Learn more"
-
+    let worthSuffixText = ")."
+    
     if isIncoming {
         append(peerName, font: semiboldFont, additionalAttributes: peerMentionAttributes)
         append(sentYouText, font: regularFont)
@@ -1173,18 +1171,12 @@ private func walletTransferServiceMessageString(
         formatString: strings.Currency_Grams
     )
     append(amountText, font: semiboldFont)
-    append("\n", font: regularFont)
-
+    
     if let fiatValue {
         append(worthPrefixText, font: regularFont)
         append(fiatValue, font: regularFont)
         append(worthSuffixText, font: regularFont)
     }
-    append(
-        learnMoreText,
-        font: semiboldFont,
-        additionalAttributes: [NSAttributedString.Key(rawValue: TelegramTextAttributes.URL): ""]
-    )
 
     return result
 }

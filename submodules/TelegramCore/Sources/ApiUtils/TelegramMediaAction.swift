@@ -5,6 +5,8 @@ import TelegramApi
 
 func telegramMediaActionFromApiAction(_ action: Api.MessageAction) -> TelegramMediaAction? {
     switch action {
+    case let .messageActionWalletTonConnectRequest(data):
+        return TelegramMediaAction(action: .walletTonConnectRequest(flags: data.flags, sessionId: data.sessionId, expires: data.expires, topic: data.topic, traceId: data.traceId))
     case let .messageActionChannelCreate(messageActionChannelCreateData):
         let title = messageActionChannelCreateData.title
         return TelegramMediaAction(action: .groupCreated(title: title))

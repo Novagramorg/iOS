@@ -1684,6 +1684,17 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                         attributedString = addAttributesToStringWithRanges(strings.Notification_StarsGift_Sent(authorName, price)._tuple, body: bodyAttributes, argumentAttributes: attributes)
                     }
                 }
+            case let .walletTonConnectRequest(flags, _, _, _, _):
+                let text: String
+                //TODO:
+                if flags & (1 << 3) != 0 {
+                    text = "Wallet request declined"
+                } else if flags & (1 << 2) != 0 {
+                    text = "Wallet request accepted"
+                } else {
+                    text = "Wallet request"
+                }
+                attributedString = NSAttributedString(string: text, font: titleFont, textColor: primaryTextColor)
             case let .gramTransfer(amount, _, _, _, _):
                 let amountText = formatTonAmountText(
                     amount,

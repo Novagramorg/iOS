@@ -52,6 +52,7 @@ private func walletContextErrorKind(_ error: Error) -> String? {
         case .publicKeyInvalid: return "public_key_invalid"
         case .proofInvalid: return "proof_invalid"
         case .proofExpired: return "proof_expired"
+        case .rotationNotFound: return "rotation_not_found"
         case .tokenInvalid: return "token_invalid"
         case .tokenExpired: return "token_expired"
         case .clientKeyInvalid: return "client_key_invalid"
@@ -93,6 +94,7 @@ private func walletContextErrorKind(_ error: Error) -> String? {
         case .publicKeyInvalid: return "public_key_invalid"
         case .proofInvalid: return "proof_invalid"
         case .proofExpired: return "proof_expired"
+        case .rotationNotFound: return "rotation_not_found"
         case .keyRotationFailed: return "key_rotation_failed"
         case .backupDisableNeedsConfirmation: return "backup_disable_needs_confirmation"
         case .preparedBackupDisableExpired: return "prepared_backup_disable_expired"
@@ -211,6 +213,7 @@ func walletError(_ error: Error) -> WalletContext.WalletError {
         case .publicKeyInvalid: return .publicKeyInvalid
         case .proofInvalid: return .proofInvalid
         case .proofExpired: return .proofExpired
+        case .rotationNotFound: return .rotationNotFound
         case .tokenInvalid: return .tokenInvalid
         case .tokenExpired: return .tokenExpired
         case .clientKeyInvalid: return .clientKeyInvalid

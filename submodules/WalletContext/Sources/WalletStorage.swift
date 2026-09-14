@@ -8,25 +8,35 @@ struct WalletEngineDescriptorRecord: Codable, Equatable, Sendable {
     let recordId: String
     let address: String
     let publicKey: Data
+    let signingPublicKey: Data?
     let network: String
     let secretRef: String?
 
-    init(descriptor: WalletDescriptor) {
+    init(descriptor: WalletDescriptor, signingPublicKey: Data? = nil) {
         self.schemaVersion = 2
         self.recordId = descriptor.recordId
         self.address = descriptor.address
         self.publicKey = descriptor.publicKey
+        self.signingPublicKey = signingPublicKey
         self.network = descriptor.network == .mainnet ? "mainnet" : "testnet"
         self.secretRef = descriptor.secretRef.value
     }
 
-    init(recordId: String, address: String, publicKey: Data, secretRef: String?) {
+    init(recordId: String, address: String, publicKey: Data, secretRef: String?, signingPublicKey: Data? = nil, network: String = "mainnet") {
         self.schemaVersion = 2
         self.recordId = recordId
         self.address = address
         self.publicKey = publicKey
-        self.network = "mainnet"
+        self.signingPublicKey = signingPublicKey
+        self.network = network
         self.secretRef = secretRef
+    }
+
+    func withSigningPublicKey(_ value: Data) -> WalletEngineDescriptorRecord {
+        WalletEngineDescriptorRecord(
+            recordId: self.recordId, address: self.address, publicKey: self.publicKey,
+            secretRef: self.secretRef, signingPublicKey: value, network: self.network
+        )
     }
 
     var descriptor: WalletDescriptor? {
@@ -250,6 +260,7 @@ actor WalletEngineStorage {
                   !activeSecret.isEmpty else {
                 throw WalletEngineStorageError.corrupted
             }
+            try self.updateKeyRotationSigningPublicKey(record, publicKey: record.newPublicKey)
             return record
         }
         guard let candidate = try self.read(service: self.secretService, account: record.candidateSecretRef),
@@ -257,6 +268,7 @@ actor WalletEngineStorage {
             throw WalletEngineStorageError.corrupted
         }
         try self.write(candidate, service: self.secretService, account: record.activeSecretRef)
+        try self.updateKeyRotationSigningPublicKey(record, publicKey: record.newPublicKey)
         if record.phase == .submissionStarted {
             record.phase = .chainApplied
             try self.writeCodable(record, service: self.descriptorService, account: "key-rotation")
@@ -276,6 +288,7 @@ actor WalletEngineStorage {
             throw WalletEngineStorageError.corrupted
         }
         try self.write(previousSecret, service: self.secretService, account: record.activeSecretRef)
+        try self.updateKeyRotationSigningPublicKey(record, publicKey: record.previousPublicKey)
         if removeRecord {
             record.phase = .previousRestored
             try self.writeCodable(record, service: self.descriptorService, account: "key-rotation")
@@ -296,6 +309,7 @@ actor WalletEngineStorage {
             throw WalletEngineStorageError.corrupted
         }
         try self.write(previousSecret, service: self.secretService, account: record.activeSecretRef)
+        try self.updateKeyRotationSigningPublicKey(record, publicKey: record.previousPublicKey)
         record.phase = .previousRestored
         try self.writeCodable(record, service: self.descriptorService, account: "key-rotation")
         try self.cleanupRestoredKeyRotation(operationId: operationId)
@@ -342,6 +356,17 @@ actor WalletEngineStorage {
         try self.remove(service: self.secretService, account: record.candidateSecretRef)
         try self.remove(service: self.secretService, account: record.rollbackSecretRef)
         try self.remove(service: self.descriptorService, account: "key-rotation")
+    }
+
+    private func updateKeyRotationSigningPublicKey(_ record: WalletEngineKeyRotationRecord, publicKey: Data) throws {
+        guard let descriptor = try self.loadDescriptor(),
+              descriptor.recordId == record.recordId,
+              descriptor.publicKey == record.walletPublicKey,
+              walletEngineAddressesEqual(descriptor.address, record.walletAddress),
+              descriptor.secretRef == record.activeSecretRef else {
+            throw WalletEngineStorageError.corrupted
+        }
+        try self.saveDescriptor(descriptor.withSigningPublicKey(publicKey))
     }
 
     func loadSessions(recordId: String) throws -> [Data] {

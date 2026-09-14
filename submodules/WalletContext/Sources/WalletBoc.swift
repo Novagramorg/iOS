@@ -68,7 +68,8 @@ func walletBocBodyHash(_ data: Data, kind: WalletBocMessageKind) throws -> Strin
     return body.hash(using: hashes).hash.base64EncodedString()
 }
 
-private struct WalletBocCell {
+/// Shared ordinary-cell representation for message-body and signData hashing.
+struct WalletBocCell {
     /// Includes the completion bit for non-byte-aligned data.
     let bytes: [UInt8]
     let bitCount: Int
@@ -90,18 +91,18 @@ private struct WalletBocCell {
         for ref in self.refs {
             representation.append(hashes[ref].hash)
         }
-        // A <=16 KiB BOC has fewer than 8192 cells, so the depth fits UInt16.
+        // The parser bounds cell count so a valid DAG depth fits UInt16.
         let depth = self.refs.map { hashes[$0].depth }.max().map { $0 + 1 } ?? 0
         return HashAndDepth(hash: Data(SHA256.hash(data: representation)), depth: depth)
     }
 }
 
-private struct WalletBoc {
+struct WalletBoc {
     let cells: [WalletBocCell]
     let root: Int
 
-    init(_ data: Data) throws {
-        guard !data.isEmpty, data.count <= 16 * 1024 else {
+    init(_ data: Data, maximumBytes: Int = 16 * 1024) throws {
+        guard !data.isEmpty, data.count <= maximumBytes else {
             throw WalletBocError.invalidSize
         }
         let bytes = Array(data)
@@ -123,7 +124,7 @@ private struct WalletBoc {
         let absentCount = try reader.integer(sizeBytes)
         let cellBytes = try reader.integer(offsetBytes)
         guard rootCount == 1, absentCount == 0 else { throw WalletBocError.unsupportedFormat }
-        guard cellCount > 0, cellBytes <= bytes.count, cellCount <= cellBytes / 2 else {
+        guard cellCount > 0, cellCount < Int(UInt16.max), cellBytes <= bytes.count, cellCount <= cellBytes / 2 else {
             throw WalletBocError.invalidHeader
         }
         let root = try reader.integer(sizeBytes)

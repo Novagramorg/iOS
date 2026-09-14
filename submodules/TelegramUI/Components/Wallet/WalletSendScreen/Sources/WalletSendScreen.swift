@@ -585,7 +585,7 @@ private func walletPresentTransferError(_ error: WalletContext.WalletError?, on 
         text = "The encrypted comment is too long. Shorten it and try again."
     case .commentEncryptionRecipientUnavailable:
         title = "Couldn't Encrypt Comment"
-        text = "This user can't receive encrypted messages now."
+        text = "This wallet can't receive encrypted comments now."
     case .commentEncryptionFailed:
         title = "Couldn't Encrypt Comment"
         text = "The comment could not be encrypted for this wallet. Check the network connection and try again."
@@ -939,6 +939,7 @@ private final class WalletSendScreenComponent: Component {
         private var currentRate: Double?
         private var lastRateText = ""
         private var recipientAddress = ""
+        private var recipientPublicKey: Data?
         private var initialAddress: String?
 
         override init(frame: CGRect) {
@@ -1034,24 +1035,31 @@ private final class WalletSendScreenComponent: Component {
                 force: true
             )
             |> deliverOnMainQueue).start(next: { [weak self] addresses in
-                self?.completePeerAddressResolution(address: addresses.first(where: { $0.userId == peer.id })?.address)
+                guard let self, self.component?.walletContext === component.walletContext else {
+                    return
+                }
+                self.completePeerAddressResolution(peerId: peer.id, recipient: addresses.first(where: { $0.userId == peer.id }))
             }, error: { [weak self] _ in
-                self?.completePeerAddressResolution(address: nil)
+                guard let self, self.component?.walletContext === component.walletContext else {
+                    return
+                }
+                self.completePeerAddressResolution(peerId: peer.id, recipient: nil)
             }))
         }
 
-        private func completePeerAddressResolution(address: String?) {
+        private func completePeerAddressResolution(peerId: EnginePeer.Id, recipient: WalletUserAddress?) {
             guard self.peerAddressState == .loading,
                   let component = self.component,
-                  let peer = component.peer else {
+                  let peer = component.peer, peer.id == peerId else {
                 return
             }
-            if let address = address?.trimmingCharacters(in: .whitespacesAndNewlines), !address.isEmpty {
+            let address = recipient?.address.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let recipient, let address, !address.isEmpty {
                 self.peerAddressState = .resolved
-                self.recipientAddress = address
-                self.discardPeerPreparedTransfer()
+                self.updateRecipient(address: address, publicKey: recipient.publicKey)
                 component.walletContext.rememberWalletPeer(peer, address: address)
             } else {
+                self.updateRecipient(address: "", publicKey: nil)
                 self.peerAddressState = .failed
             }
             self.componentState?.updated(transition: .easeInOut(duration: 0.2))
@@ -1095,8 +1103,20 @@ private final class WalletSendScreenComponent: Component {
             return WalletSendFeesState(info: gaslessInfo, amount: self.amount, configuredMinAmount: configuration.transferGaslessMinAmount)
         }
 
+        private func updateRecipient(address: String, publicKey: Data?) {
+            guard self.recipientAddress != address || self.recipientPublicKey != publicKey else {
+                return
+            }
+            self.recipientAddress = address
+            self.recipientPublicKey = publicKey
+            self.discardPeerPreparedTransfer()
+            if self.isPreparingTransfer && !self.isSubmittingTransfer {
+                self.transferDisposable.set(nil)
+                self.isPreparingTransfer = false
+            }
+        }
+
         private func applyRecipient(_ value: String) {
-            let previousAddress = self.recipientAddress
             let previousAmount = self.amount
             let previousSendAll = self.shouldSendAll
             let previousComment = self.comment
@@ -1116,9 +1136,8 @@ private final class WalletSendScreenComponent: Component {
                     self.comment = comment
                 }
             }
-            self.recipientAddress = address
-            if previousAddress != self.recipientAddress
-                || previousAmount != self.amount
+            self.updateRecipient(address: address, publicKey: nil)
+            if previousAmount != self.amount
                 || previousSendAll != self.shouldSendAll
                 || previousComment != self.comment {
                 self.discardPeerPreparedTransfer()
@@ -1217,7 +1236,7 @@ private final class WalletSendScreenComponent: Component {
             let actionTitle = "Got it"
             controller.present(AlertScreen(
                 context: component.context,
-                configuration: AlertScreen.Configuration(allowInputInset: false),
+                configuration: AlertScreen.Configuration(allowInputInset: true),
                 content: [
                     AnyComponentWithIdentity(
                         id: "title",
@@ -1596,6 +1615,8 @@ private final class WalletSendScreenComponent: Component {
             }
             let sendAll = self.shouldSendAll
             if let peer = component.peer {
+                let recipientAddress = self.recipientAddress
+                let recipientPublicKey = self.recipientPublicKey
                 self.isPreparingTransfer = true
                 self.componentState?.updated(transition: .easeInOut(duration: 0.2))
                 let preparation: Signal<WalletContext.PreparedTransfer, WalletContext.WalletError>
@@ -1611,17 +1632,21 @@ private final class WalletSendScreenComponent: Component {
                 } else {
                     self.discardPeerPreparedTransfer()
                     preparation = component.walletContext.prepareTransfer(
-                        address: self.recipientAddress,
+                        address: recipientAddress,
                         amount: self.amount,
                         sendAll: sendAll,
                         comment: self.comment,
-                        commentEncrypted: !self.isCommentPublic
+                        commentEncrypted: !self.isCommentPublic,
+                        recipientPublicKey: recipientPublicKey
                     )
                 }
                 self.transferDisposable.set((preparation
                 |> deliverOnMainQueue).start(next: { [weak self] prepared in
                     guard let self, self.isVisible,
                           self.component?.walletContext === component.walletContext,
+                          self.component?.peer?.id == peer.id,
+                          self.recipientAddress == recipientAddress,
+                          self.recipientPublicKey == recipientPublicKey,
                           let controller = self.environment?.controller() as? WalletSendScreen else {
                         let _ = component.walletContext.discardPreparedTransfer(prepared).startStandalone()
                         return
@@ -1651,9 +1676,15 @@ private final class WalletSendScreenComponent: Component {
                     )
                     submission.start(walletContext: component.walletContext, prepared: prepared)
                 }, error: { [weak self] error in
-                    self?.isPreparingTransfer = false
-                    self?.componentState?.updated(transition: .easeInOut(duration: 0.2))
-                    self?.presentTransferError(error)
+                    guard let self, self.component?.walletContext === component.walletContext,
+                          self.component?.peer?.id == peer.id,
+                          self.recipientAddress == recipientAddress,
+                          self.recipientPublicKey == recipientPublicKey else {
+                        return
+                    }
+                    self.isPreparingTransfer = false
+                    self.componentState?.updated(transition: .easeInOut(duration: 0.2))
+                    self.presentTransferError(error)
                 }))
                 return
             }
@@ -1716,9 +1747,17 @@ private final class WalletSendScreenComponent: Component {
             }
 
             let environment = environment[EnvironmentType.self].value
+            let peerChanged = self.component?.peer?.id != component.peer?.id
             self.component = component
             self.environment = environment
             self.componentState = state
+
+            if peerChanged || (component.peer != nil && self.walletContext !== component.walletContext) {
+                self.peerAddressDisposable.set(nil)
+                self.peerAddressState = .notRequested
+                self.updateRecipient(address: "", publicKey: nil)
+                self.initialAddress = nil
+            }
 
             var shouldFocusAmountField = false
             if self.initialAddress != component.initialAddress {
@@ -1791,6 +1830,10 @@ private final class WalletSendScreenComponent: Component {
                         self.componentState?.updated(transition: .easeInOut(duration: 0.2))
                     }
                 }))
+            }
+
+            if self.isVisible {
+                self.resolvePeerAddressIfNeeded()
             }
 
             let theme = environment.theme

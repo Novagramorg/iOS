@@ -1449,6 +1449,23 @@ public extension Api {
                 return ("messageActionTopicEdit", [("flags", ConstructorParameterDescription(self.flags)), ("title", ConstructorParameterDescription(self.title)), ("iconEmojiId", ConstructorParameterDescription(self.iconEmojiId)), ("closed", ConstructorParameterDescription(self.closed)), ("hidden", ConstructorParameterDescription(self.hidden))])
             }
         }
+        public class Cons_messageActionWalletTonConnectRequest: TypeConstructorDescription {
+            public var flags: Int32
+            public var sessionId: Int64
+            public var expires: Int32
+            public var topic: String?
+            public var traceId: String?
+            public init(flags: Int32, sessionId: Int64, expires: Int32, topic: String?, traceId: String?) {
+                self.flags = flags
+                self.sessionId = sessionId
+                self.expires = expires
+                self.topic = topic
+                self.traceId = traceId
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("messageActionWalletTonConnectRequest", [("flags", ConstructorParameterDescription(self.flags)), ("sessionId", ConstructorParameterDescription(self.sessionId)), ("expires", ConstructorParameterDescription(self.expires)), ("topic", ConstructorParameterDescription(self.topic)), ("traceId", ConstructorParameterDescription(self.traceId))])
+            }
+        }
         public class Cons_messageActionWebViewDataSent: TypeConstructorDescription {
             public var text: String
             public init(text: String) {
@@ -1537,6 +1554,7 @@ public extension Api {
         case messageActionTodoCompletions(Cons_messageActionTodoCompletions)
         case messageActionTopicCreate(Cons_messageActionTopicCreate)
         case messageActionTopicEdit(Cons_messageActionTopicEdit)
+        case messageActionWalletTonConnectRequest(Cons_messageActionWalletTonConnectRequest)
         case messageActionWebViewDataSent(Cons_messageActionWebViewDataSent)
         case messageActionWebViewDataSentMe(Cons_messageActionWebViewDataSentMe)
 
@@ -2228,6 +2246,20 @@ public extension Api {
                     _data.hidden!.serialize(buffer, true)
                 }
                 break
+            case .messageActionWalletTonConnectRequest(let _data):
+                if boxed {
+                    buffer.appendInt32(-1346781657)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                serializeInt64(_data.sessionId, buffer: buffer, boxed: false)
+                serializeInt32(_data.expires, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 0) != 0 {
+                    serializeString(_data.topic!, buffer: buffer, boxed: false)
+                }
+                if Int(_data.flags) & Int(1 << 1) != 0 {
+                    serializeString(_data.traceId!, buffer: buffer, boxed: false)
+                }
+                break
             case .messageActionWebViewDataSent(let _data):
                 if boxed {
                     buffer.appendInt32(-1262252875)
@@ -2382,6 +2414,8 @@ public extension Api {
                 return ("messageActionTopicCreate", [("flags", ConstructorParameterDescription(_data.flags)), ("title", ConstructorParameterDescription(_data.title)), ("iconColor", ConstructorParameterDescription(_data.iconColor)), ("iconEmojiId", ConstructorParameterDescription(_data.iconEmojiId))])
             case .messageActionTopicEdit(let _data):
                 return ("messageActionTopicEdit", [("flags", ConstructorParameterDescription(_data.flags)), ("title", ConstructorParameterDescription(_data.title)), ("iconEmojiId", ConstructorParameterDescription(_data.iconEmojiId)), ("closed", ConstructorParameterDescription(_data.closed)), ("hidden", ConstructorParameterDescription(_data.hidden))])
+            case .messageActionWalletTonConnectRequest(let _data):
+                return ("messageActionWalletTonConnectRequest", [("flags", ConstructorParameterDescription(_data.flags)), ("sessionId", ConstructorParameterDescription(_data.sessionId)), ("expires", ConstructorParameterDescription(_data.expires)), ("topic", ConstructorParameterDescription(_data.topic)), ("traceId", ConstructorParameterDescription(_data.traceId))])
             case .messageActionWebViewDataSent(let _data):
                 return ("messageActionWebViewDataSent", [("text", ConstructorParameterDescription(_data.text))])
             case .messageActionWebViewDataSentMe(let _data):
@@ -3671,6 +3705,33 @@ public extension Api {
             let _c5 = (Int(_1 ?? 0) & Int(1 << 3) == 0) || _5 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 {
                 return Api.MessageAction.messageActionTopicEdit(Cons_messageActionTopicEdit(flags: _1!, title: _2, iconEmojiId: _3, closed: _4, hidden: _5))
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_messageActionWalletTonConnectRequest(_ reader: BufferReader) -> MessageAction? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Int64?
+            _2 = reader.readInt64()
+            var _3: Int32?
+            _3 = reader.readInt32()
+            var _4: String?
+            if Int(_1 ?? 0) & Int(1 << 0) != 0 {
+                _4 = parseString(reader)
+            }
+            var _5: String?
+            if Int(_1 ?? 0) & Int(1 << 1) != 0 {
+                _5 = parseString(reader)
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = _3 != nil
+            let _c4 = (Int(_1 ?? 0) & Int(1 << 0) == 0) || _4 != nil
+            let _c5 = (Int(_1 ?? 0) & Int(1 << 1) == 0) || _5 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 {
+                return Api.MessageAction.messageActionWalletTonConnectRequest(Cons_messageActionWalletTonConnectRequest(flags: _1!, sessionId: _2!, expires: _3!, topic: _4, traceId: _5))
             }
             else {
                 return nil

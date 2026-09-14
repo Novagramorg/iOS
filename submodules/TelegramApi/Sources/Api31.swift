@@ -125,12 +125,14 @@ public extension Api {
         public class Cons_walletUserAddress: TypeConstructorDescription {
             public var userId: Int64
             public var address: String
-            public init(userId: Int64, address: String) {
+            public var publicKey: Buffer
+            public init(userId: Int64, address: String, publicKey: Buffer) {
                 self.userId = userId
                 self.address = address
+                self.publicKey = publicKey
             }
             public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("walletUserAddress", [("userId", ConstructorParameterDescription(self.userId)), ("address", ConstructorParameterDescription(self.address))])
+                return ("walletUserAddress", [("userId", ConstructorParameterDescription(self.userId)), ("address", ConstructorParameterDescription(self.address)), ("publicKey", ConstructorParameterDescription(self.publicKey))])
             }
         }
         case walletUserAddress(Cons_walletUserAddress)
@@ -139,10 +141,11 @@ public extension Api {
             switch self {
             case .walletUserAddress(let _data):
                 if boxed {
-                    buffer.appendInt32(484442376)
+                    buffer.appendInt32(-1581738523)
                 }
                 serializeInt64(_data.userId, buffer: buffer, boxed: false)
                 serializeString(_data.address, buffer: buffer, boxed: false)
+                serializeBytes(_data.publicKey, buffer: buffer, boxed: false)
                 break
             }
         }
@@ -150,7 +153,7 @@ public extension Api {
         public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .walletUserAddress(let _data):
-                return ("walletUserAddress", [("userId", ConstructorParameterDescription(_data.userId)), ("address", ConstructorParameterDescription(_data.address))])
+                return ("walletUserAddress", [("userId", ConstructorParameterDescription(_data.userId)), ("address", ConstructorParameterDescription(_data.address)), ("publicKey", ConstructorParameterDescription(_data.publicKey))])
             }
         }
 
@@ -159,10 +162,13 @@ public extension Api {
             _1 = reader.readInt64()
             var _2: String?
             _2 = parseString(reader)
+            var _3: Buffer?
+            _3 = parseBytes(reader)
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if _c1 && _c2 {
-                return Api.WalletUserAddress.walletUserAddress(Cons_walletUserAddress(userId: _1!, address: _2!))
+            let _c3 = _3 != nil
+            if _c1 && _c2 && _c3 {
+                return Api.WalletUserAddress.walletUserAddress(Cons_walletUserAddress(userId: _1!, address: _2!, publicKey: _3!))
             }
             else {
                 return nil

@@ -63,10 +63,12 @@ public enum WalletState: Equatable, Sendable {
 public struct WalletUserAddress: Equatable {
     public let userId: EnginePeer.Id
     public let address: String
+    public let publicKey: Data
 
-    public init(userId: EnginePeer.Id, address: String) {
+    public init(userId: EnginePeer.Id, address: String, publicKey: Data) {
         self.userId = userId
         self.address = address
+        self.publicKey = publicKey
     }
 }
 
@@ -198,6 +200,7 @@ public enum WalletOperationError: Error, Equatable {
     case publicKeyInvalid
     case proofInvalid
     case proofExpired
+    case rotationNotFound
     case tokenInvalid
     case tokenExpired
     case clientKeyInvalid
@@ -232,7 +235,8 @@ private extension WalletUserAddress {
                     namespace: Namespaces.Peer.CloudUser,
                     id: PeerId.Id._internalFromInt64Value(address.userId)
                 ),
-                address: address.address
+                address: address.address,
+                publicKey: address.publicKey.makeData()
             )
         }
     }
@@ -338,9 +342,10 @@ func _internal_getWalletState(account: Account) -> Signal<WalletState, WalletGet
 func _internal_getWalletUserAddresses(
     account: Account,
     userIds: [EnginePeer.Id],
+    addresses: [String],
     force: Bool
 ) -> Signal<[WalletUserAddress], WalletGetUserAddressesError> {
-    guard !userIds.isEmpty else {
+    guard !userIds.isEmpty || !addresses.isEmpty else {
         return .single([])
     }
 
@@ -369,7 +374,7 @@ func _internal_getWalletUserAddresses(
         if force {
             flags |= 1 << 0
         }
-        return account.network.request(Api.functions.wallet.getUserAddresses(flags: flags, id: inputUsers))
+        return account.network.request(Api.functions.wallet.getUserAddresses(flags: flags, id: inputUsers, addresses: addresses))
         |> mapError { _ -> WalletGetUserAddressesError in
             return .generic
         }

@@ -1561,7 +1561,7 @@ private final class WalletTransactionContentComponent: Component {
                 text = "The encrypted comment is too long. Shorten it and try again."
             case .commentEncryptionRecipientUnavailable:
                 title = "Couldn't Encrypt Comment"
-                text = "This user can't receive encrypted messages now."
+                text = "This wallet can't receive encrypted comments now."
             case .commentEncryptionFailed:
                 title = "Couldn't Encrypt Comment"
                 text = "The comment could not be encrypted for this wallet. Check the network connection and try again."
