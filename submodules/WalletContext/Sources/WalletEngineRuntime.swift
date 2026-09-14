@@ -526,12 +526,13 @@ actor WalletEngineRuntime {
         }
     }
 
-    func createEncryptedComment(recipient: String, comment: String) async throws -> String {
+    func createEncryptedComment(recipient: String, comment: String, recipientPublicKey: Data? = nil) async throws -> String {
         try await self.withFfi(priority: .userInitiated) {
             try await self.ensureKeyRotationAllowsSigning()
             return try await self.requireClient().createEncryptedComment(request: CreateEncryptedCommentRequest(
                 recipient: recipient,
-                comment: comment
+                comment: comment,
+                recipientPublicKey: recipientPublicKey
             ))
         }
     }

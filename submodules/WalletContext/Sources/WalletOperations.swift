@@ -341,7 +341,6 @@ public extension WalletContext {
                 Task { await impl.discardCommentEncryptionTransfer(prepared, sessionId: session?.id) }
             },
             discardOnCancel: { [impl = self.impl] in
-                // Cancellation can precede adoption; only discard an unclaimed record here.
                 Task { await impl.discardCommentEncryptionTransfer(prepared, sessionId: nil) }
             },
             validateResult: { session in
@@ -352,7 +351,7 @@ public extension WalletContext {
         }
     }
 
-    func prepareTransfer(address: String, amount: Int64, sendAll: Bool = false, comment: String?, commentEncrypted: Bool = false, session: PasscodeSession? = nil) -> Signal<PreparedTransfer, WalletError> {
+    func prepareTransfer(address: String, amount: Int64, sendAll: Bool = false, comment: String?, commentEncrypted: Bool = false, recipientPublicKey: Data? = nil, session: PasscodeSession? = nil) -> Signal<PreparedTransfer, WalletError> {
         self.signal(
             name: "preparing_transfer",
             discardResult: { [impl = self.impl] prepared in
@@ -365,6 +364,7 @@ public extension WalletContext {
                 sendAll: sendAll,
                 comment: comment,
                 commentEncrypted: commentEncrypted,
+                recipientPublicKey: recipientPublicKey,
                 session: session,
                 operationId: operationId
             )
@@ -1246,6 +1246,7 @@ extension WalletContextImpl {
         sendAll: Bool,
         comment: String?,
         commentEncrypted: Bool,
+        recipientPublicKey: Data? = nil,
         session: PasscodeSession? = nil,
         operationId: UUID
     ) async throws -> PreparedTransfer {
@@ -1258,15 +1259,40 @@ extension WalletContextImpl {
             let resolved = try resolveTransferInput(address: address, amount: amount, comment: comment)
             self.requestGaslessInfo()
             let activationGeneration = self.activationGeneration
-            let encryptComment = commentEncrypted && resolved.comment != nil
+            let encryptComment = commentEncrypted && resolved.comment?.isEmpty == false
             let body: SendMessageBody
             if encryptComment, let comment = resolved.comment {
                 guard comment.utf8.count <= 960 else {
                     throw WalletError.commentTooLong
                 }
+                var encryptionPublicKey = recipientPublicKey
+                if encryptionPublicKey == nil {
+                    do {
+                        encryptionPublicKey = try await WalletSignalRequestContext<Data?>().run(
+                            self.engine.wallet.getUserAddresses(addresses: [resolved.address], force: false)
+                            |> map { addresses -> Data? in
+                                addresses.first(where: { walletEngineAddressesEqual($0.address, resolved.address) })?.publicKey
+                            }
+                        )
+                    } catch let error as CancellationError {
+                        throw error
+                    } catch {
+                        try Task.checkCancellation()
+                        self.logger.error("wallet_comment_recipient_key_lookup_failed", error)
+                    }
+                }
+                try Task.checkCancellation()
+                guard !self.isShutdown, self.activationGeneration == activationGeneration,
+                      self.activeOperationId == operationId else {
+                    throw WalletError.unavailable
+                }
                 let boc: String
                 do {
-                    boc = try await self.runtime.createEncryptedComment(recipient: resolved.address, comment: comment)
+                    boc = try await self.runtime.createEncryptedComment(
+                        recipient: resolved.address,
+                        comment: comment,
+                        recipientPublicKey: encryptionPublicKey
+                    )
                 } catch {
                     try Task.checkCancellation()
                     self.logger.error("wallet_comment_encryption_failed", error)
