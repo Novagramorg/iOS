@@ -2018,7 +2018,8 @@ static NSString *dumpHexString(NSData *data, int maxLength) {
             for (MTIncomingMessage *message in parsedMessages) {
                 if ([message.body isKindOfClass:[MTRpcResultMessage class]]) {
                     MTRpcResultMessage *rpcResultMessage = message.body;
-                    id maybeInternalMessage = [MTInternalMessageParser parseMessage:rpcResultMessage.data];
+                    NSData *resultData = [MTInternalMessageParser unwrapMessage:rpcResultMessage.data];
+                    id maybeInternalMessage = resultData != nil ? [MTInternalMessageParser parseMessage:resultData] : nil;
                     if ([maybeInternalMessage isKindOfClass:[MTRpcError class]]) {
                         MTRpcError *rpcError = maybeInternalMessage;
                         if (rpcError.errorCode == 401 && [rpcError.errorDescription isEqualToString:@"AUTH_KEY_PERM_EMPTY"]) {
@@ -2272,6 +2273,11 @@ static bool isBytesEqualConstTime(uint8_t const *bytes1, uint8_t const *bytes2, 
 - (id)parseMessage:(NSData *)data
 {
     NSData *unwrappedData = [MTInternalMessageParser unwrapMessage:data];
+    if (unwrappedData == nil) {
+        // Truncated gzip_packed wrapper or a payload that does not inflate. The
+        // Swift serialization takes a non-optional Data, so stop here.
+        return nil;
+    }
     id internalMessage = [MTInternalMessageParser parseMessage:unwrappedData];
     if (internalMessage != nil)
         return internalMessage;
