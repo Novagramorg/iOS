@@ -187,7 +187,6 @@ enum WalletVault {
         }
     }
 
-    /// Enumerate attributes only: do not prompt for or load unrelated Keychain secrets.
     static func migrateAll() throws {
         self.migrationLock.lock(); defer { self.migrationLock.unlock() }
         var query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,

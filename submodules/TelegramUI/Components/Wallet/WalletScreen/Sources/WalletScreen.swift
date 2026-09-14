@@ -723,6 +723,9 @@ private final class WalletScreenComponent: Component {
         private var accountPeerDisposable: Disposable?
         private var existingWaltBalance: Bool?
         private let existingWaltBalanceDisposable = MetaDisposable()
+        private let waltBalanceSessionDisposable = MetaDisposable()
+        private let waltBalanceBotAppDisposable = MetaDisposable()
+        private var isOpeningWaltBalance = false
         private var earningsContext: StarsRevenueStatsContext?
         private var earningsStateDisposable: Disposable?
         private var availableEarnings: CurrencyAmount?
@@ -806,6 +809,9 @@ private final class WalletScreenComponent: Component {
                 action: #selector(self.navigationBalancePressed),
                 for: .touchUpInside
             )
+            
+            self.transactionsSection.layer.anchorPoint = CGPoint(x: 0.5, y: 0.0)
+            self.collectiblesSection.layer.anchorPoint = CGPoint(x: 0.5, y: 0.0)
         }
 
         required init?(coder: NSCoder) {
@@ -836,6 +842,8 @@ private final class WalletScreenComponent: Component {
             self.walletStateDisposable?.dispose()
             self.accountPeerDisposable?.dispose()
             self.existingWaltBalanceDisposable.dispose()
+            self.waltBalanceSessionDisposable.dispose()
+            self.waltBalanceBotAppDisposable.dispose()
             self.earningsStateDisposable?.dispose()
             self.twoStepAuthDataDisposable?.dispose()
             self.loadMoreDisposable.dispose()
@@ -869,28 +877,106 @@ private final class WalletScreenComponent: Component {
             component.context.twoStepAuthData.set(updatedData)
         }
 
-        func refreshAdditionalBalances() {
-            self.refreshExistingWaltBalance()
-            self.earningsContext?.reload()
-        }
-
-        private func refreshExistingWaltBalance() {
-            guard let subscribedContext = self.accountContext else {
+        private func openWaltBalance() {
+            guard let component = self.component,
+                  let walletInfo = self.walletInfo,
+                  self.environment?.controller() != nil,
+                  !self.isOpeningWaltBalance else {
                 return
             }
-            self.existingWaltBalanceDisposable.set((subscribedContext.engine.wallet.getExistingWaltBalance()
-            |> deliverOnMainQueue).start(next: { [weak self] hasBalance in
-                guard let self, self.accountContext === subscribedContext else {
+
+            let context = component.context
+            let walletContext = component.walletContext
+            let address = walletInfo.address
+            self.isOpeningWaltBalance = true
+
+            self.waltBalanceSessionDisposable.set((context.engine.payments.createOnrampSession(
+                provider: "wallet",
+                cryptoCurrency: "gram",
+                address: address,
+                paymentMethod: "balance"
+            )
+            |> deliverOnMainQueue).start(next: { [weak self] session in
+                guard let self,
+                      self.component?.context === context,
+                      self.component?.walletContext === walletContext,
+                      self.walletInfo?.address == address,
+                      self.isOpeningWaltBalance else {
                     return
                 }
-                let hadValue = self.existingWaltBalance != nil
-                if self.existingWaltBalance != hasBalance {
-                    self.existingWaltBalance = hasBalance
-                    if !self.isUpdating {
-                        self.componentState?.updated(transition: hadValue ? .easeInOut(duration: 0.25) : .immediate)
+                self.waltBalanceBotAppDisposable.set((context.sharedContext.resolveUrl(
+                    context: context,
+                    peerId: nil,
+                    url: session.url,
+                    skipUrlAuth: true
+                )
+                |> take(1)
+                |> deliverOnMainQueue).start(next: { [weak self] result in
+                    guard let self,
+                          self.component?.context === context,
+                          self.component?.walletContext === walletContext,
+                          self.walletInfo?.address == address,
+                          self.isOpeningWaltBalance else {
+                        return
                     }
+                    self.isOpeningWaltBalance = false
+                    guard case let .peer(peer, .withBotApp(botAppStart)) = result, let botPeer = peer.flatMap(EnginePeer.init) else {
+                        self.presentWaltBalanceError()
+                        return
+                    }
+                    guard let controller = self.environment?.controller() else {
+                        return
+                    }
+                    let navigationController = (controller.navigationController as? NavigationController)
+                        ?? (context.sharedContext.mainWindow?.viewController as? NavigationController)
+                    guard let parentController = navigationController?.viewControllers.last as? ViewController else {
+                        self.presentWaltBalanceError()
+                        return
+                    }
+                    context.sharedContext.openBotApp(
+                        context: context,
+                        parentController: parentController,
+                        botApp: botAppStart.botApp,
+                        botPeer: botPeer,
+                        payload: botAppStart.payload,
+                        mode: botAppStart.mode,
+                        isOnramp: true,
+                        willOpen: {},
+                        completion: {}
+                    )
+                }))
+            }, error: { [weak self] _ in
+                guard let self,
+                      self.component?.context === context,
+                      self.component?.walletContext === walletContext,
+                      self.walletInfo?.address == address,
+                      self.isOpeningWaltBalance else {
+                    return
                 }
+                self.presentWaltBalanceError()
             }))
+        }
+
+        private func cancelWaltBalanceOpening() {
+            self.isOpeningWaltBalance = false
+            self.waltBalanceSessionDisposable.set(nil)
+            self.waltBalanceBotAppDisposable.set(nil)
+        }
+
+        private func presentWaltBalanceError() {
+            self.cancelWaltBalanceOpening()
+            guard let component = self.component, let controller = self.environment?.controller() else {
+                return
+            }
+            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+            controller.present(textAlertController(
+                context: component.context,
+                title: nil,
+                text: presentationData.strings.Login_UnknownError,
+                actions: [
+                    TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})
+                ]
+            ), in: .window(.root))
         }
 
         private func openEarnings() {
@@ -928,12 +1014,23 @@ private final class WalletScreenComponent: Component {
             let font = Font.medium(15.0)
             let textColor = environment.theme.list.itemPrimaryTextColor
             if self.existingWaltBalance == true {
-                appendItem(id: "walt", title: NSAttributedString(
-                    //TODO:localize
-                    string: "You also have funds in Walt",
-                    font: font,
-                    textColor: textColor
-                ))
+                items.append(AnyComponentWithIdentity(id: "walt", component: AnyComponent(ListActionItemComponent(
+                    theme: environment.theme,
+                    style: .glass,
+                    title: AnyComponent(MultilineTextComponent(
+                        text: .plain(NSAttributedString(
+                            //TODO:localize
+                            string: "You also have funds in Walt",
+                            font: font,
+                            textColor: textColor
+                        )),
+                        maximumNumberOfLines: 0
+                    )),
+                    accessory: .arrow,
+                    action: { [weak self] _ in
+                        self?.openWaltBalance()
+                    }
+                ))))
             }
             if let availableEarnings = self.availableEarnings, availableEarnings.currency == .ton, availableEarnings.amount > .zero {
                 let amount = formatCurrencyAmountText(availableEarnings, dateTimeFormat: environment.dateTimeFormat, maxDecimalPositions: nil)
@@ -949,7 +1046,19 @@ private final class WalletScreenComponent: Component {
                 title.append(amountText)
                 //TODO:localize
                 title.append(NSAttributedString(string: " in Gram Earnings", font: font, textColor: textColor))
-                appendItem(id: "earnings", title: title)
+                
+                items.append(AnyComponentWithIdentity(id: "earnings", component: AnyComponent(ListActionItemComponent(
+                    theme: environment.theme,
+                    style: .glass,
+                    title: AnyComponent(MultilineTextComponent(
+                        text: .plain(title),
+                        maximumNumberOfLines: 0
+                    )),
+                    accessory: .arrow,
+                    action: { [weak self] _ in
+                        self?.openEarnings()
+                    }
+                ))))
             }
             guard !items.isEmpty else {
                 self.additionalBalancesSection.view?.removeFromSuperview()
@@ -1124,9 +1233,13 @@ private final class WalletScreenComponent: Component {
             }
                         
             let layoutTransition: ComponentTransition = wasVisible ? transition : .immediate
-            layoutTransition.setFrame(
+            layoutTransition.setPosition(
                 view: section,
-                frame: CGRect(origin: frame.origin, size: sectionSize)
+                position: CGPoint(x: frame.midX, y: frame.minY)
+            )
+            layoutTransition.setBounds(
+                view: section,
+                bounds: CGRect(origin: .zero, size: sectionSize)
             )
             return sectionSize
         }
@@ -2387,6 +2500,7 @@ private final class WalletScreenComponent: Component {
             ComponentTransition.immediate.setFrame(view: self.navigationBalanceClippingView, frame: clippingFrame)
 
             if self.walletContext !== component.walletContext {
+                self.cancelWaltBalanceOpening()
                 self.abandonRestoration()
                 self.walletStateDisposable?.dispose()
                 self.loadMoreRequestId = nil
@@ -2407,6 +2521,7 @@ private final class WalletScreenComponent: Component {
                         case let .wallet(info) where previousInfo.address == info.address && previousInfo.publicKey == info.publicKey:
                             break
                         default:
+                            self.cancelWaltBalanceOpening()
                             self.abandonRestoration()
                         }
                     }
@@ -2446,6 +2561,7 @@ private final class WalletScreenComponent: Component {
             }
 
             if self.accountContext !== component.context {
+                self.cancelWaltBalanceOpening()
                 self.accountPeerDisposable?.dispose()
                 self.existingWaltBalanceDisposable.set(nil)
                 self.earningsStateDisposable?.dispose()
@@ -2454,6 +2570,7 @@ private final class WalletScreenComponent: Component {
                 self.accountName = ""
                 self.existingWaltBalance = nil
                 self.availableEarnings = nil
+                
                 let earningsContext = subscribedContext.engine.payments.peerStarsRevenueContext(peerId: subscribedContext.account.peerId, ton: true)
                 self.earningsContext = earningsContext
                 self.earningsStateDisposable = (earningsContext.state
@@ -2471,7 +2588,21 @@ private final class WalletScreenComponent: Component {
                         }
                     }
                 })
-                self.refreshExistingWaltBalance()
+                
+                self.existingWaltBalanceDisposable.set((subscribedContext.engine.wallet.getExistingWaltBalance()
+                |> deliverOnMainQueue).start(next: { [weak self] hasBalance in
+                    guard let self, self.accountContext === subscribedContext else {
+                        return
+                    }
+                    let hadValue = self.existingWaltBalance != nil
+                    if self.existingWaltBalance != hasBalance {
+                        self.existingWaltBalance = hasBalance
+                        if !self.isUpdating {
+                            self.componentState?.updated(transition: hadValue ? .easeInOut(duration: 0.25) : .immediate)
+                        }
+                    }
+                }))
+                
                 self.accountPeerDisposable = (subscribedContext.engine.data.subscribe(
                     TelegramEngine.EngineData.Item.Peer.Peer(id: subscribedContext.account.peerId)
                 )
@@ -3152,7 +3283,6 @@ public final class WalletScreen: ViewControllerComponentContainer {
     override public func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
 
-        let refreshAdditionalBalances = self.didAppear
         self.didAppear = true
         if self.walletScreenUpdatesDisposable == nil {
             self.walletScreenUpdatesDisposable = self.walletContext.beginWalletScreenUpdates()
@@ -3162,9 +3292,6 @@ public final class WalletScreen: ViewControllerComponentContainer {
             return
         }
         componentView.refreshTwoStepAuth()
-        if refreshAdditionalBalances {
-            componentView.refreshAdditionalBalances()
-        }
     }
 
     override public func viewDidDisappear(_ animated: Bool) {

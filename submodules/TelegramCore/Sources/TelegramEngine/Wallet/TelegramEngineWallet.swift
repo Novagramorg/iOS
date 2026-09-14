@@ -116,8 +116,8 @@ public extension TelegramEngine {
             )
         }
 
-        public func disableBackup(password: String? = nil) -> Signal<WalletState, WalletOperationError> {
-            return _internal_disableWalletBackup(account: self.account, password: password)
+        public func disableBackup(password: String? = nil, newPublicKey: Data? = nil, proof: WalletOwnershipProof? = nil) -> Signal<WalletState, WalletOperationError> {
+            return _internal_disableWalletBackup(account: self.account, password: password, newPublicKey: newPublicKey, proof: proof)
         }
 
         public func replaceWallet(replacement: WalletReplacement, password: String? = nil) -> Signal<WalletState, WalletOperationError> {

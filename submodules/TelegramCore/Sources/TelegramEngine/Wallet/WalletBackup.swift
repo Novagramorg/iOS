@@ -45,6 +45,8 @@ private func walletOperationError(_ error: MTRpcError, passwordProvided: Bool) -
         return .proofInvalid
     case "WALLET_PROOF_EXPIRED":
         return .proofExpired
+    case "WALLET_ROTATION_NOT_FOUND":
+        return .rotationNotFound
     case "WALLET_TOKEN_INVALID":
         return .tokenInvalid
     case "WALLET_TOKEN_EXPIRED":
@@ -158,17 +160,48 @@ func _internal_getWalletProofChallenge(account: Account) -> Signal<WalletProofCh
 
 func _internal_disableWalletBackup(
     account: Account,
-    password: String?
+    password: String?,
+    newPublicKey: Data?,
+    proof: WalletOwnershipProof?
 ) -> Signal<WalletState, WalletOperationError> {
-    return walletPasswordProof(account: account, password: password)
-    |> mapToSignal { proof -> Signal<WalletState, WalletOperationError> in
-        let flags: Int32 = proof == nil ? 0 : (1 << 0)
+    let apiOwnershipProof: Api.WalletOwnershipProof?
+    if let proof {
+        guard let newPublicKey, newPublicKey.count == 32 else {
+            return .fail(.publicKeyInvalid)
+        }
+        guard proof.timestamp > 0, proof.signature.count == 64 else {
+            return .fail(.proofInvalid)
+        }
+        apiOwnershipProof = .walletOwnershipProof(.init(
+            timestamp: proof.timestamp,
+            signature: Buffer(data: proof.signature)
+        ))
+    } else {
+        guard newPublicKey == nil else {
+            return .fail(.proofInvalid)
+        }
+        apiOwnershipProof = nil
+    }
+    let passwordProof: Signal<Api.InputCheckPasswordSRP?, WalletOperationError> = apiOwnershipProof == nil
+        ? walletPasswordProof(account: account, password: password)
+        : .single(nil)
+    return passwordProof
+    |> mapToSignal { passwordProof -> Signal<WalletState, WalletOperationError> in
+        var flags: Int32 = passwordProof == nil ? 0 : (1 << 0)
+        if apiOwnershipProof != nil {
+            flags |= (1 << 1) | (1 << 2)
+        }
         return account.network.request(
-            Api.functions.wallet.disableBackup(flags: flags, password: proof),
+            Api.functions.wallet.disableBackup(
+                flags: flags,
+                password: passwordProof,
+                newPublicKey: newPublicKey.map { Buffer(data: $0) },
+                proof: apiOwnershipProof
+            ),
             automaticFloodWait: false
         )
         |> mapError { error in
-            return walletOperationError(error, passwordProvided: password != nil)
+            return walletOperationError(error, passwordProvided: apiOwnershipProof == nil && password != nil)
         }
         |> map(WalletState.init(apiState:))
     }
@@ -233,29 +266,25 @@ func _internal_requestWalletSecretPhraseExport(
     account: Account,
     password: String?
 ) -> Signal<WalletSecretPhraseExport, WalletOperationError> {
-    return walletPasswordProof(account: account, password: password)
-    |> mapToSignal { proof -> Signal<WalletSecretPhraseExport, WalletOperationError> in
-        let flags: Int32 = proof == nil ? 0 : (1 << 0)
-        return account.network.request(
-            Api.functions.wallet.exportSecretPhrase(flags: flags, password: proof),
-            automaticFloodWait: false
-        )
-        |> mapError { error in
-            return walletOperationError(error, passwordProvided: password != nil)
+    return account.network.request(
+        Api.functions.wallet.exportSecretPhrase(),
+        automaticFloodWait: false
+    )
+    |> mapError { error in
+        return walletOperationError(error, passwordProvided: false)
+    }
+    |> mapToSignal { phraseParts -> Signal<WalletSecretPhraseExport, WalletOperationError> in
+        let token: String
+        let datacenterIds: [Int32]
+        switch phraseParts {
+        case let .secretPhraseParts(parts):
+            token = parts.token
+            datacenterIds = parts.dcs
         }
-        |> mapToSignal { phraseParts -> Signal<WalletSecretPhraseExport, WalletOperationError> in
-            let token: String
-            let datacenterIds: [Int32]
-            switch phraseParts {
-            case let .secretPhraseParts(parts):
-                token = parts.token
-                datacenterIds = parts.dcs
-            }
-            guard datacenterIds.count == 3, Set(datacenterIds).count == 3 else {
-                return .fail(.invalidBackupData)
-            }
-            return .single(WalletSecretPhraseExport(token: token, datacenterIds: datacenterIds))
+        guard datacenterIds.count == 3, Set(datacenterIds).count == 3 else {
+            return .fail(.invalidBackupData)
         }
+        return .single(WalletSecretPhraseExport(token: token, datacenterIds: datacenterIds))
     }
 }
 

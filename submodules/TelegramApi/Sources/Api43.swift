@@ -2273,6 +2273,21 @@ public extension Api.functions.auth {
     }
 }
 public extension Api.functions.auth {
+    static func cancelWebTokenAuthorization(webAuthToken: String) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Bool>) {
+        let buffer = Buffer()
+        buffer.appendInt32(1225633185)
+        serializeString(webAuthToken, buffer: buffer, boxed: false)
+        return (FunctionDescription(name: "auth.cancelWebTokenAuthorization", parameters: [("webAuthToken", ConstructorParameterDescription(webAuthToken))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Bool? in
+            let reader = BufferReader(buffer)
+            var result: Api.Bool?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.Bool
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.auth {
     static func checkPaidAuth(phoneNumber: String, phoneCodeHash: String, formId: Int64) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.auth.SentCode>) {
         let buffer = Buffer()
         buffer.appendInt32(1457889180)
@@ -14774,14 +14789,20 @@ public extension Api.functions.users {
     }
 }
 public extension Api.functions.wallet {
-    static func disableBackup(flags: Int32, password: Api.InputCheckPasswordSRP?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.WalletState>) {
+    static func disableBackup(flags: Int32, password: Api.InputCheckPasswordSRP?, newPublicKey: Buffer?, proof: Api.WalletOwnershipProof?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.WalletState>) {
         let buffer = Buffer()
-        buffer.appendInt32(26862065)
+        buffer.appendInt32(185331930)
         serializeInt32(flags, buffer: buffer, boxed: false)
         if Int(flags) & Int(1 << 0) != 0 {
             password!.serialize(buffer, true)
         }
-        return (FunctionDescription(name: "wallet.disableBackup", parameters: [("flags", ConstructorParameterDescription(flags)), ("password", ConstructorParameterDescription(password))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.WalletState? in
+        if Int(flags) & Int(1 << 1) != 0 {
+            serializeBytes(newPublicKey!, buffer: buffer, boxed: false)
+        }
+        if Int(flags) & Int(1 << 2) != 0 {
+            proof!.serialize(buffer, true)
+        }
+        return (FunctionDescription(name: "wallet.disableBackup", parameters: [("flags", ConstructorParameterDescription(flags)), ("password", ConstructorParameterDescription(password)), ("newPublicKey", ConstructorParameterDescription(newPublicKey)), ("proof", ConstructorParameterDescription(proof))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.WalletState? in
             let reader = BufferReader(buffer)
             var result: Api.WalletState?
             if let signature = reader.readInt32() {
@@ -14815,14 +14836,10 @@ public extension Api.functions.wallet {
     }
 }
 public extension Api.functions.wallet {
-    static func exportSecretPhrase(flags: Int32, password: Api.InputCheckPasswordSRP?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.wallet.SecretPhraseParts>) {
+    static func exportSecretPhrase() -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.wallet.SecretPhraseParts>) {
         let buffer = Buffer()
-        buffer.appendInt32(-1871197780)
-        serializeInt32(flags, buffer: buffer, boxed: false)
-        if Int(flags) & Int(1 << 0) != 0 {
-            password!.serialize(buffer, true)
-        }
-        return (FunctionDescription(name: "wallet.exportSecretPhrase", parameters: [("flags", ConstructorParameterDescription(flags)), ("password", ConstructorParameterDescription(password))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.wallet.SecretPhraseParts? in
+        buffer.appendInt32(-1828040335)
+        return (FunctionDescription(name: "wallet.exportSecretPhrase", parameters: []), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.wallet.SecretPhraseParts? in
             let reader = BufferReader(buffer)
             var result: Api.wallet.SecretPhraseParts?
             if let signature = reader.readInt32() {
@@ -14974,16 +14991,21 @@ public extension Api.functions.wallet {
     }
 }
 public extension Api.functions.wallet {
-    static func getUserAddresses(flags: Int32, id: [Api.InputUser]) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<[Api.WalletUserAddress]>) {
+    static func getUserAddresses(flags: Int32, id: [Api.InputUser], addresses: [String]) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<[Api.WalletUserAddress]>) {
         let buffer = Buffer()
-        buffer.appendInt32(501050385)
+        buffer.appendInt32(94531831)
         serializeInt32(flags, buffer: buffer, boxed: false)
         buffer.appendInt32(481674261)
         buffer.appendInt32(Int32(id.count))
         for item in id {
             item.serialize(buffer, true)
         }
-        return (FunctionDescription(name: "wallet.getUserAddresses", parameters: [("flags", ConstructorParameterDescription(flags)), ("id", ConstructorParameterDescription(id))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> [Api.WalletUserAddress]? in
+        buffer.appendInt32(481674261)
+        buffer.appendInt32(Int32(addresses.count))
+        for item in addresses {
+            serializeString(item, buffer: buffer, boxed: false)
+        }
+        return (FunctionDescription(name: "wallet.getUserAddresses", parameters: [("flags", ConstructorParameterDescription(flags)), ("id", ConstructorParameterDescription(id)), ("addresses", ConstructorParameterDescription(addresses))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> [Api.WalletUserAddress]? in
             let reader = BufferReader(buffer)
             var result: [Api.WalletUserAddress]?
             if let _ = reader.readInt32() {

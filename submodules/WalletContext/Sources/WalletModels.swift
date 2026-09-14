@@ -746,12 +746,26 @@ public extension WalletContext {
         public let walletAddress: String
         public let walletPublicKey: String
         public let words: [String]
-        public let newPublicKey: Data
-        public let signedBoc: String
-        public let seqno: UInt32
-        public let expiresAt: Int32
-        public let networkFeeNanograms: Int64?
-        let keyRotationPhase: KeyRotationPhase
+        public struct Rotation: Equatable, Sendable {
+            public let newPublicKey: Data
+            public let signedBoc: String
+            public let seqno: UInt32
+            public let expiresAt: Int32
+            public let networkFeeNanograms: Int64?
+            let phase: KeyRotationPhase
+        }
+
+        public let rotation: Rotation?
+        public var updateSecretPhrase: Bool { self.rotation != nil }
+        public var networkFeeNanograms: Int64? { self.rotation?.networkFeeNanograms }
+
+        public init(id: String, walletAddress: String, walletPublicKey: String, words: [String]) {
+            self.id = id
+            self.walletAddress = walletAddress
+            self.walletPublicKey = walletPublicKey
+            self.words = words
+            self.rotation = nil
+        }
 
         public init(
             id: String,
@@ -769,12 +783,10 @@ public extension WalletContext {
             self.walletAddress = walletAddress
             self.walletPublicKey = walletPublicKey
             self.words = words
-            self.newPublicKey = newPublicKey
-            self.signedBoc = signedBoc
-            self.seqno = seqno
-            self.expiresAt = expiresAt
-            self.networkFeeNanograms = networkFeeNanograms
-            self.keyRotationPhase = keyRotationPhase
+            self.rotation = Rotation(
+                newPublicKey: newPublicKey, signedBoc: signedBoc, seqno: seqno,
+                expiresAt: expiresAt, networkFeeNanograms: networkFeeNanograms, phase: keyRotationPhase
+            )
         }
     }
 
@@ -790,6 +802,7 @@ public extension WalletContext {
         let sourcePublicKey: Data
         let candidateAddress: String
         let candidatePublicKey: Data
+        let candidateSigningPublicKey: Data
 
         init(
             disposition: Disposition,
@@ -797,7 +810,8 @@ public extension WalletContext {
             sourceAddress: String,
             sourcePublicKey: Data,
             candidateAddress: String,
-            candidatePublicKey: Data
+            candidatePublicKey: Data,
+            candidateSigningPublicKey: Data
         ) {
             self.disposition = disposition
             self.recordId = recordId
@@ -805,6 +819,7 @@ public extension WalletContext {
             self.sourcePublicKey = sourcePublicKey
             self.candidateAddress = candidateAddress
             self.candidatePublicKey = candidatePublicKey
+            self.candidateSigningPublicKey = candidateSigningPublicKey
         }
     }
 
@@ -887,6 +902,7 @@ public extension WalletContext {
         case publicKeyInvalid
         case proofInvalid
         case proofExpired
+        case rotationNotFound
         case keyRotationFailed
         case backupDisableNeedsConfirmation(PreparedBackupDisable)
         case preparedBackupDisableExpired
@@ -964,9 +980,9 @@ extension WalletContext.Resource: Sendable where Value: Sendable {
 extension WalletContext.ActiveOperation {
     var defersServerWalletState: Bool {
         switch self {
-        case .creating, .importing, .preparingRecoveryPhraseImport, .completingRecoveryPhraseImport:
+        case .creating, .importing, .preparingRecoveryPhraseImport, .completingRecoveryPhraseImport, .disablingBackup:
             return true
-        case .recoveringPhrase, .enablingBackup, .preparingBackupDisable, .disablingBackup,
+        case .recoveringPhrase, .enablingBackup, .preparingBackupDisable,
              .preparingTransfer, .submittingTransfer, .decryptingComment, .loadingMoreTransactions, .loadingMoreCollectibles:
             return false
         }

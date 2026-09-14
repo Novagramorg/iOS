@@ -340,15 +340,6 @@ public extension Api {
 }
 public extension Api {
     enum InputPasskeyCredential: TypeConstructorDescription {
-        public class Cons_inputPasskeyCredentialFirebasePNV: TypeConstructorDescription {
-            public var pnvToken: String
-            public init(pnvToken: String) {
-                self.pnvToken = pnvToken
-            }
-            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("inputPasskeyCredentialFirebasePNV", [("pnvToken", ConstructorParameterDescription(self.pnvToken))])
-            }
-        }
         public class Cons_inputPasskeyCredentialPublicKey: TypeConstructorDescription {
             public var id: String
             public var rawId: String
@@ -362,17 +353,10 @@ public extension Api {
                 return ("inputPasskeyCredentialPublicKey", [("id", ConstructorParameterDescription(self.id)), ("rawId", ConstructorParameterDescription(self.rawId)), ("response", ConstructorParameterDescription(self.response))])
             }
         }
-        case inputPasskeyCredentialFirebasePNV(Cons_inputPasskeyCredentialFirebasePNV)
         case inputPasskeyCredentialPublicKey(Cons_inputPasskeyCredentialPublicKey)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             switch self {
-            case .inputPasskeyCredentialFirebasePNV(let _data):
-                if boxed {
-                    buffer.appendInt32(1528613672)
-                }
-                serializeString(_data.pnvToken, buffer: buffer, boxed: false)
-                break
             case .inputPasskeyCredentialPublicKey(let _data):
                 if boxed {
                     buffer.appendInt32(1009235855)
@@ -386,24 +370,11 @@ public extension Api {
 
         public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
-            case .inputPasskeyCredentialFirebasePNV(let _data):
-                return ("inputPasskeyCredentialFirebasePNV", [("pnvToken", ConstructorParameterDescription(_data.pnvToken))])
             case .inputPasskeyCredentialPublicKey(let _data):
                 return ("inputPasskeyCredentialPublicKey", [("id", ConstructorParameterDescription(_data.id)), ("rawId", ConstructorParameterDescription(_data.rawId)), ("response", ConstructorParameterDescription(_data.response))])
             }
         }
 
-        public static func parse_inputPasskeyCredentialFirebasePNV(_ reader: BufferReader) -> InputPasskeyCredential? {
-            var _1: String?
-            _1 = parseString(reader)
-            let _c1 = _1 != nil
-            if _c1 {
-                return Api.InputPasskeyCredential.inputPasskeyCredentialFirebasePNV(Cons_inputPasskeyCredentialFirebasePNV(pnvToken: _1!))
-            }
-            else {
-                return nil
-            }
-        }
         public static func parse_inputPasskeyCredentialPublicKey(_ reader: BufferReader) -> InputPasskeyCredential? {
             var _1: String?
             _1 = parseString(reader)
