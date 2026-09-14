@@ -1,0 +1,25 @@
+// swift-tools-version:5.5
+// The swift-tools-version declares the minimum version of Swift required to build this package.
+
+import PackageDescription
+
+let package = Package(
+    name: "PasscodeCore",
+    platforms: [.macOS(.v10_15)],
+    products: [
+        .library(
+            name: "PasscodeCore",
+            targets: ["PasscodeCore"]),
+    ],
+    dependencies: [
+        .package(name: "SSignalKit", path: "../SSignalKit"),
+        .package(name: "TelegramCore", path: "../TelegramCore"),
+    ],
+    targets: [
+        .target(
+            name: "PasscodeCore",
+            dependencies: [.product(name: "SwiftSignalKit", package: "SSignalKit", condition: nil),
+                           .product(name: "TelegramCore", package: "TelegramCore", condition: nil)],
+            path: "Sources"),
+    ]
+)
