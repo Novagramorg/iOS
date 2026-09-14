@@ -36,9 +36,15 @@ public final class PasscodeEnvironment: @unchecked Sendable {
     public func configure(_ configuration: PasscodeConfiguration, privateAccessGroup: (() -> String?)? = nil) throws {
         self.mutex.lock()
         defer { self.mutex.unlock() }
+        #if os(macOS)
+        guard !configuration.appGroupIdentifier.isEmpty, configuration.appGroupIdentifier.contains(".") else {
+            throw PasscodeError.unavailable
+        }
+        #else
         guard configuration.appGroupIdentifier.hasPrefix("group."), configuration.appGroupIdentifier.count > "group.".count else {
             throw PasscodeError.unavailable
         }
+        #endif
         if let current = self.configuration {
             guard current == configuration else { throw PasscodeError.unavailable }
             return
@@ -76,11 +82,15 @@ public final class PasscodeEnvironment: @unchecked Sendable {
         defer { self.mutex.unlock() }
         guard let configuration = self.configuration, configuration.processRole == .mainApp else { throw PasscodeError.unavailable }
         if let group = self.resolvedPrivateAccessGroup { return group }
-        guard let group = self.resolvePrivateAccessGroup?(),
-              !group.isEmpty, !group.hasPrefix("group."),
+        guard let group = self.resolvePrivateAccessGroup?(), !group.isEmpty else {
+            throw PasscodeError.unavailable
+        }
+        #if !os(macOS)
+        guard !group.hasPrefix("group."),
               group.hasSuffix("." + configuration.appGroupIdentifier.dropFirst("group.".count)) else {
             throw PasscodeError.unavailable
         }
+        #endif
         self.resolvedPrivateAccessGroup = group
         return group
     }
