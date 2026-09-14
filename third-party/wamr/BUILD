@@ -8,6 +8,8 @@
 # signal-handler reachability before flipping either define (iOS forbids
 # installing signal handlers in the app process).
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+
 wamr_copts = [
     "-Ithird-party/wamr/core",
     "-Ithird-party/wamr/core/iwasm/include",
