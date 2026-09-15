@@ -1482,14 +1482,28 @@ private func layoutDetails(
     // The header reads as a control, not body copy — semibold as a BASELINE weight, so an explicit
     // `.bold` inside the title still wins over it.
     titleStyleStack.push(.semibold)
-    let (titleTextItem, _, _) = layoutTextItem(
-        attributedStringForRichText(title, styleStack: titleStyleStack, formatDate: context.formatDate),
+    let titleString = attributedStringForRichText(title, styleStack: titleStyleStack, formatDate: context.formatDate)
+    let (measuredTitleTextItem, _, _) = layoutTextItem(
+        titleString,
         boundingWidth: boundingWidth - horizontalInset * 2.0 - context.metrics.detailsChevronReserve,   // reserve right edge for chevron
         offset: CGPoint(x: 0.0, y: 0.0),
         fitToWidth: context.fitToWidth,
         computeRevealCharacterRects: context.computeRevealCharacterRects
     )
-    guard let titleTextItem = titleTextItem else { return [] }
+    // A toggle block may legitimately carry NO title: other clients send `pageBlockDetails` with
+    // `textEmpty`, and `layoutTextItem` returns nil for a zero-length string. Bailing out here
+    // dropped the WHOLE block — header, chevron and every child alike. Substitute an empty text
+    // item instead: it has no lines, so it draws nothing, costs nothing in the reveal map and is
+    // skipped by selection, while `titleHeight` falls back to `detailsMinTitleHeight`, which is
+    // also the header's tap target and the chevron's vertical centre. V1 `layoutDetailsItem` has
+    // always behaved this way — it discards the optional item and keeps its own minimum height.
+    let titleTextItem = measuredTitleTextItem ?? InstantPageTextItem(
+        frame: CGRect(),
+        attributedString: titleString,
+        alignment: .natural,
+        opaqueBackground: false,
+        lines: []
+    )
     
     let titleHeight = max(context.metrics.detailsMinTitleHeight, titleTextItem.frame.height + context.metrics.detailsTitleVerticalPad)
     titleTextItem.frame.origin.x = context.rtl

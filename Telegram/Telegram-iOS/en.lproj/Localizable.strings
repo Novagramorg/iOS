@@ -14,6 +14,7 @@
 "PUSH_MESSAGE_GIF" = "%1$@|sent you a GIF";
 "PUSH_ENCRYPTED_MESSAGE" = "You have a new message%1$@";
 "PUSH_LOCKED_MESSAGE" = "You have a new message%1$@";
+"PUSH_LOCKED_STORY" = "You have a new story%1$@";
 "PUSH_MESSAGE_SCREENSHOT" = "%1$@|took a screenshot!";
 "PUSH_ENCRYPTION_REQUEST" = "New encryption request%1$@";
 "PUSH_ENCRYPTION_ACCEPT" = "Your encryption request was accepted%1$@";

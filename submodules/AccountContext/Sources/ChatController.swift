@@ -1312,7 +1312,10 @@ public enum ChatHistoryListSource {
     }
     
     case `default`
-    case custom(messages: Signal<([EngineRawMessage], Int32, Bool), NoError>, messageId: EngineMessage.Id?, quote: Quote?, isSavedMusic: Bool, canReorder: Bool, loadMore: (() -> Void)?)
+    /// `richMessageId` marks a queue whose rows are synthesized from ONE rich message's InstantPage
+    /// audio tracks; it carries that message's id so a row can be matched against the playing
+    /// InstantPageMediaPlaylist. Nil for every other custom source.
+    case custom(messages: Signal<([EngineRawMessage], Int32, Bool), NoError>, messageId: EngineMessage.Id?, quote: Quote?, isSavedMusic: Bool, canReorder: Bool, richMessageId: EngineMessage.Id?, loadMore: (() -> Void)?)
     case customView(historyView: Signal<(EngineRawMessageHistoryView, EngineViewUpdateType), NoError>)
 }
 

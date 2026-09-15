@@ -613,7 +613,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                     
                     return (messages, Int32(messages.count), false)
                 }
-                source = .custom(messages: messages, messageId: MessageId(peerId: PeerId(0), namespace: 0, id: 0), quote: nil, isSavedMusic: false, canReorder: false, loadMore: nil)
+                source = .custom(messages: messages, messageId: MessageId(peerId: PeerId(0), namespace: 0, id: 0), quote: nil, isSavedMusic: false, canReorder: false, richMessageId: nil, loadMore: nil)
             case let .reply(reply):
                 let replyAccountPeerSignal = context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: context.account.peerId))
                 |> mapToSignal { peer -> Signal<EnginePeer, NoError> in
@@ -636,7 +636,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                     
                     return (messages, Int32(messages.count), false)
                 }
-                source = .custom(messages: messages, messageId: messageIds.first ?? MessageId(peerId: PeerId(0), namespace: 0, id: 0), quote: reply.quote.flatMap { quote in ChatHistoryListSource.Quote(text: quote.text, offset: quote.offset) }, isSavedMusic: false, canReorder: false, loadMore: nil)
+                source = .custom(messages: messages, messageId: messageIds.first ?? MessageId(peerId: PeerId(0), namespace: 0, id: 0), quote: reply.quote.flatMap { quote in ChatHistoryListSource.Quote(text: quote.text, offset: quote.offset) }, isSavedMusic: false, canReorder: false, richMessageId: nil, loadMore: nil)
             case let .link(link):
                 let messages = link.options
                 |> mapToSignal { options -> Signal<(ChatControllerSubject.LinkOptions, Peer, Message?, [StoryId: CodableEntry]), NoError> in
@@ -746,13 +746,13 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                     
                     return ([message], 1, false)
                 }
-                source = .custom(messages: messages, messageId: MessageId(peerId: PeerId(0), namespace: 0, id: 0), quote: nil, isSavedMusic: false, canReorder: false, loadMore: nil)
+                source = .custom(messages: messages, messageId: MessageId(peerId: PeerId(0), namespace: 0, id: 0), quote: nil, isSavedMusic: false, canReorder: false, richMessageId: nil, loadMore: nil)
             }
         } else if case .customChatContents = chatLocation {
             if case let .customChatContents(customChatContents) = subject {
                 source = .customView(historyView: customChatContents.historyView)
             } else {
-                source = .custom(messages: .single(([], 0, false)), messageId: nil, quote: nil, isSavedMusic: false, canReorder: false, loadMore: nil)
+                source = .custom(messages: .single(([], 0, false)), messageId: nil, quote: nil, isSavedMusic: false, canReorder: false, richMessageId: nil, loadMore: nil)
             }
         } else {
             source = .default

@@ -741,6 +741,9 @@ private final class NotificationServiceHandler {
 
     private let notificationKeyDisposable = MetaDisposable()
     private let pollDisposable = MetaDisposable()
+    // Handler creation is, for practical purposes, when the system's ~30 s extension
+    // budget started ticking; the connection deadline on the poll path counts from here.
+    private let startTimestamp = CFAbsoluteTimeGetCurrent()
 
     init?(queue: Queue, episode: String, updateCurrentContent: @escaping (NotificationContent) -> Void, completed: @escaping () -> Void, payload: [AnyHashable: Any]) {
         //debug_linker_fail_test()
@@ -819,14 +822,18 @@ private final class NotificationServiceHandler {
         let networkArguments = NetworkInitializationArguments(apiId: apiId, apiHash: apiHash, languagesCategory: languagesCategory, appVersion: appVersion, voipMaxLayer: 0, voipVersions: [], appData: .single(buildConfig.bundleData(withAppToken: nil, tokenType: nil, tokenEnvironment: nil, signatureDict: nil)), externalRequestVerificationStream: .never(), externalRecaptchaRequestVerification: { _, _ in return .never() }, autolockDeadine: .single(nil), encryptionProvider: OpenSSLEncryptionProvider(), deviceModelName: nil, useBetaFeatures: !buildConfig.isAppStoreBuild, isICloudEnabled: false)
         
         let isLockedMessage: String?
+        let isLockedStoryMessage: String?
         if let data = try? Data(contentsOf: URL(fileURLWithPath: appLockStatePath(rootPath: rootPath))), let state = try? JSONDecoder().decode(LockState.self, from: data), isAppLocked(state: state) {
             if let notificationsPresentationData = try? Data(contentsOf: URL(fileURLWithPath: notificationsPresentationDataPath(rootPath: rootPath))), let notificationsPresentationDataValue = try? JSONDecoder().decode(NotificationsPresentationData.self, from: notificationsPresentationData) {
                 isLockedMessage = notificationsPresentationDataValue.applicationLockedMessageString
+                isLockedStoryMessage = notificationsPresentationDataValue.applicationLockedStoryString ?? notificationsPresentationDataValue.applicationLockedMessageString
             } else {
                 isLockedMessage = "You have a new message"
+                isLockedStoryMessage = "You have a new story"
             }
         } else {
             isLockedMessage = nil
+            isLockedStoryMessage = nil
         }
         
         let incomingCallMessage: String
@@ -1304,6 +1311,7 @@ private final class NotificationServiceHandler {
                                     content.category = "str"
                                 } else {
                                     content.category = "st"
+                                    content.isLockedMessage = isLockedStoryMessage
                                 }
                                 
                                 action = .pollStories(peerId: peerId, content: content, storyId: storyId, isReaction: isReaction)
@@ -1459,7 +1467,26 @@ private final class NotificationServiceHandler {
                             Logger.shared.log("NotificationService \(episode)", "Will poll")
                             if let stateManager = strongSelf.stateManager {
                                 let shouldKeepConnection = stateManager.network.shouldKeepConnection
-                                
+
+                                // iOS expires the extension about 30 s after didReceive. Everything on
+                                // this path that needs the connection is cut off at one deadline counted
+                                // from handler creation, leaving slack for the postbox-only work after the
+                                // fetches (unread count, content generation), so a slow poll cannot push
+                                // the fetch step past expiry. The poll additionally has its own 15 s cap:
+                                // without one, a push arriving while no connection can be established (a
+                                // dead proxy, a blocked network) kept polling until the system expired the
+                                // extension, and every retry along the way was a fresh connection attempt
+                                // (bugs.telegram.org/c/64534, /c/61583). Giving up shows the payload's own
+                                // text instead of the fetched message, which is the same content the
+                                // expiry path would have shown, only sooner and without the retries.
+                                let connectionDeadline = strongSelf.startTimestamp + 25.0
+                                let remainingBudget: () -> Double = {
+                                    return max(0.5, connectionDeadline - CFAbsoluteTimeGetCurrent())
+                                }
+                                let pollBudget: Double = 15.0
+                                let pollCompleted = Atomic<Bool>(value: false)
+                                let connectionGaveUp = Atomic<Bool>(value: false)
+
                                 let pollCompletion: (NotificationContent, Media?) -> Void = { content, customMedia in
                                     var content = content
 
@@ -1660,7 +1687,7 @@ private final class NotificationServiceHandler {
                                             }
                                         }
                                         
-                                        let resolvedEmojiFiles: Signal<[Int64: String], NoError> = _internal_resolveInlineStickers(postbox: stateManager.postbox, network: stateManager.network, fileIds: uniqueEmojiIds)
+                                        var resolvedEmojiFiles: Signal<[Int64: String], NoError> = _internal_resolveInlineStickers(postbox: stateManager.postbox, network: stateManager.network, fileIds: uniqueEmojiIds)
                                         |> mapToSignal { files -> Signal<[Int64: String], NoError> in
                                             var fetchSignals: [Signal<(Int64, String?), NoError>] = []
                                             
@@ -1784,15 +1811,29 @@ private final class NotificationServiceHandler {
                                             }
                                         }
 
+                                        if connectionGaveUp.with({ $0 }) {
+                                            // The poll never got a connection. Each fetch below would only sit
+                                            // out its own 10 s timeout on the same dead connection, past the
+                                            // point where iOS expires the extension.
+                                            Logger.shared.log("NotificationService \(episode)", "Skipping media fetches: no connection during the poll")
+                                            fetchMediaSignal = .single(nil)
+                                            fetchNotificationSoundSignal = .single(nil)
+                                            resolvedEmojiFiles = .single([:])
+                                        }
+
+                                        // Each fetch gets at most 10 s, and never more than is left before
+                                        // the deadline.
+                                        let fetchBudget = min(10.0, remainingBudget())
+
                                         Logger.shared.log("NotificationService \(episode)", "Will fetch media")
                                         let _ = (combineLatest(queue: queue,
                                             fetchMediaSignal
-                                            |> timeout(10.0, queue: queue, alternate: .single(nil)),
+                                            |> timeout(fetchBudget, queue: queue, alternate: .single(nil)),
                                             fetchNotificationSoundSignal
-                                            |> timeout(10.0, queue: queue, alternate: .single(nil)),
+                                            |> timeout(fetchBudget, queue: queue, alternate: .single(nil)),
                                             wasDisplayed,
                                             resolvedEmojiFiles
-                                            |> timeout(10.0, queue: queue, alternate: .single([:])),
+                                            |> timeout(fetchBudget, queue: queue, alternate: .single([:])),
                                         )
                                         |> deliverOn(queue)).start(next: { mediaData, notificationSoundData, wasDisplayed, resolvedEmojiFiles in
                                             guard let strongSelf = self, let stateManager = strongSelf.stateManager else {
@@ -1928,15 +1969,16 @@ private final class NotificationServiceHandler {
                                 }
 
                                 let pollSignal: Signal<Never, NoError>
-                                
+
                                 if !shouldSynchronizeState {
                                     pollSignal = .complete()
                                 } else {
                                     shouldKeepConnection.set(.single(true))
+                                    let unboundedPollSignal: Signal<Never, NoError>
                                     if peerId.namespace == Namespaces.Peer.CloudChannel {
                                         Logger.shared.log("NotificationService \(episode)", "Will poll channel \(peerId)")
-                                        
-                                        pollSignal = standalonePollChannelOnce(
+
+                                        unboundedPollSignal = standalonePollChannelOnce(
                                             accountPeerId: stateManager.accountPeerId,
                                             postbox: stateManager.postbox,
                                             network: stateManager.network,
@@ -1948,7 +1990,9 @@ private final class NotificationServiceHandler {
                                         enum ControlError {
                                             case restart
                                         }
-                                        let signal = stateManager.standalonePollDifference()
+                                        // Unbounded on its own: getDifference is paginated and restarted
+                                        // until the state catches up, which never happens offline.
+                                        unboundedPollSignal = stateManager.standalonePollDifference()
                                         |> castError(ControlError.self)
                                         |> mapToSignal { result -> Signal<Never, ControlError> in
                                             if result {
@@ -1958,9 +2002,27 @@ private final class NotificationServiceHandler {
                                             }
                                         }
                                         |> restartIfError
-                                        
-                                        pollSignal = signal
                                     }
+
+                                    // `timeout` disposes the poll when it fires, which stops the
+                                    // getDifference loop and its reconnects; the flag makes the fetch step
+                                    // skip work that would only wait on the same dead connection. The
+                                    // timer's handler can still run once after a completion it was too
+                                    // late to cancel, hence the `pollCompleted` guard: a poll that just
+                                    // made it keeps its fetches.
+                                    let pollTimeout = min(pollBudget, remainingBudget())
+                                    pollSignal = (unboundedPollSignal
+                                    |> afterCompleted {
+                                        let _ = pollCompleted.swap(true)
+                                    })
+                                    |> timeout(pollTimeout, queue: queue, alternate: Signal { subscriber in
+                                        if !pollCompleted.with({ $0 }) {
+                                            Logger.shared.log("NotificationService \(episode)", "Poll did not complete within \(pollTimeout) s, giving up on the connection")
+                                            let _ = connectionGaveUp.swap(true)
+                                        }
+                                        subscriber.putCompletion()
+                                        return EmptyDisposable
+                                    })
                                 }
 
                                 let pollWithUpdatedContent: Signal<(NotificationContent, Media?), NoError>
@@ -2063,8 +2125,12 @@ private final class NotificationServiceHandler {
                                 
                                 let reportDeliverySignal: Signal<Bool, NoError>
                                 if reportDelivery, let messageId {
+                                    // Combined with the poll below, so it needs the same deadline: a
+                                    // request that never gets a connection would otherwise hold the
+                                    // completion back even after the poll has given up. Delivery reports
+                                    // are best-effort, so dropping the in-flight request is fine.
                                     reportDeliverySignal = _internal_reportMessageDelivery(postbox: stateManager.postbox, network: stateManager.network, messageIds: [messageId], fromPushNotification: true)
-                                    |> then(.single(true))
+                                    |> timeout(remainingBudget(), queue: queue, alternate: .single(true))
                                 } else {
                                     reportDeliverySignal = .single(true)
                                 }
@@ -2088,7 +2154,7 @@ private final class NotificationServiceHandler {
 
                                     queue.async {
                                         guard let strongSelf = self, let stateManager = strongSelf.stateManager else {
-                                            let content = NotificationContent(isLockedMessage: isLockedMessage)
+                                            let content = NotificationContent(isLockedMessage: isReaction ? isLockedMessage : isLockedStoryMessage)
                                             updateCurrentContent(content)
                                             completed()
                                             return

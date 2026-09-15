@@ -74,6 +74,8 @@ public final class ListMessageItem: ListViewItem, ItemListItem {
     let isGlobalSearchResult: Bool
     let isDownloadList: Bool
     let isSavedMusic: Bool
+    /// Non-nil when this row is a synthesized track of a rich message's audio queue.
+    let richMessageQueueId: EngineMessage.Id?
     let isStoryMusic: Bool
     let isAttachMusic: Bool
     let displayFileInfo: Bool
@@ -120,6 +122,7 @@ public final class ListMessageItem: ListViewItem, ItemListItem {
         displayFileInfo: Bool = true,
         displayBackground: Bool = false,
         canReorder: Bool = false,
+        richMessageQueueId: EngineMessage.Id? = nil,
         style: ItemListStyle = .plain,
         sectionId: ItemListSectionId = 0
     ) {
@@ -143,6 +146,7 @@ public final class ListMessageItem: ListViewItem, ItemListItem {
         self.isGlobalSearchResult = isGlobalSearchResult
         self.isDownloadList = isDownloadList
         self.isSavedMusic = isSavedMusic
+        self.richMessageQueueId = richMessageQueueId
         self.isStoryMusic = isStoryMusic
         self.isAttachMusic = isAttachMusic
         self.displayFileInfo = displayFileInfo

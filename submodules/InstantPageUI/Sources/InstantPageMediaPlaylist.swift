@@ -6,17 +6,21 @@ import TelegramUIPreferences
 import AccountContext
 import MusicAlbumArtResources
 
-struct InstantPageMediaPlaylistItemId: SharedMediaPlaylistItemId {
+struct InstantPageMediaPlaylistItemId: SharedMediaPlaylistItemId, InstantPagePlaylistItemIndexProviding {
     let index: Int
+
+    var instantPageMediaIndex: Int {
+        return self.index
+    }
     
     func isEqual(to: SharedMediaPlaylistItemId) -> Bool {
-        if let to = to as? InstantPageMediaPlaylistItemId {
-            if self.index != to.index {
-                return false
-            }
-            return true
+        // Matched through the protocol, not the concrete type: a host outside InstantPageUI cannot
+        // construct this type and passes RichMessagePlaylistItemId instead. This type conforms to
+        // the same protocol, so same-type comparisons still work.
+        guard let to = to as? InstantPagePlaylistItemIndexProviding else {
+            return false
         }
-        return false
+        return self.index == to.instantPageMediaIndex
     }
 }
 
@@ -129,15 +133,27 @@ final class InstantPageMediaPlaylistItem: SharedMediaPlaylistItem {
     }
 }
 
-public enum InstantPageMediaPlaylistId: Equatable, SharedMediaPlaylistId {
+public enum InstantPageMediaPlaylistId: Equatable, SharedMediaPlaylistId, InstantPagePlaylistIdProviding {
     case instantPage(webpageId: EngineMedia.Id)
     case richMessage(messageId: EngineMessage.Id)
 
-    public func isEqual(to: SharedMediaPlaylistId) -> Bool {
-        guard let to = to as? InstantPageMediaPlaylistId else {
-            return false
+    public var instantPageRichMessageId: EngineMessage.Id? {
+        if case let .richMessage(messageId) = self {
+            return messageId
         }
-        return self == to
+        return nil
+    }
+
+    public func isEqual(to: SharedMediaPlaylistId) -> Bool {
+        if let to = to as? InstantPageMediaPlaylistId {
+            return self == to
+        }
+        // A host outside InstantPageUI cannot construct this enum and passes RichMessagePlaylistId
+        // instead; match it on the rich message id. `.instantPage` never matches, having none.
+        if let to = to as? InstantPagePlaylistIdProviding, let lhs = self.instantPageRichMessageId, let rhs = to.instantPageRichMessageId {
+            return lhs == rhs
+        }
+        return false
     }
 }
 
@@ -151,7 +167,13 @@ public final class InstantPageMediaPlaylist: SharedMediaPlaylist {
     /// the shared media accessory panel can open the music player for it (see
     /// `InstantPagePlaylistLocation` in AccountContext). Nil for the Instant View reader.
     public var location: SharedMediaPlaylistLocation {
-        return InstantPagePlaylistLocation(webpageId: self.webPage.webpageId, messageId: self.messageReference?.id)
+        var tracks: [InstantPagePlaylistTrack] = []
+        for item in self.items {
+            if case let .file(file) = item.media {
+                tracks.append(InstantPagePlaylistTrack(index: item.index, file: file))
+            }
+        }
+        return InstantPagePlaylistLocation(webpageId: self.webPage.webpageId, messageId: self.messageReference?.id, tracks: tracks, webPage: self.webPage, messageReference: self.messageReference)
     }
     
     public var currentItemDisappeared: (() -> Void)?
@@ -189,25 +211,29 @@ public final class InstantPageMediaPlaylist: SharedMediaPlaylist {
                 if let currentItem = self.currentItem, let currentIndex = self.items.firstIndex(where: { $0.index == currentItem.index }) {
                     let selectedIndex: Int?
                     switch self.order {
+                        // `items` is in document order, so advancing is +1. This is the opposite of
+                        // PeerMessagesMediaPlaylist, whose collection is a reverse-chronological
+                        // chat timeline and whose `.regular` advance therefore walks to the EARLIER
+                        // message; copying that arithmetic here reversed Next/Previous on screen.
                         case .regular:
                             if case .next = action {
-                                selectedIndex = max(0, currentIndex - 1)
-                            } else {
                                 if currentIndex == self.items.count - 1 {
                                     selectedIndex = nil
                                 } else {
                                     selectedIndex = currentIndex + 1
                                 }
+                            } else {
+                                selectedIndex = max(0, currentIndex - 1)
                             }
                         case .reversed:
                             if case .next = action {
+                                selectedIndex = max(0, currentIndex - 1)
+                            } else {
                                 if currentIndex == self.items.count - 1 {
                                     selectedIndex = nil
                                 } else {
                                     selectedIndex = currentIndex + 1
                                 }
-                            } else {
-                                selectedIndex = max(0, currentIndex - 1)
                             }
                         case .random:
                             selectedIndex = Int(arc4random_uniform(UInt32(self.items.count)))
