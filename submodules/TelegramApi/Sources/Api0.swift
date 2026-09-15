@@ -1329,6 +1329,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[1960361625] = { return Api.Update.parse_updateSavedRingtones($0) }
     dict[1347068303] = { return Api.Update.parse_updateSentPhoneCode($0) }
     dict[2103604867] = { return Api.Update.parse_updateSentStoryReaction($0) }
+    dict[-1320989366] = { return Api.Update.parse_updateSentWalletTransaction($0) }
     dict[-337352679] = { return Api.Update.parse_updateServiceNotification($0) }
     dict[-245208620] = { return Api.Update.parse_updateSmsJob($0) }
     dict[1222788802] = { return Api.Update.parse_updateStarGiftAuctionState($0) }
@@ -1349,6 +1350,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[88680979] = { return Api.Update.parse_updateUserPhone($0) }
     dict[-440534818] = { return Api.Update.parse_updateUserStatus($0) }
     dict[706199388] = { return Api.Update.parse_updateUserTyping($0) }
+    dict[-1464984404] = { return Api.Update.parse_updateWalletGaslessInfo($0) }
     dict[1791226538] = { return Api.Update.parse_updateWalletState($0) }
     dict[-772898407] = { return Api.Update.parse_updateWalletTonConnectPendingDisconnect($0) }
     dict[1352896014] = { return Api.Update.parse_updateWalletTonConnectSession($0) }
@@ -1747,11 +1749,9 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[1658259128] = { return Api.users.Users.parse_users($0) }
     dict[828000628] = { return Api.users.Users.parse_usersSlice($0) }
     dict[417867063] = { return Api.wallet.EncryptedSecretPhrasePart.parse_encryptedSecretPhrasePart($0) }
-    dict[-459792708] = { return Api.wallet.GaslessInfo.parse_gaslessInfo($0) }
     dict[-103410961] = { return Api.wallet.HolderDc.parse_holderDc($0) }
     dict[-1713105145] = { return Api.wallet.ProofChallenge.parse_proofChallenge($0) }
     dict[-422514943] = { return Api.wallet.SecretPhraseParts.parse_secretPhraseParts($0) }
-    dict[1882463590] = { return Api.wallet.SentTransfer.parse_sentTransfer($0) }
     dict[1271436947] = { return Api.wallet.TonConnectChallenge.parse_tonConnectChallenge($0) }
     dict[-2050952924] = { return Api.wallet.TonConnectPending.parse_tonConnectPending($0) }
     dict[236939414] = { return Api.wallet.TonConnectSessions.parse_tonConnectSessions($0) }
@@ -3080,15 +3080,11 @@ public extension Api {
             _1.serialize(buffer, boxed)
         case let _1 as Api.wallet.EncryptedSecretPhrasePart:
             _1.serialize(buffer, boxed)
-        case let _1 as Api.wallet.GaslessInfo:
-            _1.serialize(buffer, boxed)
         case let _1 as Api.wallet.HolderDc:
             _1.serialize(buffer, boxed)
         case let _1 as Api.wallet.ProofChallenge:
             _1.serialize(buffer, boxed)
         case let _1 as Api.wallet.SecretPhraseParts:
-            _1.serialize(buffer, boxed)
-        case let _1 as Api.wallet.SentTransfer:
             _1.serialize(buffer, boxed)
         case let _1 as Api.wallet.TonConnectChallenge:
             _1.serialize(buffer, boxed)

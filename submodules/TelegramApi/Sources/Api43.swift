@@ -14836,10 +14836,14 @@ public extension Api.functions.wallet {
     }
 }
 public extension Api.functions.wallet {
-    static func exportSecretPhrase() -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.wallet.SecretPhraseParts>) {
+    static func exportSecretPhrase(flags: Int32, password: Api.InputCheckPasswordSRP?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.wallet.SecretPhraseParts>) {
         let buffer = Buffer()
-        buffer.appendInt32(-1828040335)
-        return (FunctionDescription(name: "wallet.exportSecretPhrase", parameters: []), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.wallet.SecretPhraseParts? in
+        buffer.appendInt32(-1871197780)
+        serializeInt32(flags, buffer: buffer, boxed: false)
+        if Int(flags) & Int(1 << 0) != 0 {
+            password!.serialize(buffer, true)
+        }
+        return (FunctionDescription(name: "wallet.exportSecretPhrase", parameters: [("flags", ConstructorParameterDescription(flags)), ("password", ConstructorParameterDescription(password))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.wallet.SecretPhraseParts? in
             let reader = BufferReader(buffer)
             var result: Api.wallet.SecretPhraseParts?
             if let signature = reader.readInt32() {
@@ -14894,14 +14898,14 @@ public extension Api.functions.wallet {
     }
 }
 public extension Api.functions.wallet {
-    static func getGaslessInfo() -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.wallet.GaslessInfo>) {
+    static func getGaslessInfo() -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Updates>) {
         let buffer = Buffer()
-        buffer.appendInt32(1217780107)
-        return (FunctionDescription(name: "wallet.getGaslessInfo", parameters: []), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.wallet.GaslessInfo? in
+        buffer.appendInt32(1949167777)
+        return (FunctionDescription(name: "wallet.getGaslessInfo", parameters: []), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Updates? in
             let reader = BufferReader(buffer)
-            var result: Api.wallet.GaslessInfo?
+            var result: Api.Updates?
             if let signature = reader.readInt32() {
-                result = Api.parse(reader, signature: signature) as? Api.wallet.GaslessInfo
+                result = Api.parse(reader, signature: signature) as? Api.Updates
             }
             return result
         })
@@ -15035,19 +15039,20 @@ public extension Api.functions.wallet {
     }
 }
 public extension Api.functions.wallet {
-    static func sendTransfer(flags: Int32, dataNormal: Buffer, dataGasless: Buffer?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.wallet.SentTransfer>) {
+    static func sendTransfer(flags: Int32, dataNormal: Buffer, dataGasless: Buffer?, randomId: Int64) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Updates>) {
         let buffer = Buffer()
-        buffer.appendInt32(-1312102043)
+        buffer.appendInt32(-746745893)
         serializeInt32(flags, buffer: buffer, boxed: false)
         serializeBytes(dataNormal, buffer: buffer, boxed: false)
         if Int(flags) & Int(1 << 0) != 0 {
             serializeBytes(dataGasless!, buffer: buffer, boxed: false)
         }
-        return (FunctionDescription(name: "wallet.sendTransfer", parameters: [("flags", ConstructorParameterDescription(flags)), ("dataNormal", ConstructorParameterDescription(dataNormal)), ("dataGasless", ConstructorParameterDescription(dataGasless))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.wallet.SentTransfer? in
+        serializeInt64(randomId, buffer: buffer, boxed: false)
+        return (FunctionDescription(name: "wallet.sendTransfer", parameters: [("flags", ConstructorParameterDescription(flags)), ("dataNormal", ConstructorParameterDescription(dataNormal)), ("dataGasless", ConstructorParameterDescription(dataGasless)), ("randomId", ConstructorParameterDescription(randomId))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Updates? in
             let reader = BufferReader(buffer)
-            var result: Api.wallet.SentTransfer?
+            var result: Api.Updates?
             if let signature = reader.readInt32() {
-                result = Api.parse(reader, signature: signature) as? Api.wallet.SentTransfer
+                result = Api.parse(reader, signature: signature) as? Api.Updates
             }
             return result
         })

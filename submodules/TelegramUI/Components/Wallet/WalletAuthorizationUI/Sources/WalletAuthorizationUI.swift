@@ -13,11 +13,11 @@ private final class WalletAuthorizedOperation<Value>: Disposable {
     private let operation: (String?) -> Signal<Value, WalletContext.WalletError>
     private let next: (Value) -> Void
     private let failed: (WalletContext.WalletError) -> Void
-    private let initialAuthorizationDisposable = MetaDisposable()
     private let authorizationRequestDisposable = MetaDisposable()
     private let operationDisposable = MetaDisposable()
     private weak var passwordController: ViewController?
     private var isDisposed = false
+    private var isRunning = false
     private var didRetryWithoutRemovedPassword = false
 
     init(
@@ -25,25 +25,19 @@ private final class WalletAuthorizedOperation<Value>: Disposable {
         present: @escaping (ViewController) -> Void,
         operation: @escaping (String?) -> Signal<Value, WalletContext.WalletError>,
         next: @escaping (Value) -> Void,
-        failed: @escaping (WalletContext.WalletError) -> Void,
-        preauthorize: Bool
+        failed: @escaping (WalletContext.WalletError) -> Void
     ) {
         self.context = context
         self.present = present
         self.operation = operation
         self.next = next
         self.failed = failed
-        if preauthorize {
-            self.resolveInitialAuthorization()
-        } else {
-            self.start(password: nil, inputState: nil, progress: nil)
-        }
+        self.start(password: nil, inputState: nil, progress: nil)
     }
 
     func dispose() {
         guard !self.isDisposed else { return }
         self.isDisposed = true
-        self.initialAuthorizationDisposable.dispose()
         self.authorizationRequestDisposable.dispose()
         self.operationDisposable.dispose()
         self.passwordController?.dismiss(completion: nil)
@@ -55,51 +49,13 @@ private final class WalletAuthorizedOperation<Value>: Disposable {
         self.failed(.authorizationCancelled)
     }
 
-    private func resolveInitialAuthorization() {
-        self.initialAuthorizationDisposable.set((self.context.twoStepAuthData.get()
-        |> take(1)
-        |> deliverOnMainQueue).start(next: { [weak self] data in
-            guard let self, !self.isDisposed else {
-                return
-            }
-            if let data {
-                self.continueWithAuthorizationData(data)
-            } else {
-                self.loadAuthorizationData()
-            }
-        }))
-    }
-
-    private func loadAuthorizationData() {
-        self.authorizationRequestDisposable.set((self.context.engine.auth.twoStepAuthData()
-        |> deliverOnMainQueue).start(next: { [weak self] data in
-            guard let self, !self.isDisposed else {
-                return
-            }
-            self.context.twoStepAuthData.set(.single(data))
-            self.continueWithAuthorizationData(data)
-        }, error: { [weak self] _ in
-            guard let self, !self.isDisposed else {
-                return
-            }
-            self.failed(.network)
-        }))
-    }
-
-    private func continueWithAuthorizationData(_ data: TwoStepAuthData) {
-        if data.currentPasswordDerivation != nil {
-            self.presentPasswordPrompt()
-        } else {
-            self.start(password: nil, inputState: nil, progress: nil)
-        }
-    }
-
     private func start(
         password: String?,
         inputState: AlertInputFieldComponent.ExternalState?,
         progress: ValuePromise<Bool>?
     ) {
-        guard !self.isDisposed else { return }
+        guard !self.isDisposed, !self.isRunning else { return }
+        self.isRunning = true
         progress?.set(true)
         self.operationDisposable.set((self.operation(password)
         |> deliverOnMainQueue).start(next: { [weak self] value in
@@ -109,6 +65,7 @@ private final class WalletAuthorizedOperation<Value>: Disposable {
             self.next(value)
         }, error: { [weak self] error in
             guard let self, !self.isDisposed else { return }
+            self.isRunning = false
             progress?.set(false)
             switch error {
             case .requestPassword where inputState == nil:
@@ -141,6 +98,7 @@ private final class WalletAuthorizedOperation<Value>: Disposable {
         progress: ValuePromise<Bool>?
     ) {
         self.didRetryWithoutRemovedPassword = true
+        self.isRunning = true
         progress?.set(true)
         self.authorizationRequestDisposable.set((self.context.engine.auth.twoStepAuthData()
         |> deliverOnMainQueue).start(next: { [weak self] data in
@@ -148,6 +106,7 @@ private final class WalletAuthorizedOperation<Value>: Disposable {
                 return
             }
             self.context.twoStepAuthData.set(.single(data))
+            self.isRunning = false
             guard data.currentPasswordDerivation == nil else {
                 progress?.set(false)
                 self.passwordController?.dismiss(completion: nil)
@@ -159,6 +118,7 @@ private final class WalletAuthorizedOperation<Value>: Disposable {
             guard let self, !self.isDisposed else {
                 return
             }
+            self.isRunning = false
             progress?.set(false)
             self.passwordController?.dismiss(completion: nil)
             self.failed(.network)
@@ -227,23 +187,19 @@ private final class WalletAuthorizedOperation<Value>: Disposable {
     }
 }
 
-/// Resolves Telegram 2FA before a protected wallet operation and obtains fresh
-/// SRP parameters only when the operation is submitted with a password.
 public func performWalletAuthorizedOperation<Value>(
     context: AccountContext,
     present: @escaping (ViewController) -> Void,
     operation: @escaping (String?) -> Signal<Value, WalletContext.WalletError>,
     next: @escaping (Value) -> Void,
-    failed: @escaping (WalletContext.WalletError) -> Void,
-    preauthorize: Bool = true
+    failed: @escaping (WalletContext.WalletError) -> Void
 ) -> Disposable {
     WalletAuthorizedOperation(
         context: context,
         present: present,
         operation: operation,
         next: next,
-        failed: failed,
-        preauthorize: preauthorize
+        failed: failed
     )
 }
 

@@ -72,13 +72,13 @@ public struct WalletUserAddress: Equatable {
     }
 }
 
-public enum WalletTransactionPeer: Equatable {
+public enum WalletTransactionPeer: Equatable, @unchecked Sendable {
     case user(EnginePeer, address: String, domain: String?)
     case address(String, domain: String?)
     case unsupported
 }
 
-public struct WalletTransaction: Equatable {
+public struct WalletTransaction: Equatable, Sendable {
     public let incoming: Bool
     public let gasless: Bool
     public let failed: Bool
@@ -152,14 +152,64 @@ public struct WalletGaslessInfo: Codable, Equatable, Sendable {
 public struct WalletSentTransfer: Codable, Equatable, Sendable {
     public let gasless: Bool
     public let msgHash: String
-    public let gaslessLeft: Int32
-    public let gaslessResetAt: Int32
 
-    public init(gasless: Bool, msgHash: String, gaslessLeft: Int32, gaslessResetAt: Int32) {
+    public init(gasless: Bool, msgHash: String) {
         self.gasless = gasless
         self.msgHash = msgHash
-        self.gaslessLeft = gaslessLeft
-        self.gaslessResetAt = gaslessResetAt
+    }
+}
+
+public struct WalletSendTransferResult: Equatable, Sendable {
+    public let transfer: WalletSentTransfer
+    public let transaction: WalletTransaction?
+    public let gaslessInfo: WalletGaslessInfo
+
+    public init(transfer: WalletSentTransfer, transaction: WalletTransaction?, gaslessInfo: WalletGaslessInfo) {
+        self.transfer = transfer
+        self.transaction = transaction
+        self.gaslessInfo = gaslessInfo
+    }
+}
+
+struct WalletSendTransferUpdates {
+    let transfer: WalletSentTransfer
+    let transaction: Api.WalletTransaction?
+    let gaslessInfo: WalletGaslessInfo
+
+    init?(updates: Api.Updates) {
+        var transfer: Api.Update.Cons_updateSentWalletTransaction?
+        var gaslessInfo: WalletGaslessInfo?
+        for update in updates.allUpdates {
+            switch update {
+            case let .updateSentWalletTransaction(data):
+                transfer = data
+            case let .updateWalletGaslessInfo(data):
+                gaslessInfo = WalletGaslessInfo(apiInfo: data)
+            default:
+                break
+            }
+        }
+        guard let transfer, let gaslessInfo else { return nil }
+        self.transfer = WalletSentTransfer(apiTransfer: transfer)
+        self.transaction = transfer.transaction
+        self.gaslessInfo = gaslessInfo
+    }
+}
+
+public enum WalletTransferUpdate: Equatable, Sendable {
+    case sentTransaction(WalletSentTransfer, WalletTransaction?)
+    case gaslessInfo(WalletGaslessInfo)
+}
+
+extension WalletGaslessInfo {
+    init(apiInfo: Api.Update.Cons_updateWalletGaslessInfo) {
+        self.init(available: apiInfo.flags & 1 != 0, left: apiInfo.left, resetAt: apiInfo.resetAt, minAmount: apiInfo.minAmount, relayerAddress: apiInfo.relayerAddress)
+    }
+}
+
+extension WalletSentTransfer {
+    init(apiTransfer: Api.Update.Cons_updateSentWalletTransaction) {
+        self.init(gasless: apiTransfer.flags & 1 != 0, msgHash: apiTransfer.msgHash)
     }
 }
 
@@ -269,7 +319,7 @@ private extension WalletTransactionPeer {
     }
 }
 
-private extension WalletTransaction {
+extension WalletTransaction {
     init(apiTransaction: Api.WalletTransaction, transaction: Transaction) {
         switch apiTransaction {
         case let .walletTransaction(walletTransaction):
@@ -423,21 +473,19 @@ func _internal_getWalletTransactions(
 func _internal_getWalletGaslessInfo(account: Account) -> Signal<WalletGaslessInfo, WalletGetGaslessInfoError> {
     return account.network.request(Api.functions.wallet.getGaslessInfo(), automaticFloodWait: false)
     |> mapError { _ -> WalletGetGaslessInfoError in .generic }
-    |> map { result in
-        switch result {
-        case let .gaslessInfo(info):
-            return WalletGaslessInfo(
-                available: (info.flags & (1 << 0)) != 0,
-                left: info.left,
-                resetAt: info.resetAt,
-                minAmount: info.minAmount,
-                relayerAddress: info.relayerAddress
-            )
-        }
+    |> mapToSignal { updates -> Signal<WalletGaslessInfo, WalletGetGaslessInfoError> in
+        account.stateManager.addUpdates(updates)
+        guard let info = updates.allUpdates.compactMap({ update -> WalletGaslessInfo? in
+            if case let .updateWalletGaslessInfo(data) = update {
+                return WalletGaslessInfo(apiInfo: data)
+            }
+            return nil
+        }).last else { return .fail(.generic) }
+        return .single(info)
     }
 }
 
-func _internal_sendWalletTransfer(account: Account, dataNormal: Data, dataGasless: Data?, pendingMessage: WalletPendingTransferMessageReference? = nil) -> Signal<WalletSentTransfer, WalletSendTransferError> {
+func _internal_sendWalletTransfer(account: Account, dataNormal: Data, dataGasless: Data?, randomId: Int64, pendingMessage: WalletPendingTransferMessageReference? = nil) -> Signal<WalletSendTransferResult, WalletSendTransferError> {
     guard !dataNormal.isEmpty, dataNormal.count <= 16 * 1024,
           (dataGasless?.count ?? 0) <= 16 * 1024 else {
         if let pendingMessage {
@@ -450,7 +498,8 @@ func _internal_sendWalletTransfer(account: Account, dataNormal: Data, dataGasles
     return account.network.request(Api.functions.wallet.sendTransfer(
         flags: dataGasless == nil ? 0 : (1 << 0),
         dataNormal: Buffer(data: dataNormal),
-        dataGasless: dataGasless.map { Buffer(data: $0) }
+        dataGasless: dataGasless.map { Buffer(data: $0) },
+        randomId: randomId
     ), automaticFloodWait: false)
     |> mapError { error -> WalletSendTransferError in
         switch error.errorDescription {
@@ -462,24 +511,42 @@ func _internal_sendWalletTransfer(account: Account, dataNormal: Data, dataGasles
             return error.errorCode < 0 ? .network : .generic
         }
     }
-    |> mapToSignal { result -> Signal<WalletSentTransfer, WalletSendTransferError> in
-        switch result {
-        case let .sentTransfer(transfer):
-            let result = WalletSentTransfer(
-                gasless: (transfer.flags & (1 << 0)) != 0,
-                msgHash: transfer.msgHash,
-                gaslessLeft: transfer.gaslessLeft,
-                gaslessResetAt: transfer.gaslessResetAt
-            )
-            if let pendingMessage {
-                return _internal_acceptPendingWalletTransferMessage(postbox: account.postbox, reference: pendingMessage, transfer: result, receivedAt: Int32(clamping: Int64(Date().timeIntervalSince1970)))
-                |> castError(WalletSendTransferError.self)
-                |> map { _ in result }
+    |> mapToSignal { updates -> Signal<WalletSendTransferResult, WalletSendTransferError> in
+        return account.postbox.transaction { transaction -> WalletSendTransferResult? in
+            let peers = AccumulatedPeers(transaction: transaction, chats: updates.chats, users: updates.users)
+            updatePeers(transaction: transaction, accountPeerId: account.peerId, peers: peers)
+            var messageIds: [Int64: Int32] = [:]
+            for update in updates.allUpdates {
+                if case let .updateMessageID(value) = update {
+                    messageIds[value.randomId] = value.id
+                }
             }
+            _ = applyWalletTransferMessageIds(transaction: transaction, mappings: messageIds)
+            guard let data = WalletSendTransferUpdates(updates: updates) else { return nil }
+            let result = WalletSendTransferResult(
+                transfer: data.transfer,
+                transaction: data.transaction.map { WalletTransaction(apiTransaction: $0, transaction: transaction) },
+                gaslessInfo: data.gaslessInfo
+            )
+            if !result.transfer.msgHash.isEmpty, let pendingMessage {
+                acceptPendingWalletTransferMessage(transaction: transaction, reference: pendingMessage, transfer: result.transfer, receivedAt: Int32(clamping: Int64(Date().timeIntervalSince1970)))
+                if let value = result.transaction, case let .user(peer, _, _) = value.peer, peer.id.toInt64() == pendingMessage.peerId {
+                    resolvePendingWalletTransferMessage(transaction: transaction, reference: pendingMessage, transactionId: value.id, failed: value.failed)
+                }
+            }
+            return result
+        }
+        |> castError(WalletSendTransferError.self)
+        |> mapToSignal { result -> Signal<WalletSendTransferResult, WalletSendTransferError> in
+            account.stateManager.addUpdates(updates)
+            guard let result else {
+                return .fail(.generic)
+            }
+            guard !result.transfer.msgHash.isEmpty else { return .fail(.sendFailed) }
             return .single(result)
         }
     }
-    |> `catch` { error -> Signal<WalletSentTransfer, WalletSendTransferError> in
+    |> `catch` { error -> Signal<WalletSendTransferResult, WalletSendTransferError> in
         if let pendingMessage, error == .invalidData || error == .sendFailed {
             return _internal_removePendingWalletTransferMessage(postbox: account.postbox, reference: pendingMessage)
             |> castError(WalletSendTransferError.self)

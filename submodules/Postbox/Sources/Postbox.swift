@@ -1039,6 +1039,11 @@ public final class Transaction {
         assert(!self.disposed)
         return self.postbox?.getPendingMessageAction(type: type, id: id)
     }
+
+    public func getPendingMessageActions(type: PendingMessageActionType) -> [PendingMessageActionsEntry] {
+        assert(!self.disposed)
+        return self.postbox?.pendingMessageActionsTable.getActions(type: type) ?? []
+    }
     
     public func getMessageTagSummary(peerId: PeerId, threadId: Int64?, tagMask: MessageTags, namespace: MessageId.Namespace, customTag: MemoryBuffer?) -> MessageHistoryTagNamespaceSummary? {
         assert(!self.disposed)

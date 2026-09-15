@@ -559,6 +559,109 @@ private final class CounterpartyRowComponent: CombinedComponent {
     }
 }
 
+private final class WalletTransactionKeyUpdateHeaderComponent: Component {
+    let theme: PresentationTheme
+
+    init(theme: PresentationTheme) {
+        self.theme = theme
+    }
+
+    static func ==(lhs: WalletTransactionKeyUpdateHeaderComponent, rhs: WalletTransactionKeyUpdateHeaderComponent) -> Bool {
+        return lhs.theme === rhs.theme
+    }
+
+    final class View: UIView {
+        private let backgroundView = UIImageView()
+        private let iconView = UIImageView()
+        private let title = ComponentView<Empty>()
+
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+
+            self.isUserInteractionEnabled = false
+            self.backgroundView.image = generateGradientFilledCircleImage(
+                diameter: 90.0,
+                colors: [
+                    UIColor(rgb: 0x9aa0ac).cgColor,
+                    UIColor(rgb: 0xb8bdc7).cgColor
+                ] as NSArray,
+                direction: .vertical
+            )
+            self.iconView.image = generateTintedImage(
+                image: UIImage(bundleImageName: "Wallet/TransactionKeyLarge"),
+                color: .white
+            )
+            self.iconView.contentMode = .scaleAspectFit
+            self.addSubview(self.backgroundView)
+            self.addSubview(self.iconView)
+        }
+
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+
+        func update(component: WalletTransactionKeyUpdateHeaderComponent, availableSize: CGSize, transition: ComponentTransition) -> CGSize {
+            let iconBackgroundFrame = CGRect(
+                x: floorToScreenPixels((availableSize.width - 90.0) / 2.0),
+                y: 76.0 - 90.0 / 2.0,
+                width: 90.0,
+                height: 90.0
+            )
+            transition.setFrame(view: self.backgroundView, frame: iconBackgroundFrame)
+            transition.setFrame(view: self.iconView, frame: CGRect(
+                x: iconBackgroundFrame.midX - 26.0,
+                y: iconBackgroundFrame.midY - 26.0,
+                width: 52.0,
+                height: 52.0
+            ))
+
+            let titleSize = self.title.update(
+                transition: transition,
+                component: AnyComponent(MultilineTextComponent(
+                    text: .plain(NSAttributedString(
+                        //TODO:localize
+                        string: "Key Update",
+                        font: Font.semibold(22.0),
+                        textColor: component.theme.actionSheet.primaryTextColor,
+                        paragraphAlignment: .center
+                    )),
+                    horizontalAlignment: .center,
+                    maximumNumberOfLines: 1
+                )),
+                environment: {},
+                containerSize: CGSize(width: availableSize.width - 100.0, height: .greatestFiniteMagnitude)
+            )
+            let titleFrame = CGRect(
+                x: floorToScreenPixels((availableSize.width - titleSize.width) / 2.0),
+                y: floorToScreenPixels(151.0 - titleSize.height / 2.0),
+                width: titleSize.width,
+                height: titleSize.height
+            )
+            if let titleView = self.title.view {
+                if titleView.superview == nil {
+                    self.addSubview(titleView)
+                }
+                transition.setFrame(view: titleView, frame: titleFrame)
+            }
+            return CGSize(width: availableSize.width, height: titleFrame.maxY)
+        }
+    }
+
+    func makeView() -> View {
+        return View(frame: .zero)
+    }
+
+    func update(
+        view: View,
+        availableSize: CGSize,
+        state: EmptyComponentState,
+        environment: Environment<Empty>,
+        transition: ComponentTransition
+    ) -> CGSize {
+        return view.update(component: self, availableSize: availableSize, transition: transition)
+    }
+}
+
 private final class WalletTransactionContentComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
 
@@ -616,6 +719,7 @@ private final class WalletTransactionContentComponent: Component {
         }
 
         private let controlButtons = ComponentView<Empty>()
+        private let keyUpdateHeader = ComponentView<Empty>()
         private let collectibleHeader = ComponentView<Empty>()
         private let amount = ComponentView<Empty>()
         private let usdValue = ComponentView<Empty>()
@@ -1981,8 +2085,47 @@ private final class WalletTransactionContentComponent: Component {
 
             let fiatCurrency = self.latestWalletState?.fiat.selectedCurrency ?? .usd
             let fiatRate = self.latestWalletState?.fiat.selectedRate
+            let isKeyChange = transaction.kind == .keyChange
+            if !isKeyChange, let headerView = self.keyUpdateHeader.view {
+                transition.setAlpha(view: headerView, alpha: 0.0)
+            }
+            if isKeyChange || transaction.collectible == nil, let headerView = self.collectibleHeader.view {
+                transition.setAlpha(view: headerView, alpha: 0.0)
+                (headerView as? WalletCollectibleHeaderComponent.View)?.setAnimationVisible(false)
+            }
+            if isKeyChange || transaction.collectible != nil {
+                if let amountView = self.amount.view {
+                    amountView.isUserInteractionEnabled = false
+                    transition.setAlpha(view: amountView, alpha: 0.0)
+                }
+                if let usdView = self.usdValue.view {
+                    transition.setAlpha(view: usdView, alpha: 0.0)
+                }
+                if let dotView = self.processingDot.view {
+                    transition.setAlpha(view: dotView, alpha: 0.0)
+                }
+                if let processingView = self.processingText.view {
+                    transition.setAlpha(view: processingView, alpha: 0.0)
+                }
+            }
+
             var contentHeight: CGFloat = transaction.collectible == nil ? 71.0 : 44.0
-            if let collectible = transaction.collectible {
+            if isKeyChange {
+                let headerSize = self.keyUpdateHeader.update(
+                    transition: transition,
+                    component: AnyComponent(WalletTransactionKeyUpdateHeaderComponent(theme: theme)),
+                    environment: {},
+                    containerSize: CGSize(width: availableSize.width, height: .greatestFiniteMagnitude)
+                )
+                if let headerView = self.keyUpdateHeader.view {
+                    if headerView.superview == nil {
+                        self.addSubview(headerView)
+                    }
+                    transition.setFrame(view: headerView, frame: CGRect(origin: .zero, size: headerSize))
+                    transition.setAlpha(view: headerView, alpha: 1.0)
+                }
+                contentHeight = headerSize.height
+            } else if let collectible = transaction.collectible {
                 let headerSize = self.collectibleHeader.update(
                     transition: transition,
                     component: AnyComponent(WalletCollectibleHeaderComponent(
@@ -2014,26 +2157,7 @@ private final class WalletTransactionContentComponent: Component {
                     (headerView as? WalletCollectibleHeaderComponent.View)?.setAnimationVisible(true)
                 }
                 contentHeight += headerSize.height
-
-                if let amountView = self.amount.view {
-                    amountView.isUserInteractionEnabled = false
-                    transition.setAlpha(view: amountView, alpha: 0.0)
-                }
-                if let usdView = self.usdValue.view {
-                    transition.setAlpha(view: usdView, alpha: 0.0)
-                }
-                if let dotView = self.processingDot.view {
-                    transition.setAlpha(view: dotView, alpha: 0.0)
-                }
-                if let processingView = self.processingText.view {
-                    transition.setAlpha(view: processingView, alpha: 0.0)
-                }
             } else {
-                if let headerView = self.collectibleHeader.view {
-                    transition.setAlpha(view: headerView, alpha: 0.0)
-                    (headerView as? WalletCollectibleHeaderComponent.View)?.setAnimationVisible(false)
-                }
-
                 let amountSize = self.amount.update(
                     transition: transition,
                     component: AnyComponent(WalletTransactionAmountComponent(
@@ -2313,7 +2437,7 @@ private final class WalletTransactionContentComponent: Component {
                     (commentView as? TransactionCommentComponent.View)?.cancelSelection()
                     transition.setAlpha(view: commentView, alpha: 0.0)
                 }
-                contentHeight += transaction.collectible == nil ? 44.0 : 22.0
+                contentHeight += !isKeyChange && transaction.collectible == nil ? 44.0 : 22.0
             }
 
             let valueFont = Font.regular(15.0)
@@ -2429,7 +2553,7 @@ private final class WalletTransactionContentComponent: Component {
                 canSendToPeer = false
             }
             let displaysSendButton: Bool
-            if !self.isPreview, component.walletContext != nil, canSendToPeer {
+            if !self.isPreview, transaction.kind != .keyChange, component.walletContext != nil, canSendToPeer {
                 switch transaction.direction {
                 case .incoming, .outgoing:
                     displaysSendButton = true

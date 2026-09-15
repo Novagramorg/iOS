@@ -9,16 +9,18 @@ public final class PendingWalletTransferMessageAttribute: MessageAttribute, Pend
     public let msgHash: String?
     public let transactionId: String?
     public let chainTraceId: String?
+    public let serverMessageId: Int32?
 
-    var resolvedMessageId: String? { self.chainTraceId ?? self.transactionId }
+    var resolvedMessageId: String? { self.transactionId ?? self.chainTraceId }
 
-    public init(operationId: String, expiresAt: Int32, previousMessageId: Int32, msgHash: String? = nil, transactionId: String? = nil, chainTraceId: String? = nil) {
+    public init(operationId: String, expiresAt: Int32, previousMessageId: Int32, msgHash: String? = nil, transactionId: String? = nil, chainTraceId: String? = nil, serverMessageId: Int32? = nil) {
         self.operationId = operationId
         self.expiresAt = expiresAt
         self.previousMessageId = previousMessageId
         self.msgHash = msgHash
         self.transactionId = transactionId
         self.chainTraceId = chainTraceId
+        self.serverMessageId = serverMessageId
     }
 
     public init(decoder: PostboxDecoder) {
@@ -28,9 +30,15 @@ public final class PendingWalletTransferMessageAttribute: MessageAttribute, Pend
         self.msgHash = decoder.decodeOptionalStringForKey("h")
         self.transactionId = decoder.decodeOptionalStringForKey("t")
         self.chainTraceId = decoder.decodeOptionalStringForKey("ct")
+        self.serverMessageId = decoder.decodeOptionalInt32ForKey("sid")
     }
 
     public func encode(_ encoder: PostboxEncoder) {
+        if let serverMessageId = self.serverMessageId {
+            encoder.encodeInt32(serverMessageId, forKey: "sid")
+        } else {
+            encoder.encodeNil(forKey: "sid")
+        }
         if let chainTraceId = self.chainTraceId {
             encoder.encodeString(chainTraceId, forKey: "ct")
         } else {
@@ -61,6 +69,7 @@ public final class PendingWalletTransferMessageAttribute: MessageAttribute, Pend
             && self.msgHash == other.msgHash
             && self.transactionId == other.transactionId
             && self.chainTraceId == other.chainTraceId
+            && self.serverMessageId == other.serverMessageId
     }
 
     func accepting(msgHash: String, receivedAt: Int32) -> PendingWalletTransferMessageAttribute {
@@ -74,7 +83,8 @@ public final class PendingWalletTransferMessageAttribute: MessageAttribute, Pend
             previousMessageId: self.previousMessageId,
             msgHash: msgHash,
             transactionId: self.transactionId,
-            chainTraceId: self.chainTraceId
+            chainTraceId: self.chainTraceId,
+            serverMessageId: self.serverMessageId
         )
     }
 
@@ -85,7 +95,8 @@ public final class PendingWalletTransferMessageAttribute: MessageAttribute, Pend
             previousMessageId: self.previousMessageId,
             msgHash: self.msgHash,
             transactionId: transactionId,
-            chainTraceId: self.chainTraceId
+            chainTraceId: self.chainTraceId,
+            serverMessageId: self.serverMessageId
         )
     }
 
@@ -94,7 +105,18 @@ public final class PendingWalletTransferMessageAttribute: MessageAttribute, Pend
         return PendingWalletTransferMessageAttribute(
             operationId: self.operationId, expiresAt: self.expiresAt,
             previousMessageId: self.previousMessageId, msgHash: self.msgHash,
-            transactionId: self.transactionId, chainTraceId: chainTraceId
+            transactionId: self.transactionId, chainTraceId: chainTraceId,
+            serverMessageId: self.serverMessageId
+        )
+    }
+
+    func resolving(serverMessageId: Int32) -> PendingWalletTransferMessageAttribute {
+        guard self.serverMessageId == nil, serverMessageId > 0 else { return self }
+        return PendingWalletTransferMessageAttribute(
+            operationId: self.operationId, expiresAt: self.expiresAt,
+            previousMessageId: self.previousMessageId, msgHash: self.msgHash,
+            transactionId: self.transactionId, chainTraceId: self.chainTraceId,
+            serverMessageId: serverMessageId
         )
     }
 }

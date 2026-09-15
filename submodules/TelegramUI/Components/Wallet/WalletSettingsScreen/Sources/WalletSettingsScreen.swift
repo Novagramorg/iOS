@@ -375,12 +375,6 @@ private final class WalletSettingsScreenComponent: Component {
                     guard let self, let component = self.component, let controller = self.environment?.controller() else {
                         return
                     }
-                    let canRevealLocally: Bool
-                    if let walletState = self.walletState, case let .wallet(info) = walletState.phase {
-                        canRevealLocally = info.canSign
-                    } else {
-                        canRevealLocally = false
-                    }
                     self.operationDisposable.set(performWalletAuthorizedOperation(
                         context: component.context,
                         present: { [weak controller] alert in
@@ -400,8 +394,7 @@ private final class WalletSettingsScreenComponent: Component {
                         },
                         failed: { [weak self] error in
                             self?.presentRecoveryPhraseError(error: error)
-                        },
-                        preauthorize: !canRevealLocally
+                        }
                     ))
                 }
             ))
@@ -940,58 +933,68 @@ private final class WalletSettingsScreenComponent: Component {
             let generation = self.disableBackupPreparationGeneration
             self.isDisablingBackup = true
             self.disableBackupProgress?.set(true)
-            self.backupOperationDisposable.set((self.walletFlowAuthorization(for: .disableBackup)
-            |> mapToSignal { session in
-                component.walletContext.disableBackup(prepared, session: session)
-            }
-            |> deliverOnMainQueue).start(next: { [weak self] _ in
-                guard let self, self.disableBackupPreparationGeneration == generation,
-                      self.preparedBackupDisable?.id == prepared.id else { return }
-                let complete: () -> Void = { [weak self] in
-                    guard let self, self.disableBackupPreparationGeneration == generation else { return }
-                    self.dismissBackupWordsFlow()
-                    self.presentBackupDisabledToast()
-                }
-                if let alertController = self.disableBackupConfirmationController {
-                    alertController.dismiss(completion: complete)
-                } else {
-                    complete()
-                }
-            }, error: { [weak self] error in
-                guard let self, self.disableBackupPreparationGeneration == generation,
-                      self.preparedBackupDisable?.id == prepared.id else { return }
-                self.isDisablingBackup = false
-                self.disableBackupProgress?.set(false)
-                if error == .preparedBackupDisableExpired {
-                    let restart: () -> Void = { [weak self] in
-                        guard let self, self.disableBackupPreparationGeneration == generation,
-                              self.preparedBackupDisable?.id == prepared.id else { return }
-                        self.presentDisableBackupAlert(restarting: true)
+            self.backupOperationDisposable.set(performWalletAuthorizedOperation(
+                context: component.context,
+                present: { [weak self] alert in
+                    self?.environment?.controller()?.present(alert, in: .window(.root))
+                },
+                operation: { [weak self] password -> Signal<WalletContext.WalletInfo, WalletContext.WalletError> in
+                    guard let self else { return .fail(.authorizationCancelled) }
+                    return self.walletFlowAuthorization(for: .disableBackup)
+                    |> mapToSignal { session in
+                        component.walletContext.disableBackup(prepared, password: password, session: session)
                     }
-                    if let alert = self.disableBackupConfirmationController {
-                        alert.dismiss(completion: restart)
+                },
+                next: { [weak self] _ in
+                    guard let self, self.disableBackupPreparationGeneration == generation,
+                          self.preparedBackupDisable?.id == prepared.id else { return }
+                    let complete: () -> Void = { [weak self] in
+                        guard let self, self.disableBackupPreparationGeneration == generation else { return }
+                        self.dismissBackupWordsFlow()
+                        self.presentBackupDisabledToast()
+                    }
+                    if let alertController = self.disableBackupConfirmationController {
+                        alertController.dismiss(completion: complete)
                     } else {
-                        restart()
+                        complete()
                     }
-                    return
+                },
+                failed: { [weak self] error in
+                    guard let self, self.disableBackupPreparationGeneration == generation,
+                          self.preparedBackupDisable?.id == prepared.id else { return }
+                    self.isDisablingBackup = false
+                    self.disableBackupProgress?.set(false)
+                    if error == .preparedBackupDisableExpired {
+                        let restart: () -> Void = { [weak self] in
+                            guard let self, self.disableBackupPreparationGeneration == generation,
+                                  self.preparedBackupDisable?.id == prepared.id else { return }
+                            self.presentDisableBackupAlert(restarting: true)
+                        }
+                        if let alert = self.disableBackupConfirmationController {
+                            alert.dismiss(completion: restart)
+                        } else {
+                            restart()
+                        }
+                        return
+                    }
+                    if case let .backupDisableNeedsConfirmation(updated) = error {
+                        self.preparedBackupDisable = updated
+                        let confirm: () -> Void = { [weak self] in
+                            guard let self, self.disableBackupPreparationGeneration == generation,
+                                  self.preparedBackupDisable?.id == updated.id else { return }
+                            self.presentFinalDisableBackupAlert(refresh: false)
+                        }
+                        if let alert = self.disableBackupConfirmationController {
+                            alert.dismiss(completion: confirm)
+                        } else {
+                            confirm()
+                        }
+                        return
+                    }
+                    if error == .authorizationCancelled { self.endWalletFlow() }
+                    self.presentDisableBackupError(error: error)
                 }
-                if case let .backupDisableNeedsConfirmation(updated) = error {
-                    self.preparedBackupDisable = updated
-                    let confirm: () -> Void = { [weak self] in
-                        guard let self, self.disableBackupPreparationGeneration == generation,
-                              self.preparedBackupDisable?.id == updated.id else { return }
-                        self.presentFinalDisableBackupAlert(refresh: false)
-                    }
-                    if let alert = self.disableBackupConfirmationController {
-                        alert.dismiss(completion: confirm)
-                    } else {
-                        confirm()
-                    }
-                    return
-                }
-                if error == .authorizationCancelled { self.endWalletFlow() }
-                self.presentDisableBackupError(error: error)
-            }))
+            ))
         }
 
         private func dismissBackupWordsFlow() {
@@ -1332,6 +1335,7 @@ private final class WalletSettingsScreenComponent: Component {
             }
             self.isCreatingReplacementWallet = true
             creationProgress.set(true)
+            let createdWallet = Atomic<WalletContext.WalletInfo?>(value: nil)
             self.operationDisposable.set(performWalletAuthorizedOperation(
                 context: component.context,
                 present: { [weak controller] alert in
@@ -1340,7 +1344,18 @@ private final class WalletSettingsScreenComponent: Component {
                 operation: { [weak self] password -> Signal<WalletContext.WalletInfo, WalletContext.WalletError> in
                     guard let self else { return .fail(.authorizationCancelled) }
                     return self.walletFlowAuthorization(for: .create) |> mapToSignal { session in
-                        component.walletContext.createWallet(password: password, session: session)
+                        let creation: Signal<WalletContext.WalletInfo, WalletContext.WalletError>
+                        if let created = createdWallet.with({ $0 }) {
+                            creation = .single(created)
+                        } else {
+                            creation = component.walletContext.createWallet(password: password, session: session)
+                        }
+                        return creation |> deliverOnMainQueue |> mapToSignal { created in
+                            _ = createdWallet.swap(created)
+                            return self.walletFlowAuthorization(for: .create) |> mapToSignal { session in
+                                component.walletContext.completeWalletCreation(created, password: password, session: session)
+                            }
+                        }
                     }
                 },
                 next: { [weak self, weak alertController] _ in

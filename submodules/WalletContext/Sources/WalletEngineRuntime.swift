@@ -656,8 +656,6 @@ actor WalletEngineRuntime {
               walletEngineAddressesEqual(record.walletAddress, serverAddress),
               record.newPublicKey == serverPublicKey,
               record.phase == .submissionStarted || record.phase == .chainApplied || record.phase == .backupDisabled else {
-            // An old server key can mean the scanner is still catching up.
-            // Only chain evidence may roll a submitted candidate back.
             return .none
         }
         _ = try await self.storage.markKeyRotationChainApplied(
@@ -732,6 +730,7 @@ actor WalletEngineRuntime {
     func sendKeyRotation(
         operationId: String,
         words: [String],
+        previousPublicKey: Data,
         newPublicKey: Data,
         signedBoc: String,
         seqno: UInt32,
@@ -758,22 +757,9 @@ actor WalletEngineRuntime {
                 throw WalletContext.WalletError.invalidMnemonic
             }
             let client = try self.requireClient()
-            let snapshot = try client.snapshot()
-            let previousPublicKey: Data
-            do {
-                previousPublicKey = try await self.statuslessHost.walletPublicKey(address: descriptor.address)
-            } catch {
-                switch snapshot.account?.status {
-                case .nonexistent, .uninitialized:
-                    // Before the first deployment, the signing key is the
-                    // stable anchor key represented by the descriptor.
-                    previousPublicKey = descriptor.publicKey
-                case .active, .frozen, .unknown, nil:
-                    throw error
-                }
-            }
             try await self.ensureKeyRotationAllowsSigning()
-            guard let signingIdentity = self.serverWalletIdentity,
+            guard previousPublicKey.count == 32,
+                  let signingIdentity = self.serverWalletIdentity,
                   walletEngineAddressesEqual(signingIdentity.address, descriptor.address),
                   signingIdentity.publicKey == previousPublicKey else {
                 throw WalletContext.WalletError.storage(.identityMismatch)
@@ -827,9 +813,6 @@ actor WalletEngineRuntime {
                         self.logger.error("wallet_key_rotation_reconciliation_failed", error)
                     }
                 }
-                // submissionStarted is the app's durable boundary. An absent or
-                // unrelated snapshot does not prove that provider handoff did
-                // not happen, so both secrets remain stored for reconciliation.
                 throw error
             }
         }
@@ -976,8 +959,6 @@ actor WalletEngineRuntime {
         }
         do {
             let publicKey = try await self.statuslessHost.walletPublicKey(address: record.walletAddress)
-            // A scanner update received during the provider request supersedes
-            // its result, including a stale response with the previous key.
             guard let latestIdentity = self.serverWalletIdentity,
                   walletEngineAddressesEqual(latestIdentity.address, record.walletAddress) else {
                 return .different
@@ -1165,8 +1146,6 @@ actor WalletEngineRuntime {
                 let send = try await client.resolvePending()
                 _ = try await self.reconcileKeyRotation(send: send)
             } catch {
-                // A transport failure is ambiguous. Keep both the replacement
-                // secret and rollback material until provider evidence is available.
                 self.logger.error("wallet_key_rotation_recovery_failed", error)
             }
         case .chainApplied, .backupDisabled:
@@ -1246,8 +1225,6 @@ actor WalletEngineRuntime {
         try await self.ensureCurrentWalletIdentity()
     }
 
-    /// Verifies the protected phrase belongs to the current wallet's anchor.
-    /// This does not establish the current on-chain signing key.
     private func ensureCurrentWalletIdentity() async throws {
         guard let descriptor = self.descriptor,
               let serverIdentity = self.serverWalletIdentity,

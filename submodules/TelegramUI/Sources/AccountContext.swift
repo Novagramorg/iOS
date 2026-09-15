@@ -354,14 +354,6 @@ public final class AccountContextImpl: AccountContext {
                 applicationInForeground: sharedContext.applicationBindings.applicationInForeground,
                 accountIsCurrent: accountIsCurrent,
                 networkAvailable: networkAvailable,
-                twoStepAuthRequired: self.twoStepAuthData.get()
-                |> map { data -> Bool? in
-                    guard let data else {
-                        return nil
-                    }
-                    return data.currentPasswordDerivation != nil
-                }
-                |> distinctUntilChanged,
                 applicationIsPasscodeLocked: sharedContext.appLockContext.isPasscodeLocked
             )
             self.giftAuctionsManager = GiftAuctionsManager(account: account)

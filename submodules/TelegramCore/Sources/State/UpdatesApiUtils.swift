@@ -402,6 +402,12 @@ extension Api.Update {
     
     var peerIds: [PeerId] {
         switch self {
+            case let .updateSentWalletTransaction(data):
+                if case let .walletTransaction(value)? = data.transaction,
+                   case let .walletTransactionPeerUser(peer) = value.peer {
+                    return [PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(peer.userId))]
+                }
+                return []
             case let .updateChannel(updateChannelData):
                 let channelId = updateChannelData.channelId
                 return [PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(channelId))]

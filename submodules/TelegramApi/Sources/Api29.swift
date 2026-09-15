@@ -2667,6 +2667,19 @@ public extension Api {
                 return ("updateSentStoryReaction", [("peer", ConstructorParameterDescription(self.peer)), ("storyId", ConstructorParameterDescription(self.storyId)), ("reaction", ConstructorParameterDescription(self.reaction))])
             }
         }
+        public class Cons_updateSentWalletTransaction: TypeConstructorDescription {
+            public var flags: Int32
+            public var msgHash: String
+            public var transaction: Api.WalletTransaction?
+            public init(flags: Int32, msgHash: String, transaction: Api.WalletTransaction?) {
+                self.flags = flags
+                self.msgHash = msgHash
+                self.transaction = transaction
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("updateSentWalletTransaction", [("flags", ConstructorParameterDescription(self.flags)), ("msgHash", ConstructorParameterDescription(self.msgHash)), ("transaction", ConstructorParameterDescription(self.transaction))])
+            }
+        }
         public class Cons_updateServiceNotification: TypeConstructorDescription {
             public var flags: Int32
             public var inboxDate: Int32?
@@ -2886,6 +2899,23 @@ public extension Api {
                 return ("updateUserTyping", [("flags", ConstructorParameterDescription(self.flags)), ("userId", ConstructorParameterDescription(self.userId)), ("topMsgId", ConstructorParameterDescription(self.topMsgId)), ("action", ConstructorParameterDescription(self.action))])
             }
         }
+        public class Cons_updateWalletGaslessInfo: TypeConstructorDescription {
+            public var flags: Int32
+            public var left: Int32
+            public var resetAt: Int32
+            public var minAmount: Int64
+            public var relayerAddress: String
+            public init(flags: Int32, left: Int32, resetAt: Int32, minAmount: Int64, relayerAddress: String) {
+                self.flags = flags
+                self.left = left
+                self.resetAt = resetAt
+                self.minAmount = minAmount
+                self.relayerAddress = relayerAddress
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("updateWalletGaslessInfo", [("flags", ConstructorParameterDescription(self.flags)), ("left", ConstructorParameterDescription(self.left)), ("resetAt", ConstructorParameterDescription(self.resetAt)), ("minAmount", ConstructorParameterDescription(self.minAmount)), ("relayerAddress", ConstructorParameterDescription(self.relayerAddress))])
+            }
+        }
         public class Cons_updateWalletState: TypeConstructorDescription {
             public var state: Api.WalletState
             public init(state: Api.WalletState) {
@@ -3098,6 +3128,7 @@ public extension Api {
         case updateSavedRingtones
         case updateSentPhoneCode(Cons_updateSentPhoneCode)
         case updateSentStoryReaction(Cons_updateSentStoryReaction)
+        case updateSentWalletTransaction(Cons_updateSentWalletTransaction)
         case updateServiceNotification(Cons_updateServiceNotification)
         case updateSmsJob(Cons_updateSmsJob)
         case updateStarGiftAuctionState(Cons_updateStarGiftAuctionState)
@@ -3118,6 +3149,7 @@ public extension Api {
         case updateUserPhone(Cons_updateUserPhone)
         case updateUserStatus(Cons_updateUserStatus)
         case updateUserTyping(Cons_updateUserTyping)
+        case updateWalletGaslessInfo(Cons_updateWalletGaslessInfo)
         case updateWalletState(Cons_updateWalletState)
         case updateWalletTonConnectPendingDisconnect(Cons_updateWalletTonConnectPendingDisconnect)
         case updateWalletTonConnectSession(Cons_updateWalletTonConnectSession)
@@ -4493,6 +4525,16 @@ public extension Api {
                 serializeInt32(_data.storyId, buffer: buffer, boxed: false)
                 _data.reaction.serialize(buffer, true)
                 break
+            case .updateSentWalletTransaction(let _data):
+                if boxed {
+                    buffer.appendInt32(-1320989366)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                serializeString(_data.msgHash, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 1) != 0 {
+                    _data.transaction!.serialize(buffer, true)
+                }
+                break
             case .updateServiceNotification(let _data):
                 if boxed {
                     buffer.appendInt32(-337352679)
@@ -4651,6 +4693,16 @@ public extension Api {
                     serializeInt32(_data.topMsgId!, buffer: buffer, boxed: false)
                 }
                 _data.action.serialize(buffer, true)
+                break
+            case .updateWalletGaslessInfo(let _data):
+                if boxed {
+                    buffer.appendInt32(-1464984404)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                serializeInt32(_data.left, buffer: buffer, boxed: false)
+                serializeInt32(_data.resetAt, buffer: buffer, boxed: false)
+                serializeInt64(_data.minAmount, buffer: buffer, boxed: false)
+                serializeString(_data.relayerAddress, buffer: buffer, boxed: false)
                 break
             case .updateWalletState(let _data):
                 if boxed {
@@ -4991,6 +5043,8 @@ public extension Api {
                 return ("updateSentPhoneCode", [("sentCode", ConstructorParameterDescription(_data.sentCode))])
             case .updateSentStoryReaction(let _data):
                 return ("updateSentStoryReaction", [("peer", ConstructorParameterDescription(_data.peer)), ("storyId", ConstructorParameterDescription(_data.storyId)), ("reaction", ConstructorParameterDescription(_data.reaction))])
+            case .updateSentWalletTransaction(let _data):
+                return ("updateSentWalletTransaction", [("flags", ConstructorParameterDescription(_data.flags)), ("msgHash", ConstructorParameterDescription(_data.msgHash)), ("transaction", ConstructorParameterDescription(_data.transaction))])
             case .updateServiceNotification(let _data):
                 return ("updateServiceNotification", [("flags", ConstructorParameterDescription(_data.flags)), ("inboxDate", ConstructorParameterDescription(_data.inboxDate)), ("type", ConstructorParameterDescription(_data.type)), ("message", ConstructorParameterDescription(_data.message)), ("media", ConstructorParameterDescription(_data.media)), ("entities", ConstructorParameterDescription(_data.entities))])
             case .updateSmsJob(let _data):
@@ -5031,6 +5085,8 @@ public extension Api {
                 return ("updateUserStatus", [("userId", ConstructorParameterDescription(_data.userId)), ("status", ConstructorParameterDescription(_data.status))])
             case .updateUserTyping(let _data):
                 return ("updateUserTyping", [("flags", ConstructorParameterDescription(_data.flags)), ("userId", ConstructorParameterDescription(_data.userId)), ("topMsgId", ConstructorParameterDescription(_data.topMsgId)), ("action", ConstructorParameterDescription(_data.action))])
+            case .updateWalletGaslessInfo(let _data):
+                return ("updateWalletGaslessInfo", [("flags", ConstructorParameterDescription(_data.flags)), ("left", ConstructorParameterDescription(_data.left)), ("resetAt", ConstructorParameterDescription(_data.resetAt)), ("minAmount", ConstructorParameterDescription(_data.minAmount)), ("relayerAddress", ConstructorParameterDescription(_data.relayerAddress))])
             case .updateWalletState(let _data):
                 return ("updateWalletState", [("state", ConstructorParameterDescription(_data.state))])
             case .updateWalletTonConnectPendingDisconnect(let _data):
@@ -7753,6 +7809,27 @@ public extension Api {
                 return nil
             }
         }
+        public static func parse_updateSentWalletTransaction(_ reader: BufferReader) -> Update? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: String?
+            _2 = parseString(reader)
+            var _3: Api.WalletTransaction?
+            if Int(_1 ?? 0) & Int(1 << 1) != 0 {
+                if let signature = reader.readInt32() {
+                    _3 = Api.parse(reader, signature: signature) as? Api.WalletTransaction
+                }
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = (Int(_1 ?? 0) & Int(1 << 1) == 0) || _3 != nil
+            if _c1 && _c2 && _c3 {
+                return Api.Update.updateSentWalletTransaction(Cons_updateSentWalletTransaction(flags: _1!, msgHash: _2!, transaction: _3))
+            }
+            else {
+                return nil
+            }
+        }
         public static func parse_updateServiceNotification(_ reader: BufferReader) -> Update? {
             var _1: Int32?
             _1 = reader.readInt32()
@@ -8070,6 +8147,29 @@ public extension Api {
             let _c4 = _4 != nil
             if _c1 && _c2 && _c3 && _c4 {
                 return Api.Update.updateUserTyping(Cons_updateUserTyping(flags: _1!, userId: _2!, topMsgId: _3, action: _4!))
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_updateWalletGaslessInfo(_ reader: BufferReader) -> Update? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Int32?
+            _2 = reader.readInt32()
+            var _3: Int32?
+            _3 = reader.readInt32()
+            var _4: Int64?
+            _4 = reader.readInt64()
+            var _5: String?
+            _5 = parseString(reader)
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = _3 != nil
+            let _c4 = _4 != nil
+            let _c5 = _5 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 {
+                return Api.Update.updateWalletGaslessInfo(Cons_updateWalletGaslessInfo(flags: _1!, left: _2!, resetAt: _3!, minAmount: _4!, relayerAddress: _5!))
             }
             else {
                 return nil

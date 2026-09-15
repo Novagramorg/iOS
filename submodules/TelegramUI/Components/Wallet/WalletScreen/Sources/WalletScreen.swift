@@ -2929,6 +2929,13 @@ private final class WalletScreenComponent: Component {
                     origin: CGPoint(x: environment.safeInsets.left + sideInset, y: transactionsOriginY),
                     size: CGSize(width: cardWidth, height: 0.0)
                 )
+                let walletConfiguration = WalletConfiguration.with(appConfiguration: component.context.currentAppConfiguration.with { $0 })
+                let formattedMinAmount = formatTonAmountText(
+                    walletConfiguration.transferMinAmount,
+                    dateTimeFormat: environment.dateTimeFormat,
+                    maxDecimalPositions: 9,
+                    formatString: environment.strings.Currency_Grams
+                )
                 let transactionsSectionSize = self.updateSection(
                     self.transactionsSection,
                     theme: environment.theme,
@@ -2936,7 +2943,7 @@ private final class WalletScreenComponent: Component {
                     items: items,
                     footer: AnyComponent(MultilineTextComponent(
                         text: .plain(NSAttributedString(
-                            string: "Tap on a transaction to view details.",
+                            string: "Transactions under \(formattedMinAmount) are hidden.",
                             font: Font.regular(13.0),
                             textColor: environment.theme.list.freeTextColor
                         )),

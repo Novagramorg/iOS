@@ -2010,6 +2010,8 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
             case let .updateStarsBalance(updateStarsBalanceData):
                 let amount = CurrencyAmount(apiAmount: updateStarsBalanceData.balance)
                 updatedState.updateStarsBalance(peerId: accountPeerId, currency: amount.currency, balance: amount.amount)
+            case .updateSentWalletTransaction, .updateWalletGaslessInfo:
+                updatedState.addWalletTransferUpdate(update)
             case let .updateWalletState(updateWalletStateData):
                 updatedState.updateWalletState(updateWalletStateData.state)
             case let .updateStarsRevenueStatus(updateStarsRevenueStatusData):
@@ -3850,7 +3852,7 @@ private func optimizedOperations(_ operations: [AccountStateMutationOperation]) 
     var currentAddQuickReplyMessages: OptimizeAddMessagesState?
     for operation in operations {
         switch operation {
-        case .DeleteMessages, .DeleteMessagesWithGlobalIds, .EditMessage, .UpsertEphemeralReplacement, .DeleteEphemeralMessages, .UpdateMessagePoll, .UpdateMessageReactions, .UpdateMedia, .MergeApiChats, .MergeApiUsers, .MergePeerPresences, .UpdatePeer, .ReadInbox, .ReadOutbox, .ReadGroupFeedInbox, .ResetReadState, .ResetIncomingReadState, .UpdatePeerChatUnreadMark, .ResetMessageTagSummary, .UpdateNotificationSettings, .UpdateGlobalNotificationSettings, .UpdateSecretChat, .AddSecretMessages, .ReadSecretOutbox, .AddPeerInputActivity, .AddPeerLiveTypingDraftUpdate, .AddPeerLiveTypingDraftStop, .UpdateCachedPeerData, .UpdatePinnedItemIds, .UpdatePinnedSavedItemIds, .UpdatePinnedTopic, .UpdatePinnedTopicOrder, .ReadMessageContents, .UpdateMessageImpressionCount, .UpdateMessageForwardsCount, .UpdateInstalledStickerPacks, .UpdateRecentGifs, .UpdateChatInputState, .UpdateCall, .AddCallSignalingData, .UpdateLangPack, .UpdateMinAvailableMessage, .UpdateIsContact, .UpdatePeerChatInclusion, .UpdateTheme, .SyncChatListFilters, .UpdateChatListFilter, .UpdateChatListFilterOrder, .UpdateReadThread, .UpdateMessagesPinned, .UpdateGroupCallParticipants, .UpdateGroupCall, .UpdateGroupCallChainBlocks, .UpdateGroupCallMessage, .UpdateGroupCallOpaqueMessage, .UpdateAutoremoveTimeout, .UpdateAttachMenuBots, .UpdateAudioTranscription, .UpdateConfig, .UpdateExtendedMedia, .ResetForumTopic, .UpdateStory, .UpdateReadStories, .UpdateStoryStealthMode, .UpdateStorySentReaction, .UpdateNewAuthorization, .UpdateNewBotConnection, .UpdateWebBrowserSettings, .UpdateWebBrowserException, .UpdateWallpaper, .UpdateStarsBalance, .UpdateStarsRevenueStatus, .UpdateStarsReactionsDefaultPrivacy, .ReportMessageDelivery, .UpdateMonoForumNoPaidException, .UpdateStarGiftAuctionState, .UpdateStarGiftAuctionMyState, .UpdateEmojiGameInfo, .UpdateWalletState:
+        case .DeleteMessages, .DeleteMessagesWithGlobalIds, .EditMessage, .UpsertEphemeralReplacement, .DeleteEphemeralMessages, .UpdateMessagePoll, .UpdateMessageReactions, .UpdateMedia, .MergeApiChats, .MergeApiUsers, .MergePeerPresences, .UpdatePeer, .ReadInbox, .ReadOutbox, .ReadGroupFeedInbox, .ResetReadState, .ResetIncomingReadState, .UpdatePeerChatUnreadMark, .ResetMessageTagSummary, .UpdateNotificationSettings, .UpdateGlobalNotificationSettings, .UpdateSecretChat, .AddSecretMessages, .ReadSecretOutbox, .AddPeerInputActivity, .AddPeerLiveTypingDraftUpdate, .AddPeerLiveTypingDraftStop, .UpdateCachedPeerData, .UpdatePinnedItemIds, .UpdatePinnedSavedItemIds, .UpdatePinnedTopic, .UpdatePinnedTopicOrder, .ReadMessageContents, .UpdateMessageImpressionCount, .UpdateMessageForwardsCount, .UpdateInstalledStickerPacks, .UpdateRecentGifs, .UpdateChatInputState, .UpdateCall, .AddCallSignalingData, .UpdateLangPack, .UpdateMinAvailableMessage, .UpdateIsContact, .UpdatePeerChatInclusion, .UpdateTheme, .SyncChatListFilters, .UpdateChatListFilter, .UpdateChatListFilterOrder, .UpdateReadThread, .UpdateMessagesPinned, .UpdateGroupCallParticipants, .UpdateGroupCall, .UpdateGroupCallChainBlocks, .UpdateGroupCallMessage, .UpdateGroupCallOpaqueMessage, .UpdateAutoremoveTimeout, .UpdateAttachMenuBots, .UpdateAudioTranscription, .UpdateConfig, .UpdateExtendedMedia, .ResetForumTopic, .UpdateStory, .UpdateReadStories, .UpdateStoryStealthMode, .UpdateStorySentReaction, .UpdateNewAuthorization, .UpdateNewBotConnection, .UpdateWebBrowserSettings, .UpdateWebBrowserException, .UpdateWallpaper, .UpdateStarsBalance, .UpdateStarsRevenueStatus, .UpdateStarsReactionsDefaultPrivacy, .ReportMessageDelivery, .UpdateMonoForumNoPaidException, .UpdateStarGiftAuctionState, .UpdateStarGiftAuctionMyState, .UpdateEmojiGameInfo, .UpdateWalletState, .UpdateWalletTransfer:
                 if let currentAddMessages = currentAddMessages, !currentAddMessages.messages.isEmpty {
                     result.append(.AddMessages(currentAddMessages.messages, currentAddMessages.location))
                 }
@@ -4081,6 +4083,7 @@ func replayFinalState(
     var updateConfig = false
     var updatedStarsBalance: [PeerId: StarsAmount] = [:]
     var updatedTonBalance: [PeerId: StarsAmount] = [:]
+    var walletTransferApiUpdates: [Api.Update] = []
     var updatedWalletState: Api.WalletState?
     var updatedStarsRevenueStatus: [PeerId: StarsRevenueStats.Balances] = [:]
     var updatedStarsReactionsDefaultPrivacy: TelegramPaidReactionPrivacy?
@@ -4286,6 +4289,8 @@ func replayFinalState(
     }
     
     var isPremiumUpdated = false
+
+    let mappedWalletMessageIds = applyWalletTransferMessageIds(transaction: transaction, mappings: finalState.state.updatedOutgoingUniqueMessageIds)
     
     for operation in optimizedOperations(finalState.state.operations) {
         switch operation {
@@ -5728,6 +5733,8 @@ func replayFinalState(
                 case .stars:
                     updatedStarsBalance[peerId] = balance
                 }
+            case let .UpdateWalletTransfer(update):
+                walletTransferApiUpdates.append(update)
             case let .UpdateWalletState(state):
                 updatedWalletState = state
             case let .UpdateStarsRevenueStatus(peerId, status):
@@ -6228,6 +6235,12 @@ func replayFinalState(
     
     addedIncomingMessageIds.append(contentsOf: addedSecretMessageIds)
     
+    for id in mappedWalletMessageIds {
+        if let pending = transaction.getPendingMessageAction(type: .walletTransfer, id: id) as? PendingWalletTransferMessageAttribute {
+            reconcileStoredWalletTransferMessage(transaction: transaction, id: id, pending: pending)
+        }
+    }
+
     for (uniqueId, messageIdValue) in finalState.state.updatedOutgoingUniqueMessageIds {
         if let peerId = removePossiblyDeliveredMessagesUniqueIds[uniqueId] {
             let messageId = MessageId(peerId: peerId, namespace: Namespaces.Message.Cloud, id: messageIdValue)
@@ -6409,6 +6422,19 @@ func replayFinalState(
         isPremiumUpdated: isPremiumUpdated,
         updatedStarsBalance: updatedStarsBalance,
         updatedTonBalance: updatedTonBalance,
+        walletTransferUpdates: walletTransferApiUpdates.compactMap { update in
+            switch update {
+            case let .updateSentWalletTransaction(data):
+                guard !data.msgHash.isEmpty else { return nil }
+                return .sentTransaction(WalletSentTransfer(apiTransfer: data), data.transaction.map {
+                    WalletTransaction(apiTransaction: $0, transaction: transaction)
+                })
+            case let .updateWalletGaslessInfo(data):
+                return .gaslessInfo(WalletGaslessInfo(apiInfo: data))
+            default:
+                return nil
+            }
+        },
         updatedWalletState: updatedWalletState,
         updatedStarsRevenueStatus: updatedStarsRevenueStatus,
         sentScheduledMessageIds: finalState.state.sentScheduledMessageIds,

@@ -11,8 +11,7 @@ private final class WalletTransferStoreMessageAction: StoreOrUpdateMessageAction
 
     func addOrUpdate(messages: [StoreMessage], transaction: Transaction) {
         guard let pending = transaction.getPendingMessageAction(type: .walletTransfer, id: self.id) as? PendingWalletTransferMessageAttribute,
-              let resolvedId = pending.resolvedMessageId,
-              messages.contains(where: { walletTransferMessageMatches($0, peerId: self.id.peerId, transactionId: resolvedId) }) else {
+              messages.contains(where: { walletTransferMessageMatches($0, peerId: self.id.peerId, pending: pending) }) else {
             return
         }
         reconcileStoredWalletTransferMessage(transaction: transaction, id: self.id, pending: pending)

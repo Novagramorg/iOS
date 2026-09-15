@@ -1,4 +1,5 @@
 import Foundation
+import CoreFoundation
 import SwiftSignalKit
 import TelegramCore
 import WalletEngineFFI
@@ -314,7 +315,11 @@ func walletEnginePublicKey(fromToncenterResponse data: Data) -> Data? {
           let object = try? JSONSerialization.jsonObject(with: data),
           let root = object as? [String: Any],
           root["error"] == nil,
+          root["ok"] as? Bool != false,
           let result = root["result"] as? [String: Any],
+          let exitCode = result["exit_code"] as? NSNumber,
+          CFGetTypeID(exitCode) != CFBooleanGetTypeID(),
+          exitCode == 0 || exitCode == 1,
           let stack = result["stack"] as? [Any],
           let first = stack.first,
           let encoded = walletEngineStackNumber(first) else {

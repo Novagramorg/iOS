@@ -172,15 +172,24 @@ func mergeTransactions(
     existing: [WalletContext.Transaction],
     new: [WalletContext.Transaction]
 ) -> [WalletContext.Transaction] {
+    let transactions = existing + new
+    var hashById: [String: String] = [:]
+    for transaction in transactions {
+        if let hash = transaction.transactionHash { hashById[transaction.id] = hash }
+    }
     var values: [String: WalletContext.Transaction] = [:]
-    for transaction in existing + new {
-        let key = walletTransactionMergeKey(transaction)
+    for transaction in transactions {
+        // An inline final transaction can gain its optional tx_hash on a later page.
+        let key = transaction.transactionHash ?? hashById[transaction.id] ?? transaction.id
         if let current = values[key] {
             let currentScore = transactionInformationScore(current)
             let candidateScore = transactionInformationScore(transaction)
-            if candidateScore >= currentScore {
-                values[key] = transaction
-            }
+            let preferred = candidateScore >= currentScore ? transaction : current
+            values[key] = walletTransactionWithPresentationId(
+                preferred,
+                presentationId: current.presentationId != current.id ? current.presentationId : transaction.presentationId,
+                fallbackTransactionHash: current.transactionHash ?? transaction.transactionHash
+            )
         } else {
             values[key] = transaction
         }
@@ -279,15 +288,17 @@ private func transactionWithResolvedStreamingPeer(
 
 func walletTransactionWithPresentationId(
     _ transaction: WalletContext.Transaction,
-    presentationId: String
+    presentationId: String,
+    fallbackTransactionHash: String? = nil
 ) -> WalletContext.Transaction {
-    guard transaction.presentationId != presentationId else {
+    let transactionHash = transaction.transactionHash ?? fallbackTransactionHash
+    guard transaction.presentationId != presentationId || transaction.transactionHash != transactionHash else {
         return transaction
     }
     return WalletContext.Transaction(
         id: transaction.id,
         presentationId: presentationId,
-        transactionHash: transaction.transactionHash,
+        transactionHash: transactionHash,
         logicalTime: transaction.logicalTime,
         timestamp: transaction.timestamp,
         direction: transaction.direction,
@@ -460,4 +471,5 @@ struct WalletEngineTransferReceipt: Codable, Equatable, Sendable {
     let pendingTransfer: WalletContext.PendingTransfer
     let receivedAt: Int32
     let transfer: WalletSentTransfer
+    var transaction: WalletStoredTransaction? = nil
 }

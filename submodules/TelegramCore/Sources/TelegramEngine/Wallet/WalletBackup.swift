@@ -13,12 +13,12 @@ public struct WalletSecretPhraseExport: Equatable {
     public let datacenterIds: [Int32]
 }
 
-private func walletOperationError(_ error: MTRpcError, passwordProvided: Bool) -> WalletOperationError {
+func walletOperationError(_ error: MTRpcError, passwordProvided: Bool) -> WalletOperationError {
     let description = error.errorDescription ?? ""
     if description == "PASSWORD_HASH_INVALID" {
-        return passwordProvided ? .invalidPassword : .requestPassword
-    } else if description == "PASSWORD_MISSING" {
-        return passwordProvided ? .twoStepAuthMissing : .requestPassword
+        return passwordProvided ? .invalidPassword : .generic
+    } else if error.errorCode == 400 && description == "PASSWORD_MISSING" {
+        return .requestPassword
     } else if description == "INTERNAL_NO_PASSWORD" || description == "NO_PASSWORD" {
         return .twoStepAuthMissing
     } else if description.hasPrefix("PASSWORD_TOO_FRESH_") {
@@ -98,6 +98,19 @@ private func walletPasswordProof(account: Account, password: String?) -> Signal<
     }
 }
 
+func walletRequestWithOptionalPassword<Value>(
+    password: String?,
+    makePasswordProof: @escaping (String) -> Signal<Api.InputCheckPasswordSRP?, WalletOperationError>,
+    request: @escaping (Api.InputCheckPasswordSRP?) -> Signal<Value, WalletOperationError>
+) -> Signal<Value, WalletOperationError> {
+    return request(nil)
+    |> `catch` { error -> Signal<Value, WalletOperationError> in
+        guard error == .requestPassword, let password else { return .fail(error) }
+        return makePasswordProof(password)
+        |> mapToSignal { proof in request(proof) }
+    }
+}
+
 func _internal_replaceWallet(
     account: Account,
     replacement: WalletReplacement,
@@ -122,21 +135,18 @@ func _internal_replaceWallet(
             ))
         ))
     }
-    return walletPasswordProof(account: account, password: password)
-    |> mapError { error in
-        return error == .network ? .preflightNetwork : error
-    }
-    |> mapToSignal { proof -> Signal<WalletState, WalletOperationError> in
+    return walletRequestWithOptionalPassword(password: password, makePasswordProof: { password in
+        walletPasswordProof(account: account, password: password)
+        |> mapError { $0 == .network ? .preflightNetwork : $0 }
+    }, request: { proof in
         let flags: Int32 = proof == nil ? 0 : (1 << 0)
         return account.network.request(
             Api.functions.wallet.replaceWallet(flags: flags, wallet: apiReplacement, password: proof),
             automaticFloodWait: false
         )
-        |> mapError { error in
-            return walletOperationError(error, passwordProvided: password != nil)
-        }
+        |> mapError { walletOperationError($0, passwordProvided: proof != nil) }
         |> map(WalletState.init(apiState:))
-    }
+    })
 }
 
 func _internal_getWalletProofChallenge(account: Account) -> Signal<WalletProofChallenge, WalletOperationError> {
@@ -182,11 +192,9 @@ func _internal_disableWalletBackup(
         }
         apiOwnershipProof = nil
     }
-    let passwordProof: Signal<Api.InputCheckPasswordSRP?, WalletOperationError> = apiOwnershipProof == nil
-        ? walletPasswordProof(account: account, password: password)
-        : .single(nil)
-    return passwordProof
-    |> mapToSignal { passwordProof -> Signal<WalletState, WalletOperationError> in
+    return walletRequestWithOptionalPassword(password: password, makePasswordProof: { password in
+        walletPasswordProof(account: account, password: password)
+    }, request: { passwordProof in
         var flags: Int32 = passwordProof == nil ? 0 : (1 << 0)
         if apiOwnershipProof != nil {
             flags |= (1 << 1) | (1 << 2)
@@ -200,11 +208,9 @@ func _internal_disableWalletBackup(
             ),
             automaticFloodWait: false
         )
-        |> mapError { error in
-            return walletOperationError(error, passwordProvided: apiOwnershipProof == nil && password != nil)
-        }
+        |> mapError { walletOperationError($0, passwordProvided: passwordProof != nil) }
         |> map(WalletState.init(apiState:))
-    }
+    })
 }
 
 private func parseBackupHolders(_ holders: [Api.wallet.HolderDc]) -> [WalletBackupHolder]? {
@@ -244,8 +250,9 @@ func _internal_enableWalletBackup(
     guard encryptedParts.count == 3, encryptedParts.allSatisfy({ !$0.isEmpty }) else {
         return .fail(.invalidBackupData)
     }
-    return walletPasswordProof(account: account, password: password)
-    |> mapToSignal { proof -> Signal<WalletState, WalletOperationError> in
+    return walletRequestWithOptionalPassword(password: password, makePasswordProof: { password in
+        walletPasswordProof(account: account, password: password)
+    }, request: { proof in
         let flags: Int32 = proof == nil ? 0 : (1 << 0)
         return account.network.request(
             Api.functions.wallet.enableBackup(
@@ -255,24 +262,24 @@ func _internal_enableWalletBackup(
             ),
             automaticFloodWait: false
         )
-        |> mapError { error in
-            return walletOperationError(error, passwordProvided: password != nil)
-        }
+        |> mapError { walletOperationError($0, passwordProvided: proof != nil) }
         |> map(WalletState.init(apiState:))
-    }
+    })
 }
 
 func _internal_requestWalletSecretPhraseExport(
     account: Account,
     password: String?
 ) -> Signal<WalletSecretPhraseExport, WalletOperationError> {
-    return account.network.request(
-        Api.functions.wallet.exportSecretPhrase(),
-        automaticFloodWait: false
-    )
-    |> mapError { error in
-        return walletOperationError(error, passwordProvided: false)
-    }
+    return walletRequestWithOptionalPassword(password: password, makePasswordProof: { password in
+        walletPasswordProof(account: account, password: password)
+    }, request: { proof in
+        account.network.request(
+            Api.functions.wallet.exportSecretPhrase(flags: proof == nil ? 0 : (1 << 0), password: proof),
+            automaticFloodWait: false
+        )
+        |> mapError { walletOperationError($0, passwordProvided: proof != nil) }
+    })
     |> mapToSignal { phraseParts -> Signal<WalletSecretPhraseExport, WalletOperationError> in
         let token: String
         let datacenterIds: [Int32]
