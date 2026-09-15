@@ -34,13 +34,25 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         recorderVC.tabBarItem = UITabBarItem(title: "Recorder",
                                              image: UIImage(systemName: "record.circle"), tag: 2)
 
+        // Measures the commit-to-display depth the baked flight's `beginTime` is implicitly betting on.
+        let pipelineVC = PipelineDepthViewController()
+        pipelineVC.tabBarItem = UITabBarItem(title: "Pipeline",
+                                             image: UIImage(systemName: "timer"), tag: 4)
+
         let tabs = UITabBarController()
-        tabs.viewControllers = [listVC, physicsVC, abVC, recorderVC]
+        tabs.viewControllers = [listVC, physicsVC, abVC, recorderVC, pipelineVC]
 
         let window = UIWindow(windowScene: windowScene)
         window.rootViewController = tabs
         self.window = window
         window.makeKeyAndVisible()
+
+        // `-pipelineProbe` opens the Pipeline tab and starts it with no interaction at all, so the
+        // measurement can be driven entirely from the host: launch, screenshot, read the separation.
+        if ProcessInfo.processInfo.arguments.contains("-pipelineProbe") {
+            tabs.selectedIndex = 4
+            DispatchQueue.main.async { PipelineDepthProbe.shared.start() }
+        }
     }
 
     func sceneDidDisconnect(_ scene: UIScene) {

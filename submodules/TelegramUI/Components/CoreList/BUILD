@@ -15,6 +15,8 @@ swift_library(
             "CoreListDemo/ViewController.swift",
             "CoreListDemo/PhysicsScrollDemoViewController.swift",
             "CoreListDemo/ScrollComparisonViewController.swift",
+            "CoreListDemo/PipelineDepthProbe.swift",
+            "CoreListDemo/PipelineDepthViewController.swift",
             "CoreListDemo/DemoRow.swift",
             "CoreListDemo/AutoLoadResponseScheduler.swift",
         ],

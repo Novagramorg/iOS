@@ -1265,6 +1265,34 @@ Animation an authority.
     as the catch snap-back below, sign-flipped, and `FlightLaunchContinuityTests` is the mirror of
     `FlightCatchContinuityTests` — including its own non-vacuity control, which measures the
     un-rewound step in points.
+  - **D, the commit-to-display depth, is a PLATFORM constant, and the Simulator is in a different
+    regime from a device — do not tune the opening against it.** The residual this fix leaves is
+    `(D − 1) × frameTravel`, so D decides whether there is anything left to correct.
+    `CoreListDemo`'s Pipeline tab (`PipelineDepthProbe`, `Tools/measure-pipeline-depth.py`) measures it
+    by differential: two bars ride one 900 pt/s ramp from a shared layer-local origin, RED moved by a
+    per-frame model write and BLUE by a `CABasicAnimation` on an explicit `beginTime`, and their
+    separation in one composited frame is `velocity × D`. **Measured on the Simulator: D = 0.01
+    frames** — +0.19 ms, which is just the main-thread turn between the display-link callback and the
+    commit. So there CoreAnimation evaluates the animation at the COMMIT's own time for the frame that
+    commit produces, and the frame is presented on the spot.
+    Taken at face value that would invert this fix: at D = 0 the release frame STALLS without a
+    full-frame hand-off. It does not apply to a device, whose pipeline is real — and the device's
+    regime is pinned by the report that produced this fix, which is only consistent with D ≈ 1: at the
+    old 0.5-frame hand-off the release was seen to jump FORWARD, and under D = 0 that setting gives
+    half a frame of advance where a frame is expected, which is a slowdown and cannot read as a jump.
+    A direct device measurement still has not been taken (it needs the display captured over USB;
+    `MTLDrawable.presentedTime`/`addPresentedHandler`, the one API that reported real scan-out, is
+    gone from the iOS 27 SDK).
+    - **Capture with `simctl io recordVideo`, never `simctl io screenshot`.** The screenshot path
+      re-renders on demand instead of sampling a composited frame: its gap wandered between 0 and 37px
+      with no stable value, while the red bar's own positions stayed cleanly quantized to exactly one
+      frame of travel — i.e. the app side was provably fine and all the noise was the instrument.
+      `recordVideo` taps per frame and lands a 1px standard deviation.
+    - **Run the lead sweep every time.** `--sweep` commands a known offset on the animated bar, which
+      must come back as an equal measured gap (measured: −8.333 → −8.33, 0 → +0.19, +4.167 → +4.44,
+      +8.333 → +8.70, +16.667 → +17.04, +33.333 → +33.52 ms; slope 1.00, max residual 0.4 ms). A
+      near-zero reading means nothing until a known offset is shown to move it, and this instrument's
+      headline answer IS a near-zero reading.
   - **It is a real integration frame, so it can END the deceleration it was handed** — which is the
     whole reason the probe still runs, and why `launchFlight` re-checks `core.isDecelerating` after it
     rather than baking (the rewind happens only after that check, so it cannot reach these cases). `endDrag` reports `.decelerate` for
