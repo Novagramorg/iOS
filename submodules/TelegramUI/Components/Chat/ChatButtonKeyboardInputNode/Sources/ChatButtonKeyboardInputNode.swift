@@ -177,13 +177,22 @@ private final class ChatButtonKeyboardInputButtonNode: HighlightTrackingButtonNo
         }
         
         let textSize = self.textNode.updateLayout(CGSize(width: maxTextWidth, height: self.bounds.height))
+        let textHasRTL = self.textNode.cachedLayout?.hasRTL ?? false
         
         var textFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((self.bounds.width - textSize.width) / 2.0), y: floorToScreenPixels((self.bounds.height - textSize.height) / 2.0)), size: textSize)
         if let iconView = self.icon?.view {
             let contentX = floor((size.width - textSize.width - iconSize.width - iconSpacing) * 0.5)
-            textFrame.origin.x = contentX + iconSize.width + iconSpacing
+            // The icon leads the title in reading order, so it follows the title visually in RTL.
+            let iconX: CGFloat
+            if textHasRTL {
+                textFrame.origin.x = contentX
+                iconX = contentX + textSize.width + iconSpacing
+            } else {
+                textFrame.origin.x = contentX + iconSize.width + iconSpacing
+                iconX = contentX
+            }
             
-            let iconFrame = CGRect(origin: CGPoint(x: contentX, y: floor((size.height - iconSize.height) * 0.5)), size: iconSize)
+            let iconFrame = CGRect(origin: CGPoint(x: iconX, y: floor((size.height - iconSize.height) * 0.5)), size: iconSize)
             if iconView.superview == nil {
                 iconView.isUserInteractionEnabled = false
                 self.view.addSubview(iconView)

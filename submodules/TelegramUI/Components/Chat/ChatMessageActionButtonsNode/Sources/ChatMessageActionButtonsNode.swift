@@ -502,7 +502,13 @@ private final class ChatMessageActionButtonNode: ASDisplayNode {
                     var titleFrame = CGRect(origin: CGPoint(x: floor((width - titleSize.size.width) / 2.0), y: floor((42.0 - titleSize.size.height) / 2.0) + 1.0), size: titleSize.size)
                     
                     if button.style?.iconFileId != nil {
-                        titleFrame.origin.x = floorToScreenPixels((width - titleSize.size.width - emojiIconSize.width - emojiIconSpacing) * 0.5) + emojiIconSize.width + emojiIconSpacing
+                        let contentOriginX = floorToScreenPixels((width - titleSize.size.width - emojiIconSize.width - emojiIconSpacing) * 0.5)
+                        // The icon leads the title in reading order, so it follows the title visually in RTL.
+                        if titleSize.hasRTL {
+                            titleFrame.origin.x = contentOriginX
+                        } else {
+                            titleFrame.origin.x = contentOriginX + emojiIconSize.width + emojiIconSpacing
+                        }
                     } else if let image = node.iconNode?.image, customInfo?.icon != nil {
                         if customInfo?.icon == .actionArrow {
                             titleFrame.origin.x = floorToScreenPixels((width - titleSize.size.width - image.size.width + 1.0) * 0.5) - 0.0
@@ -566,7 +572,12 @@ private final class ChatMessageActionButtonNode: ASDisplayNode {
                             containerSize: emojiIconSize
                         )
                         
-                        let contentX = titleFrame.origin.x - emojiIconSize.width - emojiIconSpacing
+                        let contentX: CGFloat
+                        if titleSize.hasRTL {
+                            contentX = titleFrame.maxX + emojiIconSpacing
+                        } else {
+                            contentX = titleFrame.origin.x - emojiIconSize.width - emojiIconSpacing
+                        }
                         
                         let iconFrame = CGRect(origin: CGPoint(x: contentX, y: floor((42.0 - emojiIconSize.height) * 0.5) - 1.0), size: emojiIconSize)
                         if let iconView = icon.view {
