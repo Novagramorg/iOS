@@ -379,11 +379,15 @@ API_AVAILABLE(ios(10))
     }
     if (resultData == nil) {
         NSMutableData *randomData = [[NSMutableData alloc] initWithLength:32 + 16];
-        int result = SecRandomCopyBytes(kSecRandomDefault, randomData.length, [randomData mutableBytes]);
+        if (SecRandomCopyBytes(kSecRandomDefault, randomData.length, randomData.mutableBytes) != errSecSuccess) {
+            // This buffer becomes the database key and is persisted; it must never
+            // be left at the all-zero contents initWithLength: gave it. arc4random_buf
+            // cannot fail.
+            arc4random_buf(randomData.mutableBytes, randomData.length);
+        }
         if (currentData != nil && currentData.length == 32) { // upgrade key with salt
             [currentData getBytes:randomData.mutableBytes length:32];
         }
-        assert(result == 0);
         resultData = randomData;
         [resultData writeToFile:filePath atomically:false];
     }
