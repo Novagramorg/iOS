@@ -73,7 +73,7 @@ ios_unit_test(
     # ContextUI pulls in LegacyComponents, whose TGMediaPickerGalleryVideoItemView references
     # MPVolumeView. The app target links MediaPlayer implicitly; a standalone test binary does not.
     linkopts = ["-framework", "MediaPlayer"],
-    minimum_os_version = "13.0",
+    minimum_os_version = "15.0",
     runner = ":ChatRichTextEditorComposerTestRunner",
     deps = [
         ":ChatRichTextEditorComposerTestsLib",

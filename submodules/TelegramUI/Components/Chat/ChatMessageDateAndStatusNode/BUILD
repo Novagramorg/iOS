@@ -58,7 +58,7 @@ ios_unit_test(
     # MPVolumeView. The app target links MediaPlayer implicitly; a standalone test binary does not.
     # Mirrors //submodules/TelegramUI/Components/Chat/ChatRichTextEditorComposer:ChatRichTextEditorComposerTests.
     linkopts = ["-framework", "MediaPlayer"],
-    minimum_os_version = "13.0",
+    minimum_os_version = "15.0",
     runner = ":ChatMessageDateAndStatusNodeTestRunner",
     deps = [
         ":ChatMessageDateAndStatusNodeTestsLib",
