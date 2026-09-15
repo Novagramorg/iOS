@@ -222,7 +222,7 @@ final class StarsStatisticsScreenComponent: Component {
         }
         
         func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
-            if self.isLockedAtPanels(scrollBounds: scrollView.bounds), let panelContainerView = self.panelContainer.view as? StarsTransactionsPanelContainerComponent.View {
+            if !"".isEmpty, self.isLockedAtPanels(scrollBounds: scrollView.bounds), let panelContainerView = self.panelContainer.view as? StarsTransactionsPanelContainerComponent.View {
                 panelContainerView.transferVelocity(self.previousVelocityM1)
             }
         }

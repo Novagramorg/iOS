@@ -1150,9 +1150,9 @@ private func walletTransferServiceMessageString(
     //TODO:localize
     let sentYouText = " sent you "
     //TODO:localize
-    let worthPrefixText = "("
+    let worthPrefixText = " ("
     //TODO:localize
-    let worthSuffixText = ")."
+    let worthSuffixText = ")"
     
     if isIncoming {
         append(peerName, font: semiboldFont, additionalAttributes: peerMentionAttributes)
