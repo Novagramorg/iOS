@@ -74,6 +74,7 @@ struct WalletStoredTransaction: Codable, Equatable, Sendable {
     let direction: WalletContext.Transaction.Direction
     let amount: Int64
     let fee: Int64
+    let gasless: Bool?
     let peer: Peer
     let peerAddress: String?
     let peerDomain: String?
@@ -93,6 +94,7 @@ struct WalletStoredTransaction: Codable, Equatable, Sendable {
         self.direction = transaction.direction
         self.amount = transaction.amount
         self.fee = transaction.fee
+        self.gasless = transaction.gasless
         switch transaction.peer {
         case let .user(peer, address, domain):
             self.peer = .user(id: peer.id)
@@ -139,6 +141,7 @@ struct WalletStoredTransaction: Codable, Equatable, Sendable {
             direction: self.direction,
             amount: self.amount,
             fee: self.fee,
+            gasless: self.gasless ?? false,
             peer: peer,
             comment: self.comment,
             commentEncrypted: self.commentEncrypted ?? false,

@@ -2,6 +2,7 @@ import PasscodeCore
 import Foundation
 import SwiftSignalKit
 import TelegramCore
+import Postbox
 import WalletEngineFFI
 
 private let walletOwnershipProofDomain = "telegram.org"
@@ -113,7 +114,7 @@ func stageRecoveryPhraseImport(
     let staged = try await runtime.stageTransientReplacement(words: normalizedWords)
     let disposition: WalletContext.PreparedRecoveryPhraseImport.Disposition
     if walletEngineAddressesEqual(staged.address, sourceAddress) {
-        guard staged.signingPublicKey == sourcePublicKey else {
+        guard staged.publicKey == sourcePublicKey else {
             try await runtime.discardReplacement(recordId: staged.recordId)
             throw WalletContext.WalletError.storage(.identityMismatch)
         }
@@ -588,6 +589,10 @@ extension WalletContextImpl {
             let state = selected.state
             let identity = try walletServerIdentity(state)
             let serverStateRevision = selected.revision
+            self.deferredServerWalletState = (
+                state,
+                self.deferredServerWalletState?.refreshIfStreamingUnavailable ?? false
+            )
             let generation = await self.prepareForRuntimeIdentityChange()
             do {
                 let words = try await exportWalletSecretPhrase(
@@ -597,7 +602,7 @@ extension WalletContextImpl {
                 )
                 let staged = try await self.runtime.stageReplacement(words: words)
                 guard walletEngineAddressesEqual(staged.address, identity.address),
-                      staged.signingPublicKey == identity.publicKey else {
+                      staged.publicKey == identity.publicKey else {
                     await self.discardReplacementForCleanup(recordId: staged.recordId)
                     throw WalletError.storage(.identityMismatch)
                 }
@@ -608,7 +613,11 @@ extension WalletContextImpl {
                     serverStateRevision: serverStateRevision
                 )
                 guard self.serverStateMutationRevision == serverStateRevision else { throw CancellationError() }
-                return self.installRuntimeActivation(state: state, activation: activation, generation: generation)
+                return self.installRuntimeActivation(
+                    state: self.deferredServerWalletState?.state ?? state,
+                    activation: activation,
+                    generation: generation
+                )
             } catch {
                 self.logger.error("wallet_created_local_setup_failed", error)
                 let activation = try await self.runtime.activate(
@@ -617,7 +626,11 @@ extension WalletContextImpl {
                     serverStateRevision: serverStateRevision
                 )
                 guard self.serverStateMutationRevision == serverStateRevision else { throw CancellationError() }
-                return self.installRuntimeActivation(state: state, activation: activation, generation: generation)
+                return self.installRuntimeActivation(
+                    state: self.deferredServerWalletState?.state ?? state,
+                    activation: activation,
+                    generation: generation
+                )
             }
         }
     }
@@ -655,7 +668,7 @@ extension WalletContextImpl {
             let state = selected.state
             let identity = try walletServerIdentity(state)
             guard walletEngineAddressesEqual(staged.address, identity.address),
-                  staged.signingPublicKey == identity.publicKey else {
+                  staged.publicKey == identity.publicKey else {
                 throw WalletError.storage(.identityMismatch)
             }
             let serverStateRevision = selected.revision
@@ -776,7 +789,7 @@ extension WalletContextImpl {
             switch prepared.disposition {
             case .currentWallet:
                 guard walletEngineAddressesEqual(prepared.candidateAddress, currentIdentity.address),
-                      prepared.candidateSigningPublicKey == currentIdentity.publicKey else {
+                      prepared.candidatePublicKey == currentIdentity.publicKey else {
                     if self.preparedRecoveryPhraseImportRecordId == prepared.recordId {
                         self.preparedRecoveryPhraseImportRecordId = nil
                     }
@@ -848,7 +861,7 @@ extension WalletContextImpl {
                 let state = selected.state
                 let replacementIdentity = try walletServerIdentity(state)
                 guard walletEngineAddressesEqual(prepared.candidateAddress, replacementIdentity.address),
-                      prepared.candidateSigningPublicKey == replacementIdentity.publicKey else {
+                      prepared.candidatePublicKey == replacementIdentity.publicKey else {
                     throw WalletError.storage(.identityMismatch)
                 }
                 let replacementRevision = selected.revision
@@ -908,7 +921,7 @@ extension WalletContextImpl {
             if !updateSecretPhrase {
                 guard try await self.runtime.keyRotationRecord() == nil else { throw WalletError.operationInProgress }
                 let words = try await self.runtime.revealRecoveryPhrase()
-                guard try walletMnemonicSigningPublicKey(words: words).walletHexString == info.publicKey else {
+                guard try rotationMnemonicPublicKey(phrase: words.joined(separator: " ")).walletHexString == info.publicKey else {
                     throw WalletError.storage(.identityMismatch)
                 }
                 return PreparedBackupDisable(
@@ -1001,7 +1014,7 @@ extension WalletContextImpl {
               walletEngineAddressesEqual(info.address, prepared.walletAddress) else { throw WalletError.unavailable }
         let signingKey = try walletMnemonicSigningPublicKey(words: prepared.words)
         guard let material = prepared.rotation else {
-            guard signingKey.walletHexString == prepared.walletPublicKey,
+            guard try rotationMnemonicPublicKey(phrase: prepared.words.joined(separator: " ")).walletHexString == prepared.walletPublicKey,
                   try await self.runtime.keyRotationRecord() == nil else { throw WalletError.operationInProgress }
             return prepared
         }
@@ -1084,9 +1097,14 @@ extension WalletContextImpl {
         return try await self.performOperation(.disablingBackup, operationId: operationId, session: session) {
             let initialState = try self.backupDisableState(prepared)
             let signingPublicKey = try walletMnemonicSigningPublicKey(words: prepared.words)
-            guard signingPublicKey == prepared.rotation?.newPublicKey ||
-                    (prepared.rotation == nil && signingPublicKey.walletHexString == prepared.walletPublicKey) else {
-                throw WalletError.storage(.identityMismatch)
+            if let rotation = prepared.rotation {
+                guard signingPublicKey == rotation.newPublicKey else {
+                    throw WalletError.storage(.identityMismatch)
+                }
+            } else {
+                guard try rotationMnemonicPublicKey(phrase: prepared.words.joined(separator: " ")).walletHexString == prepared.walletPublicKey else {
+                    throw WalletError.storage(.identityMismatch)
+                }
             }
             if self.backupDisableIsComplete(initialState, prepared: prepared) {
                 return try await self.finishBackupDisable(prepared)
