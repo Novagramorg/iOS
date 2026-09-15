@@ -288,6 +288,23 @@ recording, exactly as CustomImpl's muted state does; the muted-speech detector l
 unit, not in the recording path, so it is unaffected. CLI regression: `--mute-participants` now
 fails on `Muted audio leaks` (audio RTP counted at the SFU per SSRC) — 456 packets before, 0 after.
 
+**Outgoing Opus frame duration is decided in `buildRemoteAnswer` (2026-09-15).** WebRTC derives the
+send codec from the *remote* answer (`VoiceChannel::SetRemoteContent_w`), and this engine fabricates
+that answer itself, so the Opus `ptime` written there is the frame duration we send. Without it the
+encoder used WebRTC's 20 ms default: ~50 packets/s, three times the iOS CustomImpl (which requests
+120 but is clamped to 60 because this build no longer defines `WEBRTC_OPUS_SUPPORT_120MS_PTIME` —
+active from 2021-06 until the 2024-03-15 Opus 1.5.1 upgrade commented it out, for no stated reason
+and in exchange for `WEBRTC_OPUS_SUPPORT_DRED`/`WEBRTC_OPUS_USE_CODEC_PLC`, which no source consumes
+and whose libopus is built without `--enable-dred`) and six times Android and desktop, whose builds
+keep the define and really send 120 ms frames. The answer now carries `ptime=60; maxptime=120`,
+standard RFC 7587 SDP that a server-produced answer can take over verbatim. 60 rather than 120: it
+is what iOS custom participants have shipped since 2024, needs no build flag, and keeps small
+conference calls responsive; the extra step to 120 saves only ~4 kbit/s more of per-packet overhead
+for another 60 ms of delay and a 120 ms hole per lost packet. The CLI's per-SSRC counts show it:
+a reference participant fell from 476 to 170 packets in a 10 s run, against 142 for a custom one,
+and the encoder log line reads `ptime: 60`. Note WebRTC's Audio Network Adaptor is not a substitute
+here: it adapts frame length to the sender's uplink estimate, which cannot see the SFU fan-out.
+
 The **discovery tap** is installed once on mid=0's receiver only. Each recvonly receiver gets its own separate transformer instance — sharing ONE instance across receivers triggers `Register{Sink,}TransformedFrameCallback` re-runs that overwrite valid registrations and misroute frames.
 
 **Video:**
