@@ -285,7 +285,14 @@ public final class MediaPlaybackHeaderPanelComponent: Component {
                             } else {
                                 controllerContext = component.context.sharedContext.makeTempAccountContext(account: component.data.account)
                             }
-                            let playerController = component.context.sharedContext.makeOverlayAudioPlayerController(context: controllerContext, chatLocation: .peer(id: messageId.peerId), type: component.data.kind, initialMessageId: messageId, initialOrder: component.data.playbackOrder, playlistLocation: nil, parentNavigationController: navigationController)
+                            // The queue is built from synthesized Local-id rows, one per track, so it
+                            // must be anchored on the PLAYING track's synthesized id — the rich
+                            // message's own id is not among those rows.
+                            var anchorMessageId = messageId
+                            if let indexProviding = component.data.item.id as? InstantPagePlaylistItemIndexProviding {
+                                anchorMessageId = EngineMessage.Id(peerId: messageId.peerId, namespace: Namespaces.Message.Local, id: Int32(clamping: indexProviding.instantPageMediaIndex))
+                            }
+                            let playerController = component.context.sharedContext.makeOverlayAudioPlayerController(context: controllerContext, chatLocation: .peer(id: messageId.peerId), type: component.data.kind, initialMessageId: anchorMessageId, initialOrder: component.data.playbackOrder, playlistLocation: instantPageLocation, parentNavigationController: navigationController)
                             self.window?.endEditing(true)
                             playerController.navigationPresentation = .flatModal
                             controller.push(playerController)

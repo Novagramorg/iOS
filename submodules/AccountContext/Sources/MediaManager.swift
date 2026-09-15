@@ -33,20 +33,45 @@ public enum PeerMessagesMediaPlaylistId: Equatable, SharedMediaPlaylistId {
 /// `messageId` is what makes the panel actionable: tapping the mini player opens the full music
 /// player for that message. An Instant View page (`messageId == nil`) has no message to open, so the
 /// panel tap stays inert there, as it always was.
-public struct InstantPagePlaylistLocation: Equatable, SharedMediaPlaylistLocation {
+/// One audio track of an InstantPage playlist, as the player queue needs to render it.
+/// `index` is `InstantPageMedia.index` — the playlist's item identity — so a queue row maps back
+/// to a playlist item exactly. Declared here rather than reusing `InstantPageMedia` because
+/// `AccountContext` does not (and must not) depend on `InstantPageUI`.
+public struct InstantPagePlaylistTrack: Equatable {
+    public let index: Int
+    public let file: TelegramMediaFile
+
+    public init(index: Int, file: TelegramMediaFile) {
+        self.index = index
+        self.file = file
+    }
+}
+
+public struct InstantPagePlaylistLocation: SharedMediaPlaylistLocation {
     public let webpageId: EngineMedia.Id
     public let messageId: EngineMessage.Id?
+    /// Display payload for the player queue, NOT part of this location's identity.
+    public let tracks: [InstantPagePlaylistTrack]
+    /// Everything needed to rebuild the SAME playlist re-anchored on another track when a queue
+    /// row is tapped. Both are TelegramCore types, so carrying them adds no module dependency.
+    public let webPage: TelegramMediaWebpage?
+    public let messageReference: MessageReference?
 
-    public init(webpageId: EngineMedia.Id, messageId: EngineMessage.Id?) {
+    public init(webpageId: EngineMedia.Id, messageId: EngineMessage.Id?, tracks: [InstantPagePlaylistTrack] = [], webPage: TelegramMediaWebpage? = nil, messageReference: MessageReference? = nil) {
         self.webpageId = webpageId
         self.messageId = messageId
+        self.tracks = tracks
+        self.webPage = webPage
+        self.messageReference = messageReference
     }
 
     public func isEqual(to: SharedMediaPlaylistLocation) -> Bool {
         guard let to = to as? InstantPagePlaylistLocation else {
             return false
         }
-        return self == to
+        // Identity is the page and the message only. Including `tracks` would make
+        // `areSharedMediaPlaylistsEqual` report a different playlist whenever the list is rebuilt.
+        return self.webpageId == to.webpageId && self.messageId == to.messageId
     }
 }
 
@@ -200,7 +225,13 @@ public func peerMessageMediaPlayerType(_ message: EngineMessage) -> MediaManager
     return nil
 }
     
-public func peerMessagesMediaPlaylistAndItemId(_ message: EngineMessage, isRecentActions: Bool, isGlobalSearch: Bool, isDownloadList: Bool, isSavedMusic: Bool, isAttachMusic: Bool) -> (SharedMediaPlaylistId, SharedMediaPlaylistItemId)? {
+public func peerMessagesMediaPlaylistAndItemId(_ message: EngineMessage, isRecentActions: Bool, isGlobalSearch: Bool, isDownloadList: Bool, isSavedMusic: Bool, isAttachMusic: Bool, richMessageQueueId: EngineMessage.Id? = nil) -> (SharedMediaPlaylistId, SharedMediaPlaylistItemId)? {
+    if let richMessageQueueId {
+        // A rich message's audio queue renders synthesized Local-id rows whose id.id IS the
+        // InstantPageMedia index. The playing playlist is an InstantPageMediaPlaylist, so its
+        // identity — not a PeerMessages one — is what the row must be compared against.
+        return (RichMessagePlaylistId(messageId: richMessageQueueId), RichMessagePlaylistItemId(index: Int(message.id.id)))
+    }
     if isSavedMusic {
         return (PeerMessagesMediaPlaylistId.savedMusic(message.id.peerId), PeerMessagesMediaPlaylistItemId(messageId: message.id, messageIndex: message.index))
     } else if isAttachMusic || (isGlobalSearch && !isDownloadList) {
