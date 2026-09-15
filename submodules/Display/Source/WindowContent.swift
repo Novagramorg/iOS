@@ -91,6 +91,28 @@ private func inputHeightOffsetForLayout(_ layout: WindowLayout) -> CGFloat {
     return 0.0
 }
 
+/// Resolves the device's sensor-housing safe-area insets for a window of `windowSize`.
+///
+/// `DeviceMetrics.safeInsets(inLandscape:)` describes the **screen** — where the notch, the Dynamic
+/// Island and the home indicator physically sit — not the window. Those areas only overlap the
+/// window where the window's edge *is* the screen's edge, so a window that does not span the whole
+/// screen (iOS 26 / iPadOS free resize, Split View, Slide Over, Stage Manager) has none of them,
+/// while `deviceMetrics` still reports the hardware's values and `inLandscape` is derived from the
+/// window's aspect ratio rather than from the device's orientation.
+///
+/// The failure this guards against is invisible on the detail side and glaring in the master
+/// column: an 899x674 window on an iPhone 16 Pro-class device reads as "landscape" and takes 59pt
+/// of inset on each side, which leaves 202pt of content inside the 320pt chat list column.
+private func deviceSafeInsets(deviceMetrics: DeviceMetrics, windowSize: CGSize) -> UIEdgeInsets {
+    let screenSize = UIScreen.main.bounds.size
+    let portraitWindowSize = CGSize(width: min(windowSize.width, windowSize.height), height: max(windowSize.width, windowSize.height))
+    let portraitScreenSize = CGSize(width: min(screenSize.width, screenSize.height), height: max(screenSize.width, screenSize.height))
+    if abs(portraitWindowSize.width - portraitScreenSize.width) > 1.0 || abs(portraitWindowSize.height - portraitScreenSize.height) > 1.0 {
+        return UIEdgeInsets()
+    }
+    return deviceMetrics.safeInsets(inLandscape: windowSize.width > windowSize.height)
+}
+
 private func containedLayoutForWindowLayout(_ layout: WindowLayout, deviceMetrics: DeviceMetrics) -> ContainerViewLayout {
     let resolvedStatusBarHeight: CGFloat?
     if let statusBarHeight = layout.statusBarHeight {
@@ -108,10 +130,9 @@ private func containedLayoutForWindowLayout(_ layout: WindowLayout, deviceMetric
         updatedInputHeight = inputHeight - inputHeightOffsetForLayout(layout)
     }
     
-    let isLandscape = layout.size.width > layout.size.height
     var resolvedSafeInsets = layout.safeInsets
     if layout.safeInsets.left.isZero {
-        resolvedSafeInsets = deviceMetrics.safeInsets(inLandscape: isLandscape)
+        resolvedSafeInsets = deviceSafeInsets(deviceMetrics: deviceMetrics, windowSize: layout.size)
     }
     
     return ContainerViewLayout(size: layout.size, metrics: layout.metrics, deviceMetrics: deviceMetrics, intrinsicInsets: UIEdgeInsets(top: 0.0, left: 0.0, bottom: layout.onScreenNavigationHeight ?? 0.0, right: 0.0), safeInsets: resolvedSafeInsets, additionalInsets: UIEdgeInsets(), statusBarHeight: resolvedStatusBarHeight, inputHeight: updatedInputHeight, inputHeightIsInteractivellyChanging: layout.upperKeyboardInputPositionBound != nil && layout.upperKeyboardInputPositionBound != layout.size.height && layout.inputHeight != nil, inVoiceOver: layout.inVoiceOver)
@@ -396,7 +417,7 @@ public class Window1 {
         }
         
         let isLandscape = boundsSize.width > boundsSize.height
-        let safeInsets = self.deviceMetrics.safeInsets(inLandscape: isLandscape)
+        let safeInsets = deviceSafeInsets(deviceMetrics: self.deviceMetrics, windowSize: boundsSize)
         let onScreenNavigationHeight = self.deviceMetrics.onScreenNavigationHeight(inLandscape: isLandscape, systemOnScreenNavigationHeight: self.hostView.onScreenNavigationHeight)
         
         let orientation: UIInterfaceOrientation = self.hostView.currentInterfaceOrientation()
@@ -927,7 +948,7 @@ public class Window1 {
         } else {
             transition = .immediate
         }
-        self.updateLayout { $0.update(size: value, metrics: layoutMetricsForScreenSize(size: value, orientation: orientation), safeInsets: self.deviceMetrics.safeInsets(inLandscape: value.width > value.height), forceInCallStatusBarText: self.forceInCallStatusBarText, transition: transition, overrideTransition: true) }
+        self.updateLayout { $0.update(size: value, metrics: layoutMetricsForScreenSize(size: value, orientation: orientation), safeInsets: deviceSafeInsets(deviceMetrics: self.deviceMetrics, windowSize: value), forceInCallStatusBarText: self.forceInCallStatusBarText, transition: transition, overrideTransition: true) }
         if let statusBarHost = self.statusBarHost, !statusBarHost.isApplicationInForeground {
             self.layoutSubviews(force: true)
         }
