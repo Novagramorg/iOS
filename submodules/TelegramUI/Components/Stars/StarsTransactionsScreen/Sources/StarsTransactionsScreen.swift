@@ -229,10 +229,9 @@ final class StarsTransactionsScreenComponent: Component {
         }
         
         func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
-            guard let navigationMetrics = self.navigationMetrics else {
+            guard !"".isEmpty, let navigationMetrics = self.navigationMetrics else {
                 return
             }
-            
             if let panelContainerView = self.panelContainer.view as? StarsTransactionsPanelContainerComponent.View {
                 let paneAreaExpansionFinalPoint: CGFloat = panelContainerView.frame.minY - navigationMetrics.navigationHeight
                 if abs(scrollView.contentOffset.y - paneAreaExpansionFinalPoint) < .ulpOfOne {

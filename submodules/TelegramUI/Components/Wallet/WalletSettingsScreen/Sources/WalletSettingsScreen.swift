@@ -89,10 +89,13 @@ private final class WalletSettingsScreenComponent: Component {
         private weak var disableBackupPreparationController: AlertScreen?
         private var disableBackupPreparationProgress: ValuePromise<Bool>?
         private var disableBackupPreparationContent: Promise<[AnyComponentWithIdentity<AlertComponentEnvironment>]>?
+        private var disableBackupPreparationActions: Promise<[AlertScreen.Action]>?
         private var disableBackupCheckState: AlertCheckComponent.ExternalState?
         private let disableBackupChoiceDisposable = MetaDisposable()
         private var disableBackupPreparationGeneration: UInt64 = 0
         private var disableBackupUpdateSecretPhrase = false
+        private var disableBackupRequiresTopUp = false
+        private var disableBackupRotationPreview: WalletContext.PreparedBackupDisable?
         private var disableBackupPreparationError: WalletContext.WalletError?
         private var disableBackupWalletIdentity: (address: String, publicKey: String)?
         private var isPreparingBackupDisable = false
@@ -149,7 +152,10 @@ private final class WalletSettingsScreenComponent: Component {
             self.disableBackupPreparationGeneration &+= 1
             self.disableBackupChoiceDisposable.set(nil)
             self.disableBackupPreparationContent = nil
+            self.disableBackupPreparationActions = nil
             self.disableBackupCheckState = nil
+            self.disableBackupRequiresTopUp = false
+            self.disableBackupRotationPreview = nil
             self.disableBackupPreparationError = nil
             self.disableBackupWalletIdentity = nil
             self.isPreparingBackupDisable = false
@@ -487,11 +493,15 @@ private final class WalletSettingsScreenComponent: Component {
             }
             self.disableBackupWalletIdentity = (info.address, info.publicKey)
             self.disableBackupUpdateSecretPhrase = updateSecretPhrase
+            self.disableBackupRequiresTopUp = updateSecretPhrase && self.disableBackupHasLowBalance
+            self.disableBackupRotationPreview = nil
             self.disableBackupPreparationError = nil
             let checkState = AlertCheckComponent.ExternalState()
             self.disableBackupCheckState = checkState
             let content = Promise<[AnyComponentWithIdentity<AlertComponentEnvironment>]>()
             self.disableBackupPreparationContent = content
+            let actions = Promise<[AlertScreen.Action]>()
+            self.disableBackupPreparationActions = actions
             let progress = ValuePromise<Bool>(false, ignoreRepeated: true)
             self.disableBackupPreparationProgress = progress
             self.updateDisableBackupPreparationContent()
@@ -499,21 +509,7 @@ private final class WalletSettingsScreenComponent: Component {
             let alertController = AlertScreen(
                 configuration: AlertScreen.Configuration(dismissOnOutsideTap: false),
                 contentSignal: content.get(),
-                actionsSignal: .single([
-                    AlertScreen.Action(title: "Cancel", action: { [weak self] in
-                        self?.abandonWalletFlow()
-                    }),
-                    AlertScreen.Action(
-                        title: "Disable",
-                        type: .destructive,
-                        action: { [weak self] in
-                            self?.beginDisableBackupPreparation()
-                        },
-                        autoDismiss: false,
-                        isEnabled: progress.get() |> map { !$0 },
-                        progress: progress.get()
-                    )
-                ]),
+                actionsSignal: actions.get(),
                 updatedPresentationData: (
                     component.context.sharedContext.currentPresentationData.with { $0 },
                     component.context.sharedContext.presentationData
@@ -528,8 +524,6 @@ private final class WalletSettingsScreenComponent: Component {
                 self.disableBackupPreparationProgress = nil
                 self.abandonWalletFlow()
             }
-            // The subscription owns this preview only while this alert is open.
-            var rotationPreview: WalletContext.PreparedBackupDisable?
             self.disableBackupChoiceDisposable.set((checkState.valueSignal
             |> deliverOnMainQueue).start(next: { [weak self, weak checkState] _ in
                 guard let self, let checkState,
@@ -537,23 +531,45 @@ private final class WalletSettingsScreenComponent: Component {
                       self.disableBackupUpdateSecretPhrase != checkState.value else {
                     return
                 }
-                self.disableBackupPreparationGeneration &+= 1
-                self.backupOperationDisposable.set(nil)
-                if let prepared = self.preparedBackupDisable, prepared.updateSecretPhrase {
-                    rotationPreview = prepared
-                }
-                self.preparedBackupDisable = checkState.value ? rotationPreview : nil
-                self.isPreparingBackupDisable = false
-                self.disableBackupPreparationProgress?.set(false)
-                self.disableBackupPreparationError = nil
-                self.disableBackupUpdateSecretPhrase = checkState.value
-                self.updateDisableBackupPreparationContent()
-                if checkState.value, rotationPreview == nil {
-                    self.prepareDisableBackup(openWordsWhenReady: false)
-                }
+                self.updateDisableBackupPreparationState(updateSecretPhrase: checkState.value)
             }))
             controller.present(alertController, in: .window(.root))
             if updateSecretPhrase {
+                self.prepareDisableBackup(openWordsWhenReady: false)
+            }
+        }
+
+        private var disableBackupHasLowBalance: Bool {
+            guard let balance = self.walletState?.balance.currentValue else {
+                return false
+            }
+            return balance < 500_000
+        }
+
+        private func updateDisableBackupPreparationState(updateSecretPhrase: Bool) {
+            guard self.disableBackupCheckState != nil else {
+                return
+            }
+            let requiresTopUp = updateSecretPhrase && self.disableBackupHasLowBalance
+            guard self.disableBackupUpdateSecretPhrase != updateSecretPhrase || self.disableBackupRequiresTopUp != requiresTopUp else {
+                self.updateDisableBackupPreparationContent()
+                return
+            }
+            self.disableBackupUpdateSecretPhrase = updateSecretPhrase
+            self.disableBackupRequiresTopUp = requiresTopUp
+            self.disableBackupPreparationGeneration &+= 1
+            self.backupOperationDisposable.set(nil)
+            if requiresTopUp {
+                self.disableBackupRotationPreview = nil
+            } else if let prepared = self.preparedBackupDisable, prepared.updateSecretPhrase {
+                self.disableBackupRotationPreview = prepared
+            }
+            self.preparedBackupDisable = updateSecretPhrase ? self.disableBackupRotationPreview : nil
+            self.isPreparingBackupDisable = false
+            self.disableBackupPreparationProgress?.set(false)
+            self.disableBackupPreparationError = nil
+            self.updateDisableBackupPreparationContent()
+            if updateSecretPhrase, !requiresTopUp, self.disableBackupRotationPreview == nil {
                 self.prepareDisableBackup(openWordsWhenReady: false)
             }
         }
@@ -585,6 +601,8 @@ private final class WalletSettingsScreenComponent: Component {
 
         private func updateDisableBackupPreparationContent() {
             guard let content = self.disableBackupPreparationContent,
+                  let actions = self.disableBackupPreparationActions,
+                  let progress = self.disableBackupPreparationProgress,
                   let checkState = self.disableBackupCheckState else {
                 return
             }
@@ -609,7 +627,18 @@ private final class WalletSettingsScreenComponent: Component {
                     ))
                 )
             ]
-            if self.disableBackupUpdateSecretPhrase, let prepared = self.preparedBackupDisable {
+            if self.disableBackupRequiresTopUp {
+                items.append(AnyComponentWithIdentity(
+                    id: "topUpInfo",
+                    component: AnyComponent(AlertTextComponent(
+                        content: .plain("You need a non-zero balance to update your recovery phrase."),
+                        alignment: .center,
+                        color: .primary,
+                        style: .background(.small),
+                        insets: UIEdgeInsets(top: 8.0, left: 8.0, bottom: 0.0, right: 8.0)
+                    ))
+                ))
+            } else if self.disableBackupUpdateSecretPhrase, let prepared = self.preparedBackupDisable {
                 var text = "You'll get a new phrase to write down. Address and balance stay the same."
                 if let fee = prepared.networkFeeNanograms {
                     text += "\n\nNetwork fee: \(self.disableBackupFeeText(fee))."
@@ -624,7 +653,7 @@ private final class WalletSettingsScreenComponent: Component {
                     ))
                 ))
             }
-            if let error = self.disableBackupPreparationError {
+            if !self.disableBackupRequiresTopUp, let error = self.disableBackupPreparationError {
                 let message = self.disableBackupErrorMessage(error)
                 items.append(AnyComponentWithIdentity(
                     id: "preparationError",
@@ -637,10 +666,53 @@ private final class WalletSettingsScreenComponent: Component {
                 ))
             }
             content.set(.single(items))
+            actions.set(.single([
+                AlertScreen.Action(title: "Cancel", action: { [weak self] in
+                    self?.abandonWalletFlow()
+                }),
+                AlertScreen.Action(
+                    id: "primary",
+                    title: self.disableBackupRequiresTopUp ? "Top Up" : "Disable",
+                    type: self.disableBackupRequiresTopUp ? .default : .destructive,
+                    action: { [weak self] in
+                        guard let self else {
+                            return
+                        }
+                        if self.disableBackupRequiresTopUp {
+                            self.openDisableBackupTopUp()
+                        } else {
+                            self.beginDisableBackupPreparation()
+                        }
+                    },
+                    autoDismiss: false,
+                    isEnabled: progress.get() |> map { !$0 },
+                    progress: progress.get()
+                )
+            ]))
+        }
+
+        private func openDisableBackupTopUp() {
+            guard let component = self.component,
+                  let controller = self.environment?.controller(),
+                  let alert = self.disableBackupPreparationController,
+                  let identity = self.disableBackupWalletIdentity,
+                  case let .wallet(info) = component.walletContext.stateValue.phase,
+                  info.address == identity.address, info.publicKey == identity.publicKey else {
+                return
+            }
+            self.disableBackupPreparationController = nil
+            self.disableBackupPreparationProgress = nil
+            self.abandonWalletFlow()
+            alert.dismiss { [weak controller] in
+                controller?.push(component.context.sharedContext.makeWalletReceiveScreen(
+                    context: component.context,
+                    address: info.address
+                ))
+            }
         }
 
         private func beginDisableBackupPreparation() {
-            guard !self.isPreparingBackupDisable else {
+            guard !self.isPreparingBackupDisable, !self.disableBackupRequiresTopUp else {
                 return
             }
             if self.disableBackupPreparationError == nil,
@@ -654,6 +726,7 @@ private final class WalletSettingsScreenComponent: Component {
 
         private func prepareDisableBackup(openWordsWhenReady: Bool) {
             guard !self.isPreparingBackupDisable,
+                  !self.disableBackupRequiresTopUp,
                   self.disableBackupPreparationController != nil,
                   let component = self.component else {
                 return
@@ -726,7 +799,10 @@ private final class WalletSettingsScreenComponent: Component {
             }
             self.disableBackupChoiceDisposable.set(nil)
             self.disableBackupPreparationContent = nil
+            self.disableBackupPreparationActions = nil
             self.disableBackupCheckState = nil
+            self.disableBackupRequiresTopUp = false
+            self.disableBackupRotationPreview = nil
             self.disableBackupPreparationProgress = nil
             if let alert = self.disableBackupPreparationController {
                 self.disableBackupPreparationController = nil
@@ -995,7 +1071,7 @@ private final class WalletSettingsScreenComponent: Component {
                             alert.dismiss()
                             return
                         }
-                        self.updateDisableBackupPreparationContent()
+                        self.updateDisableBackupPreparationState(updateSecretPhrase: self.disableBackupUpdateSecretPhrase)
                         return
                     }
                     if let newPublicKey = self.preparedBackupDisable?.rotation?.newPublicKey,
