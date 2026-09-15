@@ -5522,7 +5522,27 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         }
         
         if case .System = animation/*, !strongSelf.mainContextSourceNode.isExtractedToContextPreview*/ {
-            if !strongSelf.backgroundNode.frame.equalTo(backgroundFrame) {
+            // `previousBackgroundFrame` — the rect this node was laid out with last pass — rather
+            // than `backgroundNode.frame`, which cannot answer this question.
+            //
+            // `CALayer.frame` is DERIVED: `origin.y == position.y - bounds.height * anchor.y`. The
+            // chat's bubble inset is 7/3, which is not representable, so writing the frame and
+            // reading it back loses ~1.5e-15 — measured on device as
+            // `2.3333333333333335` in, `2.333333333333332` out. `equalTo` is exact, so this guard
+            // was TRUE on every pass, including the many that re-apply an unchanged layout, and the
+            // whole animated block below re-ran each time.
+            //
+            // That is not merely wasted work. `ContainedViewLayoutTransition.updateFrame(layer:)`
+            // has the same derived-frame guard, so the background and backdrop layers re-targeted
+            // too — each repeat pass restarting a fresh full-duration animation from the layer's
+            // PRESENTATION value. The mask, its silhouette and the wallpaper portal are framed at
+            // `(-1,-1,w+2,h+2)` / `(0,0,w,h)`, whose integral origins round-trip exactly, so their
+            // guard did fire and they stayed on the original timeline — leaving two halves of one
+            // bubble running on two clocks, which reads as the backdrop lagging its own outline.
+            //
+            // `backgroundFrame` is stored above from the value this pass computed, never through a
+            // layer, so it compares exactly. Keep it that way.
+            if !previousBackgroundFrame.equalTo(backgroundFrame) {
                 animation.animator.updateFrame(layer: strongSelf.backgroundNode.layer, frame: backgroundFrame, completion: nil)
                 if let backgroundHighlightNode = strongSelf.backgroundHighlightNode {
                     animation.animator.updateFrame(layer: backgroundHighlightNode.layer, frame: backgroundFrame, completion: nil)
