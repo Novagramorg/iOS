@@ -851,7 +851,7 @@ struct WalletStreamingPresentationOverlay {
         return true
     }
 
-    private func transactionsWithPendingComments(
+    private func transactionsWithPendingDetails(
         _ transactions: [WalletContext.Transaction],
         traceId: String,
         pendingTransfers: [WalletContext.PendingTransfer]
@@ -888,12 +888,13 @@ struct WalletStreamingPresentationOverlay {
                   let index = indices.first,
                   let matchingPending = pendingByRecipient[recipient],
                   matchingPending.count == 1,
-                  let pending = matchingPending.first,
-                  let comment = pending.comment else {
+                  let pending = matchingPending.first else {
                 continue
             }
             let transaction = transactions[index]
-            guard transaction.comment == nil else {
+            let hasPendingComment = transaction.comment == nil && pending.comment != nil
+            let gasless = transaction.gasless || (pending.sentTransfer?.gasless ?? false)
+            guard hasPendingComment || gasless != transaction.gasless else {
                 continue
             }
             result[index] = WalletContext.Transaction(
@@ -905,9 +906,10 @@ struct WalletStreamingPresentationOverlay {
                 direction: transaction.direction,
                 amount: transaction.amount,
                 fee: transaction.fee,
+                gasless: gasless,
                 peer: transaction.peer,
-                comment: comment,
-                commentEncrypted: pending.commentEncrypted,
+                comment: hasPendingComment ? pending.comment : transaction.comment,
+                commentEncrypted: hasPendingComment ? pending.commentEncrypted : transaction.commentEncrypted,
                 currency: transaction.currency,
                 collectible: transaction.collectible,
                 status: transaction.status,
@@ -947,7 +949,7 @@ struct WalletStreamingPresentationOverlay {
             return walletPendingTransferTransaction(pending)
         }
         let streamingTransactions = self.traces.flatMap { traceId, trace in
-            let transactions = self.transactionsWithPendingComments(
+            let transactions = self.transactionsWithPendingDetails(
                 trace.transactions,
                 traceId: traceId,
                 pendingTransfers: state.pendingTransfers

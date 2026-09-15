@@ -134,10 +134,12 @@ func walletTransactions(
             direction: transaction.incoming ? .incoming : .outgoing,
             amount: transaction.amount,
             fee: transaction.fee,
+            gasless: transaction.gasless,
             peer: peer,
             comment: transaction.comment,
             commentEncrypted: transaction.commentEncrypted,
-            status: status
+            status: status,
+            kind: transaction.keyChange ? .keyChange : .transfer
         ))
     }
     return result
@@ -208,6 +210,7 @@ func walletPendingTransferTransaction(
         direction: .outgoing,
         amount: -pending.amount,
         fee: pending.fee ?? 0,
+        gasless: pending.sentTransfer?.gasless ?? false,
         peer: .address(pending.recipient, domain: nil),
         comment: pending.comment,
         commentEncrypted: pending.commentEncrypted,
@@ -263,6 +266,7 @@ private func transactionWithResolvedStreamingPeer(
         direction: transaction.direction,
         amount: transaction.amount,
         fee: transaction.fee,
+        gasless: transaction.gasless,
         peer: .user(peer, address: address, domain: domain),
         comment: transaction.comment,
         commentEncrypted: transaction.commentEncrypted,
@@ -289,6 +293,7 @@ func walletTransactionWithPresentationId(
         direction: transaction.direction,
         amount: transaction.amount,
         fee: transaction.fee,
+        gasless: transaction.gasless,
         peer: transaction.peer,
         comment: transaction.comment,
         commentEncrypted: transaction.commentEncrypted,

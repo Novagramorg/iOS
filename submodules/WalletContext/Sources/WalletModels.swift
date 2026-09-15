@@ -372,6 +372,7 @@ public extension WalletContext {
         public enum Kind: Int32, Codable, Equatable, Sendable {
             case transfer = 0
             case deployContract = 1
+            case keyChange = 2
         }
 
         public enum Direction: Int32, Codable, Equatable, Sendable {
@@ -478,6 +479,7 @@ public extension WalletContext {
         public let direction: Direction
         public let amount: Int64
         public let fee: Int64
+        public let gasless: Bool
         public let peer: Peer
         public let comment: String?
         public let commentEncrypted: Bool
@@ -494,6 +496,7 @@ public extension WalletContext {
             direction: Direction,
             amount: Int64,
             fee: Int64,
+            gasless: Bool = false,
             peer: Peer,
             comment: String?,
             commentEncrypted: Bool = false,
@@ -511,6 +514,7 @@ public extension WalletContext {
             self.direction = direction
             self.amount = amount
             self.fee = fee
+            self.gasless = gasless
             self.peer = peer
             self.comment = comment
             self.commentEncrypted = commentEncrypted
@@ -520,7 +524,7 @@ public extension WalletContext {
         }
 
         public var isVisibleInWalletHistory: Bool {
-            if self.status == .failed || self.kind == .deployContract {
+            if self.status == .failed || self.kind == .deployContract || self.kind == .keyChange {
                 return true
             }
             if self.collectible != nil {
