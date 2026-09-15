@@ -15,8 +15,12 @@
 // the retry cadence backs off, and under a proxy the probe list is cut down to what can
 // actually tell one outcome from another.
 
+static MTDatacenterAddress *makeAddressWithMedia(NSString *ip, uint16_t port, bool preferForMedia, bool preferForProxy) {
+    return [[MTDatacenterAddress alloc] initWithIp:ip port:port preferForMedia:preferForMedia restrictToTcp:false cdn:false preferForProxy:preferForProxy secret:nil];
+}
+
 static MTDatacenterAddress *makeAddress(NSString *ip, uint16_t port, bool preferForProxy) {
-    return [[MTDatacenterAddress alloc] initWithIp:ip port:port preferForMedia:false restrictToTcp:false cdn:false preferForProxy:preferForProxy secret:nil];
+    return makeAddressWithMedia(ip, port, false, preferForProxy);
 }
 
 static MTSocksProxySettings *makeSocksProxy(void) {
@@ -107,6 +111,59 @@ static MTSocksProxySettings *makeWebProxy(void) {
 
     NSArray *result = [MTDiscoverConnectionSignals probeAddressesForAddressList:list media:false isProxy:true proxySettings:makeWebProxy()];
     XCTAssertEqual(result.count, 1u);
+}
+
+- (void)testProxyWithNoProxyPreferredAddressesFallsBackToWholeList {
+    // A datacenter whose config has no `static` address used to produce zero probes under
+    // a proxy, and discovery spun on its retry timer forever.
+    NSArray *list = @[
+        makeAddress(@"149.154.175.50", 443, false),
+        makeAddress(@"149.154.167.50", 443, false),
+    ];
+
+    NSArray *socksResult = [MTDiscoverConnectionSignals probeAddressesForAddressList:list media:false isProxy:true proxySettings:makeSocksProxy()];
+    XCTAssertEqual(socksResult.count, 2u);
+
+    NSArray *mtProxyResult = [MTDiscoverConnectionSignals probeAddressesForAddressList:list media:false isProxy:true proxySettings:makeMtProxy()];
+    XCTAssertEqual(mtProxyResult.count, 1u);
+}
+
+- (void)testFallbackWithoutProxyPreferenceStillExcludesMediaAddresses {
+    // The context drops a media-only address from the schemes of a non-media connection, so
+    // a media address winning a non-media probe would be discovery producing nothing usable.
+    // The first relaxation therefore keeps the media match. Order matters for the MTProxy
+    // collapse, so the media-only address is listed first.
+    NSArray *list = @[
+        makeAddressWithMedia(@"149.154.175.51", 443, true, false),
+        makeAddressWithMedia(@"149.154.175.50", 443, false, false),
+        makeAddressWithMedia(@"149.154.167.50", 443, false, false),
+    ];
+
+    NSArray<MTDatacenterAddress *> *mtProxyResult = [MTDiscoverConnectionSignals probeAddressesForAddressList:list media:false isProxy:true proxySettings:makeMtProxy()];
+    XCTAssertEqual(mtProxyResult.count, 1u);
+    XCTAssertEqualObjects(mtProxyResult.firstObject.ip, @"149.154.175.50");
+
+    NSArray<MTDatacenterAddress *> *socksResult = [MTDiscoverConnectionSignals probeAddressesForAddressList:list media:false isProxy:true proxySettings:makeSocksProxy()];
+    XCTAssertEqual(socksResult.count, 2u);
+    for (MTDatacenterAddress *address in socksResult) {
+        XCTAssertFalse(address.preferForMedia);
+    }
+}
+
+- (void)testFallbackReachesWholeListOnlyWhenMediaMatchIsEmptyToo {
+    // Every address is media-only and this is a non-media probe under a proxy: the second
+    // stage still yields probes rather than none.
+    NSArray *list = @[
+        makeAddressWithMedia(@"149.154.175.51", 443, true, false),
+    ];
+
+    NSArray *result = [MTDiscoverConnectionSignals probeAddressesForAddressList:list media:false isProxy:true proxySettings:makeSocksProxy()];
+    XCTAssertEqual(result.count, 1u);
+}
+
+- (void)testEmptyAddressListYieldsNoProbes {
+    NSArray *result = [MTDiscoverConnectionSignals probeAddressesForAddressList:@[] media:false isProxy:true proxySettings:makeMtProxy()];
+    XCTAssertEqual(result.count, 0u);
 }
 
 - (void)testMediaFallbackStillAppliesUnderProxy {

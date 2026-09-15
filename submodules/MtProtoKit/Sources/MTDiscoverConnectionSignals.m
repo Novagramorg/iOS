@@ -162,8 +162,33 @@
         }
     }
 
-    if (bestAddressList.count == 0 && media)
+    if (bestAddressList.count == 0) {
+        // Nothing matched both preferences. A datacenter whose config carries no `static`
+        // (proxy-preferred) address hits this with a proxy on, and the list used to stay
+        // empty: zero probes, so discovery ticked on its retry timer forever and never
+        // produced a scheme. MTProto still had schemes to dial (the transport uses every
+        // non-media address regardless of the proxy flag), so this was not the outage; the
+        // cost is that with an alive SOCKS proxy the datacenter never converged on a
+        // probed, known-good address, and the gain of probing here is that trade against
+        // one (MTProxy) or a few (SOCKS5) probe connections per backoff round through a
+        // proxy that may itself be down.
+        //
+        // Relax in two stages. First drop only the proxy preference and keep the media
+        // match: the scheme this produces keeps the probed address, and
+        // transportSchemesForDatacenterWithId discards a media-only address for a
+        // non-media connection (and MTTcpConnection derives the MTProxy datacenter tag
+        // from it), so a media address winning a non-media probe would be discovery
+        // succeeding with nothing usable.
+        for (MTDatacenterAddress *address in addressList) {
+            if (media == address.preferForMedia) {
+                [bestAddressList addObject:address];
+            }
+        }
+    }
+    if (bestAddressList.count == 0) {
+        // Second stage, the whole list. This is the fallback media discovery always had.
         [bestAddressList addObjectsFromArray:addressList];
+    }
 
     if (proxySettings != nil && (proxySettings.secret != nil || proxySettings.webProxy)) {
         // An MTProxy chooses the datacenter from the obfuscated header and a WEB relay
