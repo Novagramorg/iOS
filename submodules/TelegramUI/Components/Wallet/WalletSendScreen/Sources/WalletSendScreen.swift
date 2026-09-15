@@ -1217,7 +1217,7 @@ private final class WalletSendScreenComponent: Component {
             let actionTitle = "Got it"
             controller.present(AlertScreen(
                 context: component.context,
-                configuration: AlertScreen.Configuration(allowInputInset: false),
+                configuration: AlertScreen.Configuration(allowInputInset: true),
                 content: [
                     AnyComponentWithIdentity(
                         id: "title",

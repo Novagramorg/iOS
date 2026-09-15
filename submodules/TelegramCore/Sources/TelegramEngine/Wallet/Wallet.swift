@@ -198,6 +198,7 @@ public enum WalletOperationError: Error, Equatable {
     case publicKeyInvalid
     case proofInvalid
     case proofExpired
+    case rotationNotFound
     case tokenInvalid
     case tokenExpired
     case clientKeyInvalid
@@ -369,7 +370,7 @@ func _internal_getWalletUserAddresses(
         if force {
             flags |= 1 << 0
         }
-        return account.network.request(Api.functions.wallet.getUserAddresses(flags: flags, id: inputUsers))
+        return account.network.request(Api.functions.wallet.getUserAddresses(flags: flags, id: inputUsers, addresses: []))
         |> mapError { _ -> WalletGetUserAddressesError in
             return .generic
         }

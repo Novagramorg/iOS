@@ -1381,7 +1381,7 @@ public enum WalletWordsScreenMode: Equatable {
     case view
     case verify
     case replacement
-    case backupDisable
+    case backupDisable(updateSecretPhrase: Bool)
 }
 
 public protocol SharedAccountContext: AnyObject {

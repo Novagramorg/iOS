@@ -16,6 +16,24 @@ import BundleIconComponent
 import ResizableSheetComponent
 import GlassBarButtonComponent
 
+private extension WalletWordsScreenMode {
+    var retainsVerificationScreens: Bool {
+        switch self {
+        case .replacement, .backupDisable:
+            return true
+        case .view, .verify:
+            return false
+        }
+    }
+
+    var verifiesRotatedKey: Bool {
+        if case let .backupDisable(updateSecretPhrase) = self {
+            return updateSecretPhrase
+        }
+        return false
+    }
+}
+
 private final class WalletWordsScreenComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
 
@@ -83,12 +101,12 @@ private final class WalletWordsScreenComponent: Component {
             let titleText: String
             let bodyText: String
             switch component.mode {
-            case .view, .verify:
+            case .view, .verify, .backupDisable(updateSecretPhrase: false):
                 //TODO:localize
                 titleText = "Your Recovery Phrase"
                 //TODO:localize
                 bodyText = "Your Secret Recovery Phrase is the key to\u{00a0}back up your wallet. Keep it secret and\u{00a0}secure at all times."
-            case .replacement, .backupDisable:
+            case .replacement, .backupDisable(updateSecretPhrase: true):
                 //TODO:localize
                 titleText = "New Secret Phrase"
                 //TODO:localize
@@ -578,7 +596,7 @@ public final class WalletWordsScreen: ViewControllerComponentContainer {
         guard !self.pendingAutomaticDismissal, !self.words.isEmpty, !self.isVerifying else {
             return
         }
-        if (self.mode == .replacement || self.mode == .backupDisable), Date().timeIntervalSince(self.displayedAt) < 10.0 {
+        if self.mode.retainsVerificationScreens, Date().timeIntervalSince(self.displayedAt) < 10.0 {
             //TODO:localize
             self.present(textAlertController(
                 context: self.context,
@@ -594,7 +612,7 @@ public final class WalletWordsScreen: ViewControllerComponentContainer {
             let wordsController: ViewController = self
             let verificationController = self.context.sharedContext.makeWalletImportScreen(
                 context: self.context,
-                mode: .verify(words: self.words, keyRotation: self.mode == .backupDisable),
+                mode: .verify(words: self.words, keyRotation: self.mode.verifiesRotatedKey),
                 completion: { [weak self, weak wordsController] in
                     guard let self, let wordsController else {
                         return
@@ -611,7 +629,7 @@ public final class WalletWordsScreen: ViewControllerComponentContainer {
                     self.isVerifying = false
                     self.completion?()
 
-                    if self.mode == .replacement || self.mode == .backupDisable {
+                    if self.mode.retainsVerificationScreens {
                         return
                     }
 

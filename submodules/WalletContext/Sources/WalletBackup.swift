@@ -103,7 +103,7 @@ private func exportWalletSecretPhraseAttempt(
                 return .fail(.invalidBackupData)
             }
             do {
-                let publicKey = try rotationMnemonicPublicKey(phrase: words.joined(separator: " "))
+                let publicKey = try walletMnemonicSigningPublicKey(words: words)
                 guard expectedPublicKey.count == 32,
                       publicKey.count == 32,
                       Data(publicKey) == expectedPublicKey else {

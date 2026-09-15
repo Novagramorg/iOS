@@ -24,6 +24,7 @@ swift_library(
         "//submodules/TelegramUI/Components/ListActionItemComponent",
         "//submodules/TelegramUI/Components/ListSectionComponent",
         "//submodules/TelegramUI/Components/AlertComponent",
+        "//submodules/TelegramUI/Components/AlertComponent/AlertCheckComponent",
         "//submodules/UndoUI",
         "//submodules/WalletContext",
         "//submodules/TelegramUI/Components/Wallet/WalletAuthorizationUI",

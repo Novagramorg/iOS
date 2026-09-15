@@ -493,7 +493,8 @@ actor WalletContextImpl {
                     promotedReplacement = try await self.runtime.reconcileReplacementCandidate(
                         serverAddress: address,
                         serverPublicKey: publicKey,
-                        discardMismatch: true
+                        discardMismatch: true,
+                        serverStateRevision: revision
                     )
                 } else if case .empty = value {
                     try await self.runtime.discardReplacementAfterAuthoritativeEmptyState()
@@ -528,6 +529,17 @@ actor WalletContextImpl {
         refreshIfStreamingUnavailable: Bool = false
     ) {
         self.serverStateMutationRevision &+= 1
+        if case let .ready(_, _, _, address, publicKey, _) = value {
+            let revision = self.serverStateMutationRevision
+            Task { [runtime = self.runtime] in
+                await runtime.updateServerWalletIdentity(address: address, publicKey: publicKey, revision: revision)
+            }
+        } else {
+            let revision = self.serverStateMutationRevision
+            Task { [runtime = self.runtime] in
+                await runtime.invalidateServerWalletIdentity(revision: revision)
+            }
+        }
         self.serverStateNeedsActivation = self.serverStateNeedsActivation || forceActivation
         if self.currentState.activeOperation?.defersServerWalletState == true {
             let shouldRefreshIfStreamingUnavailable = refreshIfStreamingUnavailable
@@ -540,7 +552,9 @@ actor WalletContextImpl {
         self.serverStateRetryTask = nil
         self.serverWalletState = value
         if case let .ready(backupEnabled, _, _, address, publicKey, _) = value, !backupEnabled {
-            self.completeAppliedKeyRotationIfBackupDisabled(address: address, publicKey: publicKey)
+            self.completeAppliedKeyRotationIfBackupDisabled(
+                address: address, publicKey: publicKey, serverStateRevision: self.serverStateMutationRevision
+            )
         }
         if !self.serverStateNeedsActivation,
            case let .ready(backupEnabled, canExportPhrase, canEnableBackup, address, publicKey, _) = value,
@@ -603,6 +617,7 @@ actor WalletContextImpl {
         self.preparedTransfers.removeAll()
         self.deferredSynchronizationScope = []
         let generation = self.activationGeneration
+        let serverStateRevision = self.serverStateMutationRevision
         self.activationTask?.cancel()
         self.activationTask = nil
 
@@ -665,7 +680,8 @@ actor WalletContextImpl {
                     address: address,
                     publicKey: publicKey,
                     previousCoordinator: previousCoordinator,
-                    generation: generation
+                    generation: generation,
+                    serverStateRevision: serverStateRevision
                 )
             }
         }
@@ -678,7 +694,8 @@ actor WalletContextImpl {
         address: String,
         publicKey: Data,
         previousCoordinator: WalletTonConnectCoordinator?,
-        generation: UInt64
+        generation: UInt64,
+        serverStateRevision: UInt64
     ) async {
         defer {
             if self.automaticPhraseRecoveryGeneration == generation {
@@ -694,7 +711,7 @@ actor WalletContextImpl {
                 $0.schemaVersion == 2
                     && $0.network == "mainnet"
                     && walletEngineAddressesEqual($0.address, address)
-                    && $0.publicKey == publicKey
+                    && ($0.signingPublicKey == nil || $0.signingPublicKey == publicKey)
             } ?? false
             let hasStoredSecret: Bool
             if storedMatchesIdentity, let secretRef = stored?.secretRef {
@@ -742,19 +759,22 @@ actor WalletContextImpl {
                     activation = try await self.runtime.commitReplacement(
                         recordId: prepared.recordId,
                         serverAddress: address,
-                        serverPublicKey: publicKey
+                        serverPublicKey: publicKey,
+                        serverStateRevision: serverStateRevision
                     )
                 } catch {
                     self.logger.error("wallet_automatic_phrase_install_failed", error)
                     activation = try await self.runtime.activate(
                         serverAddress: address,
-                        serverPublicKey: publicKey
+                        serverPublicKey: publicKey,
+                        serverStateRevision: serverStateRevision
                     )
                 }
             } else {
                 activation = try await self.runtime.activate(
                     serverAddress: address,
-                    serverPublicKey: publicKey
+                    serverPublicKey: publicKey,
+                    serverStateRevision: serverStateRevision
                 )
             }
             try Task.checkCancellation()
@@ -1045,16 +1065,13 @@ actor WalletContextImpl {
         }
     }
 
-    func completeAppliedKeyRotationIfBackupDisabled(address: String, publicKey: Data) {
+    func completeAppliedKeyRotationIfBackupDisabled(address: String, publicKey: Data, serverStateRevision: UInt64) {
         Task { [runtime = self.runtime, logger = self.logger] in
             do {
-                guard let record = try await runtime.keyRotationRecord(),
-                      (record.phase == .chainApplied || record.phase == .backupDisabled),
-                      walletEngineAddressesEqual(record.walletAddress, address),
-                      record.walletPublicKey == publicKey else {
-                    return
-                }
-                try await runtime.completeKeyRotationAfterBackupDisabled(operationId: record.operationId)
+                try await runtime.reconcileKeyRotation(
+                    serverAddress: address, serverPublicKey: publicKey, backupEnabled: false,
+                    serverStateRevision: serverStateRevision
+                )
             } catch {
                 logger.error("wallet_applied_key_rotation_cleanup_failed", error)
             }

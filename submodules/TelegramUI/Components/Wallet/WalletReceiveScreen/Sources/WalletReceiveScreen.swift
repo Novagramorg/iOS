@@ -1087,7 +1087,7 @@ private final class WalletReceiveSheetContent: Component {
             )
 
             //TODO:localize
-            let explanationText = "Use to receive GRAM on\nThe Open Network (TON) only."
+            let explanationText = "Share your address or this\nQR code to receive GRAM."
             let explanationSize = self.explanation.update(
                 transition: .immediate,
                 component: AnyComponent(BalancedTextComponent(
