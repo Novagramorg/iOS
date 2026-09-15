@@ -238,10 +238,14 @@ final class PhysicsScrollCore {
     /// actual release-to-first-frame gap (analysis §2, "Decel hand-off").
     ///
     /// `.stepped` inherits this from its display link's first callback, and `ScrollReplay` models it
-    /// explicitly as `firstDecelStepMs`. A BAKED path has to apply it too, or the whole trajectory is
-    /// one frame of integration behind UIScrollView's: identical shape and identical landing, but
-    /// `v × frame` less displacement at every instant — largest at the start, which is what makes it
-    /// read as a slower initial speed while every distance measurement still agrees.
+    /// explicitly as `firstDecelStepMs`. **A BAKED path must NOT keep it**, and that is the one thing
+    /// about this step that is easy to get backwards: the compensation exists because a model-write
+    /// driver presents a value a commit-to-display delay after computing it, and a render-server-played
+    /// trajectory anchored at the release instant is already that far into its path on the first frame
+    /// it is presented on. Keeping it there double-counts the frame and the release steps forward —
+    /// see `PhysicsScrollEngine.launchFlight`, which runs this only as a settle probe and rewinds it.
+    /// The MODEL timelines still agree with UIScrollView's `contentOffset` either way, which is why
+    /// every distance measurement is blind to the difference.
     ///
     /// Fires no `onScroll` and writes no host bounds: the caller parks the layer at the trajectory's
     /// settled offset immediately afterwards.

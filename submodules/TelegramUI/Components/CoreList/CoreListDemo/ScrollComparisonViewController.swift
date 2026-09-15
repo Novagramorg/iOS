@@ -25,9 +25,16 @@ final class ScrollComparisonViewController: UIViewController, UIGestureRecognize
     private let engine = PhysicsScrollEngine()
     private let readout = UILabel()
     private let modeControl = UISegmentedControl(items: ["keyframe", "stepped"])
-    /// Release hand-off, in display frames. The A/B measures its effect directly: the deceleration
-    /// runs behind the real scroll view at 0 and ahead of it at 1, so the value UIScrollView actually
-    /// applies is somewhere between and is what this exists to find.
+    /// Release hand-off, in display frames.
+    ///
+    /// It was built to find how much of a frame UIScrollView applies at release, by comparing openings.
+    /// That question is answered, and the answer for the `.keyframe` path is NONE: the hand-off is a
+    /// model-write driver's compensation, and a render-server-played trajectory gets the same frame
+    /// from the commit-to-display delay (`PhysicsScrollEngine.launchFlight`). This control therefore no
+    /// longer moves the opening — it only decides how marginal a release has to be for the probe to
+    /// settle it instead of launching a flight. Note also what hid the defect here: this harness reads
+    /// `UIScrollView.contentOffset`, a MODEL value, against our own model, and the delay cancels in
+    /// that comparison — so the hand-off really is needed for the two models to agree.
     private let handOffControl = UISegmentedControl(items: ["0", "¼", "½", "1 frame"])
     private let handOffValues: [CGFloat] = [0, 0.25, 0.5, 1.0]
     /// WHICH recognizer drives the replica. Driving from `scrollView.panGestureRecognizer` removes all

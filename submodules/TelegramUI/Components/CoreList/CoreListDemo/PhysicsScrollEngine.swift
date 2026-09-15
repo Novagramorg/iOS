@@ -415,21 +415,35 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
     /// and hand the visual path to the render server. The sampling link reports the live offset (and
     /// drives the list's mid-flight rebalance → rebake); the CA completion finalises.
     private func launchFlight() {
-        // UIScrollView integrates exactly one display frame at release, synchronously, before anything
-        // is presented. Without this the baked path trails it by that frame for the whole flight —
-        // same landing, visibly less initial movement. See `applyDecelerationHandOff`.
+        // The release hand-off runs as a SETTLE PROBE, and its displacement is rewound before the bake.
+        // It compensates a MODEL-WRITE driver, which a baked flight is not: the render server plays the
+        // path from an explicit `beginTime` at each frame's own PRESENTATION time, so the first frame
+        // the launch transaction lands on is already one commit-to-display delay in — and that delay IS
+        // the hand-off. Keeping it double-counts the frame and the release steps FORWARD by
+        // `releaseHandOffFrames × frameTravel` (12pt at 120Hz, 23pt at 60Hz off a 3000 pt/s flick, twice
+        // that under the repeated-flick multiplier). Keyframe-only — `.stepped` writes the model once
+        // per frame just as the drag does. CLAUDE.md has the full account; `FlightLaunchContinuityTests`
+        // locks it, and `FlightCatchContinuityTests` is the same seam sign-flipped at the catch.
+        //
+        // The probe still has to RUN, because it is a real integration frame and can END the
+        // deceleration it was handed — and a release CAN reach here with nothing left to spend.
+        // `endDrag` reports `.decelerate` for two of them: a blend that cancels (the decelerate
+        // threshold reads the RAW latest sample and the 0.75/0.25 low-pass runs after it, so a finger
+        // reversing on its last sample releases above the threshold at ~0 pts/ms), and an overscrolled
+        // release already inside `Deceleration.settleTolerance` — the everyday drag-to-the-edge-and-
+        // pause. `.stepped` absorbs both in its first link callback; here the settle happens BEFORE the
+        // bake, so building the flight would violate the `.decelerating` precondition `KeyframeFlight`
+        // asserts (`FlightLaunchPreconditionTests`). The rewind runs only AFTER that verdict is read,
+        // so it cannot reach those cases — and it is exact, since `offset`/`decelerationVelocity` are
+        // the axis' full-precision state (pixel rounding is on the WRITE) and `reseedDeceleration` is a
+        // pure (offset, velocity, phase) restore. It rewinds the CORE, not just the bake, because
+        // `engine.offset` feeds the list's own geometry and must describe the screen, not lead it.
+        let releaseState = (offset: core.offset, velocity: core.decelerationVelocity)
         if Self.appliesReleaseHandOff {
             core.applyDecelerationHandOff(frameMs: Self.displayFrameMs * Self.releaseHandOffFrames)
         }
-        // The hand-off is a real integration frame, so it can also END the deceleration it was handed —
-        // and a release CAN reach here with nothing left to spend. `endDrag` reports `.decelerate` for
-        // two of them: a blend that cancels (the decelerate threshold reads the RAW latest sample and
-        // the 0.75/0.25 low-pass runs after it, so a finger reversing on its last sample releases above
-        // the threshold at ~0 pts/ms), and an overscrolled release already inside
-        // `Deceleration.settleTolerance` — the everyday drag-to-the-edge-and-pause. `.stepped` absorbs
-        // both in its first link callback; here the settle happens BEFORE the bake, so building the
-        // flight would violate the `.decelerating` precondition `KeyframeFlight` asserts.
         guard core.isDecelerating else { settleWithoutFlight(at: core.offset); return }
+        core.reseedDeceleration(offset: releaseState.offset, velocity: releaseState.velocity)
         let now = localNow()
         let f = KeyframeFlight(core: core, startTime: now)
         guard f.trajectory.samples.count >= 2, f.trajectory.duration > 0 else {
@@ -699,14 +713,21 @@ final class PhysicsScrollEngine: NSObject, ScrollEngine {
     /// incidentally reducing sampler load, so the combination read as worse.
     static var pinsSamplingLinkRate = true
 
-    /// Whether a baked flight applies UIScrollView's one-frame release hand-off (see
-    /// `PhysicsScrollCore.applyDecelerationHandOff`). Togglable because its evidence is a
-    /// fixture-LANDING argument, and the A/B harness measures the opening instead.
+    /// Whether `launchFlight` runs UIScrollView's release hand-off at all (see
+    /// `PhysicsScrollCore.applyDecelerationHandOff`).
+    ///
+    /// On the baked path the step is a SETTLE PROBE and nothing else — its displacement is rewound
+    /// before the bake, because a render-server-played path gets that frame from the commit-to-display
+    /// delay for free (`launchFlight`). Turning it off therefore does not change the opening; it
+    /// removes the probe, so a release with nothing left to spend bakes a degenerate ~1-vertex flight
+    /// instead of settling through `settleWithoutFlight`.
     static var appliesReleaseHandOff = true
-    /// How much of a display frame the release hand-off integrates. Measured against a real
-    /// UIScrollView driven by the SAME gesture (the A/B harness): 0 leaves us ~313pt behind at peak,
-    /// 1.0 overshoots to ~301pt ahead, so the compensation the real thing actually applies is about
-    /// half a frame. Tunable while that is pinned down.
+    /// How much of a display frame the settle probe integrates.
+    ///
+    /// It no longer sizes any displacement — see `appliesReleaseHandOff` — so this only decides how
+    /// marginal a release has to be for the probe to settle it. UIScrollView's own step is a full
+    /// frame; half of one is kept because it is what shipped and every `FlightLaunchPreconditionTests`
+    /// fixture is stated at that size.
     static var releaseHandOffFrames: CGFloat = 0.5
 
     /// A FIXED max-refresh range for ProMotion, or nil on ≤60Hz (incl. Simulator) or when pinning is
