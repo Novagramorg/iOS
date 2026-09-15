@@ -393,7 +393,17 @@ public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessag
         }
         if let image = self.stopButtonIcon.image {
             self.stopButtonIcon.tintColor = interfaceState.theme.chat.inputPanel.panelControlColor
-            transition.updateFrame(view: self.stopButtonIcon, frame: image.size.centered(in: CGRect(origin: CGPoint(), size: size)))
+            // This icon carries a scale transform: ChatTextInputPanelNode cross-fades it against the
+            // mic button by scaling between 0.001 and 1.0. `frame` is a DERIVED property — UIKit
+            // computes it from bounds, position, anchorPoint and transform — so writing it back while
+            // the transform is non-identity makes UIKit solve for bounds instead, inflating them by
+            // 1/scale. A 14pt icon written at scale 0.001 yields 14000pt bounds, which render as a
+            // huge square once the scale animates back to 1.0, and each subsequent layout pass feeds
+            // the inflated value back in. Drive the transform-independent properties directly, the
+            // way micButton above does for exactly the same reason.
+            let iconFrame = image.size.centered(in: CGRect(origin: CGPoint(), size: size))
+            transition.updatePosition(layer: self.stopButtonIcon.layer, position: iconFrame.center)
+            transition.updateBounds(layer: self.stopButtonIcon.layer, bounds: CGRect(origin: CGPoint(), size: iconFrame.size))
         }
         transition.updateFrame(view: self.stopButton, frame: CGRect(origin: CGPoint(), size: size))
         
