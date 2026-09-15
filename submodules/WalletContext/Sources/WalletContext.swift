@@ -85,13 +85,13 @@ public final class WalletContext {
     private let environmentDisposable = MetaDisposable()
     private let walletConfigurationDisposable = MetaDisposable()
     private let walletStateUpdatesDisposable = MetaDisposable()
+    private let walletTransferUpdatesDisposable = MetaDisposable()
+    private var walletTransferUpdatesTask: Task<Void, Never>?
     private let storedStateDisposable = MetaDisposable()
-    private let twoStepAuthDisposable = MetaDisposable()
     private let operationTaskRegistry: WalletOperationTaskRegistry
     private let environmentRevision = Atomic<UInt64>(value: 0)
     private let walletConfigurationRevision = Atomic<UInt64>(value: 0)
     private let walletStateRevision = Atomic<UInt64>(value: 0)
-    private let twoStepAuthRevision = Atomic<UInt64>(value: 0)
     private let subscriberDemand = Atomic<WalletSubscriberDemand>(value: WalletSubscriberDemand())
     private let walletScreenDemand = Atomic<WalletScreenDemand>(value: WalletScreenDemand())
     let fiatCurrencyRevision = Atomic<UInt64>(value: 0)
@@ -207,7 +207,6 @@ public final class WalletContext {
         applicationInForeground: Signal<Bool, NoError>,
         accountIsCurrent: Signal<Bool, NoError>,
         networkAvailable: Signal<Bool, NoError>,
-        twoStepAuthRequired: Signal<Bool?, NoError> = .single(nil),
         applicationIsPasscodeLocked: Signal<Bool, NoError> = .single(false),
         log: @escaping (String) -> Void = { Logger.shared.log("WalletContext", $0) }
     ) {
@@ -268,16 +267,26 @@ public final class WalletContext {
             }
         }))
 
-        self.twoStepAuthDisposable.set(twoStepAuthRequired.start(next: { [weak self] value in
-            guard let self else { return }
-            let revision = self.twoStepAuthRevision.modify { value in
-                let next = value &+ 1
-                return next
+        let transferUpdates = AsyncStream<([WalletTransferUpdate], String?)> { continuation in
+            self.walletTransferUpdatesDisposable.set(engine.wallet.transferUpdates().start(next: { [weak self] updates in
+                guard let self else { return }
+                let address: String?
+                if case let .wallet(info) = self.stateValue.phase {
+                    address = info.address
+                } else {
+                    address = nil
+                }
+                continuation.yield((updates, address))
+            }, completed: {
+                continuation.finish()
+            }))
+        }
+        self.walletTransferUpdatesTask = Task {
+            for await (updates, address) in transferUpdates {
+                guard !Task.isCancelled else { return }
+                await impl.receiveWalletTransferUpdates(updates, walletAddress: address)
             }
-            Task {
-                await impl.updateTwoStepAuthRequirement(value, revision: revision)
-            }
-        }))
+        }
 
         self.environmentDisposable.set(combineLatest(
             applicationInForeground |> distinctUntilChanged,
@@ -334,8 +343,9 @@ public final class WalletContext {
         self.environmentDisposable.dispose()
         self.walletConfigurationDisposable.dispose()
         self.walletStateUpdatesDisposable.dispose()
+        self.walletTransferUpdatesDisposable.dispose()
+        self.walletTransferUpdatesTask?.cancel()
         self.storedStateDisposable.dispose()
-        self.twoStepAuthDisposable.dispose()
         self.operationTaskRegistry.shutdown()
         let impl = self.impl
         Task {
@@ -394,7 +404,6 @@ public final class WalletContext {
                                 switch result {
                                 case let .success(value):
                                     try validateResult?(value)
-                                    // Ownership passes before the subscriber can dispose from its callback.
                                     delivered = true
                                     subscriber.putNext(value)
                                     subscriber.putCompletion()

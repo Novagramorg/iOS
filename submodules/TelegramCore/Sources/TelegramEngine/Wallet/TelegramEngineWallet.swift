@@ -24,12 +24,12 @@ public extension TelegramEngine {
             return _internal_getWalletGaslessInfo(account: self.account)
         }
 
-        public func sendTransfer(dataNormal: Data, dataGasless: Data? = nil, pendingMessage: WalletPendingTransferMessageReference? = nil) -> Signal<WalletSentTransfer, WalletSendTransferError> {
-            return _internal_sendWalletTransfer(account: self.account, dataNormal: dataNormal, dataGasless: dataGasless, pendingMessage: pendingMessage)
+        public func sendTransfer(dataNormal: Data, dataGasless: Data? = nil, randomId: Int64, pendingMessage: WalletPendingTransferMessageReference? = nil) -> Signal<WalletSendTransferResult, WalletSendTransferError> {
+            return _internal_sendWalletTransfer(account: self.account, dataNormal: dataNormal, dataGasless: dataGasless, randomId: randomId, pendingMessage: pendingMessage)
         }
 
-        public func createPendingTransferMessage(peerId: EnginePeer.Id, operationId: String, amount: Int64, address: String, comment: String?, commentEncrypted: Bool, timestamp: Int32) -> Signal<WalletPendingTransferMessageReference?, NoError> {
-            return _internal_createPendingWalletTransferMessage(account: self.account, peerId: peerId, operationId: operationId, amount: amount, address: address, comment: comment, commentEncrypted: commentEncrypted, timestamp: timestamp)
+        public func createPendingTransferMessage(peerId: EnginePeer.Id, operationId: String, randomId: Int64, amount: Int64, address: String, comment: String?, commentEncrypted: Bool, timestamp: Int32) -> Signal<WalletPendingTransferMessageReference?, NoError> {
+            return _internal_createPendingWalletTransferMessage(account: self.account, peerId: peerId, operationId: operationId, randomId: randomId, amount: amount, address: address, comment: comment, commentEncrypted: commentEncrypted, timestamp: timestamp)
         }
 
         public func acceptPendingTransferMessage(_ reference: WalletPendingTransferMessageReference, transfer: WalletSentTransfer, receivedAt: Int32) -> Signal<Void, NoError> {
@@ -58,6 +58,10 @@ public extension TelegramEngine {
 
         public func getTransactionsByMsgHash(msgHash: [String]) -> Signal<WalletTransactions, WalletGetTransactionsError> {
             return _internal_getWalletTransactionsByMsgHash(account: self.account, msgHash: msgHash)
+        }
+
+        public func transferUpdates() -> Signal<[WalletTransferUpdate], NoError> {
+            return self.account.stateManager.walletTransferUpdates()
         }
 
         public func stateUpdates() -> Signal<WalletState, NoError> {

@@ -331,6 +331,8 @@ public final class AccountStateManager {
             return self.storyUpdatesPipe.signal()
         }
 
+        fileprivate let walletTransferUpdatesPipe = ValuePipe<[WalletTransferUpdate]>()
+
         fileprivate let walletStateUpdatesPipe = ValuePipe<Api.WalletState>()
         var walletStateUpdates: Signal<Api.WalletState, NoError> {
             return self.walletStateUpdatesPipe.signal()
@@ -1137,6 +1139,9 @@ public final class AccountStateManager {
                             }
                             if !events.updatedTonBalance.isEmpty {
                                 strongSelf.notifyUpdatedTonBalance(events.updatedTonBalance)
+                            }
+                            if !events.walletTransferUpdates.isEmpty {
+                                strongSelf.walletTransferUpdatesPipe.putNext(events.walletTransferUpdates)
                             }
                             if let updatedWalletState = events.updatedWalletState {
                                 strongSelf.walletStateUpdatesPipe.putNext(updatedWalletState)
@@ -2232,6 +2237,12 @@ public final class AccountStateManager {
     public func updatedTonBalance() -> Signal<[PeerId: StarsAmount], NoError> {
         return self.impl.signalWith { impl, subscriber in
             return impl.updatedTonBalance().start(next: subscriber.putNext, error: subscriber.putError, completed: subscriber.putCompletion)
+        }
+    }
+
+    func walletTransferUpdates() -> Signal<[WalletTransferUpdate], NoError> {
+        return self.impl.signalWith { impl, subscriber in
+            return impl.walletTransferUpdatesPipe.signal().start(next: subscriber.putNext, error: subscriber.putError, completed: subscriber.putCompletion)
         }
     }
 

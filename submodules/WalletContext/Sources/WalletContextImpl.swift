@@ -99,7 +99,6 @@ actor WalletContextImpl {
     var latestEnvironmentRevision: UInt64 = 0
     var latestWalletConfigurationRevision: UInt64 = 0
     var latestWalletStateRevision: UInt64 = 0
-    var latestTwoStepAuthRevision: UInt64 = 0
     var latestSubscriberDemandRevision: UInt64 = 0
     var latestFiatCurrencyRevision: UInt64 = 0
     var activeOperationId: UUID?
@@ -125,6 +124,7 @@ actor WalletContextImpl {
     var pendingTransferExpirationTaskId: UUID?
     var pendingTransferExpirationDeadline: Int32?
     var walletTransferResolutions: [String: WalletTransferResolution] = [:]
+    var walletTransferHashStates: [String: WalletTransferHashState] = [:]
     var walletTransferResolutionTask: Task<Void, Never>?
     var walletTransferResolutionScheduledAt: Int32?
     var fiatRefreshTask: Task<Void, Never>?
@@ -132,7 +132,6 @@ actor WalletContextImpl {
     var gaslessInfoTask: Task<Void, Never>?
     var gaslessInfoTaskId: UUID?
     var gaslessQuotaRevision: UInt64 = 0
-    var latestGaslessQuota: (left: Int32, resetAt: Int32, receivedAt: Int32)?
     var streamingClient: WalletToncenterStreamingClient?
     var streamingTask: Task<Void, Never>?
     var streamingRefreshTask: Task<Void, Never>?
@@ -146,10 +145,7 @@ actor WalletContextImpl {
     var streamingRefreshTracker = WalletStreamingRefreshTracker()
     var expiredPendingStreamingTraceIds = Set<String>()
     var activationGeneration: UInt64 = 0
-    var twoStepAuthRequired: Bool? = nil
-    var automaticPhraseRecoveryAttemptRevision: UInt64? = nil
-    var automaticPhraseRecoveryAttemptAddress: String? = nil
-    var automaticPhraseRecoveryGeneration: UInt64? = nil
+    var automaticPhraseRecoveryAttemptIdentity: (address: String, publicKey: Data)?
     var balanceLastSuccessfulAt: Int32?
     var fiatLastSuccessfulAt: Int32?
     var storedStateMutationRevision: UInt64 = 0
@@ -252,43 +248,24 @@ actor WalletContextImpl {
         self.transferGaslessMinAmount = configuration.transferGaslessMinAmount
     }
 
-    func updateTwoStepAuthRequirement(_ required: Bool?, revision: UInt64) {
-        guard !self.isShutdown else { return }
-        guard revision > self.latestTwoStepAuthRevision else { return }
-        self.latestTwoStepAuthRevision = revision
-        self.twoStepAuthRequired = required
-        if required != false,
-           self.automaticPhraseRecoveryGeneration == self.activationGeneration,
-           self.currentState.activeOperation == nil,
-           let serverWalletState = self.serverWalletState {
-            self.automaticPhraseRecoveryGeneration = nil
-            self.activationTask?.cancel()
-            self.applyServerWalletState(serverWalletState, forceActivation: true)
-            return
-        }
-        self.scheduleAutomaticPhraseRecoveryIfNeeded()
+    private func hasAttemptedAutomaticPhraseRecovery(address: String, publicKey: Data) -> Bool {
+        guard let attempted = self.automaticPhraseRecoveryAttemptIdentity else { return false }
+        return walletEngineAddressesEqual(attempted.address, address) && attempted.publicKey == publicKey
     }
 
     func scheduleAutomaticPhraseRecoveryIfNeeded() {
         guard (try? walletProtectionSettings().enabled) == false else { return }
-        guard self.twoStepAuthRequired == false,
-              self.currentState.activeOperation == nil,
+        guard self.currentState.activeOperation == nil,
               case let .wallet(info) = self.currentState.phase,
               !info.canSign,
               info.canExportPhrase,
               let serverWalletState = self.serverWalletState,
               case let .ready(_, _, _, address, publicKey, _) = serverWalletState,
               walletEngineAddressesEqual(info.address, address),
-              info.publicKey == publicKey.map({ String(format: "%02x", $0) }).joined() else {
+              info.publicKey == publicKey.map({ String(format: "%02x", $0) }).joined(),
+              !self.hasAttemptedAutomaticPhraseRecovery(address: address, publicKey: publicKey) else {
             return
         }
-        if self.automaticPhraseRecoveryAttemptRevision == self.latestTwoStepAuthRevision,
-           let attemptedAddress = self.automaticPhraseRecoveryAttemptAddress,
-           walletEngineAddressesEqual(attemptedAddress, address) {
-            return
-        }
-        self.automaticPhraseRecoveryAttemptRevision = self.latestTwoStepAuthRevision
-        self.automaticPhraseRecoveryAttemptAddress = address
         self.applyServerWalletState(serverWalletState, forceActivation: true)
     }
 
@@ -621,6 +598,8 @@ actor WalletContextImpl {
         self.stopStreaming()
         self.cancelWalletTransferResolution()
         self.walletTransferResolutions.removeAll()
+        self.walletTransferHashStates.removeAll()
+        self.gaslessQuotaRevision &+= 1
         self.cancelWalletStateFallbackRefresh()
         if let activeOperationId = self.activeOperationId {
             self.output.cancelOperation(id: activeOperationId)
@@ -711,11 +690,6 @@ actor WalletContextImpl {
         generation: UInt64,
         serverStateRevision: UInt64
     ) async {
-        defer {
-            if self.automaticPhraseRecoveryGeneration == generation {
-                self.automaticPhraseRecoveryGeneration = nil
-            }
-        }
         do {
             let authorizationGeneration = try self.authorization.operationGeneration(requireAvailable: false)
             try await self.authorization.waitUntilAvailable(generation: authorizationGeneration)
@@ -737,10 +711,10 @@ actor WalletContextImpl {
             }
             let needsSecret = !hasStoredSecret
             var words: [String]?
-            if needsSecret && canExportPhrase && self.twoStepAuthRequired == false, try !walletProtectionSettings().enabled {
-                self.automaticPhraseRecoveryAttemptRevision = self.latestTwoStepAuthRevision
-                self.automaticPhraseRecoveryAttemptAddress = address
-                self.automaticPhraseRecoveryGeneration = generation
+            if needsSecret && canExportPhrase,
+               !self.hasAttemptedAutomaticPhraseRecovery(address: address, publicKey: publicKey),
+               try !walletProtectionSettings().enabled {
+                self.automaticPhraseRecoveryAttemptIdentity = (address, publicKey)
                 do {
                     let exportedWords = try await exportWalletSecretPhrase(
                         engine: self.engine,
@@ -750,9 +724,9 @@ actor WalletContextImpl {
                     guard !self.isShutdown, self.activationGeneration == generation else {
                         return
                     }
-                    if self.twoStepAuthRequired == false {
-                        words = exportedWords
-                    }
+                    words = exportedWords
+                } catch TelegramCore.WalletOperationError.requestPassword {
+                    
                 } catch {
                     self.logger.error("wallet_automatic_phrase_export_failed", error)
                 }

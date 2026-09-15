@@ -686,8 +686,8 @@ enum WalletStreamingEventParser {
         }
 
         let status: WalletContext.Transaction.Status
-        if candidate.bounced || value.description?.aborted == true
-            || value.description?.compute_ph?.success == false || value.description?.action?.success == false {
+        if (candidate.bounced || value.description?.aborted == true
+            || value.description?.compute_ph?.success == false || value.description?.action?.success == false) && candidate.direction != .incoming {
             status = .failed
         } else if finality == .pending || value.emulated == true {
             status = .pending
@@ -1249,7 +1249,7 @@ func walletHistoryTransactionForPending(_ pending: WalletContext.PendingTransfer
     let matches = transactions.filter {
         ($0.presentationId == "pending:\(pending.id)" || (pending.transactionHash != nil && $0.transactionHash == pending.transactionHash))
             && !$0.id.isEmpty
-            && ($0.status == .failed || ($0.status == .completed && $0.transactionHash != nil))
+            && ($0.status == .failed || $0.status == .completed)
             && $0.direction == .outgoing
             && $0.peer.address.map { walletEngineAddressesEqual($0, pending.recipient) } == true
     }

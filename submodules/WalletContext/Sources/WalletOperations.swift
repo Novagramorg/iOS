@@ -31,7 +31,6 @@ func walletKeyRotationPreparationIsExpired(_ error: Error, seqno: UInt32) -> Boo
     case let .SendPreviewFailed(value), let .SendFailed(value): diagnostic = value
     default: return false
     }
-    // Upstream exposes these validation failures as diagnostics rather than separate error cases.
     if diagnostic == "transfer expiration timestamp is not after fresh provider time" { return true }
     let prefix = "prepared BOC seqno \(seqno) does not match current wallet seqno "
     guard diagnostic.hasPrefix(prefix), let current = UInt32(diagnostic.dropFirst(prefix.count)) else { return false }
@@ -258,6 +257,12 @@ public extension WalletContext {
         }
     }
 
+    func completeWalletCreation(_ created: WalletInfo, password: String? = nil, session: PasscodeSession? = nil) -> Signal<WalletInfo, WalletError> {
+        self.signal(name: "completing_wallet_creation", cancelOnDispose: false, deliverWhenAvailable: session?.lifetime == .ownerManaged) { impl, operationId in
+            try await impl.completeWalletCreation(created, password: password, session: session, operationId: operationId)
+        }
+    }
+
     func importWallet(words: [String], password: String? = nil, session: PasscodeSession? = nil) -> Signal<WalletInfo, WalletError> {
         self.signal(name: "importing", cancelOnDispose: false, deliverWhenAvailable: session?.lifetime == .ownerManaged) { impl, operationId in
             try await impl.importWallet(words: words, password: password, session: session, operationId: operationId)
@@ -310,9 +315,9 @@ public extension WalletContext {
         }
     }
 
-    func disableBackup(_ prepared: PreparedBackupDisable, session: PasscodeSession? = nil) -> Signal<WalletInfo, WalletError> {
+    func disableBackup(_ prepared: PreparedBackupDisable, password: String? = nil, session: PasscodeSession? = nil) -> Signal<WalletInfo, WalletError> {
         self.signal(name: "disabling_backup", cancelOnDispose: false, deliverWhenAvailable: session?.lifetime == .ownerManaged) { impl, operationId in
-            try await impl.disableBackup(prepared, session: session, operationId: operationId)
+            try await impl.disableBackup(prepared, password: password, session: session, operationId: operationId)
         }
     }
 
@@ -476,7 +481,6 @@ extension WalletContextImpl {
                 guard challenge.expires > challenge.timestamp else { throw WalletError.proofExpired }
                 let signature = try await sign(challenge)
                 guard signature.count == 64 else { throw WalletError.proofInvalid }
-                // Include network and protected-secret access time; never send an expired challenge.
                 let elapsed = max(0, ProcessInfo.processInfo.systemUptime - startedAt)
                 guard Double(challenge.timestamp) + elapsed < Double(challenge.expires) else {
                     throw WalletError.proofExpired
@@ -593,46 +597,31 @@ extension WalletContextImpl {
                 state,
                 self.deferredServerWalletState?.refreshIfStreamingUnavailable ?? false
             )
+            self.automaticPhraseRecoveryAttemptIdentity = (identity.address, identity.publicKey)
             let generation = await self.prepareForRuntimeIdentityChange()
-            do {
-                let words = try await exportWalletSecretPhrase(
-                    engine: self.engine,
-                    password: password,
-                    expectedPublicKey: identity.publicKey
-                )
-                let staged = try await self.runtime.stageReplacement(words: words)
-                guard walletEngineAddressesEqual(staged.address, identity.address),
-                      staged.publicKey == identity.publicKey else {
-                    await self.discardReplacementForCleanup(recordId: staged.recordId)
-                    throw WalletError.storage(.identityMismatch)
-                }
-                let activation = try await self.runtime.commitReplacement(
-                    recordId: staged.recordId,
-                    serverAddress: identity.address,
-                    serverPublicKey: identity.publicKey,
-                    serverStateRevision: serverStateRevision
-                )
-                guard self.serverStateMutationRevision == serverStateRevision else { throw CancellationError() }
-                return self.installRuntimeActivation(
-                    state: self.deferredServerWalletState?.state ?? state,
-                    activation: activation,
-                    generation: generation
-                )
-            } catch {
-                self.logger.error("wallet_created_local_setup_failed", error)
-                let activation = try await self.runtime.activate(
-                    serverAddress: identity.address,
-                    serverPublicKey: identity.publicKey,
-                    serverStateRevision: serverStateRevision
-                )
-                guard self.serverStateMutationRevision == serverStateRevision else { throw CancellationError() }
-                return self.installRuntimeActivation(
-                    state: self.deferredServerWalletState?.state ?? state,
-                    activation: activation,
-                    generation: generation
-                )
-            }
+            let activation = try await self.runtime.activate(
+                serverAddress: identity.address,
+                serverPublicKey: identity.publicKey,
+                serverStateRevision: serverStateRevision
+            )
+            guard self.serverStateMutationRevision == serverStateRevision else { throw CancellationError() }
+            return self.installRuntimeActivation(
+                state: self.deferredServerWalletState?.state ?? state,
+                activation: activation,
+                generation: generation
+            )
         }
+    }
+
+    func completeWalletCreation(_ created: WalletInfo, password: String?, session: PasscodeSession?, operationId: UUID) async throws -> WalletInfo {
+        guard case let .wallet(current) = self.currentState.phase,
+              walletEngineAddressesEqual(current.address, created.address),
+              current.publicKey == created.publicKey else { throw WalletError.storage(.identityMismatch) }
+        _ = try await self.recoveryPhrase(password: password, session: session, operationId: operationId, expectedWallet: created)
+        guard case let .wallet(updated) = self.currentState.phase,
+              walletEngineAddressesEqual(updated.address, created.address),
+              updated.publicKey == created.publicKey, updated.canSign else { throw WalletError.storage(.identityMismatch) }
+        return updated
     }
 
     func importWallet(words: [String], password: String?, session: PasscodeSession? = nil, operationId: UUID) async throws -> WalletInfo {
@@ -661,8 +650,6 @@ extension WalletContextImpl {
                 await self.discardReplacementForCleanup(recordId: staged.recordId)
                 throw error
             }
-            // The RPC accepted this phrase. Keep it durably even if a newer
-            // scanner state prevents us from activating the candidate now.
             try await self.runtime.persistReplacementCandidate(recordId: staged.recordId)
             let selected = try self.replacementStateAfterRequest(response, startedAt: requestRevision)
             let state = selected.state
@@ -684,10 +671,14 @@ extension WalletContextImpl {
         }
     }
 
-    func recoveryPhrase(password: String?, session: PasscodeSession? = nil, operationId: UUID) async throws -> [String] {
+    func recoveryPhrase(password: String?, session: PasscodeSession? = nil, operationId: UUID, expectedWallet: WalletInfo? = nil) async throws -> [String] {
         return try await self.performOperation(.recoveringPhrase, operationId: operationId, session: session) {
             guard case let .wallet(info) = self.currentState.phase, info.canRevealPhrase else {
                 throw WalletError.unavailable
+            }
+            if let expectedWallet {
+                guard walletEngineAddressesEqual(info.address, expectedWallet.address),
+                      info.publicKey == expectedWallet.publicKey else { throw WalletError.storage(.identityMismatch) }
             }
             if info.canSign {
                 return try await self.runtime.revealRecoveryPhrase()
@@ -990,7 +981,6 @@ extension WalletContextImpl {
         }
     }
 
-    /// Updates are deferred during submission, but they remain authoritative for every subsequent step.
     private func backupDisableState(_ prepared: PreparedBackupDisable) throws -> TelegramCore.WalletState {
         guard let state = self.deferredServerWalletState?.state ?? self.serverWalletState,
               case let .ready(_, _, _, address, publicKey, _) = state,
@@ -1034,7 +1024,6 @@ extension WalletContextImpl {
             }
             return prepared
         }
-        // A submitted operation without a journal must never be turned into a second transaction.
         guard material.phase == .prepared else { throw WalletError.operationInProgress }
         guard material.expiresAt > currentWalletTimestamp() else { throw WalletError.preparedBackupDisableExpired }
         let preview = try await self.runtime.previewKeyRotation(
@@ -1070,8 +1059,6 @@ extension WalletContextImpl {
         guard self.backupDisableIsComplete(state, prepared: prepared) else { throw WalletError.invalidBackupData }
         let identity = try walletServerIdentity(state)
         let revision = self.serverStateMutationRevision
-        // A failed activation must not leave the same-key fast path pointing
-        // at a client/observation that was already stopped below.
         self.serverStateNeedsActivation = true
         if prepared.rotation != nil {
             try await self.runtime.reconcileKeyRotation(
@@ -1093,7 +1080,7 @@ extension WalletContextImpl {
         )
     }
 
-    func disableBackup(_ prepared: PreparedBackupDisable, session: PasscodeSession? = nil, operationId: UUID) async throws -> WalletInfo {
+    func disableBackup(_ prepared: PreparedBackupDisable, password: String?, session: PasscodeSession? = nil, operationId: UUID) async throws -> WalletInfo {
         return try await self.performOperation(.disablingBackup, operationId: operationId, session: session) {
             let initialState = try self.backupDisableState(prepared)
             let signingPublicKey = try walletMnemonicSigningPublicKey(words: prepared.words)
@@ -1128,7 +1115,8 @@ extension WalletContextImpl {
                           material.phase == .prepared, !material.signedBoc.isEmpty else { throw WalletError.unavailable }
                     do {
                         let result = try await self.runtime.sendKeyRotation(
-                            operationId: prepared.id, words: prepared.words, newPublicKey: material.newPublicKey,
+                            operationId: prepared.id, words: prepared.words,
+                            previousPublicKey: publicKey, newPublicKey: material.newPublicKey,
                             signedBoc: material.signedBoc, seqno: material.seqno, validUntil: UInt64(material.expiresAt)
                         )
                         switch result.phase {
@@ -1137,6 +1125,7 @@ extension WalletContextImpl {
                         }
                     } catch {
                         let sendError = error
+                        self.logger.error("wallet_key_rotation_send_failed", sendError)
                         if let state = try? self.backupDisableState(prepared), self.backupDisableIsComplete(state, prepared: prepared) {
                             return try await self.finishBackupDisable(prepared)
                         }
@@ -1203,14 +1192,13 @@ extension WalletContextImpl {
                     if self.backupDisableIsComplete(latest, prepared: prepared) { return latest }
                     let revision = self.serverStateMutationRevision
                     let response = try await WalletSignalRequestContext<TelegramCore.WalletState>().run(
-                        self.engine.wallet.disableBackup(newPublicKey: signingPublicKey, proof: proof)
+                        self.engine.wallet.disableBackup(password: password, newPublicKey: signingPublicKey, proof: proof)
                     )
                     if self.serverStateMutationRevision == revision { self.applyServerWalletState(response) }
                     return try self.backupDisableState(prepared)
                 })
                 return try await self.finishBackupDisable(prepared)
             } catch {
-                // RPC failure can race a successful scanner update or an accepted request.
                 let failure = error
                 if let state = try? await self.refreshBackupDisableServerState(prepared),
                    self.backupDisableIsComplete(state, prepared: prepared) {
@@ -1524,12 +1512,14 @@ extension WalletContextImpl {
             }
             let activationGenerationBeforeSend = self.activationGeneration
             let createdAt = currentWalletTimestamp()
+            let randomId = Int64.random(in: Int64.min ... Int64.max)
             let pendingMessage: WalletPendingTransferMessageReference?
             if let recipientPeerId, prepared.collectible == nil, WalletContext.useWalletTransferApi {
                 pendingMessage = try await WalletSignalRequestContext<WalletPendingTransferMessageReference?>().run(
                     self.engine.wallet.createPendingTransferMessage(
                         peerId: recipientPeerId,
                         operationId: prepared.id,
+                        randomId: randomId,
                         amount: prepared.amount,
                         address: prepared.recipient,
                         comment: pendingComment,
@@ -1590,6 +1580,7 @@ extension WalletContextImpl {
                     prepared: prepared,
                     intent: intent,
                     pending: pending,
+                    randomId: randomId,
                     walletAddress: record.walletAddress,
                     generation: activationGenerationBeforeSend
                 )
@@ -2078,8 +2069,6 @@ extension WalletContextImpl {
                 if activeOperation.defersServerWalletState {
                     if (activeOperation == .disablingBackup || !operationCompleted),
                        let deferred = self.deferredServerWalletState {
-                        // A different key may have cancelled this flow. Apply it even when it is
-                        // incompatible with the previous signer, so no stale signing access survives.
                         self.applyServerWalletState(deferred.state, refreshIfStreamingUnavailable: deferred.refreshIfStreamingUnavailable)
                     } else {
                         self.applyCompatibleDeferredServerWalletState()
