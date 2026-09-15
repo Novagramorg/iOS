@@ -271,6 +271,23 @@ the unmute — they must notice the SSRC from the media alone. Before the fix a 
 the late SSRC at all; the same late unmute with no prior renegotiation passed, which is what proved
 the trigger was the renegotiation rather than the lateness.
 
+**Mute must stop the stream, not silence it (2026-09-15).** `setIsMuted` used to call only
+`_outgoingAudioTrack->set_enabled(false)`. In WebRTC that reaches `ChannelSend::SetInputMute`, which
+zeroes the samples but keeps encoding and sending, so a muted reference participant still emitted a
+full Opus stream (~50 packets/s at level 0) — invisible to every level-based check and to the peers,
+but paid for by the SFU and every receiver. What actually starts and stops the `AudioSendStream` is
+the sender's `encodings[0].active` (`WebRtcAudioSendStream::UpdateSendState`; note this vendored
+WebRTC starts the stream even with no source, so `SetTrack(nullptr)` would NOT stop it).
+`applyOutgoingAudioMuteState()` toggles it through `GetParameters`/`SetParameters` with no
+renegotiation — the PeerConnection counterpart of CustomImpl's `Enable(!_isMuted)` — keeps the
+track disabled, and applies the ADM microphone mute as CustomImpl's `onUpdatedIsMuted` does (on iOS
+that is the system mute, which is also what drives the muted-speech hint; the reference engine never
+engaged it before). It also runs from `start()` so the stream is stopped from the first negotiation,
+via the sender's init parameters. Stopping the only send stream makes `AudioState` stop ADM
+recording, exactly as CustomImpl's muted state does; the muted-speech detector lives in the audio
+unit, not in the recording path, so it is unaffected. CLI regression: `--mute-participants` now
+fails on `Muted audio leaks` (audio RTP counted at the SFU per SSRC) — 456 packets before, 0 after.
+
 The **discovery tap** is installed once on mid=0's receiver only. Each recvonly receiver gets its own separate transformer instance — sharing ONE instance across receivers triggers `Register{Sink,}TransformedFrameCallback` re-runs that overwrite valid registrations and misroute frames.
 
 **Video:**
