@@ -1595,7 +1595,9 @@ static const NSUInteger MTMaxUnacknowledgedMessageCount = 64;
     int64_t authKeyId = authKey.authKeyId;
     memcpy(frame, &authKeyId, 8);
     memcpy(frame + 8, msgKeyLarge + 8, 16);
-    MTAesEncryptRaw(plaintext.bytes, frame + 24, (NSInteger)plaintext.length, encryptionKey.key.bytes, encryptionKey.iv.bytes);
+    if (!MTAesEncryptRaw(plaintext.bytes, frame + 24, (NSInteger)plaintext.length, encryptionKey.key.bytes, encryptionKey.iv.bytes)) {
+        return nil;
+    }
 
     return encryptedData;
 }
@@ -1627,7 +1629,9 @@ static const NSUInteger MTMaxUnacknowledgedMessageCount = 64;
     {
         NSMutableData *encryptedData = [[NSMutableData alloc] initWithCapacity:14 + decryptedData.length];
         [encryptedData appendData:decryptedData];
-        MTAesEncryptInplace(encryptedData, encryptionKey.key, encryptionKey.iv);
+        if (!MTAesEncryptInplace(encryptedData, encryptionKey.key, encryptionKey.iv)) {
+            return nil;
+        }
         
         int64_t authKeyId = authKey.authKeyId;
         [encryptedData replaceBytesInRange:NSMakeRange(0, 0) withBytes:&authKeyId length:8];
@@ -1773,7 +1777,7 @@ static const NSUInteger MTMaxUnacknowledgedMessageCount = 64;
                 
                 MTInputStream *messageIs = [[MTInputStream alloc] initWithData:decryptedData];
                 
-                bool stop = false;
+                bool stop = decryptedData == nil;
                 if (!stop) {
                     [messageIs readInt64:&stop];
                 }
@@ -2197,7 +2201,9 @@ static bool isBytesEqualConstTime(uint8_t const *bytes1, uint8_t const *bytes2, 
     // is returned.
     NSUInteger encryptedLength = (transportData.length - 24) & ~((NSUInteger)15);
     NSMutableData *decryptedData = [[NSMutableData alloc] initWithLength:encryptedLength];
-    MTAesDecryptRaw(frame + 24, decryptedData.mutableBytes, (NSInteger)encryptedLength, encryptionKey.key.bytes, encryptionKey.iv.bytes);
+    if (!MTAesDecryptRaw(frame + 24, decryptedData.mutableBytes, (NSInteger)encryptedLength, encryptionKey.key.bytes, encryptionKey.iv.bytes)) {
+        return nil;
+    }
 
     // msg_key must equal SHA256(auth_key[96..128] ‖ plaintext)[8..24]; compare in
     // constant time before trusting any field of the plaintext.
