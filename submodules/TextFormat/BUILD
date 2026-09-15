@@ -41,6 +41,8 @@ swift_library(
         # Needed by the FlatBuffers round-trip tests: the flatc-generated
         # TelegramCore_* types live in the FlatSerialization module.
         "//submodules/TelegramCore/FlatSerialization",
+        # Needed by SpoilerStrikethroughLayoutTests: TextNode's layout.
+        "//submodules/Display:Display",
     ],
 )
 
