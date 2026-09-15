@@ -524,7 +524,7 @@ public final class WalletTransactionItemComponent: Component {
                 let _ = self.serviceIcon.update(
                     transition: transition,
                     component: AnyComponent(WalletTransactionServiceIconComponent(
-                        iconName: isKeyChange ? "Item List/Icons/Key" : "Chat List/Tabs/IconSettings"
+                        iconName: isKeyChange ? "Wallet/TransactionKey" : "Chat List/Tabs/IconSettings"
                     )),
                     environment: {},
                     containerSize: avatarSize

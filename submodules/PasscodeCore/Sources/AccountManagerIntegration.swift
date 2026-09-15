@@ -1,4 +1,7 @@
 import TelegramCore
+#if os(macOS)
+import PasscodeCore
+#endif
 
 public func passcodeKind(from kind: PostboxAccessChallengeData.Kind) -> PasscodeKind {
     switch kind {
@@ -33,6 +36,7 @@ public func accessChallengeData(reference: PasscodeCredentialReference) -> Postb
 
 /// nil input requests authority without migrating legacy metadata. A nil result
 /// means no managed credential exists; .some(.none) is an authoritative removal.
+@available(macOS 10.15, *)
 private func resolveAccessChallenge(_ current: PostboxAccessChallengeData?, allowMigration: Bool) throws -> PostboxAccessChallengeData? {
     let credentials = PasscodeCredentialStore.shared
     if let current, case .secured = current {
@@ -57,6 +61,7 @@ private func resolveAccessChallenge(_ current: PostboxAccessChallengeData?, allo
     }
 }
 
+@available(macOS 10.15, *)
 public func setupAccountManager<Types: AccountManagerTypes>(basePath: String, isTemporary: Bool, isReadOnly: Bool, useCaches: Bool, removeDatabaseOnError: Bool, resetLocalSecrets: (() throws -> Void)? = nil) -> AccountManager<Types> {
     let isMainProcess = PasscodeEnvironment.shared.isMainApp
     let canReset = isMainProcess && !isTemporary && !isReadOnly

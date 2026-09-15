@@ -3646,18 +3646,11 @@ private class StorageUsageClearProgressOverlayNode: ASDisplayNode {
             containerSize: CGSize(width: contentWidth, height: size.height)
         )
 
-        let progressTextTransition: ComponentTransition = self.progressText.view == nil ? .immediate : ComponentTransition(transition)
         let progressTextSize = self.progressText.update(
-            transition: progressTextTransition,
-            component: AnyComponent(AnimatedTextComponent(
-                font: Font.with(size: 24.0, design: .regular, weight: .semibold, traits: [.monospacedNumbers]),
-                color: self.presentationData.theme.actionSheet.primaryTextColor,
-                items: [
-                    AnimatedTextComponent.Item(id: "value", content: .number(Int(self.progress * 100.0), minDigits: 1)),
-                    AnimatedTextComponent.Item(id: "suffix", content: .text("%"))
-                ],
-                noDelay: true,
-                blur: true
+            transition: .immediate,
+            component: AnyComponent(MultilineTextComponent(
+                text: .plain(NSAttributedString(string: "\(max(1, Int(self.progress * 100.0)))%", font: Font.with(size: 24.0, design: .regular, weight: .semibold, traits: [.monospacedNumbers]), textColor: self.presentationData.theme.actionSheet.primaryTextColor)),
+                horizontalAlignment: .center
             )),
             environment: {},
             containerSize: CGSize(width: contentWidth, height: size.height)
@@ -3681,7 +3674,7 @@ private class StorageUsageClearProgressOverlayNode: ASDisplayNode {
             if progressTextView.superview == nil {
                 self.view.addSubview(progressTextView)
             }
-            progressTextTransition.setFrame(view: progressTextView, frame: progressTextFrame)
+            progressTextView.frame = progressTextFrame
         }
 
         let progressFrame = CGRect(x: inset, y: progressTextFrame.maxY + spacing, width: contentWidth, height: progressHeight)

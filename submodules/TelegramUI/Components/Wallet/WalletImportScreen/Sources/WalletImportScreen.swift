@@ -946,7 +946,7 @@ private final class WalletImportScreenComponent: Component {
             controller.present(textAlertController(
                 context: component.context,
                 title: "Invalid Recovery Phrase",
-                text: "Check the order of your words.\nOnly recovery phrase created by a **TWallet-based wallet** can be imported here.",
+                text: "Check the word order.\n\nOnly a recovery phrase created in Telegram can be imported here.",
                 actions: [TextAlertAction(type: .defaultAction, title: "OK", action: {
                 })]
             ), in: .window(.root))

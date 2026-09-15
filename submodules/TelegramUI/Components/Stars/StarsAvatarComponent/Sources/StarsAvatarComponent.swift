@@ -82,7 +82,41 @@ public final class StarsAvatarComponent: Component {
     }
 
     public final class View: UIView {
+        private struct AvatarState: Equatable {
+            let context: AccountContext
+            let theme: PresentationTheme
+            let peerId: EnginePeer.Id
+            let photo: TelegramMediaImageRepresentation?
+            let nameColor: PeerColor?
+            let displayLetters: [String]
+
+            static func ==(lhs: AvatarState, rhs: AvatarState) -> Bool {
+                if lhs.context !== rhs.context {
+                    return false
+                }
+                if lhs.theme !== rhs.theme {
+                    return false
+                }
+                if lhs.peerId != rhs.peerId {
+                    return false
+                }
+                if lhs.photo != rhs.photo {
+                    return false
+                }
+                if lhs.photo == nil {
+                    if lhs.nameColor != rhs.nameColor {
+                        return false
+                    }
+                    if lhs.displayLetters != rhs.displayLetters {
+                        return false
+                    }
+                }
+                return true
+            }
+        }
+
         private let avatarNode: AvatarNode
+        private var avatarState: AvatarState?
         private let backgroundView = UIImageView()
         private let iconView = UIImageView()
         private var imageNode: TransformImageNode?
@@ -276,12 +310,29 @@ public final class StarsAvatarComponent: Component {
                 switch peer {
                 case let .peer(peer):
                     if !didSetup {
-                        self.avatarNode.setPeer(
+                        let photo: TelegramMediaImageRepresentation?
+                        if peer.restrictionText(platform: "ios", contentSettings: component.context.currentContentSettings.with { $0 }) == nil {
+                            photo = peer.smallProfileImage
+                        } else {
+                            photo = nil
+                        }
+                        let avatarState = AvatarState(
                             context: component.context,
                             theme: component.theme,
-                            peer: peer,
-                            synchronousLoad: true
+                            peerId: peer.id,
+                            photo: photo,
+                            nameColor: peer.nameColor,
+                            displayLetters: peer.displayLetters
                         )
+                        if self.avatarState != avatarState {
+                            self.avatarNode.setPeer(
+                                context: component.context,
+                                theme: component.theme,
+                                peer: peer,
+                                synchronousLoad: true
+                            )
+                            self.avatarState = avatarState
+                        }
                         self.backgroundView.isHidden = true
                         self.iconView.isHidden = true
                         self.avatarNode.isHidden = false

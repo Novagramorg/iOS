@@ -58,7 +58,11 @@ private final class WalletAppInfoContentComponent: CombinedComponent {
                 availableSize: CGSize(width: 88.0, height: 88.0),
                 transition: context.transition
             )
-            context.add(icon.position(CGPoint(x: centerX, y: contentHeight + icon.size.height / 2.0)))
+            context.add(icon
+                .position(CGPoint(x: centerX, y: contentHeight + icon.size.height / 2.0))
+                .cornerRadius(icon.size.width * 0.5)
+                .clipsToBounds(true)
+            )
             contentHeight += icon.size.height + 18.0
 
             let title = title.update(

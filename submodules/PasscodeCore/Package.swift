@@ -5,11 +5,14 @@ import PackageDescription
 
 let package = Package(
     name: "PasscodeCore",
-    platforms: [.macOS(.v10_15)],
+    platforms: [.macOS(.v10_13)],
     products: [
         .library(
             name: "PasscodeCore",
             targets: ["PasscodeCore"]),
+        .library(
+            name: "PasscodeAccountManager",
+            targets: ["PasscodeAccountManager"]),
     ],
     dependencies: [
         .package(name: "SSignalKit", path: "../SSignalKit"),
@@ -18,8 +21,14 @@ let package = Package(
     targets: [
         .target(
             name: "PasscodeCore",
-            dependencies: [.product(name: "SwiftSignalKit", package: "SSignalKit", condition: nil),
+            dependencies: [.product(name: "SwiftSignalKit", package: "SSignalKit", condition: nil)],
+            path: "Sources",
+            exclude: ["AccountManagerIntegration.swift"]),
+        .target(
+            name: "PasscodeAccountManager",
+            dependencies: ["PasscodeCore",
                            .product(name: "TelegramCore", package: "TelegramCore", condition: nil)],
-            path: "Sources"),
+            path: "Sources",
+            sources: ["AccountManagerIntegration.swift"]),
     ]
 )
