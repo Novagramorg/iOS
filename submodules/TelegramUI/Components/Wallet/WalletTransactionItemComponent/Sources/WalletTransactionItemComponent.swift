@@ -13,9 +13,15 @@ import StarsAvatarComponent
 import WalletContext
 import WalletCollectibleImageComponent
 
-private final class WalletTransactionDeployIconComponent: Component {
-    static func ==(lhs: WalletTransactionDeployIconComponent, rhs: WalletTransactionDeployIconComponent) -> Bool {
-        return true
+private final class WalletTransactionServiceIconComponent: Component {
+    let iconName: String
+
+    init(iconName: String) {
+        self.iconName = iconName
+    }
+
+    static func ==(lhs: WalletTransactionServiceIconComponent, rhs: WalletTransactionServiceIconComponent) -> Bool {
+        return lhs.iconName == rhs.iconName
     }
 
     final class View: UIView {
@@ -34,7 +40,7 @@ private final class WalletTransactionDeployIconComponent: Component {
             fatalError("init(coder:) has not been implemented")
         }
 
-        func update() -> CGSize {
+        func update(component: WalletTransactionServiceIconComponent) -> CGSize {
             let size = CGSize(width: 40.0, height: 40.0)
             self.backgroundView.image = generateGradientFilledCircleImage(
                 diameter: size.width,
@@ -45,7 +51,7 @@ private final class WalletTransactionDeployIconComponent: Component {
                 direction: .vertical
             )
             self.iconView.image = generateTintedImage(
-                image: UIImage(bundleImageName: "Chat List/Tabs/IconSettings"),
+                image: UIImage(bundleImageName: component.iconName),
                 color: .white
             )
             self.backgroundView.frame = CGRect(origin: .zero, size: size)
@@ -65,7 +71,7 @@ private final class WalletTransactionDeployIconComponent: Component {
         environment: Environment<Empty>,
         transition: ComponentTransition
     ) -> CGSize {
-        return view.update()
+        return view.update(component: self)
     }
 }
 
@@ -165,7 +171,7 @@ public final class WalletTransactionItemComponent: Component {
         private var avatarMask: UIView?
         private var avatarMaskCutout: UIView?
         private let avatar = ComponentView<Empty>()
-        private let deployIcon = ComponentView<Empty>()
+        private let serviceIcon = ComponentView<Empty>()
         private var activityIndicatorBackground: UIView?
         private var activityIndicator: ActivityIndicator?
         private let title = ComponentView<Empty>()
@@ -199,7 +205,7 @@ public final class WalletTransactionItemComponent: Component {
 
         private func setTransactionContentHidden(_ hidden: Bool) {
             self.avatarContainer.isHidden = hidden
-            self.deployIcon.view?.isHidden = hidden
+            self.serviceIcon.view?.isHidden = hidden
             self.activityIndicatorBackground?.isHidden = hidden
             self.activityIndicator?.view.isHidden = hidden
             self.title.view?.isHidden = hidden
@@ -415,13 +421,22 @@ public final class WalletTransactionItemComponent: Component {
             self.setCustomContentHidden(true)
 
             let isDeployContract = transaction.kind == .deployContract
+            let isKeyChange = transaction.kind == .keyChange
+            let hasServiceIcon = isDeployContract || isKeyChange
             var subtitleText: String
             var amountValue: Int64
             var amountPrefix: String = ""
             var amountColor: UIColor
             var amountIconColor: UIColor?
             var avatarPeer: StarsAvatarComponent.Peer?
-            if isDeployContract {
+            if isKeyChange {
+                //TODO:localize
+                subtitleText = "Key Update"
+                amountValue = -(abs(transaction.amount) + transaction.fee)
+                amountColor = component.theme.list.itemPrimaryTextColor
+                amountIconColor = nil
+                avatarPeer = nil
+            } else if isDeployContract {
                 //TODO:localize
                 subtitleText = "Deploy Contract"
                 amountValue = 0
@@ -476,7 +491,7 @@ public final class WalletTransactionItemComponent: Component {
                     avatarPeer = nil
                 }
             }
-            if case let .user(peer, _, _) = transaction.peer {
+            if !hasServiceIcon, case let .user(peer, _, _) = transaction.peer {
                 avatarPeer = .transactionPeer(.peer(peer))
             }
             
@@ -489,7 +504,7 @@ public final class WalletTransactionItemComponent: Component {
 
             let isPending = transaction.status == .pending
                 && transaction.collectible == nil
-                && !isDeployContract
+                && !hasServiceIcon
             if isPending {
                 amountColor = component.theme.list.itemSecondaryTextColor
                 amountIconColor = component.theme.list.itemSecondaryTextColor
@@ -503,25 +518,27 @@ public final class WalletTransactionItemComponent: Component {
 
             let avatarSize = CGSize(width: 40.0, height: 40.0)
             let avatarFrame = CGRect(origin: CGPoint(x: -4.0, y: 2.0), size: avatarSize)
-            if isDeployContract {
+            if hasServiceIcon {
                 self.avatarContainer.isHidden = true
-                self.deployIcon.parentState = state
-                let _ = self.deployIcon.update(
+                self.serviceIcon.parentState = state
+                let _ = self.serviceIcon.update(
                     transition: transition,
-                    component: AnyComponent(WalletTransactionDeployIconComponent()),
+                    component: AnyComponent(WalletTransactionServiceIconComponent(
+                        iconName: isKeyChange ? "Item List/Icons/Key" : "Chat List/Tabs/IconSettings"
+                    )),
                     environment: {},
                     containerSize: avatarSize
                 )
-                if let deployIconView = self.deployIcon.view {
-                    if deployIconView.superview == nil {
-                        deployIconView.isUserInteractionEnabled = false
-                        self.addSubview(deployIconView)
+                if let serviceIconView = self.serviceIcon.view {
+                    if serviceIconView.superview == nil {
+                        serviceIconView.isUserInteractionEnabled = false
+                        self.addSubview(serviceIconView)
                     }
-                    deployIconView.isHidden = false
-                    transition.setFrame(view: deployIconView, frame: avatarFrame)
+                    serviceIconView.isHidden = false
+                    transition.setFrame(view: serviceIconView, frame: avatarFrame)
                 }
             } else if let avatarPeer {
-                self.deployIcon.view?.isHidden = true
+                self.serviceIcon.view?.isHidden = true
                 self.avatarContainer.isHidden = false
                 self.avatar.parentState = state
                 let _ = self.avatar.update(
@@ -550,7 +567,7 @@ public final class WalletTransactionItemComponent: Component {
                     )
                 }
             } else {
-                self.deployIcon.view?.isHidden = true
+                self.serviceIcon.view?.isHidden = true
                 self.avatarContainer.isHidden = true
             }
 
@@ -697,7 +714,7 @@ public final class WalletTransactionItemComponent: Component {
                     amountValue,
                     dateTimeFormat: component.dateTimeFormat,
                     showPlus: false,
-                    maxDecimalPositions: 3
+                    maxDecimalPositions: isKeyChange ? 5 : 3
                 )
                 amountIconName = "Wallet/TransactionGram"
             } else {

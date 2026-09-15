@@ -21,14 +21,18 @@ void MTRawSha256(void const * _Nonnull inData, NSUInteger length, void * _Nonnul
     
 int32_t MTMurMurHash32(const void * _Nonnull bytes, int length);
     
-void MTAesEncryptInplace(NSMutableData * _Nonnull data, NSData * _Nonnull key, NSData * _Nonnull iv);
-void MTAesEncryptInplaceAndModifyIv(NSMutableData * _Nonnull data, NSData * _Nonnull key, NSMutableData * _Nonnull iv);
+// The AES-IGE helpers fail closed: when CommonCrypto reports an error the
+// destination is zeroed (or nil is returned) so no plaintext-derived bytes can
+// leave through it. The bool-returning variants report that failure; the void
+// in-place variants used from Swift zero the buffer and log.
+bool MTAesEncryptInplace(NSMutableData * _Nonnull data, NSData * _Nonnull key, NSData * _Nonnull iv);
+bool MTAesEncryptInplaceAndModifyIv(NSMutableData * _Nonnull data, NSData * _Nonnull key, NSMutableData * _Nonnull iv);
 void MTAesEncryptBytesInplaceAndModifyIv(void * _Nonnull data, NSInteger length, NSData * _Nonnull key, void * _Nonnull iv);
 // AES-256-IGE over `length` bytes (a positive multiple of 16) with a 32-byte key and
 // 32-byte IV. `data` and `outData` must not overlap; either may be unaligned.
-void MTAesEncryptRaw(void const * _Nonnull data, void * _Nonnull outData, NSInteger length, void const * _Nonnull key, void const * _Nonnull iv);
-void MTAesDecryptRaw(void const * _Nonnull data, void * _Nonnull outData, NSInteger length, void const * _Nonnull key, void const * _Nonnull iv);
-void MTAesDecryptInplaceAndModifyIv(NSMutableData * _Nonnull data, NSData * _Nonnull key, NSMutableData * _Nonnull iv);
+bool MTAesEncryptRaw(void const * _Nonnull data, void * _Nonnull outData, NSInteger length, void const * _Nonnull key, void const * _Nonnull iv);
+bool MTAesDecryptRaw(void const * _Nonnull data, void * _Nonnull outData, NSInteger length, void const * _Nonnull key, void const * _Nonnull iv);
+bool MTAesDecryptInplaceAndModifyIv(NSMutableData * _Nonnull data, NSData * _Nonnull key, NSMutableData * _Nonnull iv);
 void MTAesDecryptBytesInplaceAndModifyIv(void * _Nonnull data, NSInteger length, NSData * _Nonnull key, void * _Nonnull iv);
 NSData * _Nullable MTAesEncrypt(NSData * _Nonnull data, NSData * _Nonnull key, NSData * _Nonnull iv);
 NSData * _Nullable MTAesDecrypt(NSData * _Nonnull data, NSData * _Nonnull key, NSData * _Nonnull iv);
@@ -52,14 +56,16 @@ bool MTCheckMod(id<EncryptionProvider> _Nonnull provider, NSData * _Nonnull numb
     
 @interface MTAesCtr : NSObject
 
-- (instancetype _Nonnull)initWithKey:(const void * _Nonnull)key keyLength:(int)keyLength iv:(const void * _Nonnull)iv decrypt:(bool)decrypt;
-- (instancetype _Nonnull)initWithKey:(const void * _Nonnull)key keyLength:(int)keyLength iv:(const void * _Nonnull)iv ecount:(void * _Nonnull)ecount num:(uint32_t)num;
+// Both initializers return nil when the cipher context cannot be created.
+- (instancetype _Nullable)initWithKey:(const void * _Nonnull)key keyLength:(int)keyLength iv:(const void * _Nonnull)iv decrypt:(bool)decrypt;
+- (instancetype _Nullable)initWithKey:(const void * _Nonnull)key keyLength:(int)keyLength iv:(const void * _Nonnull)iv ecount:(void * _Nonnull)ecount num:(uint32_t)num;
 
 - (uint32_t)num;
 - (void * _Nonnull)ecount;
 - (void)getIv:(void * _Nonnull)iv;
 
-- (void)encryptIn:(const unsigned char * _Nonnull)in out:(unsigned char * _Nonnull)out len:(size_t)len;
+// Returns false, with the unprocessed part of `out` zeroed, on a keystream failure.
+- (bool)encryptIn:(const unsigned char * _Nonnull)in out:(unsigned char * _Nonnull)out len:(size_t)len;
 
 @end
     

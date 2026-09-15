@@ -63,10 +63,12 @@ public enum WalletState: Equatable, Sendable {
 public struct WalletUserAddress: Equatable {
     public let userId: EnginePeer.Id
     public let address: String
+    public let publicKey: Data
 
-    public init(userId: EnginePeer.Id, address: String) {
+    public init(userId: EnginePeer.Id, address: String, publicKey: Data) {
         self.userId = userId
         self.address = address
+        self.publicKey = publicKey
     }
 }
 
@@ -78,7 +80,9 @@ public enum WalletTransactionPeer: Equatable {
 
 public struct WalletTransaction: Equatable {
     public let incoming: Bool
+    public let gasless: Bool
     public let failed: Bool
+    public let keyChange: Bool
     public let id: String
     public let amount: Int64
     public let fee: Int64
@@ -90,7 +94,9 @@ public struct WalletTransaction: Equatable {
 
     public init(
         incoming: Bool,
+        gasless: Bool = false,
         failed: Bool,
+        keyChange: Bool = false,
         id: String,
         amount: Int64,
         fee: Int64,
@@ -101,7 +107,9 @@ public struct WalletTransaction: Equatable {
         txHash: String?
     ) {
         self.incoming = incoming
+        self.gasless = gasless
         self.failed = failed
+        self.keyChange = keyChange
         self.id = id
         self.amount = amount
         self.fee = fee
@@ -233,7 +241,8 @@ private extension WalletUserAddress {
                     namespace: Namespaces.Peer.CloudUser,
                     id: PeerId.Id._internalFromInt64Value(address.userId)
                 ),
-                address: address.address
+                address: address.address,
+                publicKey: address.publicKey.makeData()
             )
         }
     }
@@ -266,7 +275,9 @@ private extension WalletTransaction {
         case let .walletTransaction(walletTransaction):
             self.init(
                 incoming: (walletTransaction.flags & (1 << 0)) != 0,
+                gasless: (walletTransaction.flags & (1 << 1)) != 0,
                 failed: (walletTransaction.flags & (1 << 2)) != 0,
+                keyChange: (walletTransaction.flags & (1 << 5)) != 0,
                 id: walletTransaction.id,
                 amount: walletTransaction.amount,
                 fee: walletTransaction.fee,
@@ -339,9 +350,10 @@ func _internal_getWalletState(account: Account) -> Signal<WalletState, WalletGet
 func _internal_getWalletUserAddresses(
     account: Account,
     userIds: [EnginePeer.Id],
+    addresses: [String],
     force: Bool
 ) -> Signal<[WalletUserAddress], WalletGetUserAddressesError> {
-    guard !userIds.isEmpty else {
+    guard !userIds.isEmpty || !addresses.isEmpty else {
         return .single([])
     }
 
@@ -370,7 +382,7 @@ func _internal_getWalletUserAddresses(
         if force {
             flags |= 1 << 0
         }
-        return account.network.request(Api.functions.wallet.getUserAddresses(flags: flags, id: inputUsers, addresses: []))
+        return account.network.request(Api.functions.wallet.getUserAddresses(flags: flags, id: inputUsers, addresses: addresses))
         |> mapError { _ -> WalletGetUserAddressesError in
             return .generic
         }

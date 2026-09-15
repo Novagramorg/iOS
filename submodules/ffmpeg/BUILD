@@ -1,4 +1,6 @@
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+
 ffmpeg_header_paths = [
     "libavutil/hwcontext.h",
     "libavutil/time.h",

@@ -119,8 +119,6 @@ actor WalletEngineStorage {
     }
 
     func saveTransferReceipt(_ receipt: WalletEngineTransferReceipt) throws {
-        // Retain the short-lived UI receipts independently of the engine journal.
-        // Include the pending draft so a crash before the Postbox write can recover it.
         var receipts = try self.loadTransferReceipts().filter {
             $0.pendingTransfer.id != receipt.pendingTransfer.id
                 && Int64($0.receivedAt) + Int64(walletPendingTransferUILifetime) > Int64(receipt.receivedAt)

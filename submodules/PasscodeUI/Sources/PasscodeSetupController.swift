@@ -331,7 +331,7 @@ public func applicationPasscodeSetupController(
         guard let controller, savingTask == nil, lifecycle.accepts(generation: lifecycle.generation) else { return }
         let generation = lifecycle.generation
         controller.view.isUserInteractionEnabled = false
-        savingTask = Task.detached(priority: .userInitiated) {
+        savingTask = Task.detached(priority: .userInitiated) { [weak controller] in
             let result = Result { () -> (PasscodeCredentialReference, PasscodeSession?) in
                 guard !Task.isCancelled else { throw PasscodeError.cancelled }
                 let kind: PasscodeKind = numerical ? (code.count == 6 ? .digits6 : .digits4) : .alphanumeric

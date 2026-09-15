@@ -66,12 +66,14 @@ public extension TelegramEngine {
         }
 
         public func getUserAddresses(
-            userIds: [EnginePeer.Id],
+            userIds: [EnginePeer.Id] = [],
+            addresses: [String] = [],
             force: Bool = false
         ) -> Signal<[WalletUserAddress], WalletGetUserAddressesError> {
             return _internal_getWalletUserAddresses(
                 account: self.account,
                 userIds: userIds,
+                addresses: addresses,
                 force: force
             )
         }

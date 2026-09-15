@@ -594,20 +594,6 @@ def generate_project(bazel, arguments):
         target_name=target_name
     )
 
-    if target_name == "Telegram":
-        run_executable_with_output('swift', arguments=[
-            'run',
-            '-c',
-            'release',
-            '--package-path',
-            'build-system/XcodeParse',
-            'XcodeParse',
-            '--project-path',
-            xcodeproj_path,
-            '--output-path',
-            'Telegram/Telegram.LSP.json'
-        ], check_result=True)
-
     call_executable(['open', xcodeproj_path])
 
 

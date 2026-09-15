@@ -14,6 +14,7 @@
 
 #import <MtProtoKit/MTInternalId.h>
 #import <MtProtoKit/MTQuickAck.h>
+#import <MtProtoKit/MTTransport.h>
 
 #import <MtProtoKit/MTContext.h>
 #import <MtProtoKit/MTApiEnvironment.h>
@@ -74,8 +75,11 @@ static void generate_public_key(unsigned char key[32], id<EncryptionProvider> pr
     
     id<MTBignum> x = [context create];
     while (1) {
-        int randomResult = SecRandomCopyBytes(kSecRandomDefault, 32, key);
-        assert(randomResult == errSecSuccess);
+        if (SecRandomCopyBytes(kSecRandomDefault, 32, key) != errSecSuccess) {
+            // Only fails when the system entropy source is unavailable; never
+            // continue with whatever the buffer held. arc4random_buf cannot fail.
+            arc4random_buf(key, 32);
+        }
         
         key[31] &= 127;
         [context assignBinTo:x value:[NSData dataWithBytesNoCopy:key length:32 freeWhenDone:false]];
@@ -1329,7 +1333,16 @@ struct ctr_state {
                             MTAesCtr *incomingAesCtr = [[MTAesCtr alloc] initWithKey:incomingAesKey.bytes keyLength:32 iv:incomingAesIv.bytes decrypt:false];
                             
                             uint8_t encryptedControlBytes[64];
-                            [outgoingAesCtr encryptIn:controlBytes out:encryptedControlBytes len:64];
+                            if (outgoingAesCtr == nil || incomingAesCtr == nil || ![outgoingAesCtr encryptIn:controlBytes out:encryptedControlBytes len:64]) {
+                                if (MTLogEnabled()) {
+                                    MTLog(@"***** %s: could not set up the obfuscation cipher", __PRETTY_FUNCTION__);
+                                }
+                                [self closeAndNotifyWithError:true];
+                                if (dataToSend.completion) {
+                                    dataToSend.completion(false);
+                                }
+                                return;
+                            }
                             
                             uint32_t intHeader = 0;
                             memcpy(&intHeader, encryptedControlBytes, 4);
@@ -1957,7 +1970,7 @@ struct ctr_state {
                 [self requestReadDataWithLength:1 tag:MTTcpReadTagPacketShortLength];
             }
         } else {
-            if (length < 4 || length > 16 * 1024 * 1024) {
+            if (length < 4 || (NSUInteger)length > MTMaxTransportPayloadLength) {
                 if (MTLogEnabled()) {
                     MTLog(@"[MTTcpConnection#%" PRIxPTR " received invalid length %d]", (intptr_t)self, length);
                 }

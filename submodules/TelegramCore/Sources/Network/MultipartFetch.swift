@@ -438,7 +438,10 @@ private enum MultipartFetchSource {
                                     var ivOffset: Int32 = Int32(clamping: (offset / 16)).bigEndian
                                     memcpy(bytes.advanced(by: partIvCount - 4), &ivOffset, 4)
                                 }
-                                return .single((MTAesCtrDecrypt(bytes.makeData(), key, partIv)!, info))
+                                guard let decryptedData = MTAesCtrDecrypt(bytes.makeData(), key, partIv) else {
+                                    return .fail(.generic)
+                                }
+                                return .single((decryptedData, info))
                             }
                     }
                 }

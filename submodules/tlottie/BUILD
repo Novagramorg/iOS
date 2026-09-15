@@ -1,3 +1,5 @@
+load("@rules_cc//cc:objc_library.bzl", "objc_library")
+
 load("@rules_rust//rust:defs.bzl", "rust_static_library", "rust_test")
 
 # Pinned, not inherited. rules_rust follows Bazel's compilation mode, so under

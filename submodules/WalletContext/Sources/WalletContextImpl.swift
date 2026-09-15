@@ -464,6 +464,7 @@ actor WalletContextImpl {
 
     private func performServerWalletStateRequest() async {
         let revision = self.serverStateMutationRevision
+        let walletStateRevision = self.latestWalletStateRevision
         let generation = self.activationGeneration
         defer {
             self.serverStateTask = nil
@@ -479,6 +480,7 @@ actor WalletContextImpl {
             try Task.checkCancellation()
             guard !self.isShutdown,
                   self.serverStateMutationRevision == revision,
+                  self.latestWalletStateRevision == walletStateRevision,
                   self.activationGeneration == generation else {
                 if self.needsServerWalletStateRefresh {
                     self.serverStateRefreshRequested = true
@@ -500,13 +502,13 @@ actor WalletContextImpl {
                     try await self.runtime.discardReplacementAfterAuthoritativeEmptyState()
                 }
             }
-            // Promotion consumes the candidate even if a newer state arrived while awaiting it.
             if promotedReplacement {
                 self.serverStateNeedsActivation = true
             }
             try Task.checkCancellation()
             guard !self.isShutdown,
                   self.serverStateMutationRevision == revision,
+                  self.latestWalletStateRevision == walletStateRevision,
                   self.activationGeneration == generation else {
                 if self.needsServerWalletStateRefresh {
                     self.serverStateRefreshRequested = true
@@ -528,6 +530,18 @@ actor WalletContextImpl {
         forceActivation: Bool = false,
         refreshIfStreamingUnavailable: Bool = false
     ) {
+        if !forceActivation,
+           self.currentState.activeOperation == .creating,
+           case let .ready(_, _, _, pendingAddress, pendingPublicKey, _)? = self.deferredServerWalletState?.state,
+           case let .ready(_, _, _, address, publicKey, _) = value,
+           walletEngineAddressesEqual(pendingAddress, address),
+           pendingPublicKey == publicKey {
+            self.deferredServerWalletState = (
+                value,
+                refreshIfStreamingUnavailable || (self.deferredServerWalletState?.refreshIfStreamingUnavailable ?? false)
+            )
+            return
+        }
         self.serverStateMutationRevision &+= 1
         if case let .ready(_, _, _, address, publicKey, _) = value {
             let revision = self.serverStateMutationRevision
@@ -711,7 +725,7 @@ actor WalletContextImpl {
                 $0.schemaVersion == 2
                     && $0.network == "mainnet"
                     && walletEngineAddressesEqual($0.address, address)
-                    && ($0.signingPublicKey == nil || $0.signingPublicKey == publicKey)
+                    && $0.publicKey == publicKey
             } ?? false
             let hasStoredSecret: Bool
             if storedMatchesIdentity, let secretRef = stored?.secretRef {

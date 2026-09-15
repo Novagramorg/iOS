@@ -769,8 +769,11 @@
     if ([message.body isKindOfClass:[MTRpcResultMessage class]])
     {
         MTRpcResultMessage *rpcResultMessage = message.body;
-        
-        id maybeInternalMessage = [MTInternalMessageParser parseMessage:rpcResultMessage.data];
+
+        // Unwrap once, up front: a gzip_packed rpc_error or rpc_answer_dropped must be
+        // recognised as such instead of degrading into a synthetic TL_PARSING_ERROR.
+        NSData *resultData = [MTInternalMessageParser unwrapMessage:rpcResultMessage.data];
+        id maybeInternalMessage = resultData != nil ? [MTInternalMessageParser parseMessage:resultData] : nil;
         
         if ([maybeInternalMessage isKindOfClass:[MTDropRpcResultMessage class]])
         {
@@ -803,8 +806,9 @@
                         rpcError = maybeInternalMessage;
                     else
                     {
-                        NSData *unwrappedData = [MTInternalMessageParser unwrapMessage:rpcResultMessage.data];
-                        rpcResult = request.responseParser(unwrappedData);
+                        if (resultData != nil) {
+                            rpcResult = request.responseParser(resultData);
+                        }
                         if (rpcResult == nil)
                         {
                             rpcError = [[MTRpcError alloc] initWithErrorCode:500 errorDescription:@"TL_PARSING_ERROR"];

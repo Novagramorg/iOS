@@ -27,10 +27,12 @@ http_archive(
     build_file_content = _WASI_SDK_BUILD,
 )
 
-bazel_dep(name = "bazel_features", version = "1.50.0")
+bazel_dep(name = "bazel_features", version = "1.51.0")
 bazel_dep(name = "bazel_skylib", version = "1.9.0")
 bazel_dep(name = "platforms", version = "1.1.0")
+bazel_dep(name = "rules_cc", version = "0.2.20")
 bazel_dep(name = "rules_rust", version = "0.74.0")
+bazel_dep(name = "rules_shell", version = "0.6.1")
 
 rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
 rust.toolchain(
@@ -143,6 +145,12 @@ local_path_override(
     module_name = "apple_support",
     path = "./build-system/bazel-rules/apple_support",
 )
+
+# Must be registered here: only the root module outranks rules_cc's generic
+# @local_config_cc toolchain, which rules_swift rejects ("Invalid target triple: local").
+apple_cc_configure = use_extension("@build_bazel_apple_support//crosstool:setup.bzl", "apple_cc_configure_extension")
+use_repo(apple_cc_configure, "local_config_apple_cc", "local_config_apple_cc_toolchains")
+register_toolchains("@local_config_apple_cc_toolchains//:all")
 
 http_file(
     name = "cmake_tar_gz",

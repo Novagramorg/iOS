@@ -662,6 +662,7 @@ private final class WalletTransactionContentComponent: Component {
         private let commentEnvironmentDisposable = MetaDisposable()
         private let commentCredentialChangesDisposable = MetaDisposable()
         private var preparedTransfer: WalletContext.PreparedTransfer?
+        private var submittedTransfer: WalletContext.PendingTransfer?
         private var displayedFee: Int64?
         private var preparedTransferNeedsRefresh = false
         private var dismissSendScreen: (() -> Void)?
@@ -767,6 +768,7 @@ private final class WalletTransactionContentComponent: Component {
             self.previewCommentEncrypted = false
             self.displayedCommentEncrypted = nil
             self.preparedTransfer = nil
+            self.submittedTransfer = nil
             self.displayedFee = nil
             self.preparedTransferNeedsRefresh = false
             self.dismissSendScreen = nil
@@ -887,6 +889,14 @@ private final class WalletTransactionContentComponent: Component {
             let recipient = preparedTransfer?.recipient ?? previewSource.address
             let amount = preparedTransfer?.amount ?? previewSource.amount
             let collectible = preparedTransfer?.collectible ?? previewSource.collectible
+            let gasless: Bool
+            if let submittedTransfer = self.submittedTransfer {
+                gasless = self.latestWalletState?.transactions.items.first(where: {
+                    $0.presentationId == "pending:\(submittedTransfer.id)"
+                })?.gasless ?? submittedTransfer.sentTransfer?.gasless ?? false
+            } else {
+                gasless = false
+            }
             return WalletContext.Transaction(
                 id: "preview-\(previewSource.id)",
                 logicalTime: previewSource.id,
@@ -894,6 +904,7 @@ private final class WalletTransactionContentComponent: Component {
                 direction: .outgoing,
                 amount: amount,
                 fee: self.displayedFee ?? 0,
+                gasless: gasless,
                 peer: .address(recipient, domain: nil),
                 comment: self.previewComment,
                 collectible: collectible.map(walletTransactionCollectible)
@@ -1194,7 +1205,6 @@ private final class WalletTransactionContentComponent: Component {
             self.commentSession = nil
             self.isAuthorizingComment = false
             self.commentSessionDisposable.set(nil)
-            // An accepted submission retains its existing completion semantics.
             if self.previewOperation != .submitting && !self.isFinishedPreview {
                 self.preparingForSend = false
                 if self.previewCommentEncrypted {
@@ -1415,6 +1425,9 @@ private final class WalletTransactionContentComponent: Component {
                 return
             }
             if self.isAuthorizingComment { return }
+
+            self.endEditing(true)
+
             if self.previewCommentEncrypted && self.commentSession?.isValid != true {
                 self.requestCommentSession(forSend: true)
                 return
@@ -1452,6 +1465,7 @@ private final class WalletTransactionContentComponent: Component {
             guard let walletContext = self.walletContext else {
                 return
             }
+            self.submittedTransfer = nil
             self.previewOperation = .submitting
             self.componentState?.updated(transition: .easeInOut(duration: 0.2))
             self.transferDisposable.set((walletContext.submitTransfer(preparedTransfer, session: self.previewCommentEncrypted ? self.commentSession : nil)
@@ -1459,6 +1473,7 @@ private final class WalletTransactionContentComponent: Component {
                 guard let self else {
                     return
                 }
+                self.submittedTransfer = pendingTransfer
                 self.preparedTransferNeedsRefresh = false
                 self.dismissSendScreenIfNeeded()
                 switch pendingTransfer.status {
@@ -1561,7 +1576,7 @@ private final class WalletTransactionContentComponent: Component {
                 text = "The encrypted comment is too long. Shorten it and try again."
             case .commentEncryptionRecipientUnavailable:
                 title = "Couldn't Encrypt Comment"
-                text = "This user can't receive encrypted messages now."
+                text = "This wallet can't receive encrypted comments now."
             case .commentEncryptionFailed:
                 title = "Couldn't Encrypt Comment"
                 text = "The comment could not be encrypted for this wallet. Check the network connection and try again."
@@ -2523,7 +2538,7 @@ private final class WalletTransactionContentComponent: Component {
                     component: addressComponent
                 ))
             }
-            if transaction.direction == .outgoing, let feeComponent {
+            if transaction.direction == .outgoing, !transaction.gasless, let feeComponent {
                 tableItems.append(TableComponent.Item(
                     id: "fee",
                     title: feeTitle,

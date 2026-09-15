@@ -67,3 +67,12 @@
 - (void)simulateDisconnection;
 
 @end
+
+// Largest payload accepted in one intermediate-framed transport packet, and the
+// bound applied to each msg_container child.
+FOUNDATION_EXTERN NSUInteger const MTMaxTransportPayloadLength;
+
+// Largest inflated size accepted for a gzip_packed message body. The transport
+// limit above bounds the *compressed* frame, so this is a separate policy; it
+// matches tdesktop's kMaxUnpackedMessageLength.
+FOUNDATION_EXTERN NSUInteger const MTMaxUnpackedMessageLength;

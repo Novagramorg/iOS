@@ -258,13 +258,11 @@ actor WalletEngineRuntime {
             guard let candidate = try await self.storage.loadReplacementCandidate(),
                   candidate.recordId == recordId,
                   walletEngineAddressesEqual(candidate.address, serverAddress),
+                  candidate.publicKey == serverPublicKey,
                   candidate.descriptor != nil else {
                 throw WalletContext.WalletError.storage(.identityMismatch)
             }
             let signingPublicKey = try await self.signingPublicKey(for: candidate)
-            guard signingPublicKey == serverPublicKey else {
-                throw WalletContext.WalletError.storage(.identityMismatch)
-            }
             guard self.serverStateRevision == revision else { throw CancellationError() }
             try await self.promoteReplacementCandidate(candidate.withSigningPublicKey(signingPublicKey))
             return try await self.activateUnlocked(
@@ -275,8 +273,6 @@ actor WalletEngineRuntime {
         }
     }
 
-    /// Reconciles a candidate against an authoritative wallet.getState result.
-    /// A mismatch from stateUpdates alone must not discard an ambiguous candidate.
     func reconcileReplacementCandidate(
         serverAddress: String,
         serverPublicKey: Data,
@@ -293,17 +289,16 @@ actor WalletEngineRuntime {
             if let known = candidate.signingPublicKey {
                 signingPublicKey = known
             } else if candidate.descriptor != nil {
-                // Legacy candidates may need an unlocked vault. An unavailable
-                // secret is not evidence that an ambiguous replacement failed.
                 signingPublicKey = try? await self.signingPublicKey(for: candidate)
             } else {
                 signingPublicKey = nil
             }
             guard self.serverStateRevision <= revision else { throw CancellationError() }
             if walletEngineAddressesEqual(candidate.address, serverAddress),
-               signingPublicKey == serverPublicKey,
+               candidate.publicKey == serverPublicKey,
                candidate.descriptor != nil {
-                try await self.promoteReplacementCandidate(candidate.withSigningPublicKey(serverPublicKey))
+                let verifiedCandidate = signingPublicKey.map { candidate.withSigningPublicKey($0) } ?? candidate
+                try await self.promoteReplacementCandidate(verifiedCandidate)
                 return true
             } else if discardMismatch, signingPublicKey != nil,
                       !walletEngineAddressesEqual(candidate.address, serverAddress) {
@@ -362,21 +357,15 @@ actor WalletEngineRuntime {
            stored.schemaVersion == 2,
            stored.network == "mainnet",
            walletEngineAddressesEqual(stored.address, serverAddress),
-           stored.publicKey.count == 32 {
-            // The address anchor stays valid when the server reports a new
-            // signing key. Never replace or delete this descriptor on rotation.
+           stored.publicKey == serverPublicKey {
             selectedRecord = stored
             if let secretRef = stored.secretRef,
                try await self.storage.containsProtectedSecret(ProtectedSecretRef(value: secretRef)) {
                 let verifiedKey = try? await self.signingPublicKey(for: stored)
-                let localKey = verifiedKey ?? stored.signingPublicKey
                 if let verifiedKey {
                     selectedRecord = stored.withSigningPublicKey(verifiedKey)
                 }
-                // A legacy secret can require passcode authorization before its
-                // signing metadata can be migrated. Every signing entrypoint
-                // verifies the actual phrase after obtaining that authorization.
-                canSign = localKey == nil || localKey == serverPublicKey
+                canSign = true
             }
         }
 
@@ -481,6 +470,9 @@ actor WalletEngineRuntime {
         let phrase = try await self.lifecycle.revealRecoveryPhrase(descriptor: descriptor)
         var words = normalizedEngineMnemonic(phrase.phrase.split(whereSeparator: { $0.isWhitespace }).map(String.init))
         defer { words.removeAll(keepingCapacity: false) }
+        guard try rotationMnemonicPublicKey(phrase: words.joined(separator: " ")) == record.publicKey else {
+            throw WalletContext.WalletError.storage(.identityMismatch)
+        }
         return try walletMnemonicSigningPublicKey(words: words)
     }
 
@@ -526,12 +518,13 @@ actor WalletEngineRuntime {
         }
     }
 
-    func createEncryptedComment(recipient: String, comment: String) async throws -> String {
+    func createEncryptedComment(recipient: String, comment: String, recipientPublicKey: Data? = nil) async throws -> String {
         try await self.withFfi(priority: .userInitiated) {
             try await self.ensureKeyRotationAllowsSigning()
             return try await self.requireClient().createEncryptedComment(request: CreateEncryptedCommentRequest(
                 recipient: recipient,
-                comment: comment
+                comment: comment,
+                recipientPublicKey: recipientPublicKey
             ))
         }
     }
@@ -595,7 +588,7 @@ actor WalletEngineRuntime {
 
     func revealRecoveryPhrase() async throws -> [String] {
         try await self.withFfi {
-            try await self.ensureCurrentSigningIdentity()
+            try await self.ensureCurrentWalletIdentity()
             guard let descriptor = self.descriptor else {
                 throw WalletContext.WalletError.unavailable
             }
@@ -691,7 +684,6 @@ actor WalletEngineRuntime {
                 throw WalletContext.WalletError.storage(.identityMismatch)
             }
             var words: [String]
-            let previousPublicKey: Data?
             if let rotationOperationId, let rotation = try await self.storage.loadKeyRotation() {
                 guard rotation.operationId == rotationOperationId,
                       rotation.recordId == descriptor.recordId,
@@ -702,18 +694,17 @@ actor WalletEngineRuntime {
                     throw WalletContext.WalletError.storage(.identityMismatch)
                 }
                 words = try await self.keyRotationRecoveryPhrase(operationId: rotationOperationId)
-                previousPublicKey = rotation.previousPublicKey
             } else {
                 try await self.ensureKeyRotationAllowsSigning()
                 let phrase = try await self.lifecycle.revealRecoveryPhrase(descriptor: descriptor)
                 words = normalizedEngineMnemonic(phrase.phrase.split(whereSeparator: { $0.isWhitespace }).map(String.init))
-                previousPublicKey = nil
             }
             defer { words.removeAll(keepingCapacity: false) }
             guard let serverIdentity = self.serverWalletIdentity,
                   walletEngineAddressesEqual(serverIdentity.address, expectedAddress),
-                  serverIdentity.publicKey == expectedPublicKey || serverIdentity.publicKey == previousPublicKey,
+                  serverIdentity.publicKey == descriptor.publicKey,
                   self.descriptor?.recordId == descriptor.recordId,
+                  self.descriptor?.publicKey == descriptor.publicKey,
                   self.descriptor?.secretRef == descriptor.secretRef else {
                 throw WalletContext.WalletError.storage(.identityMismatch)
             }
@@ -1115,11 +1106,13 @@ actor WalletEngineRuntime {
         }
     }
 
-    func signMessage(_ request: SignMessageRequest, wallet: TonConnectWalletIdentity) async throws -> SignMessageResult {
-        try await self.withFfi(priority: .userInitiated, cancellation: .send) {
+    func signMessage(_ request: SignMessageRequest, wallet: TonConnectWalletIdentity, beforeSigning: @escaping @Sendable () throws -> Void = {}) async throws -> SignMessageResult {
+        try await self.withFfi(priority: .userInitiated, cancellation: .send, beforeSigning: beforeSigning) {
             try self.validateTonConnectWallet(wallet)
             try await self.ensureKeyRotationAllowsSigning()
-            return try await self.requireClient().signMessage(request: request)
+            let client = try self.requireClient()
+            try beforeSigning()
+            return try await client.signMessage(request: request)
         }
     }
 
@@ -1250,13 +1243,16 @@ actor WalletEngineRuntime {
         if try await self.storage.loadKeyRotation() != nil {
             throw WalletContext.WalletError.operationInProgress
         }
-        try await self.ensureCurrentSigningIdentity()
+        try await self.ensureCurrentWalletIdentity()
     }
 
-    private func ensureCurrentSigningIdentity() async throws {
+    /// Verifies the protected phrase belongs to the current wallet's anchor.
+    /// This does not establish the current on-chain signing key.
+    private func ensureCurrentWalletIdentity() async throws {
         guard let descriptor = self.descriptor,
               let serverIdentity = self.serverWalletIdentity,
               walletEngineAddressesEqual(descriptor.address, serverIdentity.address),
+              descriptor.publicKey == serverIdentity.publicKey,
               let stored = try await self.storage.loadDescriptor(),
               stored.recordId == descriptor.recordId,
               stored.publicKey == descriptor.publicKey,
@@ -1266,8 +1262,9 @@ actor WalletEngineRuntime {
         let signingPublicKey = try await self.signingPublicKey(for: stored)
         guard let currentIdentity = self.serverWalletIdentity,
               walletEngineAddressesEqual(currentIdentity.address, descriptor.address),
-              currentIdentity.publicKey == signingPublicKey,
+              currentIdentity.publicKey == descriptor.publicKey,
               self.descriptor?.recordId == descriptor.recordId,
+              self.descriptor?.publicKey == descriptor.publicKey,
               self.descriptor?.secretRef == descriptor.secretRef else {
             throw WalletContext.WalletError.storage(.identityMismatch)
         }
@@ -1276,7 +1273,10 @@ actor WalletEngineRuntime {
         }
         guard let latestIdentity = self.serverWalletIdentity,
               walletEngineAddressesEqual(latestIdentity.address, descriptor.address),
-              latestIdentity.publicKey == signingPublicKey else {
+              latestIdentity.publicKey == descriptor.publicKey,
+              self.descriptor?.recordId == descriptor.recordId,
+              self.descriptor?.publicKey == descriptor.publicKey,
+              self.descriptor?.secretRef == descriptor.secretRef else {
             throw WalletContext.WalletError.storage(.identityMismatch)
         }
     }
@@ -1291,6 +1291,7 @@ actor WalletEngineRuntime {
     private func withFfi<Value>(
         priority: FfiPriority = .userInitiated,
         cancellation: FfiCancellation = .none,
+        beforeSigning: (@Sendable () throws -> Void)? = nil,
         _ operation: @escaping () async throws -> Value
     ) async throws -> Value {
         if let session = WalletAuthorizationScope.session {

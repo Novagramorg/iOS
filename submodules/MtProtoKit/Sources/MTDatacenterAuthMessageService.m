@@ -576,6 +576,14 @@ static NSData *encryptRSAModernPadding(id<EncryptionProvider> encryptionProvider
                 [tmpAesIv appendData:newNonce0_4];
                 
                 NSData *answerWithHash = MTAesDecrypt(((MTServerDhParamsOkMessage *)serverDhParamsMessage).encryptedResponse, tmpAesKey, tmpAesIv);
+                if (answerWithHash == nil || answerWithHash.length < 20) {
+                    if (MTLogEnabled()) {
+                        MTLog(@"[MTDatacenterAuthMessageService#%p couldn't decrypt DH params]", self);
+                    }
+                    [self reset:mtProto];
+                    
+                    return;
+                }
                 NSData *answerHash = [[NSData alloc] initWithBytes:((uint8_t *)answerWithHash.bytes) length:20];
                 
                 NSMutableData *answerData = [[NSMutableData alloc] initWithBytes:(((uint8_t *)answerWithHash.bytes) + 20) length:(answerWithHash.length - 20)];

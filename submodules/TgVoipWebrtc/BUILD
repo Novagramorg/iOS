@@ -1,3 +1,7 @@
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
+load("@rules_cc//cc:objc_library.bzl", "objc_library")
+
 load("@build_bazel_rules_apple//apple:ios.bzl", "ios_unit_test")
 
 config_setting(

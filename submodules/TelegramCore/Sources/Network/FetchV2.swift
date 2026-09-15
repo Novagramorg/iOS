@@ -819,8 +819,11 @@ private final class FetchImpl {
                             }
                             
                             let fetchedData = bytes.makeData()
+                            guard let decryptedData = MTAesCtrDecrypt(fetchedData, cdnData.encryptionKey, partIv) else {
+                                return .failure
+                            }
                             return .data(
-                                data: MTAesCtrDecrypt(fetchedData, cdnData.encryptionKey, partIv)!,
+                                data: decryptedData,
                                 verifyPartHashData: VerifyPartHashData(fetchRange: fetchRange, fetchedData: fetchedData)
                             )
                         }
