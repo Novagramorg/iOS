@@ -1681,7 +1681,7 @@ final class ComposePollScreenComponent: Component {
             
             var pollOptionsSectionReadyItems: [ListSectionContentView.ReadyItem] = []
             
-            let processPollOptionItem: (Int) -> Void = { i in
+            let processPollOptionItem: (Int) -> Void = { [self] i in
                 let pollOption = self.pollOptions[i]
                 
                 let optionId = pollOption.id
