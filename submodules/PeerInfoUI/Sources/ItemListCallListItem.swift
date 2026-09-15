@@ -67,15 +67,20 @@ private func stringForCallType(message: EngineMessage, strings: PresentationStri
         switch media {
         case let action as TelegramMediaAction:
             switch action.action {
-            case let .phoneCall(_, discardReason, _, isVideo):
+            case let .phoneCall(_, discardReason, duration, isVideo):
                 let incoming = message.flags.contains(.Incoming)
+                let callConnected = (duration ?? 0) > 0
                 if let discardReason = discardReason {
                     switch discardReason {
                     case .disconnect:
-                        if isVideo {
-                            string = strings.Notification_VideoCallCanceled
-                        } else {
-                            string = strings.Notification_CallCanceled
+                        // A connected call whose transport died at the end is not a cancelled call
+                        // (see ChatMessageCallBubbleContentNode).
+                        if !callConnected {
+                            if isVideo {
+                                string = strings.Notification_VideoCallCanceled
+                            } else {
+                                string = strings.Notification_CallCanceled
+                            }
                         }
                     case .missed, .busy:
                         if incoming {

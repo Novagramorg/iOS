@@ -338,16 +338,21 @@ public func chatListItemStrings(strings: PresentationStrings, nameDisplayOrder: 
                                         messageText = strings.Chat_CallMessage_OutgoingGroupCall
                                     }
                                 }
-                            case let .phoneCall(_, discardReason, _, isVideo):
+                            case let .phoneCall(_, discardReason, duration, isVideo):
                                 hideAuthor = !isPeerGroup
                                 let incoming = message.flags.contains(.Incoming)
+                                let callConnected = (duration ?? 0) > 0
                                 if let discardReason = discardReason {
                                     switch discardReason {
                                         case .disconnect:
-                                            if isVideo {
-                                                messageText = strings.Notification_VideoCallCanceled
-                                            } else {
-                                                messageText = strings.Notification_CallCanceled
+                                            // A connected call whose transport died at the end is
+                                            // not a cancelled call (see ChatMessageCallBubbleContentNode).
+                                            if !callConnected {
+                                                if isVideo {
+                                                    messageText = strings.Notification_VideoCallCanceled
+                                                } else {
+                                                    messageText = strings.Notification_CallCanceled
+                                                }
                                             }
                                         case .missed, .busy:
                                             if incoming {

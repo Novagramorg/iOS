@@ -837,7 +837,7 @@ private final class CallSessionManagerContext {
                     case .hangUp:
                         internalReason = .hangUp(0)
                     case .disconnect:
-                        internalReason = .disconnect
+                        internalReason = .disconnect(0)
                     case .missed:
                         internalReason = .missed
                     }
@@ -846,13 +846,17 @@ private final class CallSessionManagerContext {
                     dropData = (id, accessHash, .abort)
                     disposable.dispose()
                 case let .active(id, accessHash, beginTimestamp, _, _, _, _, _, _, _, _, _):
-                    let duration = max(0, Int32(CFAbsoluteTimeGetCurrent()) - beginTimestamp)
+                    // `beginTimestamp` is the server's `phoneCall.start_date`, i.e. a Unix
+                    // timestamp, so it has to be subtracted from server-synced Unix time.
+                    // `CFAbsoluteTimeGetCurrent()` is relative to 2001 and left this difference
+                    // permanently negative, so every duration this client reported was clamped to 0.
+                    let duration = max(0, self.network.getApproximateRemoteTimestamp() - beginTimestamp)
                     let internalReason: DropCallSessionReason
                     switch reason {
                     case .busy, .hangUp:
                         internalReason = .hangUp(duration)
                     case .disconnect:
-                        internalReason = .disconnect
+                        internalReason = .disconnect(duration)
                     case .missed:
                         internalReason = .missed
                     }
@@ -872,7 +876,7 @@ private final class CallSessionManagerContext {
                     case .busy, .hangUp:
                         internalReason = .missed
                     case .disconnect:
-                        internalReason = .disconnect
+                        internalReason = .disconnect(0)
                     case .missed:
                         internalReason = .missed
                     }
@@ -1757,7 +1761,7 @@ private enum DropCallSessionReason {
     case abort
     case hangUp(Int32)
     case busy
-    case disconnect
+    case disconnect(Int32)
     case missed
     case switchToConference(slug: String)
 }
@@ -1773,7 +1777,8 @@ private func dropCallSession(network: Network, addUpdates: @escaping (Api.Update
         mappedReason = .phoneCallDiscardReasonHangup
     case .busy:
         mappedReason = .phoneCallDiscardReasonBusy
-    case .disconnect:
+    case let .disconnect(value):
+        duration = value
         mappedReason = .phoneCallDiscardReasonDisconnect
     case .missed:
         mappedReason = .phoneCallDiscardReasonMissed
