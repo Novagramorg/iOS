@@ -115,8 +115,10 @@ option without the factory yields a stock inactive DTLS transport over plain
 RTP, which connects nothing.
 
 - **State.** `dtls_state()` starts `kNew` and becomes `kConnected` the first
-  time the ICE transport reports writable; never `kFailed`; `kClosed` only on
-  destruction. Transitions are published with `SendDtlsState`, so the
+  time the ICE transport reports writable; it never reports `kFailed` or
+  `kClosed` (stock `DtlsTransport` emits nothing from its destructor either;
+  the `webrtc::DtlsTransport` wrapper handles teardown via `Clear()`). The one
+  transition is published with `SendDtlsState`, so the
   aggregate `PeerConnectionState` and the `webrtc::DtlsTransport` stats
   wrapper see a connected transport. `IsDtlsActive()` is true.
 - **Negotiation surface.** `SetDtlsRole`/`GetDtlsRole` store the role;
