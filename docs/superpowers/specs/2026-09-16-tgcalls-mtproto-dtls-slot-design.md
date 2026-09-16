@@ -137,8 +137,9 @@ RTP, which connects nothing.
 - **Receive.** Decrypt with `EncryptedConnection::handleIncomingRawPacket`;
   emit each contained message: prefix present means `flags 0`, absent means
   `PF_SRTP_BYPASS`. `RtpTransport` ignores flags; `DcSctpTransport` skips
-  non-zero, so RTP never enters the SCTP parser. Undecryptable packets are
-  dropped silently, as today.
+  non-zero, so RTP never enters the SCTP parser. Undecryptable packets emit
+  nothing; `EncryptedConnection` logs `ERROR! Bad incoming data hash.` once per
+  such packet, as in 13.0.0.
 - **Signals.** Forward the seven `PacketTransportInternal` signals from ICE
   (writable, receiving, ready-to-send, sent, network route, closed, read
   packet) re-emitted with `this`, mirroring stock `DtlsTransport`. There are
