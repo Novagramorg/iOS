@@ -1,6 +1,7 @@
 import Foundation
 import WalletEngineFFI
 
+@available(macOS 10.15, *)
 func walletMnemonicSigningPublicKey(words: [String]) throws -> Data {
     var words = normalizedEngineMnemonic(words)
     defer { words.removeAll(keepingCapacity: false) }
@@ -12,6 +13,7 @@ func walletMnemonicSigningPublicKey(words: [String]) throws -> Data {
     }
 }
 
+@available(macOS 10.15, *)
 func walletOwnershipProofSignature(
     words: [String],
     expectedAnchorPublicKey: Data,
@@ -54,6 +56,7 @@ func walletOwnershipProofSignature(
     }
 }
 
+@available(macOS 10.15, *)
 func walletOwnershipProofDigest(address: String, domain: String, timestamp: UInt64, payload: String) throws -> Data {
     guard !domain.isEmpty, let domainLength = UInt32(exactly: domain.utf8.count), timestamp > 0,
           let address = try? parseTonAddress(value: address) else {

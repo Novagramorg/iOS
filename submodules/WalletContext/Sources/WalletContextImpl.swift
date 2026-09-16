@@ -6,6 +6,7 @@ import WalletEngineFFI
 
 let walletFiatRatesRefreshInterval: TimeInterval = 15 * 60
 
+@available(macOS 10.15, *)
 actor WalletContextImpl {
     typealias FiatCurrency = WalletContext.FiatCurrency
     typealias FiatRate = WalletContext.FiatRate
@@ -1554,23 +1555,28 @@ actor WalletContextImpl {
     }
 }
 
+@available(macOS 10.15, *)
 func captureAsync<Value>(_ operation: () async throws -> Value) async -> Result<Value, Error> {
     do { return .success(try await operation()) } catch { return .failure(error) }
 }
 
+@available(macOS 10.15, *)
 func currentWalletTimestamp() -> Int32 {
     Int32(clamping: Int64(Date().timeIntervalSince1970))
 }
 
+@available(macOS 10.15, *)
 func walletEngineBalance(_ nanograms: String) -> Int64? {
     guard let value = Int64(nanograms), value >= 0 else { return nil }
     return value
 }
 
+@available(macOS 10.15, *)
 func walletEngineAcceptsSubmission(_ phase: SendPhase) -> Bool {
     phase == .submitted || phase == .submissionUnknown || phase == .confirmed
 }
 
+@available(macOS 10.15, *)
 func walletEngineAcceptsSignHandoff(_ phase: SendPhase) -> Bool {
     phase == .handedOff
 }

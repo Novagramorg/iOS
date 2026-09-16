@@ -1,6 +1,7 @@
 import Foundation
 import PasscodeCore
 
+@available(macOS 10.15, *)
 public struct WalletAuthorizationRequest: Sendable {
     public let id: UUID
     public let namespace: String
@@ -8,10 +9,12 @@ public struct WalletAuthorizationRequest: Sendable {
     public let lifetime: PasscodeSession.Lifetime
 }
 
+@available(macOS 10.15, *)
 enum WalletAuthorizationScope {
     @TaskLocal static var session: PasscodeSession?
 }
 
+@available(macOS 10.15, *)
 final class WalletAuthorizationContext: @unchecked Sendable {
     typealias Presenter = @Sendable (WalletAuthorizationRequest) async throws -> PasscodeSession
     let namespace: String

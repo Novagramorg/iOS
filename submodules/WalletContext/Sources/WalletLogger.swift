@@ -3,6 +3,7 @@ import Foundation
 import TelegramCore
 import WalletEngineFFI
 
+@available(macOS 10.15, *)
 final class WalletLogger: @unchecked Sendable {
     private let sink: (String) -> Void
 
@@ -23,6 +24,7 @@ final class WalletLogger: @unchecked Sendable {
     }
 }
 
+@available(macOS 10.15, *)
 private func walletContextErrorFields(_ error: Error) -> String {
     let nsError = error as NSError
     var result = "error_type=\(String(reflecting: type(of: error))) error_domain=\(nsError.domain) error_code=\(nsError.code)"
@@ -32,6 +34,7 @@ private func walletContextErrorFields(_ error: Error) -> String {
     return result
 }
 
+@available(macOS 10.15, *)
 private func walletContextErrorKind(_ error: Error) -> String? {
     if error is CancellationError {
         return "cancelled"
@@ -121,6 +124,7 @@ private func walletContextErrorKind(_ error: Error) -> String? {
     return nil
 }
 
+@available(macOS 10.15, *)
 private func walletEngineErrorCaseName(_ error: WalletClientError) -> String {
     if case .SendAlreadyInProgress = error {
         return "send_already_in_progress"
@@ -147,6 +151,7 @@ private func walletEngineErrorCaseName(_ error: WalletClientError) -> String {
     return result.isEmpty ? "unknown" : result
 }
 
+@available(macOS 10.15, *)
 func synchronizationError(_ error: DomainError?) -> WalletContext.SynchronizationError {
     guard let error else { return .engine }
     switch error.code {
@@ -163,6 +168,7 @@ func synchronizationError(_ error: DomainError?) -> WalletContext.Synchronizatio
     }
 }
 
+@available(macOS 10.15, *)
 func synchronizationError(_ error: Error?) -> WalletContext.SynchronizationError {
     guard let error else { return .engine }
     if let error = error as? WalletContext.SynchronizationError { return error }
@@ -180,6 +186,7 @@ func synchronizationError(_ error: Error?) -> WalletContext.SynchronizationError
     return .engine
 }
 
+@available(macOS 10.15, *)
 func walletError(_ error: Error) -> WalletContext.WalletError {
     if let value = error as? PasscodeError {
         switch value {

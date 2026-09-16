@@ -3,6 +3,7 @@ import CryptoKit
 import Security
 import PasscodeCore
 
+@available(macOS 10.15, *)
 public struct WalletSecretEnvelope: Codable, Equatable, Sendable {
     public let version: Int
     public let vaultId: String
@@ -12,6 +13,7 @@ public struct WalletSecretEnvelope: Codable, Equatable, Sendable {
 
     public static func encrypt(_ secret: Data, vaultId: String, access: PasscodeSession) throws -> WalletSecretEnvelope {
         guard !secret.isEmpty, !vaultId.isEmpty else { throw PasscodeError.corrupted }
+        guard #available(macOS 11.0, *) else { throw PasscodeError.unavailable }
         let secretId = UUID().uuidString
         var dek = try random(32)
         defer { dek.resetBytes(in: 0 ..< dek.count) }
@@ -24,6 +26,7 @@ public struct WalletSecretEnvelope: Codable, Equatable, Sendable {
 
     public func decrypt(vaultId: String, access: PasscodeSession) throws -> Data {
         guard self.version == 1, self.vaultId == vaultId, !self.secretId.isEmpty else { throw PasscodeError.corrupted }
+        guard #available(macOS 11.0, *) else { throw PasscodeError.unavailable }
         return try access.withDerivedKey(namespace: vaultId, domain: "telegram.wallet.dek.v1") { key in
             var dek = try Self.open(self.wrappedDek, key: key, context: "dek.v1:\(vaultId):\(self.secretId)")
             defer { dek.resetBytes(in: 0 ..< dek.count) }
@@ -57,12 +60,14 @@ public struct WalletSecretEnvelope: Codable, Equatable, Sendable {
     }
 }
 
+@available(macOS 10.15, *)
 protocol WalletVaultStorage {
     func read(service: String, account: String) throws -> Data?
     func insert(_ data: Data, service: String, account: String) throws
     func remove(service: String, account: String) throws
 }
 
+@available(macOS 10.15, *)
 struct WalletVaultMigrator {
     let storage: WalletVaultStorage
 
@@ -83,6 +88,7 @@ struct WalletVaultMigrator {
     }
 }
 
+@available(macOS 10.15, *)
 private struct WalletVaultKeychain: WalletVaultStorage {
     func read(service: String, account: String) throws -> Data? { try WalletVault.read(service: service, account: account) }
 
@@ -100,6 +106,7 @@ private struct WalletVaultKeychain: WalletVaultStorage {
     }
 }
 
+@available(macOS 10.15, *)
 enum WalletVault {
     static let legacyPrefix = "org.telegram.ton-wallet.engine.v2.secret."
     private static let prefix = "org.telegram.ton-wallet.vault.v1.envelope."

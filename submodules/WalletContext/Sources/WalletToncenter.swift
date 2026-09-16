@@ -4,6 +4,7 @@ import SwiftSignalKit
 import TelegramCore
 import WalletEngineFFI
 
+@available(macOS 10.15, *)
 private enum WalletEngineRelayError: Error {
     case completedWithoutResponse
     case invalidRequest
@@ -13,6 +14,7 @@ private enum WalletEngineRelayError: Error {
 
 let walletEngineMaximumStatuslessResponseBytes = 4 * 1024 * 1024
 
+@available(macOS 10.15, *)
 func walletEngineTransportKind(_ code: URLError.Code) -> StatuslessHostErrorKind {
     switch code {
     case .notConnectedToInternet, .internationalRoamingOff, .dataNotAllowed, .callIsActive:
@@ -28,6 +30,7 @@ func walletEngineTransportKind(_ code: URLError.Code) -> StatuslessHostErrorKind
     }
 }
 
+@available(macOS 10.15, *)
 final class WalletSignalRequestContext<Value>: @unchecked Sendable {
     private let lock = NSLock()
     private var continuation: CheckedContinuation<Value, Error>?
@@ -100,6 +103,7 @@ final class WalletSignalRequestContext<Value>: @unchecked Sendable {
     }
 }
 
+@available(macOS 10.15, *)
 actor WalletEngineStatuslessHost: WalletStatuslessHost {
     private static let maximumEarlyCancellations = 256
 
@@ -310,6 +314,7 @@ actor WalletEngineStatuslessHost: WalletStatuslessHost {
     }
 }
 
+@available(macOS 10.15, *)
 func walletEnginePublicKey(fromToncenterResponse data: Data) -> Data? {
     guard data.count <= walletEngineMaximumStatuslessResponseBytes,
           let object = try? JSONSerialization.jsonObject(with: data),
@@ -328,6 +333,7 @@ func walletEnginePublicKey(fromToncenterResponse data: Data) -> Data? {
     return walletEngineUInt256(encoded)
 }
 
+@available(macOS 10.15, *)
 private func walletEngineStackNumber(_ value: Any) -> String? {
     if let values = value as? [Any], values.count == 2,
        values[0] as? String == "num" {
@@ -339,6 +345,7 @@ private func walletEngineStackNumber(_ value: Any) -> String? {
     return nil
 }
 
+@available(macOS 10.15, *)
 private func walletEngineUInt256(_ value: String) -> Data? {
     var bytes = [UInt8](repeating: 0, count: 32)
     if value.hasPrefix("0x") || value.hasPrefix("0X") {

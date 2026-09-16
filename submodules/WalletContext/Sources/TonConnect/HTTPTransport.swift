@@ -1,6 +1,7 @@
 import Foundation
 import WalletEngineFFI
 
+@available(macOS 10.15, *)
 private final class TransferCancellation: @unchecked Sendable {
     private let lock = NSLock()
     private var task: URLSessionTask?
@@ -34,6 +35,7 @@ private final class TransferCancellation: @unchecked Sendable {
 }
 
 /// URLSession invokes this delegate on its serial delegate queue.
+@available(macOS 10.15, *)
 private final class ReceiveDelegate: NSObject, URLSessionDataDelegate, @unchecked Sendable {
     private let url: URL
     private let maximumBytes: Int
@@ -123,6 +125,7 @@ private final class ReceiveDelegate: NSObject, URLSessionDataDelegate, @unchecke
     }
 }
 
+@available(macOS 10.15, *)
 public struct TonConnectHTTPTransport: TonConnectTransport {
     public init() {}
 

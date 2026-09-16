@@ -6,6 +6,7 @@ import WalletEngineFFI
 
 let walletStreamingMaximumFrameBytes = 4 * 1024 * 1024
 
+@available(macOS 10.15, *)
 enum WalletStreamingError: Error, Equatable {
     case invalidURL
     case expiredURL
@@ -14,6 +15,7 @@ enum WalletStreamingError: Error, Equatable {
     case frameTooLarge
 }
 
+@available(macOS 10.15, *)
 actor WalletStreamingURLProvider {
     private struct CachedValue {
         let url: URL
@@ -74,6 +76,7 @@ actor WalletStreamingURLProvider {
     }
 }
 
+@available(macOS 10.15, *)
 private final class WalletStreamingSessionDelegate: NSObject, URLSessionWebSocketDelegate, @unchecked Sendable {
     private let expectedURL: URL
     private let logger: WalletLogger
@@ -125,6 +128,7 @@ private final class WalletStreamingSessionDelegate: NSObject, URLSessionWebSocke
     }
 }
 
+@available(macOS 10.15, *)
 actor WalletURLSessionStreamingTransport {
     private let provider: WalletStreamingURLProvider
     private let logger: WalletLogger
@@ -228,6 +232,7 @@ actor WalletURLSessionStreamingTransport {
     }
 }
 
+@available(macOS 10.15, *)
 enum WalletStreamingFinality: Int, Sendable, Equatable {
     case pending = 0
     case confirmed = 1
@@ -245,6 +250,7 @@ enum WalletStreamingFinality: Int, Sendable, Equatable {
     }
 }
 
+@available(macOS 10.15, *)
 enum WalletStreamingParsedEvent: Sendable, Equatable {
     case connecting
     case subscribed
@@ -260,6 +266,7 @@ enum WalletStreamingParsedEvent: Sendable, Equatable {
     case traceInvalidated(traceId: String)
 }
 
+@available(macOS 10.15, *)
 enum WalletStreamingConnectionState: Sendable, Equatable {
     case inactive
     case connecting
@@ -267,6 +274,7 @@ enum WalletStreamingConnectionState: Sendable, Equatable {
     case disconnected
 }
 
+@available(macOS 10.15, *)
 enum WalletStreamingDemand {
     static func isActive(
         foreground: Bool,
@@ -296,6 +304,7 @@ enum WalletStreamingDemand {
     }
 }
 
+@available(macOS 10.15, *)
 struct WalletStreamingRefreshTracker {
     private var finalizedBalance: Int64?
     private var remainingRetryCount = 0
@@ -351,6 +360,7 @@ struct WalletStreamingRefreshTracker {
     }
 }
 
+@available(macOS 10.15, *)
 struct WalletSynchronizationScope: OptionSet, Sendable {
     let rawValue: Int
 
@@ -360,6 +370,7 @@ struct WalletSynchronizationScope: OptionSet, Sendable {
     static let all: WalletSynchronizationScope = [.account, .transactions, .nfts]
 }
 
+@available(macOS 10.15, *)
 struct WalletSynchronizationRequestGate {
     private(set) var runningScope: WalletSynchronizationScope = []
     private(set) var isRunning = false
@@ -398,6 +409,7 @@ struct WalletSynchronizationRequestGate {
     }
 }
 
+@available(macOS 10.15, *)
 enum WalletStreamingEventParser {
     private struct Envelope: Decodable {
         let type: String?
@@ -721,6 +733,7 @@ enum WalletStreamingEventParser {
     }
 }
 
+@available(macOS 10.15, *)
 struct WalletStreamingPresentationOverlay {
     private struct BalanceValue {
         let revision: UInt64
@@ -1003,6 +1016,7 @@ struct WalletStreamingPresentationOverlay {
     }
 }
 
+@available(macOS 10.15, *)
 private struct WalletStreamingSubscribeRequest: Encodable {
     let operation = "subscribe"
     let types = ["account_state_change", "transactions"]
@@ -1023,10 +1037,12 @@ private struct WalletStreamingSubscribeRequest: Encodable {
     }
 }
 
+@available(macOS 10.15, *)
 private struct WalletStreamingPingRequest: Encodable {
     let operation = "ping"
 }
 
+@available(macOS 10.15, *)
 actor WalletToncenterStreamingClient {
     struct Configuration: Sendable {
         let initialBackoff: TimeInterval
@@ -1232,6 +1248,7 @@ actor WalletToncenterStreamingClient {
     }
 }
 
+@available(macOS 10.15, *)
 struct WalletStreamingTransferEvidence: Equatable, Sendable {
     let walletAddress: String
     let bodyHash: String
@@ -1239,12 +1256,14 @@ struct WalletStreamingTransferEvidence: Equatable, Sendable {
     let transaction: WalletContext.Transaction
 }
 
+@available(macOS 10.15, *)
 private func walletStreamingHash(_ hash: String?) -> Data? {
     guard let hash, hash.utf8.count == 44,
           let data = Data(base64Encoded: hash), data.count == 32 else { return nil }
     return data
 }
 
+@available(macOS 10.15, *)
 func walletHistoryTransactionForPending(_ pending: WalletContext.PendingTransfer, transactions: [WalletContext.Transaction]) -> WalletContext.Transaction? {
     let matches = transactions.filter {
         ($0.presentationId == "pending:\(pending.id)" || (pending.transactionHash != nil && $0.transactionHash == pending.transactionHash))
@@ -1256,6 +1275,7 @@ func walletHistoryTransactionForPending(_ pending: WalletContext.PendingTransfer
     return matches.count == 1 ? matches.first : nil
 }
 
+@available(macOS 10.15, *)
 func walletPendingTransfersMatchingBodies(
     _ pending: [WalletContext.PendingTransfer],
     walletAddress: String,
@@ -1314,6 +1334,7 @@ func walletPendingTransfersMatchingBodies(
     }
 }
 
+@available(macOS 10.15, *)
 func walletPendingTransfersReconciledWithHistory(
     _ pendingTransfers: [WalletContext.PendingTransfer],
     transactions: [WalletContext.Transaction],
@@ -1357,6 +1378,7 @@ func walletPendingTransfersReconciledWithHistory(
     )
 }
 
+@available(macOS 10.15, *)
 extension WalletContextImpl {
     func evaluateStreamingDemand() {
         let demandIsActive = WalletStreamingDemand.isActive(

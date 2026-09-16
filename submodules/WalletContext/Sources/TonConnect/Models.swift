@@ -1,6 +1,7 @@
 import Foundation
 import WalletEngineFFI
 
+@available(macOS 10.15, *)
 public struct TonConnectWalletIdentity: Codable, Equatable, Sendable {
     public let recordId: String
     public let address: String
@@ -13,6 +14,7 @@ public struct TonConnectWalletIdentity: Codable, Equatable, Sendable {
     }
 }
 
+@available(macOS 10.15, *)
 public enum TonConnectFailure: Error, Equatable, Sendable {
     case unavailable, invalidLink, conflictingLink, capacityExceeded
     case invalidResponse, responseTooLarge, invalidManifest, wrongNetwork
@@ -37,6 +39,7 @@ public enum TonConnectFailure: Error, Equatable, Sendable {
     }
 }
 
+@available(macOS 10.15, *)
 public struct TonConnectManifestInfo: Codable, Equatable, Sendable {
     public let url: String
     public let name: String
@@ -51,11 +54,13 @@ public struct TonConnectManifestInfo: Codable, Equatable, Sendable {
     }
 }
 
+@available(macOS 10.15, *)
 public enum TonConnectReturnTarget: Codable, Equatable, Sendable {
     case back, none, url(String)
 }
 
 /// Only routing metadata is decoded here. Rust validates the complete connect request.
+@available(macOS 10.15, *)
 public struct TonConnectLink: Equatable, Sendable {
     public let value: String
     public let peerId: String
@@ -103,11 +108,13 @@ public struct TonConnectLink: Equatable, Sendable {
     }
 }
 
+@available(macOS 10.15, *)
 public enum TonConnectPreview: Sendable {
     case send(SendPreview)
     case sign(SignMessagePreview)
 }
 
+@available(macOS 10.15, *)
 public struct TonConnectInteraction: Sendable {
     public enum Content: Sendable {
         case connect(TonConnectConnectPrompt)
@@ -119,6 +126,7 @@ public struct TonConnectInteraction: Sendable {
     public let content: Content
 }
 
+@available(macOS 10.15, *)
 public struct TonConnectDecision: Equatable, Sendable {
     public let approved: Bool
     public let deliveryPending: Bool
@@ -126,6 +134,7 @@ public struct TonConnectDecision: Equatable, Sendable {
     public let returnTarget: TonConnectReturnTarget
 }
 
+@available(macOS 10.15, *)
 public struct TonConnectSessionInfo: Equatable, Sendable {
     public enum Status: Equatable, Sendable {
         case connecting, connected, disconnecting
@@ -137,6 +146,7 @@ public struct TonConnectSessionInfo: Equatable, Sendable {
     public let error: TonConnectFailure?
 }
 
+@available(macOS 10.15, *)
 public struct TonConnectActiveInteraction: Sendable {
     public enum Status: Equatable, Sendable {
         case ready, processing, completed(TonConnectDecision), invalidated
@@ -145,6 +155,7 @@ public struct TonConnectActiveInteraction: Sendable {
     public var status: Status
 }
 
+@available(macOS 10.15, *)
 public struct TonConnectServiceState: Sendable {
     public let revision: UInt64
     public let sessions: [TonConnectSessionInfo]
@@ -153,12 +164,14 @@ public struct TonConnectServiceState: Sendable {
     public let diagnostic: TonConnectDiagnostic?
 }
 
+@available(macOS 10.15, *)
 public struct TonConnectDiagnostic: Equatable, Sendable {
     public let id: UUID
     public let failure: TonConnectFailure
     public init(id: UUID, failure: TonConnectFailure) { self.id = id; self.failure = failure }
 }
 
+@available(macOS 10.15, *)
 public struct TonConnectStoredSession: Codable, Sendable {
     public let version: Int
     public let id: String
@@ -185,12 +198,14 @@ public struct TonConnectStoredSession: Codable, Sendable {
     }
 }
 
+@available(macOS 10.15, *)
 public protocol TonConnectSessionStorage: Sendable {
     func loadSessions(recordId: String) async throws -> [Data]
     func saveSession(_ data: Data, recordId: String, sessionId: String) async throws
     func removeSession(recordId: String, sessionId: String) async throws
 }
 
+@available(macOS 10.15, *)
 public protocol TonConnectWalletExecutor: Sendable {
     func account(for wallet: TonConnectWalletIdentity) async throws -> TonConnectAccountInfo
     func signProof(wallet: TonConnectWalletIdentity, domain: String, timestamp: UInt64, payload: String) async throws -> TonConnectProofSignature
@@ -199,22 +214,26 @@ public protocol TonConnectWalletExecutor: Sendable {
     func execute(wallet: TonConnectWalletIdentity, request: TonConnectIncomingRequest) async throws -> TonConnectSignedResult
 }
 
+@available(macOS 10.15, *)
 public enum TonConnectSignedResult: Sendable {
     case send(String)
     case sign(String)
 }
 
+@available(macOS 10.15, *)
 public protocol TonConnectTransport: Sendable {
     func loadManifest(from url: String) async throws -> String
     func post(_ post: TonConnectPreparedPost) async throws
     func stream(from url: String, onChunk: @escaping @Sendable (Data) async throws -> Void) async throws
 }
 
+@available(macOS 10.15, *)
 public protocol TonConnectClock: Sendable {
     var now: UInt64 { get }
     func sleep(seconds: Double) async throws
 }
 
+@available(macOS 10.15, *)
 public struct TonConnectSystemClock: TonConnectClock {
     public init() {}
     public var now: UInt64 { UInt64(max(0, Date().timeIntervalSince1970)) }
@@ -223,6 +242,7 @@ public struct TonConnectSystemClock: TonConnectClock {
     }
 }
 
+@available(macOS 10.15, *)
 extension TonConnectIncomingRequest {
     var requestId: String {
         switch self {

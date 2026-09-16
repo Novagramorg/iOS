@@ -7,6 +7,7 @@ import WalletEngineFFI
 
 private let walletOwnershipProofDomain = "telegram.org"
 
+@available(macOS 10.15, *)
 func walletPreviewNeedsSeqnoRetry(_ error: Error) -> Bool {
     guard let error = error as? WalletClientError else {
         return false
@@ -24,6 +25,7 @@ func walletPreviewNeedsSeqnoRetry(_ error: Error) -> Bool {
     ) != nil
 }
 
+@available(macOS 10.15, *)
 func walletKeyRotationPreparationIsExpired(_ error: Error, seqno: UInt32) -> Bool {
     guard let error = error as? WalletClientError else { return false }
     let diagnostic: String
@@ -37,6 +39,7 @@ func walletKeyRotationPreparationIsExpired(_ error: Error, seqno: UInt32) -> Boo
     return current != seqno
 }
 
+@available(macOS 10.15, *)
 func acceptedWalletTransferSubmission(
     pending: WalletContext.PendingTransfer,
     messageHash: String?,
@@ -79,6 +82,7 @@ func acceptedWalletTransferSubmission(
     )
 }
 
+@available(macOS 10.15, *)
 private func walletEngineSendPhaseIsTerminal(_ phase: SendPhase) -> Bool {
     switch phase {
     case .replaced, .sequenceNumberConsumed, .expired, .superseded, .failed, .cancelled:
@@ -89,6 +93,7 @@ private func walletEngineSendPhaseIsTerminal(_ phase: SendPhase) -> Bool {
     }
 }
 
+@available(macOS 10.15, *)
 private func walletServerIdentity(_ state: TelegramCore.WalletState) throws -> (address: String, publicKey: Data) {
     switch state {
     case let .ready(_, _, _, address, publicKey, _):
@@ -101,6 +106,7 @@ private func walletServerIdentity(_ state: TelegramCore.WalletState) throws -> (
     }
 }
 
+@available(macOS 10.15, *)
 func stageRecoveryPhraseImport(
     runtime: WalletEngineRuntime,
     words: [String],
@@ -133,6 +139,7 @@ func stageRecoveryPhraseImport(
     )
 }
 
+@available(macOS 10.15, *)
 public extension WalletContext {
     func beginWalletFlow(reason: String) -> Signal<PasscodeSession, WalletError> {
         self.signal(
@@ -434,6 +441,7 @@ public extension WalletContext {
     }
 }
 
+@available(macOS 10.15, *)
 extension WalletContextImpl {
     func beginWalletFlow(reason: String, operationId: UUID) async throws -> PasscodeSession {
         guard !self.isShutdown else { throw WalletError.unavailable }
@@ -1872,6 +1880,7 @@ extension WalletContextImpl {
     }
 }
 
+@available(macOS 10.15, *)
 extension WalletContextImpl {
     private func isCurrentPaginationOperation(_ operationId: UUID, generation: UInt64) -> Bool {
         !self.isShutdown
@@ -2182,6 +2191,7 @@ extension WalletContextImpl {
     }
 }
 
+@available(macOS 10.15, *)
 private func normalizedMainnetAddress(_ input: String) -> String? {
     let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
     let address: String
@@ -2199,6 +2209,7 @@ private func normalizedMainnetAddress(_ input: String) -> String? {
     )
 }
 
+@available(macOS 10.15, *)
 private func encryptedCommentBoc(_ comment: String) -> String? {
     guard let data = Data(base64Encoded: comment), !data.isEmpty, data.count <= 1024 else {
         return nil
@@ -2241,6 +2252,7 @@ private func encryptedCommentBoc(_ comment: String) -> String? {
     return boc.base64EncodedString()
 }
 
+@available(macOS 10.15, *)
 final class WalletOperationTaskRegistry {
     private let lock = NSLock()
     private var operations: [UUID: WalletOperationCancellation] = [:]
@@ -2282,6 +2294,7 @@ final class WalletOperationTaskRegistry {
     }
 }
 
+@available(macOS 10.15, *)
 final class WalletOperationCancellation {
     private let lock = NSLock()
     private var task: Task<Void, Never>?
@@ -2306,6 +2319,7 @@ final class WalletOperationCancellation {
     }
 }
 
+@available(macOS 10.15, *)
 private extension Data {
     var walletHexString: String { self.map { String(format: "%02x", $0) }.joined() }
 }

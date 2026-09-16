@@ -2,6 +2,7 @@ import Foundation
 import TelegramCore
 import WalletEngineFFI
 
+@available(macOS 10.15, *)
 extension WalletContextImpl {
     var activeSynchronizationScope: WalletSynchronizationScope {
         self.synchronizationGate.pendingScope.union(self.collectiblesSynchronizationGate.pendingScope)

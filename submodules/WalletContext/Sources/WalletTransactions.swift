@@ -5,11 +5,13 @@ import WalletEngineFFI
 
 let walletTransactionFetchLimit = 25
 
+@available(macOS 10.15, *)
 struct WalletPeerAddressMapping: @unchecked Sendable {
     let peer: EnginePeer
     let address: String
 }
 
+@available(macOS 10.15, *)
 struct ResolvedTransferInput {
     let address: String
     let amount: Int64
@@ -19,6 +21,7 @@ struct ResolvedTransferInput {
     let expiration: SendExpiration
 }
 
+@available(macOS 10.15, *)
 func resolveTransferInput(address: String, amount: Int64, comment: String?) throws -> ResolvedTransferInput {
     let trimmed = address.trimmingCharacters(in: .whitespacesAndNewlines)
     let link: ParsedTonTransferLink?
@@ -94,6 +97,7 @@ func resolveTransferInput(address: String, amount: Int64, comment: String?) thro
     )
 }
 
+@available(macOS 10.15, *)
 private func isTestnetAddress(_ format: TonAddressFormat) -> Bool {
     switch format {
     case .raw:
@@ -103,6 +107,7 @@ private func isTestnetAddress(_ format: TonAddressFormat) -> Bool {
     }
 }
 
+@available(macOS 10.15, *)
 func walletTransactions(
     from transactions: [TelegramCore.WalletTransaction]
 ) -> [WalletContext.Transaction] {
@@ -145,6 +150,7 @@ func walletTransactions(
     return result
 }
 
+@available(macOS 10.15, *)
 func walletTransactions(
     from transactions: [WalletStoredTransaction],
     engine: TelegramEngine
@@ -168,6 +174,7 @@ func walletTransactions(
     return transactions.map { $0.transaction(peers: peers) }
 }
 
+@available(macOS 10.15, *)
 func mergeTransactions(
     existing: [WalletContext.Transaction],
     new: [WalletContext.Transaction]
@@ -197,6 +204,7 @@ func mergeTransactions(
     return sortedWalletTransactions(Array(values.values))
 }
 
+@available(macOS 10.15, *)
 func walletPendingTransferTransaction(
     _ pending: WalletContext.PendingTransfer
 ) -> WalletContext.Transaction? {
@@ -227,6 +235,7 @@ func walletPendingTransferTransaction(
     )
 }
 
+@available(macOS 10.15, *)
 func transactionsWithStreamingOverlay(
     authoritative: [WalletContext.Transaction],
     streaming: [WalletContext.Transaction],
@@ -246,6 +255,7 @@ func transactionsWithStreamingOverlay(
     return sortedWalletTransactions(Array(values.values))
 }
 
+@available(macOS 10.15, *)
 func walletAddressMappingKey(_ address: String) -> String? {
     let trimmed = address.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmed.isEmpty, let info = try? parseTonAddress(value: trimmed) else {
@@ -257,6 +267,7 @@ func walletAddressMappingKey(_ address: String) -> String? {
     return try? convertTonAddress(value: trimmed, format: .raw).lowercased()
 }
 
+@available(macOS 10.15, *)
 private func transactionWithResolvedStreamingPeer(
     _ transaction: WalletContext.Transaction,
     peerByAddress: [String: EnginePeer]
@@ -286,6 +297,7 @@ private func transactionWithResolvedStreamingPeer(
     )
 }
 
+@available(macOS 10.15, *)
 func walletTransactionWithPresentationId(
     _ transaction: WalletContext.Transaction,
     presentationId: String,
@@ -315,10 +327,12 @@ func walletTransactionWithPresentationId(
     )
 }
 
+@available(macOS 10.15, *)
 func walletTransactionMergeKey(_ transaction: WalletContext.Transaction) -> String {
     transaction.transactionHash ?? transaction.id
 }
 
+@available(macOS 10.15, *)
 private func sortedWalletTransactions(
     _ transactions: [WalletContext.Transaction]
 ) -> [WalletContext.Transaction] {
@@ -330,6 +344,7 @@ private func sortedWalletTransactions(
     }
 }
 
+@available(macOS 10.15, *)
 private func transactionInformationScore(_ value: WalletContext.Transaction) -> Int {
     var score = value.status == .completed ? 100 : 0
     if value.peer.displayName != nil { score += 4 }
@@ -338,6 +353,7 @@ private func transactionInformationScore(_ value: WalletContext.Transaction) -> 
     return score
 }
 
+@available(macOS 10.15, *)
 private func decimalStringIsGreater(_ lhs: String, _ rhs: String) -> Bool {
     let left = normalizedUnsignedDecimal(lhs)
     let right = normalizedUnsignedDecimal(rhs)
@@ -350,6 +366,7 @@ private func decimalStringIsGreater(_ lhs: String, _ rhs: String) -> Bool {
     return left > right
 }
 
+@available(macOS 10.15, *)
 private func normalizedUnsignedDecimal(_ value: String) -> String? {
     guard !value.isEmpty, value.allSatisfy(\.isNumber) else {
         return nil
@@ -358,6 +375,7 @@ private func normalizedUnsignedDecimal(_ value: String) -> String? {
     return trimmed.isEmpty ? "0" : String(trimmed)
 }
 
+@available(macOS 10.15, *)
 struct WalletTransactionHistory {
     struct Page {
         let items: [WalletContext.Transaction]
@@ -446,6 +464,7 @@ struct WalletTransactionHistory {
     }
 }
 
+@available(macOS 10.15, *)
 func loadWalletTransactionHistoryPages(
     isolation: isolated (any Actor)? = #isolation,
     nextRequest: () throws -> WalletTransactionHistory.PageRequest?,
@@ -465,6 +484,7 @@ func loadWalletTransactionHistoryPages(
     }
 }
 
+@available(macOS 10.15, *)
 struct WalletEngineTransferReceipt: Codable, Equatable, Sendable {
     let recordId: String
     let walletAddress: String

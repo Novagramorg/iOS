@@ -6,6 +6,7 @@ private let walletCollectibleLottieHosts: Set<String> = ["nft.fragment.com"]
 private let walletTelegramAnonymousNumbersCollection = "0:0e41dc1dc3c9067ed24248580e12b3359818d83dee0304fabcf80845eafafdb2"
 private let walletTelegramUsernamesCollection = "0:80d78a35f955a14b679faa887ff4cd5bfc0f43b4a4eea2a7e6927f3701b273c2"
 
+@available(macOS 10.15, *)
 struct WalletCollectibleMetadata {
     var name: String?
     var description: String?
@@ -28,6 +29,7 @@ struct WalletCollectibleMetadata {
     }
 }
 
+@available(macOS 10.15, *)
 func walletCollectibles(
     from values: [NftItem],
     logger: WalletLogger
@@ -55,6 +57,7 @@ func walletCollectibles(
     return result
 }
 
+@available(macOS 10.15, *)
 func walletCollectible(
     from nft: NftItem,
     metadata: WalletCollectibleMetadata
@@ -93,6 +96,7 @@ func walletCollectible(
     )
 }
 
+@available(macOS 10.15, *)
 private func walletCollectibleMetadata(from nft: NftItem) -> WalletCollectibleMetadata {
     let content = nft.content
     let collectionContent = nft.collection?.content ?? [:]
@@ -119,6 +123,7 @@ private func walletCollectibleMetadata(from nft: NftItem) -> WalletCollectibleMe
     )
 }
 
+@available(macOS 10.15, *)
 private func walletCollectibleMetadataUrl(from nft: NftItem) -> URL? {
     guard let value = firstCollectibleString(nft.content, keys: ["uri", "metadata_url", "content_uri"]) else {
         return nil
@@ -126,6 +131,7 @@ private func walletCollectibleMetadataUrl(from nft: NftItem) -> URL? {
     return normalizedCollectibleUrl(value, relativeTo: nil)
 }
 
+@available(macOS 10.15, *)
 private final class WalletCollectibleDataTask: @unchecked Sendable {
     private let lock = NSLock()
     private var task: URLSessionDataTask?
@@ -152,6 +158,7 @@ private final class WalletCollectibleDataTask: @unchecked Sendable {
     }
 }
 
+@available(macOS 10.15, *)
 private func walletCollectibleData(for request: URLRequest) async throws -> (Data, URLResponse) {
     let cancellation = WalletCollectibleDataTask()
     return try await withTaskCancellationHandler(operation: {
@@ -173,6 +180,7 @@ private func walletCollectibleData(for request: URLRequest) async throws -> (Dat
     })
 }
 
+@available(macOS 10.15, *)
 private func walletCollectibleMetadata(from url: URL) async throws -> WalletCollectibleMetadata {
     var request = URLRequest(url: url)
     request.cachePolicy = .returnCacheDataElseLoad
@@ -197,6 +205,7 @@ private func walletCollectibleMetadata(from url: URL) async throws -> WalletColl
     )
 }
 
+@available(macOS 10.15, *)
 private func walletCollectibleNeedsRemoteMetadata(
     _ nft: NftItem,
     metadata: WalletCollectibleMetadata
@@ -208,6 +217,7 @@ private func walletCollectibleNeedsRemoteMetadata(
         && (metadata.attributes["model"] == nil || metadata.attributes["backdrop"] == nil)
 }
 
+@available(macOS 10.15, *)
 private func walletCollectibleKind(from nft: NftItem) -> WalletContext.Collectible.Kind {
     let collectionAddress = nft.collectionAddress.flatMap {
         try? convertTonAddress(value: $0, format: .raw).lowercased()
@@ -222,6 +232,7 @@ private func walletCollectibleKind(from nft: NftItem) -> WalletContext.Collectib
     return .other
 }
 
+@available(macOS 10.15, *)
 private func walletCollectibleGiftSlug(name: String, metadataUrl: URL?) -> String? {
     if let hash = name.lastIndex(of: "#") {
         let title = name[..<hash].filter { $0.isLetter || $0.isNumber }
@@ -237,10 +248,12 @@ private func walletCollectibleGiftSlug(name: String, metadataUrl: URL?) -> Strin
     return nonEmptyCollectibleString(metadataUrl.deletingPathExtension().lastPathComponent)
 }
 
+@available(macOS 10.15, *)
 private func firstCollectibleString(_ values: [String: String], keys: [String]) -> String? {
     keys.lazy.compactMap { nonEmptyCollectibleString(values[$0]) }.first
 }
 
+@available(macOS 10.15, *)
 private func firstCollectibleUrl(
     _ values: [String: String],
     keys: [String],
@@ -250,6 +263,7 @@ private func firstCollectibleUrl(
     return normalizedCollectibleUrl(value, relativeTo: baseUrl)?.absoluteString
 }
 
+@available(macOS 10.15, *)
 private func collectibleAttributes(from value: Any?) -> [String: String] {
     guard let attributes = value as? [[String: Any]] else { return [:] }
     var result: [String: String] = [:]
@@ -263,6 +277,7 @@ private func collectibleAttributes(from value: Any?) -> [String: String] {
     return result
 }
 
+@available(macOS 10.15, *)
 private func nonEmptyCollectibleString(_ value: String?) -> String? {
     guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else {
         return nil
@@ -270,6 +285,7 @@ private func nonEmptyCollectibleString(_ value: String?) -> String? {
     return value
 }
 
+@available(macOS 10.15, *)
 func normalizedCollectibleUrl(_ value: String, relativeTo baseUrl: URL?) -> URL? {
     guard let value = nonEmptyCollectibleString(value) else { return nil }
     if value.lowercased().hasPrefix("ipfs://") {
@@ -286,6 +302,7 @@ func normalizedCollectibleUrl(_ value: String, relativeTo baseUrl: URL?) -> URL?
     return url
 }
 
+@available(macOS 10.15, *)
 func normalizedFragmentCollectibleUrl(_ value: String?, relativeTo baseUrl: URL? = nil) -> String? {
     guard let value,
           let url = normalizedCollectibleUrl(value, relativeTo: baseUrl),
@@ -296,6 +313,7 @@ func normalizedFragmentCollectibleUrl(_ value: String?, relativeTo baseUrl: URL?
     return url.absoluteString
 }
 
+@available(macOS 10.15, *)
 func normalizedCollectibleLottieUrl(_ value: String?, relativeTo baseUrl: URL? = nil) -> String? {
     guard let value,
           let url = normalizedCollectibleUrl(value, relativeTo: baseUrl),
@@ -307,6 +325,7 @@ func normalizedCollectibleLottieUrl(_ value: String?, relativeTo baseUrl: URL? =
     return url.absoluteString
 }
 
+@available(macOS 10.15, *)
 func shortenedCollectibleAddress(_ address: String) -> String {
     address.count > 14 ? "\(address.prefix(6))…\(address.suffix(6))" : address
 }

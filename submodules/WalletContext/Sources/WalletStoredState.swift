@@ -1,8 +1,11 @@
 import Foundation
 import SwiftSignalKit
 import TelegramCore
+#if canImport(TelegramUIPreferences)
 import TelegramUIPreferences
+#endif
 
+@available(macOS 10.15, *)
 struct WalletStoredTransaction: Codable, Equatable, Sendable {
     enum Peer: Codable, Equatable, @unchecked Sendable {
         case user(id: EnginePeer.Id)
@@ -153,6 +156,7 @@ struct WalletStoredTransaction: Codable, Equatable, Sendable {
     }
 }
 
+@available(macOS 10.15, *)
 struct WalletStoredState: Codable, Equatable, Sendable {
     private struct Payload: Codable {
         var walletAddress: String?
@@ -221,6 +225,7 @@ struct WalletStoredState: Codable, Equatable, Sendable {
     }
 }
 
+@available(macOS 10.15, *)
 actor WalletStoredStateWriter {
     private enum Mutation: Sendable {
         case store(WalletStoredState)
@@ -313,3 +318,9 @@ actor WalletStoredStateWriter {
         self.beginWritingIfNeeded()
     }
 }
+
+#if !canImport(TelegramUIPreferences)
+struct ApplicationSpecificPreferencesKeys {
+    static let walletState: EngineDataBuffer = applicationSpecificPreferencesKey(23)
+}
+#endif

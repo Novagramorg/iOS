@@ -1,6 +1,7 @@
 import Foundation
 import WalletEngineFFI
 
+@available(macOS 10.15, *)
 struct SessionUpdate: Sendable {
     let info: TonConnectSessionInfo
     let interactions: [TonConnectInteraction]
@@ -8,6 +9,7 @@ struct SessionUpdate: Sendable {
 }
 
 // The gate prevents actor reentrancy from interleaving protocol transitions.
+@available(macOS 10.15, *)
 actor Session {
     private let engine: any ProtocolSession
     private let storage: any TonConnectSessionStorage

@@ -6,6 +6,7 @@ import WalletEngineFFI
 private let walletTransferResolutionInterval: Int32 = 15
 private let walletTransferSubmissionTimeout: UInt64 = 45_000_000_000
 
+@available(macOS 10.15, *)
 private struct WalletTransferData: Sendable {
     let normal: Data
     let gasless: Data?
@@ -41,12 +42,14 @@ private struct WalletTransferData: Sendable {
     }
 }
 
+@available(macOS 10.15, *)
 private struct WalletTransferSubmissionResult: Sendable {
     let pendingTransfer: WalletContext.PendingTransfer
     let receipt: WalletEngineTransferReceipt?
     let transaction: WalletContext.Transaction?
 }
 
+@available(macOS 10.15, *)
 func walletPendingTransferAfterRestart(_ pending: WalletContext.PendingTransfer) -> WalletContext.PendingTransfer {
     guard pending.status == .broadcasting, pending.streamingData != nil else { return pending }
     return acceptedWalletTransferSubmission(
@@ -54,18 +57,21 @@ func walletPendingTransferAfterRestart(_ pending: WalletContext.PendingTransfer)
     ) ?? pending
 }
 
+@available(macOS 10.15, *)
 struct WalletTransferHashState {
     let expiresAt: Int32
     var nextAttemptAt: Int32
     var transactions: [WalletContext.Transaction]
 }
 
+@available(macOS 10.15, *)
 struct WalletTransferResolution {
     let pending: WalletContext.PendingTransfer
     let expiresAt: Int32
     var nextAttemptAt: Int32
 }
 
+@available(macOS 10.15, *)
 func walletTransferResolutionCandidate(_ pending: WalletContext.PendingTransfer, transactions: [WalletContext.Transaction], history: [WalletContext.Transaction] = []) -> WalletContext.Transaction? {
     let matches = transactions.filter {
         $0.direction == .outgoing
@@ -82,6 +88,7 @@ func walletTransferResolutionCandidate(_ pending: WalletContext.PendingTransfer,
     return transaction
 }
 
+@available(macOS 10.15, *)
 private func walletTransferConfirmed(_ pending: WalletContext.PendingTransfer, transaction: WalletContext.Transaction) -> WalletContext.PendingTransfer {
     WalletContext.PendingTransfer(
         id: pending.id, recipient: pending.recipient, amount: pending.amount,
@@ -95,6 +102,7 @@ private func walletTransferConfirmed(_ pending: WalletContext.PendingTransfer, t
     )
 }
 
+@available(macOS 10.15, *)
 extension WalletContextImpl {
     func submitTransferThroughWalletApi(
         prepared: PreparedTransfer,

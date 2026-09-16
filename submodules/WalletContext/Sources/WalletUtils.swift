@@ -1,11 +1,13 @@
 import Foundation
 import CryptoKit
 
+@available(macOS 10.15, *)
 enum WalletBocMessageKind: Equatable, Sendable {
     case external
     case internalMessage
 }
 
+@available(macOS 10.15, *)
 enum WalletBocError: String, Error, Equatable {
     case invalidSize
     case truncated
@@ -20,6 +22,7 @@ enum WalletBocError: String, Error, Equatable {
     case unexpectedMessageKind
 }
 
+@available(macOS 10.15, *)
 func walletBocBodyHash(_ data: Data, kind: WalletBocMessageKind) throws -> String {
     let boc = try WalletBoc(data)
     var reader = WalletBocBitReader(cell: boc.cells[boc.root])
@@ -68,6 +71,7 @@ func walletBocBodyHash(_ data: Data, kind: WalletBocMessageKind) throws -> Strin
     return body.hash(using: hashes).hash.base64EncodedString()
 }
 
+@available(macOS 10.15, *)
 struct WalletBocCell {
     let bytes: [UInt8]
     let bitCount: Int
@@ -95,6 +99,7 @@ struct WalletBocCell {
     }
 }
 
+@available(macOS 10.15, *)
 struct WalletBoc {
     let cells: [WalletBocCell]
     let root: Int
@@ -182,6 +187,7 @@ struct WalletBoc {
     }
 }
 
+@available(macOS 10.15, *)
 private struct WalletBocByteReader {
     let bytes: [UInt8]
     private(set) var offset = 0
@@ -208,6 +214,7 @@ private struct WalletBocByteReader {
     }
 }
 
+@available(macOS 10.15, *)
 private struct WalletBocBitReader {
     let cell: WalletBocCell
     private var bitOffset = 0
@@ -292,6 +299,7 @@ private struct WalletBocBitReader {
     }
 }
 
+@available(macOS 10.15, *)
 private func walletBocCRC32C(_ bytes: ArraySlice<UInt8>) -> UInt32 {
     var crc: UInt32 = 0xffffffff
     for byte in bytes {
@@ -303,6 +311,7 @@ private func walletBocCRC32C(_ bytes: ArraySlice<UInt8>) -> UInt32 {
     return ~crc
 }
 
+@available(macOS 10.15, *)
 struct WalletRequestCoalescingKey: Hashable, Sendable {
     struct Header: Hashable, Sendable {
         let name: String
@@ -332,6 +341,7 @@ struct WalletRequestCoalescingKey: Hashable, Sendable {
     }
 }
 
+@available(macOS 10.15, *)
 final class WalletRequestCoalescer: @unchecked Sendable {
     final class Request: @unchecked Sendable {
         private let lock = NSLock()

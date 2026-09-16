@@ -3,11 +3,13 @@ import TelegramCore
 import PasscodeCore
 import WalletEngineFFI
 
+@available(macOS 10.15, *)
 struct WalletEngineActivation: @unchecked Sendable {
     let snapshot: WalletSnapshot
     let canSign: Bool
 }
 
+@available(macOS 10.15, *)
 struct WalletEngineStagedWallet: Equatable, Sendable {
     let recordId: String
     let address: String
@@ -15,6 +17,7 @@ struct WalletEngineStagedWallet: Equatable, Sendable {
     let signingPublicKey: Data
 }
 
+@available(macOS 10.15, *)
 struct WalletEngineSendExecution: @unchecked Sendable {
     let result: SendResult
     let didRecreateClient: Bool
@@ -25,6 +28,7 @@ struct WalletEngineSendExecution: @unchecked Sendable {
     }
 }
 
+@available(macOS 10.15, *)
 enum WalletEngineKeyRotationResolution: Equatable, Sendable {
     case none
     case pending(operationId: String, retryAfterMilliseconds: UInt64?)
@@ -32,12 +36,14 @@ enum WalletEngineKeyRotationResolution: Equatable, Sendable {
     case rolledBack(operationId: String, phase: SendPhase)
 }
 
+@available(macOS 10.15, *)
 private enum WalletEngineKeyRotationChainState: Equatable {
     case replacement
     case previous
     case different
 }
 
+@available(macOS 10.15, *)
 actor WalletEngineRuntime {
     private enum FfiPriority {
         case background
@@ -1358,6 +1364,7 @@ actor WalletEngineRuntime {
     }
 }
 
+@available(macOS 10.15, *)
 func walletEngineIsSendAlreadyInProgress(_ error: Error) -> Bool {
     guard let error = error as? WalletClientError else {
         return false
@@ -1368,11 +1375,13 @@ func walletEngineIsSendAlreadyInProgress(_ error: Error) -> Bool {
     return false
 }
 
+@available(macOS 10.15, *)
 func normalizedEngineMnemonic(_ words: [String]) -> [String] {
     words.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
         .filter { !$0.isEmpty }
 }
 
+@available(macOS 10.15, *)
 func walletEngineAddressesEqual(_ lhs: String, _ rhs: String) -> Bool {
     guard let left = try? convertTonAddress(value: lhs, format: .raw),
           let right = try? convertTonAddress(value: rhs, format: .raw) else {

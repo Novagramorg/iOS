@@ -2,8 +2,11 @@ import PasscodeCore
 import Foundation
 import SwiftSignalKit
 import TelegramCore
+#if canImport(TelegramUIPreferences)
 import TelegramUIPreferences
+#endif
 
+@available(macOS 10.15, *)
 final class WalletContextOutput {
     private let stateValue: Atomic<WalletContext.State>
     let statePromise: ValuePromise<WalletContext.State>
@@ -34,11 +37,13 @@ final class WalletContextOutput {
     }
 }
 
+@available(macOS 10.15, *)
 private struct WalletSubscriberDemand: Sendable {
     var count: Int = 0
     var revision: UInt64 = 0
 }
 
+@available(macOS 10.15, *)
 struct WalletScreenDemand: Sendable {
     var walletCount = 0
     var collectiblesCount = 0
@@ -74,6 +79,7 @@ struct WalletScreenDemand: Sendable {
     }
 }
 
+@available(macOS 10.15, *)
 public final class WalletContext {
     static let useWalletTransferApi = true
 
@@ -505,6 +511,7 @@ public final class WalletContext {
     }
 }
 
+@available(macOS 10.15, *)
 public struct WalletConfiguration: Equatable, Sendable {
     public static var defaultValue: WalletConfiguration {
         return WalletConfiguration(
