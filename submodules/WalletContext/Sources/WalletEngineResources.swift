@@ -1,6 +1,7 @@
 import Foundation
 import WalletEngineFFI
 
+@available(macOS 10.15, *)
 enum WalletEngineResourceStatus: Equatable {
     case idle
     case loading
@@ -10,6 +11,7 @@ enum WalletEngineResourceStatus: Equatable {
     case skipped
 }
 
+@available(macOS 10.15, *)
 func walletEngineResourceStatus(_ resource: ResourceState, outcome: WalletOperationOutcome? = nil) -> WalletEngineResourceStatus {
     switch outcome {
     case .cancelled, .superseded:
@@ -37,6 +39,7 @@ func walletEngineResourceStatus(_ resource: ResourceState, outcome: WalletOperat
     }
 }
 
+@available(macOS 10.15, *)
 func walletEngineCollectibles(
     _ update: WalletUpdate,
     pagination: Bool,
@@ -60,6 +63,7 @@ func walletEngineCollectibles(
     }
 }
 
+@available(macOS 10.15, *)
 func walletEngineCollectiblesState(
     previous: WalletContext.CollectiblesState,
     items: [WalletContext.Collectible]?,
@@ -75,6 +79,7 @@ func walletEngineCollectiblesState(
     )
 }
 
+@available(macOS 10.15, *)
 func walletEngineCollectiblesState(
     previous: WalletContext.CollectiblesState,
     failure: Error,
@@ -89,6 +94,7 @@ func walletEngineCollectiblesState(
     )
 }
 
+@available(macOS 10.15, *)
 struct WalletEngineCollectiblesRevision {
     private(set) var latest: UInt64?
 
@@ -103,6 +109,7 @@ struct WalletEngineCollectiblesRevision {
     }
 }
 
+@available(macOS 10.15, *)
 struct WalletEngineBalanceTracker {
     private struct Observation: Equatable {
         let account: AccountSnapshot?

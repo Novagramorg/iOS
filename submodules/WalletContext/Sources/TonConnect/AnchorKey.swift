@@ -1,6 +1,7 @@
 import Foundation
 import CryptoKit
 
+@available(macOS 10.15, *)
 enum TonConnectCryptoError: Error, Equatable {
     case invalidMnemonic
     case identityMismatch
@@ -13,6 +14,7 @@ enum TonConnectCryptoError: Error, Equatable {
     case randomGenerationFailed
 }
 
+@available(macOS 10.15, *)
 enum TonConnectCryptoPrimitives {
     static func sha256(_ data: Data) -> Data {
         return Data(SHA256.hash(data: data))
@@ -27,6 +29,7 @@ enum TonConnectCryptoPrimitives {
     }
 }
 
+@available(macOS 10.15, *)
 enum TonConnectKeyDerivation {
     /// One 64-byte PBKDF2 block, as required by BIP-39.
     static func pbkdf2SHA512(password: Data, salt: Data, iterations: Int) throws -> Data {
@@ -80,6 +83,7 @@ enum TonConnectKeyDerivation {
 /// mnemonic with wallet-engine before calling derive, then discard this object
 /// at the end of protected access. Buffer resets are best effort: Swift and
 /// CryptoKit may retain copies that this type cannot explicitly erase.
+@available(macOS 10.15, *)
 final class TonConnectAnchorKey {
     private var seed: Data
     let publicKey: Data
@@ -137,6 +141,7 @@ final class TonConnectAnchorKey {
 }
 
 /// Accumulates every byte difference; only the public length check exits early.
+@available(macOS 10.15, *)
 func tonConnectConstantTimeEqual(_ lhs: Data, _ rhs: Data) -> Bool {
     guard lhs.count == rhs.count else { return false }
     return lhs.withUnsafeBytes { (left: UnsafeRawBufferPointer) in

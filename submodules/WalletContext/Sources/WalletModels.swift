@@ -3,10 +3,12 @@ import TelegramCore
 
 let walletPendingTransferUILifetime: Int32 = 90
 
+@available(macOS 10.15, *)
 func walletPendingTransferUIExpirationTimestamp(from timestamp: Int32) -> Int32 {
     return Int32(clamping: Int64(timestamp) + Int64(walletPendingTransferUILifetime))
 }
 
+@available(macOS 10.15, *)
 public extension WalletContext {
     enum FiatCurrency: Int32, CaseIterable, Codable, Hashable, Sendable {
         case usd, eur, rub, cny
@@ -986,9 +988,11 @@ public extension WalletContext {
     }
 }
 
+@available(macOS 10.15, *)
 extension WalletContext.Resource: Sendable where Value: Sendable {
 }
 
+@available(macOS 10.15, *)
 extension WalletContext.ActiveOperation {
     var defersServerWalletState: Bool {
         switch self {

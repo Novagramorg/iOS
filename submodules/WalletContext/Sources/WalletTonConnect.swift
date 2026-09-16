@@ -4,6 +4,7 @@ import WalletEngineFFI
 import UIKit
 #endif
 
+@available(macOS 10.15, *)
 actor WalletTonConnectCoordinator {
     private let runtime: WalletEngineRuntime
     private let storage: WalletEngineStorage
@@ -257,6 +258,7 @@ actor WalletTonConnectCoordinator {
 
 }
 
+@available(macOS 10.15, *)
 private struct WalletTonConnectExecutor: TonConnectWalletExecutor {
     let runtime: WalletEngineRuntime
 

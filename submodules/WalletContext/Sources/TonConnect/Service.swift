@@ -1,6 +1,7 @@
 import Foundation
 import WalletEngineFFI
 
+@available(macOS 10.15, *)
 public actor TonConnectService {
     private let identity: TonConnectWalletIdentity
     private let storage: any TonConnectSessionStorage

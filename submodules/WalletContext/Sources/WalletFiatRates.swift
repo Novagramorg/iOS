@@ -2,6 +2,7 @@ import Foundation
 import SwiftSignalKit
 import TelegramCore
 
+@available(macOS 10.15, *)
 func walletFiatRatesResult(
     currencyRates: [CurrencyRate]?,
     tonUsdRate: Double?
@@ -24,6 +25,7 @@ func walletFiatRatesResult(
     return .success(rates)
 }
 
+@available(macOS 10.15, *)
 extension WalletContextImpl {
     private var isFiatRatesRefreshEligible: Bool {
         self.canUseNetworkRuntime && self.stateSubscriberCount > 0

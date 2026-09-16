@@ -1,12 +1,14 @@
 import Foundation
 import WalletEngineFFI
 
+@available(macOS 10.15, *)
 enum SessionResponse {
     case signed(TonConnectSignedResult)
     case error(TonConnectRpcErrorCode, String)
     case disconnect
 }
 
+@available(macOS 10.15, *)
 protocol ProtocolSession: Sendable {
     func phase() throws -> TonConnectSessionPhase
     func prompt() throws -> TonConnectConnectPrompt?
@@ -22,6 +24,7 @@ protocol ProtocolSession: Sendable {
     func disconnect() throws
 }
 
+@available(macOS 10.15, *)
 struct EngineSession: ProtocolSession {
     let value: TonConnectSession
     func phase() throws -> TonConnectSessionPhase { try self.value.phase() }

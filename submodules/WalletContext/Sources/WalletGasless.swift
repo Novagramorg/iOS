@@ -2,6 +2,7 @@ import Foundation
 import SwiftSignalKit
 import TelegramCore
 
+@available(macOS 10.15, *)
 public extension WalletContext {
     static func isGaslessEligible(amount: Int64, gaslessInfo: WalletGaslessInfo?, minimumAmount: Int64) -> Bool {
         guard let gaslessInfo else { return false }
@@ -10,6 +11,7 @@ public extension WalletContext {
     }
 }
 
+@available(macOS 10.15, *)
 extension WalletContextImpl {
     func requestGaslessInfo() {
         guard WalletContext.useWalletTransferApi, self.canUseNetworkRuntime, case .wallet = self.currentState.phase,

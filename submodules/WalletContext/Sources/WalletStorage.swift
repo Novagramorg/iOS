@@ -3,6 +3,7 @@ import Security
 import PasscodeCore
 import WalletEngineFFI
 
+@available(macOS 10.15, *)
 struct WalletEngineDescriptorRecord: Codable, Equatable, Sendable {
     let schemaVersion: Int
     let recordId: String
@@ -57,6 +58,7 @@ struct WalletEngineDescriptorRecord: Codable, Equatable, Sendable {
     }
 }
 
+@available(macOS 10.15, *)
 enum WalletEngineKeyRotationStoragePhase: String, Codable, Equatable, Sendable {
     case candidateStored
     case submissionStarted
@@ -65,6 +67,7 @@ enum WalletEngineKeyRotationStoragePhase: String, Codable, Equatable, Sendable {
     case previousRestored
 }
 
+@available(macOS 10.15, *)
 struct WalletEngineKeyRotationRecord: Codable, Equatable, Sendable {
     let operationId: String
     let recordId: String
@@ -79,11 +82,13 @@ struct WalletEngineKeyRotationRecord: Codable, Equatable, Sendable {
     var phase: WalletEngineKeyRotationStoragePhase
 }
 
+@available(macOS 10.15, *)
 enum WalletEngineStorageError: Error, Equatable {
     case keychainStatus(Int32)
     case corrupted
 }
 
+@available(macOS 10.15, *)
 actor WalletEngineStorage {
     private struct JournalDiskRecord: Codable {
         let version: UInt64
@@ -370,6 +375,15 @@ actor WalletEngineStorage {
     func loadSessions(recordId: String) throws -> [Data] {
         // Legacy single-session records cannot be restored by this registry.
         try self.remove(service: self.legacyTonConnectService, account: recordId)
+        #if os(macOS)
+        var query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: self.tonConnectService,
+            kSecAttrSynchronizable as String: false,
+            kSecReturnAttributes as String: true,
+            kSecMatchLimit as String: kSecMatchLimitAll
+        ]
+        #else
         var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: self.tonConnectService,
@@ -379,6 +393,7 @@ actor WalletEngineStorage {
             kSecMatchLimit as String: kSecMatchLimitAll
         ]
         query[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+        #endif
         query[kSecAttrAccessGroup as String] = try WalletVault.keychainAccessGroup()
         var result: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
@@ -387,10 +402,21 @@ actor WalletEngineStorage {
             throw WalletEngineStorageError.keychainStatus(status)
         }
         let prefix = recordId + "/"
+        #if os(macOS)
+        var sessions: [Data] = []
+        for item in items {
+            guard let account = item[kSecAttrAccount as String] as? String, account.hasPrefix(prefix) else { continue }
+            if let data = try self.read(service: self.tonConnectService, account: account) {
+                sessions.append(data)
+            }
+        }
+        return sessions
+        #else
         return items.compactMap { item -> Data? in
             guard let account = item[kSecAttrAccount as String] as? String, account.hasPrefix(prefix) else { return nil }
             return item[kSecValueData as String] as? Data
         }
+        #endif
     }
 
     func saveSession(_ data: Data, recordId: String, sessionId: String) throws {
@@ -543,6 +569,7 @@ actor WalletEngineStorage {
     }
 }
 
+@available(macOS 10.15, *)
 actor WalletEnginePlatformHost: WalletPlatformHost {
     let storage: WalletEngineStorage
     private let logger: WalletLogger
@@ -677,6 +704,7 @@ actor WalletEnginePlatformHost: WalletPlatformHost {
     }
 }
 
+@available(macOS 10.15, *)
 private func protectedSecretFailure(
     _ kind: ProtectedSecretHostErrorKind,
     _ diagnostic: String
@@ -684,6 +712,7 @@ private func protectedSecretFailure(
     .Failed(kind: kind, diagnostic: sanitizedWalletEngineDiagnostic(diagnostic))
 }
 
+@available(macOS 10.15, *)
 private func journalFailure(
     _ kind: JournalHostErrorKind,
     _ diagnostic: String
@@ -691,6 +720,7 @@ private func journalFailure(
     .Failed(kind: kind, diagnostic: sanitizedWalletEngineDiagnostic(diagnostic))
 }
 
+@available(macOS 10.15, *)
 func sanitizedWalletEngineDiagnostic(_ value: String) -> String {
     String(
         value.unicodeScalars
@@ -700,4 +730,5 @@ func sanitizedWalletEngineDiagnostic(_ value: String) -> String {
     )
 }
 
+@available(macOS 10.15, *)
 extension WalletEngineStorage: TonConnectSessionStorage {}

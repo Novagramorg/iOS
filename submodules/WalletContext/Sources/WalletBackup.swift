@@ -4,6 +4,7 @@ import TelegramCore
 import WalletBackupCrypto
 import WalletEngineFFI
 
+@available(macOS 10.15, *)
 private enum WalletPhraseCodec {
     private static let encodedLength = 215
 
@@ -37,6 +38,7 @@ private enum WalletPhraseCodec {
     }
 }
 
+@available(macOS 10.15, *)
 func enableWalletBackup(
     engine: TelegramEngine,
     words: [String],
@@ -59,6 +61,7 @@ func enableWalletBackup(
     )
 }
 
+@available(macOS 10.15, *)
 private func shouldRetryWalletPhraseExport(_ error: TelegramCore.WalletOperationError) -> Bool {
     switch error {
     case .network, .tokenInvalid, .tokenExpired, .clientKeyInvalid, .partUnavailable, .invalidBackupData:
@@ -68,6 +71,7 @@ private func shouldRetryWalletPhraseExport(_ error: TelegramCore.WalletOperation
     }
 }
 
+@available(macOS 10.15, *)
 private func exportWalletSecretPhraseAttempt(
     engine: TelegramEngine,
     password: String?,
@@ -129,6 +133,7 @@ private func exportWalletSecretPhraseAttempt(
     }
 }
 
+@available(macOS 10.15, *)
 func exportWalletSecretPhrase(
     engine: TelegramEngine,
     password: String?,
