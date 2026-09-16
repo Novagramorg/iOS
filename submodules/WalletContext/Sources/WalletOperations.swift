@@ -67,6 +67,7 @@ func acceptedWalletTransferSubmission(
         collectibleAddress: pending.collectibleAddress,
         normalizedHash: transfer?.gasless == true ? nil : (messageHash ?? pending.normalizedHash),
         sentTransfer: transfer,
+        expectedGasless: pending.expectedGasless,
         pendingMessage: pending.pendingMessage,
         streamingData: pending.streamingData,
         fee: pending.fee,
@@ -1537,6 +1538,16 @@ extension WalletContextImpl {
                 }
                 throw WalletError.unavailable
             }
+            let expectedGasless: Bool
+            if WalletContext.useWalletTransferApi, case .send = record.request {
+                expectedGasless = WalletContext.isGaslessEligible(
+                    amount: prepared.amount,
+                    gaslessInfo: self.currentState.gaslessInfo.currentValue,
+                    minimumAmount: self.transferGaslessMinAmount
+                )
+            } else {
+                expectedGasless = false
+            }
             let pending = PendingTransfer(
                 id: prepared.id,
                 recipient: prepared.recipient,
@@ -1544,6 +1555,7 @@ extension WalletContextImpl {
                 comment: pendingComment,
                 commentEncrypted: prepared.commentEncrypted,
                 collectibleAddress: prepared.collectible?.address,
+                expectedGasless: expectedGasless,
                 pendingMessage: pendingMessage,
                 fee: prepared.fee,
                 createdAt: createdAt,

@@ -491,8 +491,14 @@ private final class SendButtonContentComponent: Component {
 
 private enum CounterpartyContentId: Hashable {
     case peer(EnginePeer.Id)
+    case name(String)
     case address(String)
     case unknown
+}
+
+private enum CounterpartyRowId: Hashable {
+    case withSendButton
+    case content(CounterpartyContentId)
 }
 
 private final class CounterpartyRowComponent: CombinedComponent {
@@ -668,6 +674,7 @@ private final class WalletTransactionContentComponent: Component {
     let context: AccountContext
     let mode: WalletTransactionContentMode
     let walletContext: WalletContext?
+    let fromChat: Bool
     let openExplorer: (String) -> Void
     let animateOut: ActionSlot<Action<Void>>
 
@@ -675,18 +682,20 @@ private final class WalletTransactionContentComponent: Component {
         context: AccountContext,
         mode: WalletTransactionContentMode,
         walletContext: WalletContext?,
+        fromChat: Bool,
         openExplorer: @escaping (String) -> Void,
         animateOut: ActionSlot<Action<Void>>
     ) {
         self.context = context
         self.mode = mode
         self.walletContext = walletContext
+        self.fromChat = fromChat
         self.openExplorer = openExplorer
         self.animateOut = animateOut
     }
 
     static func ==(lhs: WalletTransactionContentComponent, rhs: WalletTransactionContentComponent) -> Bool {
-        if lhs.context !== rhs.context || lhs.walletContext !== rhs.walletContext {
+        if lhs.context !== rhs.context || lhs.walletContext !== rhs.walletContext || lhs.fromChat != rhs.fromChat {
             return false
         }
         switch (lhs.mode, rhs.mode) {
@@ -747,6 +756,7 @@ private final class WalletTransactionContentComponent: Component {
         private let commentEncryptionButton = ComponentView<Empty>()
         private var displayedCommentEncrypted: Bool?
         private let actionButton = ComponentView<Empty>()
+        private var isClosing = false
 
         private var component: WalletTransactionContentComponent?
         private var environment: EnvironmentType?
@@ -997,7 +1007,7 @@ private final class WalletTransactionContentComponent: Component {
             if let submittedTransfer = self.submittedTransfer {
                 gasless = self.latestWalletState?.transactions.items.first(where: {
                     $0.presentationId == "pending:\(submittedTransfer.id)"
-                })?.gasless ?? submittedTransfer.sentTransfer?.gasless ?? false
+                })?.gasless ?? submittedTransfer.gasless
             } else {
                 gasless = false
             }
@@ -1023,13 +1033,14 @@ private final class WalletTransactionContentComponent: Component {
             self.dismissSendScreen?()
         }
 
-        private func close(animated: Bool = true) {
-            self.invalidateCommentSession()
-            self.resetCommentDecryption()
-            guard let component = self.component,
+        private func close(animated: Bool = true, completion: (() -> Void)? = nil) {
+            guard !self.isClosing, let component = self.component,
                   let controller = self.environment?.controller() else {
                 return
             }
+            self.isClosing = true
+            self.invalidateCommentSession()
+            self.resetCommentDecryption()
             switch self.previewOperation {
             case .submitting, .submissionUnknown, .confirmed:
                 self.dismissSendScreenIfNeeded()
@@ -1051,11 +1062,68 @@ private final class WalletTransactionContentComponent: Component {
                     transition: .easeInOut(duration: 0.3).withUserData(ViewControllerComponentContainer.AnimateOutTransition())
                 )
                 component.animateOut.invoke(Action { [weak controller] _ in
-                    controller?.dismiss(completion: nil)
+                    controller?.dismiss(completion: completion)
                 })
             } else {
-                controller.dismiss(completion: nil)
+                controller.dismiss(completion: completion)
             }
+        }
+
+        private func openMyWallet() {
+            guard !self.isClosing, let component = self.component,
+                  component.fromChat, component.context.walletContext != nil,
+                  let navigationController = self.environment?.controller()?.navigationController as? NavigationController else {
+                return
+            }
+            let context = component.context
+            self.close(completion: { [weak navigationController] in
+                guard let navigationController else {
+                    return
+                }
+                navigationController.pushViewController(context.sharedContext.makeWalletScreen(context: context))
+            })
+        }
+
+        private func presentFeesAlert(transaction: WalletContext.Transaction) {
+            guard let component = self.component, let environment = self.environment,
+                  let controller = environment.controller() else {
+                return
+            }
+            //TODO:localize
+            let title = "Network fees"
+            //TODO:localize
+            let walletConfiguration = WalletConfiguration.with(appConfiguration: component.context.currentAppConfiguration.with { $0 })
+            let transfersText = "\(walletConfiguration.transferGaslessDailyLimit) transfers"
+            let feeText: String
+            if let fiatState = self.latestWalletState?.fiat, let fiatRate = fiatState.selectedRate {
+                let fiatFee = formatTonFiatValue(
+                    transaction.fee,
+                    rate: fiatRate.unitsPerGram,
+                    currencySymbol: fiatState.selectedCurrency.symbol,
+                    maxDecimalPositions: 4,
+                    dateTimeFormat: environment.dateTimeFormat
+                )
+                feeText = " (\(fiatFee))"
+            } else {
+                feeText = ""
+            }
+            //TODO:localize
+            let text = "Every transfer costs a small network fee\(feeText).\n\nTelegram covers your first \(transfersText) each day."
+            //TODO:localize
+            let actionTitle = "Got it"
+            let alertController = textAlertController(
+                context: component.context,
+                title: title,
+                text: text,
+                actions: [
+                    TextAlertAction(
+                        type: .defaultAction,
+                        title: actionTitle,
+                        action: {}
+                    )
+                ]
+            )
+            controller.present(alertController, in: .window(.root))
         }
 
         private func resetCommentDecryption() {
@@ -1978,7 +2046,7 @@ private final class WalletTransactionContentComponent: Component {
                         dismiss(.default)
                         controller?.push(component.context.sharedContext.makeWalletInfoScreen(
                             context: component.context,
-                            mode: .gram,
+                            mode: .firstTime,
                             completion: nil
                         ))
                     }
@@ -2487,16 +2555,9 @@ private final class WalletTransactionContentComponent: Component {
                 addressComponent = nil
             }
             let counterpartyContentId: CounterpartyContentId
-            switch transaction.peer {
-            case let .user(peer, _, _):
-                counterpartyContentId = .peer(peer.id)
-            case let .address(address, _):
-                counterpartyContentId = .address(address)
-            case .unsupported:
-                counterpartyContentId = .unknown
-            }
             let counterpartyContent: AnyComponent<Empty>
             if case let .user(peer, _, _) = transaction.peer {
+                counterpartyContentId = .peer(peer.id)
                 let peerItems: [AnyComponentWithIdentity<Empty>] = [
                     AnyComponentWithIdentity(
                         id: "avatar",
@@ -2526,13 +2587,16 @@ private final class WalletTransactionContentComponent: Component {
                     }
                 ))
             } else if let counterpartyName {
+                counterpartyContentId = .name(transaction.peer.address ?? counterpartyName)
                 counterpartyContent = AnyComponent(MultilineTextComponent(
                     text: .plain(NSAttributedString(string: counterpartyName, font: valueFont, textColor: valueColor)),
                     maximumNumberOfLines: 0
                 ))
-            } else if let addressComponent {
+            } else if let addressComponent, let address = transaction.peer.address {
+                counterpartyContentId = .address(address)
                 counterpartyContent = addressComponent
             } else {
+                counterpartyContentId = .unknown
                 //TODO:localize
                 counterpartyContent = AnyComponent(MultilineTextComponent(
                     text: .plain(NSAttributedString(string: "Unknown Address", font: valueFont, textColor: valueColor)),
@@ -2641,7 +2705,7 @@ private final class WalletTransactionContentComponent: Component {
             //TODO:localize
             let dateTitle = "Date"
             var tableItems: [TableComponent.Item] = [TableComponent.Item(
-                id: "counterparty",
+                id: displaysSendButton ? CounterpartyRowId.withSendButton : .content(counterpartyContentId),
                 title: counterpartyTitle,
                 component: counterpartyComponent
             )]
@@ -2667,6 +2731,44 @@ private final class WalletTransactionContentComponent: Component {
                     id: "fee",
                     title: feeTitle,
                     component: feeComponent
+                ))
+            }
+            if !self.isPreview, transaction.gasless && transaction.direction == .outgoing {
+                tableItems.append(TableComponent.Item(
+                    id: "gaslessFee",
+                    title: feeTitle,
+                    component: AnyComponent(CounterpartyRowComponent(
+                        counterparty: AnyComponentWithIdentity(
+                            id: "gaslessFee",
+                            component: AnyComponent(HStack([
+                                AnyComponentWithIdentity(id: "icon", component: AnyComponent(BundleIconComponent(
+                                    name: "Ads/TonAbout",
+                                    tintColor: UIColor(rgb: 0x30a1f5),
+                                    maxSize: CGSize(width: 14.0, height: 14.0)
+                                ))),
+                                AnyComponentWithIdentity(id: "text", component: AnyComponent(MultilineTextComponent(
+                                    text: .plain(NSAttributedString(
+                                        //TODO:localize
+                                        string: "Free (paid by Telegram)",
+                                        font: valueFont,
+                                        textColor: valueColor
+                                    )),
+                                    maximumNumberOfLines: 0
+                                )))
+                            ], spacing: 3.0))
+                        ),
+                        sendButton: AnyComponent(Button(
+                            content: AnyComponent(SendButtonContentComponent(
+                                text: "?",
+                                color: theme.list.itemAccentColor
+                            )),
+                            action: { [weak self] in
+                                self?.presentFeesAlert(transaction: transaction)
+                            }
+                        )),
+                        spacing: 6.0,
+                        alignSendButtonToTop: false
+                    ))
                 ))
             }
             tableItems.append(TableComponent.Item(
@@ -2879,6 +2981,9 @@ private final class WalletTransactionContentComponent: Component {
                         formatString: environment.strings.Currency_Grams
                     )
                 }
+            } else if !self.isPreview && component.fromChat {
+                //TODO:localize
+                actionTitle = "Open My Wallet"
             } else {
                 //TODO:localize
                 actionTitle = "OK"
@@ -2919,6 +3024,8 @@ private final class WalletTransactionContentComponent: Component {
                         }
                         if self.isPreview && !self.isFinishedPreview {
                             self.send()
+                        } else if !self.isPreview && self.component?.fromChat == true {
+                            self.openMyWallet()
                         } else {
                             self.close()
                         }
@@ -2969,6 +3076,7 @@ private final class WalletTransactionPagerComponent: Component {
 
     let context: AccountContext
     let walletContext: WalletContext
+    let fromChat: Bool
     let transactions: [WalletContext.Transaction]
     let initialIndex: Int
     let itemSpacing: CGFloat
@@ -2979,6 +3087,7 @@ private final class WalletTransactionPagerComponent: Component {
     init(
         context: AccountContext,
         walletContext: WalletContext,
+        fromChat: Bool,
         transactions: [WalletContext.Transaction],
         initialIndex: Int,
         itemSpacing: CGFloat,
@@ -2988,6 +3097,7 @@ private final class WalletTransactionPagerComponent: Component {
     ) {
         self.context = context
         self.walletContext = walletContext
+        self.fromChat = fromChat
         self.transactions = transactions
         self.initialIndex = initialIndex
         self.itemSpacing = itemSpacing
@@ -2999,6 +3109,7 @@ private final class WalletTransactionPagerComponent: Component {
     static func ==(lhs: WalletTransactionPagerComponent, rhs: WalletTransactionPagerComponent) -> Bool {
         return lhs.context === rhs.context
             && lhs.walletContext === rhs.walletContext
+            && lhs.fromChat == rhs.fromChat
             && lhs.transactions == rhs.transactions
             && lhs.initialIndex == rhs.initialIndex
             && lhs.itemSpacing == rhs.itemSpacing
@@ -3029,6 +3140,7 @@ private final class WalletTransactionPagerComponent: Component {
                     context: self.context,
                     transaction: self.transactions[index],
                     walletContext: self.walletContext,
+                    fromChat: self.fromChat,
                     hasDimView: false,
                     updatesPresentationContextLayout: isCurrent,
                     openExplorer: self.openExplorer
@@ -3046,6 +3158,7 @@ private final class WalletTransactionSheetComponent: CombinedComponent {
     let context: AccountContext
     let transaction: WalletContext.Transaction
     let walletContext: WalletContext?
+    let fromChat: Bool
     let hasDimView: Bool
     let updatesPresentationContextLayout: Bool
     let openExplorer: (String) -> Void
@@ -3054,6 +3167,7 @@ private final class WalletTransactionSheetComponent: CombinedComponent {
         context: AccountContext,
         transaction: WalletContext.Transaction,
         walletContext: WalletContext?,
+        fromChat: Bool,
         hasDimView: Bool,
         updatesPresentationContextLayout: Bool,
         openExplorer: @escaping (String) -> Void
@@ -3061,6 +3175,7 @@ private final class WalletTransactionSheetComponent: CombinedComponent {
         self.context = context
         self.transaction = transaction
         self.walletContext = walletContext
+        self.fromChat = fromChat
         self.hasDimView = hasDimView
         self.updatesPresentationContextLayout = updatesPresentationContextLayout
         self.openExplorer = openExplorer
@@ -3069,6 +3184,7 @@ private final class WalletTransactionSheetComponent: CombinedComponent {
     static func ==(lhs: WalletTransactionSheetComponent, rhs: WalletTransactionSheetComponent) -> Bool {
         if lhs.context !== rhs.context
             || lhs.walletContext !== rhs.walletContext
+            || lhs.fromChat != rhs.fromChat
             || lhs.hasDimView != rhs.hasDimView
             || lhs.updatesPresentationContextLayout != rhs.updatesPresentationContextLayout {
             return false
@@ -3090,6 +3206,7 @@ private final class WalletTransactionSheetComponent: CombinedComponent {
                         context: context.component.context,
                         mode: .transaction(context.component.transaction),
                         walletContext: context.component.walletContext,
+                        fromChat: context.component.fromChat,
                         openExplorer: context.component.openExplorer,
                         animateOut: animateOut
                     )),
@@ -3212,6 +3329,7 @@ private final class WalletTransactionPreviewSheetComponent: CombinedComponent {
                             dismissSendScreen: context.component.dismissSendScreen
                         ),
                         walletContext: context.component.walletContext,
+                        fromChat: false,
                         openExplorer: context.component.openExplorer,
                         animateOut: animateOut
                     )),
@@ -3355,9 +3473,13 @@ private func walletTransactionOpenExplorer(context: AccountContext) -> (String) 
 public final class WalletTransactionScreen: ViewControllerComponentContainer, WalletTransactionContentController {
     private let accountContext: AccountContext
     private let navigationWalletContext: WalletContext?
+    private let fromChat: Bool
     private let openExplorer: (String) -> Void
     private let stateDisposable = MetaDisposable()
     private let loadMoreDisposable = MetaDisposable()
+    #if DEBUG
+    private var gaslessInfoDisposable: Disposable?
+    #endif
     fileprivate var refreshBalanceOnSend: Bool {
         self.navigationWalletContext == nil
     }
@@ -3374,7 +3496,8 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
     public init(
         context: AccountContext,
         walletContext: WalletContext? = nil,
-        transaction: WalletContext.Transaction
+        transaction: WalletContext.Transaction,
+        fromChat: Bool
     ) {
         let initialState = walletContext?.stateValue.transactions
         var initialTransactions = initialState?.items.filter(\.isVisibleInWalletHistory) ?? []
@@ -3387,6 +3510,7 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
 
         self.accountContext = context
         self.navigationWalletContext = walletContext
+        self.fromChat = fromChat
         self.openExplorer = openExplorer
         self.transactionsState = initialState
         self.transactions = initialTransactions
@@ -3400,6 +3524,7 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
             initialComponent = AnyComponent(WalletTransactionPagerComponent(
                 context: context,
                 walletContext: walletContext,
+                fromChat: fromChat,
                 transactions: initialTransactions,
                 initialIndex: initialIndex,
                 itemSpacing: 10.0,
@@ -3416,6 +3541,7 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
                 context: context,
                 transaction: transaction,
                 walletContext: context.walletContext,
+                fromChat: fromChat,
                 hasDimView: true,
                 updatesPresentationContextLayout: true,
                 openExplorer: openExplorer
@@ -3458,6 +3584,9 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
     deinit {
         self.stateDisposable.dispose()
         self.loadMoreDisposable.dispose()
+        #if DEBUG
+        self.gaslessInfoDisposable?.dispose()
+        #endif
     }
 
     public override func viewDidLoad() {
@@ -3468,6 +3597,11 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
     public override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
 
+        #if DEBUG
+        if self.gaslessInfoDisposable == nil {
+            self.gaslessInfoDisposable = (self.navigationWalletContext ?? self.accountContext.walletContext)?.beginGaslessInfoUpdates()
+        }
+        #endif
         self.commentVisibilityActions[self.currentCloseId]?(true, false)
     }
 
@@ -3485,6 +3619,10 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
 
     public override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
+        #if DEBUG
+        self.gaslessInfoDisposable?.dispose()
+        self.gaslessInfoDisposable = nil
+        #endif
         if self.navigationController?.viewControllers.contains(where: { $0 === self }) != true {
             for action in self.commentVisibilityActions.values { action(false, true) }
         }
@@ -3569,6 +3707,7 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
                 content: AnyComponent(WalletTransactionPagerComponent(
                     context: self.accountContext,
                     walletContext: navigationWalletContext,
+                    fromChat: self.fromChat,
                     transactions: self.transactions,
                     initialIndex: initialIndex,
                     itemSpacing: 10.0,

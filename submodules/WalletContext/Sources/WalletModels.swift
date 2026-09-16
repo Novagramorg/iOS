@@ -666,8 +666,13 @@ public extension WalletContext {
         public let collectibleAddress: String?
         public let normalizedHash: String?
         public let sentTransfer: WalletSentTransfer?
+        public let expectedGasless: Bool
         public let pendingMessage: WalletPendingTransferMessageReference?
         public var streamingData: StreamingData?
+
+        public var gasless: Bool {
+            return self.sentTransfer?.gasless ?? self.expectedGasless
+        }
 
         public var streamingTraceId: String? {
             return self.streamingData?.traceId ?? (self.sentTransfer?.gasless == true ? nil : self.normalizedHash)
@@ -689,6 +694,7 @@ public extension WalletContext {
             collectibleAddress: String? = nil,
             normalizedHash: String? = nil,
             sentTransfer: WalletSentTransfer? = nil,
+            expectedGasless: Bool = false,
             pendingMessage: WalletPendingTransferMessageReference? = nil,
             streamingData: StreamingData? = nil,
             fee: Int64? = nil,
@@ -706,6 +712,7 @@ public extension WalletContext {
             self.collectibleAddress = collectibleAddress
             self.normalizedHash = normalizedHash
             self.sentTransfer = sentTransfer
+            self.expectedGasless = expectedGasless
             self.pendingMessage = pendingMessage
             self.streamingData = streamingData
             self.fee = fee
@@ -727,6 +734,7 @@ public extension WalletContext {
                 collectibleAddress: try container.decodeIfPresent(String.self, forKey: .collectibleAddress),
                 normalizedHash: try container.decodeIfPresent(String.self, forKey: .normalizedHash),
                 sentTransfer: try container.decodeIfPresent(WalletSentTransfer.self, forKey: .sentTransfer),
+                expectedGasless: try container.decodeIfPresent(Bool.self, forKey: .expectedGasless) ?? false,
                 pendingMessage: try container.decodeIfPresent(WalletPendingTransferMessageReference.self, forKey: .pendingMessage),
                 streamingData: try container.decodeIfPresent(StreamingData.self, forKey: .streamingData),
                 fee: try container.decodeIfPresent(Int64.self, forKey: .fee),

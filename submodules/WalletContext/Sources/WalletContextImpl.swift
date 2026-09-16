@@ -961,6 +961,7 @@ actor WalletContextImpl {
                 collectibleAddress: current.collectibleAddress,
                 normalizedHash: current.normalizedHash,
                 sentTransfer: current.sentTransfer,
+                expectedGasless: current.expectedGasless,
                 pendingMessage: current.pendingMessage,
                 streamingData: current.streamingData,
                 fee: current.fee,

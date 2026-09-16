@@ -893,7 +893,7 @@ struct WalletStreamingPresentationOverlay {
             }
             let transaction = transactions[index]
             let hasPendingComment = transaction.comment == nil && pending.comment != nil
-            let gasless = transaction.gasless || (pending.sentTransfer?.gasless ?? false)
+            let gasless = transaction.gasless || pending.gasless
             guard hasPendingComment || gasless != transaction.gasless else {
                 continue
             }
@@ -1305,7 +1305,8 @@ func walletPendingTransfersMatchingBodies(
             id: transfer.id, recipient: transfer.recipient, amount: transfer.amount,
             comment: transfer.comment, commentEncrypted: transfer.commentEncrypted,
             collectibleAddress: transfer.collectibleAddress, normalizedHash: transfer.normalizedHash,
-            sentTransfer: transfer.sentTransfer, pendingMessage: transfer.pendingMessage,
+            sentTransfer: transfer.sentTransfer, expectedGasless: transfer.expectedGasless,
+            pendingMessage: transfer.pendingMessage,
             streamingData: streamingData, fee: transfer.fee,
             transactionHash: match.transaction.transactionHash, transactionLt: match.transaction.logicalTime,
             uiExpiresAt: transfer.uiExpiresAt, createdAt: transfer.createdAt, status: .confirmed

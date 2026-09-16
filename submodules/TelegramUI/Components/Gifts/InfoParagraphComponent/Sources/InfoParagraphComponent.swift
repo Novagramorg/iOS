@@ -13,6 +13,7 @@ public final class InfoParagraphComponent: CombinedComponent {
     let title: String?
     let titleColor: UIColor
     let text: String
+    let attributedText: NSAttributedString?
     let textColor: UIColor
     let accentColor: UIColor
     let iconName: String
@@ -24,6 +25,7 @@ public final class InfoParagraphComponent: CombinedComponent {
         title: String?,
         titleColor: UIColor,
         text: String,
+        attributedText: NSAttributedString? = nil,
         textColor: UIColor,
         accentColor: UIColor,
         iconName: String,
@@ -34,6 +36,7 @@ public final class InfoParagraphComponent: CombinedComponent {
         self.title = title
         self.titleColor = titleColor
         self.text = text
+        self.attributedText = attributedText
         self.textColor = textColor
         self.accentColor = accentColor
         self.iconName = iconName
@@ -50,6 +53,9 @@ public final class InfoParagraphComponent: CombinedComponent {
             return false
         }
         if lhs.text != rhs.text {
+            return false
+        }
+        if lhs.attributedText != rhs.attributedText {
             return false
         }
         if lhs.textColor != rhs.textColor {
@@ -93,7 +99,7 @@ public final class InfoParagraphComponent: CombinedComponent {
                     component: MultilineTextComponent(
                         text: .plain(NSAttributedString(
                             string: titleText,
-                            font: Font.semibold(15.0),
+                            font: Font.semibold(16.0),
                             textColor: component.titleColor,
                             paragraphAlignment: .natural
                         )),
@@ -150,7 +156,7 @@ public final class InfoParagraphComponent: CombinedComponent {
                         
             let text = text.update(
                 component: BalancedTextComponent(
-                    text: .markdown(text: component.text, attributes: markdownAttributes),
+                    text: component.attributedText.map { .plain($0) } ?? .markdown(text: component.text, attributes: markdownAttributes),
                     horizontalAlignment: .natural,
                     maximumNumberOfLines: 0,
                     lineSpacing: 0.2,

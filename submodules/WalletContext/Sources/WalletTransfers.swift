@@ -87,7 +87,8 @@ private func walletTransferConfirmed(_ pending: WalletContext.PendingTransfer, t
         id: pending.id, recipient: pending.recipient, amount: pending.amount,
         comment: pending.comment, commentEncrypted: pending.commentEncrypted,
         collectibleAddress: pending.collectibleAddress, normalizedHash: pending.normalizedHash,
-        sentTransfer: pending.sentTransfer, pendingMessage: pending.pendingMessage,
+        sentTransfer: pending.sentTransfer, expectedGasless: pending.expectedGasless,
+        pendingMessage: pending.pendingMessage,
         streamingData: pending.streamingData, fee: transaction.fee,
         transactionHash: transaction.transactionHash, transactionLt: transaction.logicalTime,
         uiExpiresAt: pending.uiExpiresAt, createdAt: pending.createdAt, status: .confirmed
@@ -217,7 +218,7 @@ extension WalletContextImpl {
             response = try await withThrowingTaskGroup(of: WalletSendTransferResult.self) { group in
                 group.addTask {
                     try await WalletSignalRequestContext<WalletSendTransferResult>().run(
-                        engine.wallet.sendTransfer(dataNormal: data.normal, dataGasless: nil, randomId: randomId, pendingMessage: pendingMessage)
+                        engine.wallet.sendTransfer(dataNormal: data.normal, dataGasless: data.gasless, randomId: randomId, pendingMessage: pendingMessage)
                     )
                 }
                 group.addTask {

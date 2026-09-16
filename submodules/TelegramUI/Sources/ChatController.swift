@@ -1185,12 +1185,14 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                                 self.push(self.context.sharedContext.makeWalletTransactionScreen(
                                     context: self.context,
                                     walletContext: walletContext,
-                                    transaction: transaction
+                                    transaction: transaction,
+                                    fromChat: true
                                 ))
                             } else {
                                 self.push(self.context.sharedContext.makeWalletTransactionScreen(
                                     context: self.context,
-                                    transaction: transaction
+                                    transaction: transaction,
+                                    fromChat: true
                                 ))
                             }
                             return true
