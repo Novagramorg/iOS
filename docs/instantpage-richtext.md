@@ -1287,6 +1287,37 @@ Load-bearing details:
   `ChatMessageInstantVideoBubbleContentNode` sets `overrideMask` and hangs its own round
   `BubbleMaskLayer` on that view's layer; that still works, because the extra layer lands above the
   now-empty shape image and an instant-video bubble is never torn.
+- **Moving the silhouette into a child made the backdrop stop animating, and nothing said so.**
+  `BubbleBackdropMaskView` holds the stretchable `bubbleMaskForType` image in a `shapeView` child,
+  where the backdrop used to *be* that image view. Animating a `UIImageView`'s bounds stretches a
+  9-slice image on the curve; animating a container that re-seats its child in `layoutSubviews`
+  does not — `layoutSubviews` runs at the next commit with the model (destination) bounds, so the
+  silhouette jumped while the mask's own layer animated underneath it. The bubble body kept
+  animating (`ChatMessageBackground` still holds its image directly), so only the wallpaper
+  backdrop looked wrong: it snapped outright when shrinking, and grew with square-cut edges and a
+  popping tail when growing. `BubbleBackdropMaskView.updateFrame(_:animator:)` and its two
+  transition overloads move both boxes together, and all three
+  `ChatMessageBubbleBackdrop.updateFrame` overloads go through them.
+  `ChatMessageBackdropFrameTests` is the guard. `layoutSubviews` stays as the backstop for the
+  unanimated paths (mask creation in `setType`, the node's own `frame` didSet).
+- **Never ask `CALayer.frame` whether a frame changed.** It is DERIVED —
+  `origin.y == position.y - bounds.height * anchor.y` — and that round-trip is lossy for an origin
+  that is not representable. The chat's bubble inset is 7/3: `2.3333333333333335` goes in,
+  `2.333333333333332` comes back out, so an exact `equalTo` answers "changed" forever
+  (`ChatMessageBackdropFrameRoundTripTests` pins the numbers, measured on device 2026-09-15).
+  `ChatMessageBubbleItemNode`'s `.System` branch was gated on
+  `!backgroundNode.frame.equalTo(backgroundFrame)` and therefore re-ran on **every** pass, including
+  the many that re-apply an unchanged layout — and because
+  `ContainedViewLayoutTransition.updateFrame(layer:)` carries the same derived-frame guard, the
+  background and backdrop layers re-targeted each time, restarting a fresh full-duration animation
+  from the layer's PRESENTATION value. The mask, its silhouette and the wallpaper portal are framed
+  at `(-1,-1,w+2,h+2)` / `(0,0,w,h)`, integral origins that round-trip exactly, so their guard *did*
+  fire and they stayed on the first timeline: two halves of one bubble on two clocks, which reads as
+  the backdrop lagging its own outline. The gate now compares `previousBackgroundFrame`, the value
+  the previous pass computed, which never goes through a layer. **This was invisible until the
+  silhouette animated** — before that it snapped, so there was no second clock to disagree with.
+  The hazard is general: any `updateFrame(layer:)` caller whose rect has a non-representable origin
+  re-targets on every repeat call.
 - **With a patterned or gradient wallpaper the pill's own portal background and the torn gap are the
   same pixels**, so the pill's card vanishes and only its badge and text read. That is the intended
   effect and is why the band is full-width. With a plain-colour theme the pill keeps its faint

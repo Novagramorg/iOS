@@ -101,6 +101,19 @@ public final class ChatBotInfoItemNode: ListViewItemNode {
     public var controllerInteraction: ChatControllerInteraction?
     
     public let offsetContainer: ASDisplayNode
+
+    /// The vertical offset the LIST last asked this node to hold, via `updateTrailingItemSpace`.
+    ///
+    /// Remembered because the layout apply below rewrites `offsetContainer.frame` — it is the only
+    /// place the container's SIZE is set — and would otherwise discard the offset on every re-layout.
+    /// The list does re-issue the value at the end of the same pass, so the discard is invisible while
+    /// that re-issue is immediate; on a pass whose transition is animated it is not, and the block
+    /// springs from the discarded zero back to the position it never actually left. Holding the value
+    /// here means nothing needs restoring: an unchanged offset re-applies as a no-op
+    /// (`CALayer.animateFrame` returns early on `from == to`), while a genuine change still travels on
+    /// the pass transition.
+    private var trailingItemSpaceOffset: CGFloat = 0.0
+
     public let backgroundNode: ASImageNode
     public let imageNode: TransformImageNode
     public var videoNode: UniversalVideoNode?
@@ -399,7 +412,7 @@ public final class ChatBotInfoItemNode: ListViewItemNode {
                     let _ = titleApply()
                     let _ = textApply()
                     
-                    strongSelf.offsetContainer.frame = CGRect(origin: CGPoint(), size: itemLayout.contentSize)
+                    strongSelf.offsetContainer.frame = CGRect(origin: CGPoint(x: 0.0, y: strongSelf.trailingItemSpaceOffset), size: itemLayout.contentSize)
                     strongSelf.backgroundNode.frame = backgroundFrame
                     strongSelf.titleNode.frame = titleFrame
                     strongSelf.textNode.frame = textFrame
@@ -435,11 +448,8 @@ public final class ChatBotInfoItemNode: ListViewItemNode {
     }
     
     override public func updateTrailingItemSpace(_ height: CGFloat, transition: ContainedViewLayoutTransition) {
-        if height.isLessThanOrEqualTo(0.0) {
-            transition.updateFrame(node: self.offsetContainer, frame: CGRect(origin: CGPoint(), size: self.offsetContainer.bounds.size))
-        } else {
-            transition.updateFrame(node: self.offsetContainer, frame: CGRect(origin: CGPoint(x: 0.0, y: -floorToScreenPixels(height / 2.0)), size: self.offsetContainer.bounds.size))
-        }
+        self.trailingItemSpaceOffset = height.isLessThanOrEqualTo(0.0) ? 0.0 : -floorToScreenPixels(height / 2.0)
+        transition.updateFrame(node: self.offsetContainer, frame: CGRect(origin: CGPoint(x: 0.0, y: self.trailingItemSpaceOffset), size: self.offsetContainer.bounds.size))
     }
     
     override public func animateAdded(_ currentTimestamp: Double, duration: Double) {

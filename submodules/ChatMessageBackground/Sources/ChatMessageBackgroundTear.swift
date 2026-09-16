@@ -441,6 +441,33 @@ public final class BubbleBackdropMaskView: UIView {
         self.shapeView.frame = self.bounds
     }
 
+    /// Resize this view AND the silhouette inside it on one curve.
+    ///
+    /// Load-bearing, and invisible from the call site: the shape image is what the backdrop's mask
+    /// actually is, and `layoutSubviews` re-seats it at the DESTINATION size on the next commit,
+    /// unanimated. Animating only this view therefore leaves the silhouette snapping behind an
+    /// animating clip — the bubble's wallpaper backdrop reads as un-animated while its layer is
+    /// demonstrably animating. That is what `ChatMessageBubbleBackdrop` looked like between the
+    /// bubble-tear change (which moved the image from this view into a child) and this method.
+    ///
+    /// `layoutSubviews` stays, as the backstop for every path that does not animate: the mask's
+    /// creation in `setType`, and the node's own `frame` didSet. On an animated path it re-asserts
+    /// the same value the animator already wrote as the model, so it is a no-op there.
+    func updateFrame(_ frame: CGRect, animator: ControlledTransitionAnimator) {
+        animator.updateFrame(layer: self.layer, frame: frame, completion: nil)
+        animator.updateFrame(layer: self.shapeView.layer, frame: CGRect(origin: CGPoint(), size: frame.size), completion: nil)
+    }
+
+    func updateFrame(_ frame: CGRect, transition: ContainedViewLayoutTransition) {
+        transition.updateFrame(view: self, frame: frame)
+        transition.updateFrame(view: self.shapeView, frame: CGRect(origin: CGPoint(), size: frame.size))
+    }
+
+    func updateFrame(_ frame: CGRect, transition: CombinedTransition) {
+        transition.updateFrame(layer: self.layer, frame: frame)
+        transition.updateFrame(layer: self.shapeView.layer, frame: CGRect(origin: CGPoint(), size: frame.size))
+    }
+
     func update(bands: [BubbleTearBand], tailInsets: BubbleTearTailInsets, animation: ListViewItemUpdateAnimation) {
         let shouldBeTorn = !bands.isEmpty && self.tearFilter != nil
         if shouldBeTorn != self.isTorn {

@@ -1002,6 +1002,25 @@ Animation an authority.
     `coreListAttachmentFlight`) and the physics trajectories (`PhysicsScrollEngine`,
     `Trajectory+Keyframe`, `SplicedTrajectory`), which re-install with a past origin on every rebake
     precisely so a mid-flight rebake resumes at its current phase.
+    - **A flight's LAUNCH is explicit for its own reasons, not just the rebake's** — worth stating,
+      because `launchFlight` is the one of the two where an implicit origin looks obviously fine.
+      `beginTime` there is not the animation's private business: it is `KeyframeFlight.startTime`, the
+      flight model's clock, which `liveOffset`, `isComplete`, `beginTick`, `braked(stoppingAt:)` and
+      the `multiplierResetTime` comparison all measure against — and which `TestScrollEngine` supplies
+      from a `SyntheticClock` with no CA in the process at all. An implicit origin hands that value to
+      CoreAnimation, leaving the model to guess it or read it back after the commit, and a layer
+      outside the render tree resolves none (`beginTime` stays 0 forever), which is every windowless
+      fixture. It is also worse where it looks better: an implicit origin resolves to the COMMIT,
+      so it drifts with whatever else the release turn cost — `endDrag`, the bake, then the host's
+      `applyChanges` off `didEndDragging` — while the presented frame stays put on the vsync grid,
+      costing `velocity × turnCost` of backward bias, variable and largest exactly when the app is
+      busiest. `localNow()` is captured in a touch handler at the top of the turn, right after a
+      vsync, so it is phase-locked to that grid.
+    - **Why `localNow()` is the RIGHT explicit value is a cancellation, not a coincidence.** The
+      trajectory's `t = 0` is the offset as of the LAST DRAG UPDATE, one frame before the release
+      turn; the animation is first presented one frame later (D ≈ 1). Anchoring at the release turn's
+      start makes those two one-frame errors cancel — which is also why the release hand-off had
+      nothing left to compensate and had to be rewound (see `launchFlight`).
   - **The residual, named:** the model now LEADS the screen by the commit delay δ for any query that
     compares a model sample against the screen at the same instant (`presentedFrame(of:)`). δ is the
     rest of `applyChanges` plus the rest of the runloop turn — it contains the pass's own main-thread
@@ -1217,22 +1236,66 @@ Animation an authority.
   is `x²(3−2x)` in real arithmetic, but 1/3 and 2/3 round to float32 and every sample drifts by up to
   1.7e-8 — including at phase 0.5, where the ideal bezier is exactly 0.5. Payload-free cases
   (`.easeInOut`, `.linear`) use `Double` literals and are exact.
-- **A baked deceleration must apply UIScrollView's one-frame release hand-off, and omitting it is
-  invisible to every distance measurement.** `-[UIScrollView _endPanNormal:]` sets the decel's
-  `lastUpdateTime = now − 1/maxFPS` and then calls `_smoothScrollWithUpdateTime:(now)` SYNCHRONOUSLY,
-  so a real scroll view has already integrated exactly one display frame before anything is presented
-  — regardless of the release-to-first-frame gap (analysis §2, "Decel hand-off"). `.stepped` inherits
-  it from its display link's first callback and `ScrollReplay` models it as `firstDecelStepMs`, but a
-  baked `Trajectory` starts at `t = 0` = the release state, so `.keyframe` trailed UIScrollView by one
-  frame of integration for the WHOLE flight: identical shape, identical landing, `v × frame` less
-  displacement at every instant. At 8.9 pts/ms on a 120Hz panel that is 74pt missing from the first
-  frame, which reads as a slower initial speed — while total travel, whole-flight profile, rendered-
-  vs-planned position and the deterministic suite all keep agreeing, because the difference is a phase
-  shift that converges. `PhysicsScrollCore.applyDecelerationHandOff` is applied in `launchFlight`
-  before the bake; it fires no `onScroll` and writes no host bounds, since the flight parks the layer
-  immediately after. Applying it also brings the landing DOWN by ~3-5% — omitting it overshoots.
-  - **It is a real integration frame, so it can END the deceleration it was handed**, and `launchFlight`
-    must re-check `core.isDecelerating` after it rather than baking. `endDrag` reports `.decelerate` for
+- **UIScrollView's one-frame release hand-off is a MODEL-WRITE driver's compensation, and a baked
+  deceleration must NOT keep it — the commit-to-display delay already is it.**
+  `-[UIScrollView _endPanNormal:]` sets the decel's `lastUpdateTime = now − 1/maxFPS` and then calls
+  `_smoothScrollWithUpdateTime:(now)` SYNCHRONOUSLY (analysis §2, "Decel hand-off"). It needs that
+  because its deceleration writes `contentOffset` once per frame exactly as the drag did: a value
+  computed in one main-thread turn is presented a delay later, and the release turn itself produces no
+  drag write, so without the step the content stalls for a frame. `.stepped` inherits the same shape
+  from its display link's first callback and `ScrollReplay` models it as `firstDecelStepMs`. A baked
+  `Trajectory` is a different kind of driver: the render server plays it from an explicit `beginTime`,
+  evaluated at each frame's own PRESENTATION time, so the first frame the launch transaction lands on
+  is ALREADY one delay into the path. Keeping the hand-off in the baked state double-counts that frame
+  and the release steps FORWARD — measured 12pt at 120Hz and 23pt at 60Hz off a 3000 pt/s flick, twice
+  that under the repeated-flick multiplier, and another full frame of travel for every extra frame of
+  pipeline depth. That is a visible snap at the instant the finger lifts, and it is keyframe-only.
+  `launchFlight` therefore runs `PhysicsScrollCore.applyDecelerationHandOff` **only as a settle probe**
+  (next bullet) and rewinds the axis to the release state before baking; the rewind is exact, since
+  `offset`/`decelerationVelocity` are full precision and `reseedDeceleration` is a pure
+  (offset, velocity, phase) restore. It rewinds the CORE, not just the bake, because `engine.offset`
+  feeds the list's own geometry and must describe the screen rather than lead it.
+  - **Why it shipped the other way round, and why nothing caught it:** the evidence for the hand-off
+    is a MODEL argument, and it is correct as one. Our model timeline and `UIScrollView.contentOffset`
+    agree only WITH the hand-off — the pipeline delay cancels when model is compared against model,
+    which is exactly what the A/B harness and every distance fixture do. The error exists only on the
+    presented timeline, and the module's instruments cannot see that: `presentation()` is evaluated on
+    the main thread at `CACurrentMediaTime()` and agrees with the analytic sampler to −0.02ms, so the
+    `sampleTick` PROFILE probe reports no lag while the screen is a frame ahead. This is the same seam
+    as the catch snap-back below, sign-flipped, and `FlightLaunchContinuityTests` is the mirror of
+    `FlightCatchContinuityTests` — including its own non-vacuity control, which measures the
+    un-rewound step in points.
+  - **D, the commit-to-display depth, is a PLATFORM constant, and the Simulator is in a different
+    regime from a device — do not tune the opening against it.** The residual this fix leaves is
+    `(D − 1) × frameTravel`, so D decides whether there is anything left to correct.
+    `CoreListDemo`'s Pipeline tab (`PipelineDepthProbe`, `Tools/measure-pipeline-depth.py`) measures it
+    by differential: two bars ride one 900 pt/s ramp from a shared layer-local origin, RED moved by a
+    per-frame model write and BLUE by a `CABasicAnimation` on an explicit `beginTime`, and their
+    separation in one composited frame is `velocity × D`. **Measured on the Simulator: D = 0.01
+    frames** — +0.19 ms, which is just the main-thread turn between the display-link callback and the
+    commit. So there CoreAnimation evaluates the animation at the COMMIT's own time for the frame that
+    commit produces, and the frame is presented on the spot.
+    Taken at face value that would invert this fix: at D = 0 the release frame STALLS without a
+    full-frame hand-off. It does not apply to a device, whose pipeline is real — and the device's
+    regime is pinned by the report that produced this fix, which is only consistent with D ≈ 1: at the
+    old 0.5-frame hand-off the release was seen to jump FORWARD, and under D = 0 that setting gives
+    half a frame of advance where a frame is expected, which is a slowdown and cannot read as a jump.
+    A direct device measurement still has not been taken (it needs the display captured over USB;
+    `MTLDrawable.presentedTime`/`addPresentedHandler`, the one API that reported real scan-out, is
+    gone from the iOS 27 SDK).
+    - **Capture with `simctl io recordVideo`, never `simctl io screenshot`.** The screenshot path
+      re-renders on demand instead of sampling a composited frame: its gap wandered between 0 and 37px
+      with no stable value, while the red bar's own positions stayed cleanly quantized to exactly one
+      frame of travel — i.e. the app side was provably fine and all the noise was the instrument.
+      `recordVideo` taps per frame and lands a 1px standard deviation.
+    - **Run the lead sweep every time.** `--sweep` commands a known offset on the animated bar, which
+      must come back as an equal measured gap (measured: −8.333 → −8.33, 0 → +0.19, +4.167 → +4.44,
+      +8.333 → +8.70, +16.667 → +17.04, +33.333 → +33.52 ms; slope 1.00, max residual 0.4 ms). A
+      near-zero reading means nothing until a known offset is shown to move it, and this instrument's
+      headline answer IS a near-zero reading.
+  - **It is a real integration frame, so it can END the deceleration it was handed** — which is the
+    whole reason the probe still runs, and why `launchFlight` re-checks `core.isDecelerating` after it
+    rather than baking (the rewind happens only after that check, so it cannot reach these cases). `endDrag` reports `.decelerate` for
     two releases with nothing left to spend: a blend that CANCELS — the decelerate threshold reads the
     RAW latest sample and the 0.75/0.25 low-pass runs after it, so a finger reversing on its last sample
     releases above the threshold at ~0 pts/ms, below `Deceleration.velocityFloor` — and an overscrolled

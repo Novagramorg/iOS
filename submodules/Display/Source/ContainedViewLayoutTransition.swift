@@ -9,6 +9,38 @@ extension CGRect {
     }
 }
 
+/// Is this layer already laid out at `frame`?
+///
+/// `CALayer.frame` cannot answer that. It is DERIVED — `origin.y == position.y - bounds.height *
+/// anchor.y` — so writing a frame and reading it back is lossy whenever the origin is not exactly
+/// representable, and an exact `equalTo` then answers "no" forever. The chat's bubble inset is 7/3:
+/// `2.3333333333333335` goes in and `2.333333333333332` comes back out (measured on device
+/// 2026-09-15). Every repeat layout pass over an unchanged bubble therefore re-entered the animated
+/// branch and restarted a fresh full-duration animation from the layer's PRESENTATION value, which
+/// on screen is a wobble.
+///
+/// So compare what the frame setter actually writes — `position` and `bounds` are STORED, not
+/// derived, and round-trip exactly. This is the same guard `ControlledTransition.NativeAnimator`
+/// already uses (`updatePosition`/`updateBounds`), which is why the wobble never appeared on the
+/// ListViewImpl backend: it animates items through the native animator, while the CoreList backend
+/// uses the legacy one and reaches this function.
+///
+/// A non-identity transform makes the derivation invalid — `layer.frame` is then the transformed
+/// bounding box — so those layers keep the original comparison. They are no worse off than before.
+func layerIsAlreadyAtFrame(_ layer: CALayer, _ frame: CGRect) -> Bool {
+    guard CATransform3DIsIdentity(layer.transform) else {
+        return layer.frame.equalTo(frame)
+    }
+    let anchorPoint = layer.anchorPoint
+    let expectedPosition = CGPoint(
+        x: frame.minX + frame.width * anchorPoint.x,
+        y: frame.minY + frame.height * anchorPoint.y
+    )
+    // The setter keeps the existing bounds origin and replaces only the size.
+    let expectedBounds = CGRect(origin: layer.bounds.origin, size: frame.size)
+    return layer.position == expectedPosition && layer.bounds == expectedBounds
+}
+
 public enum ContainedViewLayoutTransitionCurve: Equatable, Hashable {
     case linear
     case easeInOut
@@ -188,7 +220,7 @@ public extension ContainedViewLayoutTransition {
             return
         }
         
-        if node.frame.equalTo(frame) && !force {
+        if layerIsAlreadyAtFrame(node.layer, frame) && !force {
             completion?(true)
         } else {
             switch self {
@@ -901,7 +933,7 @@ public extension ContainedViewLayoutTransition {
             return
         }
         
-        if view.frame.equalTo(frame) && !force {
+        if layerIsAlreadyAtFrame(view.layer, frame) && !force {
             completion?(true)
         } else {
             switch self {
@@ -930,7 +962,7 @@ public extension ContainedViewLayoutTransition {
     }
 
     func updateFrame(layer: CALayer, frame: CGRect, beginWithCurrentState: Bool = false, delay: Double = 0.0, completion: ((Bool) -> Void)? = nil) {
-        if layer.frame.equalTo(frame) {
+        if layerIsAlreadyAtFrame(layer, frame) {
             completion?(true)
         } else {
             switch self {

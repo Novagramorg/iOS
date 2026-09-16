@@ -639,7 +639,7 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                     }
                 }
                 attributedString = mutableString
-            case let .phoneCall(_, discardReason, _, _):
+            case let .phoneCall(_, discardReason, duration, _):
                 var titleString: String
                 let incoming: Bool
                 if message.flags.contains(.Incoming) {
@@ -649,10 +649,15 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                     titleString = strings.Notification_CallOutgoing
                     incoming = false
                 }
+                let callConnected = (duration ?? 0) > 0
                 if let discardReason = discardReason {
                     switch discardReason {
                     case .disconnect:
-                        titleString = strings.Notification_CallCanceled
+                        // A connected call whose transport died at the end is not a cancelled call
+                        // (see ChatMessageCallBubbleContentNode).
+                        if !callConnected {
+                            titleString = strings.Notification_CallCanceled
+                        }
                     case .missed, .busy:
                         titleString = incoming ? strings.Notification_CallMissed : strings.Notification_CallCanceled
                     case .hangup:

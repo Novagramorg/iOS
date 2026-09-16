@@ -2577,6 +2577,7 @@ Unused sets are archived when you add more.";
 "Call.CallInProgressVoiceChatMessage" = "Finish call with %1$@ and start a voice chat with %2$@?";
 "Call.CallInProgressLiveStreamMessage" = "Finish call with %1$@ and start a live stream with %2$@?";
 "Call.ExternalCallInProgressMessage" = "Please finish the current call first.";
+"Call.SystemStartErrorMessage" = "An error occurred";
 
 "Call.VoiceChatInProgressTitle" = "Voice Chat in Progress";
 "Call.LiveStreamInProgressTitle" = "Live Stream in Progress";

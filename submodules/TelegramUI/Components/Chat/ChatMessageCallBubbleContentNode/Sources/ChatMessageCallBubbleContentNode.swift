@@ -119,14 +119,21 @@ public class ChatMessageCallBubbleContentNode: ChatMessageBubbleContentNode {
                     if let action = media as? TelegramMediaAction, case let .phoneCall(_, discardReason, duration, isVideoValue) = action.action {
                         isVideo = isVideoValue
                         callDuration = duration
+                        let callConnected = (duration ?? 0) > 0
                         if let discardReason = discardReason {
                             switch discardReason {
                                 case .disconnect:
-                                    callSuccessful = false
-                                    if isVideo {
-                                        titleString = item.presentationData.strings.Notification_VideoCallCanceled
-                                    } else {
-                                        titleString = item.presentationData.strings.Notification_CallCanceled
+                                    // `.disconnect` means the transport died, which says nothing
+                                    // about whether the call connected: a non-zero duration means
+                                    // it was answered and ran, so the connection was merely lost at
+                                    // the end of a real conversation rather than cancelled.
+                                    if !callConnected {
+                                        callSuccessful = false
+                                        if isVideo {
+                                            titleString = item.presentationData.strings.Notification_VideoCallCanceled
+                                        } else {
+                                            titleString = item.presentationData.strings.Notification_CallCanceled
+                                        }
                                     }
                                 case .missed, .busy:
                                     callSuccessful = false

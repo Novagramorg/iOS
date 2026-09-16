@@ -666,6 +666,19 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
      
     public let mainContextSourceNode: ContextExtractedContentContainingNode
     private let mainContainerNode: ContextControllerSourceNode
+
+    /// The vertical offset the LIST last asked this node to hold, via `updateTrailingItemSpace`.
+    ///
+    /// Remembered because the layout apply rewrites `mainContainerNode.frame` — it is the only place
+    /// the container's SIZE is set — and would otherwise discard the offset on every re-layout. The
+    /// list does re-issue the value at the end of the same pass, so the discard is invisible while
+    /// that re-issue is immediate; on a pass whose transition is animated it is not, and the bubble
+    /// springs from the discarded zero back to the position it never actually left.
+    ///
+    /// Unlike the info items, which opt in once in `init`, this node sets
+    /// `wantsTrailingItemSpaceUpdates` per layout — so the apply that clears the flag must also clear
+    /// this, since no further call will arrive to reset it.
+    private var trailingItemSpaceOffset: CGFloat = 0.0
     private let backgroundWallpaperNode: ChatMessageBubbleBackdrop
     private let backgroundNode: ChatMessageBackground
     private var backgroundHighlightNode: ChatMessageBackground?
@@ -983,11 +996,8 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
     }
 
     override public func updateTrailingItemSpace(_ height: CGFloat, transition: ContainedViewLayoutTransition) {
-        if height.isLessThanOrEqualTo(0.0) {
-            transition.updateFrame(node: self.mainContainerNode, frame: CGRect(origin: CGPoint(), size: self.mainContainerNode.bounds.size))
-        } else {
-            transition.updateFrame(node: self.mainContainerNode, frame: CGRect(origin: CGPoint(x: 0.0, y: -floorToScreenPixels(height / 2.0)), size: self.mainContainerNode.bounds.size))
-        }
+        self.trailingItemSpaceOffset = height.isLessThanOrEqualTo(0.0) ? 0.0 : -floorToScreenPixels(height / 2.0)
+        transition.updateFrame(node: self.mainContainerNode, frame: CGRect(origin: CGPoint(x: 0.0, y: self.trailingItemSpaceOffset), size: self.mainContainerNode.bounds.size))
     }
     
     override public func cancelInsertionAnimations() {
@@ -3930,11 +3940,14 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             strongSelf.wantsTrailingItemSpaceUpdates = true
         } else {
             strongSelf.wantsTrailingItemSpaceUpdates = false
+            // No further updateTrailingItemSpace call will arrive for this node, so the remembered
+            // offset must not outlive the mode that produced it.
+            strongSelf.trailingItemSpaceOffset = 0.0
         }
         
         let themeUpdated = strongSelf.appliedItem?.presentationData.theme.theme !== item.presentationData.theme.theme
         let previousContextFrame = strongSelf.mainContainerNode.frame
-        strongSelf.mainContainerNode.frame = CGRect(origin: CGPoint(), size: layout.contentSize)
+        strongSelf.mainContainerNode.frame = CGRect(origin: CGPoint(x: 0.0, y: strongSelf.trailingItemSpaceOffset), size: layout.contentSize)
         strongSelf.mainContextSourceNode.frame = CGRect(origin: CGPoint(), size: layout.contentSize)
         strongSelf.mainContextSourceNode.contentNode.frame = CGRect(origin: CGPoint(), size: layout.contentSize)
         strongSelf.contentContainersWrapperNode.frame = CGRect(origin: CGPoint(), size: layout.contentSize)
@@ -5522,7 +5535,27 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         }
         
         if case .System = animation/*, !strongSelf.mainContextSourceNode.isExtractedToContextPreview*/ {
-            if !strongSelf.backgroundNode.frame.equalTo(backgroundFrame) {
+            // `previousBackgroundFrame` — the rect this node was laid out with last pass — rather
+            // than `backgroundNode.frame`, which cannot answer this question.
+            //
+            // `CALayer.frame` is DERIVED: `origin.y == position.y - bounds.height * anchor.y`. The
+            // chat's bubble inset is 7/3, which is not representable, so writing the frame and
+            // reading it back loses ~1.5e-15 — measured on device as
+            // `2.3333333333333335` in, `2.333333333333332` out. `equalTo` is exact, so this guard
+            // was TRUE on every pass, including the many that re-apply an unchanged layout, and the
+            // whole animated block below re-ran each time.
+            //
+            // That is not merely wasted work. `ContainedViewLayoutTransition.updateFrame(layer:)`
+            // has the same derived-frame guard, so the background and backdrop layers re-targeted
+            // too — each repeat pass restarting a fresh full-duration animation from the layer's
+            // PRESENTATION value. The mask, its silhouette and the wallpaper portal are framed at
+            // `(-1,-1,w+2,h+2)` / `(0,0,w,h)`, whose integral origins round-trip exactly, so their
+            // guard did fire and they stayed on the original timeline — leaving two halves of one
+            // bubble running on two clocks, which reads as the backdrop lagging its own outline.
+            //
+            // `backgroundFrame` is stored above from the value this pass computed, never through a
+            // layer, so it compares exactly. Keep it that way.
+            if !previousBackgroundFrame.equalTo(backgroundFrame) {
                 animation.animator.updateFrame(layer: strongSelf.backgroundNode.layer, frame: backgroundFrame, completion: nil)
                 if let backgroundHighlightNode = strongSelf.backgroundHighlightNode {
                     animation.animator.updateFrame(layer: backgroundHighlightNode.layer, frame: backgroundFrame, completion: nil)

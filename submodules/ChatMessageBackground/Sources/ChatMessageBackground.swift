@@ -691,7 +691,7 @@ public final class ChatMessageBubbleBackdrop: ASDisplayNode {
     
     public func updateFrame(_ value: CGRect, animator: ControlledTransitionAnimator, completion: @escaping () -> Void = {}) {
         if let maskView = self.maskView {
-            animator.updateFrame(layer: maskView.layer, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: value.size.width, height: value.size.height)).insetBy(dx: -maskInset, dy: -maskInset), completion: nil)
+            maskView.updateFrame(CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: value.size.width, height: value.size.height)).insetBy(dx: -maskInset, dy: -maskInset), animator: animator)
         }
         if let backgroundContent = self.backgroundContent {
             animator.updateFrame(layer: backgroundContent.layer, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: value.size.width, height: value.size.height)), completion: nil)
@@ -703,7 +703,7 @@ public final class ChatMessageBubbleBackdrop: ASDisplayNode {
     
     public func updateFrame(_ value: CGRect, transition: ContainedViewLayoutTransition, completion: @escaping () -> Void = {}) {
         if let maskView = self.maskView {
-            transition.updateFrame(view: maskView, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: value.size.width, height: value.size.height)).insetBy(dx: -maskInset, dy: -maskInset))
+            maskView.updateFrame(CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: value.size.width, height: value.size.height)).insetBy(dx: -maskInset, dy: -maskInset), transition: transition)
         }
         if let backgroundContent = self.backgroundContent {
             transition.updateFrame(layer: backgroundContent.layer, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: value.size.width, height: value.size.height)))
@@ -715,7 +715,7 @@ public final class ChatMessageBubbleBackdrop: ASDisplayNode {
 
     public func updateFrame(_ value: CGRect, transition: CombinedTransition, completion: @escaping () -> Void = {}) {
         if let maskView = self.maskView {
-            transition.updateFrame(layer: maskView.layer, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: value.size.width, height: value.size.height)).insetBy(dx: -maskInset, dy: -maskInset))
+            maskView.updateFrame(CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: value.size.width, height: value.size.height)).insetBy(dx: -maskInset, dy: -maskInset), transition: transition)
         }
         if let backgroundContent = self.backgroundContent {
             transition.updateFrame(layer: backgroundContent.layer, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: value.size.width, height: value.size.height)))
