@@ -219,7 +219,7 @@ func walletPendingTransferTransaction(
         direction: .outgoing,
         amount: -pending.amount,
         fee: pending.fee ?? 0,
-        gasless: pending.sentTransfer?.gasless ?? false,
+        gasless: pending.gasless,
         peer: .address(pending.recipient, domain: nil),
         comment: pending.comment,
         commentEncrypted: pending.commentEncrypted,

@@ -1133,12 +1133,15 @@ private final class WalletSendScreenComponent: Component {
         }
 
         private func feesAreCovered(amount: Int64) -> Bool {
-            guard let component = self.component, let gaslessInfo = self.gaslessInfo.currentValue else {
+            guard let component = self.component else {
                 return false
             }
             let configuration = WalletConfiguration.with(appConfiguration: component.context.currentAppConfiguration.with { $0 })
-            return gaslessInfo.available && gaslessInfo.left > 0
-                && amount >= max(gaslessInfo.minAmount, configuration.transferGaslessMinAmount)
+            return WalletContext.isGaslessEligible(
+                amount: amount,
+                gaslessInfo: self.gaslessInfo.currentValue,
+                minimumAmount: configuration.transferGaslessMinAmount
+            )
         }
 
         private func preparedTransfer(for request: WalletSendFeeRequest) -> WalletContext.PreparedTransfer? {
@@ -2527,11 +2530,14 @@ private final class WalletSendScreenComponent: Component {
                 transition.setAlpha(view: balanceTextView, alpha: showBalance ? 1.0 : 0.0)
             }
 
-            let feeValueComponent: AnyComponent<Empty>
+            let feeValueComponent: AnyComponentWithIdentity<Empty>
             if feeDisplayState == .loading {
-                feeValueComponent = AnyComponent(WalletSendFeePlaceholderComponent(
-                    color: theme.overallDarkAppearance ? theme.list.itemModalBlocksBackgroundColor : theme.list.itemInputField.backgroundColor
-                ))
+                feeValueComponent = AnyComponentWithIdentity(
+                    id: "placeholder",
+                    component: AnyComponent(WalletSendFeePlaceholderComponent(
+                        color: theme.overallDarkAppearance ? theme.list.itemModalBlocksBackgroundColor : theme.list.itemInputField.backgroundColor
+                    ))
+                )
             } else {
                 let feeValue: String
                 if case let .value(fee) = feeDisplayState {
@@ -2540,14 +2546,17 @@ private final class WalletSendScreenComponent: Component {
                 } else {
                     feeValue = "—"
                 }
-                feeValueComponent = AnyComponent(MultilineTextComponent(
-                    text: .plain(NSAttributedString(
-                        string: feeValue,
-                        font: Font.regular(13.0),
-                        textColor: theme.list.itemSecondaryTextColor
-                    )),
-                    maximumNumberOfLines: 1
-                ))
+                feeValueComponent = AnyComponentWithIdentity(
+                    id: "value",
+                    component: AnyComponent(MultilineTextComponent(
+                        text: .plain(NSAttributedString(
+                            string: feeValue,
+                            font: Font.regular(13.0),
+                            textColor: theme.list.itemSecondaryTextColor
+                        )),
+                        maximumNumberOfLines: 1
+                    ))
+                )
             }
             let feeTextSize = self.feeText.update(
                 transition: .immediate,
@@ -2564,7 +2573,7 @@ private final class WalletSendScreenComponent: Component {
                             maximumNumberOfLines: 1
                         ))
                     ),
-                    AnyComponentWithIdentity(id: "value", component: feeValueComponent)
+                    feeValueComponent
                 ], spacing: 3.0)),
                 environment: {},
                 containerSize: CGSize(width: availableSize.width - 32.0, height: 24.0)

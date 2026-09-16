@@ -491,8 +491,14 @@ private final class SendButtonContentComponent: Component {
 
 private enum CounterpartyContentId: Hashable {
     case peer(EnginePeer.Id)
+    case name(String)
     case address(String)
     case unknown
+}
+
+private enum CounterpartyRowId: Hashable {
+    case withSendButton
+    case content(CounterpartyContentId)
 }
 
 private final class CounterpartyRowComponent: CombinedComponent {
@@ -1001,7 +1007,7 @@ private final class WalletTransactionContentComponent: Component {
             if let submittedTransfer = self.submittedTransfer {
                 gasless = self.latestWalletState?.transactions.items.first(where: {
                     $0.presentationId == "pending:\(submittedTransfer.id)"
-                })?.gasless ?? submittedTransfer.sentTransfer?.gasless ?? false
+                })?.gasless ?? submittedTransfer.gasless
             } else {
                 gasless = false
             }
@@ -2549,16 +2555,9 @@ private final class WalletTransactionContentComponent: Component {
                 addressComponent = nil
             }
             let counterpartyContentId: CounterpartyContentId
-            switch transaction.peer {
-            case let .user(peer, _, _):
-                counterpartyContentId = .peer(peer.id)
-            case let .address(address, _):
-                counterpartyContentId = .address(address)
-            case .unsupported:
-                counterpartyContentId = .unknown
-            }
             let counterpartyContent: AnyComponent<Empty>
             if case let .user(peer, _, _) = transaction.peer {
+                counterpartyContentId = .peer(peer.id)
                 let peerItems: [AnyComponentWithIdentity<Empty>] = [
                     AnyComponentWithIdentity(
                         id: "avatar",
@@ -2588,13 +2587,16 @@ private final class WalletTransactionContentComponent: Component {
                     }
                 ))
             } else if let counterpartyName {
+                counterpartyContentId = .name(transaction.peer.address ?? counterpartyName)
                 counterpartyContent = AnyComponent(MultilineTextComponent(
                     text: .plain(NSAttributedString(string: counterpartyName, font: valueFont, textColor: valueColor)),
                     maximumNumberOfLines: 0
                 ))
-            } else if let addressComponent {
+            } else if let addressComponent, let address = transaction.peer.address {
+                counterpartyContentId = .address(address)
                 counterpartyContent = addressComponent
             } else {
+                counterpartyContentId = .unknown
                 //TODO:localize
                 counterpartyContent = AnyComponent(MultilineTextComponent(
                     text: .plain(NSAttributedString(string: "Unknown Address", font: valueFont, textColor: valueColor)),
@@ -2703,7 +2705,7 @@ private final class WalletTransactionContentComponent: Component {
             //TODO:localize
             let dateTitle = "Date"
             var tableItems: [TableComponent.Item] = [TableComponent.Item(
-                id: "counterparty",
+                id: displaysSendButton ? CounterpartyRowId.withSendButton : .content(counterpartyContentId),
                 title: counterpartyTitle,
                 component: counterpartyComponent
             )]
@@ -2732,9 +2734,8 @@ private final class WalletTransactionContentComponent: Component {
                 ))
             }
             if !self.isPreview, transaction.gasless {
-                tableItems.removeAll(where: { $0.id == AnyHashable("fee") })
                 tableItems.append(TableComponent.Item(
-                    id: "fee",
+                    id: "gaslessFee",
                     title: feeTitle,
                     component: AnyComponent(CounterpartyRowComponent(
                         counterparty: AnyComponentWithIdentity(
