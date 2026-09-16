@@ -9,34 +9,28 @@ This repo has been patched to support native macOS arm64 builds (`darwin_arm64` 
 - `third-party/openh264/BUILD` — added `//conditions:default` to `select()` statements
 - `third-party/webrtc/absl/absl/base/attributes.h` — disabled `ABSL_ATTRIBUTE_LIFETIME_BOUND` (newer Xcode clang rejects it on void-returning functions)
 
-### Vendored webrtc patch: "Allow SCTP without DTLS"
+### Vendored webrtc seams for tgcalls (no behaviour patches)
 
-`third-party/webrtc/webrtc/pc/peer_connection.cc` — the SCTP factory is no
-longer gated on `dtls_enabled_`.
+The fork carries three additive, default-off seams, each marked
+`TGCALLS SEAM (<consumer>)` in the source. None changes behaviour for a caller
+that does not opt in. When bumping webrtc, carry these forward, and drop one
+the moment upstream grows an equivalent.
 
-Upstream writes `// DTLS has to be enabled to use SCTP.` and only sets
-`config.sctp_factory` when DTLS is on, because SCTP would otherwise run
-unprotected. tgcalls disables DTLS deliberately when `network_use_mtproto` is
-set: the mtproto layer below ICE carries its own shared key, so DTLS is
-redundant and its handshake round-trips and record framing are exactly the
-overhead being removed.
+| Seam | Where | Consumer |
+|---|---|---|
+| `PeerConnectionDependencies::dtls_transport_factory` | `api/peer_connection_interface.h`, `pc/peer_connection.{h,cc}` (plumbed to the `JsepTransportController::Config` field that already existed) | `tgcalls::MtProtoDtlsTransportFactory` |
+| `PeerConnectionFactoryInterface::Options::external_transport_security` | `api/peer_connection_interface.h`; `pc/peer_connection.cc` in `InitializeTransportController_n` (`config.disable_encryption`) and `SrtpRequired()` | `InstanceV2ReferenceImpl`, `CallCoreHost` under `network_use_mtproto` |
+| `PeerConnectionObserver::OnUnDemuxableRtpPacket(const RtpPacketReceived&)` | `api/peer_connection_interface.h`; `pc/peer_connection.cc` in `InitializeUnDemuxablePacketHandler` (network thread, before the hand-off to `Call`) | `GroupInstanceReferenceImpl` late-speaker SSRC discovery |
 
-Without this patch, `Options::disable_encryption` also destroys the data
-channel — `GetDataChannelTransport` returns null, `SetLocalDescription` fails
-with "Failed to create data channel", and **no call can connect at all**. That
-failure is not obvious from the option's name, and it is why three separate
-no-patch designs were abandoned before this one.
+History, so nobody reintroduces them: between 2026-09-01 and 2026-09-16 the
+fork carried three *behaviour* patches instead ("Allow SCTP without DTLS" in
+`pc/peer_connection.cc` and `pc/media_session.cc`, "Inactive DtlsTransport
+forwards packet flags" in `p2p/base/dtls_transport.cc`), all consequences of
+using `Options::disable_encryption` for mtproto. Engine-side detail and the
+regression they caused are in `tgcalls/CLAUDE.md` under "mtproto transport on
+the PeerConnection engines"; the design record is
+`docs/superpowers/specs/2026-09-16-tgcalls-mtproto-dtls-slot-design.md`.
 
-Safe because the `DtlsTransport` object still exists under `disable_encryption`
-(it is passed to `CreateUnencryptedRtpTransport`) and an inactive one is a pure
-passthrough to ICE (`dtls_transport.cc:431`), so SCTP rides through it into
-mtproto — matching 13.0.0, where the data channel shares the mtproto transport.
-Only callers setting `disable_encryption` are affected, which upstream treats as
-a test-only switch; for everyone else `dtls_enabled_` is true and behaviour is
-unchanged.
-
-Engine-side detail is in `tgcalls/CLAUDE.md` under "mtproto transport on the
-PeerConnection engines".
 - 8 third-party BUILD files + 8 build shell scripts — added `darwin_arm64 -> macos_arm64` architecture support (opus, libvpx, ffmpeg, dav1d, mozjpeg, webp, libjxl, td)
 
 ## Linux Build Support
@@ -250,17 +244,17 @@ only recovers whoever happens to be transmitting during the ~250 ms before the f
 join a quiet room and the call can have no audio at all. CustomImpl is immune: it receives all remote
 audio on ONE channel and never adds a second m-line.
 
-Discovery therefore happens **below the demuxer**, at the ICE transport — the only point where a
-packet nothing claims is still visible, and the same place CustomImpl discovers SSRCs
-(`GroupNetworkManager`). `start()` injects `MtProtoIceTransportFactory` via
-`PeerConnectionDependencies::ice_transport_factory` with **no encryption key**, so the decorator is a
-pass-through whose only job is its `IncomingPacketObserver`: per inbound packet it checks
-`InferRtpPacketType`, matches payload type 111 (Opus is pinned in group calls, so audio is
-identifiable without parsing the payload), reads the SSRC from the cleartext RTP header — SRTP
-encrypts the payload, not the header — de-dupes under `AudioSsrcTap`, and posts
-`handleDiscoveredAudioSsrc` to the media thread. Keep it cheap; it runs on the network thread for
-every packet. With a key set (1:1 mtproto) the observer runs on the *decrypted* packet instead, so
-observation is a byproduct of the decryption pass either way.
+Discovery therefore happens **where the demuxer drops the packet**: `RtpTransport` reports every
+demux failure, and the vendored webrtc forwards it to
+`PeerConnectionObserver::OnUnDemuxableRtpPacket` (a `TGCALLS SEAM`, see "Vendored webrtc seams"
+above), parsed and SRTP-unprotected, on the network thread. `GRPeerConnectionObserver::
+onUnDemuxableRtpPacket` matches payload type 111 (Opus is pinned in group calls, so audio is
+identifiable without parsing the payload), reads `packet.Ssrc()`, de-dupes under `AudioSsrcTap`, and
+posts `handleDiscoveredAudioSsrc` to the media thread. It fires only for packets the demuxer
+dropped, so it costs nothing for the steady state. Packets that still reach the mid=0 catch-all are
+demuxed, never arrive there, and are covered by `GRAudioFrameTransformer` as before. (Until
+2026-09-16 this was a pass-through `MtProtoIceTransport` decorator injected through
+`ice_transport_factory` that inspected every inbound packet; that class is gone.)
 
 An app-side roster (`addSsrcs` from the participant list) was implemented first and rejected: this
 engine adds one recvonly m-line per SSRC and a voice chat's roster runs to thousands.
