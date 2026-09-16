@@ -797,7 +797,26 @@ private final class WalletPeerSelectionScreenComponent: Component {
                 }
                 Queue.mainQueue().after(0.15) {
                     scanner?.dismiss()
-                    self.openRecipient(recipient)
+                    if case .transfer = component.mode {
+                        self.peerAddressDisposable.set((component.context.engine.wallet.getUserAddresses(addresses: [recipient.address])
+                        |> `catch` { _ -> Signal<[WalletUserAddress], NoError> in
+                            return .single([])
+                        }
+                        |> mapToSignal { addresses -> Signal<EnginePeer?, NoError> in
+                            guard let userId = addresses.first?.userId else {
+                                return .single(nil)
+                            }
+                            return component.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: userId))
+                        }
+                        |> deliverOnMainQueue).start(next: { [weak self, weak controller] peer in
+                            guard let self, let controller, controller.navigationController?.viewControllers.last === controller else {
+                                return
+                            }
+                            self.openSendScreen(peer: peer, address: recipient.transferInput)
+                        }))
+                    } else {
+                        self.openRecipient(recipient)
+                    }
                 }
             }
             controller.push(scanner)
@@ -837,8 +856,18 @@ private final class WalletPeerSelectionScreenComponent: Component {
                     context: component.context,
                     peer: peer,
                     walletContext: component.walletContext,
+                    initialAddress: address ?? "",
                     refreshBalanceOnOpen: false,
-                    completed: dismissSelectionScreen
+                    displaySuccessToast: address == nil,
+                    completed: { [weak controller] in
+                        let navigationController = controller?.navigationController as? NavigationController
+                        dismissSelectionScreen()
+                        if address != nil, let navigationController {
+                            component.context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: navigationController, context: component.context, chatLocation: .peer(peer), keepStack: .default, useExisting: true, completion: { chatController in
+                                chatController.scrollToEndOfHistory()
+                            }, forceOpenChat: true))
+                        }
+                    }
                 )
             } else if let address {
                 sendScreen = WalletSendScreen(

@@ -2764,6 +2764,7 @@ public final class WalletSendScreen: ViewControllerComponentContainer, Attachmen
         context: AccountContext,
         peer: EnginePeer,
         walletContext: WalletContext,
+        initialAddress: String = "",
         refreshBalanceOnOpen: Bool = true,
         displaySuccessToast: Bool = true,
         completed: (() -> Void)? = nil
@@ -2775,7 +2776,7 @@ public final class WalletSendScreen: ViewControllerComponentContainer, Attachmen
             component: WalletSendScreenComponent(
                 context: context,
                 peer: peer,
-                initialAddress: "",
+                initialAddress: initialAddress,
                 walletContext: walletContext,
                 displaySuccessToast: displaySuccessToast,
                 completed: completed

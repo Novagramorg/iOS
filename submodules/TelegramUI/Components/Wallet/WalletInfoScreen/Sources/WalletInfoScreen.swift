@@ -169,7 +169,7 @@ private func walletInfoContent(
         //TODO:localize
         let sendTitle = "Send"
         //TODO:localize
-        let sendText = "Transfer Grams to anyone.\nTap # → Money in chats."
+        let sendText = "Transfer Grams to anyone.\nTap  # → Money in chats."
         //TODO:localize
         let tradeTitle = "Trade"
         //TODO:localize
@@ -177,7 +177,7 @@ private func walletInfoContent(
         //TODO:localize
         let storeTitle = "Store"
         //TODO:localize
-        let storeText = "Keep your Grams in Telegram (# → Wallet) or other wallets."
+        let storeText = "Keep your Grams in Telegram (#→ Wallet) or other wallets."
         //TODO:localize
         let buttonTitle = "Got it"
 
