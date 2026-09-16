@@ -5057,3 +5057,114 @@ no account is active), so the sync follows the active account across switches:
 ```
 
 `import FenixuzProMessager` already present (Feature #45) — **no import and no BUILD change.**
+
+---
+
+## 📌 PasskeysScreen — crash fix, `preconditionFailure` on a detached view (2026-09-16)
+
+**Why:** real App Store crash, 91 devices in two weeks on 12.9.6 build 78 (Xcode Organizer group
+`TelegramUIFramework: 0x1050f4000 + 20054712`, `EXC_BREAKPOINT (SIGTRAP)`).
+
+`createPasskey()` awaits `requestPasskeyRegistration()` — a network round-trip — before it calls
+`authController.performRequests()`. If the user leaves the screen during that wait, the view is no
+longer in a window when AuthenticationServices asks for the presentation anchor, and the original
+`preconditionFailure()` killed the app.
+
+Crashing stack:
+
+```
+0  @objc PasskeysScreenComponent.View.presentationAnchor(for:)
+1  -[ASAuthorizationController _performAuthorizationRequests:requestStyle:requestOptions:]
+2  _dispatch_call_block_and_release  →  main queue
+```
+
+### `submodules/TelegramUI/Components/Settings/PasskeysScreen/Sources/PasskeysScreen.swift` (UPSTREAM hook)
+
+Three edits, 10 lines total:
+
+1. New stored property on `PasskeysScreenComponent.View`:
+
+```swift
+// Captured while the view is still on screen: createPasskey() awaits a network round-trip
+// before performRequests(), so the view can be off-window when AuthenticationServices
+// asks for the anchor.
+private weak var authorizationAnchorScene: UIWindowScene?
+```
+
+2. `createPasskey()` — capture it before the `await`, right after the `guard let self` line:
+
+```swift
+self.authorizationAnchorScene = self.window?.windowScene
+```
+
+3. `presentationAnchor(for:)` — no longer traps:
+
+```swift
+func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+    if let windowScene = self.window?.windowScene ?? self.authorizationAnchorScene {
+        return ASPresentationAnchor(windowScene: windowScene)
+    }
+    // Screen was torn down mid-request. Hand back a plain anchor so AuthenticationServices
+    // reports an error instead of the app dying here.
+    return ASPresentationAnchor()
+}
+```
+
+**On upstream pull:** if upstream rewrites `presentationAnchor(for:)`, re-apply — upstream still
+traps there as of 12.9.6. Full crash analysis in `CRASH_AUDIT_12.9.6.md`.
+
+---
+
+## 📌 NewContactScreen — crash fix, component update re-entrancy (2026-09-16)
+
+**Why:** real App Store crash, 222 devices in two weeks on 12.9.6 build 78 (Organizer group
+`TelegramUIFramework: 0x1030b8000 + 57738692`, `EXC_BREAKPOINT (SIGTRAP)`).
+
+`ComponentHostView._update` opens with `precondition(!self.isUpdating)`
+(`submodules/ComponentFlow/Source/Host/ComponentHostView.swift:47`). `NewContactScreenComponent.View.update`
+sets its own `isUpdating = true` and, just before returning, called `activateInput(tag:)` — still inside
+the pass. `becomeFirstResponder` makes UIKit **synchronously** resign the currently focused field, that
+field's `textFieldDidEndEditing` calls `state.updated()`, and the component update re-enters while the
+host view is still updating.
+
+Crashing stack:
+
+```
+0  ComponentHostView._update(…)                                    ← precondition trap
+1  closure #1 in ComponentHostView._update(…)
+2  closure #1 in ComponentView._update(…)
+3  ComponentState.updated(transition:isLocal:)
+4  ListTextFieldItemComponent.View.textFieldDidEndEditing(_:)
+6  -[UITextField _notifyDidEndEditing]
+7  -[UITextField _resignFirstResponder]
+8  -[UIResponder _finishResignFirstResponderFromBecomeFirstResponder:]
+11 -[UIResponder becomeFirstResponder]
+14 NewContactScreenComponent.View.activateInput(tag:)
+```
+
+**User-visible trigger:** Contacts → new contact → type a first name → press **Next** on the keyboard
+(`onReturn` sets `updateFocusTag` then calls `state.updated()`). Same for last name → phone, and for the
+country-code picker.
+
+### `submodules/TelegramUI/Components/Contacts/NewContactScreen/Sources/NewContactScreen.swift` (UPSTREAM hook)
+
+One edit, at the end of `View.update(component:availableSize:state:environment:transition:)`:
+
+```swift
+if let updateFocusTag {
+    // becomeFirstResponder makes UIKit synchronously resign whichever field holds focus
+    // now, and that field's textFieldDidEndEditing calls state.updated() — re-entering
+    // the update we are still inside, which trips ComponentHostView's
+    // precondition(!isUpdating). Move the focus change to the next runloop turn.
+    Queue.mainQueue().justDispatch { [weak self] in
+        self?.activateInput(tag: updateFocusTag)
+    }
+}
+```
+
+Nothing is removed — focus is still applied, one runloop turn later. The same file already guards four
+other `state.updated()` call sites with `if !self.isUpdating` (lines ~485, 511, 526, 532); this call site
+was missed.
+
+**On upstream pull:** if upstream restructures `update(...)`, re-apply. Full crash analysis in
+`CRASH_AUDIT_12.9.6.md`.
