@@ -319,6 +319,21 @@ public enum ResolvedBotStartPeerType {
     case channel
 }
 
+public struct WalletSendRequest {
+    public enum Recipient {
+        case peer(EnginePeer)
+        case address(String)
+    }
+
+    public let recipient: Recipient
+    public let amountNanograms: Int64?
+
+    public init(recipient: Recipient, amountNanograms: Int64?) {
+        self.recipient = recipient
+        self.amountNanograms = amountNanograms
+    }
+}
+
 public enum ResolvedUrl {
     case externalUrl(String)
     case urlAuth(String)
@@ -361,6 +376,7 @@ public enum ResolvedUrl {
     case storyFolder(peerId: EnginePeer.Id, id: Int64)
     case giftCollection(peerId: EnginePeer.Id, id: Int64)
     case sendGift(peerId: EnginePeer.Id?)
+    case sendGrams(transfer: WalletSendRequest?)
     case unknownDeepLink(path: String)
     case oauth(url: String)
     case createBot(parentBot: EnginePeer.Id, username: String?, title: String?)

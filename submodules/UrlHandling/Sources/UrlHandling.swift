@@ -7,6 +7,7 @@ import TelegramPresentationData
 import TelegramUIPreferences
 import TelegramNotices
 import AccountContext
+import WalletContext
 
 private let baseTelegramMePaths = [
     "telegram.me",
@@ -154,6 +155,7 @@ public enum ParsedInternalUrl {
     case oauth(url: String)
     case createBot(parentBot: String, username: String?, title: String?)
     case textStyle(slug: String)
+    case sendGrams(queryItems: [URLQueryItem])
     case externalUrl(url: String)
 }
 
@@ -166,6 +168,10 @@ public func parseInternalUrl(sharedContext: SharedAccountContext, context: Accou
     var query = query
     if query.hasPrefix("s/") {
         query = String(query[query.index(query.startIndex, offsetBy: 2)...])
+    }
+    if let components = URLComponents(string: "/" + query),
+       components.path.lowercased() == "/sendgrams" || components.path.lowercased() == "/sendgrams/" {
+        return .sendGrams(queryItems: components.queryItems ?? [])
     }
     if query.hasSuffix("/") {
         query.removeLast()
@@ -836,6 +842,33 @@ private enum ResolveInternalUrlResult {
 
 private func resolveInternalUrl(context: AccountContext, url: ParsedInternalUrl) -> Signal<ResolveInternalUrlResult, NoError> {
     switch url {
+        case let .sendGrams(queryItems):
+            guard let link = SendGramsLink(queryItems: queryItems) else {
+                return .complete()
+            }
+            guard let recipient = link.recipient else {
+                return .single(.result(.sendGrams(transfer: nil)))
+            }
+            if recipient.hasPrefix("@") {
+                return context.engine.peers.resolvePeerByName(name: String(recipient.dropFirst()), referrer: nil)
+                |> map { result -> ResolveInternalUrlResult in
+                    switch result {
+                    case .progress:
+                        return .progress
+                    case let .result(peer):
+                        guard let peer, case let .user(user) = peer,
+                              user.isGenericUser, !peer.isService, peer.id != context.account.peerId else {
+                            return .result(.inaccessiblePeer)
+                        }
+                        return .result(.sendGrams(transfer: WalletSendRequest(recipient: .peer(peer), amountNanograms: link.amountNanograms)))
+                    }
+                }
+            } else {
+                guard WalletContext.transferAddress(from: recipient) != nil else {
+                    return .complete()
+                }
+                return .single(.result(.sendGrams(transfer: WalletSendRequest(recipient: .address(recipient), amountNanograms: link.amountNanograms))))
+            }
         case let .phone(phone, attach, startAttach, text):
             return context.engine.peers.resolvePeerByPhone(phone: phone)
             |> mapToSignal { peer -> Signal<ResolveInternalUrlResult, NoError> in

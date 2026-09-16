@@ -44,6 +44,7 @@ import ProxyServerPreviewScreen
 import AuthConfirmationScreen
 import OpenInExternalAppUI
 import CreateBotScreen
+import WalletSendScreen
 
 private func defaultNavigationForPeerId(_ peerId: PeerId?, navigation: ChatControllerInteractionNavigateToPeer) -> ChatControllerInteractionNavigateToPeer {
     if case .default = navigation {
@@ -1120,6 +1121,43 @@ func openResolvedUrlImpl(
                 if let navigationController {
                     navigationController.pushViewController(controller, animated: true)
                 }
+            }
+        case let .sendGrams(transfer):
+            guard let walletContext = context.walletContext, let navigationController else {
+                return
+            }
+            dismissInput()
+            if let transfer {
+                let controller: WalletSendScreen
+                switch transfer.recipient {
+                case let .peer(peer):
+                    controller = WalletSendScreen(
+                        context: context,
+                        peer: peer,
+                        walletContext: walletContext,
+                        initialAmountNanograms: transfer.amountNanograms,
+                        displaySuccessToast: false,
+                        completed: { [weak navigationController] in
+                            guard let navigationController else {
+                                return
+                            }
+                            context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: navigationController, context: context, chatLocation: .peer(peer), keepStack: .default, useExisting: true, completion: { chatController in
+                                chatController.scrollToEndOfHistory()
+                            }, forceOpenChat: true))
+                        }
+                    )
+                case let .address(address):
+                    controller = WalletSendScreen(
+                        context: context,
+                        walletContext: walletContext,
+                        address: address,
+                        initialAmountNanograms: transfer.amountNanograms
+                    )
+                }
+                controller.navigationPresentation = .modal
+                navigationController.pushViewController(controller, animated: true)
+            } else {
+                navigationController.pushViewController(context.sharedContext.makeWalletScreen(context: context), animated: true)
             }
         case .ton:
             dismissInput()

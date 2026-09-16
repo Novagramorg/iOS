@@ -838,6 +838,7 @@ private final class WalletSendScreenComponent: Component {
     let context: AccountContext
     let peer: EnginePeer?
     let initialAddress: String
+    let initialAmountNanograms: Int64?
     let walletContext: WalletContext
     let displaySuccessToast: Bool
     let completed: (() -> Void)?
@@ -846,6 +847,7 @@ private final class WalletSendScreenComponent: Component {
         context: AccountContext,
         peer: EnginePeer?,
         initialAddress: String,
+        initialAmountNanograms: Int64?,
         walletContext: WalletContext,
         displaySuccessToast: Bool,
         completed: (() -> Void)?
@@ -853,6 +855,7 @@ private final class WalletSendScreenComponent: Component {
         self.context = context
         self.peer = peer
         self.initialAddress = initialAddress
+        self.initialAmountNanograms = initialAmountNanograms
         self.walletContext = walletContext
         self.displaySuccessToast = displaySuccessToast
         self.completed = completed
@@ -866,6 +869,9 @@ private final class WalletSendScreenComponent: Component {
             return false
         }
         if lhs.initialAddress != rhs.initialAddress {
+            return false
+        }
+        if lhs.initialAmountNanograms != rhs.initialAmountNanograms {
             return false
         }
         if lhs.walletContext !== rhs.walletContext {
@@ -942,6 +948,7 @@ private final class WalletSendScreenComponent: Component {
         private var inputMode: WalletSendInputMode = .gram
         private var amount: Int64 = 0
         private var amountSource: WalletSendAmountSource = .manual
+        private var didApplyInitialAmount = false
         private var comment: String?
         private var isCommentPublic = false
         private var currentFiatCurrency: WalletContext.FiatCurrency = .usd
@@ -1919,6 +1926,15 @@ private final class WalletSendScreenComponent: Component {
                 shouldFocusAmountField = component.peer != nil || !component.initialAddress.isEmpty
             }
 
+            if !self.didApplyInitialAmount {
+                self.didApplyInitialAmount = true
+                if let amount = component.initialAmountNanograms {
+                    self.amount = amount
+                    self.amountSource = .transferLink
+                    self.invalidateFeePreparation()
+                }
+            }
+
             if self.walletContext !== component.walletContext {
                 self.abandonRestoration()
                 self.invalidateCommentSession()
@@ -2765,6 +2781,7 @@ public final class WalletSendScreen: ViewControllerComponentContainer, Attachmen
         peer: EnginePeer,
         walletContext: WalletContext,
         initialAddress: String = "",
+        initialAmountNanograms: Int64? = nil,
         refreshBalanceOnOpen: Bool = true,
         displaySuccessToast: Bool = true,
         completed: (() -> Void)? = nil
@@ -2777,6 +2794,7 @@ public final class WalletSendScreen: ViewControllerComponentContainer, Attachmen
                 context: context,
                 peer: peer,
                 initialAddress: initialAddress,
+                initialAmountNanograms: initialAmountNanograms,
                 walletContext: walletContext,
                 displaySuccessToast: displaySuccessToast,
                 completed: completed
@@ -2793,6 +2811,7 @@ public final class WalletSendScreen: ViewControllerComponentContainer, Attachmen
         context: AccountContext,
         walletContext: WalletContext,
         address: String,
+        initialAmountNanograms: Int64? = nil,
         refreshBalanceOnOpen: Bool = true,
         completed: (() -> Void)? = nil
     ) {
@@ -2804,6 +2823,7 @@ public final class WalletSendScreen: ViewControllerComponentContainer, Attachmen
                 context: context,
                 peer: nil,
                 initialAddress: address,
+                initialAmountNanograms: initialAmountNanograms,
                 walletContext: walletContext,
                 displaySuccessToast: true,
                 completed: completed

@@ -433,6 +433,14 @@ func openExternalUrlImpl(context: AccountContext, urlContext: OpenURLContext, ur
         if let scheme = parsedUrl.scheme, (scheme == "tg" || scheme == context.sharedContext.applicationBindings.appSpecificScheme) {
             var convertedUrl: String?
             let host = parsedUrl.host?.lowercased() ?? ""
+            if host == "sendgrams" {
+                guard parsedUrl.path.isEmpty || parsedUrl.path == "/",
+                      let components = URLComponents(url: parsedUrl, resolvingAgainstBaseURL: false) else {
+                    return
+                }
+                handleInternalUrl("https://t.me/sendgrams" + (components.percentEncodedQuery.map { "?" + $0 } ?? ""))
+                return
+            }
             if let query = parsedUrl.query, let params = QueryParameters(query) {
                 switch host {
                 case "localpeer":
