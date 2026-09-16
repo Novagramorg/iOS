@@ -716,6 +716,7 @@ private final class WalletScreenComponent: Component {
         private var loadMoreRequestId: Int?
         private let gramTooltipDisposable = MetaDisposable()
         private let signingAccessDisposable = MetaDisposable()
+        private let peerAddressDisposable = MetaDisposable()
         private var restorationSession: PasscodeSession?
         private var restorationGeneration = 0
         private var accountContext: AccountContext?
@@ -849,6 +850,7 @@ private final class WalletScreenComponent: Component {
             self.loadMoreDisposable.dispose()
             self.gramTooltipDisposable.dispose()
             self.signingAccessDisposable.dispose()
+            self.peerAddressDisposable.dispose()
         }
 
         func refreshTwoStepAuth() {
@@ -1921,9 +1923,44 @@ private final class WalletScreenComponent: Component {
                 return
             }
             if let address {
-                let sendScreen = WalletSendScreen(context: component.context, walletContext: component.walletContext, address: address, refreshBalanceOnOpen: false)
-                sendScreen.navigationPresentation = .modal
-                controller.push(sendScreen)
+                self.peerAddressDisposable.set((component.context.engine.wallet.getUserAddresses(addresses: [WalletContext.transferAddress(from: address) ?? address])
+                |> `catch` { _ -> Signal<[WalletUserAddress], NoError> in
+                    return .single([])
+                }
+                |> mapToSignal { addresses -> Signal<EnginePeer?, NoError> in
+                    guard let userId = addresses.first?.userId else {
+                        return .single(nil)
+                    }
+                    return component.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: userId))
+                }
+                |> deliverOnMainQueue).start(next: { [weak controller] peer in
+                    guard let controller, controller.navigationController?.viewControllers.last === controller else {
+                        return
+                    }
+                    let sendScreen: WalletSendScreen
+                    if let peer {
+                        sendScreen = WalletSendScreen(
+                            context: component.context,
+                            peer: peer,
+                            walletContext: component.walletContext,
+                            initialAddress: address,
+                            refreshBalanceOnOpen: false,
+                            displaySuccessToast: false,
+                            completed: { [weak controller] in
+                                guard let navigationController = controller?.navigationController as? NavigationController else {
+                                    return
+                                }
+                                component.context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: navigationController, context: component.context, chatLocation: .peer(peer), keepStack: .default, useExisting: true, completion: { chatController in
+                                    chatController.scrollToEndOfHistory()
+                                }, forceOpenChat: true))
+                            }
+                        )
+                    } else {
+                        sendScreen = WalletSendScreen(context: component.context, walletContext: component.walletContext, address: address, refreshBalanceOnOpen: false)
+                    }
+                    sendScreen.navigationPresentation = .modal
+                    controller.push(sendScreen)
+                }))
             } else {
                 let peerSelectionScreen = WalletPeerSelectionScreen(
                     context: component.context,

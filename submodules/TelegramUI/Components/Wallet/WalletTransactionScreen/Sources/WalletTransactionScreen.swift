@@ -2733,7 +2733,7 @@ private final class WalletTransactionContentComponent: Component {
                     component: feeComponent
                 ))
             }
-            if !self.isPreview, transaction.gasless {
+            if !self.isPreview, transaction.gasless && transaction.direction == .outgoing {
                 tableItems.append(TableComponent.Item(
                     id: "gaslessFee",
                     title: feeTitle,

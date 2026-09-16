@@ -1219,6 +1219,7 @@ public protocol ChatController: ViewController {
     func presentReactionDeletionOptions(author: EnginePeer, messageId: EngineMessage.Id)
     
     func performScrollToTop() -> Bool
+    func scrollToEndOfHistory()
     func transferScrollingVelocity(_ velocity: CGFloat)
     func updateIsScrollingLockedAtTop(isScrollingLockedAtTop: Bool)
     
