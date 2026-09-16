@@ -204,9 +204,27 @@ class TartVMManager:
             return False
             
         except subprocess.CalledProcessError as e:
-            logger.warning(f"Could not check VM status for {vm_name}: {e}")
+            # `tart list` prints each VM's disk usage, and reading that metadata fails
+            # ("Resource temporarily unavailable") for a VM whose disk is an ASIF image
+            # that is currently attached. That makes `tart list` unusable as a liveness
+            # probe exactly while a VM is running, so fall back to looking for the
+            # `tart run <vm_name>` process. `tart ip` is not a substitute here: it answers
+            # from the host DHCP lease file and keeps returning the last known address
+            # long after the VM has stopped.
+            logger.debug(f"'tart list' failed for {vm_name}, falling back to a process check: {e}")
+            return self._is_vm_process_running(vm_name)
+
+    def _is_vm_process_running(self, vm_name: str) -> bool:
+        """Check whether a `tart run <vm_name>` process is alive (vm names are unique per session)"""
+        try:
+            result = subprocess.run([
+                "pgrep", "-f", f"tart run {vm_name}"
+            ], capture_output=True, text=True)
+            return result.returncode == 0 and len(result.stdout.strip()) > 0
+        except Exception as e:
+            logger.warning(f"Could not check VM process for {vm_name}: {e}")
             return False
-    
+
     def _check_ssh_connectivity(self, ip_address: str, timeout: int = 5) -> bool:
         """Check if VM is responsive via SSH"""
         if not ip_address:
@@ -504,8 +522,8 @@ class TartBuild(RemoteBuildInterface):
     def __init__(self):
         self.vm_manager = TartVMManager()
     
-    def session(self, macos_version: str, xcode_version: str, mount_directories: Dict[str, str]) -> TartBuildSessionContext:
-        image_name = f"macos-{macos_version}-xcode-{xcode_version}"
+    def session(self, macos_version: str, xcode_version: str, mount_directories: Dict[str, str], image: Optional[str] = None) -> TartBuildSessionContext:
+        image_name = image if image is not None else f"macos-{macos_version}-xcode-{xcode_version}"
         print(f"Image name: {image_name}")
         session_id = str(uuid.uuid4())
 
@@ -521,7 +539,7 @@ def create_rsync_ignore_file(exclude_patterns: List[str] = []):
     
     return rsync_ignore_file.name
 
-def remote_build_tart(macos_version, bazel_cache_host, configuration, build_input_data_path):
+def remote_build_tart(macos_version, bazel_cache_host, configuration, build_input_data_path, vm_image=None, override_xcode_version=False):
     base_dir = os.getcwd()
 
     configuration_path = 'versions.json'
@@ -558,7 +576,7 @@ def remote_build_tart(macos_version, bazel_cache_host, configuration, build_inpu
         local_path = bazel_cache_host.replace("file://", "")
         mount_directories["bazel-cache"] = local_path
 
-    with TartBuild().session(macos_version=macos_version, xcode_version=xcode_version, mount_directories=mount_directories) as session:
+    with TartBuild().session(macos_version=macos_version, xcode_version=xcode_version, mount_directories=mount_directories, image=vm_image) as session:
         print('Uploading data to VM...')
         session.upload_directory(local_path=build_input_data_path, remote_path="telegram-build-input")
         
@@ -570,7 +588,8 @@ def remote_build_tart(macos_version, bazel_cache_host, configuration, build_inpu
             "/bazel-telegram-ios/",
             "/buildbox/",
             "/build/",
-            ".build/"
+            ".build/",
+            "/.claude/worktrees/"
         ]
         session.upload_directory(local_path=base_dir, remote_path="/Users/Shared/telegram-ios", exclude_patterns=source_exclude_patterns)
 
@@ -598,6 +617,8 @@ def remote_build_tart(macos_version, bazel_cache_host, configuration, build_inpu
                 guest_build_sh += f"export CACHE_HOST=\"{bazel_cache_host}\"\n"
 
         guest_build_sh += 'python3 build-system/Make/Make.py \\'
+        if override_xcode_version:
+            guest_build_sh += '--overrideXcodeVersion \\'
         if bazel_cache_host is not None:
             if bazel_cache_host.startswith("file://"):
                 guest_build_sh += '--cacheDir="/Volumes/My Shared Files/bazel-cache" \\'
@@ -619,7 +640,9 @@ def remote_build_tart(macos_version, bazel_cache_host, configuration, build_inpu
 
         print('Executing remote build...')
 
-        session.run(command='bash -l guest-build-telegram.sh')
+        build_result = session.run(command='bash -l guest-build-telegram.sh')
+        if build_result['status'] != 0:
+            raise TartBuildError('Remote build failed with exit code {}'.format(build_result['status']))
 
         print('Retrieving build artifacts...')
 

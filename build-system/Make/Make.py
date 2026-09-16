@@ -1201,6 +1201,13 @@ if __name__ == '__main__':
         type=str,
         help='Bazel remote cache host address.'
     )
+    vm_build_parser.add_argument(
+        '--vmImage',
+        required=False,
+        type=str,
+        help='Name of the Tart image to clone. Defaults to macos-<macos_version>-xcode-<xcode_version> as declared in versions.json.',
+        metavar='name'
+    )
 
     generate_profiles_build_parser = subparsers.add_parser('generate-verification-profiles', help='Generate provisioning profiles that can be used to build a veritication IPA.')
     add_codesigning_common_arguments(generate_profiles_build_parser)
@@ -1450,7 +1457,9 @@ if __name__ == '__main__':
                 macos_version=versions.macos_version,
                 bazel_cache_host=args.cacheHost,
                 configuration=args.configuration,
-                build_input_data_path=remote_input_path
+                build_input_data_path=remote_input_path,
+                vm_image=args.vmImage,
+                override_xcode_version=args.overrideXcodeVersion
             )
         elif args.commandName == 'generate-verification-profiles':
             base_path = os.getcwd()
