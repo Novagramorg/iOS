@@ -30,6 +30,7 @@ private struct WalletInfoItem: Equatable {
     let title: String?
     let text: String
     let iconName: String
+    var textIconName: String? = nil
 }
 
 private struct WalletInfoContent: Equatable {
@@ -149,6 +150,65 @@ private func walletInfoContent(
             ],
             buttonTitle: buttonTitle
         )
+    case .firstTime:
+        //TODO:localize
+        let title = "Your first Grams!"
+        let text: String
+        if let fiatState, let fiatRate = fiatState.selectedRate, fiatRate.unitsPerGram.isFinite, fiatRate.unitsPerGram > 0.0 {
+            let fiatRateText = formatFiatValue(
+                fiatRate.unitsPerGram,
+                currencySymbol: fiatState.selectedCurrency.symbol,
+                dateTimeFormat: dateTimeFormat
+            )
+            //TODO:localize
+            text = "**1 Gram** currently equals **\(fiatRateText)**.\nYou can:"
+        } else {
+            //TODO:localize
+            text = "You can:"
+        }
+        //TODO:localize
+        let sendTitle = "Send"
+        //TODO:localize
+        let sendText = "Transfer Grams to anyone.\nTap # → Money in chats."
+        //TODO:localize
+        let tradeTitle = "Trade"
+        //TODO:localize
+        let tradeText = "Convert Grams to cash or crypto on exchanges."
+        //TODO:localize
+        let storeTitle = "Store"
+        //TODO:localize
+        let storeText = "Keep your Grams in Telegram (# → Wallet) or other wallets."
+        //TODO:localize
+        let buttonTitle = "Got it"
+
+        return WalletInfoContent(
+            logo: WalletInfoLogo(name: "Diamond", loop: true),
+            title: title,
+            text: text,
+            items: [
+                WalletInfoItem(
+                    id: "send",
+                    title: sendTitle,
+                    text: sendText,
+                    iconName: "Wallet/InfoSend",
+                    textIconName: "Wallet/InfoAttach"
+                ),
+                WalletInfoItem(
+                    id: "trade",
+                    title: tradeTitle,
+                    text: tradeText,
+                    iconName: "Wallet/InfoTrade"
+                ),
+                WalletInfoItem(
+                    id: "store",
+                    title: storeTitle,
+                    text: storeText,
+                    iconName: "Wallet/InfoStore",
+                    textIconName: "Wallet/InfoSettings"
+                )
+            ],
+            buttonTitle: buttonTitle
+        )
     case .recovery:
         //TODO:localize
         let title = "Recovery Phrase"
@@ -244,7 +304,7 @@ private final class WalletInfoSheetContent: CombinedComponent {
 
             super.init()
 
-            if mode == .gram, let walletContext = context.walletContext {
+            if mode == .gram || mode == .firstTime, let walletContext = context.walletContext {
                 self.fiatState = walletContext.stateValue.fiat
                 self.walletStateDisposable = (walletContext.state
                 |> deliverOnMainQueue).start(next: { [weak self] walletState in
@@ -406,13 +466,28 @@ private final class WalletInfoSheetContent: CombinedComponent {
             contentSize.height += spacing + 9.0
 
             let items: [AnyComponentWithIdentity<Empty>] = content.items.map { item in
+                let itemTextColor = item.title != nil ? secondaryTextColor : textColor
+                var attributedText: NSAttributedString?
+                if let textIconName = item.textIconName, let range = item.text.range(of: "#"), let image = generateTintedImage(image: UIImage(bundleImageName: textIconName), color: itemTextColor) {
+                    let text = NSMutableAttributedString(string: item.text, font: textFont, textColor: itemTextColor)
+                    let iconRange = NSRange(range, in: item.text)
+                    let placeholderWidth = text.attributedSubstring(from: iconRange).size().width
+                    // Reserve the icon's width without changing the surrounding line height.
+                    text.addAttributes([
+                        .attachment: image,
+                        .kern: image.size.width - placeholderWidth
+                    ], range: iconRange)
+                    attributedText = text
+                }
+
                 return AnyComponentWithIdentity(
                     id: item.id,
                     component: AnyComponent(InfoParagraphComponent(
                         title: item.title,
                         titleColor: textColor,
                         text: item.text,
-                        textColor: item.title != nil ? secondaryTextColor : textColor,
+                        attributedText: attributedText,
+                        textColor: itemTextColor,
                         accentColor: theme.list.itemAccentColor,
                         iconName: item.iconName,
                         iconColor: theme.list.itemAccentColor

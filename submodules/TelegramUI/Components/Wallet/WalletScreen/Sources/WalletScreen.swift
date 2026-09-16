@@ -2097,7 +2097,8 @@ private final class WalletScreenComponent: Component {
             controller.push(component.context.sharedContext.makeWalletTransactionScreen(
                 context: component.context,
                 walletContext: component.walletContext,
-                transaction: transaction
+                transaction: transaction,
+                fromChat: false
             ))
         }
 
@@ -2671,6 +2672,9 @@ private final class WalletScreenComponent: Component {
                     name: self.accountName,
                     address: walletInfo?.address ?? "",
                     isVisible: environment.isVisible,
+                    cardPressed: { [weak self] in
+                        self?.openReceive()
+                    },
                     qrPressed: { [weak self] in
                         self?.openReceive()
                     }

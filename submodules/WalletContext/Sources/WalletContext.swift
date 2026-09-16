@@ -509,19 +509,23 @@ public struct WalletConfiguration: Equatable, Sendable {
     public static var defaultValue: WalletConfiguration {
         return WalletConfiguration(
             transferMinAmount: 100_000_000,
-            transferGaslessMinAmount: 100_000_000
+            transferGaslessMinAmount: 100_000_000,
+            transferGaslessDailyLimit: 5
         )
     }
 
     public let transferMinAmount: Int64
     public let transferGaslessMinAmount: Int64
+    public let transferGaslessDailyLimit: Int32
 
     private init(
         transferMinAmount: Int64,
-        transferGaslessMinAmount: Int64
+        transferGaslessMinAmount: Int64,
+        transferGaslessDailyLimit: Int32
     ) {
         self.transferMinAmount = transferMinAmount
         self.transferGaslessMinAmount = transferGaslessMinAmount
+        self.transferGaslessDailyLimit = transferGaslessDailyLimit
     }
 
     public static func with(appConfiguration: AppConfiguration) -> WalletConfiguration {
@@ -535,9 +539,14 @@ public struct WalletConfiguration: Equatable, Sendable {
            let intValue = Int64(exactly: value), intValue >= 0 {
             transferGaslessMinAmount = intValue
         }
+        var transferGaslessDailyLimit = self.defaultValue.transferGaslessDailyLimit
+        if let value = appConfiguration.data?["wallet_gasless_daily_transfers"] as? Double {
+            transferGaslessDailyLimit = Int32(value)
+        }
         return WalletConfiguration(
             transferMinAmount: transferMinAmount,
-            transferGaslessMinAmount: transferGaslessMinAmount
+            transferGaslessMinAmount: transferGaslessMinAmount,
+            transferGaslessDailyLimit: transferGaslessDailyLimit
         )
     }
 }

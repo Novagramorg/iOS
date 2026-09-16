@@ -27,6 +27,7 @@ public final class WalletCardComponent: Component {
     public let name: String
     public let address: String
     public let isVisible: Bool
+    public let cardPressed: (() -> Void)?
     public let qrPressed: () -> Void
 
     public init(
@@ -37,6 +38,7 @@ public final class WalletCardComponent: Component {
         name: String,
         address: String,
         isVisible: Bool,
+        cardPressed: (() -> Void)? = nil,
         qrPressed: @escaping () -> Void
     ) {
         self.balance = balance
@@ -46,6 +48,7 @@ public final class WalletCardComponent: Component {
         self.name = name
         self.address = address
         self.isVisible = isVisible
+        self.cardPressed = cardPressed
         self.qrPressed = qrPressed
     }
 
@@ -66,6 +69,9 @@ public final class WalletCardComponent: Component {
             return false
         }
         if lhs.isVisible != rhs.isVisible {
+            return false
+        }
+        if (lhs.cardPressed == nil) != (rhs.cardPressed == nil) {
             return false
         }
         return true
@@ -180,6 +186,7 @@ public final class WalletCardComponent: Component {
             self.foregroundView.clipsToBounds = false
             self.foregroundView.layer.masksToBounds = false
             self.foregroundView.layer.allowsEdgeAntialiasing = true
+            self.foregroundView.addTarget(self, action: #selector(self.cardPressed), for: .touchUpInside)
             self.addSubview(self.foregroundView)
 
             self.scrollShadingLayer.startPoint = CGPoint(x: 0.5, y: 0.0)
@@ -200,7 +207,9 @@ public final class WalletCardComponent: Component {
             self.balanceTransitionView.layer.zPosition = Self.foregroundZPosition
 
             self.primaryBalanceCollapseContainerView.clipsToBounds = false
+            self.primaryBalanceCollapseContainerView.isUserInteractionEnabled = false
             self.secondaryBalanceCollapseContainerView.clipsToBounds = false
+            self.secondaryBalanceCollapseContainerView.isUserInteractionEnabled = false
             self.primaryBalanceContainerView.clipsToBounds = false
             self.secondaryBalanceContainerView.clipsToBounds = false
             self.foregroundView.addSubview(self.primaryBalanceCollapseContainerView)
@@ -569,6 +578,7 @@ public final class WalletCardComponent: Component {
                 containerSize: CGSize(width: width - 96.0 * scale, height: 50.0)
             )
             if let nameView = self.name.view {
+                nameView.isUserInteractionEnabled = false
                 if nameView.superview !== self.foregroundView {
                     self.foregroundView.addSubview(nameView)
                 }
@@ -641,6 +651,7 @@ public final class WalletCardComponent: Component {
                 containerSize: CGSize(width: size.height, height: 50.0)
             )
             if let addressView = self.addressOutline.view {
+                addressView.isUserInteractionEnabled = false
                 if addressView.superview !== self.foregroundView {
                     self.foregroundView.addSubview(addressView)
                 }
@@ -650,6 +661,7 @@ public final class WalletCardComponent: Component {
                 addressView.transform = CGAffineTransform(rotationAngle: .pi / 2.0)
             }
             if let addressView = self.address.view {
+                addressView.isUserInteractionEnabled = false
                 if addressView.superview !== self.foregroundView {
                     self.foregroundView.addSubview(addressView)
                 }
@@ -1251,6 +1263,10 @@ public final class WalletCardComponent: Component {
                 topLeft: clipPosition(topLeft),
                 topRight: clipPosition(topRight)
             )
+        }
+
+        @objc private func cardPressed() {
+            self.component?.cardPressed?()
         }
 
         @objc private func handlePan(_ gestureRecognizer: UIPanGestureRecognizer) {

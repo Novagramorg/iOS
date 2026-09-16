@@ -32,6 +32,7 @@ swift_library(
         "//submodules/TelegramUI/Components/ButtonComponent",
         "//submodules/TelegramUI/Components/GlassControls",
         "//submodules/TelegramUI/Components/PlainButtonComponent",
+        "//submodules/TelegramUI/Components/ShimmeringMask",
         "//submodules/QrCodeUI",
         "//submodules/WalletContext",
         "//submodules/PasscodeCore",

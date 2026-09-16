@@ -212,13 +212,13 @@ public func walletAuthorizationErrorMessage(_ error: WalletContext.WalletError) 
     case let .sessionTooFresh(timeout):
         return ("Session Is Too New", "For your security, try again in \(timeout) seconds.")
     case .backupDisabled:
-        return ("Backup Is Disabled", "Enable encrypted backup before restoring the recovery phrase from Telegram.")
+        return ("Backup Is Disabled", "Enable encrypted backup before restoring the secret phrase from Telegram.")
     case .backupNotAvailable:
         return ("Backup Unavailable", "Encrypted backup is not available for this wallet.")
     case .keyRotationFailed:
         return (
-            "Couldn't Update Recovery Phrase",
-            "The new recovery phrase was not activated. Your previous phrase and encrypted backup are still valid."
+            "Couldn't Update Secret Phrase",
+            "The new secret phrase was not activated. Your previous phrase and encrypted backup are still valid."
         )
     case .proofInvalid:
         return (

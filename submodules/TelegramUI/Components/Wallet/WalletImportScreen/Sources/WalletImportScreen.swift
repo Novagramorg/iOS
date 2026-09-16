@@ -930,8 +930,8 @@ private final class WalletImportScreenComponent: Component {
             //TODO:localize
             controller.present(textAlertController(
                 context: component.context,
-                title: "Invalid Recovery Phrase",
-                text: "A TON recovery phrase must contain exactly 12 or 24 words. The pasted phrase contains \(count).",
+                title: "Invalid Secret Phrase",
+                text: "A secret phrase must contain exactly 12 or 24 words. The pasted phrase contains \(count).",
                 actions: [TextAlertAction(type: .defaultAction, title: "OK", action: {
                 })]
             ), in: .window(.root))
@@ -945,8 +945,8 @@ private final class WalletImportScreenComponent: Component {
             //TODO:localize
             controller.present(textAlertController(
                 context: component.context,
-                title: "Invalid Recovery Phrase",
-                text: "Check the word order.\n\nOnly a recovery phrase created in Telegram can be imported here.",
+                title: "Invalid Secret Phrase",
+                text: "Check the word order.\n\nOnly a secret phrase created in Telegram can be imported here.",
                 actions: [TextAlertAction(type: .defaultAction, title: "OK", action: {
                 })]
             ), in: .window(.root))
@@ -1131,7 +1131,7 @@ private final class WalletImportScreenComponent: Component {
             controller.present(textAlertController(
                 context: component.context,
                 title: "Replace Wallet",
-                text: "This recovery phrase belongs to a different wallet. Replacing the current wallet will remove access to it on this device. Make sure you’ve saved its recovery phrase before continuing.",
+                text: "This secret phrase belongs to a different wallet. Replacing the current wallet will remove access to it on this device. Make sure you’ve saved its secret phrase before continuing.",
                 actions: [
                     TextAlertAction(type: .genericAction, title: "Cancel", action: { [weak self] in
                         self?.endWalletFlow()
@@ -1232,7 +1232,7 @@ private final class WalletImportScreenComponent: Component {
             controller.present(textAlertController(
                 context: component.context,
                 title: message?.title ?? "Couldn’t Import Wallet",
-                text: message?.text ?? "Check the recovery phrase and network connection, then try again.",
+                text: message?.text ?? "Check the secret phrase and network connection, then try again.",
                 actions: [TextAlertAction(type: .defaultAction, title: "OK", action: {
                 })]
             ), in: .window(.root))

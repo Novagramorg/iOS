@@ -4220,12 +4220,12 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         return WalletTransferScreen(context: context, walletContext: walletContext, request: request, cancelled: cancelled, confirm: confirm)
     }
 
-    public func makeWalletTransactionScreen(context: AccountContext, transaction: WalletContext.Transaction) -> ViewController {
-        return WalletTransactionScreen(context: context, transaction: transaction)
+    public func makeWalletTransactionScreen(context: AccountContext, transaction: WalletContext.Transaction, fromChat: Bool) -> ViewController {
+        return WalletTransactionScreen(context: context, transaction: transaction, fromChat: fromChat)
     }
 
-    public func makeWalletTransactionScreen(context: AccountContext, walletContext: WalletContext, transaction: WalletContext.Transaction) -> ViewController {
-        return WalletTransactionScreen(context: context, walletContext: walletContext, transaction: transaction)
+    public func makeWalletTransactionScreen(context: AccountContext, walletContext: WalletContext, transaction: WalletContext.Transaction, fromChat: Bool) -> ViewController {
+        return WalletTransactionScreen(context: context, walletContext: walletContext, transaction: transaction, fromChat: fromChat)
     }
 
     public func makeWalletTransactionPreviewScreen(context: AccountContext, walletContext: WalletContext, preparedTransfer: WalletContext.PreparedTransfer, dismissSendScreen: @escaping () -> Void) -> ViewController {
