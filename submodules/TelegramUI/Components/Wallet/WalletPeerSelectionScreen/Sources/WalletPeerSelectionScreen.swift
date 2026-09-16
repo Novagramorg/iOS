@@ -795,7 +795,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
                       let recipient = WalletContext.transferRecipient(from: value) else {
                     return
                 }
-                Queue.mainQueue().after(0.15) {
+                Queue.mainQueue().after(0.15) { [self, controller] in
                     scanner?.dismiss()
                     if case .transfer = component.mode {
                         self.peerAddressDisposable.set((component.context.engine.wallet.getUserAddresses(addresses: [recipient.address])
