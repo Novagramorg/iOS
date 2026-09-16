@@ -59,6 +59,10 @@ final class PasskeysScreenComponent: Component {
 
         private var passkeysData: [TelegramPasskey]?
         private var loadPasskeysDataDisposable: Disposable?
+        // Captured while the view is still on screen: createPasskey() awaits a network round-trip
+        // before performRequests(), so the view can be off-window when AuthenticationServices
+        // asks for the anchor.
+        private weak var authorizationAnchorScene: UIWindowScene?
         
         override init(frame: CGRect) {
             super.init(frame: frame)
@@ -110,10 +114,12 @@ final class PasskeysScreenComponent: Component {
         }
         
         func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
-            guard let windowScene = self.window?.windowScene else {
-                preconditionFailure()
+            if let windowScene = self.window?.windowScene ?? self.authorizationAnchorScene {
+                return ASPresentationAnchor(windowScene: windowScene)
             }
-            return ASPresentationAnchor(windowScene: windowScene)
+            // Screen was torn down mid-request. Hand back a plain anchor so AuthenticationServices
+            // reports an error instead of the app dying here.
+            return ASPresentationAnchor()
         }
 
         private func createPasskey() {
@@ -122,6 +128,7 @@ final class PasskeysScreenComponent: Component {
                     guard let self, let component = self.component else {
                         return
                     }
+                    self.authorizationAnchorScene = self.window?.windowScene
                     
                     let decodeBase64: (String) -> Data? = { string in
                         var string = string.replacingOccurrences(of: "-", with: "+")
