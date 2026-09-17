@@ -435,7 +435,7 @@ public final class ChatPincodeViewController: ViewController {
 
     private func buildForgotButton(isDark: Bool) {
         forgotButton = UIButton(type: .system)
-        forgotButton.setTitle(isMasterRecovery ? FenixuzChatLockStrings.resetButtonTitle : FenixuzChatLockStrings.forgotPincode, for: .normal)
+        forgotButton.setTitle(showsDeviceOwnerReset ? FenixuzChatLockStrings.resetButtonTitle : FenixuzChatLockStrings.forgotPincode, for: .normal)
         forgotButton.setTitleColor(UIColor(rgb: presentationData.theme.list.itemAccentColor.rgb), for: .normal)
         forgotButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .medium)
         forgotButton.addTarget(self, action: #selector(forgotTapped), for: .touchUpInside)
@@ -506,7 +506,17 @@ public final class ChatPincodeViewController: ViewController {
         // "Forgot pincode?": only in verify mode when a master-recovery handler is supplied.
         // Chat page: shown when master recovery exists. Master page: button is "Reset Chat Lock",
         // hidden until the user has struggled (4 wrong tries), per the surface-recovery UX.
-        forgotButton.isHidden = isMasterRecovery ? (failedAttempts < 4) : (verifyOnForgot == nil)
+        // The master page keeps its reset hidden until the user has struggled — it wipes every lock,
+        // so it should not be the first thing on screen. A plain chat lock is different: whoever
+        // forgot the pincode will try once or twice and give up, never seeing a button that only
+        // appears on the fourth failure, so offer it straight away. It still costs the device
+        // passcode, so showing it early gives a snooper nothing.
+        if isMasterRecovery {
+            forgotButton.isHidden = failedAttempts < 4
+        } else {
+            // Verify screens only — .set / .remove / .confirm have nothing to recover from.
+            forgotButton.isHidden = !isVerifyMode
+        }
 
         // Biometric button: only during verify/remove (never setup), when device supports it.
         let showBiometric = !isPickingType && biometricShouldShow()
@@ -666,11 +676,28 @@ public final class ChatPincodeViewController: ViewController {
         return nil
     }
 
+    /// True on the screens that ask for an existing credential — the only places the owner can be
+    /// locked out of their own chat.
+    private var isVerifyMode: Bool {
+        if case .verify = mode {
+            return true
+        }
+        return false
+    }
+
+    /// Whether this screen offers the device-owner reset rather than master-pincode recovery.
+    /// The master page always does. A plain verify page does too when it has no master handler:
+    /// a chat locked while the master pincode was off, with biometrics then switched off, had no
+    /// way back at all — no Face ID, no "Forgot pincode?", nothing.
+    private var showsDeviceOwnerReset: Bool {
+        return isMasterRecovery || (isVerifyMode && verifyOnForgot == nil)
+    }
+
     @objc private func forgotTapped() {
-        if isMasterRecovery {
-            resetChatLockTapped()
+        if let onForgot = verifyOnForgot {
+            onForgot()
         } else {
-            verifyOnForgot?()
+            resetChatLockTapped()
         }
     }
 
@@ -689,7 +716,9 @@ public final class ChatPincodeViewController: ViewController {
         alert.addAction(UIAlertAction(title: FenixuzChatLockStrings.resetConfirmAction, style: .destructive) { [weak self] _ in
             self?.authenticateThenReset()
         })
-        present(alert, animated: true)
+        // Present from the navigation controller when there is one: this screen is always inside a
+        // fullScreen nav, and presenting from the child has silently no-opped before.
+        (self.navigationController ?? self).present(alert, animated: true)
     }
 
     private func authenticateThenReset() {
@@ -717,11 +746,11 @@ public final class ChatPincodeViewController: ViewController {
 
     /// After 4 wrong entries we never lock the owner out — we make the recovery obvious instead.
     private func revealRecovery() {
-        guard isMasterRecovery || verifyOnForgot != nil else { return }
+        guard showsDeviceOwnerReset || verifyOnForgot != nil else { return }
         subtitleLabel.text = FenixuzChatLockStrings.recoveryHint
         subtitleLabel.textColor = presentationData.theme.overallDarkAppearance
             ? UIColor(white: 1, alpha: 0.5) : UIColor(white: 0, alpha: 0.45)
-        if isMasterRecovery {
+        if showsDeviceOwnerReset {
             forgotButton.isHidden = false
         }
         guard !forgotButton.isHidden else { return }
