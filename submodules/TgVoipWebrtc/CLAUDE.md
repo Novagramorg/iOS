@@ -11,7 +11,7 @@ This repo has been patched to support native macOS arm64 builds (`darwin_arm64` 
 
 ### Vendored webrtc seams for tgcalls (no behaviour patches)
 
-The fork carries three additive, default-off seams, each marked
+The fork carries four additive seams, each marked
 `TGCALLS SEAM (<consumer>)` in the source. None changes behaviour for a caller
 that does not opt in. When bumping webrtc, carry these forward, and drop one
 the moment upstream grows an equivalent.
@@ -21,6 +21,24 @@ the moment upstream grows an equivalent.
 | `PeerConnectionDependencies::dtls_transport_factory` | `api/peer_connection_interface.h`, `pc/peer_connection.{h,cc}` (plumbed to the `JsepTransportController::Config` field that already existed) | `tgcalls::MtProtoDtlsTransportFactory` |
 | `PeerConnectionFactoryInterface::Options::external_transport_security` | `api/peer_connection_interface.h`; `pc/peer_connection.cc` in `InitializeTransportController_n` (`config.disable_encryption`) and `SrtpRequired()` | `InstanceV2ReferenceImpl`, `CallCoreHost` under `network_use_mtproto` |
 | `PeerConnectionObserver::OnUnDemuxableRtpPacket(const RtpPacketReceived&)` | `api/peer_connection_interface.h`; `pc/peer_connection.cc` in `InitializeUnDemuxablePacketHandler` (network thread, before the hand-off to `Call`) | `GroupInstanceReferenceImpl` late-speaker SSRC discovery |
+| `PeerConnectionSdpMethods::ResetSctpDataMidAfterRollback()` | `pc/peer_connection_internal.h`, `pc/peer_connection.{h,cc}`; called from `SdpOfferAnswerHandler::Rollback` in `pc/sdp_offer_answer.cc` | every PeerConnection engine, no opt-in — the one seam that changes stock behaviour, and only in a state stock never recovers from (below) |
+
+The rollback seam (2026-09-17) closes a wedge that stock WebRTC cannot leave:
+when the description that first set up the data-channel transport is rolled
+back by a colliding remote offer, `sctp_mid` keeps naming an m-section no
+stable description has (and which the remote offer may reuse for media).
+`CheckIfNegotiationIsNeeded` then returns true forever for the missing data
+section while `GetOptionsForUnifiedPlanOffer` never adds one because the mid is
+set — an offer/answer loop for the rest of the call, one round per signaling
+RTT, stopping the video send stream twice and flapping the audio channel each
+round. The seam releases the mid (signaling- and network-side, without closing
+the channels, so `HasDataChannels()` stays true) and the next offer renegotiates
+data under a fresh mid. Production hit it in every 18/19 video call
+(`getlogstgcalls/analysis/FINDINGS-v19-video-loop.md`); the engine-side cause
+is fixed too (see `tgcalls/v2wasm/CLAUDE.md`), this seam is the backstop for any
+future start glare. Reproduce/verify with the CLI: `tgcalls_cli --mode p2p
+--version 19.0.0 --version2 19.0.0 --video` must show 4 description sets per
+call and one `Creating data channel`.
 
 History, so nobody reintroduces them: between 2026-09-01 and 2026-09-16 the
 fork carried three *behaviour* patches instead ("Allow SCTP without DTLS" in
