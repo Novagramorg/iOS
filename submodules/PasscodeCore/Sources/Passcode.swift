@@ -114,9 +114,8 @@ final class PasscodeKeychain: PasscodeStorage {
             kSecAttrAccount as String: account,
             kSecAttrSynchronizable as String: false
         ]
+        #if !os(macOS)
         query[kSecAttrAccessGroup as String] = try account.hasPrefix("biometric.") ? self.environment.privateAccessGroup() : self.environment.sharedAccessGroup()
-        #if os(macOS)
-        query[kSecUseDataProtectionKeychain as String] = true
         #endif
         return query
     }
@@ -154,6 +153,9 @@ final class PasscodeKeychain: PasscodeStorage {
             insert[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
         }
         let status = SecItemAdd(insert as CFDictionary, nil)
+        if biometric, status == errSecMissingEntitlement {
+            throw PasscodeError.biometricsUnavailable
+        }
         guard status == errSecSuccess else { throw PasscodeError.keychain(status) }
     }
 
