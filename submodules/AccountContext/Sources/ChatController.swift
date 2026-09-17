@@ -277,6 +277,14 @@ public extension ChatMessageItemAssociatedData {
         }
     }
 
+    var isForwardOptionsPreview: Bool {
+        if case let .messageOptions(_, _, info) = self.subject, case .forward = info {
+            return true
+        } else {
+            return false
+        }
+    }
+
     func isPollVotingRestricted(poll: TelegramMediaPoll, accountTestingEnvironment: Bool, currentTimestamp: Int32) -> Bool {
         if !poll.countries.isEmpty, let accountCountry = self.accountCountry, !poll.countries.contains(accountCountry) {
             return true

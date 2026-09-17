@@ -598,11 +598,11 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                         
                         var forwardInfo: MessageForwardInfo?
                         if let ephemeralParams {
-                            forwardInfo = MessageForwardInfo(author: ephemeralParams.authorId.flatMap { message.peers[$0] }, source: ephemeralParams.sourceId.flatMap { message.peers[$0] }, sourceMessageId: nil, date: 0, authorSignature: nil, psaType: nil, flags: [])
+                            forwardInfo = MessageForwardInfo(author: ephemeralParams.authorId.flatMap { message.peers[$0] }, source: ephemeralParams.sourceId.flatMap { message.peers[$0] }, sourceMessageId: nil, date: message.timestamp, authorSignature: nil, psaType: nil, flags: [])
                         } else if let existingForwardInfo = message.forwardInfo {
-                            forwardInfo = MessageForwardInfo(author: existingForwardInfo.author, source: existingForwardInfo.source, sourceMessageId: nil, date: 0, authorSignature: nil, psaType: nil, flags: [])
+                            forwardInfo = MessageForwardInfo(author: existingForwardInfo.author, source: existingForwardInfo.source, sourceMessageId: nil, date: existingForwardInfo.date, authorSignature: existingForwardInfo.authorSignature, psaType: nil, flags: [])
                         } else {
-                            forwardInfo = MessageForwardInfo(author: message.author, source: nil, sourceMessageId: nil, date: 0, authorSignature: nil, psaType: nil, flags: [])
+                            forwardInfo = MessageForwardInfo(author: message.author, source: nil, sourceMessageId: nil, date: message.timestamp, authorSignature: nil, psaType: nil, flags: [])
                         }
                         if hideNames && !hasDice {
                             forwardInfo = nil

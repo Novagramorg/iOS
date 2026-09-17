@@ -98,7 +98,7 @@ public func stringForMessageTimestampStatus(
     var displayFullDate = false
     if case .full = format, timestamp > 100000 {
         displayFullDate = true
-    } else if let forwardInfo = message.forwardInfo, message.id.peerId == context.account.peerId {
+    } else if let forwardInfo = message.forwardInfo, message.id.peerId == context.account.peerId, !associatedData.isForwardOptionsPreview {
         displayFullDate = true
         timestamp = forwardInfo.date
     }

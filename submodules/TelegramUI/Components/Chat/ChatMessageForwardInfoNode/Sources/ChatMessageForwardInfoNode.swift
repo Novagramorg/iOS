@@ -474,7 +474,9 @@ public class ChatMessageForwardInfoNode: ASDisplayNode {
             let (titleLayout, titleApply) = titleNodeLayout(TextNodeLayoutArguments(attributedString: string, backgroundColor: nil, maximumNumberOfLines: 2, truncationType: .end, constrainedSize: CGSize(width: constrainedSize.width - credibilityIconWidth - infoWidth, height: constrainedSize.height), alignment: .natural, cutout: cutout, insets: UIEdgeInsets()))
             
             var authorAvatarInset: CGFloat = 0.0
-            authorAvatarInset = 20.0
+            if let authorString, !authorString.isEmpty {
+                authorAvatarInset = 20.0
+            }
             
             let availableNameWidth = max(0.0, constrainedSize.width - credibilityIconWidth - infoWidth - authorAvatarInset)
             var viaBotLayoutAndApply: (TextNodeLayout, () -> TextNode)?
