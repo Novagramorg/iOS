@@ -78,8 +78,21 @@ private final class AVCaptureEventHandlerImpl: VolumeButtonHandlerImpl {
     }
     
     deinit {
-        self.interaction.isEnabled = false
-        self.context?.mainWindow?.viewController?.view.removeInteraction(self.interaction)
+        // AVCaptureEventInteraction tears down through _UIPhysicalButtonInteraction, which asserts
+        // it is on the main queue. VolumeButtonsListener.deinit reaches us through
+        // SharedContext.remove(id:), and that runs on whichever thread dropped the listener — the
+        // update(id:) path is deliverOnMainQueue, this one never was.
+        let interaction = self.interaction
+        let context = self.context
+        let tearDown: () -> Void = {
+            interaction.isEnabled = false
+            context?.mainWindow?.viewController?.view.removeInteraction(interaction)
+        }
+        if Thread.isMainThread {
+            tearDown()
+        } else {
+            Queue.mainQueue().async(tearDown)
+        }
     }
 }
 
