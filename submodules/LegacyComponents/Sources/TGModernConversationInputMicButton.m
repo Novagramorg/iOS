@@ -249,6 +249,39 @@ static const CGFloat outerCircleMinScale = innerCircleRadius / outerCircleRadius
     _innerIconView.center = center;
 }
 
+// While the keyboard is up, -[ChatTextInputMediaRecordingButtonPresenter present] parks the overlay
+// container in UIRemoteKeyboardWindow, so the button and the overlay end up in two different windows.
+// On iOS 27 that keyboard window is hosted on a DIFFERENT UIScreen object than the app's window, even
+// though both cover the same display (measured; see docs/ios27-windows-and-touches.md). UIKit refuses to
+// convert between two screens' coordinate spaces: -convertPoint:toWindow: logs "Invalid UIScreen
+// coordinate space conversion" and returns a point derived from CGRectNull, whose infinite origin becomes
+// a NaN layer position at the assignments below and kills the app with CALayerInvalidGeometry. This runs
+// on every display-link tick while recording, so the mismatch has to be predicted rather than detected
+// after the fact - otherwise the invalid conversion is logged at frame rate.
+- (CGPoint)overlayCenterInView:(UIView *)parentView
+{
+    UIWindow *selfWindow = self.window;
+    CGPoint centerPointInSelfWindow = [selfWindow convertPoint:self.center fromView:self.superview];
+    
+    UIWindow *parentWindow = parentView.window;
+    if (parentWindow == nil || parentWindow == selfWindow) {
+        return [parentView convertPoint:centerPointInSelfWindow fromView:selfWindow];
+    }
+    
+    CGPoint centerPointInParentWindow;
+    if (parentWindow.screen == selfWindow.screen) {
+        centerPointInParentWindow = [selfWindow convertPoint:centerPointInSelfWindow toWindow:parentWindow];
+    } else {
+        // Both windows describe the same display, so relate them by their frames - which is what
+        // -convertPoint:toWindow: would have done had it accepted the pair. For two full-screen windows
+        // this is the identity.
+        centerPointInParentWindow = CGPointMake(centerPointInSelfWindow.x + CGRectGetMinX(selfWindow.frame) - CGRectGetMinX(parentWindow.frame),
+                                                centerPointInSelfWindow.y + CGRectGetMinY(selfWindow.frame) - CGRectGetMinY(parentWindow.frame));
+    }
+    
+    return [parentView convertPoint:centerPointInParentWindow fromView:parentWindow];
+}
+
 - (void)updateOverlay
 {
     if (_presentation == nil) {
@@ -256,9 +289,7 @@ static const CGFloat outerCircleMinScale = innerCircleRadius / outerCircleRadius
     }
     UIView *parentView = [_presentation view];
     
-    CGPoint centerPointInSelfWindow = [self.window convertPoint:self.center fromView:self.superview];
-    CGPoint centerPointInParentViewWindow = [self.window convertPoint:centerPointInSelfWindow toWindow:parentView.window];
-    CGPoint centerPoint = [parentView.window convertPoint:centerPointInParentViewWindow toView:parentView];
+    CGPoint centerPoint = [self overlayCenterInView:parentView];
     
     centerPoint.x += _centerOffset.x;
     centerPoint.y += _centerOffset.y;

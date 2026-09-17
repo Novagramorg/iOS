@@ -66,6 +66,35 @@ Note that `UIRemoteKeyboardWindow` declines points that are not over the keyboar
 `-hitTest:` returns nil there rather than itself, so a touch above the keyboard falls through to the
 window below unless something in that window's hierarchy claims it.
 
+### Never convert coordinates between the app window and the keyboard window (iOS 27)
+
+Because re-parenting puts content in a second window, it is tempting to convert a frame from the app
+window into it. **On iOS 27 that conversion fails and produces NaN**, because the keyboard window is
+hosted on a *different `UIScreen` object* than the app's window (same bounds, same `UIScreenMode`
+object - it is the same physical display, just a second `UIScreen` instance). UIKit routes
+`-[UIWindow convertPoint:toWindow:]` through both windows' screens and refuses a cross-screen
+conversion:
+
+```
+Invalid UIScreen coordinate space conversion: Attempting to convert rect {{347, 379}, {0, 0}}
+from <UIScreen: 0x103e00140; bounds: {{0, 0}, {375, 667}}; mode: <UIScreenMode: 0x10dd40540; ...>>
+to <UIScreen: 0x10ddb5a40; bounds: {{0, 0}, {375, 667}}; mode: <UIScreenMode: 0x10dd40540; ...>>,
+which is not a valid conversion; returning CGRectNull
+```
+
+It only *logs* - the returned point comes from `CGRectNull`, whose origin is infinite, and the app dies
+one assignment later with `CALayerInvalidGeometry: CALayer position contains NaN`. This killed the
+voice/video-message recording overlay: `-[TGModernConversationInputMicButton updateOverlay]` positioned
+its circles by converting the mic button's centre into the overlay container, which
+`ChatTextInputMediaRecordingButtonPresenter.present()` parks in the keyboard window whenever the
+keyboard is up. It runs on every display-link tick while recording, so the log came at frame rate.
+
+Predict the mismatch (`parentWindow.screen == selfWindow.screen`) rather than detect the bad result
+afterwards, and relate the two windows through their `frame`s in the mismatched case - for two
+full-screen windows on the same display that is the identity, which is the answer
+`-convertPoint:toWindow:` would have given had it accepted the pair. Note the `screen` *getter* is not
+deprecated (only `-setScreen:` is), so reading it does not trip `-warnings-as-errors`.
+
 ## A layer that renders nothing receives no touches
 
 **`-hitTest:` is not the whole story.** A view whose layer renders nothing at all — `backgroundColor`
