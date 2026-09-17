@@ -748,7 +748,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 searchNavigationHeight = navigationHeight + 10.0
             }
             
-            let searchEdgeEffectHeight: CGFloat = 40.0
+            let searchEdgeEffectHeight: CGFloat = min(40.0, searchNavigationHeight)
             let searchEdgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: width, height: searchNavigationHeight))
             
             let searchEdgeEffectView: EdgeEffectView
