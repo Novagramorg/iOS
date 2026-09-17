@@ -47,7 +47,7 @@ public class ChatMessageInstantVideoItemNode: ChatMessageItemView, ASGestureReco
     
     public var appliedParams: ListViewItemLayoutParams?
     public var appliedItem: ChatMessageItem?
-    public var appliedForwardInfo: (EngineRawPeer?, String?)?
+    public var appliedForwardInfo: ChatMessageAppliedForwardInfo?
     public var appliedHasAvatar = false
     public var appliedCurrentlyPlaying: Bool?
     public var appliedAutomaticDownload = false
@@ -560,24 +560,11 @@ public class ChatMessageInstantVideoItemNode: ChatMessageItemView, ASGestureReco
             if !ignoreForward, let forwardInfo = item.message.forwardInfo {
                 let forwardPsaType = forwardInfo.psaType
                 
-                if let source = forwardInfo.source {
-                    forwardSource = source
-                    if let authorSignature = forwardInfo.authorSignature {
-                        forwardAuthorSignature = authorSignature
-                    } else if let forwardInfoAuthor = forwardInfo.author, forwardInfoAuthor.id != source.id {
-                        forwardAuthorSignature = EnginePeer(forwardInfoAuthor).displayTitle(strings: item.presentationData.strings, displayOrder: item.presentationData.nameDisplayOrder)
-                    } else {
-                        forwardAuthorSignature = nil
-                    }
-                } else {
-                    if let currentForwardInfo = currentForwardInfo, forwardInfo.author == nil && currentForwardInfo.0 != nil {
-                        forwardSource = nil
-                        forwardAuthorSignature = currentForwardInfo.0.flatMap(EnginePeer.init)?.displayTitle(strings: item.presentationData.strings, displayOrder: item.presentationData.nameDisplayOrder)
-                    } else {
-                        forwardSource = forwardInfo.author
-                        forwardAuthorSignature = forwardInfo.authorSignature
-                    }
-                }
+                let resolvedForwardInfo = chatMessageForwardInfoDisplay(forwardInfo: forwardInfo, messageId: item.message.id, previouslyApplied: currentForwardInfo, peerDisplayTitle: { peer in
+                    return EnginePeer(peer).displayTitle(strings: item.presentationData.strings, displayOrder: item.presentationData.nameDisplayOrder)
+                })
+                forwardSource = resolvedForwardInfo.source
+                forwardAuthorSignature = resolvedForwardInfo.authorSignature
                 let availableWidth = max(60.0, availableContentWidth - normalDisplaySize.width + 6.0)
                 forwardInfoSizeApply = makeForwardInfoLayout(item.context, item.presentationData, item.presentationData.strings, .standalone, forwardSource.flatMap(EnginePeer.init), forwardAuthorSignature, forwardPsaType == nil ? inlineBotNameString : nil, forwardPsaType, nil, CGSize(width: availableWidth, height: CGFloat.greatestFiniteMagnitude))
             }
@@ -658,7 +645,7 @@ public class ChatMessageInstantVideoItemNode: ChatMessageItemView, ASGestureReco
                     strongSelf.appliedParams = params
                     strongSelf.appliedItem = item
                     strongSelf.appliedHasAvatar = hasAvatar
-                    strongSelf.appliedForwardInfo = (forwardSource, forwardAuthorSignature)
+                    strongSelf.appliedForwardInfo = ChatMessageAppliedForwardInfo(messageId: item.message.id, source: forwardSource, authorSignature: forwardAuthorSignature)
                     strongSelf.appliedCurrentlyPlaying = isPlaying
                     strongSelf.appliedAutomaticDownload = automaticDownload
                     

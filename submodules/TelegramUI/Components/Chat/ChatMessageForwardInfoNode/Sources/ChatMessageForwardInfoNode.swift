@@ -91,8 +91,6 @@ public class ChatMessageForwardInfoNode: ASDisplayNode {
     private var linkProgressView: TextLoadingEffectView?
     private var linkProgressDisposable: Disposable?
     
-    private var previousPeer: EnginePeer?
-    
     public var openPsa: ((String, ASDisplayNode) -> Void)?
     
     override public init() {
@@ -288,19 +286,14 @@ public class ChatMessageForwardInfoNode: ASDisplayNode {
         let nameNodeLayout = TextNode.asyncLayout(maybeNode?.nameNode)
         let viaBotNodeLayout = TextNode.asyncLayout(maybeNode?.viaBotNode)
         
-        let previousPeer = maybeNode?.previousPeer
-        
         return { context, presentationData, strings, type, peer, authorName, inlineBotName, psaType, storyData, constrainedSize in
-            let originalPeer = peer
-            let peer = peer ?? previousPeer
-            
             let fontSize = floor(presentationData.fontSize.baseDisplaySize * 14.0 / 17.0)
             let prefixFont = Font.regular(fontSize)
             let peerFont = Font.medium(fontSize)
             
             let peerString: String
             if let peer = peer {
-                if let authorName = authorName, originalPeer == peer {
+                if let authorName = authorName {
                     peerString = "\(peer.displayTitle(strings: strings, displayOrder: presentationData.nameDisplayOrder)) (\(authorName))"
                 } else {
                     peerString = peer.displayTitle(strings: strings, displayOrder: presentationData.nameDisplayOrder)
@@ -524,8 +517,6 @@ public class ChatMessageForwardInfoNode: ASDisplayNode {
                 
                 node.theme = presentationData.theme.theme
                 node.highlightColor = titleColor.withMultipliedAlpha(0.1)
-                
-                node.previousPeer = peer
                 
                 let titleNode = titleApply()
                 titleNode.displaysAsynchronously = !presentationData.isPreview

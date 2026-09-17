@@ -74,7 +74,7 @@ public class ChatMessageStickerItemNode: ChatMessageItemView {
     private var replyRecognizer: ChatSwipeToReplyRecognizer?
     private var currentSwipeAction: ChatControllerInteractionSwipeAction?
     
-    private var appliedForwardInfo: (EngineRawPeer?, String?)?
+    private var appliedForwardInfo: ChatMessageAppliedForwardInfo?
 
     private var enableSynchronousImageApply: Bool = false
     
@@ -795,24 +795,11 @@ public class ChatMessageStickerItemNode: ChatMessageItemView {
             if !ignoreForward, let forwardInfo = item.message.forwardInfo {
                 forwardPsaType = forwardInfo.psaType
                 
-                if let source = forwardInfo.source {
-                    forwardSource = source
-                    if let authorSignature = forwardInfo.authorSignature {
-                        forwardAuthorSignature = authorSignature
-                    } else if let forwardInfoAuthor = forwardInfo.author, forwardInfoAuthor.id != source.id {
-                        forwardAuthorSignature = EnginePeer(forwardInfoAuthor).displayTitle(strings: item.presentationData.strings, displayOrder: item.presentationData.nameDisplayOrder)
-                    } else {
-                        forwardAuthorSignature = nil
-                    }
-                } else {
-                    if let currentForwardInfo = currentForwardInfo, forwardInfo.author == nil && currentForwardInfo.0 != nil {
-                        forwardSource = nil
-                        forwardAuthorSignature = currentForwardInfo.0.flatMap(EnginePeer.init)?.displayTitle(strings: item.presentationData.strings, displayOrder: item.presentationData.nameDisplayOrder)
-                    } else {
-                        forwardSource = forwardInfo.author
-                        forwardAuthorSignature = forwardInfo.authorSignature
-                    }
-                }
+                let resolvedForwardInfo = chatMessageForwardInfoDisplay(forwardInfo: forwardInfo, messageId: item.message.id, previouslyApplied: currentForwardInfo, peerDisplayTitle: { peer in
+                    return EnginePeer(peer).displayTitle(strings: item.presentationData.strings, displayOrder: item.presentationData.nameDisplayOrder)
+                })
+                forwardSource = resolvedForwardInfo.source
+                forwardAuthorSignature = resolvedForwardInfo.authorSignature
                 let availableForwardWidth = max(60.0, availableWidth + 6.0)
                 forwardInfoSizeApply = makeForwardInfoLayout(item.context, item.presentationData, item.presentationData.strings, .standalone, forwardSource.flatMap(EnginePeer.init), forwardAuthorSignature, forwardPsaType == nil ? inlineBotNameString : nil, forwardPsaType, nil, CGSize(width: availableForwardWidth, height: CGFloat.greatestFiniteMagnitude))
             }
@@ -1023,7 +1010,7 @@ public class ChatMessageStickerItemNode: ChatMessageItemView {
                         transition = .animated(duration: duration, curve: .spring)
                     }
                     
-                    strongSelf.appliedForwardInfo = (forwardSource, forwardAuthorSignature)
+                    strongSelf.appliedForwardInfo = ChatMessageAppliedForwardInfo(messageId: item.message.id, source: forwardSource, authorSignature: forwardAuthorSignature)
                     strongSelf.updateAccessibilityData(accessibilityData)
                     
                     strongSelf.updateAttachedDateHeader(hasDate: dateHeaderAtBottom.hasDate, hasPeer: dateHeaderAtBottom.hasTopic)

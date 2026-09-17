@@ -102,7 +102,7 @@ public class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
     private var item: ChatMessageBubbleContentItem?
     private var automaticDownload: Bool?
     public var media: TelegramMediaFile?
-    public var appliedForwardInfo: (Peer?, String?)?
+    public var appliedForwardInfo: ChatMessageAppliedForwardInfo?
         
     private let fetchDisposable = MetaDisposable()
 
@@ -438,24 +438,11 @@ public class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
             if !ignoreForward && !ignoreHeaders, let forwardInfo = item.message.forwardInfo {
                 let forwardPsaType = forwardInfo.psaType
                 
-                if let source = forwardInfo.source {
-                    forwardSource = source
-                    if let authorSignature = forwardInfo.authorSignature {
-                        forwardAuthorSignature = authorSignature
-                    } else if let forwardInfoAuthor = forwardInfo.author, forwardInfoAuthor.id != source.id {
-                        forwardAuthorSignature = EnginePeer(forwardInfoAuthor).displayTitle(strings: item.presentationData.strings, displayOrder: item.presentationData.nameDisplayOrder)
-                    } else {
-                        forwardAuthorSignature = nil
-                    }
-                } else {
-                    if let currentForwardInfo = currentForwardInfo, forwardInfo.author == nil && currentForwardInfo.0 != nil {
-                        forwardSource = nil
-                        forwardAuthorSignature = currentForwardInfo.0.flatMap(EnginePeer.init)?.displayTitle(strings: item.presentationData.strings, displayOrder: item.presentationData.nameDisplayOrder)
-                    } else {
-                        forwardSource = forwardInfo.author
-                        forwardAuthorSignature = forwardInfo.authorSignature
-                    }
-                }
+                let resolvedForwardInfo = chatMessageForwardInfoDisplay(forwardInfo: forwardInfo, messageId: item.message.id, previouslyApplied: currentForwardInfo, peerDisplayTitle: { peer in
+                    return EnginePeer(peer).displayTitle(strings: item.presentationData.strings, displayOrder: item.presentationData.nameDisplayOrder)
+                })
+                forwardSource = resolvedForwardInfo.source
+                forwardAuthorSignature = resolvedForwardInfo.authorSignature
                 let availableWidth: CGFloat = max(60.0, availableContentWidth - 220.0 + 6.0)
                 forwardInfoSizeApply = makeForwardInfoLayout(item.context, item.presentationData, item.presentationData.strings, .standalone, forwardSource.flatMap(EnginePeer.init), forwardAuthorSignature, forwardPsaType == nil ? inlineBotNameString : nil, forwardPsaType, nil, CGSize(width: availableWidth, height: CGFloat.greatestFiniteMagnitude))
             }
@@ -649,7 +636,7 @@ public class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                 if let strongSelf = self {
                     strongSelf.item = item
                     strongSelf.videoFrame = displayVideoFrame
-                    strongSelf.appliedForwardInfo = (forwardSource, forwardAuthorSignature)
+                    strongSelf.appliedForwardInfo = ChatMessageAppliedForwardInfo(messageId: item.message.id, source: forwardSource, authorSignature: forwardAuthorSignature)
                     strongSelf.viewOnceIconImage = viewOnceIconImage
                     
                     strongSelf.automaticDownload = automaticDownload

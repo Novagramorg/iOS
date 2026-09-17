@@ -763,7 +763,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
     private var currentSwipeToReplyTranslation: CGFloat = 0.0
     
     private var appliedItem: ChatMessageItem?
-    private var appliedForwardInfo: (Peer?, String?)?
+    private var appliedForwardInfo: ChatMessageAppliedForwardInfo?
     private var disablesComments = true
     
     private var wasPending: Bool = false
@@ -1600,7 +1600,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         makeSuggestedPostInfoNodeLayout: ChatMessageSuggestedPostInfoNode.AsyncLayout,
         layoutConstants: ChatMessageItemLayoutConstants,
         currentItem: ChatMessageItem?,
-        currentForwardInfo: (Peer?, String?)?,
+        currentForwardInfo: ChatMessageAppliedForwardInfo?,
         isSelected: Bool?
     ) -> (ListViewItemNodeLayout, (ListViewItemUpdateAnimation, ListViewItemApply, Bool) -> Void) {
         let isPreview = item.presentationData.isPreview
@@ -2930,24 +2930,11 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 
                 let forwardPsaType: String? = forwardInfo.psaType
                 
-                if let source = forwardInfo.source {
-                    forwardSource = source
-                    if let authorSignature = forwardInfo.authorSignature {
-                        forwardAuthorSignature = authorSignature
-                    } else if let forwardInfoAuthor = forwardInfo.author, forwardInfoAuthor.id != source.id {
-                        forwardAuthorSignature = EnginePeer(forwardInfoAuthor).displayTitle(strings: item.presentationData.strings, displayOrder: item.presentationData.nameDisplayOrder)
-                    } else {
-                        forwardAuthorSignature = nil
-                    }
-                } else {
-                    if let currentForwardInfo = currentForwardInfo, forwardInfo.author == nil && currentForwardInfo.0 != nil {
-                        forwardSource = nil
-                        forwardAuthorSignature = currentForwardInfo.0.flatMap(EnginePeer.init)?.displayTitle(strings: item.presentationData.strings, displayOrder: item.presentationData.nameDisplayOrder)
-                    } else {
-                        forwardSource = forwardInfo.author
-                        forwardAuthorSignature = forwardInfo.authorSignature
-                    }
-                }
+                let resolvedForwardInfo = chatMessageForwardInfoDisplay(forwardInfo: forwardInfo, messageId: firstMessage.id, previouslyApplied: currentForwardInfo, peerDisplayTitle: { peer in
+                    return EnginePeer(peer).displayTitle(strings: item.presentationData.strings, displayOrder: item.presentationData.nameDisplayOrder)
+                })
+                forwardSource = resolvedForwardInfo.source
+                forwardAuthorSignature = resolvedForwardInfo.authorSignature
                 let sizeAndApply = forwardInfoLayout(item.context, item.presentationData, item.presentationData.strings, .bubble(incoming: incoming), forwardSource.flatMap(EnginePeer.init), forwardAuthorSignature, forwardInlineBotNameString, forwardPsaType, nil, CGSize(width: maximumNodeWidth - layoutConstants.text.bubbleInsets.left - layoutConstants.text.bubbleInsets.right, height: CGFloat.greatestFiniteMagnitude))
                 forwardInfoSizeApply = (sizeAndApply.0, { width in sizeAndApply.1(width) })
                 
@@ -2962,7 +2949,10 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 }
                 
                 forwardSource = firstMessage.peers[storyMedia.storyId.peerId]
-                
+                if forwardSource == nil, let currentForwardInfo, currentForwardInfo.messageId == firstMessage.id {
+                    forwardSource = currentForwardInfo.source
+                }
+
                 var storyType: ChatMessageForwardInfoNode.StoryType = .regular
                 if let storyItem = firstMessage.associatedStories[storyMedia.storyId], storyItem.data.isEmpty {
                     storyType = .expired
@@ -3953,7 +3943,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         strongSelf.contentContainersWrapperNode.frame = CGRect(origin: CGPoint(), size: layout.contentSize)
         
         strongSelf.appliedItem = item
-        strongSelf.appliedForwardInfo = (forwardSource, forwardAuthorSignature)
+        strongSelf.appliedForwardInfo = ChatMessageAppliedForwardInfo(messageId: item.content.firstMessage.id, source: forwardSource, authorSignature: forwardAuthorSignature)
         strongSelf.updateAccessibilityData(accessibilityData)
         strongSelf.disablesComments = disablesComments
         
