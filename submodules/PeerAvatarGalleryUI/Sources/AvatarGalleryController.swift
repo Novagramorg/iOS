@@ -1028,6 +1028,12 @@ public class AvatarGalleryController: ViewController, StandalonePresentableContr
         switch entry {
             case .topImage:
                 if self.peer.id == self.context.account.peerId {
+                    // A top image carries no photo reference, so it can only be removed as "the
+                    // current profile photo". Without this, deleting is a silent no-op whenever
+                    // the photo list has not been fetched yet and the only entry is the one
+                    // derived from the peer record.
+                    let _ = self.context.engine.accountData.removeAccountPhoto(reference: nil).start()
+                    dismiss = true
                 } else {
                     if entry == self.entries.first {
                         let _ = self.context.engine.peers.updatePeerPhoto(peerId: self.peer.id, photo: nil, mapResourceToAvatarSizes: { _, _ in .single([:]) }).start()

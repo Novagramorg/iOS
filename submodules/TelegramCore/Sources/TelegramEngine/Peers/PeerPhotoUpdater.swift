@@ -493,11 +493,26 @@ func _internal_updatePeerPhotoInternal(postbox: Postbox, network: Network, state
                                         return peer
                                     }
                                 })
-                                transaction.updatePeerCachedData(peerIds: Set([peer.id])) { peerId, cachedPeerData in
-                                    if let cachedPeerData = cachedPeerData as? CachedUserData {
-                                        return cachedPeerData.withUpdatedPersonalPhoto(.known(updatedImage))
-                                    } else {
-                                        return nil
+                                if fallback {
+                                    // The request above cleared the fallback photo (flags bit 0),
+                                    // which lives in its own cached field. Writing the result to
+                                    // personalPhoto instead would leave the removed photo in place
+                                    // as the last entry of the avatar gallery, and keep offering to
+                                    // remove it.
+                                    transaction.updatePeerCachedData(peerIds: Set([peer.id])) { peerId, cachedPeerData in
+                                        if let cachedPeerData = cachedPeerData as? CachedUserData {
+                                            return cachedPeerData.withUpdatedFallbackPhoto(.known(updatedImage))
+                                        } else {
+                                            return nil
+                                        }
+                                    }
+                                } else {
+                                    transaction.updatePeerCachedData(peerIds: Set([peer.id])) { peerId, cachedPeerData in
+                                        if let cachedPeerData = cachedPeerData as? CachedUserData {
+                                            return cachedPeerData.withUpdatedPersonalPhoto(.known(updatedImage))
+                                        } else {
+                                            return nil
+                                        }
                                     }
                                 }
                             }
@@ -602,6 +617,48 @@ func _internal_updatePeerPhotoExisting(network: Network, reference: TelegramMedi
     }
 }
 
+/// Re-reads the account user from the server and stores it.
+///
+/// Removing a profile photo leaves the local `TelegramUser.photo` untouched: neither
+/// `photos.deletePhotos` nor `photos.updateProfilePhoto` reports the resulting photo, and the
+/// session that issued the change receives no update for it either. The stale record would then
+/// keep feeding every avatar of the account (the multi-account settings tab icon, the profile
+/// header, message avatars) until some unrelated response happened to carry the account user
+/// again. Refetching is also the only way to learn which photo the server promoted to current
+/// when the removed one was not the last remaining photo.
+private func refreshAccountPeer(account: Account) -> Signal<Void, NoError> {
+    return account.network.request(Api.functions.users.getUsers(id: [.inputUserSelf]))
+    |> `catch` { _ -> Signal<[Api.User], NoError> in
+        return .single([])
+    }
+    |> mapToSignal { users -> Signal<Void, NoError> in
+        if users.isEmpty {
+            return .complete()
+        }
+        return account.postbox.transaction { transaction -> Void in
+            updatePeers(transaction: transaction, accountPeerId: account.peerId, peers: AccumulatedPeers(users: users))
+        }
+    }
+}
+
+/// Forgets the account's fallback photo.
+///
+/// The fallback photo is not part of `TelegramUser.photo`; it lives alone in
+/// `CachedUserData.fallbackPhoto`, so removing it has to be written there and refreshing the
+/// account user would not cover it.
+private func clearAccountFallbackPhoto(account: Account) -> Signal<Void, NoError> {
+    return account.postbox.transaction { transaction -> Void in
+        transaction.updatePeerCachedData(peerIds: Set([account.peerId]), update: { _, current in
+            if let current = current as? CachedUserData {
+                return current.withUpdatedFallbackPhoto(.known(nil))
+            } else {
+                return current
+            }
+        })
+        return Void()
+    }
+}
+
 func _internal_removeAccountPhoto(account: Account, reference: TelegramMediaImageReference?, fallback: Bool) -> Signal<Void, NoError> {
     if let reference = reference {
         switch reference {
@@ -611,8 +668,15 @@ func _internal_removeAccountPhoto(account: Account, reference: TelegramMediaImag
                 |> `catch` { _ -> Signal<[Int64], NoError> in
                     return .single([])
                 }
-                |> mapToSignal { _ -> Signal<Void, NoError> in
-                    return .complete()
+                |> mapToSignal { deletedIds -> Signal<Void, NoError> in
+                    if deletedIds.isEmpty {
+                        return .complete()
+                    }
+                    if fallback {
+                        return clearAccountFallbackPhoto(account: account)
+                    } else {
+                        return refreshAccountPeer(account: account)
+                    }
                 }
             } else {
                 return .complete()
@@ -629,18 +693,9 @@ func _internal_removeAccountPhoto(account: Account, reference: TelegramMediaImag
         |> retryRequest
         |> mapToSignal { _ -> Signal<Void, NoError> in
             if fallback {
-                return account.postbox.transaction { transaction -> Void in
-                    transaction.updatePeerCachedData(peerIds: Set([account.peerId]), update: { _, current in
-                        if let current = current as? CachedUserData {
-                            return current.withUpdatedFallbackPhoto(.known(nil))
-                        } else {
-                            return current
-                        }
-                    })
-                    return Void()
-                }
+                return clearAccountFallbackPhoto(account: account)
             } else {
-                return .complete()
+                return refreshAccountPeer(account: account)
             }
         }
     }
