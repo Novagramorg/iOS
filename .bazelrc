@@ -7,8 +7,6 @@ build --enable_platform_specific_config
 build --noincompatible_target_cpu_from_platform
 
 # macOS-specific settings (auto-applied on macOS via --enable_platform_specific_config)
-build:macos --per_file_copt=".*\.m$","@-fno-objc-msgsend-selector-stubs"
-build:macos --per_file_copt=".*\.mm$","@-fno-objc-msgsend-selector-stubs"
 build:macos --features=debug_prefix_map_pwd_is_dot
 build:macos --features=swift.cacheable_swiftmodules
 build:macos --features=swift.debug_prefix_map
