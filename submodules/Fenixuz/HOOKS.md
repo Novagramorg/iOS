@@ -5315,3 +5315,35 @@ out of step — `selectedItemsModel` is assigned after the view exists, and two 
 land before the view has processed the first. Both `insertItemAtIndex:` and `deleteItemAtIndex:` now
 compare the data source count with the collection view's cached count and fall back to `reloadData`
 when they disagree. The thumbnail still appears, just without the insert animation.
+
+---
+
+## 📌 Chat input service tasks — stale length in attributed-string enumeration (2026-09-17)
+
+**Why:** 59 devices in two weeks on 12.9.6 build 78, `SIGABRT` raised by
+`-[NSRLEArray objectAtIndex:effectiveRange:runIndex:]` under
+`-[NSAttributedString enumerateAttribute:inRange:options:usingBlock:]`, i.e. `NSRangeException`.
+
+### `submodules/TelegramUI/Sources/ChatInterfaceInputContexts.swift` (UPSTREAM hook)
+
+`serviceTasksForChatPresentationIntefaceState` captures the composer text up front:
+
+```swift
+let inputText = chatPresentationInterfaceState.interfaceState.composeInputState.inputText
+```
+
+and then, inside the `resolveInlineStickers` completion — after a **network round-trip** — enumerated
+the *current* text using the *captured* one's length:
+
+```swift
+inputState.inputText.enumerateAttribute(…, in: NSRange(location: 0, length: inputText.length), …)
+//                  ^^ current text                                    ^^ stale length
+```
+
+If the user shortens or clears the draft while the sticker request is in flight, the range runs past
+the end of the string and `NSAttributedString` raises. Fixed by using `inputState.inputText.length`.
+
+**Not verified on device** — reaching the code needs an unresolved custom emoji in the composer, and
+custom emoji are Premium-gated server-side, so a non-Premium test account cannot get one there. The
+mistake is unambiguous in the source: the enumerated string and the range now come from the same
+object.
