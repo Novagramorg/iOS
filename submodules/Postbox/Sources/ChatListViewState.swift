@@ -657,6 +657,15 @@ private final class ChatListViewSpaceState {
                     let isIncluded = filterPredicate.includes(peer: mainPeer, groupId: groupId, isRemovedFromTotalUnreadCount: nowRemovedFromTotalUnreadCount, isUnread: isUnread, isContact: postbox.contactsTable.isContact(peerId: peerId), messageTagSummaryResult: messageTagSummaryResult)
                     if isIncluded && self.orderedEntries.indicesForPeerId(mainPeer.id) == nil {
                         for peer in peers {
+                            // isIncluded was decided for mainPeer, but ChatListFilterPredicate.includes
+                            // rejects a chat pinned in this folder by its *own* id, and an associated
+                            // peer (a secret chat) is never put through that check. Without this it is
+                            // inserted here while the .peers(asPinned:) space already holds it, leaving
+                            // two entries for one chat -- which trips the stableId assertion in
+                            // mergeListsStableWithUpdates.
+                            if filterPredicate.pinnedPeerIds.contains(peer.id) {
+                                continue
+                            }
                             let tableEntry = postbox.chatListTable.getEntry(groupId: groupId, peerId: peer.id, messageHistoryTable: postbox.messageHistoryTable, peerChatInterfaceStateTable: postbox.peerChatInterfaceStateTable)
                             if let entry = tableEntry {
                                 if pinned.include == (entry.index.pinningIndex != nil) {
@@ -905,6 +914,15 @@ private final class ChatListViewSpaceState {
                     let isIncluded = filterPredicate.includes(peer: mainPeer, groupId: groupId, isRemovedFromTotalUnreadCount: nowRemovedFromTotalUnreadCount, isUnread: isUnread, isContact: postbox.contactsTable.isContact(peerId: peerId), messageTagSummaryResult: messageTagSummaryResult)
                     if isIncluded && self.orderedEntries.indicesForPeerId(mainPeer.id) == nil {
                         for peer in peers {
+                            // isIncluded was decided for mainPeer, but ChatListFilterPredicate.includes
+                            // rejects a chat pinned in this folder by its *own* id, and an associated
+                            // peer (a secret chat) is never put through that check. Without this it is
+                            // inserted here while the .peers(asPinned:) space already holds it, leaving
+                            // two entries for one chat -- which trips the stableId assertion in
+                            // mergeListsStableWithUpdates.
+                            if filterPredicate.pinnedPeerIds.contains(peer.id) {
+                                continue
+                            }
                             let tableEntry = postbox.chatListTable.getEntry(groupId: groupId, peerId: peer.id, messageHistoryTable: postbox.messageHistoryTable, peerChatInterfaceStateTable: postbox.peerChatInterfaceStateTable)
                             if let entry = tableEntry {
                                 if pinned.include == (entry.index.pinningIndex != nil) {
