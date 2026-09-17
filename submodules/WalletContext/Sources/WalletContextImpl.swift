@@ -645,6 +645,7 @@ actor WalletContextImpl {
                 walletEngineAddressesEqual($0, address)
             } ?? false
             let previousBalance = isSameCachedIdentity ? self.currentState.balance.currentValue : nil
+            let supersededBalance = isSameCachedIdentity ? nil : self.currentState.balance.currentValue
             let previousCoordinator = self.tonConnectCoordinator
             self.tonConnectCoordinator = nil
             self.currentTonConnectState = .empty
@@ -674,6 +675,7 @@ actor WalletContextImpl {
                     address: address,
                     publicKey: publicKey,
                     previousCoordinator: previousCoordinator,
+                    supersededBalance: supersededBalance,
                     generation: generation,
                     serverStateRevision: serverStateRevision
                 )
@@ -688,6 +690,7 @@ actor WalletContextImpl {
         address: String,
         publicKey: Data,
         previousCoordinator: WalletTonConnectCoordinator?,
+        supersededBalance: Int64?,
         generation: UInt64,
         serverStateRevision: UInt64
     ) async {
@@ -695,6 +698,7 @@ actor WalletContextImpl {
             let authorizationGeneration = try self.authorization.operationGeneration(requireAvailable: false)
             try await self.authorization.waitUntilAvailable(generation: authorizationGeneration)
             await previousCoordinator?.shutdown()
+            await self.runtime.setLastKnownBalance(supersededBalance)
             let stored = try await self.storage.loadDescriptor()
             let storedMatchesIdentity = stored.map {
                 $0.schemaVersion == 2

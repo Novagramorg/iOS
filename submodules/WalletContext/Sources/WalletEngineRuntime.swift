@@ -60,6 +60,7 @@ actor WalletEngineRuntime {
     }
 
     let storage: WalletEngineStorage
+    private var lastKnownBalance: Int64?
     private let engine: TelegramEngine
     private let logger: WalletLogger
     private let platformHost: WalletEnginePlatformHost
@@ -407,7 +408,7 @@ actor WalletEngineRuntime {
             if let stored,
                stored.recordId != record.recordId,
                stored.secretRef != record.secretRef {
-                try await self.deleteLocalWallet(stored)
+                try await self.archiveLocalWallet(stored)
             }
         } catch {
             try? await client.shutdown()
@@ -432,7 +433,7 @@ actor WalletEngineRuntime {
         if let previous,
            previous.recordId != candidate.recordId,
            previous.secretRef != candidate.secretRef {
-            try await self.deleteLocalWallet(previous)
+            try await self.archiveLocalWallet(previous)
         }
     }
 
@@ -466,6 +467,51 @@ actor WalletEngineRuntime {
     private func deleteLocalWallet(_ record: WalletEngineDescriptorRecord) async throws {
         if let secretRef = record.secretRef {
             try await self.storage.deleteProtectedSecret(ProtectedSecretRef(value: secretRef))
+        }
+    }
+
+    func setLastKnownBalance(_ value: Int64?) {
+        self.lastKnownBalance = value
+    }
+
+    private func archiveLocalWallet(_ record: WalletEngineDescriptorRecord) async throws {
+        let balance = self.lastKnownBalance
+        self.lastKnownBalance = nil
+        do {
+            try await self.storage.archiveWallet(record, balance: balance, archivedAt: currentWalletTimestamp())
+        } catch {
+            try await self.deleteLocalWallet(record)
+        }
+    }
+
+    func archivedWallets() async throws -> [WalletContext.PreviousWallet] {
+        try await self.storage.availableArchivedWallets().map {
+            WalletContext.PreviousWallet(
+                id: $0.descriptor.recordId,
+                address: $0.descriptor.address,
+                balance: $0.balance,
+                lastUsedAt: $0.archivedAt
+            )
+        }
+    }
+
+    func forgetArchivedWallet(recordId: String) async throws {
+        try await self.storage.removeArchivedWallet(recordId: recordId)
+    }
+
+    func removeArchivedWallets() async throws {
+        try await self.storage.removeArchivedWallets()
+    }
+
+    func revealArchivedRecoveryPhrase(recordId: String) async throws -> [String] {
+        try await self.withFfi {
+            guard let record = try await self.storage.loadArchivedWallets()
+                .first(where: { $0.descriptor.recordId == recordId }),
+                  let descriptor = record.descriptor.descriptor else {
+                throw WalletContext.WalletError.unavailable
+            }
+            let phrase = try await self.lifecycle.revealRecoveryPhrase(descriptor: descriptor)
+            return phrase.phrase.split(separator: " ").map(String.init)
         }
     }
 
