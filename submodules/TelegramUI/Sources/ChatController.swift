@@ -7744,6 +7744,69 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     
     var returnInputViewFocus = false
     
+    private var isPreviewingMode: Bool {
+        if case .standard(.previewing) = self.mode {
+            return true
+        } else {
+            return false
+        }
+    }
+
+    // Installed from viewDidAppear for a normally presented chat, and from containerLayoutUpdated
+    // for a previewing one: a controller hosted inside a ContextController only ever gets its
+    // display node reparented and its layout updated, so viewDidAppear never runs for it.
+    private func setupScreenCaptureDetectionIfNeeded() {
+        if case let .peer(peerId) = self.chatLocation, self.screenCaptureManager == nil {
+            if peerId.namespace == Namespaces.Peer.SecretChat {
+                self.screenCaptureManager = ScreenCaptureDetectionManager(check: { [weak self] in
+                    if let strongSelf = self, strongSelf.traceVisibility() {
+                        if strongSelf.canReadHistoryValue || strongSelf.isPreviewingMode {
+                            let _ = strongSelf.context.engine.messages.addSecretChatMessageScreenshot(peerId: peerId).startStandalone()
+                        }
+                        return true
+                    } else {
+                        return false
+                    }
+                })
+            } else if peerId.isTelegramNotifications {
+                self.screenCaptureManager = ScreenCaptureDetectionManager(check: { [weak self] in
+                    if let strongSelf = self, strongSelf.traceVisibility() {
+                        let loginCodeRegex = try? NSRegularExpression(pattern: "\\b\\d{5,7}\\b", options: [])
+                        var loginCodesToInvalidate: [String] = []
+                        strongSelf.chatDisplayNode.historyNode.forEachVisibleMessageItemNode({ itemNode in
+                            if let text = itemNode.item?.message.text, let matches = loginCodeRegex?.matches(in: text, options: [], range: NSMakeRange(0, (text as NSString).length)), let match = matches.first {
+                                loginCodesToInvalidate.append((text as NSString).substring(with: match.range))
+                            }
+                        })
+                        if !loginCodesToInvalidate.isEmpty {
+                            let _ = strongSelf.context.engine.auth.invalidateLoginCodes(codes: loginCodesToInvalidate).startStandalone()
+                        }
+                        return true
+                    } else {
+                        return false
+                    }
+                })
+            } else if peerId.namespace == Namespaces.Peer.CloudUser {
+                self.screenCaptureManager = ScreenCaptureDetectionManager(check: { [weak self] in
+                    guard let self else {
+                        return false
+                    }
+                    
+                    let _ = (self.context.sharedContext.mediaManager.globalMediaPlayerState
+                    |> take(1)
+                    |> deliverOnMainQueue).startStandalone(next: { [weak self] playlistStateAndType in
+                        if let self, let (_, playbackState, _) = playlistStateAndType, case let .state(state) = playbackState {
+                            if let source = state.item.playbackData?.source, case let .telegramFile(_, _, isViewOnce) = source, isViewOnce {
+                                self.context.sharedContext.mediaManager.setPlaylist(nil, type: .voice, control: .playback(.pause))
+                            }
+                        }
+                    })
+                    return true
+                })
+            }
+        }
+    }
+
     override public func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         
@@ -7849,55 +7912,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         if !self.checkedPeerChatServiceActions {
             self.checkedPeerChatServiceActions = true
             
-            if case let .peer(peerId) = self.chatLocation, self.screenCaptureManager == nil {
-                if peerId.namespace == Namespaces.Peer.SecretChat {
-                    self.screenCaptureManager = ScreenCaptureDetectionManager(check: { [weak self] in
-                        if let strongSelf = self, strongSelf.traceVisibility() {
-                            if strongSelf.canReadHistoryValue {
-                                let _ = strongSelf.context.engine.messages.addSecretChatMessageScreenshot(peerId: peerId).startStandalone()
-                            }
-                            return true
-                        } else {
-                            return false
-                        }
-                    })
-                } else if peerId.isTelegramNotifications {
-                    self.screenCaptureManager = ScreenCaptureDetectionManager(check: { [weak self] in
-                        if let strongSelf = self, strongSelf.traceVisibility() {
-                            let loginCodeRegex = try? NSRegularExpression(pattern: "\\b\\d{5,7}\\b", options: [])
-                            var loginCodesToInvalidate: [String] = []
-                            strongSelf.chatDisplayNode.historyNode.forEachVisibleMessageItemNode({ itemNode in
-                                if let text = itemNode.item?.message.text, let matches = loginCodeRegex?.matches(in: text, options: [], range: NSMakeRange(0, (text as NSString).length)), let match = matches.first {
-                                    loginCodesToInvalidate.append((text as NSString).substring(with: match.range))
-                                }
-                            })
-                            if !loginCodesToInvalidate.isEmpty {
-                                let _ = strongSelf.context.engine.auth.invalidateLoginCodes(codes: loginCodesToInvalidate).startStandalone()
-                            }
-                            return true
-                        } else {
-                            return false
-                        }
-                    })
-                } else if peerId.namespace == Namespaces.Peer.CloudUser {
-                    self.screenCaptureManager = ScreenCaptureDetectionManager(check: { [weak self] in
-                        guard let self else {
-                            return false
-                        }
-                        
-                        let _ = (self.context.sharedContext.mediaManager.globalMediaPlayerState
-                        |> take(1)
-                        |> deliverOnMainQueue).startStandalone(next: { [weak self] playlistStateAndType in
-                            if let self, let (_, playbackState, _) = playlistStateAndType, case let .state(state) = playbackState {
-                                if let source = state.item.playbackData?.source, case let .telegramFile(_, _, isViewOnce) = source, isViewOnce {
-                                    self.context.sharedContext.mediaManager.setPlaylist(nil, type: .voice, control: .playback(.pause))
-                                }
-                            }
-                        })
-                        return true
-                    })
-                }
-            }
+            self.setupScreenCaptureDetectionIfNeeded()
             
             if case let .peer(peerId) = self.chatLocation {
                 let _ = self.context.engine.peers.checkPeerChatServiceActions(peerId: peerId).startStandalone()
@@ -8360,6 +8375,15 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     override public func containerLayoutUpdated(_ layout: ContainerViewLayout, transition: ContainedViewLayoutTransition) {
         self.suspendNavigationBarLayout = true
         super.containerLayoutUpdated(layout, transition: transition)
+        
+        if self.isPreviewingMode, case let .peer(peerId) = self.chatLocation, peerId.namespace == Namespaces.Peer.SecretChat {
+            // A previewing controller is hosted by a ContextController, which never calls
+            // viewDidAppear on it, so the usual install site there never runs. This is the first
+            // hook that does run once the content is on screen. Restricted to secret chats: the
+            // other capture handlers guard content a preview is not obliged to protect, and this
+            // runs on every layout pass of every preview.
+            self.setupScreenCaptureDetectionIfNeeded()
+        }
         
         self.validLayout = layout
         

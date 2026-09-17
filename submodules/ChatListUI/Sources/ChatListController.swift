@@ -2045,22 +2045,17 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 strongSelf.presentInGlobalOverlay(contextController)
             } else {
                 var dismissPreviewingImpl: ((Bool) -> (() -> Void))?
-                let contextContentSource: ContextContentSource
-                if peer.id.namespace == Namespaces.Peer.SecretChat, let node = node.subnodes?.first as? ContextExtractedContentContainingNode {
-                    contextContentSource = .extracted(ChatListHeaderBarContextExtractedContentSource(controller: strongSelf, sourceNode: node, sourceView: nil, keepInPlace: false))
-                } else {
-                    var subject: ChatControllerSubject?
-                    if case let .search(messageId) = source, let id = messageId {
-                        subject = .message(id: .id(id), highlight: nil, timecode: nil, setupReply: false)
-                    }
-                    let chatController = strongSelf.context.sharedContext.makeChatController(context: strongSelf.context, chatLocation: .peer(id: peer.id), subject: subject, botStart: nil, mode: .standard(.previewing), params: nil)
-                    chatController.customNavigationController = strongSelf.navigationController as? NavigationController
-                    chatController.canReadHistory.set(false)
-                    chatController.dismissPreviewing = { animateIn in
-                        return dismissPreviewingImpl?(animateIn) ?? {}
-                    }
-                    contextContentSource = .controller(ContextControllerContentSourceImpl(controller: chatController, sourceNode: node, navigationController: strongSelf.navigationController as? NavigationController))
+                var subject: ChatControllerSubject?
+                if case let .search(messageId) = source, let id = messageId {
+                    subject = .message(id: .id(id), highlight: nil, timecode: nil, setupReply: false)
                 }
+                let chatController = strongSelf.context.sharedContext.makeChatController(context: strongSelf.context, chatLocation: .peer(id: peer.id), subject: subject, botStart: nil, mode: .standard(.previewing), params: nil)
+                chatController.customNavigationController = strongSelf.navigationController as? NavigationController
+                chatController.canReadHistory.set(false)
+                chatController.dismissPreviewing = { animateIn in
+                    return dismissPreviewingImpl?(animateIn) ?? {}
+                }
+                let contextContentSource: ContextContentSource = .controller(ContextControllerContentSourceImpl(controller: chatController, sourceNode: node, navigationController: strongSelf.navigationController as? NavigationController))
                 
                 let contextController = makeContextController(context: strongSelf.context, presentationData: strongSelf.presentationData, source: contextContentSource, items: chatContextMenuItems(context: strongSelf.context, peerId: peer.id, promoInfo: nil, source: .search(source), chatListController: strongSelf, joined: false) |> map { ContextController.Items(content: .list($0)) }, gesture: gesture)
                 strongSelf.presentInGlobalOverlay(contextController)

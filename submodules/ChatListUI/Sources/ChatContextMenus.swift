@@ -213,8 +213,15 @@ func chatContextMenuItems(context: AccountContext, peerId: EnginePeer.Id, promoI
                             isCommunity = false
                         }
                         
+                        // A folder's include/exclude lists are matched against a peer's identity-overriding
+                        // associated peer (ChatListFilterPredicate.includes), so a secret chat's own id can
+                        // never match one: adding or removing it would write an entry that changes nothing
+                        // and then report success. Pinning is unaffected, since pinnedPeerIds is matched
+                        // against the raw peer id.
+                        let canEditFolderMembership = peerId.namespace != Namespaces.Peer.SecretChat
+
                         var hasRemoveFromFolder = false
-                        if case let .chatList(currentFilter) = source {
+                        if canEditFolderMembership, case let .chatList(currentFilter) = source {
                             if let currentFilter = currentFilter, case let .filter(id, title, emoticon, data) = currentFilter {
                                 items.append(.action(ContextMenuActionItem(text: strings.ChatList_Context_RemoveFromFolder, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/RemoveFromFolder"), color: theme.contextMenu.primaryColor) }, action: { c, _ in
                                     let _ = (context.engine.peers.updateChatListFiltersInteractively { filters in
@@ -241,7 +248,7 @@ func chatContextMenuItems(context: AccountContext, peerId: EnginePeer.Id, promoI
                             }
                         }
                         
-                        if !hasRemoveFromFolder && peerGroup != nil {
+                        if canEditFolderMembership && !hasRemoveFromFolder && peerGroup != nil {
                             var hasFolders = false
                             
                             for case let .filter(_, _, _, data) in filters {
