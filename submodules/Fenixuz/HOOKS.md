@@ -5435,3 +5435,27 @@ possession of the phone).
 
 **Verified on device**: reset appears and works with no master pincode; setup, correct unlock, master
 recovery, the master page's own 4-attempt gate, the Secret Vault and lock removal all unchanged.
+
+### Follow-up the same day: the reset button did nothing when tapped
+
+Surfacing the button was only half of it. Testing found the reset authenticating and then silently
+giving up, leaving the user on the pincode screen:
+
+- **`LAContext` was a local `let`.** LocalAuthentication cancels an evaluation as soon as its context
+  is released, and the completion block did not capture it, so ARC freed it the moment
+  `authenticateThenReset()` returned — the Face ID sheet dropped away and no passcode fallback ever
+  appeared. The context is now held on the view controller (and, in `ChatLockBiometricHelper`, in a
+  static) until the reply arrives.
+- **Two prompts fought each other.** `viewDidAppear` fires the screen's own biometric prompt; starting
+  the reset evaluation on top of it made the system cancel one. `ChatLockBiometricHelper.cancelPending()`
+  now invalidates the outstanding one first.
+- **Failure was silent.** `if success { proceed() }` and nothing else. Now an alert explains what
+  happened and offers Try Again.
+- **`localizedFallbackTitle`** is set, so the passcode option is labelled in the Face ID sheet instead
+  of only appearing after two failed scans.
+- **The confirmation text now says the passcode works**, so someone whose Face ID is broken or off does
+  not assume the reset is closed to them.
+
+Note on behaviour: when biometrics are *available*, iOS insists on them and shows the passcode only
+after failures — that is the system's own policy, not ours. When biometrics are unavailable or
+disabled (the case that started this), `.deviceOwnerAuthentication` goes straight to the passcode.

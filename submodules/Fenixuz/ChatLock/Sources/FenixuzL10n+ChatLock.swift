@@ -144,7 +144,13 @@ public enum FenixuzChatLockStrings {
         localized(en: "Reset Chat Lock?", uz: "Chat Lock reset qilinsinmi?", ru: "Сбросить Chat Lock?")
     }
     static var resetConfirmMessage: String {
-        localized(en: "This removes the master pincode and unlocks every chat. Your messages are not deleted.", uz: "Bu asosiy pinkodni o'chiradi va barcha chatlarni ochadi. Xabarlaringiz o'chmaydi.", ru: "Это удалит главный пин-код и разблокирует все чаты. Сообщения не удаляются.")
+        // Say the passcode works up front. Someone whose Face ID is broken or switched off will
+        // otherwise assume the reset is closed to them and stay locked out of their own chat.
+        localized(
+            en: "Confirm with Face ID, Touch ID or your iPhone passcode — any of them works.\n\nThis removes the master pincode and unlocks every chat. Your messages are not deleted.",
+            uz: "Face ID, Touch ID yoki iPhone parolingiz bilan tasdiqlang — har qaysisi ishlaydi.\n\nBu asosiy pinkodni o'chiradi va barcha chatlarni ochadi. Xabarlaringiz o'chmaydi.",
+            ru: "Подтвердите с помощью Face ID, Touch ID или код-пароля iPhone — подойдёт любой.\n\nЭто удалит главный пин-код и разблокирует все чаты. Сообщения не удаляются."
+        )
     }
     static var resetConfirmAction: String {
         localized(en: "Reset", uz: "Reset", ru: "Сбросить")
@@ -154,6 +160,18 @@ public enum FenixuzChatLockStrings {
     }
     static var resetReason: String {
         localized(en: "Confirm your identity to reset Chat Lock", uz: "Chat Lock'ni reset qilish uchun shaxsingizni tasdiqlang", ru: "Подтвердите личность для сброса Chat Lock")
+    }
+    static var resetUsePasscode: String {
+        localized(en: "Use iPhone Passcode", uz: "iPhone parolidan foydalanish", ru: "Ввести код-пароль")
+    }
+    static var resetFailedTitle: String {
+        localized(en: "Not Confirmed", uz: "Tasdiqlanmadi", ru: "Не подтверждено")
+    }
+    static var resetFailedMessage: String {
+        localized(en: "Chat Lock was not reset. Confirm with Face ID, Touch ID or your iPhone passcode to continue.", uz: "Chat Lock reset qilinmadi. Davom etish uchun Face ID, Touch ID yoki iPhone parolingiz bilan tasdiqlang.", ru: "Chat Lock не сброшен. Подтвердите с помощью Face ID, Touch ID или код-пароля iPhone.")
+    }
+    static var resetRetry: String {
+        localized(en: "Try Again", uz: "Qayta urinish", ru: "Повторить")
     }
     static var recoveryHint: String {
         localized(en: "Forgot it? Use the option below.", uz: "Unutdingizmi? Pastdagi variantdan foydalaning.", ru: "Забыли? Используйте вариант ниже.")
