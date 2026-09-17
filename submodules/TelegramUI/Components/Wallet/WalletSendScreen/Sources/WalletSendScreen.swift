@@ -1630,7 +1630,7 @@ private final class WalletSendScreenComponent: Component {
                     }
                 ))
             } else {
-                self.presentRecoveryPhraseImportAlert()
+                self.openRecoveryPhraseImport()
             }
         }
 
@@ -1701,25 +1701,6 @@ private final class WalletSendScreenComponent: Component {
             ), in: .window(.root))
         }
 
-        private func presentRecoveryPhraseImportAlert() {
-            guard let component = self.component, let controller = self.environment?.controller() else {
-                return
-            }
-            controller.present(textAlertController(
-                context: component.context,
-                title: "Recovery Phrase Required",
-                text: "To send funds, you’ll need to enter your 12- or 24-word recovery phrase to restore access to this wallet.",
-                actions: [
-                    TextAlertAction(type: .genericAction, title: "Cancel", action: {}),
-                    TextAlertAction(type: .defaultAction, title: "Proceed", action: { [weak self] in
-                        Queue.mainQueue().after(0.25) { [weak self] in
-                            self?.openRecoveryPhraseImport()
-                        }
-                    })
-                ]
-            ), in: .window(.root))
-        }
-
         private func openRecoveryPhraseImport() {
             guard let component = self.component, let controller = self.environment?.controller() else {
                 return
@@ -1758,7 +1739,7 @@ private final class WalletSendScreenComponent: Component {
                     presentationData: presentationData,
                     content: .actionSucceeded(
                         title: "Wallet Imported",
-                        text: "Your wallet was restored from your recovery phrase.",
+                        text: "Your wallet was restored from your secret phrase.",
                         cancel: nil,
                         destructive: false
                     ),

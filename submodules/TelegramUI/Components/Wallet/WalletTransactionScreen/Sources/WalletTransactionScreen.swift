@@ -1219,24 +1219,7 @@ private final class WalletTransactionContentComponent: Component {
                     }
                 ))
             } else {
-                //TODO:localize
-                controller.present(textAlertController(
-                    context: component.context,
-                    title: "Recovery Phrase Required",
-                    text: "Enter your recovery phrase to restore access to this wallet and decrypt the comment.",
-                    actions: [
-                        TextAlertAction(type: .genericAction, title: "Cancel", action: { [weak self] in
-                            guard let self, self.commentDecryptionRevision == revision else { return }
-                            self.finishCommentDecryption(error: .authorizationCancelled)
-                        }),
-                        TextAlertAction(type: .defaultAction, title: "Proceed", action: { [weak self] in
-                            Queue.mainQueue().after(0.25) { [weak self] in
-                                self?.importCommentKey(revision: revision)
-                            }
-                        })
-                    ],
-                    dismissOnOutsideTap: false
-                ), in: .window(.root))
+                self.importCommentKey(revision: revision)
             }
         }
 

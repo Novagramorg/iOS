@@ -17,6 +17,7 @@ import SegmentControlComponent
 import WalletContext
 import SwiftSignalKit
 import WalletAuthorizationUI
+import AlertComponent
 
 private final class WalletImportScreenComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
@@ -1045,10 +1046,7 @@ private final class WalletImportScreenComponent: Component {
             }
             if component.mode == .enterRecoveryPhrase {
                 if let prepared = self.activePreparedRecoveryPhraseImport, self.preparedImportWords == words {
-                    switch prepared.disposition {
-                    case .currentWallet: self.completeRecoveryPhraseImport(prepared, password: nil)
-                    case .replacement: self.authorizeRecoveryPhraseReplacement(prepared)
-                    }
+                    self.processRecoveryPhraseImport(prepared)
                     return
                 }
                 self.prepareRecoveryPhraseImport(words: words)
@@ -1111,66 +1109,118 @@ private final class WalletImportScreenComponent: Component {
                 }
                 self.activePreparedRecoveryPhraseImport = prepared
                 self.preparedImportWords = words
-                switch prepared.disposition {
-                case .currentWallet:
-                    self.completeRecoveryPhraseImport(prepared, password: nil)
-                case .replacement:
-                    self.isImporting = false
-                    self.componentState?.updated(transition: .easeInOut(duration: 0.2))
-                    self.presentReplacementConfirmation(prepared)
-                }
+                self.processRecoveryPhraseImport(prepared)
             }, error: { [weak self] error in
                 self?.finishImportWithError(error: error)
             }))
         }
 
-        private func presentReplacementConfirmation(_ prepared: WalletContext.PreparedRecoveryPhraseImport) {
-            guard let component = self.component, let controller = self.environment?.controller() else {
-                return
+        private func processRecoveryPhraseImport(_ prepared: WalletContext.PreparedRecoveryPhraseImport) {
+            switch prepared.disposition {
+            case .currentWallet:
+                self.completeRecoveryPhraseImport(prepared, password: nil)
+            case .replacement:
+                self.endWalletFlow()
+                self.isImporting = false
+                self.componentState?.updated(transition: .easeInOut(duration: 0.2))
+                self.presentWrongSecretPhrase()
             }
-            controller.present(textAlertController(
-                context: component.context,
-                title: "Replace Wallet",
-                text: "This secret phrase belongs to a different wallet. Replacing the current wallet will remove access to it on this device. Make sure you’ve saved its secret phrase before continuing.",
-                actions: [
-                    TextAlertAction(type: .genericAction, title: "Cancel", action: { [weak self] in
-                        self?.endWalletFlow()
-                    }),
-                    TextAlertAction(type: .destructiveAction, title: "Replace", action: { [weak self] in
-                        self?.authorizeRecoveryPhraseReplacement(prepared)
-                    })
-                ],
-                dismissOnOutsideTap: false
-            ), in: .window(.root))
         }
 
-        private func authorizeRecoveryPhraseReplacement(_ prepared: WalletContext.PreparedRecoveryPhraseImport) {
-            guard let component = self.component, let controller = self.environment?.controller() else {
+        private func presentRecoveryPhraseAlert(_ alert: AlertScreen, clearWordsOnDismiss: Bool = false) {
+            guard let controller = self.environment?.controller() else {
                 return
             }
-            self.isImporting = true
-            self.componentState?.updated(transition: .easeInOut(duration: 0.2))
-            self.operationDisposable.set(performWalletAuthorizedOperation(
-                context: component.context,
-                present: { [weak controller] alert in
-                    controller?.present(alert, in: .window(.root))
-                },
-                operation: { [weak self] password -> Signal<WalletContext.WalletInfo, WalletContext.WalletError> in
-                    guard let self else { return .fail(.authorizationCancelled) }
-                    return self.walletFlowAuthorization() |> mapToSignal { session in
-                        component.walletContext.completeRecoveryPhraseImport(prepared, password: password, session: session)
+            self.endEditing(true)
+            alert.dismissed = { [weak self] _ in
+                DispatchQueue.main.async { [weak self] in
+                    guard let self,
+                          self.component?.mode == .enterRecoveryPhrase,
+                          let controller = self.environment?.controller(),
+                          controller.navigationController?.topViewController === controller,
+                          self.window != nil,
+                          !self.words.isEmpty else {
+                        return
                     }
-                },
-                next: { [weak self] _ in
-                    self?.finishRecoveryPhraseImport()
-                },
-                failed: { [weak self] error in
-                    if error == .authorizationCancelled {
-                        self?.discardPreparedRecoveryPhraseImport(prepared)
+                    self.scrollToBottomAfterPaste = false
+                    if clearWordsOnDismiss {
+                        self.setupWordInputFields(displayNumbers: Array(1 ... self.words.count), preserving: [])
+                        self.componentState?.updated(transition: .immediate)
                     }
-                    self?.finishImportWithError(error: error)
+                    let index = self.words.firstIndex(where: { $0.isEmpty }) ?? (self.words.count - 1)
+                    guard self.wordFields.indices.contains(index), self.wordFields[index].textField.window != nil else {
+                        return
+                    }
+                    let _ = self.wordFields[index].textField.becomeFirstResponder()
                 }
+            }
+            controller.present(alert, in: .window(.root))
+        }
+
+        private func presentRecoveryPhraseExplanation() {
+            guard let component = self.component, component.mode == .enterRecoveryPhrase else {
+                return
+            }
+            //TODO:localize
+            self.presentRecoveryPhraseAlert(AlertScreen(
+                context: component.context,
+                configuration: AlertScreen.Configuration(allowInputInset: false),
+                content: [
+                    AnyComponentWithIdentity(id: "text", component: AnyComponent(AlertTextComponent(
+                        content: .plain("Since you disabled backups for your wallet, you have to manually enter your Secret Phrase in every new Telegram session.")
+                    )))
+                ],
+                actions: [AlertScreen.Action(title: "OK", type: .default)]
             ))
+        }
+
+        private func presentWrongSecretPhrase() {
+            guard let component = self.component,
+                  case let .wallet(info) = component.walletContext.stateValue.phase else {
+                return
+            }
+            HapticFeedback().error()
+            let theme = component.context.sharedContext.currentPresentationData.with { $0.theme }
+            let addressFont = Font.with(size: 14.0, design: .monospace)
+            let addressText = NSMutableAttributedString(string: "")
+            var addressIndex = info.address.startIndex
+            var groupIndex = 0
+            while addressIndex < info.address.endIndex {
+                let endIndex = info.address.index(addressIndex, offsetBy: 4, limitedBy: info.address.endIndex) ?? info.address.endIndex
+                if groupIndex != 0 {
+                    addressText.append(NSAttributedString(
+                        string: groupIndex.isMultiple(of: 6) ? "\n" : " ",
+                        font: addressFont,
+                        textColor: theme.actionSheet.primaryTextColor
+                    ))
+                }
+                addressText.append(NSAttributedString(
+                    string: String(info.address[addressIndex ..< endIndex]),
+                    font: addressFont,
+                    textColor: groupIndex.isMultiple(of: 2)
+                        ? theme.actionSheet.primaryTextColor
+                        : theme.actionSheet.secondaryTextColor
+                ))
+                addressIndex = endIndex
+                groupIndex += 1
+            }
+            //TODO:localize
+            self.presentRecoveryPhraseAlert(AlertScreen(
+                context: component.context,
+                configuration: AlertScreen.Configuration(allowInputInset: false),
+                content: [
+                    AnyComponentWithIdentity(id: "title", component: AnyComponent(AlertTitleComponent(title: "Wrong Secret Phrase"))),
+                    AnyComponentWithIdentity(id: "text", component: AnyComponent(AlertTextComponent(
+                        content: .plain("The words you entered don't match the wallet.")
+                    ))),
+                    AnyComponentWithIdentity(id: "address", component: AnyComponent(AlertTextComponent(
+                        content: .attributed(addressText),
+                        alignment: .center,
+                        style: .background(.small)
+                    )))
+                ],
+                actions: [AlertScreen.Action(title: "OK", type: .default)]
+            ), clearWordsOnDismiss: true)
         }
 
         private func completeRecoveryPhraseImport(
@@ -1393,7 +1443,7 @@ private final class WalletImportScreenComponent: Component {
                 //TODO:localize
                 titleText = "Import Wallet"
                 //TODO:localize
-                let bodyText = "Enter the 12- or 24-word recovery phrase from another wallet you own."
+                let bodyText = "Enter the 12- or 24-word secret phrase from another wallet you own."
                 bodyContent = .plain(NSAttributedString(
                     string: bodyText,
                     font: Font.regular(16.0),
@@ -1403,16 +1453,19 @@ private final class WalletImportScreenComponent: Component {
                 buttonTitle = "Import"
             case .enterRecoveryPhrase:
                 isVerificationMode = false
-                animationName = "WalletWordList"
+                animationName = "WalletWordCheck"
                 //TODO:localize
-                titleText = "Enter Recovery Phrase"
+                titleText = "Secret Phrase"
                 //TODO:localize
-                let bodyText = "Enter the 12- or 24-word recovery phrase for this wallet."
-                bodyContent = .plain(NSAttributedString(
-                    string: bodyText,
-                    font: Font.regular(16.0),
-                    textColor: theme.list.itemPrimaryTextColor
-                ))
+                bodyContent = .markdown(
+                    text: "Enter your wallet's Secret Phrase\nto continue. [Why?](why)",
+                    attributes: MarkdownAttributes(
+                        body: MarkdownAttributeSet(font: Font.regular(16.0), textColor: theme.list.itemPrimaryTextColor),
+                        bold: MarkdownAttributeSet(font: Font.semibold(16.0), textColor: theme.list.itemPrimaryTextColor),
+                        link: MarkdownAttributeSet(font: Font.regular(16.0), textColor: theme.list.itemAccentColor),
+                        linkAttribute: { _ in ("WalletRecoveryPhraseExplanation", true) }
+                    )
+                )
                 //TODO:localize
                 buttonTitle = "Done"
             case .verify:
@@ -1421,7 +1474,7 @@ private final class WalletImportScreenComponent: Component {
                 //TODO:localize
                 titleText = "Test Time"
                 //TODO:localize
-                let bodyText = "Make sure you wrote your recovery phrase down correctly.\nEnter words **%1$@**, **%2$@** and **%3$@**."
+                let bodyText = "Make sure you wrote your secret phrase down correctly.\nEnter words **%1$@**, **%2$@** and **%3$@**."
                 let displayedIndices = component.verificationIndices.map { String($0 + 1) }
                 let formattedBodyText: String
                 if displayedIndices.count == 3 {
@@ -1583,7 +1636,18 @@ private final class WalletImportScreenComponent: Component {
                     text: bodyContent,
                     horizontalAlignment: .center,
                     maximumNumberOfLines: 0,
-                    lineSpacing: 0.2
+                    lineSpacing: 0.2,
+                    highlightColor: theme.list.itemAccentColor.withAlphaComponent(0.2),
+                    highlightAction: { attributes in
+                        let key = NSAttributedString.Key(rawValue: "WalletRecoveryPhraseExplanation")
+                        return attributes[key] != nil ? key : nil
+                    },
+                    tapAction: { [weak self] attributes, _ in
+                        guard attributes[NSAttributedString.Key(rawValue: "WalletRecoveryPhraseExplanation")] != nil else {
+                            return
+                        }
+                        self?.presentRecoveryPhraseExplanation()
+                    }
                 )),
                 environment: {},
                 containerSize: CGSize(width: contentWidth, height: 1000.0)
