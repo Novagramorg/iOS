@@ -907,6 +907,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         if let navigationBar = self.navigationBar {
             self.contentContainerNode.contentNode.addSubnode(navigationBar)
         }
+        self.updateNavigationBarPassthroughTouches()
         
         self.inputPanelContainerNode.expansionUpdated = { [weak self] transition in
             guard let strongSelf = self else {
@@ -3735,6 +3736,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             
             let updateInputTextState = self.chatPresentationInterfaceState.interfaceState.effectiveInputState != chatPresentationInterfaceState.interfaceState.effectiveInputState
             self.chatPresentationInterfaceState = chatPresentationInterfaceState
+            self.updateNavigationBarPassthroughTouches()
 
             self.updateRichMediaPreuploadNeeds()
             
@@ -4373,6 +4375,27 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         }
     }
         
+    private func updateNavigationBarPassthroughTouches() {
+        guard let navigationBar = self.navigationBar else {
+            return
+        }
+        // The chat's navigation bar is drawn in the glass style: apart from the button pills it is
+        // transparent, and the history scrolls underneath it. Letting it pass touches through would
+        // deliver taps and long presses made on that visually empty header to the message behind it,
+        // opening media or showing a context menu. Make the bar absorb them, matching the system bars.
+        //
+        // Only the standard chat opts in. Previewing must keep the passthrough, because hitTest(_:with:)
+        // below routes those touches to the preview's own scroll host. The remaining modes have no
+        // visible bar to absorb with - .inline and .standard(.embedded) are built without one, .overlay
+        // hides it - but that is their business, so state the opt-in positively rather than inheriting
+        // it by default.
+        if case .standard(.default) = self.chatPresentationInterfaceState.mode {
+            navigationBar.passthroughTouches = false
+        } else {
+            navigationBar.passthroughTouches = true
+        }
+    }
+    
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         switch self.chatPresentationInterfaceState.mode {
         case .standard(.previewing):
