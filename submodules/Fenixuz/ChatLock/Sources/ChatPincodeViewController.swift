@@ -731,17 +731,58 @@ public final class ChatPincodeViewController: ViewController {
                 self.dismissSelf()
             }
         }
+        // The context has to outlive this function. A local `let` is released the moment we return,
+        // and LocalAuthentication cancels the evaluation with it: the Face ID sheet drops away and
+        // the passcode fallback never appears, which looks exactly like the reset doing nothing.
+        // The screen fires its own Face ID prompt from viewDidAppear. If that one is still on
+        // screen, starting a second evaluation makes the system cancel one of them, which is what
+        // a failure with no passcode fallback looks like.
+        ChatLockBiometricHelper.cancelPending()
+
         let context = LAContext()
+        // Without this the Face ID sheet only offers the passcode after two failed scans, so a user
+        // who simply does not want to use Face ID has to sit through them. Naming the fallback puts
+        // the passcode one tap away from the moment the sheet appears.
+        context.localizedFallbackTitle = FenixuzChatLockStrings.resetUsePasscode
+        self.resetAuthContext = context
+
         var authError: NSError?
         // deviceOwnerAuthentication = biometrics with a device-passcode fallback.
         if context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &authError) {
-            context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: FenixuzChatLockStrings.resetReason) { success, _ in
-                DispatchQueue.main.async { if success { proceed() } }
+            context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: FenixuzChatLockStrings.resetReason) { [weak self] success, evalError in
+                DispatchQueue.main.async {
+                    self?.resetAuthContext = nil
+                    if success {
+                        proceed()
+                    } else {
+                        // Face ID fails for something as ordinary as looking away. Saying nothing
+                        // leaves the user staring at the pincode screen thinking reset is broken.
+                        _ = evalError
+                        self?.presentResetAuthFailed()
+                    }
+                }
             }
         } else {
             // No passcode/biometrics on the device — there is no security boundary to honor.
+            self.resetAuthContext = nil
             proceed()
         }
+    }
+
+    /// Kept alive for the duration of the reset authentication — see authenticateThenReset().
+    private var resetAuthContext: LAContext?
+
+    private func presentResetAuthFailed() {
+        let alert = UIAlertController(
+            title: FenixuzChatLockStrings.resetFailedTitle,
+            message: FenixuzChatLockStrings.resetFailedMessage,
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: FenixuzChatLockStrings.cancel, style: .cancel))
+        alert.addAction(UIAlertAction(title: FenixuzChatLockStrings.resetRetry, style: .default) { [weak self] _ in
+            self?.authenticateThenReset()
+        })
+        (self.navigationController ?? self).present(alert, animated: true)
     }
 
     /// After 4 wrong entries we never lock the owner out — we make the recovery obvious instead.
