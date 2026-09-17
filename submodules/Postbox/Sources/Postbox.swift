@@ -2658,8 +2658,8 @@ final class PostboxImpl {
             var index = 0
             for (_, peer) in updatedPeers {
                 updatedPeerIdToIndex[peer.0.id] = index
+                index += 1
             }
-            index += 1
             for (peerId, change) in updatedContacts {
                 if let index = updatedPeerIdToIndex[peerId] {
                     if let (peer, _) = updatedPeers[index].0 {
