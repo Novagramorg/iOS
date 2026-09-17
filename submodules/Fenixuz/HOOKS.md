@@ -5383,3 +5383,55 @@ a no-op. The second subscriber class further down the file is entirely commented
 
 **Verified on device**: chats, sending, photo editing, video playback, stickers, search and settings
 all behave — this is load-bearing code for every signal in the app.
+
+---
+
+## 📌 ChatLock — a chat could be locked with no way back (2026-09-17)
+
+**Reported by a user**, not a crash report: they put a pincode on a chat, turned Face ID off, then
+forgot the pincode. The chat could not be opened again.
+
+### Why there was no way out
+
+`NavigateToChatController.swift:~47` only wires the recovery handler when a master pincode exists:
+
+```swift
+onForgot: ChatPincodeManager.shared.isMasterEnabled() ? { …master recovery… } : nil
+```
+
+and `ChatPincodeViewController` hid the button whenever that handler was nil:
+
+```swift
+forgotButton.isHidden = isMasterRecovery ? (failedAttempts < 4) : (verifyOnForgot == nil)
+```
+
+The master pincode is a **separate** toggle in NovagramPro settings, off by default. So a chat locked
+without it, on a device where biometrics were then switched off, had nothing at all: no Face ID, no
+"Forgot pincode?", no reset. The pincode lives in the keychain, which survives deleting and
+reinstalling the app, so the chat was unreachable permanently.
+
+The device-owner reset (`resetChatLockTapped` → `authenticateThenReset`) already existed and was
+already correct — it uses `.deviceOwnerAuthentication`, i.e. biometrics **or the device passcode** —
+it was simply unreachable unless a master pincode had been set.
+
+### `submodules/Fenixuz/ChatLock/Sources/ChatPincodeViewController.swift` (FENIXUZ module)
+
+- New `isVerifyMode` / `showsDeviceOwnerReset` helpers. The latter is true on the master page and on
+  any plain `.verify` page with no master handler.
+- Button title and `forgotTapped()` now key off that, so a verify screen with no master handler runs
+  the device-owner reset instead of doing nothing.
+- Visibility: the master page keeps its 4-failed-attempts gate (that button wipes every lock, it
+  should not lead). A plain chat lock shows the reset **immediately** — whoever forgot the pincode
+  tries once or twice and gives up, and would never reach a button that appears on the fourth
+  failure. It still costs the device passcode, so showing it early gives a snooper nothing.
+- `.set` / `.remove` / `.confirm` keep the button hidden — nothing to recover there.
+- The confirmation alert is presented from the navigation controller
+  (`(self.navigationController ?? self).present(…)`); `CRASH_AUDIT_2.0.1.md` finding #5 flagged this
+  exact line as silently no-opping.
+
+**Rejected alternatives:** forcing a master pincode at first lock (two pincodes to forget instead of
+one), and email recovery (needs a server, and is weaker than a passcode that requires physical
+possession of the phone).
+
+**Verified on device**: reset appears and works with no master pincode; setup, correct unlock, master
+recovery, the master page's own 4-attempt gate, the Secret Vault and lock removal all unchanged.
