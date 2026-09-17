@@ -70,11 +70,10 @@ private final class WalletSettingsScreenComponent: Component {
         private let backupSection = ComponentView<Empty>()
         private let replacementSection = ComponentView<Empty>()
         private let previousWalletsSection = ComponentView<Empty>()
-        #if DEBUG
+        
         private let debugSection = ComponentView<Empty>()
         private let debugRemoveMnemonicDisposable = MetaDisposable()
         private var isRemovingMnemonic = false
-        #endif
 
         private var component: WalletSettingsScreenComponent?
         private var environment: EnvironmentType?
@@ -152,9 +151,7 @@ private final class WalletSettingsScreenComponent: Component {
             self.walletStateDisposable.dispose()
             self.previousWalletsDisposable.dispose()
             self.previousWalletPhraseDisposable.dispose()
-            #if DEBUG
             self.debugRemoveMnemonicDisposable.dispose()
-            #endif
         }
 
         private func endWalletFlow() {
