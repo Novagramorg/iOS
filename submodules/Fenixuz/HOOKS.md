@@ -5057,3 +5057,405 @@ no account is active), so the sync follows the active account across switches:
 ```
 
 `import FenixuzProMessager` already present (Feature #45) — **no import and no BUILD change.**
+
+---
+
+## 📌 PasskeysScreen — crash fix, `preconditionFailure` on a detached view (2026-09-16)
+
+**Why:** real App Store crash, 91 devices in two weeks on 12.9.6 build 78 (Xcode Organizer group
+`TelegramUIFramework: 0x1050f4000 + 20054712`, `EXC_BREAKPOINT (SIGTRAP)`).
+
+`createPasskey()` awaits `requestPasskeyRegistration()` — a network round-trip — before it calls
+`authController.performRequests()`. If the user leaves the screen during that wait, the view is no
+longer in a window when AuthenticationServices asks for the presentation anchor, and the original
+`preconditionFailure()` killed the app.
+
+Crashing stack:
+
+```
+0  @objc PasskeysScreenComponent.View.presentationAnchor(for:)
+1  -[ASAuthorizationController _performAuthorizationRequests:requestStyle:requestOptions:]
+2  _dispatch_call_block_and_release  →  main queue
+```
+
+### `submodules/TelegramUI/Components/Settings/PasskeysScreen/Sources/PasskeysScreen.swift` (UPSTREAM hook)
+
+Three edits, 10 lines total:
+
+1. New stored property on `PasskeysScreenComponent.View`:
+
+```swift
+// Captured while the view is still on screen: createPasskey() awaits a network round-trip
+// before performRequests(), so the view can be off-window when AuthenticationServices
+// asks for the anchor.
+private weak var authorizationAnchorScene: UIWindowScene?
+```
+
+2. `createPasskey()` — capture it before the `await`, right after the `guard let self` line:
+
+```swift
+self.authorizationAnchorScene = self.window?.windowScene
+```
+
+3. `presentationAnchor(for:)` — no longer traps:
+
+```swift
+func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+    if let windowScene = self.window?.windowScene ?? self.authorizationAnchorScene {
+        return ASPresentationAnchor(windowScene: windowScene)
+    }
+    // Screen was torn down mid-request. Hand back a plain anchor so AuthenticationServices
+    // reports an error instead of the app dying here.
+    return ASPresentationAnchor()
+}
+```
+
+**On upstream pull:** if upstream rewrites `presentationAnchor(for:)`, re-apply — upstream still
+traps there as of 12.9.6. Full crash analysis in `CRASH_AUDIT_12.9.6.md`.
+
+---
+
+## 📌 NewContactScreen — crash fix, component update re-entrancy (2026-09-16)
+
+**Why:** real App Store crash, 222 devices in two weeks on 12.9.6 build 78 (Organizer group
+`TelegramUIFramework: 0x1030b8000 + 57738692`, `EXC_BREAKPOINT (SIGTRAP)`).
+
+`ComponentHostView._update` opens with `precondition(!self.isUpdating)`
+(`submodules/ComponentFlow/Source/Host/ComponentHostView.swift:47`). `NewContactScreenComponent.View.update`
+sets its own `isUpdating = true` and, just before returning, called `activateInput(tag:)` — still inside
+the pass. `becomeFirstResponder` makes UIKit **synchronously** resign the currently focused field, that
+field's `textFieldDidEndEditing` calls `state.updated()`, and the component update re-enters while the
+host view is still updating.
+
+Crashing stack:
+
+```
+0  ComponentHostView._update(…)                                    ← precondition trap
+1  closure #1 in ComponentHostView._update(…)
+2  closure #1 in ComponentView._update(…)
+3  ComponentState.updated(transition:isLocal:)
+4  ListTextFieldItemComponent.View.textFieldDidEndEditing(_:)
+6  -[UITextField _notifyDidEndEditing]
+7  -[UITextField _resignFirstResponder]
+8  -[UIResponder _finishResignFirstResponderFromBecomeFirstResponder:]
+11 -[UIResponder becomeFirstResponder]
+14 NewContactScreenComponent.View.activateInput(tag:)
+```
+
+**User-visible trigger:** Contacts → new contact → type a first name → press **Next** on the keyboard
+(`onReturn` sets `updateFocusTag` then calls `state.updated()`). Same for last name → phone, and for the
+country-code picker.
+
+### `submodules/TelegramUI/Components/Contacts/NewContactScreen/Sources/NewContactScreen.swift` (UPSTREAM hook)
+
+One edit, at the end of `View.update(component:availableSize:state:environment:transition:)`:
+
+```swift
+if let updateFocusTag {
+    // becomeFirstResponder makes UIKit synchronously resign whichever field holds focus
+    // now, and that field's textFieldDidEndEditing calls state.updated() — re-entering
+    // the update we are still inside, which trips ComponentHostView's
+    // precondition(!isUpdating). Move the focus change to the next runloop turn.
+    Queue.mainQueue().justDispatch { [weak self] in
+        self?.activateInput(tag: updateFocusTag)
+    }
+}
+```
+
+Nothing is removed — focus is still applied, one runloop turn later. The same file already guards four
+other `state.updated()` call sites with `if !self.isUpdating` (lines ~485, 511, 526, 532); this call site
+was missed.
+
+**On upstream pull:** if upstream restructures `update(...)`, re-apply. Full crash analysis in
+`CRASH_AUDIT_12.9.6.md`.
+
+---
+
+## 📌 Animated stickers — crash fix, corrupt cache file trusted (2026-09-17)
+
+**Why:** real App Store crash, 96 devices in two weeks on 12.9.6 build 78,
+`EXC_BAD_ACCESS (SIGSEGV)` inside `AnimatedStickerCachedFrameSource.takeFrame(draw:)`.
+Reached from `DefaultAnimatedStickerNodeImpl.play(firstFrame:fromIndex:)` on the playback timer —
+i.e. any animated sticker or animated emoji.
+
+The cached-animation format is a 20-byte header (five `Int32`s) followed by
+`[Int32 frameLength][frameLength bytes of LZFSE]` per frame. Every field was trusted.
+
+### `submodules/AnimatedStickerNode/Sources/AnimatedStickerFrameSource.swift` (UPSTREAM hook)
+
+Three guards added to `AnimatedStickerCachedFrameSource`:
+
+1. `init` — reject a file shorter than the header before the five `memcpy`s:
+
+```swift
+// The header is five Int32s. A truncated cache file would be read past its end.
+if buffer.count < 20 {
+    return false
+}
+```
+
+2. `init` — reject nonsensical header values before `Data(count: bytesPerRow * height)`, which traps
+   on a negative product:
+
+```swift
+if frameRateValue <= 0 || frameCountValue <= 0 || widthValue <= 0 || heightValue <= 0 || bytesPerRowValue < widthValue {
+    return false
+}
+if Int(bytesPerRowValue) * Int(heightValue) > 256 * 1024 * 1024 {
+    return false
+}
+```
+
+3. `takeFrame(draw:)` — reject a negative `frameLength`. **This is the production SIGSEGV**: the old
+   check `self.offset + 4 + Int(frameLength) > dataLength` *passes* for negative values, and
+   `compression_decode_buffer` then widens it to `size_t`:
+
+```swift
+if frameLength < 0 || self.offset + 4 + Int(frameLength) > dataLength {
+    return
+}
+```
+
+### `submodules/AnimatedStickerNode/Tests/` + `BUILD` (NEW — upstream module)
+
+Four regression tests and `ios_unit_test` / `ios_test_runner` targets, modelled on
+`submodules/TextFormat/BUILD`. Before the fix: 2 assertions failed and the test process died with
+`signal 5: Trace/BPT trap`. After: 4/4 pass. Run them with:
+
+```sh
+./build-input/bazel-8.4.2-darwin-arm64 --output_user_root="$HOME/telegram-bazel-cache/bazel-user-root" \
+  test //submodules/AnimatedStickerNode:AnimatedStickerNodeTests \
+  --action_env=DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
+  --xcode_version=26.5.0.17F42 -c dbg --ios_multi_cpus=sim_arm64 \
+  --//Telegram:disableProvisioningProfiles --test_output=all
+```
+
+`Make.py test` does not work in this repo — it demands `TELEGRAM_CODESIGNING_GIT_PASSWORD`.
+
+---
+
+## 📌 Parabolic keyframe animations — divide by zero (2026-09-17)
+
+**Why:** `StoryItemSetContainerComponent.View.animateOut` appears in App Store crash reports with
+`SIGABRT`, raised by `CA::Layer::set_position` — a NaN position.
+
+`generateParabollicMotionKeyframes` builds `midPoint.x = (x1 + x3) / 2`, so its denominator
+`(x1 - x2) * (x1 - x3) * (x2 - x3)` reduces to `(x1 - x3)³ / 4`. When source and destination share an
+x coordinate that is **zero**, so `a`, `b`, `c` are NaN, `y = a·x² + b·x + c` is NaN, and
+`layer.position = …` raises.
+
+The guard only took the safe linear branch when **both** axes were close (`&&`). Upstream already
+fixed exactly this in `Calls/CallScreen/Sources/Components/KeyEmojiView.swift:147` by switching to
+`||`, but left five other copies untouched. Applied the same change to all of them:
+
+| File | Animation the user sees |
+|---|---|
+| `ReactionSelectionNode/Sources/ReactionContextNode.swift` | reaction flying to the message |
+| `TelegramUI/Components/Chat/QuickShareScreen/Sources/QuickShareToastScreen.swift` | avatar flying on swipe-to-share |
+| `TelegramUI/Components/Stories/StoryContainerScreen/Sources/StoryItemSetContainerComponent.swift` | story closing |
+| `TelegramUI/Components/EmojiStatusSelectionComponent/Sources/EmojiStatusSelectionComponent.swift` | emoji status pick |
+| `PremiumUI/Sources/EmojiHeaderComponent.swift` | Premium screen header |
+
+**Not reproducible by hand** — it needs exact x alignment; 20 open/close cycles of the stories viewer
+produced nothing. The defect is provable from the arithmetic and `||` is strictly safer: a parabola
+through two vertically-aligned points *is* a straight line.
+
+**On upstream pull:** if upstream ever unifies these copies into one helper, drop these hooks.
+
+---
+
+## 📌 Three defensive crash guards (2026-09-17)
+
+All three are provable from the code, none could be reproduced by hand on a device, and none change
+behaviour for valid input. From the same App Store crash sweep as the fixes above.
+
+### `submodules/TelegramUniversalVideoContent/Sources/HLSVideoJSNativeContentNode.swift` (UPSTREAM hook)
+
+`HLSJSServerSource.fileData(id:range:)` crashed with a Swift precondition failure inside
+`Data.subdata` — `Data._Representation.subscript.getter`. `result.offset`/`result.size` describe what
+`MediaBoxFileContextV2Impl` believes it wrote, but the partial file mapped from disk can be shorter
+(a write cut short, or a flush landing after the map). Range-checked before slicing:
+
+```swift
+let lowerBound = Int(result.offset)
+let upperBound = Int(result.offset + result.size)
+if lowerBound >= 0 && lowerBound <= upperBound && upperBound <= data.count {
+    let subData = data.subdata(in: lowerBound ..< upperBound)
+    postbox.mediaBox.storeResourceData(…)
+}
+```
+
+Skipping the cache store is harmless — playback reads `partialFile` from the `putNext` below, which
+is outside this block.
+
+### `submodules/Utils/VolumeButtons/Sources/VolumeButtons.swift` (UPSTREAM hook)
+
+`AVCaptureEventHandlerImpl.__deallocating_deinit` crashed in `_dispatch_assert_queue_fail`:
+`AVCaptureEventInteraction` tears down through `_UIPhysicalButtonInteraction`, which asserts it is on
+the main queue. `VolumeButtonsListener.deinit → SharedContext.remove(id:) → updateListeners() →
+cameraSpecificHandler = nil` runs on whichever thread dropped the listener — the sibling
+`update(id:)` path is `deliverOnMainQueue`, this one never was. The deinit now hops:
+
+```swift
+let interaction = self.interaction
+let context = self.context
+let tearDown: () -> Void = {
+    interaction.isEnabled = false
+    context?.mainWindow?.viewController?.view.removeInteraction(interaction)
+}
+if Thread.isMainThread { tearDown() } else { Queue.mainQueue().async(tearDown) }
+```
+
+### `submodules/LegacyComponents/Sources/TGMediaPickerPhotoStripView.m` (UPSTREAM hook)
+
+79 devices, `SIGABRT` from `-[UICollectionView _Bug_Detected_In_Client_Of_UICollectionView_Invalid_Batch_Updates:]`
+via `insertItemAtIndex:`, reached from `TGMediaPickerGallerySelectedItemsModel.addSelectedItem:`.
+The data source returns `selectedItemsModel.totalCount`, and the model and the collection view fall
+out of step — `selectedItemsModel` is assigned after the view exists, and two selection changes can
+land before the view has processed the first. Both `insertItemAtIndex:` and `deleteItemAtIndex:` now
+compare the data source count with the collection view's cached count and fall back to `reloadData`
+when they disagree. The thumbnail still appears, just without the insert animation.
+
+---
+
+## 📌 Chat input service tasks — stale length in attributed-string enumeration (2026-09-17)
+
+**Why:** 59 devices in two weeks on 12.9.6 build 78, `SIGABRT` raised by
+`-[NSRLEArray objectAtIndex:effectiveRange:runIndex:]` under
+`-[NSAttributedString enumerateAttribute:inRange:options:usingBlock:]`, i.e. `NSRangeException`.
+
+### `submodules/TelegramUI/Sources/ChatInterfaceInputContexts.swift` (UPSTREAM hook)
+
+`serviceTasksForChatPresentationIntefaceState` captures the composer text up front:
+
+```swift
+let inputText = chatPresentationInterfaceState.interfaceState.composeInputState.inputText
+```
+
+and then, inside the `resolveInlineStickers` completion — after a **network round-trip** — enumerated
+the *current* text using the *captured* one's length:
+
+```swift
+inputState.inputText.enumerateAttribute(…, in: NSRange(location: 0, length: inputText.length), …)
+//                  ^^ current text                                    ^^ stale length
+```
+
+If the user shortens or clears the draft while the sticker request is in flight, the range runs past
+the end of the string and `NSAttributedString` raises. Fixed by using `inputState.inputText.length`.
+
+**Not verified on device** — reaching the code needs an unresolved custom emoji in the composer, and
+custom emoji are Premium-gated server-side, so a non-Premium test account cannot get one there. The
+mistake is unambiguous in the source: the enumerated string and the range now come from the same
+object.
+
+---
+
+## 📌 SSubscriber — disposal race (2026-09-17)
+
+**Why:** 51 devices in two weeks on 12.9.6 build 78, `EXC_BAD_ACCESS (SIGSEGV)` in `objc_retain`
+inside `-[SSubscriberDisposable dispose]`, reached from `-[SSubscriber putCompletion]` under
+`TGPhotoEditorController.createEditedImageWithEditorValues:…`. The photo editor is just where it
+surfaced — every signal in the app goes through this code.
+
+### `submodules/SSignalKit/SSignalKit/Source/SSignalKit/SSubscriber.m` (UPSTREAM hook)
+
+`_disposable` was read and nilled **outside** the lock in three methods:
+
+```objc
+os_unfair_lock_unlock(&_lock);
+…
+if (shouldDispose) {
+    [self->_disposable dispose];   // another thread can nil (and release) it right here
+    self->_disposable = nil;       // double release under ARC
+}
+```
+
+Two threads reaching `putCompletion` / `putError:` / `dispose` concurrently both load the same
+`_disposable`, both send it `-dispose`, and both assign nil — the object is released twice and the
+second `-dispose` lands on freed memory.
+
+`_markTerminatedWithoutDisposal` in the same file already did it correctly: take the disposable under
+the lock, nil it under the lock, send `-dispose` after unlocking. Applied that to `putError:`,
+`putCompletion` and `dispose`. `_assignDisposable:` was already correct.
+
+`shouldDispose` disappears — the disposable is only taken when `!_terminated`, and `[nil dispose]` is
+a no-op. The second subscriber class further down the file is entirely commented out and untouched.
+
+**Verified on device**: chats, sending, photo editing, video playback, stickers, search and settings
+all behave — this is load-bearing code for every signal in the app.
+
+---
+
+## 📌 ChatLock — a chat could be locked with no way back (2026-09-17)
+
+**Reported by a user**, not a crash report: they put a pincode on a chat, turned Face ID off, then
+forgot the pincode. The chat could not be opened again.
+
+### Why there was no way out
+
+`NavigateToChatController.swift:~47` only wires the recovery handler when a master pincode exists:
+
+```swift
+onForgot: ChatPincodeManager.shared.isMasterEnabled() ? { …master recovery… } : nil
+```
+
+and `ChatPincodeViewController` hid the button whenever that handler was nil:
+
+```swift
+forgotButton.isHidden = isMasterRecovery ? (failedAttempts < 4) : (verifyOnForgot == nil)
+```
+
+The master pincode is a **separate** toggle in NovagramPro settings, off by default. So a chat locked
+without it, on a device where biometrics were then switched off, had nothing at all: no Face ID, no
+"Forgot pincode?", no reset. The pincode lives in the keychain, which survives deleting and
+reinstalling the app, so the chat was unreachable permanently.
+
+The device-owner reset (`resetChatLockTapped` → `authenticateThenReset`) already existed and was
+already correct — it uses `.deviceOwnerAuthentication`, i.e. biometrics **or the device passcode** —
+it was simply unreachable unless a master pincode had been set.
+
+### `submodules/Fenixuz/ChatLock/Sources/ChatPincodeViewController.swift` (FENIXUZ module)
+
+- New `isVerifyMode` / `showsDeviceOwnerReset` helpers. The latter is true on the master page and on
+  any plain `.verify` page with no master handler.
+- Button title and `forgotTapped()` now key off that, so a verify screen with no master handler runs
+  the device-owner reset instead of doing nothing.
+- Visibility: the master page keeps its 4-failed-attempts gate (that button wipes every lock, it
+  should not lead). A plain chat lock shows the reset **immediately** — whoever forgot the pincode
+  tries once or twice and gives up, and would never reach a button that appears on the fourth
+  failure. It still costs the device passcode, so showing it early gives a snooper nothing.
+- `.set` / `.remove` / `.confirm` keep the button hidden — nothing to recover there.
+- The confirmation alert is presented from the navigation controller
+  (`(self.navigationController ?? self).present(…)`); `CRASH_AUDIT_2.0.1.md` finding #5 flagged this
+  exact line as silently no-opping.
+
+**Rejected alternatives:** forcing a master pincode at first lock (two pincodes to forget instead of
+one), and email recovery (needs a server, and is weaker than a passcode that requires physical
+possession of the phone).
+
+**Verified on device**: reset appears and works with no master pincode; setup, correct unlock, master
+recovery, the master page's own 4-attempt gate, the Secret Vault and lock removal all unchanged.
+
+### Follow-up the same day: the reset button did nothing when tapped
+
+Surfacing the button was only half of it. Testing found the reset authenticating and then silently
+giving up, leaving the user on the pincode screen:
+
+- **`LAContext` was a local `let`.** LocalAuthentication cancels an evaluation as soon as its context
+  is released, and the completion block did not capture it, so ARC freed it the moment
+  `authenticateThenReset()` returned — the Face ID sheet dropped away and no passcode fallback ever
+  appeared. The context is now held on the view controller (and, in `ChatLockBiometricHelper`, in a
+  static) until the reply arrives.
+- **Two prompts fought each other.** `viewDidAppear` fires the screen's own biometric prompt; starting
+  the reset evaluation on top of it made the system cancel one. `ChatLockBiometricHelper.cancelPending()`
+  now invalidates the outstanding one first.
+- **Failure was silent.** `if success { proceed() }` and nothing else. Now an alert explains what
+  happened and offers Try Again.
+- **`localizedFallbackTitle`** is set, so the passcode option is labelled in the Face ID sheet instead
+  of only appearing after two failed scans.
+- **The confirmation text now says the passcode works**, so someone whose Face ID is broken or off does
+  not assume the reset is closed to them.
+
+Note on behaviour: when biometrics are *available*, iOS insists on them and shows the passcode only
+after failures — that is the system's own policy, not ours. When biometrics are unavailable or
+disabled (the case that started this), `.deviceOwnerAuthentication` goes straight to the passcode.

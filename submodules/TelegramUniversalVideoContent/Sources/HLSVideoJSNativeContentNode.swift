@@ -298,8 +298,16 @@ final class HLSJSServerSource: SharedHLSServer.Source {
                             print("Fetching \(quality)p part took \(fetchTime * 1000.0) ms")
                             #endif
                             if let data = try? Data(contentsOf: URL(fileURLWithPath: partialFile.path), options: .alwaysMapped) {
-                                let subData = data.subdata(in: Int(result.offset) ..< Int(result.offset + result.size))
-                                postbox.mediaBox.storeResourceData(file.media.resource.id, range: Int64(range.lowerBound) ..< Int64(range.upperBound), data: subData)
+                                // result describes what the fetch context believes it wrote. The mapped
+                                // partial file can be shorter — a write cut short, or a flush that landed
+                                // after we mapped it — and Data.subdata traps on a range past the end.
+                                // Skipping the cache store is harmless; playback uses partialFile below.
+                                let lowerBound = Int(result.offset)
+                                let upperBound = Int(result.offset + result.size)
+                                if lowerBound >= 0 && lowerBound <= upperBound && upperBound <= data.count {
+                                    let subData = data.subdata(in: lowerBound ..< upperBound)
+                                    postbox.mediaBox.storeResourceData(file.media.resource.id, range: Int64(range.lowerBound) ..< Int64(range.upperBound), data: subData)
+                                }
                             }
                             subscriber.putNext((partialFile, Int(result.offset) ..< Int(result.offset + result.size), Int(size)))
                             subscriber.putCompletion()
