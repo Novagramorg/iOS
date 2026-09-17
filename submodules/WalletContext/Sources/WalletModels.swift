@@ -134,6 +134,20 @@ public extension WalletContext {
         }
     }
 
+    struct PreviousWallet: Equatable, Sendable, Identifiable {
+        public let id: String
+        public let address: String
+        public let balance: Int64?
+        public let lastUsedAt: Int32
+
+        public init(id: String, address: String, balance: Int64?, lastUsedAt: Int32) {
+            self.id = id
+            self.address = address
+            self.balance = balance
+            self.lastUsedAt = lastUsedAt
+        }
+    }
+
     struct WalletInfo: Equatable, Sendable {
         public let address: String
         public let publicKey: String

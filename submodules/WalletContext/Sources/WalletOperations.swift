@@ -277,6 +277,24 @@ public extension WalletContext {
         }
     }
 
+    func previousWallets() -> Signal<[PreviousWallet], WalletError> {
+        self.signal(name: "previous_wallets") { impl, _ in
+            try await impl.previousWallets()
+        }
+    }
+
+    func forgetPreviousWallet(id: String) -> Signal<Void, WalletError> {
+        self.signal(name: "forgetting_previous_wallet") { impl, _ in
+            try await impl.forgetPreviousWallet(id: id)
+        }
+    }
+
+    func previousWalletRecoveryPhrase(id: String, session: PasscodeSession? = nil) -> Signal<[String], WalletError> {
+        self.signal(name: "recovering_previous_phrase", cancelOnDispose: false, deliverWhenAvailable: session?.lifetime == .ownerManaged) { impl, operationId in
+            try await impl.previousWalletRecoveryPhrase(id: id, session: session, operationId: operationId)
+        }
+    }
+
     func recoveryPhrase(password: String? = nil, session: PasscodeSession? = nil) -> Signal<[String], WalletError> {
         self.signal(name: "recovering_phrase", cancelOnDispose: false, deliverWhenAvailable: session?.lifetime == .ownerManaged) { impl, operationId in
             try await impl.recoveryPhrase(password: password, session: session, operationId: operationId)
@@ -677,6 +695,20 @@ extension WalletContextImpl {
             )
             guard self.serverStateMutationRevision == serverStateRevision else { throw CancellationError() }
             return self.installRuntimeActivation(state: state, activation: activation, generation: generation)
+        }
+    }
+
+    func previousWallets() async throws -> [WalletContext.PreviousWallet] {
+        try await self.runtime.archivedWallets()
+    }
+
+    func forgetPreviousWallet(id: String) async throws {
+        try await self.runtime.forgetArchivedWallet(recordId: id)
+    }
+
+    func previousWalletRecoveryPhrase(id: String, session: PasscodeSession? = nil, operationId: UUID) async throws -> [String] {
+        return try await self.performOperation(.recoveringPhrase, operationId: operationId, session: session) {
+            try await self.runtime.revealArchivedRecoveryPhrase(recordId: id)
         }
     }
 

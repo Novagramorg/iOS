@@ -68,6 +68,13 @@ enum WalletEngineKeyRotationStoragePhase: String, Codable, Equatable, Sendable {
 }
 
 @available(macOS 10.15, *)
+struct WalletEngineArchivedWalletRecord: Codable, Equatable, Sendable {
+    let descriptor: WalletEngineDescriptorRecord
+    let balance: Int64?
+    let archivedAt: Int32
+}
+
+@available(macOS 10.15, *)
 struct WalletEngineKeyRotationRecord: Codable, Equatable, Sendable {
     let operationId: String
     let recordId: String
@@ -130,6 +137,56 @@ actor WalletEngineStorage {
         }
         receipts.append(receipt)
         try self.writeCodable(receipts, service: self.descriptorService, account: "transfer-receipts")
+    }
+
+    func loadArchivedWallets() throws -> [WalletEngineArchivedWalletRecord] {
+        try self.readCodable(service: self.descriptorService, account: "archived-wallets") ?? []
+    }
+
+    func archiveWallet(_ descriptor: WalletEngineDescriptorRecord, balance: Int64?, archivedAt: Int32) throws {
+        guard let secretRef = descriptor.secretRef, !secretRef.isEmpty,
+              try self.containsProtectedSecret(ProtectedSecretRef(value: secretRef)) else {
+            throw WalletEngineStorageError.corrupted
+        }
+        var records = try self.loadArchivedWallets().filter { $0.descriptor.recordId != descriptor.recordId }
+        records.append(WalletEngineArchivedWalletRecord(
+            descriptor: descriptor,
+            balance: balance,
+            archivedAt: archivedAt
+        ))
+        records.sort { $0.archivedAt > $1.archivedAt }
+        try self.writeCodable(records, service: self.descriptorService, account: "archived-wallets")
+    }
+
+    func availableArchivedWallets() throws -> [WalletEngineArchivedWalletRecord] {
+        try self.loadArchivedWallets().filter {
+            guard let secretRef = $0.descriptor.secretRef, !secretRef.isEmpty else { return false }
+            return (try? self.containsProtectedSecret(ProtectedSecretRef(value: secretRef))) == true
+        }
+    }
+
+    func removeArchivedWallet(recordId: String) throws {
+        let records = try self.loadArchivedWallets()
+        guard let record = records.first(where: { $0.descriptor.recordId == recordId }) else {
+            return
+        }
+        try self.writeCodable(
+            records.filter { $0.descriptor.recordId != recordId },
+            service: self.descriptorService,
+            account: "archived-wallets"
+        )
+        if let secretRef = record.descriptor.secretRef, !secretRef.isEmpty {
+            try self.deleteProtectedSecret(ProtectedSecretRef(value: secretRef))
+        }
+    }
+
+    func removeArchivedWallets() throws {
+        for record in try self.loadArchivedWallets() {
+            if let secretRef = record.descriptor.secretRef, !secretRef.isEmpty {
+                try self.deleteProtectedSecret(ProtectedSecretRef(value: secretRef))
+            }
+        }
+        try self.remove(service: self.descriptorService, account: "archived-wallets")
     }
 
     func loadReplacementCandidate() throws -> WalletEngineDescriptorRecord? {
