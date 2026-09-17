@@ -258,8 +258,15 @@ for fname, content in [
 prov = repo + '/provisioning'
 os.makedirs(prov, exist_ok=True)
 prov_build = prov + '/BUILD'
-if not os.path.exists(prov_build):
-    open(prov_build, 'w').write('exports_files([])\n')
+# Always regenerate from what is actually on disk. Writing an empty exports_files()
+# when the file happens to be missing makes every profile target unresolvable and the
+# build dies with "no such target ...:Telegram.mobileprovision". Same logic Make.py uses.
+profile_names = sorted(n for n in os.listdir(prov) if n.endswith('.mobileprovision'))
+with open(prov_build, 'w') as f:
+    f.write('exports_files([\n')
+    for name in profile_names:
+        f.write('    "{}",\n'.format(name))
+    f.write('])\n')
 
 import io
 tmp_path = repo + '/variables.bzl.tmp'
