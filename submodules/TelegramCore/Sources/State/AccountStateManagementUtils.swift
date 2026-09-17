@@ -5418,7 +5418,7 @@ func replayFinalState(
                         var state = state
                         if let index = state.filters.firstIndex(where: { $0.id == id }) {
                             if let filter = filter {
-                                state.filters[index] = ChatListFilter(apiFilter: filter)
+                                state.filters[index] = ChatListFilter(apiFilter: filter).withLocalOnlyPeers(from: state.filters[index])
                             } else {
                                 state.filters.remove(at: index)
                             }

@@ -95,9 +95,7 @@ func chatContextMenuItems(context: AccountContext, peerId: EnginePeer.Id, promoI
     )
     |> mapToSignal { peerGroup, recentlySearchedPeers, limitsData -> Signal<[ContextMenuItem], NoError> in
         let location: TogglePeerChatPinnedLocation
-        var chatListFilter: ChatListFilter?
         if case let .chatList(filter) = source, let chatFilter = filter {
-            chatListFilter = chatFilter
             location = .filter(chatFilter.id)
         } else {
             if let peerGroup = peerGroup {
@@ -405,58 +403,56 @@ func chatContextMenuItems(context: AccountContext, peerId: EnginePeer.Id, promoI
                                 })))
                             }
                             
-                            if isPinned || chatListFilter == nil || peerId.namespace != Namespaces.Peer.SecretChat {
-                                items.append(.action(ContextMenuActionItem(text: isPinned ? strings.ChatList_Context_Unpin : strings.ChatList_Context_Pin, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: isPinned ? "Chat/Context Menu/Unpin" : "Chat/Context Menu/Pin"), color: theme.contextMenu.primaryColor) }, action: { c, f in
-                                    let _ = (context.engine.peers.toggleItemPinned(location: location, itemId: .peer(peerId))
-                                             |> deliverOnMainQueue).startStandalone(next: { result in
-                                        switch result {
-                                        case .done:
-                                            f(.default)
-                                        case let .limitExceeded(count, _):
-                                            f(.default)
-                                            
-                                            let isPremium = limitsData.0?.isPremium ?? false
-                                            if isPremium {
-                                                if case .filter = location {
-                                                    let controller = PremiumLimitScreen(context: context, subject: .chatsPerFolder, count: Int32(count), action: {
-                                                        return true
-                                                    })
-                                                    chatListController?.push(controller)
-                                                } else {
-                                                    let controller = PremiumLimitScreen(context: context, subject: .pins, count: Int32(count), action: {
-                                                        return true
-                                                    })
-                                                    chatListController?.push(controller)
+                            items.append(.action(ContextMenuActionItem(text: isPinned ? strings.ChatList_Context_Unpin : strings.ChatList_Context_Pin, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: isPinned ? "Chat/Context Menu/Unpin" : "Chat/Context Menu/Pin"), color: theme.contextMenu.primaryColor) }, action: { c, f in
+                                let _ = (context.engine.peers.toggleItemPinned(location: location, itemId: .peer(peerId))
+                                         |> deliverOnMainQueue).startStandalone(next: { result in
+                                    switch result {
+                                    case .done:
+                                        f(.default)
+                                    case let .limitExceeded(count, _):
+                                        f(.default)
+                                        
+                                        let isPremium = limitsData.0?.isPremium ?? false
+                                        if isPremium {
+                                            if case .filter = location {
+                                                let controller = PremiumLimitScreen(context: context, subject: .chatsPerFolder, count: Int32(count), action: {
+                                                    return true
+                                                })
+                                                chatListController?.push(controller)
+                                            } else {
+                                                let controller = PremiumLimitScreen(context: context, subject: .pins, count: Int32(count), action: {
+                                                    return true
+                                                })
+                                                chatListController?.push(controller)
+                                            }
+                                        } else {
+                                            if case .filter = location {
+                                                var replaceImpl: ((ViewController) -> Void)?
+                                                let controller = PremiumLimitScreen(context: context, subject: .chatsPerFolder, count: Int32(count), action: {
+                                                    let premiumScreen = PremiumIntroScreen(context: context, source: .pinnedChats)
+                                                    replaceImpl?(premiumScreen)
+                                                    return true
+                                                })
+                                                chatListController?.push(controller)
+                                                replaceImpl = { [weak controller] c in
+                                                    controller?.replace(with: c)
                                                 }
                                             } else {
-                                                if case .filter = location {
-                                                    var replaceImpl: ((ViewController) -> Void)?
-                                                    let controller = PremiumLimitScreen(context: context, subject: .chatsPerFolder, count: Int32(count), action: {
-                                                        let premiumScreen = PremiumIntroScreen(context: context, source: .pinnedChats)
-                                                        replaceImpl?(premiumScreen)
-                                                        return true
-                                                    })
-                                                    chatListController?.push(controller)
-                                                    replaceImpl = { [weak controller] c in
-                                                        controller?.replace(with: c)
-                                                    }
-                                                } else {
-                                                    var replaceImpl: ((ViewController) -> Void)?
-                                                    let controller = PremiumLimitScreen(context: context, subject: .pins, count: Int32(count), action: {
-                                                        let premiumScreen = PremiumIntroScreen(context: context, source: .pinnedChats)
-                                                        replaceImpl?(premiumScreen)
-                                                        return true
-                                                    })
-                                                    chatListController?.push(controller)
-                                                    replaceImpl = { [weak controller] c in
-                                                        controller?.replace(with: c)
-                                                    }
+                                                var replaceImpl: ((ViewController) -> Void)?
+                                                let controller = PremiumLimitScreen(context: context, subject: .pins, count: Int32(count), action: {
+                                                    let premiumScreen = PremiumIntroScreen(context: context, source: .pinnedChats)
+                                                    replaceImpl?(premiumScreen)
+                                                    return true
+                                                })
+                                                chatListController?.push(controller)
+                                                replaceImpl = { [weak controller] c in
+                                                    controller?.replace(with: c)
                                                 }
                                             }
                                         }
-                                    })
-                                })))
-                            }
+                                    }
+                                })
+                            })))
                             
                             if !isSavedMessages {
                                 let isMuted = chatContextMenuPeerIsMuted(peer: peer, notificationSettings: notificationSettings, globalNotificationSettings: globalNotificationSettings)
