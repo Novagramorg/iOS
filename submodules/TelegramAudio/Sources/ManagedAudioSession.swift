@@ -30,6 +30,15 @@ public enum ManagedAudioSessionType: Equatable {
             return false
         }
     }
+    
+    var isRecord: Bool {
+        switch self {
+        case .record:
+            return true
+        default:
+            return false
+        }
+    }
 }
 
 private func nativeCategoryForType(_ type: ManagedAudioSessionType, headphones: Bool, outputMode: AudioSessionOutputMode) -> AVAudioSession.Category {
@@ -224,6 +233,10 @@ public final class ManagedAudioSessionClientParams {
 
 public protocol ManagedAudioSession: AnyObject {
     func getIsHeadsetPluggedIn() -> Bool
+    /// Synchronously reports whether the audio session is currently set up for recording.
+    /// Callers on the main thread use this to avoid pushing a playback session on top of an
+    /// active recorder, which would deactivate and therefore stop it.
+    func getIsRecordingActive() -> Bool
     func headsetConnected() -> Signal<Bool, NoError>
     func isActive() -> Signal<Bool, NoError>
     func isPlaybackActive() -> Signal<Bool, NoError>
@@ -285,7 +298,12 @@ public final class ManagedAudioSessionImpl: NSObject, ManagedAudioSession {
     private let queue: Queue
     private let hasLoudspeaker: Bool
     private var holders: [HolderRecord] = []
-    private var currentTypeAndOutputMode: (ManagedAudioSessionType, AudioSessionOutputMode)?
+    private let isRecordingActiveSync = Atomic<Bool>(value: false)
+    private var currentTypeAndOutputMode: (ManagedAudioSessionType, AudioSessionOutputMode)? {
+        didSet {
+            let _ = self.isRecordingActiveSync.swap(self.currentTypeAndOutputMode?.0.isRecord ?? false)
+        }
+    }
     private var deactivateTimer: SwiftSignalKit.Timer?
     
     private let isHeadsetPluggedInSync = Atomic<Bool>(value: false)
@@ -299,6 +317,10 @@ public final class ManagedAudioSessionImpl: NSObject, ManagedAudioSession {
     
     public func getIsHeadsetPluggedIn() -> Bool {
         return self.isHeadsetPluggedInSync.with { $0 }
+    }
+    
+    public func getIsRecordingActive() -> Bool {
+        return self.isRecordingActiveSync.with { $0 }
     }
     
     private let outputsToHeadphonesSubscribers = Bag<(Bool) -> Void>()

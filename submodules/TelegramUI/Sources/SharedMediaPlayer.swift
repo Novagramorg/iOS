@@ -373,6 +373,14 @@ final class SharedMediaPlayer {
             self.proximityManagerIndex = DeviceProximityManager.shared().add { [weak self] value in
                 let forceAudioToSpeaker = !value
                 if let strongSelf = self, strongSelf.forceAudioToSpeaker != forceAudioToSpeaker {
+                    // A voice or video message is being recorded: the sensor is covered by the user's face while
+                    // speaking, not to ask for playback on the ear speaker. Resuming would push a playback audio
+                    // session on top of the recorder's, and the recorder stops as soon as its session is
+                    // deactivated. forceAudioToSpeaker is deliberately left untouched so that the next genuine
+                    // proximity change is still seen as a change.
+                    if strongSelf.audioSession.getIsRecordingActive() {
+                        return
+                    }
                     strongSelf.forceAudioToSpeaker = forceAudioToSpeaker
                     strongSelf.playbackItem?.setForceAudioToSpeaker(forceAudioToSpeaker)
                     if !forceAudioToSpeaker {
