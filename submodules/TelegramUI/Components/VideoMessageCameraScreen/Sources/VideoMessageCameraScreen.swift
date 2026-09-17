@@ -1305,10 +1305,32 @@ public class VideoMessageCameraScreen: ViewController {
             let _ = enqueueMessages(account: self.context.engine.account, peerId: self.context.engine.account.peerId, messages: [message]).startStandalone()
         }
         
+        /// Whether `view` is a control the component host put on screen (the record-more, view-once,
+        /// flip and flash buttons are all `UIButton`s; the mute badge and the front-flash image are not).
+        private func isComponentControl(_ view: UIView?) -> Bool {
+            guard let view, let componentView = self.componentHost.view, view.isDescendant(of: componentView) else {
+                return false
+            }
+            if view is UIControl {
+                return true
+            }
+            if let gestureRecognizers = view.gestureRecognizers, !gestureRecognizers.isEmpty {
+                return true
+            }
+            return false
+        }
+        
         override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
             let result = super.hitTest(point, with: event)
             
-            if let resultPreviewView = self.resultPreviewView {
+            // The preview is claimed by its *bounding square*, while only the inscribed circle is
+            // visible - `previewContainerContentView` clips to a corner radius. The component host is a
+            // full-screen sibling above `previewContainerView`, and when the keyboard is up the container
+            // is only as tall as the input panel's top edge, so on a small screen the controls pinned to
+            // its bottom edge sit inside that square's bottom corners while remaining outside the circle.
+            // `super.hitTest` has already resolved which of the two the touch really landed on, so only
+            // fall back to the preview when it did not land on a control.
+            if let resultPreviewView = self.resultPreviewView, !self.isComponentControl(result) {
                 if resultPreviewView.bounds.contains(self.view.convert(point, to: resultPreviewView)) {
                     return resultPreviewView
                 }
