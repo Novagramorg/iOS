@@ -15,6 +15,18 @@ enum ChatLockBiometricResult {
 
 final class ChatLockBiometricHelper {
 
+    /// LocalAuthentication cancels an evaluation the moment its LAContext is released, so the
+    /// context has to outlive the call that started it. Holding the live one here also lets us
+    /// cancel it before a different prompt starts — two concurrent evaluations knock each other
+    /// out, and the second one comes back as a plain failure with no passcode fallback.
+    private static var activeContext: LAContext?
+
+    /// Cancels a prompt that is still on screen. Call before starting a different one.
+    static func cancelPending() {
+        activeContext?.invalidate()
+        activeContext = nil
+    }
+
     // Returns the biometric type available on this device, or nil if none.
     static func availableType() -> ChatLockBiometricType? {
         let ctx = LAContext()
@@ -32,6 +44,8 @@ final class ChatLockBiometricHelper {
     // Triggers a biometric prompt and calls completion on the main thread.
     // Never throws — all error paths map to .cancelled or .unavailable.
     static func evaluate(reason: String, completion: @escaping (ChatLockBiometricResult) -> Void) {
+        cancelPending()
+
         let ctx = LAContext()
         var error: NSError?
         guard ctx.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) else {
@@ -39,9 +53,13 @@ final class ChatLockBiometricHelper {
             DispatchQueue.main.async { completion(.unavailable) }
             return
         }
+        activeContext = ctx
 
         ctx.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: reason) { success, evalError in
             DispatchQueue.main.async {
+                if activeContext === ctx {
+                    activeContext = nil
+                }
                 if success {
                     completion(.success)
                     return
