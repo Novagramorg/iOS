@@ -965,9 +965,37 @@ def remote_build_tart(macos_version, bazel_cache_host, configuration, build_inpu
         ]
         session.upload_directory(local_path=base_dir, remote_path="/Users/Shared/telegram-ios", exclude_patterns=source_exclude_patterns)
 
+        # Since Xcode 26 the Metal toolchain is an optional download that only works while
+        # its cryptex DMG is mounted at /Volumes/MetalToolchainCryptex, and that mount does
+        # NOT survive a reboot -- so a freshly booted VM never has it, however the asset was
+        # installed into the image. Xcode remounts it lazily, which races when bazel starts
+        # ~17 MetalCompile actions at once: some `xcrun metal` calls succeed while others
+        # fail with "cannot execute tool 'metal' due to missing Metal Toolchain", breaking
+        # the build on a different shader each time. Mounting it once, serially, before
+        # bazel runs removes the race.
+        #
+        # Mounting alone is not enough for `metal` itself. Once the cryptex is mounted xcrun
+        # resolves every Metal tool inside it (metallib, air-lld, ...) -- except `metal`,
+        # which is shadowed by a stub of the same name in XcodeDefault.xctoolchain whose
+        # only behaviour is to print that error; it has no idea the cryptex exists. So the
+        # name is pointed at the real compiler. Both steps are best-effort: a VM whose image
+        # carries no Metal asset must still build everything that needs no shaders.
         guest_build_sh = '''
             set -x
             set -e
+
+            if [ ! -d /Volumes/MetalToolchainCryptex ]; then
+                METAL_DMG="$(ls -t /System/Library/AssetsV2/com_apple_MobileAsset_MetalToolchain/*.asset/AssetData/Restore/*.dmg 2>/dev/null | head -n 1)"
+                if [ -n "$METAL_DMG" ]; then
+                    hdiutil attach "$METAL_DMG" -mountpoint /Volumes/MetalToolchainCryptex -nobrowse -quiet || true
+                fi
+            fi
+            METAL_REAL=/Volumes/MetalToolchainCryptex/Metal.xctoolchain/usr/bin/metal
+            if [ -x "$METAL_REAL" ] && ! xcrun metal --version >/dev/null 2>&1; then
+                sudo ln -sf "$METAL_REAL" "$(xcode-select -p)/Toolchains/XcodeDefault.xctoolchain/usr/bin/metal" || true
+            fi
+            xcrun metal --version || true
+            xcrun -f metallib || true
 
             cd /Users/Shared/telegram-ios
 
