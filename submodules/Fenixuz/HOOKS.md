@@ -5261,3 +5261,57 @@ produced nothing. The defect is provable from the arithmetic and `||` is strictl
 through two vertically-aligned points *is* a straight line.
 
 **On upstream pull:** if upstream ever unifies these copies into one helper, drop these hooks.
+
+---
+
+## 📌 Three defensive crash guards (2026-09-17)
+
+All three are provable from the code, none could be reproduced by hand on a device, and none change
+behaviour for valid input. From the same App Store crash sweep as the fixes above.
+
+### `submodules/TelegramUniversalVideoContent/Sources/HLSVideoJSNativeContentNode.swift` (UPSTREAM hook)
+
+`HLSJSServerSource.fileData(id:range:)` crashed with a Swift precondition failure inside
+`Data.subdata` — `Data._Representation.subscript.getter`. `result.offset`/`result.size` describe what
+`MediaBoxFileContextV2Impl` believes it wrote, but the partial file mapped from disk can be shorter
+(a write cut short, or a flush landing after the map). Range-checked before slicing:
+
+```swift
+let lowerBound = Int(result.offset)
+let upperBound = Int(result.offset + result.size)
+if lowerBound >= 0 && lowerBound <= upperBound && upperBound <= data.count {
+    let subData = data.subdata(in: lowerBound ..< upperBound)
+    postbox.mediaBox.storeResourceData(…)
+}
+```
+
+Skipping the cache store is harmless — playback reads `partialFile` from the `putNext` below, which
+is outside this block.
+
+### `submodules/Utils/VolumeButtons/Sources/VolumeButtons.swift` (UPSTREAM hook)
+
+`AVCaptureEventHandlerImpl.__deallocating_deinit` crashed in `_dispatch_assert_queue_fail`:
+`AVCaptureEventInteraction` tears down through `_UIPhysicalButtonInteraction`, which asserts it is on
+the main queue. `VolumeButtonsListener.deinit → SharedContext.remove(id:) → updateListeners() →
+cameraSpecificHandler = nil` runs on whichever thread dropped the listener — the sibling
+`update(id:)` path is `deliverOnMainQueue`, this one never was. The deinit now hops:
+
+```swift
+let interaction = self.interaction
+let context = self.context
+let tearDown: () -> Void = {
+    interaction.isEnabled = false
+    context?.mainWindow?.viewController?.view.removeInteraction(interaction)
+}
+if Thread.isMainThread { tearDown() } else { Queue.mainQueue().async(tearDown) }
+```
+
+### `submodules/LegacyComponents/Sources/TGMediaPickerPhotoStripView.m` (UPSTREAM hook)
+
+79 devices, `SIGABRT` from `-[UICollectionView _Bug_Detected_In_Client_Of_UICollectionView_Invalid_Batch_Updates:]`
+via `insertItemAtIndex:`, reached from `TGMediaPickerGallerySelectedItemsModel.addSelectedItem:`.
+The data source returns `selectedItemsModel.totalCount`, and the model and the collection view fall
+out of step — `selectedItemsModel` is assigned after the view exists, and two selection changes can
+land before the view has processed the first. Both `insertItemAtIndex:` and `deleteItemAtIndex:` now
+compare the data source count with the collection view's cached count and fall back to `reloadData`
+when they disagree. The thumbnail still appears, just without the insert animation.
