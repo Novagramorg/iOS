@@ -103,14 +103,14 @@ private final class WalletWordsScreenComponent: Component {
             switch component.mode {
             case .view, .verify, .backupDisable(updateSecretPhrase: false):
                 //TODO:localize
-                titleText = "Your Recovery Phrase"
+                titleText = "Your Secret Phrase"
                 //TODO:localize
-                bodyText = "Your Secret Recovery Phrase is the key to\u{00a0}back up your wallet. Keep it secret and\u{00a0}secure at all times."
+                bodyText = "Your Secret Phrase is the key to\u{00a0}back up your wallet. Keep it secret and\u{00a0}secure at all times."
             case .replacement, .backupDisable(updateSecretPhrase: true):
                 //TODO:localize
                 titleText = "New Secret Phrase"
                 //TODO:localize
-                bodyText = "A new recovery phrase for your wallet has been generated. Write it down and keep it secret."
+                bodyText = "A new secret phrase for your wallet has been generated. Write it down and keep it secret."
             }
             let sideInset = 30.0 + max(environment.safeInsets.left, environment.safeInsets.right)
             let contentWidth = max(0.0, min(430.0, availableSize.width - sideInset * 2.0))

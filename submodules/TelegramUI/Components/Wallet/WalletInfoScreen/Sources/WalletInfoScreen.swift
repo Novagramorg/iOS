@@ -211,17 +211,17 @@ private func walletInfoContent(
         )
     case .recovery:
         //TODO:localize
-        let title = "Recovery Phrase"
+        let title = "Secret Phrase"
         //TODO:localize
-        let text = "Your Secret Recovery Phrase is the key to\u{00a0}back up your wallet. Keep it secret and\u{00a0}secure at all times."
+        let text = "Your Secret Phrase is the key to\u{00a0}back up your wallet. Keep it secret and\u{00a0}secure at all times."
         //TODO:localize
-        let neverShareText = "**Never share** your secret Recovery Phrase with anyone."
+        let neverShareText = "**Never share** your Secret Phrase with anyone."
         //TODO:localize
-        let canStealText = "If someone has your Recovery Phrase they **can steal your funds**."
+        let canStealText = "If someone has your Secret Phrase they **can steal your funds**."
         //TODO:localize
-        let supportText = "Telegram Support **will never ask you** for your Recovery Phrase."
+        let supportText = "Telegram Support **will never ask you** for your Secret Phrase."
         //TODO:localize
-        let buttonTitle = "Show Recovery Phrase"
+        let buttonTitle = "Show Secret Phrase"
 
         return WalletInfoContent(
             logo: WalletInfoLogo(name: "WalletWordList", loop: false),

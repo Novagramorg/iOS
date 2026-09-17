@@ -459,6 +459,13 @@ actor WalletEngineStorage {
         try self.remove(service: self.secretService, account: secretRef.value)
     }
 
+    func debugRemoveMnemonicFromKeychain() throws {
+        guard let secretRef = try self.loadDescriptor()?.secretRef, !secretRef.isEmpty else {
+            return
+        }
+        try self.deleteProtectedSecret(ProtectedSecretRef(value: secretRef))
+    }
+
     func loadJournal(_ key: JournalKey) throws -> JournalRecord? {
         let account = self.journalAccount(key)
         guard let value: JournalDiskRecord = try self.readCodable(service: self.journalService, account: account) else {

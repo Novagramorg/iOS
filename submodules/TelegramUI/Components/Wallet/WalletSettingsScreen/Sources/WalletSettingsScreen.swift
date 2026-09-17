@@ -69,6 +69,11 @@ private final class WalletSettingsScreenComponent: Component {
         private let recoverySection = ComponentView<Empty>()
         private let backupSection = ComponentView<Empty>()
         private let replacementSection = ComponentView<Empty>()
+        #if DEBUG
+        private let debugSection = ComponentView<Empty>()
+        private let debugRemoveMnemonicDisposable = MetaDisposable()
+        private var isRemovingMnemonic = false
+        #endif
 
         private var component: WalletSettingsScreenComponent?
         private var environment: EnvironmentType?
@@ -138,6 +143,9 @@ private final class WalletSettingsScreenComponent: Component {
             self.backupAccessDisposable.dispose()
             self.disableBackupChoiceDisposable.dispose()
             self.walletStateDisposable.dispose()
+            #if DEBUG
+            self.debugRemoveMnemonicDisposable.dispose()
+            #endif
         }
 
         private func endWalletFlow() {
@@ -298,24 +306,7 @@ private final class WalletSettingsScreenComponent: Component {
                     }
                 ))
             } else {
-                controller.present(textAlertController(
-                    context: component.context,
-                    title: "Recovery Phrase Required",
-                    text: "To change backup settings, enter your 12- or 24-word recovery phrase to restore access to this wallet.",
-                    actions: [
-                        TextAlertAction(type: .genericAction, title: "Cancel", action: { [weak self] in
-                            guard let self, self.backupAccessGeneration == generation else { return }
-                            self.abandonBackupAccess()
-                        }),
-                        TextAlertAction(type: .defaultAction, title: "Proceed", action: { [weak self] in
-                            Queue.mainQueue().after(0.25) { [weak self] in
-                                guard let self, self.backupAccessGeneration == generation else { return }
-                                self.openRecoveryPhraseImport(backupAccessGeneration: generation)
-                            }
-                        })
-                    ],
-                    dismissOnOutsideTap: false
-                ), in: .window(.root))
+                self.openRecoveryPhraseImport(backupAccessGeneration: generation)
             }
         }
 
@@ -408,7 +399,7 @@ private final class WalletSettingsScreenComponent: Component {
             let message = walletAuthorizationErrorMessage(error)
             controller.present(textAlertController(
                 context: component.context,
-                title: message?.title ?? "Couldn’t Show Recovery Phrase",
+                title: message?.title ?? "Couldn’t Show Secret Phrase",
                 text: message?.text ?? "Check the network connection and try again.",
                 actions: [TextAlertAction(type: .defaultAction, title: "OK", action: {
                 })]
@@ -456,7 +447,7 @@ private final class WalletSettingsScreenComponent: Component {
                     presentationData: presentationData,
                     content: .actionSucceeded(
                         title: "Wallet Imported",
-                        text: "Your wallet was restored from your recovery phrase.",
+                        text: "Your wallet was restored from your secret phrase.",
                         cancel: nil,
                         destructive: false
                     ),
@@ -607,7 +598,7 @@ private final class WalletSettingsScreenComponent: Component {
                 AnyComponentWithIdentity(
                     id: "text",
                     component: AnyComponent(AlertTextComponent(content: .plain(
-                        "The only way to recover your funds will be to manually enter your recovery phrase."
+                        "The only way to recover your funds will be to manually enter your secret phrase."
                     )))
                 ),
                 AnyComponentWithIdentity(
@@ -624,7 +615,7 @@ private final class WalletSettingsScreenComponent: Component {
                 items.append(AnyComponentWithIdentity(
                     id: "topUpInfo",
                     component: AnyComponent(AlertTextComponent(
-                        content: .plain("You need a non-zero balance to update your recovery phrase."),
+                        content: .plain("You need a non-zero balance to update your secret phrase."),
                         alignment: .center,
                         color: .primary,
                         style: .background(.small),
@@ -875,8 +866,8 @@ private final class WalletSettingsScreenComponent: Component {
                 return
             }
             var text = prepared.updateSecretPhrase
-                ? "Your wallet will switch to the new recovery phrase. After the change is confirmed, Telegram will delete the encrypted backup stored across its datacenters."
-                : "Telegram will delete the encrypted backup stored across its datacenters. Your recovery phrase will be the only way to recover this wallet."
+                ? "Your wallet will switch to the new secret phrase. After the change is confirmed, Telegram will delete the encrypted backup stored across its datacenters."
+                : "Telegram will delete the encrypted backup stored across its datacenters. Your secret phrase will be the only way to recover this wallet."
             if let fee = prepared.networkFeeNanograms {
                 text += "\n\nNetwork fee: \(self.disableBackupFeeText(fee))."
             }
@@ -1024,15 +1015,15 @@ private final class WalletSettingsScreenComponent: Component {
                 return ("Verification Expired", "The wallet verification request expired. Tap Disable to try again.")
             case .rotationNotFound?:
                 return (
-                    "Recovery Phrase Update Pending",
-                    "Telegram couldn't confirm the recovery phrase change on the blockchain yet. Wait a moment and tap Disable again."
+                    "Secret Phrase Update Pending",
+                    "Telegram couldn't confirm the secret phrase change on the blockchain yet. Wait a moment and tap Disable again."
                 )
             case .keyRotationFailed?:
-                return ("Couldn't Update Recovery Phrase", "The recovery phrase change could not be completed. Check your wallet state and try again.")
+                return ("Couldn't Update Secret Phrase", "The secret phrase change could not be completed. Check your wallet state and try again.")
             case let .insufficientBalance(required)?:
                 return (
                     "Not Enough Grams",
-                    "You need \(self.disableBackupFeeText(required)) to update your recovery phrase. Add funds and try again."
+                    "You need \(self.disableBackupFeeText(required)) to update your secret phrase. Add funds and try again."
                 )
             default:
                 return error.flatMap(walletAuthorizationErrorMessage)
@@ -1100,7 +1091,7 @@ private final class WalletSettingsScreenComponent: Component {
             controller.present(textAlertController(
                 context: component.context,
                 title: "Wallet Changed",
-                text: "The wallet's recovery phrase changed while you were updating backup settings. Restore access using the current recovery phrase and try again.",
+                text: "The wallet's secret phrase changed while you were updating backup settings. Restore access using the current secret phrase and try again.",
                 actions: [TextAlertAction(type: .defaultAction, title: "OK", action: {})]
             ), in: .window(.root))
         }
@@ -1114,7 +1105,7 @@ private final class WalletSettingsScreenComponent: Component {
                 presentationData: presentationData,
                 content: .actionSucceeded(
                     title: "Backup Disabled",
-                    text: "Your recovery phrase is now the only way to restore your wallet.",
+                    text: "Your secret phrase is now the only way to restore your wallet.",
                     cancel: nil,
                     destructive: false
                 ),
@@ -1189,7 +1180,7 @@ private final class WalletSettingsScreenComponent: Component {
             controller.present(textAlertController(
                 context: component.context,
                 title: "Delete Wallet?",
-                text: "You'll lose access to your funds unless you've saved your recovery phrase.",
+                text: "You'll lose access to your funds unless you've saved your secret phrase.",
                 actions: [
                     TextAlertAction(type: .destructiveAction, title: "Delete Anyway", action: { [weak self] in
                         Queue.mainQueue().after(0.25) { [weak self] in
@@ -1272,7 +1263,7 @@ private final class WalletSettingsScreenComponent: Component {
                     completion: { [weak self] in
                         self?.completeWalletReplacement(
                             toastTitle: "Wallet Imported",
-                            toastText: "Your wallet was restored from your recovery phrase."
+                            toastText: "Your wallet was restored from your secret phrase."
                         )
                     }
                 ))
@@ -1398,6 +1389,51 @@ private final class WalletSettingsScreenComponent: Component {
             ), in: .window(.root))
         }
 
+        #if DEBUG
+        private func debugRemoveMnemonicFromKeychain() {
+            guard !self.isRemovingMnemonic, let component = self.component, let controller = self.environment?.controller() else {
+                return
+            }
+            self.isRemovingMnemonic = true
+            self.debugRemoveMnemonicDisposable.set((component.walletContext.debugRemoveMnemonicFromKeychain()
+            |> deliverOnMainQueue).start(next: { [weak self, weak controller] _ in
+                guard let self else {
+                    return
+                }
+                self.isRemovingMnemonic = false
+                guard let controller else {
+                    return
+                }
+                let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+                controller.present(UndoOverlayController(
+                    presentationData: presentationData,
+                    content: .actionSucceeded(
+                        title: "Mnemonic Deleted",
+                        text: "The local mnemonic was deleted from Keychain.",
+                        cancel: nil,
+                        destructive: false
+                    ),
+                    position: .bottom,
+                    action: { _ in false }
+                ), in: .current)
+            }, error: { [weak self, weak controller] _ in
+                guard let self else {
+                    return
+                }
+                self.isRemovingMnemonic = false
+                guard let controller else {
+                    return
+                }
+                controller.present(textAlertController(
+                    context: component.context,
+                    title: "Couldn’t Delete Mnemonic",
+                    text: "The mnemonic could not be deleted from Keychain. Please try again.",
+                    actions: [TextAlertAction(type: .defaultAction, title: "OK", action: {})]
+                ), in: .window(.root))
+            }))
+        }
+        #endif
+
         func update(
             component: WalletSettingsScreenComponent,
             availableSize: CGSize,
@@ -1438,7 +1474,7 @@ private final class WalletSettingsScreenComponent: Component {
             self.backgroundColor = theme.list.blocksBackgroundColor
 
             //TODO:localize
-            let recoveryHeader = "Recovery Phrase"
+            let recoveryHeader = "Secret Phrase"
             //TODO:localize
             //TODO:localize
             let backupHeader = "Encrypted Backup"
@@ -1476,11 +1512,11 @@ private final class WalletSettingsScreenComponent: Component {
                 backupEnabled = false
             }
             //TODO:localize
-            let recoveryAction = canEnterRecoveryPhrase ? "Enter Recovery Phrase" : "Show Recovery Phrase"
+            let recoveryAction = canEnterRecoveryPhrase ? "Enter Secret Phrase" : "Show Secret Phrase"
             //TODO:localize
             let recoveryFooter = canEnterRecoveryPhrase
-                ? "Enter your recovery phrase to restore access to this wallet."
-                : "You can transfer your wallet to another device by copying your 12- or 24-word recovery phrase."
+                ? "Enter your secret phrase to restore access to this wallet."
+                : "You can transfer your wallet to another device by copying your 12- or 24-word secret phrase."
             //TODO:localize
             let backupFooter = backupEnabled
                 ? "Your encrypted key backup is split into three parts and stored across three continents.\n\nIt can only be reassembled on your devices, so no one — not even Telegram — can access your key."
@@ -1677,6 +1713,52 @@ private final class WalletSettingsScreenComponent: Component {
                 )
             }
             contentHeight += replacementSectionSize.height
+            #if DEBUG
+            contentHeight += sectionSpacing
+            self.debugSection.parentState = self.state
+            let debugSectionSize = self.debugSection.update(
+                transition: transition,
+                component: AnyComponent(ListSectionComponent(
+                    theme: theme,
+                    style: .glass,
+                    header: nil,
+                    footer: nil,
+                    items: [
+                        AnyComponentWithIdentity(id: "deleteMnemonic", component: AnyComponent(ListActionItemComponent(
+                            theme: theme,
+                            style: .glass,
+                            title: AnyComponent(MultilineTextComponent(
+                                text: .plain(NSAttributedString(
+                                    string: "Delete Mnemonic from Keychain",
+                                    font: actionFont,
+                                    textColor: theme.list.itemDestructiveColor
+                                )),
+                                maximumNumberOfLines: 0
+                            )),
+                            accessory: nil,
+                            action: { [weak self] _ in
+                                self?.debugRemoveMnemonicFromKeychain()
+                            }
+                        )))
+                    ]
+                )),
+                environment: {},
+                containerSize: CGSize(width: sectionWidth, height: 10000.0)
+            )
+            if let debugSectionView = self.debugSection.view {
+                if debugSectionView.superview == nil {
+                    self.scrollView.addSubview(debugSectionView)
+                }
+                transition.setFrame(
+                    view: debugSectionView,
+                    frame: CGRect(
+                        origin: CGPoint(x: sideInset, y: contentHeight),
+                        size: debugSectionSize
+                    )
+                )
+            }
+            contentHeight += debugSectionSize.height
+            #endif
             contentHeight += 24.0 + environment.safeInsets.bottom
 
             transition.setFrame(

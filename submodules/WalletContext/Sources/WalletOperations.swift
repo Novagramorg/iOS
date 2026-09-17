@@ -283,6 +283,12 @@ public extension WalletContext {
         }
     }
 
+    func debugRemoveMnemonicFromKeychain() -> Signal<Void, WalletError> {
+        self.signal(name: "debug_removing_mnemonic_from_keychain", cancelOnDispose: false) { impl, _ in
+            try await impl.storage.debugRemoveMnemonicFromKeychain()
+        }
+    }
+
     func prepareRecoveryPhraseImport(words: [String], session: PasscodeSession? = nil) -> Signal<PreparedRecoveryPhraseImport, WalletError> {
         self.signal(name: "preparing_recovery_phrase_import", deliverWhenAvailable: session?.lifetime == .ownerManaged) { impl, operationId in
             try await impl.prepareRecoveryPhraseImport(words: words, session: session, operationId: operationId)
