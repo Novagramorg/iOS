@@ -4147,7 +4147,11 @@ private func generateParabollicMotionKeyframes(from sourcePoint: CGPoint, to tar
     let y3 = targetPosition.y
     
     var keyframes: [CGPoint] = []
-    if abs(y1 - y3) < 5.0 && abs(x1 - x3) < 5.0 {
+    // midPoint.x is (x1 + x3) / 2, so the parabola's denominator below reduces to
+    // (x1 - x3)^3 / 4 — zero whenever source and destination share an x, which makes a/b/c
+    // NaN and CALayer.setPosition raise. Take the straight-line path if EITHER axis is close;
+    // for two vertically aligned points the parabola is a straight line anyway.
+    if abs(y1 - y3) < 5.0 || abs(x1 - x3) < 5.0 {
         for i in 0 ..< 10 {
             let k = CGFloat(i) / CGFloat(10 - 1)
             let x = sourcePoint.x * (1.0 - k) + targetPosition.x * k

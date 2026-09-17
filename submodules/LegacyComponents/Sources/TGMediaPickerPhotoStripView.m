@@ -120,6 +120,20 @@
 
 - (void)insertItemAtIndex:(NSInteger)index
 {
+    // UICollectionView checks that the data source's new count equals its own cached count plus
+    // the inserted rows, and raises NSInternalInconsistencyException when it does not. The model
+    // and the collection view do fall out of step here — selectedItemsModel is assigned after the
+    // view exists, and two selection changes can land before the view has processed the first.
+    // Reload instead of dying; the thumbnail still appears, just without the insert animation.
+    NSInteger newCount = [self collectionView:_collectionView numberOfItemsInSection:0];
+    NSInteger cachedCount = [_collectionView numberOfItemsInSection:0];
+    if (index < 0 || index >= newCount || newCount != cachedCount + 1)
+    {
+        [_collectionView reloadData];
+        [self _layoutCollectionViewForOrientation:self.interfaceOrientation];
+        return;
+    }
+
     NSIndexPath *indexPath = [NSIndexPath indexPathForRow:index inSection:0];
     
     [UIView performWithoutAnimation:^
@@ -149,6 +163,16 @@
 
 - (void)deleteItemAtIndex:(NSInteger)index
 {
+    // Same invariant as insertItemAtIndex:, in the other direction.
+    NSInteger newCount = [self collectionView:_collectionView numberOfItemsInSection:0];
+    NSInteger cachedCount = [_collectionView numberOfItemsInSection:0];
+    if (index < 0 || index >= cachedCount || newCount != cachedCount - 1)
+    {
+        [_collectionView reloadData];
+        [self _layoutCollectionViewForOrientation:self.interfaceOrientation];
+        return;
+    }
+
     [_collectionView performBatchUpdates:^
     {
         [_collectionView deleteItemsAtIndexPaths:@[ [NSIndexPath indexPathForRow:index inSection:0] ]];

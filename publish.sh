@@ -34,6 +34,17 @@ PROV_DIR="$SCRIPT_DIR/build-input/configuration-repository/provisioning"
 OUTPUT_DIR="${OUTPUT_DIR:-$HOME/Desktop}"
 VIPADS_TEAM_ID="ZDBP5RSRZF"
 
+# ─── Diagnostika qo'riqchisi ────────────────────────────────────────────────
+# Race condition'larni qo'lda reproduce qilish uchun manba kodiga vaqtinchalik
+# kechikish/log qo'yamiz. Ular App Store build'iga hech qachon tushmasligi kerak.
+if grep -rl "FENIX_REPRO_DELAY_DO_NOT_SHIP" submodules/ Telegram/ 2>/dev/null | head -1 | grep -q .; then
+    echo ""
+    echo "  Diagnostika kodi manbada qolib ketgan (FENIX_REPRO_DELAY_DO_NOT_SHIP):"
+    grep -rn "FENIX_REPRO_DELAY_DO_NOT_SHIP" submodules/ Telegram/ 2>/dev/null | sed 's/^/    /'
+    echo ""
+    err "Avval uni olib tashlang, keyin publish qiling."
+fi
+
 # ─── Step 0: Version param (optional) ───────────────────────────────────────
 # Usage: ./publish.sh [version]     e.g.  ./publish.sh 12.8.5
 # Agar versiya berilsa, appstore-configuration.json (app_version) va versions.json
@@ -150,8 +161,15 @@ for fname, content in [
 prov = repo + '/provisioning'
 os.makedirs(prov, exist_ok=True)
 prov_build = prov + '/BUILD'
-if not os.path.exists(prov_build):
-    open(prov_build, 'w').write('exports_files([])\n')
+# Always regenerate from what is actually on disk. Writing an empty exports_files()
+# when the file happens to be missing makes every profile target unresolvable and the
+# build dies with "no such target ...:Telegram.mobileprovision". Same logic Make.py uses.
+profile_names = sorted(n for n in os.listdir(prov) if n.endswith('.mobileprovision'))
+with open(prov_build, 'w') as f:
+    f.write('exports_files([\n')
+    for name in profile_names:
+        f.write('    "{}",\n'.format(name))
+    f.write('])\n')
 
 tmp_path = repo + '/variables.bzl.tmp'
 # aps_environment='production' — Push Notifications uz.fenixuz.app App ID'da
@@ -281,6 +299,61 @@ if [ -f "$EMBEDDED_PROV" ]; then
 else
     warn "Embedded .app topilmadi — profil verify o'tkazib yuborildi"
 fi
+
+# ─── Step 7b: dSYM arxivi ───────────────────────────────────────────────────
+# Bazel ipa ichiga Symbols/ papkasini qo'ymaydi, shuning uchun Apple hech qachon symbol
+# olmaydi va Organizer'dagi har bir crash stack xom manzil bo'lib chiqadi. Xcode dSYM'ni
+# Archives papkasidan UUID bo'yicha topadi — shuning uchun har buildda shu yerga nusxa
+# olamiz. Busiz bir marta bazel-out ustiga yozilgach, o'sha versiyaning crash'larini
+# umuman symbolicate qilib bo'lmaydi.
+if [ -n "$EMBEDDED_APP" ] && [ -d "$EMBEDDED_APP" ]; then
+    step "dSYM arxivi saqlanmoqda..."
+    ARCHIVE_DIR="$HOME/Library/Developer/Xcode/Archives/$(date +%Y-%m-%d)"
+    ARCHIVE="$ARCHIVE_DIR/Novagram ${VERSION} (${BUILD_NUMBER}) ${TIMESTAMP}.xcarchive"
+    mkdir -p "$ARCHIVE/Products/Applications" "$ARCHIVE/dSYMs"
+    cp -Rp "$EMBEDDED_APP" "$ARCHIVE/Products/Applications/"
+    DSYM_COUNT=0
+    for d in "$SCRIPT_DIR"/bazel-bin/Telegram/*.dSYM "$SCRIPT_DIR"/bazel-bin/Telegram/Telegram_dsyms/*.dSYM; do
+        [ -e "$d" ] || continue
+        cp -RpL "$d" "$ARCHIVE/dSYMs/" 2>/dev/null && DSYM_COUNT=$((DSYM_COUNT + 1))
+    done
+    BUNDLE_ID_FOR_ARCHIVE=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$EMBEDDED_APP/Info.plist" 2>/dev/null || echo "uz.fenixuz.app")
+    cat > "$ARCHIVE/Info.plist" <<ARCHIVE_PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>ApplicationProperties</key>
+	<dict>
+		<key>ApplicationPath</key>
+		<string>Applications/$(basename "$EMBEDDED_APP")</string>
+		<key>CFBundleIdentifier</key>
+		<string>$BUNDLE_ID_FOR_ARCHIVE</string>
+		<key>CFBundleShortVersionString</key>
+		<string>$VERSION</string>
+		<key>CFBundleVersion</key>
+		<string>$BUILD_NUMBER</string>
+		<key>Team</key>
+		<string>ZDBP5RSRZF</string>
+	</dict>
+	<key>ArchiveVersion</key>
+	<integer>2</integer>
+	<key>CreationDate</key>
+	<date>$(date -u +%Y-%m-%dT%H:%M:%SZ)</date>
+	<key>Name</key>
+	<string>Novagram</string>
+	<key>SchemeName</key>
+	<string>Telegram</string>
+</dict>
+</plist>
+ARCHIVE_PLIST
+    if [ "$DSYM_COUNT" -gt 0 ]; then
+        ok "dSYM arxivi: $DSYM_COUNT ta — $ARCHIVE"
+    else
+        warn "dSYM topilmadi — Organizer bu buildning crash'larini symbolicate qila olmaydi"
+    fi
+fi
+
 rm -rf "$TMP_VERIFY"
 
 # ─── Step 8: Transporter ko'rsatma ──────────────────────────────────────────
