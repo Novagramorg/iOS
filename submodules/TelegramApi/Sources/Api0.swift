@@ -1756,6 +1756,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-2050952924] = { return Api.wallet.TonConnectPending.parse_tonConnectPending($0) }
     dict[236939414] = { return Api.wallet.TonConnectSessions.parse_tonConnectSessions($0) }
     dict[1126356389] = { return Api.wallet.Transactions.parse_transactions($0) }
+    dict[-1836156075] = { return Api.wallet.UserAddresses.parse_userAddresses($0) }
     return dict
 }()
 
@@ -3093,6 +3094,8 @@ public extension Api {
         case let _1 as Api.wallet.TonConnectSessions:
             _1.serialize(buffer, boxed)
         case let _1 as Api.wallet.Transactions:
+            _1.serialize(buffer, boxed)
+        case let _1 as Api.wallet.UserAddresses:
             _1.serialize(buffer, boxed)
         default:
             break

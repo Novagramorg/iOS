@@ -1216,7 +1216,8 @@ private final class WalletImportScreenComponent: Component {
                     AnyComponentWithIdentity(id: "address", component: AnyComponent(AlertTextComponent(
                         content: .attributed(addressText),
                         alignment: .center,
-                        style: .background(.small)
+                        style: .background(.small),
+                        insets: UIEdgeInsets(top: 0.0, left: 8.0, bottom: 0.0, right: 8.0)
                     )))
                 ],
                 actions: [AlertScreen.Action(title: "OK", type: .default)]

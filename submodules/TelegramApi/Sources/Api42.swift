@@ -414,3 +414,65 @@ public extension Api.wallet {
         }
     }
 }
+public extension Api.wallet {
+    enum UserAddresses: TypeConstructorDescription {
+        public class Cons_userAddresses: TypeConstructorDescription {
+            public var addresses: [Api.WalletUserAddress]
+            public var users: [Api.User]
+            public init(addresses: [Api.WalletUserAddress], users: [Api.User]) {
+                self.addresses = addresses
+                self.users = users
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("userAddresses", [("addresses", ConstructorParameterDescription(self.addresses)), ("users", ConstructorParameterDescription(self.users))])
+            }
+        }
+        case userAddresses(Cons_userAddresses)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .userAddresses(let _data):
+                if boxed {
+                    buffer.appendInt32(-1836156075)
+                }
+                buffer.appendInt32(481674261)
+                buffer.appendInt32(Int32(_data.addresses.count))
+                for item in _data.addresses {
+                    item.serialize(buffer, true)
+                }
+                buffer.appendInt32(481674261)
+                buffer.appendInt32(Int32(_data.users.count))
+                for item in _data.users {
+                    item.serialize(buffer, true)
+                }
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .userAddresses(let _data):
+                return ("userAddresses", [("addresses", ConstructorParameterDescription(_data.addresses)), ("users", ConstructorParameterDescription(_data.users))])
+            }
+        }
+
+        public static func parse_userAddresses(_ reader: BufferReader) -> UserAddresses? {
+            var _1: [Api.WalletUserAddress]?
+            if let _ = reader.readInt32() {
+                _1 = Api.parseVector(reader, elementSignature: 0, elementType: Api.WalletUserAddress.self)
+            }
+            var _2: [Api.User]?
+            if let _ = reader.readInt32() {
+                _2 = Api.parseVector(reader, elementSignature: 0, elementType: Api.User.self)
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.wallet.UserAddresses.userAddresses(Cons_userAddresses(addresses: _1!, users: _2!))
+            }
+            else {
+                return nil
+            }
+        }
+    }
+}

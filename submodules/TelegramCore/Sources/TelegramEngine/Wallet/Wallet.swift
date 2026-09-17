@@ -349,18 +349,13 @@ private struct CachedExistingWaltBalance: Codable {
     let hasBalance: Bool
 }
 
-func _internal_getExistingWaltBalance(account: Account) -> Signal<Bool, NoError> {
+func _internal_getExistingWaltBalance(account: Account) -> Signal<Bool?, NoError> {
     let cacheId = ItemCacheEntryId(collectionId: Namespaces.CachedItemCollection.cachedExistingWaltBalance, key: ValueBoxKey(length: 0))
     return account.postbox.transaction { transaction -> CachedExistingWaltBalance? in
         return transaction.retrieveItemCacheEntry(id: cacheId)?.get(CachedExistingWaltBalance.self)
     }
-    |> mapToSignal { cachedBalance -> Signal<Bool, NoError> in
-        let cached: Signal<Bool, NoError>
-        if let cachedBalance {
-            cached = .single(cachedBalance.hasBalance)
-        } else {
-            cached = .complete()
-        }
+    |> mapToSignal { cachedBalance -> Signal<Bool?, NoError> in
+        let cached: Signal<Bool?, NoError> = .single(cachedBalance?.hasBalance)
 
         let updated = account.network.request(Api.functions.wallet.getExistingWaltBalance())
         |> map { result -> Bool in
@@ -382,6 +377,7 @@ func _internal_getExistingWaltBalance(account: Account) -> Signal<Bool, NoError>
                 return hasBalance
             }
         }
+        |> map(Optional.init)
         return cached |> then(updated)
     }
     |> distinctUntilChanged
@@ -436,8 +432,16 @@ func _internal_getWalletUserAddresses(
         |> mapError { _ -> WalletGetUserAddressesError in
             return .generic
         }
-        |> map { result in
-            return result.map { WalletUserAddress(apiAddress: $0) }
+        |> mapToSignal { result -> Signal<[WalletUserAddress], WalletGetUserAddressesError> in
+            return account.postbox.transaction { transaction -> [WalletUserAddress] in
+                switch result {
+                case let .userAddresses(data):
+                    let parsedPeers = AccumulatedPeers(transaction: transaction, chats: [], users: data.users)
+                    updatePeers(transaction: transaction, accountPeerId: account.peerId, peers: parsedPeers)
+                    return data.addresses.map { WalletUserAddress(apiAddress: $0) }
+                }
+            }
+            |> castError(WalletGetUserAddressesError.self)
         }
     }
 }
