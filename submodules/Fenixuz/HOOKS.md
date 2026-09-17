@@ -5347,3 +5347,39 @@ the end of the string and `NSAttributedString` raises. Fixed by using `inputStat
 custom emoji are Premium-gated server-side, so a non-Premium test account cannot get one there. The
 mistake is unambiguous in the source: the enumerated string and the range now come from the same
 object.
+
+---
+
+## 📌 SSubscriber — disposal race (2026-09-17)
+
+**Why:** 51 devices in two weeks on 12.9.6 build 78, `EXC_BAD_ACCESS (SIGSEGV)` in `objc_retain`
+inside `-[SSubscriberDisposable dispose]`, reached from `-[SSubscriber putCompletion]` under
+`TGPhotoEditorController.createEditedImageWithEditorValues:…`. The photo editor is just where it
+surfaced — every signal in the app goes through this code.
+
+### `submodules/SSignalKit/SSignalKit/Source/SSignalKit/SSubscriber.m` (UPSTREAM hook)
+
+`_disposable` was read and nilled **outside** the lock in three methods:
+
+```objc
+os_unfair_lock_unlock(&_lock);
+…
+if (shouldDispose) {
+    [self->_disposable dispose];   // another thread can nil (and release) it right here
+    self->_disposable = nil;       // double release under ARC
+}
+```
+
+Two threads reaching `putCompletion` / `putError:` / `dispose` concurrently both load the same
+`_disposable`, both send it `-dispose`, and both assign nil — the object is released twice and the
+second `-dispose` lands on freed memory.
+
+`_markTerminatedWithoutDisposal` in the same file already did it correctly: take the disposable under
+the lock, nil it under the lock, send `-dispose` after unlocking. Applied that to `putError:`,
+`putCompletion` and `dispose`. `_assignDisposable:` was already correct.
+
+`shouldDispose` disappears — the disposable is only taken when `!_terminated`, and `[nil dispose]` is
+a no-op. The second subscriber class further down the file is entirely commented out and untouched.
+
+**Verified on device**: chats, sending, photo editing, video playback, stickers, search and settings
+all behave — this is load-bearing code for every signal in the app.
