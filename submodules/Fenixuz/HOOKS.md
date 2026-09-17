@@ -5168,3 +5168,96 @@ was missed.
 
 **On upstream pull:** if upstream restructures `update(...)`, re-apply. Full crash analysis in
 `CRASH_AUDIT_12.9.6.md`.
+
+---
+
+## 📌 Animated stickers — crash fix, corrupt cache file trusted (2026-09-17)
+
+**Why:** real App Store crash, 96 devices in two weeks on 12.9.6 build 78,
+`EXC_BAD_ACCESS (SIGSEGV)` inside `AnimatedStickerCachedFrameSource.takeFrame(draw:)`.
+Reached from `DefaultAnimatedStickerNodeImpl.play(firstFrame:fromIndex:)` on the playback timer —
+i.e. any animated sticker or animated emoji.
+
+The cached-animation format is a 20-byte header (five `Int32`s) followed by
+`[Int32 frameLength][frameLength bytes of LZFSE]` per frame. Every field was trusted.
+
+### `submodules/AnimatedStickerNode/Sources/AnimatedStickerFrameSource.swift` (UPSTREAM hook)
+
+Three guards added to `AnimatedStickerCachedFrameSource`:
+
+1. `init` — reject a file shorter than the header before the five `memcpy`s:
+
+```swift
+// The header is five Int32s. A truncated cache file would be read past its end.
+if buffer.count < 20 {
+    return false
+}
+```
+
+2. `init` — reject nonsensical header values before `Data(count: bytesPerRow * height)`, which traps
+   on a negative product:
+
+```swift
+if frameRateValue <= 0 || frameCountValue <= 0 || widthValue <= 0 || heightValue <= 0 || bytesPerRowValue < widthValue {
+    return false
+}
+if Int(bytesPerRowValue) * Int(heightValue) > 256 * 1024 * 1024 {
+    return false
+}
+```
+
+3. `takeFrame(draw:)` — reject a negative `frameLength`. **This is the production SIGSEGV**: the old
+   check `self.offset + 4 + Int(frameLength) > dataLength` *passes* for negative values, and
+   `compression_decode_buffer` then widens it to `size_t`:
+
+```swift
+if frameLength < 0 || self.offset + 4 + Int(frameLength) > dataLength {
+    return
+}
+```
+
+### `submodules/AnimatedStickerNode/Tests/` + `BUILD` (NEW — upstream module)
+
+Four regression tests and `ios_unit_test` / `ios_test_runner` targets, modelled on
+`submodules/TextFormat/BUILD`. Before the fix: 2 assertions failed and the test process died with
+`signal 5: Trace/BPT trap`. After: 4/4 pass. Run them with:
+
+```sh
+./build-input/bazel-8.4.2-darwin-arm64 --output_user_root="$HOME/telegram-bazel-cache/bazel-user-root" \
+  test //submodules/AnimatedStickerNode:AnimatedStickerNodeTests \
+  --action_env=DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
+  --xcode_version=26.5.0.17F42 -c dbg --ios_multi_cpus=sim_arm64 \
+  --//Telegram:disableProvisioningProfiles --test_output=all
+```
+
+`Make.py test` does not work in this repo — it demands `TELEGRAM_CODESIGNING_GIT_PASSWORD`.
+
+---
+
+## 📌 Parabolic keyframe animations — divide by zero (2026-09-17)
+
+**Why:** `StoryItemSetContainerComponent.View.animateOut` appears in App Store crash reports with
+`SIGABRT`, raised by `CA::Layer::set_position` — a NaN position.
+
+`generateParabollicMotionKeyframes` builds `midPoint.x = (x1 + x3) / 2`, so its denominator
+`(x1 - x2) * (x1 - x3) * (x2 - x3)` reduces to `(x1 - x3)³ / 4`. When source and destination share an
+x coordinate that is **zero**, so `a`, `b`, `c` are NaN, `y = a·x² + b·x + c` is NaN, and
+`layer.position = …` raises.
+
+The guard only took the safe linear branch when **both** axes were close (`&&`). Upstream already
+fixed exactly this in `Calls/CallScreen/Sources/Components/KeyEmojiView.swift:147` by switching to
+`||`, but left five other copies untouched. Applied the same change to all of them:
+
+| File | Animation the user sees |
+|---|---|
+| `ReactionSelectionNode/Sources/ReactionContextNode.swift` | reaction flying to the message |
+| `TelegramUI/Components/Chat/QuickShareScreen/Sources/QuickShareToastScreen.swift` | avatar flying on swipe-to-share |
+| `TelegramUI/Components/Stories/StoryContainerScreen/Sources/StoryItemSetContainerComponent.swift` | story closing |
+| `TelegramUI/Components/EmojiStatusSelectionComponent/Sources/EmojiStatusSelectionComponent.swift` | emoji status pick |
+| `PremiumUI/Sources/EmojiHeaderComponent.swift` | Premium screen header |
+
+**Not reproducible by hand** — it needs exact x alignment; 20 open/close cycles of the stories viewer
+produced nothing. The defect is provable from the arithmetic and `||` is strictly safer: a parabola
+through two vertically-aligned points *is* a straight line.
+
+**On upstream pull:** if upstream ever unifies these copies into one helper, drop these hooks.
