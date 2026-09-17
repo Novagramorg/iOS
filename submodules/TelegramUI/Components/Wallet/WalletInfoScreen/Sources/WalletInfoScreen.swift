@@ -150,7 +150,7 @@ private func walletInfoContent(
             ],
             buttonTitle: buttonTitle
         )
-    case .firstTime:
+    case .firstGrams:
         //TODO:localize
         let title = "Your first Grams!"
         let text: String
@@ -304,7 +304,7 @@ private final class WalletInfoSheetContent: CombinedComponent {
 
             super.init()
 
-            if mode == .gram || mode == .firstTime, let walletContext = context.walletContext {
+            if mode == .gram || mode == .firstGrams, let walletContext = context.walletContext {
                 self.fiatState = walletContext.stateValue.fiat
                 self.walletStateDisposable = (walletContext.state
                 |> deliverOnMainQueue).start(next: { [weak self] walletState in

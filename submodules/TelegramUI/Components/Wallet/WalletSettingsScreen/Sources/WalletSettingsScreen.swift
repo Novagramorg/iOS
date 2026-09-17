@@ -208,7 +208,6 @@ private final class WalletSettingsScreenComponent: Component {
         fileprivate func visibilityUpdated(_ isVisible: Bool) {
             self.isVisible = isVisible
             if isVisible {
-                self.reloadPreviousWallets()
                 if self.backupAccessRequest?.phase == .importing {
                     self.abandonBackupAccess()
                 } else {
@@ -1559,6 +1558,7 @@ private final class WalletSettingsScreenComponent: Component {
                         self.state?.updated(transition: .easeInOut(duration: 0.25))
                     }
                 }))
+                self.reloadPreviousWallets()
             }
 
             let theme = environment.theme
@@ -1831,7 +1831,7 @@ private final class WalletSettingsScreenComponent: Component {
                         text.append(NSAttributedString(
                             string: String(wallet.address[addressIndex ..< endIndex]),
                             font: addressFont,
-                            textColor: groupIndex.isMultiple(of: 2) ? theme.list.itemPrimaryTextColor : theme.list.itemSecondaryTextColor
+                            textColor: (groupIndex + groupIndex / 6).isMultiple(of: 2) ? theme.list.itemPrimaryTextColor : theme.list.itemSecondaryTextColor
                         ))
                         addressIndex = endIndex
                         groupIndex += 1
@@ -1839,9 +1839,14 @@ private final class WalletSettingsScreenComponent: Component {
 
                     let balanceText: String
                     if let balance = wallet.balance {
-                        balanceText = formatTonAmountText(balance, dateTimeFormat: environment.dateTimeFormat, maxDecimalPositions: 9)
+                        balanceText = formatTonAmountText(
+                            balance,
+                            dateTimeFormat: environment.dateTimeFormat,
+                            maxDecimalPositions: 9,
+                            formatString: environment.strings.Currency_Grams
+                        )
                     } else {
-                        balanceText = "—"
+                        balanceText = environment.strings.Currency_Grams(100).replacingOccurrences(of: "100", with: "—")
                     }
                     let lastUsedDate = Date(timeIntervalSince1970: Double(wallet.lastUsedAt))
                     let lastUsedText: String
@@ -1856,7 +1861,7 @@ private final class WalletSettingsScreenComponent: Component {
                     }
                     //TODO:localize
                     text.append(NSAttributedString(
-                        string: "\n\(balanceText) Grams — last used \(lastUsedText)",
+                        string: "\n\(balanceText) — last used \(lastUsedText)",
                         font: subtitleFont,
                         textColor: theme.list.itemSecondaryTextColor
                     ))
@@ -1877,6 +1882,11 @@ private final class WalletSettingsScreenComponent: Component {
 
                 contentHeight += sectionSpacing
                 self.previousWalletsSection.parentState = self.state
+
+                var transition = transition
+                if self.previousWalletsSection.view == nil {
+                    transition = .immediate
+                }
                 let previousWalletsSectionSize = self.previousWalletsSection.update(
                     transition: transition,
                     component: AnyComponent(ListSectionComponent(
@@ -1886,7 +1896,7 @@ private final class WalletSettingsScreenComponent: Component {
                             text: .plain(NSAttributedString(
                                 //TODO:localize
                                 string: "Previous Wallets".uppercased(),
-                                font: Font.semibold(presentationData.listsFontSize.baseDisplaySize),
+                                font: headerFont,
                                 textColor: theme.list.freeTextColor
                             )),
                             maximumNumberOfLines: 0

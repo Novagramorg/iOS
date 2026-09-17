@@ -1,4 +1,54 @@
 public extension Api.wallet {
+    enum ExistingBalance: TypeConstructorDescription {
+        public class Cons_existingBalance: TypeConstructorDescription {
+            public var flags: Int32
+            public var url: String
+            public init(flags: Int32, url: String) {
+                self.flags = flags
+                self.url = url
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("existingBalance", [("flags", ConstructorParameterDescription(self.flags)), ("url", ConstructorParameterDescription(self.url))])
+            }
+        }
+        case existingBalance(Cons_existingBalance)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .existingBalance(let _data):
+                if boxed {
+                    buffer.appendInt32(-1108800883)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                serializeString(_data.url, buffer: buffer, boxed: false)
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .existingBalance(let _data):
+                return ("existingBalance", [("flags", ConstructorParameterDescription(_data.flags)), ("url", ConstructorParameterDescription(_data.url))])
+            }
+        }
+
+        public static func parse_existingBalance(_ reader: BufferReader) -> ExistingBalance? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: String?
+            _2 = parseString(reader)
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.wallet.ExistingBalance.existingBalance(Cons_existingBalance(flags: _1!, url: _2!))
+            }
+            else {
+                return nil
+            }
+        }
+    }
+}
+public extension Api.wallet {
     enum HolderDc: TypeConstructorDescription {
         public class Cons_holderDc: TypeConstructorDescription {
             public var dc: Int32

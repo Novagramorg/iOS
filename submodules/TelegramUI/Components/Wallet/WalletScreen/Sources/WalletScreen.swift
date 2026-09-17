@@ -726,11 +726,13 @@ private final class WalletScreenComponent: Component {
         private var accountContext: AccountContext?
         private var accountName = ""
         private var accountPeerDisposable: Disposable?
-        private var existingWaltBalance: Bool?
-        private let additionalBalancesDisposable = MetaDisposable()
-        private let waltBalanceSessionDisposable = MetaDisposable()
+        private var existingWaltBalance: WalletExistingBalance?
+        private let existingWaltBalanceDisposable = MetaDisposable()
+        private var isLoadingExistingWaltBalance = false
+        private let earningsDisposable = MetaDisposable()
         private let waltBalanceBotAppDisposable = MetaDisposable()
         private var isOpeningWaltBalance = false
+        private var isWaitingForWaltBalanceUrl = false
         private var earningsContext: StarsRevenueStatsContext?
         private var availableEarnings: CurrencyAmount?
         private var twoStepAuthData: Promise<TwoStepAuthData?>?
@@ -845,8 +847,8 @@ private final class WalletScreenComponent: Component {
             (self.card.view as? WalletCardComponent.View)?.setBalanceTransitionContainer(nil)
             self.walletStateDisposable?.dispose()
             self.accountPeerDisposable?.dispose()
-            self.additionalBalancesDisposable.dispose()
-            self.waltBalanceSessionDisposable.dispose()
+            self.existingWaltBalanceDisposable.dispose()
+            self.earningsDisposable.dispose()
             self.waltBalanceBotAppDisposable.dispose()
             self.twoStepAuthDataDisposable?.dispose()
             self.loadMoreDisposable.dispose()
@@ -881,26 +883,91 @@ private final class WalletScreenComponent: Component {
             component.context.twoStepAuthData.set(updatedData)
         }
 
+        private func loadExistingWaltBalance() {
+            guard let component = self.component,
+                  self.accountContext === component.context,
+                  !self.isLoadingExistingWaltBalance else {
+                return
+            }
+
+            let context = component.context
+            self.isLoadingExistingWaltBalance = true
+            self.existingWaltBalanceDisposable.set((context.engine.wallet.getExistingWaltBalance()
+            |> deliverOnMainQueue).start(next: { [weak self] balance in
+                guard let self, self.accountContext === context else {
+                    return
+                }
+                let balanceChanged = self.existingWaltBalance != balance
+                self.existingWaltBalance = balance
+
+                if let balance, let url = balance.url {
+                    if !balance.hasBalance {
+                        self.cancelWaltBalanceOpening()
+                    } else if self.isWaitingForWaltBalanceUrl {
+                        self.isWaitingForWaltBalanceUrl = false
+                        self.openWaltBalance(url: url)
+                    }
+                }
+
+                if balanceChanged && !self.isUpdating {
+                    let transition: ComponentTransition = balance != nil || self.availableEarnings != nil ? .immediate : .easeInOut(duration: 0.25)
+                    self.componentState?.updated(transition: transition)
+                }
+            }, completed: { [weak self] in
+                guard let self, self.accountContext === context else {
+                    return
+                }
+                self.isLoadingExistingWaltBalance = false
+                if self.isWaitingForWaltBalanceUrl {
+                    self.presentWaltBalanceError()
+                }
+            }))
+        }
+
         private func openWaltBalance() {
+            guard let component = self.component,
+                  self.accountContext === component.context,
+                  self.walletInfo != nil,
+                  self.existingWaltBalance?.hasBalance == true,
+                  self.environment?.controller() != nil,
+                  !self.isOpeningWaltBalance else {
+                return
+            }
+
+            self.isOpeningWaltBalance = true
+            if let url = self.existingWaltBalance?.url {
+                self.openWaltBalance(url: url)
+            } else {
+                self.isWaitingForWaltBalanceUrl = true
+                self.loadExistingWaltBalance()
+            }
+        }
+
+        private func openWaltBalance(url: String) {
             guard let component = self.component,
                   let walletInfo = self.walletInfo,
                   self.environment?.controller() != nil,
-                  !self.isOpeningWaltBalance else {
+                  self.isOpeningWaltBalance else {
+                self.cancelWaltBalanceOpening()
+                return
+            }
+            guard !url.isEmpty else {
+                self.presentWaltBalanceError()
                 return
             }
 
             let context = component.context
             let walletContext = component.walletContext
             let address = walletInfo.address
-            self.isOpeningWaltBalance = true
 
-            self.waltBalanceSessionDisposable.set((context.engine.payments.createOnrampSession(
-                provider: "wallet",
-                cryptoCurrency: "gram",
-                address: address,
-                paymentMethod: "balance"
+            self.waltBalanceBotAppDisposable.set((context.sharedContext.resolveUrl(
+                context: context,
+                peerId: nil,
+                url: url,
+                skipUrlAuth: true
             )
-            |> deliverOnMainQueue).start(next: { [weak self] session in
+            |> take(1)
+            |> deliverOnMainQueue).start(next: { [weak self] result in
                 guard let self,
                       self.component?.context === context,
                       self.component?.walletContext === walletContext,
@@ -908,48 +975,32 @@ private final class WalletScreenComponent: Component {
                       self.isOpeningWaltBalance else {
                     return
                 }
-                self.waltBalanceBotAppDisposable.set((context.sharedContext.resolveUrl(
+                self.isOpeningWaltBalance = false
+                guard case let .peer(peer, .withBotApp(botAppStart)) = result, let botPeer = peer.flatMap(EnginePeer.init) else {
+                    self.presentWaltBalanceError()
+                    return
+                }
+                guard let controller = self.environment?.controller() else {
+                    return
+                }
+                let navigationController = (controller.navigationController as? NavigationController)
+                    ?? (context.sharedContext.mainWindow?.viewController as? NavigationController)
+                guard let parentController = navigationController?.viewControllers.last as? ViewController else {
+                    self.presentWaltBalanceError()
+                    return
+                }
+                context.sharedContext.openBotApp(
                     context: context,
-                    peerId: nil,
-                    url: session.url,
-                    skipUrlAuth: true
+                    parentController: parentController,
+                    botApp: botAppStart.botApp,
+                    botPeer: botPeer,
+                    payload: botAppStart.payload,
+                    mode: botAppStart.mode,
+                    isOnramp: true,
+                    willOpen: {},
+                    completion: {}
                 )
-                |> take(1)
-                |> deliverOnMainQueue).start(next: { [weak self] result in
-                    guard let self,
-                          self.component?.context === context,
-                          self.component?.walletContext === walletContext,
-                          self.walletInfo?.address == address,
-                          self.isOpeningWaltBalance else {
-                        return
-                    }
-                    self.isOpeningWaltBalance = false
-                    guard case let .peer(peer, .withBotApp(botAppStart)) = result, let botPeer = peer.flatMap(EnginePeer.init) else {
-                        self.presentWaltBalanceError()
-                        return
-                    }
-                    guard let controller = self.environment?.controller() else {
-                        return
-                    }
-                    let navigationController = (controller.navigationController as? NavigationController)
-                        ?? (context.sharedContext.mainWindow?.viewController as? NavigationController)
-                    guard let parentController = navigationController?.viewControllers.last as? ViewController else {
-                        self.presentWaltBalanceError()
-                        return
-                    }
-                    context.sharedContext.openBotApp(
-                        context: context,
-                        parentController: parentController,
-                        botApp: botAppStart.botApp,
-                        botPeer: botPeer,
-                        payload: botAppStart.payload,
-                        mode: botAppStart.mode,
-                        isOnramp: true,
-                        willOpen: {},
-                        completion: {}
-                    )
-                }))
-            }, error: { [weak self] _ in
+            }, completed: { [weak self] in
                 guard let self,
                       self.component?.context === context,
                       self.component?.walletContext === walletContext,
@@ -963,12 +1014,15 @@ private final class WalletScreenComponent: Component {
 
         private func cancelWaltBalanceOpening() {
             self.isOpeningWaltBalance = false
-            self.waltBalanceSessionDisposable.set(nil)
+            self.isWaitingForWaltBalanceUrl = false
             self.waltBalanceBotAppDisposable.set(nil)
         }
 
         private func presentWaltBalanceError() {
             self.cancelWaltBalanceOpening()
+            if let balance = self.existingWaltBalance {
+                self.existingWaltBalance = WalletExistingBalance(hasBalance: balance.hasBalance, url: nil)
+            }
             guard let component = self.component, let controller = self.environment?.controller() else {
                 return
             }
@@ -1017,7 +1071,7 @@ private final class WalletScreenComponent: Component {
 
             let font = Font.medium(15.0)
             let textColor = environment.theme.list.itemPrimaryTextColor
-            if self.existingWaltBalance == true {
+            if self.existingWaltBalance?.hasBalance == true {
                 items.append(AnyComponentWithIdentity(id: "walt", component: AnyComponent(ListActionItemComponent(
                     theme: environment.theme,
                     style: .glass,
@@ -2603,20 +2657,20 @@ private final class WalletScreenComponent: Component {
             if self.accountContext !== component.context {
                 self.cancelWaltBalanceOpening()
                 self.accountPeerDisposable?.dispose()
-                self.additionalBalancesDisposable.set(nil)
+                self.existingWaltBalanceDisposable.set(nil)
+                self.isLoadingExistingWaltBalance = false
+                self.earningsDisposable.set(nil)
                 let subscribedContext = component.context
                 self.accountContext = subscribedContext
                 self.accountName = ""
                 self.existingWaltBalance = nil
                 self.availableEarnings = nil
+                self.loadExistingWaltBalance()
                 
                 let earningsContext = subscribedContext.engine.payments.peerStarsRevenueContext(peerId: subscribedContext.account.peerId, ton: true)
                 self.earningsContext = earningsContext
-                self.additionalBalancesDisposable.set((combineLatest(
-                    earningsContext.state,
-                    subscribedContext.engine.wallet.getExistingWaltBalance()
-                )
-                |> deliverOnMainQueue).start(next: { [weak self] revenueState, hasBalance in
+                self.earningsDisposable.set((earningsContext.state
+                |> deliverOnMainQueue).start(next: { [weak self] revenueState in
                     guard let self, self.accountContext === subscribedContext else {
                         return
                     }
@@ -2626,11 +2680,10 @@ private final class WalletScreenComponent: Component {
                     } else {
                         availableEarningsBalance = nil
                     }
-                    if self.existingWaltBalance != hasBalance || self.availableEarnings != availableEarningsBalance {
-                        self.existingWaltBalance = hasBalance
+                    if self.availableEarnings != availableEarningsBalance {
                         self.availableEarnings = availableEarningsBalance
                         if !self.isUpdating {
-                            let transition: ComponentTransition = hasBalance != nil || availableEarningsBalance != nil ? .immediate : .easeInOut(duration: 0.25)
+                            let transition: ComponentTransition = self.existingWaltBalance != nil || availableEarningsBalance != nil ? .immediate : .easeInOut(duration: 0.25)
                             self.componentState?.updated(transition: transition)
                         }
                     }

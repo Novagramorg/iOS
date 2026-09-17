@@ -1749,6 +1749,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[1658259128] = { return Api.users.Users.parse_users($0) }
     dict[828000628] = { return Api.users.Users.parse_usersSlice($0) }
     dict[417867063] = { return Api.wallet.EncryptedSecretPhrasePart.parse_encryptedSecretPhrasePart($0) }
+    dict[-1108800883] = { return Api.wallet.ExistingBalance.parse_existingBalance($0) }
     dict[-103410961] = { return Api.wallet.HolderDc.parse_holderDc($0) }
     dict[-1713105145] = { return Api.wallet.ProofChallenge.parse_proofChallenge($0) }
     dict[-422514943] = { return Api.wallet.SecretPhraseParts.parse_secretPhraseParts($0) }
@@ -3080,6 +3081,8 @@ public extension Api {
         case let _1 as Api.users.Users:
             _1.serialize(buffer, boxed)
         case let _1 as Api.wallet.EncryptedSecretPhrasePart:
+            _1.serialize(buffer, boxed)
+        case let _1 as Api.wallet.ExistingBalance:
             _1.serialize(buffer, boxed)
         case let _1 as Api.wallet.HolderDc:
             _1.serialize(buffer, boxed)
