@@ -93,6 +93,9 @@ final class CameraNeo: NSObject, CameraProtocol {
 
         super.init()
 
+        self.session.usesApplicationAudioSession = true
+        self.session.automaticallyConfiguresApplicationAudioSession = false
+
         self.sessionQueue.setSpecific(key: self.sessionQueueKey, value: ())
         self.mediaQueue.setSpecific(key: self.mediaQueueKey, value: ())
         self.previewView?.setSession(self.session, automaticallyConnect: !useMultiCam)
