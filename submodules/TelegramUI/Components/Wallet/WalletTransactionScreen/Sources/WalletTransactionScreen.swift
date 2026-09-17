@@ -1039,6 +1039,7 @@ private final class WalletTransactionContentComponent: Component {
                 return
             }
             self.isClosing = true
+            (controller as? WalletTransactionScreen)?.cancelFirstGramsSuggestion()
             self.invalidateCommentSession()
             self.resetCommentDecryption()
             switch self.previewOperation {
@@ -1995,7 +1996,8 @@ private final class WalletTransactionContentComponent: Component {
                   let transaction = self.transaction else {
                 return
             }
-            let explorerUrl = walletTransactionExplorerUrl(id: transaction.transactionHash ?? transaction.id)
+            let configuration = WalletConfiguration.with(appConfiguration: component.context.currentAppConfiguration.with { $0 })
+            let explorerUrl = walletTransactionExplorerUrl(explorerUrl: configuration.explorerUrl, id: transaction.transactionHash ?? transaction.id)
             //TODO:localize
             let viewInExplorer = "View In Explorer"
             let whatIsGram = "What is Gram?"
@@ -2029,7 +2031,7 @@ private final class WalletTransactionContentComponent: Component {
                         dismiss(.default)
                         controller?.push(component.context.sharedContext.makeWalletInfoScreen(
                             context: component.context,
-                            mode: .firstTime,
+                            mode: .gram,
                             completion: nil
                         ))
                     }
@@ -3460,6 +3462,8 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
     private let openExplorer: (String) -> Void
     private let stateDisposable = MetaDisposable()
     private let loadMoreDisposable = MetaDisposable()
+    private let firstGramsSuggestionDisposable = MetaDisposable()
+    private var checkFirstGramsOnAppear: Bool
     #if DEBUG
     private var gaslessInfoDisposable: Disposable?
     #endif
@@ -3495,6 +3499,7 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
         self.navigationWalletContext = walletContext
         self.fromChat = fromChat
         self.openExplorer = openExplorer
+        self.checkFirstGramsOnAppear = transaction.direction == .incoming && transaction.currency == .ton && transaction.collectible == nil
         self.transactionsState = initialState
         self.transactions = initialTransactions
         self.currentTransactionPresentationId = transaction.presentationId
@@ -3567,6 +3572,7 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
     deinit {
         self.stateDisposable.dispose()
         self.loadMoreDisposable.dispose()
+        self.firstGramsSuggestionDisposable.dispose()
         #if DEBUG
         self.gaslessInfoDisposable?.dispose()
         #endif
@@ -3588,12 +3594,42 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
         self.commentVisibilityActions[self.currentCloseId]?(true, false)
     }
 
+    public override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+
+        guard self.checkFirstGramsOnAppear else {
+            return
+        }
+        self.checkFirstGramsOnAppear = false
+        self.firstGramsSuggestionDisposable.set((self.accountContext.engine.notices.getServerProvidedSuggestions()
+        |> take(1)
+        |> deliverOnMainQueue).start(next: { [weak self] suggestions in
+            guard let self, suggestions.contains(.firstGrams),
+                  let navigationController = self.navigationController as? NavigationController,
+                  navigationController.topViewController === self else {
+                return
+            }
+            navigationController.pushViewController(self.accountContext.sharedContext.makeWalletInfoScreen(
+                context: self.accountContext,
+                mode: .firstGrams,
+                completion: nil
+            ))
+            let _ = self.accountContext.engine.notices.dismissServerProvidedSuggestion(suggestion: ServerProvidedSuggestion.firstGrams.id).startStandalone()
+        }))
+    }
+
     public override func viewWillDisappear(_ animated: Bool) {
+        self.cancelFirstGramsSuggestion()
         super.viewWillDisappear(animated)
         for action in self.commentVisibilityActions.values {
             action(false, false)
         }
         self.dismissAllTooltips()
+    }
+
+    fileprivate func cancelFirstGramsSuggestion() {
+        self.checkFirstGramsOnAppear = false
+        self.firstGramsSuggestionDisposable.dispose()
     }
 
     fileprivate func setCloseAction(id: String, action: @escaping (Bool) -> Void) {
@@ -3968,11 +4004,12 @@ private func tonHashHex(fromBase64 hash: String) -> String? {
     return data.map { String(format: "%02x", $0) }.joined()
 }
 
-private func walletTransactionExplorerUrl(id: String) -> String? {
+private func walletTransactionExplorerUrl(explorerUrl: String, id: String) -> String? {
     guard let encodedId = tonHashHex(fromBase64: id) else {
         return nil
     }
-    return "https://tonviewer.com/transaction/\(encodedId)"
+    let baseUrl = explorerUrl.hasSuffix("/") ? explorerUrl : explorerUrl + "/"
+    return "\(baseUrl)transaction/\(encodedId)"
 }
 
 private final class WalletTransactionContextReferenceContentSource: ContextReferenceContentSource {

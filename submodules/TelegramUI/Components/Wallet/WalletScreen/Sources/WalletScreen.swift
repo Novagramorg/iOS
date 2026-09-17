@@ -551,21 +551,24 @@ private final class WalletNavigationBalanceComponent: Component {
         func updateTransitionFrames(
             primaryFrame: CGRect?,
             secondaryFrame: CGRect?,
-            collapseFraction: CGFloat
+            collapseFraction: CGFloat,
+            transition: ComponentTransition
         ) {
             self.updateTransitionContainer(
                 self.primaryCollapseContainerView,
                 self.primaryContainerView,
                 targetFrame: self.primaryTargetFrame,
                 currentFrame: primaryFrame,
-                collapseFraction: collapseFraction
+                collapseFraction: collapseFraction,
+                transition: transition
             )
             self.updateTransitionContainer(
                 self.secondaryCollapseContainerView,
                 self.secondaryContainerView,
                 targetFrame: self.secondaryTargetFrame,
                 currentFrame: secondaryFrame,
-                collapseFraction: collapseFraction
+                collapseFraction: collapseFraction,
+                transition: transition
             )
         }
 
@@ -574,27 +577,28 @@ private final class WalletNavigationBalanceComponent: Component {
             _ containerView: UIView,
             targetFrame: CGRect,
             currentFrame: CGRect?,
-            collapseFraction: CGFloat
+            collapseFraction: CGFloat,
+            transition: ComponentTransition
         ) {
             guard !targetFrame.isEmpty,
                   let currentFrame,
                   !currentFrame.isEmpty,
                   currentFrame.width.isFinite,
                   currentFrame.height.isFinite else {
-                ComponentTransition.immediate.setPosition(view: containerView, position: targetFrame.center)
-                ComponentTransition.immediate.setTransform(view: containerView, transform: CATransform3DIdentity)
-                ComponentTransition.immediate.setTransform(view: collapseContainerView, transform: CATransform3DIdentity)
+                transition.setPosition(view: containerView, position: targetFrame.center)
+                transition.setTransform(view: containerView, transform: CATransform3DIdentity)
+                transition.setTransform(view: collapseContainerView, transform: CATransform3DIdentity)
                 return
             }
 
             let scaleX = currentFrame.width / targetFrame.width
             let scaleY = currentFrame.height / targetFrame.height
-            ComponentTransition.immediate.setPosition(view: containerView, position: currentFrame.center)
-            ComponentTransition.immediate.setTransform(
+            transition.setPosition(view: containerView, position: currentFrame.center)
+            transition.setTransform(
                 view: containerView,
                 transform: CATransform3DMakeScale(scaleX, scaleY, 1.0)
             )
-            ComponentTransition.immediate.setTransform(
+            transition.setTransform(
                 view: collapseContainerView,
                 transform: self.collapseTransform(
                     in: collapseContainerView,
@@ -722,13 +726,14 @@ private final class WalletScreenComponent: Component {
         private var accountContext: AccountContext?
         private var accountName = ""
         private var accountPeerDisposable: Disposable?
-        private var existingWaltBalance: Bool?
+        private var existingWaltBalance: WalletExistingBalance?
         private let existingWaltBalanceDisposable = MetaDisposable()
-        private let waltBalanceSessionDisposable = MetaDisposable()
+        private var isLoadingExistingWaltBalance = false
+        private let earningsDisposable = MetaDisposable()
         private let waltBalanceBotAppDisposable = MetaDisposable()
         private var isOpeningWaltBalance = false
+        private var isWaitingForWaltBalanceUrl = false
         private var earningsContext: StarsRevenueStatsContext?
-        private var earningsStateDisposable: Disposable?
         private var availableEarnings: CurrencyAmount?
         private var twoStepAuthData: Promise<TwoStepAuthData?>?
         private var twoStepAuthDataDisposable: Disposable?
@@ -843,9 +848,8 @@ private final class WalletScreenComponent: Component {
             self.walletStateDisposable?.dispose()
             self.accountPeerDisposable?.dispose()
             self.existingWaltBalanceDisposable.dispose()
-            self.waltBalanceSessionDisposable.dispose()
+            self.earningsDisposable.dispose()
             self.waltBalanceBotAppDisposable.dispose()
-            self.earningsStateDisposable?.dispose()
             self.twoStepAuthDataDisposable?.dispose()
             self.loadMoreDisposable.dispose()
             self.gramTooltipDisposable.dispose()
@@ -879,26 +883,91 @@ private final class WalletScreenComponent: Component {
             component.context.twoStepAuthData.set(updatedData)
         }
 
+        private func loadExistingWaltBalance() {
+            guard let component = self.component,
+                  self.accountContext === component.context,
+                  !self.isLoadingExistingWaltBalance else {
+                return
+            }
+
+            let context = component.context
+            self.isLoadingExistingWaltBalance = true
+            self.existingWaltBalanceDisposable.set((context.engine.wallet.getExistingWaltBalance()
+            |> deliverOnMainQueue).start(next: { [weak self] balance in
+                guard let self, self.accountContext === context else {
+                    return
+                }
+                let balanceChanged = self.existingWaltBalance != balance
+                self.existingWaltBalance = balance
+
+                if let balance, let url = balance.url {
+                    if !balance.hasBalance {
+                        self.cancelWaltBalanceOpening()
+                    } else if self.isWaitingForWaltBalanceUrl {
+                        self.isWaitingForWaltBalanceUrl = false
+                        self.openWaltBalance(url: url)
+                    }
+                }
+
+                if balanceChanged && !self.isUpdating {
+                    let transition: ComponentTransition = balance != nil || self.availableEarnings != nil ? .immediate : .easeInOut(duration: 0.25)
+                    self.componentState?.updated(transition: transition)
+                }
+            }, completed: { [weak self] in
+                guard let self, self.accountContext === context else {
+                    return
+                }
+                self.isLoadingExistingWaltBalance = false
+                if self.isWaitingForWaltBalanceUrl {
+                    self.presentWaltBalanceError()
+                }
+            }))
+        }
+
         private func openWaltBalance() {
+            guard let component = self.component,
+                  self.accountContext === component.context,
+                  self.walletInfo != nil,
+                  self.existingWaltBalance?.hasBalance == true,
+                  self.environment?.controller() != nil,
+                  !self.isOpeningWaltBalance else {
+                return
+            }
+
+            self.isOpeningWaltBalance = true
+            if let url = self.existingWaltBalance?.url {
+                self.openWaltBalance(url: url)
+            } else {
+                self.isWaitingForWaltBalanceUrl = true
+                self.loadExistingWaltBalance()
+            }
+        }
+
+        private func openWaltBalance(url: String) {
             guard let component = self.component,
                   let walletInfo = self.walletInfo,
                   self.environment?.controller() != nil,
-                  !self.isOpeningWaltBalance else {
+                  self.isOpeningWaltBalance else {
+                self.cancelWaltBalanceOpening()
+                return
+            }
+            guard !url.isEmpty else {
+                self.presentWaltBalanceError()
                 return
             }
 
             let context = component.context
             let walletContext = component.walletContext
             let address = walletInfo.address
-            self.isOpeningWaltBalance = true
 
-            self.waltBalanceSessionDisposable.set((context.engine.payments.createOnrampSession(
-                provider: "wallet",
-                cryptoCurrency: "gram",
-                address: address,
-                paymentMethod: "balance"
+            self.waltBalanceBotAppDisposable.set((context.sharedContext.resolveUrl(
+                context: context,
+                peerId: nil,
+                url: url,
+                skipUrlAuth: true
             )
-            |> deliverOnMainQueue).start(next: { [weak self] session in
+            |> take(1)
+            |> deliverOnMainQueue).start(next: { [weak self] result in
                 guard let self,
                       self.component?.context === context,
                       self.component?.walletContext === walletContext,
@@ -906,48 +975,32 @@ private final class WalletScreenComponent: Component {
                       self.isOpeningWaltBalance else {
                     return
                 }
-                self.waltBalanceBotAppDisposable.set((context.sharedContext.resolveUrl(
+                self.isOpeningWaltBalance = false
+                guard case let .peer(peer, .withBotApp(botAppStart)) = result, let botPeer = peer.flatMap(EnginePeer.init) else {
+                    self.presentWaltBalanceError()
+                    return
+                }
+                guard let controller = self.environment?.controller() else {
+                    return
+                }
+                let navigationController = (controller.navigationController as? NavigationController)
+                    ?? (context.sharedContext.mainWindow?.viewController as? NavigationController)
+                guard let parentController = navigationController?.viewControllers.last as? ViewController else {
+                    self.presentWaltBalanceError()
+                    return
+                }
+                context.sharedContext.openBotApp(
                     context: context,
-                    peerId: nil,
-                    url: session.url,
-                    skipUrlAuth: true
+                    parentController: parentController,
+                    botApp: botAppStart.botApp,
+                    botPeer: botPeer,
+                    payload: botAppStart.payload,
+                    mode: botAppStart.mode,
+                    isOnramp: true,
+                    willOpen: {},
+                    completion: {}
                 )
-                |> take(1)
-                |> deliverOnMainQueue).start(next: { [weak self] result in
-                    guard let self,
-                          self.component?.context === context,
-                          self.component?.walletContext === walletContext,
-                          self.walletInfo?.address == address,
-                          self.isOpeningWaltBalance else {
-                        return
-                    }
-                    self.isOpeningWaltBalance = false
-                    guard case let .peer(peer, .withBotApp(botAppStart)) = result, let botPeer = peer.flatMap(EnginePeer.init) else {
-                        self.presentWaltBalanceError()
-                        return
-                    }
-                    guard let controller = self.environment?.controller() else {
-                        return
-                    }
-                    let navigationController = (controller.navigationController as? NavigationController)
-                        ?? (context.sharedContext.mainWindow?.viewController as? NavigationController)
-                    guard let parentController = navigationController?.viewControllers.last as? ViewController else {
-                        self.presentWaltBalanceError()
-                        return
-                    }
-                    context.sharedContext.openBotApp(
-                        context: context,
-                        parentController: parentController,
-                        botApp: botAppStart.botApp,
-                        botPeer: botPeer,
-                        payload: botAppStart.payload,
-                        mode: botAppStart.mode,
-                        isOnramp: true,
-                        willOpen: {},
-                        completion: {}
-                    )
-                }))
-            }, error: { [weak self] _ in
+            }, completed: { [weak self] in
                 guard let self,
                       self.component?.context === context,
                       self.component?.walletContext === walletContext,
@@ -961,12 +1014,15 @@ private final class WalletScreenComponent: Component {
 
         private func cancelWaltBalanceOpening() {
             self.isOpeningWaltBalance = false
-            self.waltBalanceSessionDisposable.set(nil)
+            self.isWaitingForWaltBalanceUrl = false
             self.waltBalanceBotAppDisposable.set(nil)
         }
 
         private func presentWaltBalanceError() {
             self.cancelWaltBalanceOpening()
+            if let balance = self.existingWaltBalance {
+                self.existingWaltBalance = WalletExistingBalance(hasBalance: balance.hasBalance, url: nil)
+            }
             guard let component = self.component, let controller = self.environment?.controller() else {
                 return
             }
@@ -1015,7 +1071,7 @@ private final class WalletScreenComponent: Component {
 
             let font = Font.medium(15.0)
             let textColor = environment.theme.list.itemPrimaryTextColor
-            if self.existingWaltBalance == true {
+            if self.existingWaltBalance?.hasBalance == true {
                 items.append(AnyComponentWithIdentity(id: "walt", component: AnyComponent(ListActionItemComponent(
                     theme: environment.theme,
                     style: .glass,
@@ -1067,7 +1123,8 @@ private final class WalletScreenComponent: Component {
                 return 0.0
             }
 
-            let sectionTransition: ComponentTransition = self.additionalBalancesSection.view?.superview == nil ? .immediate : transition
+            let wasVisible = self.additionalBalancesSection.view?.superview != nil
+            let sectionTransition: ComponentTransition = !wasVisible ? .immediate : transition
             self.additionalBalancesSection.parentState = state
             let sectionSize = self.additionalBalancesSection.update(
                 transition: sectionTransition,
@@ -1087,6 +1144,9 @@ private final class WalletScreenComponent: Component {
                     self.topContentContainerView.addSubview(sectionView)
                 }
                 sectionTransition.setFrame(view: sectionView, frame: CGRect(origin: origin, size: sectionSize))
+                if !wasVisible && !transition.animation.isImmediate {
+                    transition.animateAlpha(view: sectionView, from: 0.0, to: 1.0)
+                }
             }
             return sectionSize.height + 10.0
         }
@@ -1123,7 +1183,7 @@ private final class WalletScreenComponent: Component {
         }
 
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
-            guard scrollView === self.scrollView else {
+            guard scrollView === self.scrollView, !self.isUpdating else {
                 return
             }
             self.updateScrolling(transition: .immediate)
@@ -1535,11 +1595,11 @@ private final class WalletScreenComponent: Component {
             }
 
             if let cardExpandedFrame = self.cardExpandedFrame {
-                ComponentTransition.immediate.setFrame(
+                transition.setFrame(
                     view: self.cardContainerView,
                     frame: cardExpandedFrame.offsetBy(dx: 0.0, dy: -self.cardScrollOffset)
                 )
-                ComponentTransition.immediate.setFrame(
+                transition.setFrame(
                     view: self.cardBalanceCoordinateView,
                     frame: self.cardBalanceClippingView.convert(self.cardContainerView.bounds, from: self.cardContainerView)
                 )
@@ -1575,11 +1635,11 @@ private final class WalletScreenComponent: Component {
                 navigationTitleView.layer.removeAnimation(forKey: "filters.gaussianBlur.inputRadius")
                 ComponentTransition.immediate.setBlur(layer: navigationTitleView.layer, radius: headerTransitionFraction * 8.0)
             }
-            self.updateBalanceTransition()
-            self.updateBalanceClipping()
+            self.updateBalanceTransition(transition: transition)
+            self.updateBalanceClipping(transition: transition)
         }
 
-        private func updateBalanceClipping() {
+        private func updateBalanceClipping(transition: ComponentTransition) {
             guard let cardView = self.card.view as? WalletCardComponent.View, !cardView.bounds.isEmpty else {
                 return
             }
@@ -1593,12 +1653,24 @@ private final class WalletScreenComponent: Component {
                 )
             }
 
+            func updateMask(_ layer: CAShapeLayer, in view: UIView, belowEdge: Bool) {
+                layer.frame = view.bounds
+                let path = maskPath(in: view, belowEdge: belowEdge)
+                guard layer.path != path else {
+                    return
+                }
+                if transition.animation.isImmediate {
+                    layer.removeAnimation(forKey: "path")
+                } else if layer.animation(forKey: "path") != nil, let presentationPath = layer.presentation()?.path {
+                    layer.path = presentationPath
+                }
+                transition.setShapeLayerPath(layer: layer, path: path)
+            }
+
             CATransaction.begin()
             CATransaction.setDisableActions(true)
-            self.cardBalanceMaskLayer.frame = self.cardBalanceClippingView.bounds
-            self.cardBalanceMaskLayer.path = maskPath(in: self.cardBalanceClippingView, belowEdge: false)
-            self.navigationBalanceMaskLayer.frame = self.navigationBalanceClippingView.bounds
-            self.navigationBalanceMaskLayer.path = maskPath(in: self.navigationBalanceClippingView, belowEdge: true)
+            updateMask(self.cardBalanceMaskLayer, in: self.cardBalanceClippingView, belowEdge: false)
+            updateMask(self.navigationBalanceMaskLayer, in: self.navigationBalanceClippingView, belowEdge: true)
             CATransaction.commit()
         }
 
@@ -1676,7 +1748,7 @@ private final class WalletScreenComponent: Component {
             return transform
         }
 
-        private func updateBalanceTransition() {
+        private func updateBalanceTransition(transition: ComponentTransition) {
             guard let cardView = self.card.view as? WalletCardComponent.View,
                   let navigationBalanceView = self.navigationBalance.view as? WalletNavigationBalanceComponent.View,
                   let cardExpandedFrame = self.cardExpandedFrame else {
@@ -1690,7 +1762,8 @@ private final class WalletScreenComponent: Component {
                 navigationBalanceView.updateTransitionFrames(
                     primaryFrame: navigationBalanceView.convert(primaryFrame, from: self),
                     secondaryFrame: navigationBalanceView.convert(secondaryFrame, from: self),
-                    collapseFraction: 0.0
+                    collapseFraction: 0.0,
+                    transition: transition
                 )
                 cardView.updateBalanceTransition(
                     primaryFrame: nil,
@@ -1716,7 +1789,8 @@ private final class WalletScreenComponent: Component {
                 navigationBalanceView.updateTransitionFrames(
                     primaryFrame: nil,
                     secondaryFrame: nil,
-                    collapseFraction: fraction
+                    collapseFraction: fraction,
+                    transition: transition
                 )
                 cardView.updateBalanceTransition(
                     primaryFrame: nil,
@@ -1786,7 +1860,8 @@ private final class WalletScreenComponent: Component {
             navigationBalanceView.updateTransitionFrames(
                 primaryFrame: navigationBalanceView.convert(primaryFrame, from: self),
                 secondaryFrame: navigationBalanceView.convert(secondaryFrame, from: self),
-                collapseFraction: 0.0
+                collapseFraction: 0.0,
+                transition: transition
             )
             cardView.updateBalanceTransition(
                 primaryFrame: self.cardBalanceCoordinateView.convert(primaryFrame, from: self),
@@ -2583,41 +2658,33 @@ private final class WalletScreenComponent: Component {
                 self.cancelWaltBalanceOpening()
                 self.accountPeerDisposable?.dispose()
                 self.existingWaltBalanceDisposable.set(nil)
-                self.earningsStateDisposable?.dispose()
+                self.isLoadingExistingWaltBalance = false
+                self.earningsDisposable.set(nil)
                 let subscribedContext = component.context
                 self.accountContext = subscribedContext
                 self.accountName = ""
                 self.existingWaltBalance = nil
                 self.availableEarnings = nil
+                self.loadExistingWaltBalance()
                 
                 let earningsContext = subscribedContext.engine.payments.peerStarsRevenueContext(peerId: subscribedContext.account.peerId, ton: true)
                 self.earningsContext = earningsContext
-                self.earningsStateDisposable = (earningsContext.state
+                self.earningsDisposable.set((earningsContext.state
                 |> deliverOnMainQueue).start(next: { [weak self] revenueState in
-                    guard let self, self.accountContext === subscribedContext,
-                          let availableBalance = revenueState.stats?.balances.availableBalance,
-                          availableBalance.currency == .ton else {
-                        return
-                    }
-                    let hadValue = self.availableEarnings != nil
-                    if self.availableEarnings != availableBalance {
-                        self.availableEarnings = availableBalance
-                        if !self.isUpdating {
-                            self.componentState?.updated(transition: hadValue ? .easeInOut(duration: 0.25) : .immediate)
-                        }
-                    }
-                })
-                
-                self.existingWaltBalanceDisposable.set((subscribedContext.engine.wallet.getExistingWaltBalance()
-                |> deliverOnMainQueue).start(next: { [weak self] hasBalance in
                     guard let self, self.accountContext === subscribedContext else {
                         return
                     }
-                    let hadValue = self.existingWaltBalance != nil
-                    if self.existingWaltBalance != hasBalance {
-                        self.existingWaltBalance = hasBalance
+                    let availableEarningsBalance: CurrencyAmount?
+                    if let balance = revenueState.stats?.balances.availableBalance, balance.currency == .ton {
+                        availableEarningsBalance = balance
+                    } else {
+                        availableEarningsBalance = nil
+                    }
+                    if self.availableEarnings != availableEarningsBalance {
+                        self.availableEarnings = availableEarningsBalance
                         if !self.isUpdating {
-                            self.componentState?.updated(transition: hadValue ? .easeInOut(duration: 0.25) : .immediate)
+                            let transition: ComponentTransition = self.existingWaltBalance != nil || availableEarningsBalance != nil ? .immediate : .easeInOut(duration: 0.25)
+                            self.componentState?.updated(transition: transition)
                         }
                     }
                 }))
@@ -2674,7 +2741,8 @@ private final class WalletScreenComponent: Component {
                 transition: transition
             )
             let additionalBalancesHeightChanged = previousCardTransitionStart != self.cardTransitionStart
-            let contentLayoutTransition = additionalBalancesHeightChanged ? transition.withAnimation(.none) : transition
+            let compensateAdditionalBalancesOffset = additionalBalancesHeightChanged && previousContentOffset.y > 0.0
+            let contentLayoutTransition = compensateAdditionalBalancesOffset ? transition.withAnimation(.none) : transition
             let cardOriginY = additionalBalancesOriginY + self.cardTransitionStart
             let walletInfo = self.walletInfo
             let fiatCurrency = self.walletState?.fiat.selectedCurrency ?? .usd
@@ -2973,7 +3041,7 @@ private final class WalletScreenComponent: Component {
                     )),
                     frame: transactionsFrame,
                     viewportSize: availableSize,
-                    transition: transition
+                    transition: contentLayoutTransition
                 )
                 contentHeight = transactionsOriginY + transactionsSectionSize.height
                 if let emptyTransactionsInfoView = self.emptyTransactionsInfo.view, emptyTransactionsInfoView.superview != nil {
@@ -3032,7 +3100,7 @@ private final class WalletScreenComponent: Component {
                     footer: nil,
                     frame: collectiblesFrame,
                     viewportSize: availableSize,
-                    transition: transition
+                    transition: contentLayoutTransition
                 )
                 contentHeight = collectiblesOriginY + collectiblesSectionSize.height
 
@@ -3226,7 +3294,7 @@ private final class WalletScreenComponent: Component {
                 self.scrollView.contentSize = contentSize
             }
             var contentOffset = previousContentOffset
-            if contentOffset.y > 0.0 && previousCardTransitionStart != self.cardTransitionStart {
+            if compensateAdditionalBalancesOffset {
                 contentOffset.y = max(0.0, contentOffset.y + self.cardTransitionStart - previousCardTransitionStart)
             }
             if !self.scrollView.isScrollEnabled {
@@ -3247,7 +3315,7 @@ private final class WalletScreenComponent: Component {
                 self.scrollView.verticalScrollIndicatorInsets = scrollInsets
             }
 
-            self.updateScrolling(transition: transition)
+            self.updateScrolling(transition: contentLayoutTransition)
             self.updateVisibleSections(transition: .immediate)
             self.loadMoreItemsIfNeeded()
 

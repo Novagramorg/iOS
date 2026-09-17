@@ -69,6 +69,7 @@ private final class WalletSettingsScreenComponent: Component {
         private let recoverySection = ComponentView<Empty>()
         private let backupSection = ComponentView<Empty>()
         private let replacementSection = ComponentView<Empty>()
+        private let previousWalletsSection = ComponentView<Empty>()
         #if DEBUG
         private let debugSection = ComponentView<Empty>()
         private let debugRemoveMnemonicDisposable = MetaDisposable()
@@ -83,6 +84,12 @@ private final class WalletSettingsScreenComponent: Component {
         private let backupOperationDisposable = MetaDisposable()
         private let walletStateDisposable = MetaDisposable()
         private var walletState: WalletContext.State?
+        private let previousWalletsDisposable = MetaDisposable()
+        private var previousWallets: [WalletContext.PreviousWallet] = []
+        private var previousWalletsGeneration: UInt64 = 0
+        private let previousWalletPhraseDisposable = MetaDisposable()
+        private var previousWalletPhraseGeneration: UInt64 = 0
+        private var isOpeningPreviousWalletPhrase = false
         private weak var backupWordsController: ViewController?
         private var preparedBackupDisable: WalletContext.PreparedBackupDisable? {
             didSet {
@@ -143,6 +150,8 @@ private final class WalletSettingsScreenComponent: Component {
             self.backupAccessDisposable.dispose()
             self.disableBackupChoiceDisposable.dispose()
             self.walletStateDisposable.dispose()
+            self.previousWalletsDisposable.dispose()
+            self.previousWalletPhraseDisposable.dispose()
             #if DEBUG
             self.debugRemoveMnemonicDisposable.dispose()
             #endif
@@ -157,6 +166,7 @@ private final class WalletSettingsScreenComponent: Component {
 
         fileprivate func abandonWalletFlow() {
             self.abandonBackupAccess()
+            self.cancelPreviousWalletPhrase()
             self.disableBackupPreparationGeneration &+= 1
             self.disableBackupChoiceDisposable.set(nil)
             self.disableBackupPreparationContent = nil
@@ -203,7 +213,78 @@ private final class WalletSettingsScreenComponent: Component {
                 } else {
                     self.resumeBackupActionIfReady()
                 }
+            } else {
+                self.cancelPreviousWalletPhrase()
             }
+        }
+
+        private func reloadPreviousWallets() {
+            guard let component = self.component else {
+                return
+            }
+            self.previousWalletsGeneration &+= 1
+            let generation = self.previousWalletsGeneration
+            let walletContext = component.walletContext
+            self.previousWalletsDisposable.set((walletContext.previousWallets()
+            |> deliverOnMainQueue).start(next: { [weak self] previousWallets in
+                guard let self,
+                      self.previousWalletsGeneration == generation,
+                      self.component?.walletContext === walletContext else {
+                    return
+                }
+                self.previousWallets = previousWallets
+                if !self.isUpdating {
+                    self.state?.updated(transition: .easeInOut(duration: 0.25))
+                }
+            }))
+        }
+
+        private func cancelPreviousWalletPhrase() {
+            self.previousWalletPhraseGeneration &+= 1
+            self.previousWalletPhraseDisposable.set(nil)
+            self.isOpeningPreviousWalletPhrase = false
+        }
+
+        private func openPreviousWalletPhrase(id: String) {
+            guard self.isVisible,
+                  !self.isOpeningPreviousWalletPhrase,
+                  let component = self.component,
+                  let controller = self.environment?.controller(),
+                  component.walletContext.stateValue.activeOperation == nil,
+                  self.previousWallets.contains(where: { $0.id == id }) else {
+                return
+            }
+            self.abandonWalletFlow()
+            self.isOpeningPreviousWalletPhrase = true
+            let generation = self.previousWalletPhraseGeneration
+            let walletContext = component.walletContext
+            self.previousWalletPhraseDisposable.set((walletContext.previousWalletRecoveryPhrase(id: id)
+            |> deliverOnMainQueue).start(next: { [weak self, weak controller] words in
+                guard let self,
+                      self.previousWalletPhraseGeneration == generation,
+                      self.component?.walletContext === walletContext,
+                      self.isVisible,
+                      let controller else {
+                    return
+                }
+                self.isOpeningPreviousWalletPhrase = false
+                controller.push(component.context.sharedContext.makeWalletWordsScreen(
+                    context: component.context,
+                    words: words,
+                    verify: false,
+                    dismissOnBackgroundOrLock: true,
+                    completion: nil
+                ))
+            }, error: { [weak self] error in
+                guard let self,
+                      self.previousWalletPhraseGeneration == generation,
+                      self.component?.walletContext === walletContext,
+                      self.isVisible else {
+                    return
+                }
+                self.isOpeningPreviousWalletPhrase = false
+                self.presentRecoveryPhraseError(error: error)
+            }))
         }
 
         private func abandonBackupAccess() {
@@ -1389,7 +1470,6 @@ private final class WalletSettingsScreenComponent: Component {
             ), in: .window(.root))
         }
 
-        #if DEBUG
         private func debugRemoveMnemonicFromKeychain() {
             guard !self.isRemovingMnemonic, let component = self.component, let controller = self.environment?.controller() else {
                 return
@@ -1432,7 +1512,6 @@ private final class WalletSettingsScreenComponent: Component {
                 ), in: .window(.root))
             }))
         }
-        #endif
 
         func update(
             component: WalletSettingsScreenComponent,
@@ -1454,20 +1533,32 @@ private final class WalletSettingsScreenComponent: Component {
 
             if previousWalletContext !== component.walletContext {
                 self.abandonBackupAccess()
+                self.cancelPreviousWalletPhrase()
+                self.previousWalletsGeneration &+= 1
+                self.previousWalletsDisposable.set(nil)
+                self.previousWallets = []
                 self.walletState = component.walletContext.stateValue
+                if self.isVisible {
+                    self.reloadPreviousWallets()
+                }
                 let observedWalletContext = component.walletContext
                 self.walletStateDisposable.set((component.walletContext.state
                 |> deliverOnMainQueue).start(next: { [weak self] walletState in
                     guard let self, self.component?.walletContext === observedWalletContext else {
                         return
                     }
+                    let previousPhase = self.walletState?.phase
                     self.walletState = walletState
+                    if previousPhase != walletState.phase, self.isVisible {
+                        self.reloadPreviousWallets()
+                    }
                     self.reconcileBackupDisableWalletState()
                     self.resumeBackupActionIfReady()
                     if !self.isUpdating {
                         self.state?.updated(transition: .easeInOut(duration: 0.25))
                     }
                 }))
+                self.reloadPreviousWallets()
             }
 
             let theme = environment.theme
@@ -1713,7 +1804,135 @@ private final class WalletSettingsScreenComponent: Component {
                 )
             }
             contentHeight += replacementSectionSize.height
-            #if DEBUG
+
+            if !self.previousWallets.isEmpty {
+                let addressFont = Font.with(size: presentationData.listsFontSize.baseDisplaySize * 15.0 / 17.0, design: .monospace)
+                let subtitleFont = Font.regular(presentationData.listsFontSize.baseDisplaySize * 14.0 / 17.0)
+                let calendar = Calendar.current
+                let dateFormatter = DateFormatter()
+                //TODO:localize
+                dateFormatter.locale = Locale(identifier: "en_US_POSIX")
+                dateFormatter.timeZone = calendar.timeZone
+                dateFormatter.dateFormat = "d MMM yyyy"
+
+                let previousWalletItems: [AnyComponentWithIdentity<Empty>] = self.previousWallets.map { wallet in
+                    let text = NSMutableAttributedString(string: "")
+                    var addressIndex = wallet.address.startIndex
+                    var groupIndex = 0
+                    while addressIndex < wallet.address.endIndex {
+                        let endIndex = wallet.address.index(addressIndex, offsetBy: 4, limitedBy: wallet.address.endIndex) ?? wallet.address.endIndex
+                        if groupIndex != 0 {
+                            text.append(NSAttributedString(
+                                string: groupIndex.isMultiple(of: 6) ? "\n" : " ",
+                                font: addressFont,
+                                textColor: theme.list.itemPrimaryTextColor
+                            ))
+                        }
+                        text.append(NSAttributedString(
+                            string: String(wallet.address[addressIndex ..< endIndex]),
+                            font: addressFont,
+                            textColor: (groupIndex + groupIndex / 6).isMultiple(of: 2) ? theme.list.itemPrimaryTextColor : theme.list.itemSecondaryTextColor
+                        ))
+                        addressIndex = endIndex
+                        groupIndex += 1
+                    }
+
+                    let balanceText: String
+                    if let balance = wallet.balance {
+                        balanceText = formatTonAmountText(
+                            balance,
+                            dateTimeFormat: environment.dateTimeFormat,
+                            maxDecimalPositions: 9,
+                            formatString: environment.strings.Currency_Grams
+                        )
+                    } else {
+                        balanceText = environment.strings.Currency_Grams(100).replacingOccurrences(of: "100", with: "—")
+                    }
+                    let lastUsedDate = Date(timeIntervalSince1970: Double(wallet.lastUsedAt))
+                    let lastUsedText: String
+                    if calendar.isDateInToday(lastUsedDate) {
+                        //TODO:localize
+                        lastUsedText = "today"
+                    } else if calendar.isDateInYesterday(lastUsedDate) {
+                        //TODO:localize
+                        lastUsedText = "yesterday"
+                    } else {
+                        lastUsedText = dateFormatter.string(from: lastUsedDate)
+                    }
+                    //TODO:localize
+                    text.append(NSAttributedString(
+                        string: "\n\(balanceText) — last used \(lastUsedText)",
+                        font: subtitleFont,
+                        textColor: theme.list.itemSecondaryTextColor
+                    ))
+
+                    return AnyComponentWithIdentity(id: wallet.id, component: AnyComponent(ListActionItemComponent(
+                        theme: theme,
+                        style: .glass,
+                        title: AnyComponent(MultilineTextComponent(
+                            text: .plain(text),
+                            maximumNumberOfLines: 0
+                        )),
+                        accessory: .arrow,
+                        action: { [weak self] _ in
+                            self?.openPreviousWalletPhrase(id: wallet.id)
+                        }
+                    )))
+                }
+
+                contentHeight += sectionSpacing
+                self.previousWalletsSection.parentState = self.state
+
+                var transition = transition
+                if self.previousWalletsSection.view == nil {
+                    transition = .immediate
+                }
+                let previousWalletsSectionSize = self.previousWalletsSection.update(
+                    transition: transition,
+                    component: AnyComponent(ListSectionComponent(
+                        theme: theme,
+                        style: .glass,
+                        header: AnyComponent(MultilineTextComponent(
+                            text: .plain(NSAttributedString(
+                                //TODO:localize
+                                string: "Previous Wallets".uppercased(),
+                                font: headerFont,
+                                textColor: theme.list.freeTextColor
+                            )),
+                            maximumNumberOfLines: 0
+                        )),
+                        footer: AnyComponent(MultilineTextComponent(
+                            text: .plain(NSAttributedString(
+                                //TODO:localize
+                                string: "Wallets you used before on this device. Save their secret phrases — they'll be removed if you log out or reinstall the app.",
+                                font: footerFont,
+                                textColor: theme.list.freeTextColor
+                            )),
+                            maximumNumberOfLines: 0
+                        )),
+                        items: previousWalletItems
+                    )),
+                    environment: {},
+                    containerSize: CGSize(width: sectionWidth, height: 10000.0)
+                )
+                if let previousWalletsSectionView = self.previousWalletsSection.view {
+                    if previousWalletsSectionView.superview == nil {
+                        self.scrollView.addSubview(previousWalletsSectionView)
+                    }
+                    transition.setFrame(
+                        view: previousWalletsSectionView,
+                        frame: CGRect(
+                            origin: CGPoint(x: sideInset, y: contentHeight),
+                            size: previousWalletsSectionSize
+                        )
+                    )
+                }
+                contentHeight += previousWalletsSectionSize.height
+            } else {
+                self.previousWalletsSection.view?.removeFromSuperview()
+            }
+
+            #if DEBUG && false
             contentHeight += sectionSpacing
             self.debugSection.parentState = self.state
             let debugSectionSize = self.debugSection.update(

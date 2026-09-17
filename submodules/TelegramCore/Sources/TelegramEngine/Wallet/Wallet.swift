@@ -48,6 +48,16 @@ public struct WalletOwnershipProof: Equatable, Sendable {
     }
 }
 
+public struct WalletExistingBalance: Equatable {
+    public let hasBalance: Bool
+    public let url: String?
+
+    public init(hasBalance: Bool, url: String?) {
+        self.hasBalance = hasBalance
+        self.url = url
+    }
+}
+
 public enum WalletState: Equatable, Sendable {
     case empty(creating: Bool)
     case ready(
@@ -349,39 +359,35 @@ private struct CachedExistingWaltBalance: Codable {
     let hasBalance: Bool
 }
 
-func _internal_getExistingWaltBalance(account: Account) -> Signal<Bool, NoError> {
+func _internal_getExistingWaltBalance(account: Account) -> Signal<WalletExistingBalance?, NoError> {
     let cacheId = ItemCacheEntryId(collectionId: Namespaces.CachedItemCollection.cachedExistingWaltBalance, key: ValueBoxKey(length: 0))
     return account.postbox.transaction { transaction -> CachedExistingWaltBalance? in
         return transaction.retrieveItemCacheEntry(id: cacheId)?.get(CachedExistingWaltBalance.self)
     }
-    |> mapToSignal { cachedBalance -> Signal<Bool, NoError> in
-        let cached: Signal<Bool, NoError>
-        if let cachedBalance {
-            cached = .single(cachedBalance.hasBalance)
-        } else {
-            cached = .complete()
-        }
+    |> mapToSignal { cachedBalance -> Signal<WalletExistingBalance?, NoError> in
+        let cached: Signal<WalletExistingBalance?, NoError> = .single(cachedBalance.map {
+            WalletExistingBalance(hasBalance: $0.hasBalance, url: nil)
+        })
 
         let updated = account.network.request(Api.functions.wallet.getExistingWaltBalance())
-        |> map { result -> Bool in
+        |> map { result -> WalletExistingBalance in
             switch result {
-            case .boolTrue:
-                return true
-            case .boolFalse:
-                return false
+            case let .existingBalance(balance):
+                return WalletExistingBalance(hasBalance: (balance.flags & (1 << 0)) != 0, url: balance.url)
             }
         }
-        |> `catch` { _ -> Signal<Bool, NoError> in
+        |> `catch` { _ -> Signal<WalletExistingBalance, NoError> in
             return .complete()
         }
-        |> mapToSignal { hasBalance -> Signal<Bool, NoError> in
-            return account.postbox.transaction { transaction -> Bool in
-                if let entry = CodableEntry(CachedExistingWaltBalance(hasBalance: hasBalance)) {
+        |> mapToSignal { balance -> Signal<WalletExistingBalance, NoError> in
+            return account.postbox.transaction { transaction -> WalletExistingBalance in
+                if let entry = CodableEntry(CachedExistingWaltBalance(hasBalance: balance.hasBalance)) {
                     transaction.putItemCacheEntry(id: cacheId, entry: entry)
                 }
-                return hasBalance
+                return balance
             }
         }
+        |> map(Optional.init)
         return cached |> then(updated)
     }
     |> distinctUntilChanged
@@ -436,8 +442,16 @@ func _internal_getWalletUserAddresses(
         |> mapError { _ -> WalletGetUserAddressesError in
             return .generic
         }
-        |> map { result in
-            return result.map { WalletUserAddress(apiAddress: $0) }
+        |> mapToSignal { result -> Signal<[WalletUserAddress], WalletGetUserAddressesError> in
+            return account.postbox.transaction { transaction -> [WalletUserAddress] in
+                switch result {
+                case let .userAddresses(data):
+                    let parsedPeers = AccumulatedPeers(transaction: transaction, chats: [], users: data.users)
+                    updatePeers(transaction: transaction, accountPeerId: account.peerId, peers: parsedPeers)
+                    return data.addresses.map { WalletUserAddress(apiAddress: $0) }
+                }
+            }
+            |> castError(WalletGetUserAddressesError.self)
         }
     }
 }

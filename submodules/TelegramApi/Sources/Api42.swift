@@ -1,4 +1,54 @@
 public extension Api.wallet {
+    enum ExistingBalance: TypeConstructorDescription {
+        public class Cons_existingBalance: TypeConstructorDescription {
+            public var flags: Int32
+            public var url: String
+            public init(flags: Int32, url: String) {
+                self.flags = flags
+                self.url = url
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("existingBalance", [("flags", ConstructorParameterDescription(self.flags)), ("url", ConstructorParameterDescription(self.url))])
+            }
+        }
+        case existingBalance(Cons_existingBalance)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .existingBalance(let _data):
+                if boxed {
+                    buffer.appendInt32(-1108800883)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                serializeString(_data.url, buffer: buffer, boxed: false)
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .existingBalance(let _data):
+                return ("existingBalance", [("flags", ConstructorParameterDescription(_data.flags)), ("url", ConstructorParameterDescription(_data.url))])
+            }
+        }
+
+        public static func parse_existingBalance(_ reader: BufferReader) -> ExistingBalance? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: String?
+            _2 = parseString(reader)
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.wallet.ExistingBalance.existingBalance(Cons_existingBalance(flags: _1!, url: _2!))
+            }
+            else {
+                return nil
+            }
+        }
+    }
+}
+public extension Api.wallet {
     enum HolderDc: TypeConstructorDescription {
         public class Cons_holderDc: TypeConstructorDescription {
             public var dc: Int32
@@ -407,6 +457,68 @@ public extension Api.wallet {
             let _c6 = _6 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 {
                 return Api.wallet.Transactions.transactions(Cons_transactions(flags: _1!, balance: _2!, transactions: _3!, nextOffset: _4, chats: _5!, users: _6!))
+            }
+            else {
+                return nil
+            }
+        }
+    }
+}
+public extension Api.wallet {
+    enum UserAddresses: TypeConstructorDescription {
+        public class Cons_userAddresses: TypeConstructorDescription {
+            public var addresses: [Api.WalletUserAddress]
+            public var users: [Api.User]
+            public init(addresses: [Api.WalletUserAddress], users: [Api.User]) {
+                self.addresses = addresses
+                self.users = users
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("userAddresses", [("addresses", ConstructorParameterDescription(self.addresses)), ("users", ConstructorParameterDescription(self.users))])
+            }
+        }
+        case userAddresses(Cons_userAddresses)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .userAddresses(let _data):
+                if boxed {
+                    buffer.appendInt32(-1836156075)
+                }
+                buffer.appendInt32(481674261)
+                buffer.appendInt32(Int32(_data.addresses.count))
+                for item in _data.addresses {
+                    item.serialize(buffer, true)
+                }
+                buffer.appendInt32(481674261)
+                buffer.appendInt32(Int32(_data.users.count))
+                for item in _data.users {
+                    item.serialize(buffer, true)
+                }
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .userAddresses(let _data):
+                return ("userAddresses", [("addresses", ConstructorParameterDescription(_data.addresses)), ("users", ConstructorParameterDescription(_data.users))])
+            }
+        }
+
+        public static func parse_userAddresses(_ reader: BufferReader) -> UserAddresses? {
+            var _1: [Api.WalletUserAddress]?
+            if let _ = reader.readInt32() {
+                _1 = Api.parseVector(reader, elementSignature: 0, elementType: Api.WalletUserAddress.self)
+            }
+            var _2: [Api.User]?
+            if let _ = reader.readInt32() {
+                _2 = Api.parseVector(reader, elementSignature: 0, elementType: Api.User.self)
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.wallet.UserAddresses.userAddresses(Cons_userAddresses(addresses: _1!, users: _2!))
             }
             else {
                 return nil

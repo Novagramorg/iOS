@@ -1384,7 +1384,7 @@ public enum EmojiStatusSelectionControllerMode {
 public enum WalletInfoScreenMode: Equatable, CaseIterable {
     case wallet
     case gram
-    case firstTime
+    case firstGrams
     case recovery
 }
 

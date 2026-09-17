@@ -49,12 +49,13 @@ private func walletCollectibleRarityText(_ rarity: StarGift.UniqueGift.Attribute
     }
 }
 
-private func walletCollectibleExplorerUrl(address: String) -> String? {
+private func walletCollectibleExplorerUrl(explorerUrl: String, address: String) -> String? {
     guard let encodedAddress = address.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
           !encodedAddress.isEmpty else {
         return nil
     }
-    return "https://tonviewer.com/\(encodedAddress)"
+    let baseUrl = explorerUrl.hasSuffix("/") ? explorerUrl : explorerUrl + "/"
+    return "\(baseUrl)\(encodedAddress)"
 }
 
 private func walletCollectibleFragmentUrl(collectible: WalletContext.Collectible) -> String? {
@@ -444,7 +445,8 @@ private final class WalletCollectibleContentComponent: Component {
                   let controller = self.environment?.controller() as? WalletCollectibleScreen else {
                 return
             }
-            let explorerUrl = walletCollectibleExplorerUrl(address: component.collectible.address)
+            let configuration = WalletConfiguration.with(appConfiguration: component.context.currentAppConfiguration.with { $0 })
+            let explorerUrl = walletCollectibleExplorerUrl(explorerUrl: configuration.explorerUrl, address: component.collectible.address)
             let item = ContextMenuActionItem(
                 text: "View In Explorer",
                 icon: { theme in

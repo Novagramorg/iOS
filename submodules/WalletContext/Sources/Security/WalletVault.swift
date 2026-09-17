@@ -114,8 +114,12 @@ enum WalletVault {
 
     static func service(namespace: String) -> String { self.prefix + namespace }
 
-    static func keychainAccessGroup() throws -> String {
+    static func keychainAccessGroup() throws -> String? {
+        #if os(macOS)
+        return nil
+        #else
         return try PasscodeEnvironment.shared.privateAccessGroup()
+        #endif
     }
 
     static func access(namespace: String) throws -> PasscodeSession {
@@ -138,9 +142,12 @@ enum WalletVault {
     }
 
     fileprivate static func query(service: String, account: String) throws -> [String: Any] {
-        return [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
-            kSecAttrAccount as String: account, kSecAttrSynchronizable as String: false,
-            kSecAttrAccessGroup as String: try self.keychainAccessGroup()]
+        var query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
+            kSecAttrAccount as String: account, kSecAttrSynchronizable as String: false]
+        if let group = try self.keychainAccessGroup() {
+            query[kSecAttrAccessGroup as String] = group
+        }
+        return query
     }
 
     fileprivate static func read(service: String, account: String) throws -> Data? {
@@ -175,10 +182,13 @@ enum WalletVault {
     }
 
     static func removeAll(environment: PasscodeEnvironment, readAttributes: ([String: Any]) -> (OSStatus, CFTypeRef?), delete: ([String: Any]) -> OSStatus) throws {
-        let group = try environment.privateAccessGroup()
-        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
+        let group = try self.keychainAccessGroup()
+        var query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
             kSecReturnAttributes as String: true, kSecMatchLimit as String: kSecMatchLimitAll,
-            kSecAttrSynchronizable as String: false, kSecAttrAccessGroup as String: group]
+            kSecAttrSynchronizable as String: false]
+        if let group {
+            query[kSecAttrAccessGroup as String] = group
+        }
         let (status, result) = readAttributes(query)
         if status == errSecItemNotFound { return }
         guard status == errSecSuccess, let items = result as? [[String: Any]] else { throw PasscodeError.keychain(status) }
@@ -186,9 +196,12 @@ enum WalletVault {
             guard let service = item[kSecAttrService as String] as? String,
                   service.hasPrefix("org.telegram.ton-wallet."),
                   let account = item[kSecAttrAccount as String] as? String else { continue }
-            let deletion: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
+            var deletion: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
                 kSecAttrService as String: service, kSecAttrAccount as String: account,
-                kSecAttrSynchronizable as String: false, kSecAttrAccessGroup as String: group]
+                kSecAttrSynchronizable as String: false]
+            if let group {
+                deletion[kSecAttrAccessGroup as String] = group
+            }
             let status = delete(deletion)
             guard status == errSecSuccess || status == errSecItemNotFound else { throw PasscodeError.keychain(status) }
         }
@@ -199,7 +212,9 @@ enum WalletVault {
         var query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
             kSecReturnAttributes as String: true, kSecMatchLimit as String: kSecMatchLimitAll,
             kSecAttrSynchronizable as String: false]
-        query[kSecAttrAccessGroup as String] = try self.keychainAccessGroup()
+        if let group = try self.keychainAccessGroup() {
+            query[kSecAttrAccessGroup as String] = group
+        }
         var value: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &value)
         if status == errSecItemNotFound { return }

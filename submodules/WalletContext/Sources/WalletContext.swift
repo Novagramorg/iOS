@@ -515,27 +515,35 @@ public final class WalletContext {
 public struct WalletConfiguration: Equatable, Sendable {
     public static var defaultValue: WalletConfiguration {
         return WalletConfiguration(
+            explorerUrl: "https://tonviewer.com",
             transferMinAmount: 100_000_000,
             transferGaslessMinAmount: 100_000_000,
             transferGaslessDailyLimit: 5
         )
     }
 
+    public let explorerUrl: String
     public let transferMinAmount: Int64
     public let transferGaslessMinAmount: Int64
     public let transferGaslessDailyLimit: Int32
 
     private init(
+        explorerUrl: String,
         transferMinAmount: Int64,
         transferGaslessMinAmount: Int64,
         transferGaslessDailyLimit: Int32
     ) {
+        self.explorerUrl = explorerUrl
         self.transferMinAmount = transferMinAmount
         self.transferGaslessMinAmount = transferGaslessMinAmount
         self.transferGaslessDailyLimit = transferGaslessDailyLimit
     }
 
     public static func with(appConfiguration: AppConfiguration) -> WalletConfiguration {
+        var explorerUrl = self.defaultValue.explorerUrl
+        if let value = appConfiguration.data?["ton_blockchain_explorer_url"] as? String {
+            explorerUrl = value
+        }
         var transferMinAmount = self.defaultValue.transferMinAmount
         if let value = appConfiguration.data?["wallet_transfer_min_nanos"] as? Double,
            let intValue = Int64(exactly: value) {
@@ -551,6 +559,7 @@ public struct WalletConfiguration: Equatable, Sendable {
             transferGaslessDailyLimit = Int32(value)
         }
         return WalletConfiguration(
+            explorerUrl: explorerUrl,
             transferMinAmount: transferMinAmount,
             transferGaslessMinAmount: transferGaslessMinAmount,
             transferGaslessDailyLimit: transferGaslessDailyLimit

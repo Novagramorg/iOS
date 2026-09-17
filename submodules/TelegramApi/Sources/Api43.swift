@@ -14884,14 +14884,14 @@ public extension Api.functions.wallet {
     }
 }
 public extension Api.functions.wallet {
-    static func getExistingWaltBalance() -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Bool>) {
+    static func getExistingWaltBalance() -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.wallet.ExistingBalance>) {
         let buffer = Buffer()
-        buffer.appendInt32(1653032675)
-        return (FunctionDescription(name: "wallet.getExistingWaltBalance", parameters: []), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Bool? in
+        buffer.appendInt32(1763656544)
+        return (FunctionDescription(name: "wallet.getExistingWaltBalance", parameters: []), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.wallet.ExistingBalance? in
             let reader = BufferReader(buffer)
-            var result: Api.Bool?
+            var result: Api.wallet.ExistingBalance?
             if let signature = reader.readInt32() {
-                result = Api.parse(reader, signature: signature) as? Api.Bool
+                result = Api.parse(reader, signature: signature) as? Api.wallet.ExistingBalance
             }
             return result
         })
@@ -14995,9 +14995,9 @@ public extension Api.functions.wallet {
     }
 }
 public extension Api.functions.wallet {
-    static func getUserAddresses(flags: Int32, id: [Api.InputUser], addresses: [String]) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<[Api.WalletUserAddress]>) {
+    static func getUserAddresses(flags: Int32, id: [Api.InputUser], addresses: [String]) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.wallet.UserAddresses>) {
         let buffer = Buffer()
-        buffer.appendInt32(94531831)
+        buffer.appendInt32(1383456733)
         serializeInt32(flags, buffer: buffer, boxed: false)
         buffer.appendInt32(481674261)
         buffer.appendInt32(Int32(id.count))
@@ -15009,11 +15009,11 @@ public extension Api.functions.wallet {
         for item in addresses {
             serializeString(item, buffer: buffer, boxed: false)
         }
-        return (FunctionDescription(name: "wallet.getUserAddresses", parameters: [("flags", ConstructorParameterDescription(flags)), ("id", ConstructorParameterDescription(id)), ("addresses", ConstructorParameterDescription(addresses))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> [Api.WalletUserAddress]? in
+        return (FunctionDescription(name: "wallet.getUserAddresses", parameters: [("flags", ConstructorParameterDescription(flags)), ("id", ConstructorParameterDescription(id)), ("addresses", ConstructorParameterDescription(addresses))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.wallet.UserAddresses? in
             let reader = BufferReader(buffer)
-            var result: [Api.WalletUserAddress]?
-            if let _ = reader.readInt32() {
-                result = Api.parseVector(reader, elementSignature: 0, elementType: Api.WalletUserAddress.self)
+            var result: Api.wallet.UserAddresses?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.wallet.UserAddresses
             }
             return result
         })

@@ -21,6 +21,7 @@ public enum ServerProvidedSuggestion: Equatable {
     case setupLoginEmail
     case setupLoginEmailBlocking
     case setupPasskey
+    case firstGrams
     case link(id: String, url: String, title: ServerSuggestionInfo.Item.Text, subtitle: ServerSuggestionInfo.Item.Text)
     
     init?(string: String) {
@@ -59,6 +60,8 @@ public enum ServerProvidedSuggestion: Equatable {
             self = .setupLoginEmailBlocking
         case "SETUP_PASSKEY":
             self = .setupPasskey
+        case "FIRST_GRAMS":
+            self = .firstGrams
         default:
             return nil
         }
@@ -100,6 +103,8 @@ public enum ServerProvidedSuggestion: Equatable {
             return "SETUP_LOGIN_EMAIL_NOSKIP"
         case .setupPasskey:
             return "SETUP_PASSKEY"
+        case .firstGrams:
+            return "FIRST_GRAMS"
         case let .link(id, _, _, _):
             return id
         }
