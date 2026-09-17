@@ -856,7 +856,9 @@ private enum ResolveInternalUrlResult {
 // The forum flags — not the numeric comparison — are what exclude monoforums. A monoforum's `threadId`
 // is a `PeerId.toInt64()`, and for a `CloudUser` peer (namespace 0) that is just the raw user id, so it
 // can collide with a small message id. `isForum` and `isMonoforum` are independent server flags, so
-// both are checked.
+// both are checked. A monoforum link therefore always takes the `.replyThreadMessage` branch below,
+// where `isMonoforumPost` tells the consumer to open the sublist by thread id rather than rediscover
+// it from a root message id it does not have.
 private func resolvedForumTopicUrl(channel: TelegramChannel, threadId: Int64, messageId: EngineMessage.Id) -> ResolvedUrl {
     if channel.flags.contains(.isForum), !channel.flags.contains(.isMonoforum), threadId == Int64(messageId.id) {
         return .replyThread(messageId: messageId)
@@ -868,7 +870,7 @@ private func resolvedForumTopicUrl(channel: TelegramChannel, threadId: Int64, me
             channelMessageId: nil,
             isChannelPost: false,
             isForumPost: true,
-            isMonoforumPost: false,
+            isMonoforumPost: channel.flags.contains(.isMonoforum),
             maxMessage: nil,
             maxReadIncomingMessageId: nil,
             maxReadOutgoingMessageId: nil,

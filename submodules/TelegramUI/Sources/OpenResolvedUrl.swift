@@ -342,7 +342,14 @@ func openResolvedUrlImpl(
         case let .channelMessage(peer, messageId, timecode):
             openPeer(EnginePeer(peer), .chat(textInputState: nil, subject: .message(id: .id(messageId), highlight: ChatControllerSubject.MessageHighlight(quote: nil), timecode: timecode, setupReply: false), peekData: nil))
         case let .replyThreadMessage(replyThreadMessage, messageId):
-            if let navigationController = navigationController, let effectiveMessageId = replyThreadMessage.effectiveMessageId {
+            if replyThreadMessage.isMonoforumPost {
+                // A monoforum sublist is keyed by a packed `PeerId`, so it has no root message id: `effectiveMessageId`
+                // would clamp the thread id into `Int32` and `openMessageReplies` would then rediscover a thread from a
+                // message that does not exist. The resolver already produced the thread, so navigate with it directly.
+                if let navigationController = navigationController {
+                    context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: navigationController, context: context, chatLocation: .replyThread(replyThreadMessage), subject: .message(id: .id(messageId), highlight: ChatControllerSubject.MessageHighlight(quote: nil), timecode: nil, setupReply: false), keepStack: .always))
+                }
+            } else if let navigationController = navigationController, let effectiveMessageId = replyThreadMessage.effectiveMessageId {
                 let _ = ChatControllerImpl.openMessageReplies(context: context, navigationController: navigationController, present: { c, a in
                     present(c, a)
                 }, messageId: effectiveMessageId, isChannelPost: replyThreadMessage.isChannelPost, atMessage: messageId, displayModalProgress: true).startStandalone()
