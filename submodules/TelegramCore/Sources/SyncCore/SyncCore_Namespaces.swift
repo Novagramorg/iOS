@@ -345,6 +345,7 @@ private enum PreferencesKeyValues: Int32 {
     case emojiGameInfo = 48
     case webBrowserSettings = 49
     case communitiesState = 50
+    case unreadCounterTagsState = 51
 }
 
 public func applicationSpecificPreferencesKey(_ value: Int32) -> ValueBoxKey {
@@ -363,6 +364,12 @@ public struct PreferencesKeys {
     public static let globalNotifications: ValueBoxKey = {
         let key = ValueBoxKey(length: 4)
         key.setInt32(0, value: PreferencesKeyValues.globalNotifications.rawValue)
+        return key
+    }()
+    
+    public static let unreadCounterTagsState: ValueBoxKey = {
+        let key = ValueBoxKey(length: 4)
+        key.setInt32(0, value: PreferencesKeyValues.unreadCounterTagsState.rawValue)
         return key
     }()
     

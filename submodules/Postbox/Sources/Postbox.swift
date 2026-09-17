@@ -2669,6 +2669,22 @@ final class PostboxImpl {
                 } else if let peer = self.peerTable.get(peerId) {
                     updatedPeers.append(((peer, change.0), (peer, change.1)))
                 }
+                // A peer whose identity this one overrides (a secret chat) derives its summary
+                // counter tag from this contact status, so it has to be re-tagged too -- nothing
+                // else in this transaction reports it as updated.
+                for associatedPeerId in self.reverseAssociatedPeerTable.get(peerId: peerId) {
+                    guard let associatedPeer = self.peerTable.get(associatedPeerId), associatedPeer.associatedPeerOverridesIdentity else {
+                        continue
+                    }
+                    if let index = updatedPeers.firstIndex(where: { $0.1.0.id == associatedPeerId }) {
+                        if let (existingPeer, _) = updatedPeers[index].0 {
+                            updatedPeers[index].0 = (existingPeer, change.0)
+                        }
+                        updatedPeers[index].1 = (updatedPeers[index].1.0, change.1)
+                    } else {
+                        updatedPeers.append(((associatedPeer, change.0), (associatedPeer, change.1)))
+                    }
+                }
             }
         }
         let updatedCachedPeerData = self.cachedPeerDataTable.transactionUpdatedPeers()
