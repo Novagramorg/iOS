@@ -2,6 +2,7 @@ import contextlib
 import fcntl
 import os
 import json
+import re
 import shutil
 import signal
 import sys
@@ -24,9 +25,34 @@ class TartBuildError(Exception):
     """Exception raised for Tart build errors"""
     pass
 
-EPHEMERAL_VM_PREFIX = 'telegrambuild-'
 TART_VMS_DIR = os.path.expanduser('~/.tart/vms')
-VM_BUILD_LOCK_PATH = os.path.expanduser('~/.telegram-build/vm-build.lock')
+# One build at a time is the default. Overriding the lock path runs a build in its own
+# exclusion domain, which is only safe from a SEPARATE checkout: a vm-build deletes and
+# rebuilds build-input/remote-input in its working directory, so two runs sharing one
+# checkout corrupt each other's codesigning inputs no matter what the lock says.
+VM_BUILD_LOCK_PATH = os.environ.get(
+    'TELEGRAM_VM_BUILD_LOCK_PATH',
+    os.path.expanduser('~/.telegram-build/vm-build.lock')
+)
+
+
+def _vm_build_domain() -> str:
+    """Token naming this build's exclusion domain, derived from the lock file."""
+    name = os.path.basename(VM_BUILD_LOCK_PATH)
+    if name.endswith('.lock'):
+        name = name[:-len('.lock')]
+    # Hyphens are stripped, not preserved: '-' separates the domain from the uuid, so a
+    # token containing one would make prefixes ambiguous and 'telegrambuild-vm-build-'
+    # would match 'telegrambuild-vm-build-b-<uuid>' -- the second domain's live VM.
+    return re.sub(r'[^a-z0-9]+', '', name.lower()) or 'default'
+
+
+# Ephemeral VM names carry their exclusion domain, and reap_orphan_vms only ever touches
+# its own prefix. The reaper deletes matching VMs unconditionally, which is sound only
+# while every VM it can see belongs to a run its lock has already excluded -- so builds
+# under different locks MUST NOT share a prefix, or the one that starts second stops and
+# deletes the first one's live VM.
+EPHEMERAL_VM_PREFIX = 'telegrambuild-{}-'.format(_vm_build_domain())
 
 
 def list_local_vm_names() -> List[str]:
@@ -445,10 +471,11 @@ class TartVMManager:
     def reap_orphan_vms(self) -> int:
         """Delete ephemeral clones left behind by runs that died before cleaning up.
 
-        Safe to do unconditionally because the caller holds the host-wide vm-build lock:
-        any EPHEMERAL_VM_PREFIX VM that exists right now belongs to a process that is
-        gone. Each clone is a full copy-on-write image of the base, so an unreclaimed one
-        is expensive to leave lying around.
+        Safe to do unconditionally because the caller holds the lock for this domain, and
+        EPHEMERAL_VM_PREFIX is scoped to that domain: every VM this can see belongs to a
+        run the lock has already excluded, so it belongs to a process that is gone. Each
+        clone is a full copy-on-write image of the base, so an unreclaimed one is
+        expensive to leave lying around.
         """
         orphans = [name for name in list_local_vm_names() if name.startswith(EPHEMERAL_VM_PREFIX)]
         if not orphans:
