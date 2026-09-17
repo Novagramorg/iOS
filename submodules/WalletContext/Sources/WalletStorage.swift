@@ -451,7 +451,9 @@ actor WalletEngineStorage {
         ]
         query[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
         #endif
-        query[kSecAttrAccessGroup as String] = try WalletVault.keychainAccessGroup()
+        if let group = try WalletVault.keychainAccessGroup() {
+            query[kSecAttrAccessGroup as String] = group
+        }
         var result: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
         if status == errSecItemNotFound { return [] }
@@ -576,13 +578,16 @@ actor WalletEngineStorage {
     }
 
     private func baseQuery(service: String, account: String) throws -> [String: Any] {
-        return [
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
-            kSecAttrSynchronizable as String: false,
-            kSecAttrAccessGroup as String: try WalletVault.keychainAccessGroup()
+            kSecAttrSynchronizable as String: false
         ]
+        if let group = try WalletVault.keychainAccessGroup() {
+            query[kSecAttrAccessGroup as String] = group
+        }
+        return query
     }
 
     private func read(service: String, account: String) throws -> Data? {
