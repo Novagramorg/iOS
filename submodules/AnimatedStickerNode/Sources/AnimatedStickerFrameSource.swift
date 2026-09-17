@@ -82,6 +82,10 @@ public final class AnimatedStickerCachedFrameSource: AnimatedStickerFrameSource 
             guard let bytes = buffer.baseAddress?.assumingMemoryBound(to: UInt8.self) else {
                 return false
             }
+            // The header is five Int32s. A truncated cache file would be read past its end.
+            if buffer.count < 20 {
+                return false
+            }
             var frameRateValue: Int32 = 0
             var frameCountValue: Int32 = 0
             var widthValue: Int32 = 0
@@ -97,6 +101,15 @@ public final class AnimatedStickerCachedFrameSource: AnimatedStickerFrameSource 
             offset += 4
             memcpy(&bytesPerRowValue, bytes.advanced(by: offset), 4)
             offset += 4
+            // Everything above came off disk unverified. A negative product reaches
+            // Data(count: bytesPerRow * height) below and traps; an absurd one exhausts memory.
+            if frameRateValue <= 0 || frameCountValue <= 0 || widthValue <= 0 || heightValue <= 0 || bytesPerRowValue < widthValue {
+                return false
+            }
+            if Int(bytesPerRowValue) * Int(heightValue) > 256 * 1024 * 1024 {
+                return false
+            }
+
             frameRate = Int(frameRateValue)
             frameCount = Int(frameCountValue)
             width = Int(widthValue)
@@ -166,7 +179,9 @@ public final class AnimatedStickerCachedFrameSource: AnimatedStickerFrameSource 
             var frameLength: Int32 = 0
             memcpy(&frameLength, bytes.advanced(by: self.offset), 4)
             
-            if self.offset + 4 + Int(frameLength) > dataLength {
+            // frameLength comes off disk too. A negative value passes the bounds check below and
+            // is then widened to size_t by compression_decode_buffer — a huge out-of-bounds read.
+            if frameLength < 0 || self.offset + 4 + Int(frameLength) > dataLength {
                 return
             }
             
