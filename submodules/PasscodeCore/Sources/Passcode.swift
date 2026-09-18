@@ -121,6 +121,13 @@ final class PasscodeKeychain: PasscodeStorage {
     }
 
     func read(_ account: String, context: LAContext? = nil) throws -> Data? {
+        #if os(macOS)
+        self.adoptGroupedItemsIfNeeded()
+        #endif
+        return try self.rawRead(account, context: context)
+    }
+
+    private func rawRead(_ account: String, context: LAContext?) throws -> Data? {
         var query = try self.query(account)
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
@@ -132,6 +139,36 @@ final class PasscodeKeychain: PasscodeStorage {
         guard status == errSecSuccess, let data = result as? Data else { throw PasscodeError.keychain(status) }
         return data
     }
+
+    #if os(macOS)
+    private static let adoptionLock = NSLock()
+    private static var didAdoptGroupedItems = false
+
+    private func adoptGroupedItemsIfNeeded() {
+        PasscodeKeychain.adoptionLock.lock()
+        defer { PasscodeKeychain.adoptionLock.unlock() }
+        guard !PasscodeKeychain.didAdoptGroupedItems else { return }
+        PasscodeKeychain.didAdoptGroupedItems = true
+        guard ((try? self.rawRead("grouped-adoption.v1", context: nil)) ?? nil) == nil,
+              let group = try? self.environment.sharedAccessGroup() else {
+            return
+        }
+        for account in ["credential", "device", "attempts"] {
+            guard var query = try? self.query(account) else { continue }
+            query[kSecAttrAccessGroup as String] = group
+            query[kSecUseDataProtectionKeychain as String] = true
+            query[kSecReturnData as String] = true
+            query[kSecMatchLimit as String] = kSecMatchLimitOne
+            var result: CFTypeRef?
+            guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
+                  let data = result as? Data else {
+                continue
+            }
+            try? self.write(data, account: account)
+        }
+        try? self.write(Data([1]), account: "grouped-adoption.v1")
+    }
+    #endif
 
     func write(_ data: Data, account: String, biometric: Bool = false) throws {
         let query = try self.query(account)
