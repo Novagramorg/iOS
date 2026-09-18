@@ -250,6 +250,38 @@ final class MessageHistoryTableFixture {
         }
     }
 
+    /// A freshly initialised global tag holds one hole at the upper bound, and a message
+    /// below a hole is not indexed. Like the app's hole fill, this replaces that hole with
+    /// one at the lower bound: everything above it is accepted, and because the tag's
+    /// range is no longer empty the upper hole is not recreated after a cache clear.
+    func fillGlobalTagHole(_ tag: GlobalMessageTags) {
+        self.transaction { _, _ in
+            self.globalMessageHistoryTagsTable.ensureInitialized(tag)
+            self.globalMessageHistoryTagsTable.remove(tag, index: MessageIndex.absoluteUpperBound())
+            self.globalMessageHistoryTagsTable.addHole(tag, index: MessageIndex.absoluteLowerBound())
+        }
+    }
+
+    /// Marks the region below `index` as not loaded for `tag`.
+    func addGlobalTagHole(_ tag: GlobalMessageTags, index: MessageIndex) {
+        self.transaction { _, _ in
+            self.globalMessageHistoryTagsTable.addHole(tag, index: index)
+        }
+    }
+
+    /// Indices the global-tags table lists under `tag`, excluding holes.
+    func globalTagIndices(_ tag: GlobalMessageTags) -> [MessageIndex] {
+        var indices: [MessageIndex] = []
+        self.queue.sync {
+            for entry in self.globalMessageHistoryTagsTable.laterEntries(tag, index: MessageIndex.absoluteLowerBound(), count: 1000) {
+                if case let .message(index) = entry {
+                    indices.append(index)
+                }
+            }
+        }
+        return indices
+    }
+
     /// The media table's row for `id`: `.Direct(media, referenceCount)` when shared,
     /// `.MessageReference(index)` when embedded in one message, nil when absent.
     func mediaEntry(_ id: MediaId, file: StaticString = #file, line: UInt = #line) -> DebugMediaEntry? {
