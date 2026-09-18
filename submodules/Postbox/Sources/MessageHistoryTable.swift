@@ -1568,22 +1568,30 @@ final class MessageHistoryTable: Table {
                 }
             }
             
-            var previousMediaIds = Set<MediaId>()
+            // Counted, not a set: a message that lists one media twice holds two references.
+            var previousMediaIds: [MediaId: Int] = [:]
             for (mediaId, _) in previousEmbeddedMediaWithIds {
-                previousMediaIds.insert(mediaId)
+                previousMediaIds[mediaId, default: 0] += 1
             }
             for mediaId in previousMessage.referencedMedia {
-                previousMediaIds.insert(mediaId)
+                previousMediaIds[mediaId, default: 0] += 1
             }
             
-            var updatedMediaIds = Set<MediaId>()
+            var updatedMediaIds: [MediaId: Int] = [:]
             for media in message.media {
                 if let mediaId = media.id {
-                    updatedMediaIds.insert(mediaId)
+                    updatedMediaIds[mediaId, default: 0] += 1
                 }
             }
             
-            if previousMediaIds != updatedMediaIds || index != message.index {
+            // With the same media at the same index the references this message already
+            // holds are kept, so they must not be added again below: `set` on a shared
+            // `Direct` row increments its count, and nothing would ever decrement it.
+            let keepsExistingMediaReferences = previousMediaIds == updatedMediaIds && index == message.index
+            var keptReferencedMediaIds = Set<MediaId>()
+            if keepsExistingMediaReferences {
+                keptReferencedMediaIds = Set(previousMessage.referencedMedia)
+            } else {
                 for (_, media) in previousEmbeddedMediaWithIds {
                     self.messageMediaTable.removeEmbeddedMedia(media)
                 }
@@ -1990,15 +1998,29 @@ final class MessageHistoryTable: Table {
             var referencedMedia: [MediaId] = []
             for media in message.media {
                 if let mediaId = media.id {
-                    let mediaInsertResult = self.messageMediaTable.set(media, index: message.index, messageHistoryTable: self)
-                    switch mediaInsertResult {
-                        case let .Embed(media):
-                            embeddedMedia.append(media)
-                        case .Reference:
-                            referencedMedia.append(mediaId)
-                            if let currentMedia = self.messageMediaTable.get(mediaId, embedded: { _, _ in nil })?.1, !currentMedia.isEqual(to: media) {
-                                mediaToUpdate.append(media)
-                            }
+                    // A kept reference is honoured only while a shared `Direct` row backs it
+                    // (the nil embedded closure makes `get` answer for nothing else). Anything
+                    // else, including a row that now points at another message, goes through
+                    // `set`, which repairs it as an insert would.
+                    var keptSharedMedia: Media?
+                    if keptReferencedMediaIds.contains(mediaId) {
+                        keptSharedMedia = self.messageMediaTable.get(mediaId, embedded: { _, _ in nil })?.1
+                    }
+                    if let keptSharedMedia = keptSharedMedia {
+                        referencedMedia.append(mediaId)
+                        if !keptSharedMedia.isEqual(to: media) {
+                            mediaToUpdate.append(media)
+                        }
+                    } else {
+                        switch self.messageMediaTable.set(media, index: message.index, messageHistoryTable: self) {
+                            case let .Embed(media):
+                                embeddedMedia.append(media)
+                            case .Reference:
+                                referencedMedia.append(mediaId)
+                                if let currentMedia = self.messageMediaTable.get(mediaId, embedded: { _, _ in nil })?.1, !currentMedia.isEqual(to: media) {
+                                    mediaToUpdate.append(media)
+                                }
+                        }
                     }
                 } else {
                     embeddedMedia.append(media)
