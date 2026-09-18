@@ -53,6 +53,21 @@ enum IntentHandlingError {
     case generic
 }
 
+/// Runs a signal that produces no values and reports `value` once it completes.
+/// A `Signal<Never, _>` cannot be chained into a differently typed one: `then` needs a
+/// matching value type, and `map`/`mapToSignal` bodies would be unreachable, which this
+/// project builds as an error.
+private func completing<T, E>(_ signal: Signal<Never, E>, with value: T) -> Signal<T, E> {
+    return Signal { subscriber in
+        return signal.start(error: { error in
+            subscriber.putError(error)
+        }, completed: {
+            subscriber.putNext(value)
+            subscriber.putCompletion()
+        })
+    }
+}
+
 @available(iOSApplicationExtension 10.0, iOS 10.0, *)
 @objc(IntentHandler)
 class IntentHandler: INExtension {
@@ -606,55 +621,75 @@ class DefaultIntentHandler: INExtension, INSendMessageIntentHandling, INSearchFo
         self.actionDisposable.set((self.accountPromise.get()
         |> castError(IntentHandlingError.self)
         |> take(1)
-        |> mapToSignal { account -> Signal<Void, IntentHandlingError> in
+        |> mapToSignal { account -> Signal<INSetMessageAttributeIntentResponseCode, IntentHandlingError> in
             guard let account = account else {
                 return .fail(.generic)
             }
             
-            var signals: [Signal<Void, IntentHandlingError>] = []
+            // Message identifiers are "<peerId>_<namespace>_<id>" (IntentMessages.swift).
+            // Anything else - an identifier donated by an older build, a truncated payload -
+            // has to be skipped rather than indexed into.
             var maxMessageIdsToApply: [PeerId: MessageId] = [:]
-            if let identifiers = intent.identifiers {
-                for identifier in identifiers {
-                    let components = identifier.components(separatedBy: "_")
-                    if let first = components.first, let peerId = Int64(first), let namespace = Int32(components[1]), let id = Int32(components[2]) {
-                        let peerId = PeerId(peerId)
-                        let messageId = MessageId(peerId: peerId, namespace: namespace, id: id)
-                        if let currentMessageId = maxMessageIdsToApply[peerId] {
-                            if currentMessageId < messageId {
-                                maxMessageIdsToApply[peerId] = messageId
-                            }
-                        } else {
-                            maxMessageIdsToApply[peerId] = messageId
-                        }
-                    }
+            for identifier in intent.identifiers ?? [] {
+                let components = identifier.components(separatedBy: "_")
+                guard components.count == 3, let peerIdValue = Int64(components[0]), let namespace = Int32(components[1]), let id = Int32(components[2]) else {
+                    continue
                 }
+                let peerId = PeerId(peerIdValue)
+                let messageId = MessageId(peerId: peerId, namespace: namespace, id: id)
+                if let currentMessageId = maxMessageIdsToApply[peerId], messageId < currentMessageId {
+                    continue
+                }
+                maxMessageIdsToApply[peerId] = messageId
             }
             
-            for (_, messageId) in maxMessageIdsToApply {
-                signals.append(TelegramEngine(account: account).messages.applyMaxReadMessageIdInteractively(messageId: messageId)
-                |> castError(IntentHandlingError.self))
+            if maxMessageIdsToApply.isEmpty {
+                return .single(.failureMessageNotFound)
             }
             
-            if signals.isEmpty {
-                return .complete()
-            } else {
-                account.shouldBeServiceTaskMaster.set(.single(.now))
-                return combineLatest(signals)
-                |> mapToSignal { _ -> Signal<Void, IntentHandlingError> in
-                    return .complete()
+            // resolveAttribute accepts .read and .unread and folds .flagged into .unread;
+            // acting on the attribute is what tells "mark as read" from "mark as unread".
+            var attribute = intent.attribute
+            if attribute == .flagged {
+                attribute = .unread
+            }
+            
+            let engine = TelegramEngine(account: account)
+            let applied: Signal<Bool, NoError>
+            switch attribute {
+            case .read:
+                applied = combineLatest(maxMessageIdsToApply.values.map { messageId in
+                    return engine.messages.applyMaxReadMessageIdInteractively(messageId: messageId)
+                })
+                |> map { results -> Bool in
+                    return results.contains(true)
                 }
-                |> afterDisposed {
-                    account.shouldBeServiceTaskMaster.set(.single(.never))
-                }
+            case .unread:
+                // Marking unread is idempotent and never refused, so it always applies.
+                applied = completing(engine.messages.togglePeersUnreadMarkInteractively(peerIds: Array(maxMessageIdsToApply.keys), setToValue: true), with: true)
+            default:
+                return .single(.failureMessageAttributeNotSet)
+            }
+            
+            account.shouldBeServiceTaskMaster.set(.single(.now))
+            return applied
+            |> castError(IntentHandlingError.self)
+            |> map { applied -> INSetMessageAttributeIntentResponseCode in
+                // Nothing was applied - every peer refused, which is what a secret chat does
+                // for a read. Saying "success" would tell the user it was marked when it was not.
+                return applied ? .success : .failureMessageAttributeNotSet
+            }
+            |> afterDisposed {
+                account.shouldBeServiceTaskMaster.set(.single(.never))
             }
         }
-        |> deliverOnMainQueue).start(error: { _ in
+        |> deliverOnMainQueue).start(next: { code in
+            let userActivity = NSUserActivity(activityType: NSStringFromClass(INSetMessageAttributeIntent.self))
+            let response = INSetMessageAttributeIntentResponse(code: code, userActivity: userActivity)
+            completion(response)
+        }, error: { _ in
             let userActivity = NSUserActivity(activityType: NSStringFromClass(INSetMessageAttributeIntent.self))
             let response = INSetMessageAttributeIntentResponse(code: .failure, userActivity: userActivity)
-            completion(response)
-        }, completed: {
-            let userActivity = NSUserActivity(activityType: NSStringFromClass(INSetMessageAttributeIntent.self))
-            let response = INSetMessageAttributeIntentResponse(code: .success, userActivity: userActivity)
             completion(response)
         }))
     }

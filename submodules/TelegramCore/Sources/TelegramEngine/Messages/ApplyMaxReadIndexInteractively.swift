@@ -26,13 +26,17 @@ func _internal_applyMaxReadIndexInteractively(postbox: Postbox, stateManager: Ac
 /// For every other peer the read state is id-based: it reads up to `messageId.id` and the
 /// index's timestamp is unused, so the id alone is enough. Resolve the stored message's
 /// real index anyway when there is one, since it is the honest value.
-func _internal_applyMaxReadMessageIdInteractively(postbox: Postbox, stateManager: AccountStateManager, messageId: MessageId) -> Signal<Void, NoError> {
-    return postbox.transaction { transaction -> Void in
+///
+/// Reports whether a read was applied, so a caller that has to answer the user - a Siri
+/// intent - can say it did nothing rather than claim success.
+func _internal_applyMaxReadMessageIdInteractively(postbox: Postbox, stateManager: AccountStateManager, messageId: MessageId) -> Signal<Bool, NoError> {
+    return postbox.transaction { transaction -> Bool in
         guard messageId.peerId.namespace != Namespaces.Peer.SecretChat else {
-            return
+            return false
         }
         let index = transaction.getMessage(messageId)?.index ?? MessageIndex(id: messageId, timestamp: 0)
         _internal_applyMaxReadIndexInteractively(transaction: transaction, stateManager: stateManager, index: index)
+        return true
     }
 }
 
