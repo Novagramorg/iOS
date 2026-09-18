@@ -413,6 +413,7 @@ public final class MediaBoxFileContextV2Impl: MediaBoxFileContext {
                     self.processMovedFile()
                 } catch let e {
                     postboxLog("MediaBoxFileContextV2Impl: error moving temp file at \(self.fullPath): \(e)")
+                    self.processFetchError(error: .generic)
                 }
             case let .moveTempFile(file):
                 do {
@@ -420,15 +421,15 @@ public final class MediaBoxFileContextV2Impl: MediaBoxFileContext {
                     self.processMovedFile()
                 } catch let e {
                     postboxLog("MediaBoxFileContextV2Impl: error moving temp file at \(self.fullPath): \(e)")
+                    self.processFetchError(error: .generic)
                 }
                 TempBox.shared.dispose(file)
             case let .copyLocalItem(localItem):
-                do {
-                    if localItem.copyTo(url: URL(fileURLWithPath: self.fullPath)) {
-                        unlink(self.partialPath)
-                        unlink(self.metaPath)
-                    }
+                if localItem.copyTo(url: URL(fileURLWithPath: self.fullPath)) {
                     self.processMovedFile()
+                } else {
+                    postboxLog("MediaBoxFileContextV2Impl: error copying local item to \(self.fullPath)")
+                    self.processFetchError(error: .generic)
                 }
             case .reset:
                 if !self.fileMap.ranges.isEmpty {
@@ -485,29 +486,55 @@ public final class MediaBoxFileContextV2Impl: MediaBoxFileContext {
             if let size = fileSize(self.fullPath) {
                 self.isComplete = true
                 self.storageBox?.update(id: self.resourceId, size: size)
+                
+                // The bytes live at `fullPath` now; a leftover partial file and its map
+                // would describe storage that no longer holds anything.
+                unlink(self.partialPath)
+                unlink(self.metaPath)
+            } else {
+                // The fetcher claimed to have delivered the file but nothing is there.
+                // Fail the waiting requests rather than leaving them pending forever.
+                self.processFetchError(error: .generic)
             }
         }
         
         private func processFetchError(error: MediaResourceDataFetchError) {
             assert(self.queue.isCurrent())
             
+            // The fetch signal has terminated. Forget it, and forget the ranges it was
+            // believed to be serving: `updateRequests` deduplicates new requests against
+            // `materializedRangeRequests`, so leaving either in place would make an
+            // identical retry a no-op and leave the status on Fetching forever.
+            // This may run re-entrantly from inside `updateRequests` when the fetch
+            // signal fails synchronously; everything below is safe in that ordering.
+            if let pendingFetch = self.pendingFetch {
+                self.pendingFetch = nil
+                pendingFetch.disposable.dispose()
+            }
+            self.materializedRangeRequests = []
+            
             let rangeRequests = self.rangeRequests.copyItems()
             self.rangeRequests.removeAll()
-            
-            self.statusRequests.removeAll()
-            self.rangeStatusRequests.removeAll()
-            
-            //TODO:set status to .remote?
             
             for rangeRequest in rangeRequests {
                 rangeRequest.error(error)
             }
+            
+            // Status subscribers stay registered and are told the resource is Remote
+            // again, so a retry from the UI is possible.
+            self.updateStatusRequests()
         }
         
         private func updateRangeRequest(request: RangeRequest) -> Bool {
             assert(self.queue.isCurrent())
             
-            if self.fileMap.contains(request.value) != nil {
+            // A whole-file result (`.moveLocalFile`, `.moveTempFile`, `.copyLocalItem`)
+            // completes the context without touching the file map, so `isComplete`
+            // must be consulted first, exactly as the data and status paths do.
+            if self.isComplete {
+                request.completed()
+                return true
+            } else if self.fileMap.contains(request.value) != nil {
                 request.completed()
                 return true
             } else {
@@ -621,7 +648,10 @@ public final class MediaBoxFileContextV2Impl: MediaBoxFileContext {
                 request.reportedStatus = status
                 request.next(status)
                 
-                if let truncationSize = self.fileMap.truncationSize, self.fileMap.sum == truncationSize {
+                if self.isComplete {
+                    request.completed()
+                    return true
+                } else if let truncationSize = self.fileMap.truncationSize, self.fileMap.sum == truncationSize {
                     request.completed()
                     return true
                 }
