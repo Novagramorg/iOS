@@ -2978,7 +2978,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                     |> deliverOnMainQueue
                     |> mapToSignal { account -> Signal<Void, NoError> in
                         if let messageId = messageIdFromNotification(peerId: peerId, notification: response.notification) {
-                            let _ = TelegramEngine(account: account).messages.applyMaxReadIndexInteractively(index: MessageIndex(id: messageId, timestamp: 0)).start()
+                            let _ = TelegramEngine(account: account).messages.applyMaxReadMessageIdInteractively(messageId: messageId).start()
                         }
                         var replyToMessageId: MessageId?
                         if let threadId {

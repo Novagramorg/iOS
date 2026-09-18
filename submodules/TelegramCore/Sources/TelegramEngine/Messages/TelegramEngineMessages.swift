@@ -107,6 +107,14 @@ public extension TelegramEngine {
             return _internal_applyMaxReadIndexInteractively(postbox: self.account.postbox, stateManager: self.account.stateManager, index: index)
         }
 
+        /// For callers holding only a message id, such as a notification action or a Siri
+        /// intent. Prefer `applyMaxReadIndexInteractively(index:)` wherever a real
+        /// `MessageIndex` is at hand: a made-up index is wrong for an index-based read
+        /// state, which is what a secret chat has.
+        public func applyMaxReadMessageIdInteractively(messageId: MessageId) -> Signal<Void, NoError> {
+            return _internal_applyMaxReadMessageIdInteractively(postbox: self.account.postbox, stateManager: self.account.stateManager, messageId: messageId)
+        }
+
         public func sendScheduledMessageNowInteractively(messageId: MessageId) -> Signal<Never, NoError> {
             return _internal_sendScheduledMessageNowInteractively(postbox: self.account.postbox, messageId: messageId)
         }

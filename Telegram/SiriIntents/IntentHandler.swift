@@ -631,7 +631,7 @@ class DefaultIntentHandler: INExtension, INSendMessageIntentHandling, INSearchFo
             }
             
             for (_, messageId) in maxMessageIdsToApply {
-                signals.append(TelegramEngine(account: account).messages.applyMaxReadIndexInteractively(index: MessageIndex(id: messageId, timestamp: 0))
+                signals.append(TelegramEngine(account: account).messages.applyMaxReadMessageIdInteractively(messageId: messageId)
                 |> castError(IntentHandlingError.self))
             }
             
