@@ -123,7 +123,9 @@ final class MessageHistoryTableFixture {
         return SeedConfiguration(
             globalMessageIdsPeerIdNamespaces: [],
             initializeChatListWithHole: (topLevel: nil, groups: nil),
-            messageHoles: [:],
+            // Holes are allowed in the message namespace for every peer namespace the
+            // tests use; the history-view state asserts this before it will track holes.
+            messageHoles: [PeerId.Namespace._internalFromInt32Value(0): [messageNamespace: Set()]],
             upgradedMessageHoles: [:],
             messageThreadHoles: { _, _ in nil },
             existingMessageTags: [],
