@@ -1557,15 +1557,7 @@ final class HistoryViewLoadedState {
                         let message = value.message
                         var reloadPeers = reloadPeers
                         
-                        var rebuild = false
-                        for media in message.media {
-                            if let mediaId = media.id, let _ = updatedMedia[mediaId] {
-                                rebuild = true
-                                break
-                            }
-                        }
-                        
-                        if rebuild {
+                        if message.referencesAnyMedia(in: updatedMedia) {
                             var messageMedia: [Media] = []
                             for media in message.media {
                                 if let mediaId = media.id, let updated = updatedMedia[mediaId] {

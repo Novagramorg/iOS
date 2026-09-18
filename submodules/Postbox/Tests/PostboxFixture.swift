@@ -144,6 +144,11 @@ final class PostboxFixture {
         })
     }
 
+    /// The single-message view for `id`.
+    func observeMessage(_ id: MessageId) -> Recorder<MessageView> {
+        return self.observe(self.postbox.messageView(id))
+    }
+
     /// The message history around the top of `peerId`'s chat, with `additionalData`.
     func observeHistory(peerId: PeerId, additionalData: [AdditionalMessageHistoryViewData]) -> Recorder<MessageHistoryView> {
         return self.observe(self.postbox.aroundMessageHistoryViewForLocation(.peer(peerId: peerId, threadId: nil), anchor: .upperBound, ignoreMessagesInTimestampRange: nil, ignoreMessageIds: [], count: 10, fixedCombinedReadStates: nil, topTaggedMessageIdNamespaces: [], tag: nil, appendMessagesFromTheSameGroup: false, namespaces: .all, orderStatistics: [], additionalData: additionalData) |> map { $0.0 })
