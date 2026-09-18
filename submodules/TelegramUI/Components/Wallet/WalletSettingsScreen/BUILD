@@ -28,6 +28,7 @@ swift_library(
         "//submodules/UndoUI",
         "//submodules/WalletContext",
         "//submodules/TelegramUI/Components/Wallet/WalletAuthorizationUI",
+        "//submodules/TelegramUI/Components/Wallet/WalletImportScreen",
     ],
     visibility = [
         "//visibility:public",

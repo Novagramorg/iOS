@@ -131,6 +131,7 @@ extension WalletContextImpl {
             let data = try WalletTransferData(
                 prepared: preparedData.data,
                 includeInternalBoc: prepared.amount >= self.transferGaslessMinAmount
+                    && !WalletContext.isSelfTransfer(recipient: prepared.recipient, walletAddress: walletAddress)
             )
             result = try await self.submitTransferData(
                 data,

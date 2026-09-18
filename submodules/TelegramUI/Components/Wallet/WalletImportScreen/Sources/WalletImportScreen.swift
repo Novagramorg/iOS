@@ -19,6 +19,73 @@ import SwiftSignalKit
 import WalletAuthorizationUI
 import AlertComponent
 
+private func parseWalletPastedWords(_ text: String) -> [String] {
+    let quotes = CharacterSet(charactersIn: "\"'“”‘’«»")
+    let leadingFormatting = "•-–—*\"'“”‘’«»"
+    func stripFormatting(_ token: String) -> String {
+        return String(token.drop(while: { leadingFormatting.contains($0) }))
+            .trimmingCharacters(in: quotes)
+    }
+
+    var words: [(number: Int?, word: String)] = []
+    var pendingNumber: Int?
+    var hasExtraNumbers = false
+    for sourceToken in text.split(whereSeparator: { $0.isWhitespace || $0 == "," || $0 == ";" }) {
+        var token = stripFormatting(String(sourceToken))
+        guard !token.isEmpty else {
+            continue
+        }
+
+        var numberToken = token[...]
+        let closingBracket: Character?
+        if numberToken.first == "(" {
+            closingBracket = ")"
+            numberToken = numberToken.dropFirst()
+        } else if numberToken.first == "[" {
+            closingBracket = "]"
+            numberToken = numberToken.dropFirst()
+        } else {
+            closingBracket = nil
+        }
+        let digits = numberToken.prefix(while: { ("0" ... "9").contains($0) })
+        if !digits.isEmpty {
+            let suffix = numberToken.dropFirst(digits.count)
+            var wordAfterNumber: Substring?
+            if let closingBracket {
+                if suffix.first == closingBracket {
+                    wordAfterNumber = suffix.dropFirst()
+                }
+            } else if suffix.isEmpty {
+                wordAfterNumber = suffix
+            } else if suffix.first == "." || suffix.first == ")" || suffix.first == ":" {
+                wordAfterNumber = suffix.dropFirst()
+            }
+            if let wordAfterNumber {
+                if pendingNumber != nil {
+                    hasExtraNumbers = true
+                }
+                // An overflowing number still counts as numbering, but cannot be sorted.
+                pendingNumber = Int(digits) ?? 0
+                token = stripFormatting(String(wordAfterNumber))
+            }
+        }
+
+        if !token.isEmpty {
+            words.append((number: pendingNumber, word: token.lowercased()))
+            pendingNumber = nil
+        }
+    }
+
+    // OCR may read two columns row by row. Only reorder a complete, unambiguous list.
+    if (words.count == 12 || words.count == 24) && !hasExtraNumbers && pendingNumber == nil {
+        let numbers = Set(words.compactMap { $0.number })
+        if numbers == Set(1 ... words.count) {
+            words.sort { ($0.number ?? 0) < ($1.number ?? 0) }
+        }
+    }
+    return words.map { $0.word }
+}
+
 private final class WalletImportScreenComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
 
@@ -154,11 +221,9 @@ private final class WalletImportScreenComponent: Component {
                     guard let self else {
                         return false
                     }
-                    let words = text
-                        .split(whereSeparator: { $0.isWhitespace })
-                        .map { String($0) }
+                    let words = parseWalletPastedWords(text)
                     guard !words.isEmpty else {
-                        return false
+                        return true
                     }
                     return self.pasteWords?(self.index, words) ?? false
                 }
@@ -342,17 +407,19 @@ private final class WalletImportScreenComponent: Component {
                     self.returnPressed?(self.index)
                     return false
                 }
-                guard string.rangeOfCharacter(from: .whitespacesAndNewlines) != nil else {
+                let containsWhitespace = string.contains(where: { $0.isWhitespace })
+                guard string.count > 1 || containsWhitespace else {
                     return true
                 }
 
-                let words = string
-                    .split(whereSeparator: { $0.isWhitespace })
-                    .map { String($0) }
-                if !words.isEmpty {
+                let words = parseWalletPastedWords(string)
+                guard !words.isEmpty else {
+                    return false
+                }
+                if containsWhitespace || words.count > 1 || words[0] != string.lowercased() {
                     return !(self.pasteWords?(self.index, words) ?? false)
                 }
-                return false
+                return true
             }
         }
 
@@ -381,6 +448,7 @@ private final class WalletImportScreenComponent: Component {
         private var activePreparedRecoveryPhraseImport: WalletContext.PreparedRecoveryPhraseImport?
         private var preparedImportWords: [String]?
         private var didCompleteVerification = false
+        private var isVerificationInProgress = false
         private var words = Array(repeating: "", count: 12)
         private var isImportPhraseValid = false
         private var invalidWordIndices = Set<Int>()
@@ -578,6 +646,14 @@ private final class WalletImportScreenComponent: Component {
 
         func scrollToTop() {
             self.scrollView.setContentOffset(CGPoint(), animated: true)
+        }
+
+        func setVerificationInProgress(_ inProgress: Bool) {
+            guard self.isVerificationMode, self.isVerificationInProgress != inProgress else {
+                return
+            }
+            self.isVerificationInProgress = inProgress
+            self.componentState?.updated(transition: .easeInOut(duration: 0.2))
         }
 
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
@@ -896,10 +972,10 @@ private final class WalletImportScreenComponent: Component {
                 return
             }
 
-            let words = text
-                .split(whereSeparator: { $0.isWhitespace })
-                .map { self.normalizeWord(String($0)) }
-                .filter { !$0.isEmpty }
+            let words = parseWalletPastedWords(text)
+            guard !words.isEmpty else {
+                return
+            }
             guard words.count == 12 || words.count == 24 else {
                 self.presentInvalidPhraseLength(count: words.count)
                 return
@@ -963,9 +1039,10 @@ private final class WalletImportScreenComponent: Component {
 
         private func continueVerification() {
             guard let component = self.component,
-                  case let .verify(phraseWords, _) = component.mode,
+                  case let .verify(phraseWords, _, allowsRepeatedCompletion) = component.mode,
                   component.verificationIndices.count == self.words.count,
-                  !self.didCompleteVerification else {
+                  !self.didCompleteVerification,
+                  !self.isVerificationInProgress else {
                 return
             }
 
@@ -984,6 +1061,9 @@ private final class WalletImportScreenComponent: Component {
             if mismatchedIndices.isEmpty {
                 self.didCompleteVerification = true
                 component.completion?()
+                if allowsRepeatedCompletion {
+                    self.didCompleteVerification = false
+                }
                 return
             }
 
@@ -1418,6 +1498,7 @@ private final class WalletImportScreenComponent: Component {
                 self.didPlayAnimation = false
                 self.didRequestInitialFocus = false
                 self.didCompleteVerification = false
+                self.isVerificationInProgress = false
                 switch component.mode {
                 case .importWallet, .enterRecoveryPhrase:
                     self.setupWordInputFields(displayNumbers: Array(1 ... 12), preserving: [])
@@ -1785,7 +1866,7 @@ private final class WalletImportScreenComponent: Component {
                         ))
                     ),
                     isEnabled: isButtonEnabled,
-                    displaysProgress: !isVerificationMode && self.isImporting,
+                    displaysProgress: isVerificationMode ? self.isVerificationInProgress : self.isImporting,
                     action: { [weak self] in
                         guard let self, self.isActionEnabled else {
                             return
@@ -1974,7 +2055,7 @@ public final class WalletImportScreen: ViewControllerComponentContainer {
         switch mode {
         case .importWallet, .enterRecoveryPhrase:
             verificationIndices = []
-        case let .verify(words, keyRotation):
+        case let .verify(words, keyRotation, _):
             precondition(words.count >= 3)
             if keyRotation {
                 precondition(words.count == 24)
@@ -2021,6 +2102,10 @@ public final class WalletImportScreen: ViewControllerComponentContainer {
 
     required public init(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    public func setVerificationInProgress(_ inProgress: Bool) {
+        (self.node.hostView.componentView as? WalletImportScreenComponent.View)?.setVerificationInProgress(inProgress)
     }
 
     override public func viewDidDisappear(_ animated: Bool) {

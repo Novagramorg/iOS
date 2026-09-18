@@ -539,6 +539,13 @@ public extension WalletContext {
             self.status = status
         }
 
+        public func isSelfTransfer(walletAddress: String?) -> Bool {
+            guard self.kind == .transfer, let recipient = self.peer.address else {
+                return false
+            }
+            return WalletContext.isSelfTransfer(recipient: recipient, walletAddress: walletAddress)
+        }
+
         public var isVisibleInWalletHistory: Bool {
             if self.status == .failed || self.kind == .deployContract || self.kind == .keyChange {
                 return true

@@ -32,6 +32,13 @@ private extension WalletWordsScreenMode {
         }
         return false
     }
+
+    var allowsRepeatedVerificationCompletion: Bool {
+        if case .backupDisable = self {
+            return true
+        }
+        return false
+    }
 }
 
 private final class WalletWordsScreenComponent: Component {
@@ -612,7 +619,11 @@ public final class WalletWordsScreen: ViewControllerComponentContainer {
             let wordsController: ViewController = self
             let verificationController = self.context.sharedContext.makeWalletImportScreen(
                 context: self.context,
-                mode: .verify(words: self.words, keyRotation: self.mode.verifiesRotatedKey),
+                mode: .verify(
+                    words: self.words,
+                    keyRotation: self.mode.verifiesRotatedKey,
+                    allowsRepeatedCompletion: self.mode.allowsRepeatedVerificationCompletion
+                ),
                 completion: { [weak self, weak wordsController] in
                     guard let self, let wordsController else {
                         return

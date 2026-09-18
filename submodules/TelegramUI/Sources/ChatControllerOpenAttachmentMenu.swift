@@ -545,6 +545,7 @@ extension ChatControllerImpl {
                         }
                         let controller = WalletSendScreen(
                             context: strongSelf.context,
+                            updatedPresentationData: strongSelf.updatedPresentationData,
                             peer: peer,
                             walletContext: walletContext,
                             displaySuccessToast: false

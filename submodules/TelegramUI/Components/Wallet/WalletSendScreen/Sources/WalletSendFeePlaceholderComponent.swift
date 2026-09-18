@@ -35,7 +35,7 @@ final class WalletSendFeePlaceholderComponent: Component {
             state: EmptyComponentState,
             transition: ComponentTransition
         ) -> CGSize {
-            let size = CGSize(width: 128.0, height: 16.0)
+            let size = CGSize(width: 93.0, height: 16.0)
             self.shape.parentState = state
             let shapeSize = self.shape.update(
                 transition: transition,

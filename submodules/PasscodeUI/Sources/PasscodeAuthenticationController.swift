@@ -169,6 +169,12 @@ public func passcodeAuthenticationController(
 public func requestPasscodeAuthentication(context: AccountContext, scope: PasscodeSession.Scope, lifetime: PasscodeSession.Lifetime = .standard, biometricReason: String = "", authenticateBiometrics: ((LAContext) throws -> PasscodeSession)? = nil) async throws -> PasscodeSession {
     let pending = PendingPasscodeAuthentication<ViewController>(create: { completion in
         passcodeAuthenticationController(context: context, scope: scope, lifetime: lifetime, biometricReason: biometricReason, authenticateBiometrics: authenticateBiometrics, completion: completion)
+    }, prepare: { controller, present in
+        if authenticateBiometrics != nil, let controller = controller as? PasscodeEntryController {
+            controller.requestBiometricsBeforePresentation(fallback: present)
+        } else {
+            present()
+        }
     }, present: { controller in
         context.sharedContext.presentGlobalController(controller, nil)
     }, dismiss: { controller in

@@ -1809,6 +1809,15 @@ private final class WalletTransactionContentComponent: Component {
                 return
             }
             sendScreen.navigationPresentation = .modal
+            if let controller = controller as? WalletTransactionScreen {
+                if let view = controller.node.hostView.findTaggedView(tag: WalletPagerView.Tag()) as? WalletPagerView {
+                    view.setDimHidden(true, animated: true)
+                } else if let view = controller.node.hostView.findTaggedView(
+                    tag: SheetComponent<ViewControllerComponentContainer.Environment>.View.Tag()
+                ) as? SheetComponent<ViewControllerComponentContainer.Environment>.View {
+                    view.setDimHidden(true, animated: true)
+                }
+            }
             controller.push(sendScreen)
 
             Queue.mainQueue().after(0.6) { [weak self] in
@@ -2087,6 +2096,17 @@ private final class WalletTransactionContentComponent: Component {
 
             let theme = environment.theme
             let transaction = self.currentTransaction()
+            let walletState = self.latestWalletState ?? (self.walletContext ?? component.walletContext)?.stateValue
+            let walletAddress: String?
+            if case let .wallet(info) = walletState?.phase {
+                walletAddress = info.address
+            } else {
+                walletAddress = nil
+            }
+            let isSelfTransfer = transaction.isSelfTransfer(walletAddress: walletAddress)
+            let displaysIncomingSelfTransfer = isSelfTransfer && (!self.isPreview || self.isFinishedPreview)
+            let displayedDirection: WalletContext.Transaction.Direction = displaysIncomingSelfTransfer ? .incoming : transaction.direction
+            let displayedAmount = displaysIncomingSelfTransfer ? abs(transaction.amount) : transaction.amount
             let showsMore = !self.isPreview || (self.isFinishedPreview && self.transaction != nil)
             let controlsSize = self.controlButtons.update(
                 transition: transition,
@@ -2216,8 +2236,8 @@ private final class WalletTransactionContentComponent: Component {
                     component: AnyComponent(WalletTransactionAmountComponent(
                         theme: theme,
                         dateTimeFormat: environment.dateTimeFormat,
-                        amount: transaction.amount,
-                        direction: transaction.direction,
+                        amount: displayedAmount,
+                        direction: displayedDirection,
                         currency: transaction.currency,
                         pending: !self.isPreview && transaction.status == .pending
                     )),
@@ -2364,7 +2384,7 @@ private final class WalletTransactionContentComponent: Component {
                 let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
                 let bubbleImage = self.commentBubbleImage(
                     presentationData: presentationData,
-                    incoming: transaction.direction == .incoming,
+                    incoming: displayedDirection == .incoming,
                     fillColor: theme.list.itemInputField.backgroundColor
                 )
                 let commentSize: CGSize
@@ -2404,7 +2424,7 @@ private final class WalletTransactionContentComponent: Component {
                 let bubbleFrame = CGRect(
                     x: floorToScreenPixels(
                         (availableSize.width - bubbleSize.width) / 2.0
-                        + (transaction.direction == .incoming ? -3.0 : 3.0)
+                        + (displayedDirection == .incoming ? -3.0 : 3.0)
                     ),
                     y: contentHeight,
                     width: bubbleSize.width,
@@ -2501,7 +2521,7 @@ private final class WalletTransactionContentComponent: Component {
                 //TODO:localize
                 counterpartyTitle = "Address"
             } else {
-                switch transaction.direction {
+                switch displayedDirection {
                 case .incoming:
                     //TODO:localize
                     counterpartyTitle = "Sender"
@@ -2603,7 +2623,7 @@ private final class WalletTransactionContentComponent: Component {
             }
             let displaysSendButton: Bool
             if !self.isPreview, transaction.kind != .keyChange, component.walletContext != nil, canSendToPeer {
-                switch transaction.direction {
+                switch displayedDirection {
                 case .incoming, .outgoing:
                     displaysSendButton = true
                 case .unknown:
@@ -2711,14 +2731,14 @@ private final class WalletTransactionContentComponent: Component {
                     component: addressComponent
                 ))
             }
-            if transaction.direction == .outgoing, !transaction.gasless, let feeComponent {
+            if isSelfTransfer || (transaction.direction == .outgoing && !transaction.gasless), let feeComponent {
                 tableItems.append(TableComponent.Item(
                     id: "fee",
                     title: feeTitle,
                     component: feeComponent
                 ))
             }
-            if !self.isPreview, transaction.gasless && transaction.direction == .outgoing {
+            if !self.isPreview, !isSelfTransfer, transaction.gasless && transaction.direction == .outgoing {
                 tableItems.append(TableComponent.Item(
                     id: "gaslessFee",
                     title: feeTitle,

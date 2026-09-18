@@ -1139,8 +1139,12 @@ private final class WalletSendScreenComponent: Component {
             )
         }
 
+        private var isSelfTransfer: Bool {
+            return WalletContext.isSelfTransfer(recipient: self.recipientAddress, walletAddress: self.walletInfo?.address)
+        }
+
         private func feesAreCovered(amount: Int64) -> Bool {
-            guard let component = self.component else {
+            guard !self.isSelfTransfer, let component = self.component else {
                 return false
             }
             let configuration = WalletConfiguration.with(appConfiguration: component.context.currentAppConfiguration.with { $0 })
@@ -1163,8 +1167,10 @@ private final class WalletSendScreenComponent: Component {
 
         private var feeDisplayState: WalletSendFeeDisplayState {
             guard self.amount > 0 else { return .hidden }
-            if case .stale = self.gaslessInfo { return .unavailable }
-            guard self.gaslessInfo.currentValue != nil else { return .loading }
+            if !self.isSelfTransfer {
+                if case .stale = self.gaslessInfo { return .unavailable }
+                guard self.gaslessInfo.currentValue != nil else { return .loading }
+            }
             if !self.shouldSendAll && self.feesAreCovered(amount: self.amount) { return .hidden }
             if let prepared = self.submittingTransfer ?? self.currentFeeRequest.flatMap({ self.preparedTransfer(for: $0) }) {
                 if self.feesAreCovered(amount: prepared.amount) || prepared.fee == 0 { return .hidden }
@@ -1449,6 +1455,7 @@ private final class WalletSendScreenComponent: Component {
                         context: component.context,
                         initialValue: NSAttributedString(string: self.comment ?? ""),
                         placeholder: placeholder,
+                        maxHeight: (controller.view.window?.bounds.height ?? UIScreen.main.bounds.height) * 0.5,
                         returnKeyType: .default,
                         keyboardType: .default,
                         autocapitalizationType: .sentences,
@@ -2425,7 +2432,7 @@ private final class WalletSendScreenComponent: Component {
                             textColor: theme.list.itemSecondaryTextColor
                         )),
                         horizontalAlignment: .natural,
-                        maximumNumberOfLines: 0
+                        maximumNumberOfLines: 5
                     )),
                     environment: {},
                     containerSize: CGSize(width: availableSize.width - 120.0, height: 1000.0)
@@ -2759,6 +2766,7 @@ public final class WalletSendScreen: ViewControllerComponentContainer, Attachmen
 
     public init(
         context: AccountContext,
+        updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? = nil,
         peer: EnginePeer,
         walletContext: WalletContext,
         initialAddress: String = "",
@@ -2782,7 +2790,8 @@ public final class WalletSendScreen: ViewControllerComponentContainer, Attachmen
             ),
             navigationBarAppearance: .none,
             statusBarStyle: .ignore,
-            theme: .default
+            theme: .default,
+            updatedPresentationData: updatedPresentationData
         )
 
         self.navigationItem.leftBarButtonItem = UIBarButtonItem(customView: UIView())
@@ -2790,6 +2799,7 @@ public final class WalletSendScreen: ViewControllerComponentContainer, Attachmen
 
     public init(
         context: AccountContext,
+        updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? = nil,
         walletContext: WalletContext,
         address: String,
         initialAmountNanograms: Int64? = nil,
@@ -2811,7 +2821,8 @@ public final class WalletSendScreen: ViewControllerComponentContainer, Attachmen
             ),
             navigationBarAppearance: .none,
             statusBarStyle: .ignore,
-            theme: .default
+            theme: .default,
+            updatedPresentationData: updatedPresentationData
         )
 
         self.navigationItem.leftBarButtonItem = UIBarButtonItem(customView: UIView())
