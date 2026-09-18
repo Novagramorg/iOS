@@ -1697,7 +1697,9 @@ public final class SqliteValueBox: ValueBox {
                     
                     statement.reset()
                 case .int64:
-                    if start.reversed < end.reversed {
+                    checkTableKey(table, start)
+                    checkTableKey(table, end)
+                    if start.getInt64(0) < end.getInt64(0) {
                         if limit <= 0 {
                             statement = self.rangeValueAscStatementNoLimit(table, start: start, end: end)
                         } else {
@@ -1832,7 +1834,9 @@ public final class SqliteValueBox: ValueBox {
                     
                     statement.reset()
                 case .int64:
-                    if start.reversed < end.reversed {
+                    checkTableKey(table, start)
+                    checkTableKey(table, end)
+                    if start.getInt64(0) < end.getInt64(0) {
                         if limit <= 0 {
                             statement = self.rangeKeyAscStatementNoLimit(table, start: start, end: end)
                         } else {
