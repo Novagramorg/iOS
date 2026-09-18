@@ -144,7 +144,19 @@ public final class MediaBoxFileContextV2Impl: MediaBoxFileContext {
                 self.fileMap.serialize(manager: self.manager, to: self.metaPath)
             } else {
                 do {
-                    self.fileMap = try MediaBoxFileMap.read(manager: self.manager, path: self.metaPath)
+                    let storedMap = try MediaBoxFileMap.read(manager: self.manager, path: self.metaPath)
+                    // The map is only trustworthy if the partial file actually extends as
+                    // far as the map says. A crash between a write and the map update, or
+                    // a truncated partial, would otherwise let the map vouch for bytes that
+                    // are not on disk.
+                    if let lastRange = storedMap.ranges.ranges.last, lastRange.upperBound > (fileSize(self.partialPath) ?? 0) {
+                        postboxLog("MediaBoxFileContextV2Impl: discarding file map for \(self.partialPath): claims up to \(lastRange.upperBound) bytes but the partial file is shorter")
+                        let _ = try? FileManager.default.removeItem(atPath: self.metaPath)
+                        self.fileMap = MediaBoxFileMap()
+                        self.fileMap.serialize(manager: self.manager, to: self.metaPath)
+                    } else {
+                        self.fileMap = storedMap
+                    }
                 } catch {
                     let _ = try? FileManager.default.removeItem(atPath: self.metaPath)
                     self.fileMap = MediaBoxFileMap()
@@ -185,6 +197,9 @@ public final class MediaBoxFileContextV2Impl: MediaBoxFileContext {
                 if !self.isComplete, let truncationSize = self.fileMap.truncationSize, truncationSize == self.fileMap.sum {
                     self.isComplete = true
                     
+                    // Once linked, the complete path is served as-is; make sure the
+                    // bytes the map vouches for are on disk first.
+                    self.destinationFile?.sync()
                     let linkResult = link(self.partialPath, self.fullPath)
                     if linkResult != 0 {
                         postboxLog("MediaBoxFileContextV2Impl: error while linking \(self.partialPath): \(linkResult)")
@@ -442,6 +457,8 @@ public final class MediaBoxFileContextV2Impl: MediaBoxFileContext {
             if !self.isComplete, let truncationSize = self.fileMap.truncationSize, truncationSize == self.fileMap.sum {
                 self.isComplete = true
                 
+                // See `request(...)`: flush before the partial becomes the complete file.
+                self.destinationFile?.sync()
                 let linkResult = link(self.partialPath, self.fullPath)
                 if linkResult != 0 {
                     postboxLog("MediaBoxFileContextV2Impl: error while linking \(self.partialPath): \(linkResult)")
@@ -452,33 +469,45 @@ public final class MediaBoxFileContextV2Impl: MediaBoxFileContext {
         }
         
         private func processWrite(resourceOffset: Int64, data: Data, dataRange: Range<Int64>) {
-            if let destinationFile = self.destinationFile {
-                do {
-                    var success = true
-                    try destinationFile.access { fd in
-                        if fd.seek(position: resourceOffset) {
-                            let written = data.withUnsafeBytes { rawBytes -> Int in
-                                let bytes = rawBytes.baseAddress!.assumingMemoryBound(to: UInt8.self)
-                                
-                                return fd.write(bytes.advanced(by: Int(dataRange.lowerBound)), count: dataRange.count)
-                            }
-                            assert(written == dataRange.count)
-                        } else {
-                            success = false
+            guard let destinationFile = self.destinationFile else {
+                postboxLog("MediaBoxFileContextV2Impl: no destination file for \(self.partialPath)")
+                self.processFetchError(error: .generic)
+                return
+            }
+            
+            var failure: String?
+            do {
+                try destinationFile.access { fd in
+                    if fd.seek(position: resourceOffset) {
+                        let written = data.withUnsafeBytes { rawBytes -> Int in
+                            let bytes = rawBytes.baseAddress!.assumingMemoryBound(to: UInt8.self)
+                            
+                            return fd.write(bytes.advanced(by: Int(dataRange.lowerBound)), count: dataRange.count)
                         }
-                    }
-                    if success {
-                        let range: Range<Int64> = resourceOffset ..< (resourceOffset + Int64(dataRange.count))
-                        self.fileMap.fill(range)
-                        self.fileMap.serialize(manager: self.manager, to: self.metaPath)
-                        
-                        self.storageBox?.update(id: self.resourceId, size: self.fileMap.sum)
+                        // `write(2)` may return short (disk full, file-size limit) or -1.
+                        // Only a full write may be recorded in the map: the map is the
+                        // authority for what is on disk, and once `sum == truncationSize`
+                        // the partial is linked as the complete file with no way back.
+                        if written != dataRange.count {
+                            failure = "short write: \(written) of \(dataRange.count) bytes at \(resourceOffset)"
+                        }
                     } else {
-                        postboxLog("MediaBoxFileContextV2Impl: error seeking file to \(resourceOffset) at \(self.partialPath)")
+                        failure = "error seeking to \(resourceOffset)"
                     }
-                } catch let e {
-                    postboxLog("MediaBoxFileContextV2Impl: error writing file at \(self.partialPath): \(e)")
                 }
+            } catch let e {
+                failure = "error accessing file: \(e)"
+            }
+            
+            if let failure = failure {
+                postboxLog("MediaBoxFileContextV2Impl: \(failure) at \(self.partialPath)")
+                self.processFetchError(error: .generic)
+            } else {
+                let range: Range<Int64> = resourceOffset ..< (resourceOffset + Int64(dataRange.count))
+                self.fileMap.fill(range)
+                self.fileMap.serialize(manager: self.manager, to: self.metaPath)
+                
+                self.storageBox?.update(id: self.resourceId, size: self.fileMap.sum)
             }
         }
         
