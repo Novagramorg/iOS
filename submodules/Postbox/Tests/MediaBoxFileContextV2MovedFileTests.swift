@@ -160,6 +160,28 @@ final class MediaBoxFileContextV2MovedFileTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: self.metaPath), "meta file must not linger next to the complete file")
     }
 
+    func testTrailingSizeUpdateAfterAMoveDoesNotRecreateTheMetaFile() {
+        let payload = Data(repeating: 0x55, count: 20)
+        let source = self.writeSourceFile(named: "download.tmp", payload: payload)
+
+        // Some fetchers report the size after handing over the file; that trailing
+        // event must not write a map describing a partial file that no longer exists.
+        let outcome = self.fetch(range: 0 ..< 20, with: { _ in
+            return Signal { subscriber in
+                subscriber.putNext(.moveLocalFile(path: source))
+                subscriber.putNext(.resourceSizeUpdated(20))
+                subscriber.putCompletion()
+                return EmptyDisposable
+            }
+        })
+
+        guard case .completed = outcome else {
+            return XCTFail("expected completion, got \(outcome)")
+        }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: self.fullPath))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: self.metaPath), "meta file must not be recreated after the move")
+    }
+
     func testFailedMoveReportsAnErrorInsteadOfHanging() {
         let missingSource = self.basePath + "/does-not-exist.tmp"
 

@@ -1972,9 +1972,15 @@ public final class PostboxDecoder {
     
     public func decodeArray<T: Decodable>(_ type: [T].Type, forKey key: String) -> [T]? {
         if PostboxDecoder.positionOnKey(self.buffer.memory, offset: &self.offset, maxOffset: self.buffer.length, length: self.buffer.length, key: key, valueType: .ObjectArray) {
+            if self.offset + 4 > self.buffer.length {
+                return nil
+            }
             var count: Int32 = 0
             memcpy(&count, self.buffer.memory + self.offset, 4)
             self.offset += 4
+            if count < 0 {
+                return nil
+            }
             
             var array: [T] = []
             array.reserveCapacity(Int(count))

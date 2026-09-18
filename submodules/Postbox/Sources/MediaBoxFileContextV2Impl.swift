@@ -315,7 +315,7 @@ public final class MediaBoxFileContextV2Impl: MediaBoxFileContext {
             assert(self.queue.isCurrent())
             
             if data.count == Int(range.upperBound - range.lowerBound) {
-                self.processFetchResult(result: .dataPart(resourceOffset: range.lowerBound, data: data, range: 0 ..< Int64(data.count), complete: false))
+                self.processFetchResult(result: .dataPart(resourceOffset: range.lowerBound, data: data, range: 0 ..< Int64(data.count), complete: false), from: nil)
             } else {
                 assertionFailure()
             }
@@ -365,19 +365,19 @@ public final class MediaBoxFileContextV2Impl: MediaBoxFileContext {
                             self.hasPerformedAnyFetch = true
                             
                             let queue = self.queue
-                            disposable.set(fetchImpl(pendingFetch.ranges.get()).startStrict(next: { [weak self] result in
+                            disposable.set(fetchImpl(pendingFetch.ranges.get()).startStrict(next: { [weak self, pendingFetch] result in
                                 queue.async {
                                     guard let `self` = self else {
                                         return
                                     }
-                                    self.processFetchResult(result: result)
+                                    self.processFetchResult(result: result, from: pendingFetch)
                                 }
-                            }, error: { [weak self] error in
+                            }, error: { [weak self, pendingFetch] error in
                                 queue.async {
                                     guard let `self` = self else {
                                         return
                                     }
-                                    self.processFetchError(error: error)
+                                    self.processFetchError(error: error, from: pendingFetch)
                                 }
                             }))
                         }
@@ -396,12 +396,32 @@ public final class MediaBoxFileContextV2Impl: MediaBoxFileContext {
             self.updateStatusRequests()
         }
         
-        private func processFetchResult(result: MediaResourceDataFetchResult) {
+        /// `fetch` is the fetch this result came from, or nil for a local write
+        /// (`internalStore`). A result from a fetch that is no longer the pending one
+        /// is dropped: its error closure may already have been queued from another
+        /// thread when `updateRequests` replaced it, and acting on it would tear down
+        /// the replacement.
+        private func processFetchResult(result: MediaResourceDataFetchResult, from fetch: PendingFetch?) {
             assert(self.queue.isCurrent())
+            
+            if let fetch = fetch, self.pendingFetch !== fetch {
+                return
+            }
+            
+            // Once the complete file exists nothing here can improve on it, and a
+            // trailing size update would rewrite a map for a partial file that has
+            // already been removed.
+            if self.isComplete {
+                self.updateRequests()
+                return
+            }
             
             switch result {
             case let .dataPart(resourceOffset, data, dataRange, complete):
-                self.processWrite(resourceOffset: resourceOffset, data: data, dataRange: dataRange)
+                if !self.processWrite(resourceOffset: resourceOffset, data: data, dataRange: dataRange) {
+                    self.handleWriteFailure(from: fetch)
+                    return
+                }
                 
                 if complete {
                     if let maxOffset = self.fileMap.ranges.ranges.reversed().first?.upperBound {
@@ -421,14 +441,17 @@ public final class MediaBoxFileContextV2Impl: MediaBoxFileContext {
                 self.fileMap.progressUpdated(progress)
                 self.updateStatusRequests()
             case let .replaceHeader(data, range):
-                self.processWrite(resourceOffset: 0, data: data, dataRange: range)
+                if !self.processWrite(resourceOffset: 0, data: data, dataRange: range) {
+                    self.handleWriteFailure(from: fetch)
+                    return
+                }
             case let .moveLocalFile(path):
                 do {
                     try FileManager.default.moveItem(atPath: path, toPath: self.fullPath)
                     self.processMovedFile()
                 } catch let e {
                     postboxLog("MediaBoxFileContextV2Impl: error moving temp file at \(self.fullPath): \(e)")
-                    self.processFetchError(error: .generic)
+                    self.processFetchError(error: .generic, from: nil)
                 }
             case let .moveTempFile(file):
                 do {
@@ -436,7 +459,7 @@ public final class MediaBoxFileContextV2Impl: MediaBoxFileContext {
                     self.processMovedFile()
                 } catch let e {
                     postboxLog("MediaBoxFileContextV2Impl: error moving temp file at \(self.fullPath): \(e)")
-                    self.processFetchError(error: .generic)
+                    self.processFetchError(error: .generic, from: nil)
                 }
                 TempBox.shared.dispose(file)
             case let .copyLocalItem(localItem):
@@ -444,7 +467,7 @@ public final class MediaBoxFileContextV2Impl: MediaBoxFileContext {
                     self.processMovedFile()
                 } else {
                     postboxLog("MediaBoxFileContextV2Impl: error copying local item to \(self.fullPath)")
-                    self.processFetchError(error: .generic)
+                    self.processFetchError(error: .generic, from: nil)
                 }
             case .reset:
                 if !self.fileMap.ranges.isEmpty {
@@ -468,11 +491,13 @@ public final class MediaBoxFileContextV2Impl: MediaBoxFileContext {
             self.updateRequests()
         }
         
-        private func processWrite(resourceOffset: Int64, data: Data, dataRange: Range<Int64>) {
+        /// Writes `dataRange` of `data` at `resourceOffset` and records it in the map.
+        /// Returns false when the bytes are not known to be on disk; the caller decides
+        /// what that means (a fetch fails, a local store is merely logged).
+        private func processWrite(resourceOffset: Int64, data: Data, dataRange: Range<Int64>) -> Bool {
             guard let destinationFile = self.destinationFile else {
                 postboxLog("MediaBoxFileContextV2Impl: no destination file for \(self.partialPath)")
-                self.processFetchError(error: .generic)
-                return
+                return false
             }
             
             var failure: String?
@@ -501,13 +526,25 @@ public final class MediaBoxFileContextV2Impl: MediaBoxFileContext {
             
             if let failure = failure {
                 postboxLog("MediaBoxFileContextV2Impl: \(failure) at \(self.partialPath)")
-                self.processFetchError(error: .generic)
+                return false
             } else {
                 let range: Range<Int64> = resourceOffset ..< (resourceOffset + Int64(dataRange.count))
                 self.fileMap.fill(range)
                 self.fileMap.serialize(manager: self.manager, to: self.metaPath)
                 
                 self.storageBox?.update(id: self.resourceId, size: self.fileMap.sum)
+                return true
+            }
+        }
+        
+        /// A write that could not be completed. Coming from a fetch, the fetch has
+        /// failed; coming from a local store there is no fetch to fail, and an
+        /// unrelated in-flight fetch must not be torn down for it.
+        private func handleWriteFailure(from fetch: PendingFetch?) {
+            if fetch != nil {
+                self.processFetchError(error: .generic, from: nil)
+            } else {
+                self.updateRequests()
             }
         }
         
@@ -523,12 +560,18 @@ public final class MediaBoxFileContextV2Impl: MediaBoxFileContext {
             } else {
                 // The fetcher claimed to have delivered the file but nothing is there.
                 // Fail the waiting requests rather than leaving them pending forever.
-                self.processFetchError(error: .generic)
+                self.processFetchError(error: .generic, from: nil)
             }
         }
         
-        private func processFetchError(error: MediaResourceDataFetchError) {
+        /// `fetch` is the fetch the error came from, or nil when the failure was
+        /// detected locally for the current fetch. See `processFetchResult`.
+        private func processFetchError(error: MediaResourceDataFetchError, from fetch: PendingFetch?) {
             assert(self.queue.isCurrent())
+            
+            if let fetch = fetch, self.pendingFetch !== fetch {
+                return
+            }
             
             // The fetch signal has terminated. Forget it, and forget the ranges it was
             // believed to be serving: `updateRequests` deduplicates new requests against

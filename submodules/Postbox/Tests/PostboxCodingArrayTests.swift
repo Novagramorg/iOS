@@ -40,6 +40,32 @@ final class PostboxCodingArrayTests: XCTestCase {
         XCTAssertEqual(decoder.decodeOptionalInt32ForKey("after"), 7)
     }
 
+    /// Hand-builds `[keyLength][key][type = ObjectArray]` followed by `payload`.
+    private func objectArrayValue(forKey key: String, payload: Data) -> MemoryBuffer {
+        var data = Data()
+        let keyData = key.data(using: .utf8)!
+        data.append(UInt8(keyData.count))
+        data.append(keyData)
+        data.append(UInt8(bitPattern: ValueType.ObjectArray.rawValue))
+        data.append(payload)
+        return MemoryBuffer(data: data)
+    }
+
+    func testDecodeArrayRejectsANegativeCountInsteadOfTrapping() {
+        var count: Int32 = -1
+        var payload = Data()
+        withUnsafeBytes(of: &count) { payload.append(contentsOf: $0) }
+        let decoder = PostboxDecoder(buffer: self.objectArrayValue(forKey: "items", payload: payload))
+
+        XCTAssertNil(decoder.decodeArray([Item].self, forKey: "items"))
+    }
+
+    func testDecodeArrayRejectsAValueTruncatedBeforeItsCount() {
+        let decoder = PostboxDecoder(buffer: self.objectArrayValue(forKey: "items", payload: Data()))
+
+        XCTAssertNil(decoder.decodeArray([Item].self, forKey: "items"))
+    }
+
     func testDecodeArrayReadsAnArrayWrittenByTheCodableAdapter() {
         struct Outer: Codable {
             var items: [Item]
