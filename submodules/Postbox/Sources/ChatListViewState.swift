@@ -690,7 +690,10 @@ private final class ChatListViewSpaceState {
             }
         }
         
-        if !transaction.currentUpdatedPeerNotificationSettings.isEmpty {
+        // The global settings take part in resolving any peer that keeps the default mute state, so a change to
+        // them invalidates the resolved value of every entry, not just of the peers whose own settings changed.
+        let updatedGlobalNotificationSettings = transaction.updatedGlobalNotificationSettings
+        if !transaction.currentUpdatedPeerNotificationSettings.isEmpty || updatedGlobalNotificationSettings {
             let globalNotificationSettings = postbox.getGlobalNotificationSettings(transaction: currentTransaction)
             
             if self.orderedEntries.mutableScan({ entry in
@@ -698,17 +701,24 @@ private final class ChatListViewSpaceState {
                 case let .MessageEntry(entryData):
                     if let peer = entryData.renderedPeer.peer {
                         let notificationsPeerId = peer.notificationSettingsPeerId ?? peer.id
-                        if let (_, updated) = transaction.currentUpdatedPeerNotificationSettings[notificationsPeerId] {
-                            let isRemovedFromTotalUnreadCount = resolvedIsRemovedFromTotalUnreadCount(globalSettings: globalNotificationSettings, peer: peer, peerSettings: updated)
-                            
-                            var entryData = entryData
-                            entryData.notificationSettings = updated
-                            entryData.isRemovedFromTotalUnreadCount = isRemovedFromTotalUnreadCount
-                            
-                            return .MessageEntry(entryData)
-                        } else {
+                        let updatedPeerSettings = transaction.currentUpdatedPeerNotificationSettings[notificationsPeerId]?.1
+                        if updatedPeerSettings == nil && !updatedGlobalNotificationSettings {
                             return nil
                         }
+                        // Every write that changes a peer's effective settings also populates
+                        // currentUpdatedPeerNotificationSettings, so on a global-only transaction the stored value
+                        // is still authoritative and does not need to be re-read from the table.
+                        let peerSettings = updatedPeerSettings ?? entryData.notificationSettings
+                        let isRemovedFromTotalUnreadCount = resolvedIsRemovedFromTotalUnreadCount(globalSettings: globalNotificationSettings, peer: peer, peerSettings: peerSettings)
+                        if updatedPeerSettings == nil && isRemovedFromTotalUnreadCount == entryData.isRemovedFromTotalUnreadCount {
+                            return nil
+                        }
+                        
+                        var entryData = entryData
+                        entryData.notificationSettings = peerSettings
+                        entryData.isRemovedFromTotalUnreadCount = isRemovedFromTotalUnreadCount
+                        
+                        return .MessageEntry(entryData)
                     } else {
                         return nil
                     }
