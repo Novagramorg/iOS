@@ -134,7 +134,7 @@ final class MessageHistoryTableFixture {
             existingGlobalMessageTags: [],
             peerNamespacesRequiringMessageTextIndex: [],
             peerSummaryCounterTags: { _, _ in PeerSummaryCounterTags() },
-            peerSummaryIsThreadBased: { _, _ in (false, false) },
+            peerSummaryIsThreadBased: { peer, _ in ((peer as? FixturePeer)?.isForum ?? false, false) },
             additionalChatListIndexNamespace: nil,
             messageNamespacesRequiringGroupStatsValidation: [],
             defaultMessageNamespaceReadStates: [:],

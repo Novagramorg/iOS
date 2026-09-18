@@ -13,13 +13,17 @@ final class FixturePeer: Peer {
     let containerPeerId: PeerId?
     let associatedPeerId: PeerId?
     let associatedPeerOverridesIdentity: Bool
+    /// A forum's read counter comes from its per-topic summaries rather than its read
+    /// state (`SeedConfiguration.peerSummaryIsThreadBased` reads this).
+    let isForum: Bool
 
-    init(id: PeerId, title: String, containerPeerId: PeerId? = nil, associatedPeerId: PeerId? = nil, associatedPeerOverridesIdentity: Bool = false) {
+    init(id: PeerId, title: String, containerPeerId: PeerId? = nil, associatedPeerId: PeerId? = nil, associatedPeerOverridesIdentity: Bool = false, isForum: Bool = false) {
         self.id = id
         self.title = title
         self.containerPeerId = containerPeerId
         self.associatedPeerId = associatedPeerId
         self.associatedPeerOverridesIdentity = associatedPeerOverridesIdentity
+        self.isForum = isForum
     }
 
     init(decoder: PostboxDecoder) {
@@ -28,6 +32,7 @@ final class FixturePeer: Peer {
         self.containerPeerId = decoder.decodeOptionalInt64ForKey("c").map(PeerId.init)
         self.associatedPeerId = decoder.decodeOptionalInt64ForKey("a").map(PeerId.init)
         self.associatedPeerOverridesIdentity = decoder.decodeBoolForKey("o", orElse: false)
+        self.isForum = decoder.decodeBoolForKey("f", orElse: false)
     }
 
     func encode(_ encoder: PostboxEncoder) {
@@ -40,6 +45,7 @@ final class FixturePeer: Peer {
             encoder.encodeInt64(associatedPeerId.toInt64(), forKey: "a")
         }
         encoder.encodeBool(self.associatedPeerOverridesIdentity, forKey: "o")
+        encoder.encodeBool(self.isForum, forKey: "f")
     }
 
     var indexName: PeerIndexNameRepresentation { return .title(title: self.title, addressNames: []) }
@@ -49,7 +55,7 @@ final class FixturePeer: Peer {
 
     func isEqual(_ other: Peer) -> Bool {
         guard let other = other as? FixturePeer else { return false }
-        return other.id == self.id && other.title == self.title
+        return other.id == self.id && other.title == self.title && other.isForum == self.isForum
     }
 }
 
