@@ -123,7 +123,9 @@ final class MessageHistoryTableFixture {
         return SeedConfiguration(
             globalMessageIdsPeerIdNamespaces: [],
             initializeChatListWithHole: (topLevel: nil, groups: nil),
-            messageHoles: [:],
+            // Holes are allowed in the message namespace for every peer namespace the
+            // tests use; the history-view state asserts this before it will track holes.
+            messageHoles: [PeerId.Namespace._internalFromInt32Value(0): [messageNamespace: Set()]],
             upgradedMessageHoles: [:],
             messageThreadHoles: { _, _ in nil },
             existingMessageTags: [],
@@ -132,7 +134,7 @@ final class MessageHistoryTableFixture {
             existingGlobalMessageTags: [],
             peerNamespacesRequiringMessageTextIndex: [],
             peerSummaryCounterTags: { _, _ in PeerSummaryCounterTags() },
-            peerSummaryIsThreadBased: { _, _ in (false, false) },
+            peerSummaryIsThreadBased: { peer, _ in ((peer as? FixturePeer)?.isForum ?? false, false) },
             additionalChatListIndexNamespace: nil,
             messageNamespacesRequiringGroupStatsValidation: [],
             defaultMessageNamespaceReadStates: [:],
@@ -248,6 +250,38 @@ final class MessageHistoryTableFixture {
             table.removeMessages(ids, operationsByPeerId: &ops.operationsByPeerId, updatedMedia: &ops.updatedMedia, unsentMessageOperations: &ops.unsentMessageOperations, updatedPeerReadStateOperations: &ops.updatedPeerReadStateOperations, globalTagsOperations: &ops.globalTagsOperations, pendingActionsOperations: &ops.pendingActionsOperations, updatedMessageActionsSummaries: &ops.updatedMessageActionsSummaries, updatedMessageTagSummaries: &ops.updatedMessageTagSummaries, invalidateMessageTagSummaries: &ops.invalidateMessageTagSummaries, localTagsOperations: &ops.localTagsOperations, timestampBasedMessageAttributesOperations: &ops.timestampBasedMessageAttributesOperations, forEachMedia: nil)
             return ops
         }
+    }
+
+    /// A freshly initialised global tag holds one hole at the upper bound, and a message
+    /// below a hole is not indexed. Like the app's hole fill, this replaces that hole with
+    /// one at the lower bound: everything above it is accepted, and because the tag's
+    /// range is no longer empty the upper hole is not recreated after a cache clear.
+    func fillGlobalTagHole(_ tag: GlobalMessageTags) {
+        self.transaction { _, _ in
+            self.globalMessageHistoryTagsTable.ensureInitialized(tag)
+            self.globalMessageHistoryTagsTable.remove(tag, index: MessageIndex.absoluteUpperBound())
+            self.globalMessageHistoryTagsTable.addHole(tag, index: MessageIndex.absoluteLowerBound())
+        }
+    }
+
+    /// Marks the region below `index` as not loaded for `tag`.
+    func addGlobalTagHole(_ tag: GlobalMessageTags, index: MessageIndex) {
+        self.transaction { _, _ in
+            self.globalMessageHistoryTagsTable.addHole(tag, index: index)
+        }
+    }
+
+    /// Indices the global-tags table lists under `tag`, excluding holes.
+    func globalTagIndices(_ tag: GlobalMessageTags) -> [MessageIndex] {
+        var indices: [MessageIndex] = []
+        self.queue.sync {
+            for entry in self.globalMessageHistoryTagsTable.laterEntries(tag, index: MessageIndex.absoluteLowerBound(), count: 1000) {
+                if case let .message(index) = entry {
+                    indices.append(index)
+                }
+            }
+        }
+        return indices
     }
 
     /// The media table's row for `id`: `.Direct(media, referenceCount)` when shared,
