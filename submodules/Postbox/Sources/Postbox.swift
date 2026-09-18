@@ -3535,6 +3535,24 @@ final class PostboxImpl {
         }
     }
     
+    /// The peers a chat's cached data refers to, plus the chat's container peer. The
+    /// history view's initial load and its replay must produce the same map, so both
+    /// call this.
+    func cachedPeerDataPeers(peerId: PeerId, cachedData: CachedPeerData?) -> [PeerId: Peer] {
+        var peers: [PeerId: Peer] = [:]
+        for id in cachedData?.peerIds ?? Set() {
+            if let peer = self.peerTable.get(id) {
+                peers[id] = peer
+            }
+        }
+        if let peer = self.peerTable.get(peerId), let containerPeerId = peer.containerPeerId {
+            if let containerPeer = self.peerTable.get(containerPeerId) {
+                peers[containerPeerId] = containerPeer
+            }
+        }
+        return peers
+    }
+
     fileprivate func syncAroundMessageHistoryViewForPeerId(
         subscriber: Subscriber<(MessageHistoryView, ViewUpdateType, InitialMessageHistoryData?), NoError>,
         peerIds: MessageHistoryViewInput,
@@ -3606,18 +3624,7 @@ final class PostboxImpl {
                     }
                     additionalDataEntries.append(.cachedPeerDataMessages(peerId, messages))
                 case let .cachedPeerDataPeers(peerId):
-                    var peers: [PeerId: Peer] = [:]
-                    for id in self.cachedPeerDataTable.get(peerId)?.peerIds ?? Set() {
-                        if let peer = self.peerTable.get(peerId) {
-                            peers[id] = peer
-                        }
-                    }
-                    if let peer = self.peerTable.get(peerId), let containerPeerId = peer.containerPeerId {
-                        if let containerPeer = self.peerTable.get(containerPeerId) {
-                            peers[containerPeerId] = containerPeer
-                        }
-                    }
-                    additionalDataEntries.append(.cachedPeerDataPeers(peerId, peers))
+                    additionalDataEntries.append(.cachedPeerDataPeers(peerId, self.cachedPeerDataPeers(peerId: peerId, cachedData: self.cachedPeerDataTable.get(peerId))))
                 case let .message(id):
                     let messages = self.getMessageGroup(at: id)
                     additionalDataEntries.append(.message(id, messages ?? []))

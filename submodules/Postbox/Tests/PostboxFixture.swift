@@ -24,6 +24,7 @@ final class PostboxFixture {
 
     init(name: String) {
         let _ = FixtureMedia.register
+        let _ = FixturePeer.register
         self.queue = Queue(name: name)
         self.basePath = NSTemporaryDirectory() + name + "-" + UUID().uuidString
         let queue = self.queue
@@ -90,20 +91,20 @@ final class PostboxFixture {
 
     // MARK: - Views
 
-    /// Every value a combined view has produced so far, oldest first.
-    final class ViewRecorder<View: PostboxView> {
+    /// Every value a signal has produced so far, oldest first.
+    final class Recorder<Value> {
         private let lock = NSLock()
-        private var recorded: [View] = []
+        private var recorded: [Value] = []
         private let semaphore = DispatchSemaphore(value: 0)
 
-        fileprivate func record(_ view: View) {
+        fileprivate func record(_ value: Value) {
             self.lock.lock()
-            self.recorded.append(view)
+            self.recorded.append(value)
             self.lock.unlock()
             self.semaphore.signal()
         }
 
-        var values: [View] {
+        var values: [Value] {
             self.lock.lock()
             defer { self.lock.unlock() }
             return self.recorded
@@ -111,11 +112,11 @@ final class PostboxFixture {
 
         /// Blocks until at least `count` values have arrived (or fails the test).
         @discardableResult
-        func waitForValues(count: Int, file: StaticString = #file, line: UInt = #line) -> [View] {
+        func waitForValues(count: Int, file: StaticString = #file, line: UInt = #line) -> [Value] {
             let deadline = DispatchTime.now() + 10.0
             while self.values.count < count {
                 if self.semaphore.wait(timeout: deadline) == .timedOut {
-                    XCTFail("expected \(count) view values, got \(self.values.count)", file: file, line: line)
+                    XCTFail("expected \(count) values, got \(self.values.count)", file: file, line: line)
                     break
                 }
             }
@@ -123,16 +124,28 @@ final class PostboxFixture {
         }
     }
 
-    func observe<View: PostboxView>(_ key: PostboxViewKey, as type: View.Type) -> ViewRecorder<View> {
-        let recorder = ViewRecorder<View>()
-        let disposable = self.postbox.combinedView(keys: [key]).start(next: { combined in
+    /// Records every value of `signal` for the rest of the fixture's life.
+    func observe<Value>(_ signal: Signal<Value, NoError>) -> Recorder<Value> {
+        let recorder = Recorder<Value>()
+        self.disposables.append(signal.start(next: { value in
+            recorder.record(value)
+        }))
+        return recorder
+    }
+
+    func observe<View: PostboxView>(_ key: PostboxViewKey, as type: View.Type) -> Recorder<View> {
+        return self.observe(self.postbox.combinedView(keys: [key]) |> mapToSignal { combined -> Signal<View, NoError> in
             if let view = combined.views[key] as? View {
-                recorder.record(view)
+                return .single(view)
             } else {
                 XCTFail("combined view has no \(View.self) for \(key)")
+                return .complete()
             }
         })
-        self.disposables.append(disposable)
-        return recorder
+    }
+
+    /// The message history around the top of `peerId`'s chat, with `additionalData`.
+    func observeHistory(peerId: PeerId, additionalData: [AdditionalMessageHistoryViewData]) -> Recorder<MessageHistoryView> {
+        return self.observe(self.postbox.aroundMessageHistoryViewForLocation(.peer(peerId: peerId, threadId: nil), anchor: .upperBound, ignoreMessagesInTimestampRange: nil, ignoreMessageIds: [], count: 10, fixedCombinedReadStates: nil, topTaggedMessageIdNamespaces: [], tag: nil, appendMessagesFromTheSameGroup: false, namespaces: .all, orderStatistics: [], additionalData: additionalData) |> map { $0.0 })
     }
 }

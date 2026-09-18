@@ -67,7 +67,7 @@ final class MessageOfInterestHolesViewTests: XCTestCase {
         return min(start.id, end.id) ... max(start.id, end.id)
     }
 
-    private func observeHoles() -> PostboxFixture.ViewRecorder<MessageOfInterestHolesView> {
+    private func observeHoles() -> PostboxFixture.Recorder<MessageOfInterestHolesView> {
         return self.fixture.observe(.messageOfInterestHole(location: .peer(peerId: self.peer, threadId: nil), namespace: self.namespace, count: 20), as: MessageOfInterestHolesView.self)
     }
 
