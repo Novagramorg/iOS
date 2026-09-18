@@ -7841,7 +7841,9 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                         return false
                     }
                     
-                    if !strongSelf.traceVisibility() {
+                    // The proximity dim overlay is up for as long as the phone is at the user's ear,
+                    // which is exactly when raise-to-listen has to work, so look through it here.
+                    if !strongSelf.traceVisibility(ignoringScreenDimOverlay: true) {
                         return false
                     }
                     if strongSelf.currentContextController != nil {

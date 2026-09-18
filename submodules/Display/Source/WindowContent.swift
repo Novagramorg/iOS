@@ -1568,6 +1568,13 @@ private class CustomDimController: ViewController {
             
             self.backgroundColor = .black
         }
+        
+        override func didLoad() {
+            super.didLoad()
+            
+            // Lets traceVisibility(ignoringScreenDimOverlay: true) look through this overlay.
+            self.layer.name = screenDimOverlayLayerName
+        }
     }
     override init(navigationBarPresentationData: NavigationBarPresentationData?) {
         super.init(navigationBarPresentationData: nil)
