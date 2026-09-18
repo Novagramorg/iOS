@@ -11,7 +11,11 @@ public final class SharedCallAudioContext {
     let audioDevice: OngoingCallContext.AudioDevice?
     let callKitIntegration: CallKitIntegration?
     
-    private let defaultToSpeaker: Bool
+    /// The call wants the loudspeaker unless a headset is connected. Decided from the cached
+    /// headset flag at construction and revised once the session reports the real route under
+    /// the call's category (see `resolveInitialOutput`), because the cached flag can be stale
+    /// and a paired headset is not the current route until the call's category is set.
+    private var defaultToSpeaker: Bool
     
     private var audioSessionDisposable: Disposable?
     private var audioSessionShouldBeActiveDisposable: Disposable?
@@ -172,7 +176,17 @@ public final class SharedCallAudioContext {
                             callKitIntegration.applyVoiceChatOutputMode(outputMode: .custom(self.currentAudioOutputValue))
                         }
                     } else {
-                        audioSessionControl.setOutputMode(.custom(self.currentAudioOutputValue))
+                        if self.isInitialOutputPending {
+                            // Forcing the speaker here would tear down a headset route before
+                            // anything has looked at it (the log of the 2026-09-18 report shows
+                            // exactly that: a 500 ms speaker override on top of connected
+                            // AirPods). Let the system route first; activation below reports
+                            // what the route is under the call's category, and the speaker is
+                            // applied only if no headset is in it.
+                            audioSessionControl.setOutputMode(.system)
+                        } else {
+                            audioSessionControl.setOutputMode(.custom(self.currentAudioOutputValue))
+                        }
                         audioSessionControl.setup(synchronous: true)
                     }
                     
@@ -180,7 +194,14 @@ public final class SharedCallAudioContext {
                     if let callKitIntegration = self.callKitIntegration {
                         audioSessionActive = callKitIntegration.audioSessionActive
                     } else {
-                        audioSessionControl.activate({ _ in })
+                        audioSessionControl.activate({ [weak self] state in
+                            Queue.mainQueue().async {
+                                guard let self, !self.isRetired else {
+                                    return
+                                }
+                                self.resolveInitialOutput(isHeadsetConnected: state.isHeadsetConnected)
+                            }
+                        })
                         audioSessionActive = .single(true)
                     }
                     self.isAudioSessionActivePromise.set(audioSessionActive)
@@ -193,6 +214,8 @@ public final class SharedCallAudioContext {
                         
                         self.isInitialOutputPending = false
                         
+                        // `defaultToSpeaker` has been revised by `resolveInitialOutput` or a
+                        // headset route report by now, so this cannot override a headset.
                         if self.defaultToSpeaker, let audioSessionControl = self.audioSessionControl {
                             self.currentAudioOutputValue = .speaker
                             self.didSetCurrentAudioOutputValue = true
@@ -357,8 +380,39 @@ public final class SharedCallAudioContext {
                 return false
             }
             self.isInitialOutputPending = false
+            if output.isHeadset {
+                // The session routed the call to a headset the cached flag did not know about.
+                // Without this the initial-setup timer would still force the speaker over it.
+                self.defaultToSpeaker = false
+            }
         }
         return true
+    }
+    
+    /// Runs when the audio session has activated under the call's category, which is the first
+    /// moment the route can be trusted. Decides the initial output unless a route report or an
+    /// explicit selection already has.
+    private func resolveInitialOutput(isHeadsetConnected: Bool) {
+        guard self.isInitialOutputPending else {
+            return
+        }
+        self.isInitialOutputPending = false
+        
+        if isHeadsetConnected {
+            self.defaultToSpeaker = false
+            // The route report that accompanies activation normally names the headset already;
+            // if it was skipped as unchanged, the value must still stop claiming the speaker.
+            if case .speaker = self.currentAudioOutputValue {
+                self.currentAudioOutputValue = .headphones
+            }
+            self.didSetCurrentAudioOutputValue = true
+            self.updateProximityMonitoring()
+        } else if self.defaultToSpeaker, let audioSessionControl = self.audioSessionControl {
+            self.currentAudioOutputValue = .speaker
+            self.didSetCurrentAudioOutputValue = true
+            audioSessionControl.setOutputMode(.custom(.speaker))
+            self.updateProximityMonitoring()
+        }
     }
     
     private func updateProximityMonitoring() {
@@ -380,6 +434,19 @@ public final class SharedCallAudioContext {
                 self.proximityManagerIndex = nil
                 DeviceProximityManager.shared().remove(proximityManagerIndex)
             }
+        }
+    }
+}
+
+private extension AudioSessionOutput {
+    /// Headphones or an external port (Bluetooth, wired adapter): a route the speaker default
+    /// must never override.
+    var isHeadset: Bool {
+        switch self {
+        case .headphones, .port:
+            return true
+        case .builtin, .speaker:
+            return false
         }
     }
 }

@@ -162,6 +162,10 @@ private final class ManagedAudioSessionControlActivate {
 
 public struct AudioSessionActivationState {
     public let isHeadsetConnected: Bool
+    
+    public init(isHeadsetConnected: Bool) {
+        self.isHeadsetConnected = isHeadsetConnected
+    }
 }
 
 public class ManagedAudioSessionControl {
@@ -177,6 +181,22 @@ public class ManagedAudioSessionControl {
         self.setOutputModeImpl = setOutputModeImpl
         self.setupAndActivateImpl = setupAndActivateImpl
         self.setTypeImpl = setTypeImpl
+    }
+    
+    /// Lets another `ManagedAudioSession` implementation (a test double, for one) hand out
+    /// controls. The closures mirror the public methods one to one.
+    public convenience init(
+        setup: @escaping (Bool) -> Void,
+        activate: @escaping (@escaping (AudioSessionActivationState) -> Void) -> Void,
+        setOutputMode: @escaping (AudioSessionOutputMode) -> Void,
+        setupAndActivate: @escaping (Bool, @escaping (AudioSessionActivationState) -> Void) -> Void,
+        setType: @escaping (ManagedAudioSessionType, @escaping () -> Void) -> Void
+    ) {
+        self.init(setupImpl: setup, activateImpl: { completion in
+            activate(completion.f)
+        }, setOutputModeImpl: setOutputMode, setupAndActivateImpl: { synchronous, completion in
+            setupAndActivate(synchronous, completion.f)
+        }, setTypeImpl: setType)
     }
     
     public func setup(synchronous: Bool = false) {
