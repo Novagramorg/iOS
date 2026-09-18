@@ -67,12 +67,15 @@ private func peerCombinedReadState(postbox: PostboxImpl, peerId: PeerId, handleT
 }
 
 /// Whether `transaction` may have changed what `peerCombinedReadState` returns for `peerId`:
-/// its read state, its threads summary (recomputed whenever a topic's thread info changes,
-/// which is all that reading a topic touches), or the peer record itself or its associated
-/// peer, which decide between the two counters.
-private func peerCombinedReadStateMayHaveChanged(postbox: PostboxImpl, peerId: PeerId, transaction: PostboxTransaction) -> Bool {
+/// its read state, and when threads are handled also its threads summary (recomputed
+/// whenever a topic's thread info changes, which is all that reading a topic touches) and
+/// the peer record itself or its associated peer, which decide between the two counters.
+private func peerCombinedReadStateMayHaveChanged(postbox: PostboxImpl, peerId: PeerId, handleThreads: Bool, transaction: PostboxTransaction) -> Bool {
     if transaction.alteredInitialPeerCombinedReadStates[peerId] != nil {
         return true
+    }
+    if !handleThreads {
+        return false
     }
     if transaction.updatedPeerThreadsSummaries.contains(peerId) {
         return true
@@ -143,7 +146,7 @@ final class MutableUnreadMessageCountsView: MutablePostboxView {
                         }
                     }
                 case let .peer(peerId, handleThreads, state):
-                    if peerCombinedReadStateMayHaveChanged(postbox: postbox, peerId: peerId, transaction: transaction) {
+                    if peerCombinedReadStateMayHaveChanged(postbox: postbox, peerId: peerId, handleThreads: handleThreads, transaction: transaction) {
                         let updatedState = peerCombinedReadState(postbox: postbox, peerId: peerId, handleThreads: handleThreads)
                         if updatedState != state {
                             self.entries[i] = .peer(peerId, handleThreads, updatedState)
@@ -251,7 +254,7 @@ final class MutableCombinedReadStateView: MutablePostboxView {
     }
     
     func replay(postbox: PostboxImpl, transaction: PostboxTransaction) -> Bool {
-        if peerCombinedReadStateMayHaveChanged(postbox: postbox, peerId: self.peerId, transaction: transaction) {
+        if peerCombinedReadStateMayHaveChanged(postbox: postbox, peerId: self.peerId, handleThreads: self.handleThreads, transaction: transaction) {
             return self.reload(postbox: postbox)
         }
         return false
