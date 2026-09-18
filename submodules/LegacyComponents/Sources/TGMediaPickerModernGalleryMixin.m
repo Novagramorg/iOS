@@ -341,12 +341,6 @@
     return _galleryController;
 }
 
-- (void)setPreviewMode
-{
-    _galleryController.previewMode = true;
-    _strongGalleryController = nil;
-}
-
 - (void)updateWithFetchResult:(TGMediaAssetFetchResult *)fetchResult
 {
     TGMediaAsset *currentAsset = ((TGMediaPickerGalleryItem *)_galleryController.currentItem).asset;
