@@ -1450,6 +1450,8 @@ is safe at any account count.
     while an account is suspended would drop its push until it is next made live. VoIP calls to a
     suspended account are not presented (no live session). Both are acceptable for the hold-many-accounts
     use case; revisit by widening `otherAccountUserIds` to all logged-in uids + a PushKit resume path.
+    **2026-09-18:** the PushKit resume path now exists — a call to a suspended account wakes it for the
+    length of the call. See "Incoming calls" at the end of this file.
   - Users with ≤3 accounts see IDENTICAL behaviour (no regression) — the cap only engages at 4+.
   - **2026-06-05 discoverability hook (3 Telegram-owned files):** the built-in Settings accounts section
     only lists the live working-set, which confused the owner ("4-account yo'qoldi"). Added a
@@ -5459,3 +5461,109 @@ giving up, leaving the user on the pincode screen:
 Note on behaviour: when biometrics are *available*, iOS insists on them and shows the passcode only
 after failures — that is the system's own policy, not ours. When biometrics are unavailable or
 disabled (the case that started this), `.deviceOwnerAuthentication` goes straight to the passcode.
+
+---
+
+## 📌 Incoming calls — extension fallback, suspended-account wake, call log line (2026-09-18)
+
+**Why:** calls with long delays and frequent failures, reported across the user base. The
+investigation (`CALLS_AUDIT_2026-09-18.md`) found no public Telegram call-engine or MTProto change that
+our 12.9.2 base is missing for the production 1:1 engine (13.0.0). What it did find were two breaks on
+the incoming-call path that only this fork has:
+
+1. **The notification extension cannot hand a call to CallKit.** Upstream turns a PHONE_CALL_REQUEST
+   (or conference-invite) push that reaches the extension into a ringing CallKit call with
+   `CXProvider.reportNewIncomingVoIPPushPayload`. Apple allows that only for an extension that has
+   `com.apple.developer.usernotifications.filtering`; `Telegram/BUILD` grants it to
+   `ph.telegra.Telegraph` alone and our NotificationService profile does not have it, so the call always
+   fails (`CXErrorDomainNotificationServiceExtension` code 2). Upstream then leaves empty content, which
+   our blank-banner rewrite (build 69) makes invisible: the phone neither rang nor showed anything, and
+   the caller waited until the call timed out.
+2. **Calls to a suspended account were dropped.** The working-set keeps only the primary and pinned
+   accounts live. The PushKit handler reported the call to CallKit, found no context for the account,
+   and dropped it at once — `phone.receivedCall` was never sent. Every user with 2+ accounts was hit
+   on every non-selected account.
+
+### `Telegram/NotificationService/Sources/NotificationService.swift` (UPSTREAM hook)
+
+- New file-level `fenixuzIncomingCallFallbackContent(callerTitle:callerPeerId:accountId:incomingCallMessage:payloadJson:)`,
+  right before `getCurrentRenderedTotalUnreadCount`. It builds the banner upstream itself shows when iOS
+  call integration is off (caller name + `incomingCallMessage`), takes the sound from `aps.sound`
+  (falls back to `0.m4a`), and sets `userInfo` `peerId` / `accountId` so a tap opens the caller's chat on
+  the called account — the app then connects and the call rings in-app if it is still ringing.
+- In both the `.call` and the `.groupCall` branch, inside the `reportNewIncomingVoIPPushPayload`
+  completion:
+
+```swift
+// Fenixuz: see fenixuzIncomingCallFallbackContent
+if error != nil {
+    updateCurrentContent(fenixuzIncomingCallFallbackContent(callerTitle: …, callerPeerId: …, accountId: …, incomingCallMessage: incomingCallMessage, payloadJson: payloadJson))
+}
+completed()
+```
+
+When the hand-off succeeds (once Apple grants the entitlement and the profile is regenerated) this
+never runs, so nothing needs to be removed then.
+
+### `submodules/TelegramUI/Sources/SharedAccountContext.swift` (UPSTREAM hook — multi-account section)
+
+- New state next to `fenixuzPinnedAccountsPromise`: `fenixuzCallWakeHolds` (record id → number of calls
+  holding it), `fenixuzCallWakeAccountsPromise`, `fenixuzCallWakeDisposables`.
+- New `fenixuzActiveAccountContexts(waking:)` after `fenixuzPinnedAccountsSignal`: the same value as
+  `activeAccountContexts |> take(1)`, except that a suspended account is held live first and the value
+  is delivered once its context has loaded (10 s timeout — then the caller gets the accounts without it
+  and falls back to upstream's drop). Private `fenixuzHoldAccountForCall`, `fenixuzReleaseAccountForCall`
+  and `fenixuzReleaseAccountWhenCallsEnd` (from 10 s after the wake, waits until no call is ringing on
+  that account and no call or group call is in progress, then releases 30 s later so rating / debug-log
+  upload still have the context).
+- Working-set pipeline: `combineLatest` gained `self.fenixuzCallWakeAccountsPromise.get()`, the mapped
+  tuple gained `callWakeIds`, `distinctUntilChanged` compares it (`lhs.4`), and `fenixuzWorkingSet` is now
+  the union of the capped set and every woken id — on top of `fenixuzMaxLiveAccounts`, so a ringing call never
+  evicts a pinned account. `fenixuzRecencyOrder` is untouched.
+
+### `submodules/TelegramUI/Sources/AppDelegate.swift` (UPSTREAM hook)
+
+In `pushRegistryImpl`, the conference branch (~line 2344) and the 1:1 branch (~line 2465) both change
+their source signal from
+
+```swift
+_ = (sharedApplicationContext.sharedContext.activeAccountContexts
+|> take(1)
+```
+
+to
+
+```swift
+// Fenixuz: wakes the called account first if the multi-account working-set has it suspended
+_ = (sharedApplicationContext.sharedContext.fenixuzActiveAccountContexts(waking: accountId)
+```
+
+Everything after it is upstream's code, unchanged: a live account behaves exactly as before, a woken
+account is processed by the same loop, and an account that does not load in time is dropped as before.
+
+### `submodules/TelegramCallsUI/Sources/PresentationCall.swift` (UPSTREAM hook)
+
+One log line after `let logName = …` in the `.active` branch of `updateSessionState`:
+
+```swift
+Logger.shared.log("PresentationCall", "Fenixuz call \(logName) active: version \(version), allowsP2P \(allowsP2P), connections \(…), customParameters \(customParameters ?? "nil")")
+```
+
+The app never logged which engine version and server flags (`custom_parameters`, including
+`inline_conference`) a call was given, so a failing call could not be tied to them.
+
+### Deliberately not changed
+
+- tgcalls stays at `e3069322` (upstream 12.9.2's pin). The 19 newer commits on tgcalls `development`
+  change nothing in the 13.0.0 engine at default server settings, the branch describes itself as a
+  testbench, and no matching tgcalls + webrtc + app-glue set has been published.
+- The advertised call versions and the 12.0.0 TCP-reflector injection in
+  `TelegramVoip/Sources/OngoingCallContext.swift` stay as upstream until call logs show which versions
+  the server actually gives us.
+
+### Still needed outside the code
+
+`com.apple.developer.usernotifications.filtering` for the **NotificationService** App ID
+(`uz.fenixuz.app.NotificationService`), requested with the incoming-call use case. After approval:
+regenerate `Fenixuz_AppStore_NotificationService.mobileprovision` and widen the bundle-id gate in
+`Telegram/BUILD`.

@@ -2341,8 +2341,8 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             _ = (self.sharedContextPromise.get()
             |> take(1)
             |> deliverOnMainQueue).start(next: { sharedApplicationContext in
-                _ = (sharedApplicationContext.sharedContext.activeAccountContexts
-                |> take(1)
+                // Fenixuz: wakes the called account first if the multi-account working-set has it suspended
+                _ = (sharedApplicationContext.sharedContext.fenixuzActiveAccountContexts(waking: accountId)
                 |> deliverOnMainQueue).start(next: { activeAccounts in
                     var processed = false
                     for (_, context, _) in activeAccounts.accounts {
@@ -2462,8 +2462,8 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             _ = (self.sharedContextPromise.get()
             |> take(1)
             |> deliverOnMainQueue).start(next: { sharedApplicationContext in
-                _ = (sharedApplicationContext.sharedContext.activeAccountContexts
-                |> take(1)
+                // Fenixuz: wakes the called account first if the multi-account working-set has it suspended
+                _ = (sharedApplicationContext.sharedContext.fenixuzActiveAccountContexts(waking: accountId)
                 |> deliverOnMainQueue).start(next: { activeAccounts in
                     var processed = false
                     for (_, context, _) in activeAccounts.accounts {

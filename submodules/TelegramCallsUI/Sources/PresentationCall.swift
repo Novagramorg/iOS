@@ -1029,6 +1029,8 @@ public final class PresentationCallImpl: PresentationCall {
                 } else {
                     if (self.sharedAudioContext != nil || audioSessionControl != nil), !wasActive || (self.sharedAudioContext == nil && previousControl == nil) {
                         let logName = "\(id.id)_\(id.accessHash)"
+                        // Fenixuz: record which engine and server flags the call got, so failing calls can be diagnosed from the app log
+                        Logger.shared.log("PresentationCall", "Fenixuz call \(logName) active: version \(version), allowsP2P \(allowsP2P), connections \(1 + connections.alternatives.count), customParameters \(customParameters ?? "nil")")
                         
                         var inlineConferenceSlug: String?
                         if let dict = try? JSONSerialization.jsonObject(with: (customParameters ?? "{}").data(using: .utf8)!) as? [String: Any] {

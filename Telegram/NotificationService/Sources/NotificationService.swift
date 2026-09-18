@@ -738,6 +738,33 @@ private struct NotificationContent: CustomStringConvertible {
     }
 }
 
+// Fenixuz: an incoming call that arrives as a regular push reaches CallKit only through
+// CXProvider.reportNewIncomingVoIPPushPayload, and Apple lets an extension call that only when it
+// carries com.apple.developer.usernotifications.filtering. Telegram/BUILD grants the entitlement to
+// ph.telegra.Telegraph alone, so on this fork the hand-off fails (CXErrorDomainNotificationServiceExtension
+// code 2) and the empty content published before it would end up as the invisible blank row above:
+// the phone neither rang nor showed anything, and the caller just waited. Show the banner upstream
+// uses when iOS call integration is off instead, with a sound, and point a tap at the caller's chat on
+// the called account so the app connects while the call is still ringing. If the entitlement is ever
+// granted, the hand-off succeeds and this never runs.
+private func fenixuzIncomingCallFallbackContent(callerTitle: String?, callerPeerId: PeerId, accountId: Int64, incomingCallMessage: String, payloadJson: [String: Any]) -> NotificationContent {
+    var content = NotificationContent(isLockedMessage: nil)
+    if let callerTitle {
+        content.title = callerTitle
+        content.body = incomingCallMessage
+    } else {
+        content.body = "Incoming Call"
+    }
+    if let aps = payloadJson["aps"] as? [String: Any], let sound = aps["sound"] as? String {
+        content.sound = sound
+    } else {
+        content.sound = "0.m4a"
+    }
+    content.userInfo["peerId"] = "\(callerPeerId.toInt64())"
+    content.userInfo["accountId"] = "\(accountId)"
+    return content
+}
+
 private func getCurrentRenderedTotalUnreadCount(accountManager: AccountManager<TelegramAccountManagerTypes>, postbox: Postbox) -> Signal<(Int32, RenderedTotalUnreadCountType), NoError> {
     let counters = postbox.transaction { transaction -> ChatListTotalUnreadState in
         return transaction.getTotalUnreadState(groupId: .root)
@@ -1425,6 +1452,10 @@ private final class NotificationServiceHandler {
                                         CXProvider.reportNewIncomingVoIPPushPayload(voipPayload, completion: { error in
                                             Logger.shared.log("NotificationService \(episode)", "Did report voip notification, error: \(String(describing: error))")
 
+                                            // Fenixuz: see fenixuzIncomingCallFallbackContent
+                                            if error != nil {
+                                                updateCurrentContent(fenixuzIncomingCallFallbackContent(callerTitle: callData.peer?.debugDisplayTitle, callerPeerId: callData.fromId, accountId: callData.accountId, incomingCallMessage: incomingCallMessage, payloadJson: payloadJson))
+                                            }
                                             completed()
                                         })
                                     } else {
@@ -1470,6 +1501,10 @@ private final class NotificationServiceHandler {
                                         CXProvider.reportNewIncomingVoIPPushPayload(voipPayload, completion: { error in
                                             Logger.shared.log("NotificationService \(episode)", "Did report voip notification, error: \(String(describing: error))")
 
+                                            // Fenixuz: see fenixuzIncomingCallFallbackContent
+                                            if error != nil {
+                                                updateCurrentContent(fenixuzIncomingCallFallbackContent(callerTitle: fromPeer?.debugDisplayTitle, callerPeerId: groupCallData.fromId, accountId: groupCallData.accountId, incomingCallMessage: incomingCallMessage, payloadJson: payloadJson))
+                                            }
                                             completed()
                                         })
                                     } else {
