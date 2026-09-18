@@ -194,17 +194,7 @@ public final class MediaBoxFileContextV2Impl: MediaBoxFileContext {
                 completed: completed
             )
             if self.updateRangeRequest(request: request) {
-                if !self.isComplete, let truncationSize = self.fileMap.truncationSize, truncationSize == self.fileMap.sum {
-                    self.isComplete = true
-                    
-                    // Once linked, the complete path is served as-is; make sure the
-                    // bytes the map vouches for are on disk first.
-                    self.destinationFile?.sync()
-                    let linkResult = link(self.partialPath, self.fullPath)
-                    if linkResult != 0 {
-                        postboxLog("MediaBoxFileContextV2Impl: error while linking \(self.partialPath): \(linkResult)")
-                    }
-                }
+                self.linkCompleteFileIfFullyWritten()
                 
                 self.updateRequests()
                 
@@ -477,18 +467,25 @@ public final class MediaBoxFileContextV2Impl: MediaBoxFileContext {
                 
             }
             
+            self.linkCompleteFileIfFullyWritten()
+            
+            self.updateRequests()
+        }
+        
+        /// When the map shows every byte up to the truncation size present, the
+        /// partial file becomes the complete file. Once linked, the complete path is
+        /// served as-is with no map behind it, so the bytes the map vouches for are
+        /// flushed to disk first.
+        private func linkCompleteFileIfFullyWritten() {
             if !self.isComplete, let truncationSize = self.fileMap.truncationSize, truncationSize == self.fileMap.sum {
                 self.isComplete = true
                 
-                // See `request(...)`: flush before the partial becomes the complete file.
                 self.destinationFile?.sync()
                 let linkResult = link(self.partialPath, self.fullPath)
                 if linkResult != 0 {
                     postboxLog("MediaBoxFileContextV2Impl: error while linking \(self.partialPath): \(linkResult)")
                 }
             }
-            
-            self.updateRequests()
         }
         
         /// Writes `dataRange` of `data` at `resourceOffset` and records it in the map.
