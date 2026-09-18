@@ -116,6 +116,7 @@ extension _AdaptedPostboxDecoder: Decoder {
         let decoder = PostboxDecoder(buffer: MemoryBuffer(data: self.data))
 
         var content: UnkeyedContainer.Content?
+        var isCorrupted = false
         switch self.contentType {
         case .object:
             preconditionFailure()
@@ -124,7 +125,14 @@ extension _AdaptedPostboxDecoder: Decoder {
         case .int64Array:
             content = .int64Array(decoder.decodeInt64ArrayRaw())
         case .objectArray:
-            content = .objectArray(decoder.decodeObjectDataArrayRaw())
+            if let array = decoder.decodeObjectDataArrayRaw() {
+                content = .objectArray(array)
+            } else {
+                // `unkeyedContainer()` cannot throw; the container reports the
+                // corruption from its first `decode` instead.
+                content = .objectArray([])
+                isCorrupted = true
+            }
         case .stringArray:
             content = .stringArray(decoder.decodeStringArrayRaw())
         case .dataArray:
@@ -134,7 +142,7 @@ extension _AdaptedPostboxDecoder: Decoder {
         }
 
         if let content = content {
-            let container = UnkeyedContainer(data: self.data, codingPath: self.codingPath, userInfo: self.userInfo, content: content)
+            let container = UnkeyedContainer(data: self.data, codingPath: self.codingPath, userInfo: self.userInfo, content: content, isCorrupted: isCorrupted)
             self.container = container
 
             return container
