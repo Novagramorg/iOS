@@ -197,6 +197,54 @@ final class SharedCallAudioContextTests: XCTestCase {
         XCTAssertEqual(context.currentAudioOutputValue, .headphones)
     }
 
+    /// Activation of a Bluetooth headset can outlast the half-second re-apply timer; the timer
+    /// must not decide the output before the session has reported the route.
+    func testTimerFiringBeforeActivationCompletesDoesNotForceTheSpeaker() {
+        self.session.isHeadsetPluggedIn = false
+        let context = self.makeContext(defaultToSpeaker: true)
+
+        self.handOutControl()
+        self.waitForInitialSetupTimer()
+        self.completeActivation(reporting: [.builtin, .headphones], current: .headphones, isHeadsetConnected: true)
+        self.waitForInitialSetupTimer()
+
+        XCTAssertFalse(self.control.appliedOutputModes.contains(.custom(.speaker)), "applied: \(self.control.appliedOutputModes)")
+        XCTAssertEqual(context.currentAudioOutputValue, .headphones)
+    }
+
+    /// The cached flag can also be wrong the other way: it says headset while none is connected
+    /// any more. The caller asked for the speaker, and activation shows no headset.
+    func testSpeakerIsAppliedWhenAStaleHeadsetFlagIsContradictedAtActivation() {
+        self.session.isHeadsetPluggedIn = true
+        let context = self.makeContext(defaultToSpeaker: true)
+
+        self.handOutControl()
+        self.completeActivation(reporting: [.builtin, .speaker], current: .builtin, isHeadsetConnected: false)
+        self.waitForInitialSetupTimer()
+
+        XCTAssertEqual(self.control.appliedOutputModes.last, .custom(.speaker), "applied: \(self.control.appliedOutputModes)")
+        XCTAssertEqual(context.currentAudioOutputValue, .speaker)
+    }
+
+    /// If the route report was skipped as unchanged, the activation state alone must still turn
+    /// the announced output away from the speaker, for the UI as well as for the context.
+    func testActivationReportingAHeadsetWithoutARouteReportUpdatesTheAnnouncedOutput() {
+        self.session.isHeadsetPluggedIn = false
+        let context = self.makeContext(defaultToSpeaker: true)
+        var announced: [AudioSessionOutput?] = []
+        let disposable = context.audioOutputState.start(next: { announced.append($0.1) })
+        defer { disposable.dispose() }
+
+        self.handOutControl()
+        self.control.completeActivations(isHeadsetConnected: true)
+        self.spinMainQueue()
+        self.waitForInitialSetupTimer()
+
+        XCTAssertFalse(self.control.appliedOutputModes.contains(.custom(.speaker)), "applied: \(self.control.appliedOutputModes)")
+        XCTAssertEqual(context.currentAudioOutputValue, .headphones)
+        XCTAssertEqual(announced.last, .headphones, "announced: \(announced)")
+    }
+
     func testAnExplicitSelectionDuringActivationIsKept() {
         self.session.isHeadsetPluggedIn = false
         let context = self.makeContext(defaultToSpeaker: true)

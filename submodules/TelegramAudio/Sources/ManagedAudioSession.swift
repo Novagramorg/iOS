@@ -160,9 +160,12 @@ private final class ManagedAudioSessionControlActivate {
     }
 }
 
+/// What the session found once it activated: `isHeadsetConnected` is read after the holder's
+/// category has been applied, so it reflects the route the call will actually use.
 public struct AudioSessionActivationState {
     public let isHeadsetConnected: Bool
     
+    /// Public so another `ManagedAudioSession` implementation can complete an activation.
     public init(isHeadsetConnected: Bool) {
         self.isHeadsetConnected = isHeadsetConnected
     }
