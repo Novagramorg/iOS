@@ -10,7 +10,7 @@ struct InodeInfo {
     var size: UInt32
 }
 
-private struct ScanFilesResult {
+struct ScanFilesResult {
     var unlinkedCount = 0
     var totalSize: UInt64 = 0
 }
@@ -42,7 +42,14 @@ public func printOpenFiles() {
     }
 }
 
-private final class TempScanDatabase {
+/// Identifies an inode, so that several directory entries that are hard links to one
+/// file can be recognised as the same storage.
+struct FileIdentity: Hashable {
+    let device: UInt64
+    let inode: UInt64
+}
+
+final class TempScanDatabase {
     private let queue: Queue
     let valueBox: SqliteValueBox
     
@@ -52,6 +59,10 @@ private final class TempScanDatabase {
     
     private let accessTimeKey = ValueBoxKey(length: 4 + 4)
     private let accessInfoBuffer = WriteBuffer()
+    
+    /// Rows that were registered with a `FileIdentity`, so later hard links to the same
+    /// inode can be appended to them and evicted together.
+    private var rowKeysByIdentity: [FileIdentity: ValueBoxKey] = [:]
     
     init?(queue: Queue, basePath: String) {
         self.queue = queue
@@ -75,7 +86,13 @@ private final class TempScanDatabase {
         self.valueBox.internalClose()
     }
     
-    func add(pathBuffer: UnsafeMutablePointer<Int8>, pathSize: Int, size: Int64, timestamp: Int32) {
+    /// Row value layout: `[size: Int64]` followed by the UTF-8 paths of every directory
+    /// entry for this storage, separated by NUL (a path cannot contain NUL).
+    private static let pathSeparator: UInt8 = 0
+    
+    /// Registers a file. Pass `identity` for a file that has more than one hard link, so
+    /// that `addLink` can attach the other links to this row.
+    func add(pathBuffer: UnsafeMutablePointer<Int8>, pathSize: Int, size: Int64, timestamp: Int32, identity: FileIdentity? = nil) {
         let id = self.nextId
         self.nextId += 1
         
@@ -87,9 +104,35 @@ private final class TempScanDatabase {
         self.accessTimeKey.setInt32(0, value: timestamp)
         self.accessTimeKey.setInt32(4, value: id)
         self.valueBox.set(self.accessTimeTable, key: self.accessTimeKey, value: self.accessInfoBuffer)
+        
+        if let identity = identity {
+            let key = ValueBoxKey(length: 4 + 4)
+            memcpy(key.memory, self.accessTimeKey.memory, 8)
+            self.rowKeysByIdentity[identity] = key
+        }
     }
     
-    func topByAccessTime(_ f: (Int64, String) -> Bool) {
+    /// Attaches another directory entry to the row registered by `add` for `identity`.
+    /// The link contributes no size (the inode is already counted) and is evicted
+    /// together with the other entries of that row.
+    func addLink(pathBuffer: UnsafeMutablePointer<Int8>, pathSize: Int, identity: FileIdentity) {
+        guard let key = self.rowKeysByIdentity[identity], let existing = self.valueBox.get(self.accessTimeTable, key: key) else {
+            return
+        }
+        
+        self.accessInfoBuffer.reset()
+        self.accessInfoBuffer.write(existing.memory, length: existing.length)
+        var separator = TempScanDatabase.pathSeparator
+        self.accessInfoBuffer.write(&separator, length: 1)
+        self.accessInfoBuffer.write(pathBuffer, length: pathSize)
+        
+        self.valueBox.set(self.accessTimeTable, key: key, value: self.accessInfoBuffer)
+    }
+    
+    /// Visits registered storage oldest first. Each visit carries the file's size once
+    /// and every directory entry (hard link) that refers to it; the closure must unlink
+    /// all of them for the space to be released. Returning false ends the walk.
+    func topByAccessTime(_ f: (Int64, [String]) -> Bool) {
         var startKey = ValueBoxKey(length: 4)
         startKey.setInt32(0, value: 0)
         
@@ -98,6 +141,7 @@ private final class TempScanDatabase {
         
         while true {
             var lastKey: ValueBoxKey?
+            var stopped = false
             self.valueBox.range(self.accessTimeTable, start: startKey, end: endKey, values: { key, value in
                 var result = true
                 withExtendedLifetime(value, {
@@ -111,15 +155,26 @@ private final class TempScanDatabase {
                         readBuffer.read(buffer.baseAddress!, offset: 0, length: buffer.count)
                     }
                     
-                    if let path = String(data: pathData, encoding: .utf8) {
-                        result = f(size, path)
+                    let paths = pathData.split(separator: TempScanDatabase.pathSeparator, omittingEmptySubsequences: true).compactMap { String(data: $0, encoding: .utf8) }
+                    if !paths.isEmpty {
+                        result = f(size, paths)
                     }
                 })
                 
                 lastKey = key
+                if !result {
+                    stopped = true
+                }
                 
                 return result
             }, limit: 512)
+            
+            // A `false` from `f` ends the whole walk, not just the current page. The
+            // eviction closure unlinks every file it is handed before it re-checks the
+            // limit, so resuming from `lastKey` here would delete the rest of the cache.
+            if stopped {
+                break
+            }
             
             if let lastKey = lastKey {
                 startKey = lastKey
@@ -130,7 +185,7 @@ private final class TempScanDatabase {
     }
 }
 
-private func scanFiles(at path: String, olderThan minTimestamp: Int32, includeSubdirectories: Bool, performSizeMapping: Bool, tempDatabase: TempScanDatabase, reportMemoryUsageInterval: Int, reportMemoryUsageRemaining: inout Int) -> ScanFilesResult {
+func scanFiles(at path: String, olderThan minTimestamp: Int32, includeSubdirectories: Bool, performSizeMapping: Bool, tempDatabase: TempScanDatabase, reportMemoryUsageInterval: Int, reportMemoryUsageRemaining: inout Int, seenLinkedInodes: inout Set<FileIdentity>) -> ScanFilesResult {
     var result = ScanFilesResult()
     
     var subdirectories: [String] = []
@@ -169,15 +224,34 @@ private func scanFiles(at path: String, olderThan minTimestamp: Int32, includeSu
                         unlink(pathBuffer)
                         result.unlinkedCount += 1
                     } else {
-                        result.totalSize += UInt64(value.st_size)
-                        if performSizeMapping {
-                            tempDatabase.add(pathBuffer: pathBuffer, pathSize: strnlen(pathBuffer, 1024), size: Int64(value.st_size), timestamp: Int32(value.st_mtimespec.tv_sec))
-                            
-                            reportMemoryUsageRemaining -= 1
-                            if reportMemoryUsageRemaining <= 0 {
-                                reportMemoryUsageRemaining = reportMemoryUsageInterval
+                        // A completed download is two directory entries (`<id>` and
+                        // `<id>_partial`) hard-linked to one inode. Count that storage
+                        // once, and register the extra links on the same row so eviction
+                        // removes them together; otherwise the size is counted (and
+                        // "freed") twice, and unlinking one entry releases nothing.
+                        var identity: FileIdentity?
+                        var isAdditionalLink = false
+                        if value.st_nlink > 1 {
+                            let fileIdentity = FileIdentity(device: UInt64(value.st_dev), inode: UInt64(value.st_ino))
+                            identity = fileIdentity
+                            isAdditionalLink = !seenLinkedInodes.insert(fileIdentity).inserted
+                        }
+                        
+                        if isAdditionalLink {
+                            if performSizeMapping, let identity = identity {
+                                tempDatabase.addLink(pathBuffer: pathBuffer, pathSize: strnlen(pathBuffer, 1024), identity: identity)
+                            }
+                        } else {
+                            result.totalSize += UInt64(value.st_size)
+                            if performSizeMapping {
+                                tempDatabase.add(pathBuffer: pathBuffer, pathSize: strnlen(pathBuffer, 1024), size: Int64(value.st_size), timestamp: Int32(value.st_mtimespec.tv_sec), identity: identity)
                                 
-                                postboxLog("TimeBasedCleanup in-memory size: \(tempDatabase.valueBox.getDatabaseSize() / (1024 * 1024)) MB")
+                                reportMemoryUsageRemaining -= 1
+                                if reportMemoryUsageRemaining <= 0 {
+                                    reportMemoryUsageRemaining = reportMemoryUsageInterval
+                                    
+                                    postboxLog("TimeBasedCleanup in-memory size: \(tempDatabase.valueBox.getDatabaseSize() / (1024 * 1024)) MB")
+                                }
                             }
                         }
                     }
@@ -189,7 +263,7 @@ private func scanFiles(at path: String, olderThan minTimestamp: Int32, includeSu
     
     if includeSubdirectories {
         for subPath in subdirectories {
-            let subResult = scanFiles(at: subPath, olderThan: minTimestamp, includeSubdirectories: true, performSizeMapping: performSizeMapping, tempDatabase: tempDatabase, reportMemoryUsageInterval: reportMemoryUsageInterval, reportMemoryUsageRemaining: &reportMemoryUsageRemaining)
+            let subResult = scanFiles(at: subPath, olderThan: minTimestamp, includeSubdirectories: true, performSizeMapping: performSizeMapping, tempDatabase: tempDatabase, reportMemoryUsageInterval: reportMemoryUsageInterval, reportMemoryUsageRemaining: &reportMemoryUsageRemaining, seenLinkedInodes: &seenLinkedInodes)
             result.totalSize += subResult.totalSize
             result.unlinkedCount += subResult.unlinkedCount
         }
@@ -296,6 +370,7 @@ private final class TimeBasedCleanupImpl {
                 
                 let reportMemoryUsageInterval = 100
                 var reportMemoryUsageRemaining: Int = reportMemoryUsageInterval
+                var seenLinkedInodes = Set<FileIdentity>()
                 
                 let startTime = CFAbsoluteTimeGetCurrent()
                 
@@ -353,7 +428,7 @@ private final class TimeBasedCleanupImpl {
                 let oldestShortLivedTimestamp = timestamp - shortLived
                 let oldestGeneralTimestamp = timestamp - general
                 for path in shortLivedPaths {
-                    let scanResult = scanFiles(at: path, olderThan: oldestShortLivedTimestamp, includeSubdirectories: true, performSizeMapping: performSizeMapping, tempDatabase: tempDatabase, reportMemoryUsageInterval: reportMemoryUsageInterval, reportMemoryUsageRemaining: &reportMemoryUsageRemaining)
+                    let scanResult = scanFiles(at: path, olderThan: oldestShortLivedTimestamp, includeSubdirectories: true, performSizeMapping: performSizeMapping, tempDatabase: tempDatabase, reportMemoryUsageInterval: reportMemoryUsageInterval, reportMemoryUsageRemaining: &reportMemoryUsageRemaining, seenLinkedInodes: &seenLinkedInodes)
                     if !paths.contains(path) {
                         paths.append(path)
                     }
@@ -364,7 +439,7 @@ private final class TimeBasedCleanupImpl {
                 
                 if general < Int32.max {
                     for path in generalPaths {
-                        let scanResult = scanFiles(at: path, olderThan: oldestGeneralTimestamp, includeSubdirectories: true, performSizeMapping: performSizeMapping, tempDatabase: tempDatabase, reportMemoryUsageInterval: reportMemoryUsageInterval, reportMemoryUsageRemaining: &reportMemoryUsageRemaining)
+                        let scanResult = scanFiles(at: path, olderThan: oldestGeneralTimestamp, includeSubdirectories: true, performSizeMapping: performSizeMapping, tempDatabase: tempDatabase, reportMemoryUsageInterval: reportMemoryUsageInterval, reportMemoryUsageRemaining: &reportMemoryUsageRemaining, seenLinkedInodes: &seenLinkedInodes)
                         if !paths.contains(path) {
                             paths.append(path)
                         }
@@ -374,7 +449,7 @@ private final class TimeBasedCleanupImpl {
                 }
                 
                 if gigabytesLimit < Int32.max {
-                    let scanResult = scanFiles(at: totalSizeBasedPath, olderThan: 0, includeSubdirectories: false, performSizeMapping: performSizeMapping, tempDatabase: tempDatabase, reportMemoryUsageInterval: reportMemoryUsageInterval, reportMemoryUsageRemaining: &reportMemoryUsageRemaining)
+                    let scanResult = scanFiles(at: totalSizeBasedPath, olderThan: 0, includeSubdirectories: false, performSizeMapping: performSizeMapping, tempDatabase: tempDatabase, reportMemoryUsageInterval: reportMemoryUsageInterval, reportMemoryUsageRemaining: &reportMemoryUsageRemaining, seenLinkedInodes: &seenLinkedInodes)
                     if !paths.contains(totalSizeBasedPath) {
                         paths.append(totalSizeBasedPath)
                     }
@@ -388,18 +463,23 @@ private final class TimeBasedCleanupImpl {
                 
                 if totalLimitSize > bytesLimit {
                     var remainingSize = Int64(totalLimitSize)
-                    tempDatabase.topByAccessTime { size, filePath in
+                    var unlinkedResourceIdSet = Set<Data>()
+                    tempDatabase.topByAccessTime { size, filePaths in
                         remainingSize -= size
                         
-                        unlink(filePath)
-                        
-                        if (filePath as NSString).deletingLastPathComponent == totalSizeBasedPath {
-                            let fileName = (filePath as NSString).lastPathComponent
-                            if let idData = MediaBox.idForFileName(name: fileName).data(using: .utf8) {
-                                unlinkedResourceIds.append(idData)
+                        // Every path here is a hard link to the same inode; all of them
+                        // must go for the space to be released.
+                        for filePath in filePaths {
+                            unlink(filePath)
+                            
+                            if (filePath as NSString).deletingLastPathComponent == totalSizeBasedPath {
+                                let fileName = (filePath as NSString).lastPathComponent
+                                if let idData = MediaBox.idForFileName(name: fileName).data(using: .utf8), !unlinkedResourceIdSet.contains(idData) {
+                                    unlinkedResourceIdSet.insert(idData)
+                                    unlinkedResourceIds.append(idData)
+                                }
                             }
                         }
-                        //let fileName = filePath.lastPathComponent
                         
                         if remainingSize <= Int64(bytesLimit) {
                             return false
