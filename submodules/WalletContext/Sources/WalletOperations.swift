@@ -162,6 +162,15 @@ public extension WalletContext {
         normalizedMainnetAddress(value)
     }
 
+    static func isSelfTransfer(recipient: String, walletAddress: String?) -> Bool {
+        guard let walletAddress,
+              let normalizedRecipient = normalizedMainnetAddress(recipient),
+              let normalizedWalletAddress = normalizedMainnetAddress(walletAddress) else {
+            return false
+        }
+        return normalizedRecipient == normalizedWalletAddress
+    }
+
     static func transferRecipient(from value: String) -> ResolvedTransferRecipient? {
         let value = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let address = normalizedMainnetAddress(value) else {
@@ -1131,14 +1140,20 @@ extension WalletContextImpl {
         return try await self.performOperation(.disablingBackup, operationId: operationId, session: session) {
             let initialState = try self.backupDisableState(prepared)
             let signingPublicKey = try walletMnemonicSigningPublicKey(words: prepared.words)
+            let proofPublicKey: Data
             if let rotation = prepared.rotation {
                 guard signingPublicKey == rotation.newPublicKey else {
                     throw WalletError.storage(.identityMismatch)
                 }
+                proofPublicKey = signingPublicKey
             } else {
-                guard try rotationMnemonicPublicKey(phrase: prepared.words.joined(separator: " ")).walletHexString == prepared.walletPublicKey else {
+                let anchorPublicKey = try rotationMnemonicPublicKey(phrase: prepared.words.joined(separator: " "))
+                guard anchorPublicKey.walletHexString == prepared.walletPublicKey else {
                     throw WalletError.storage(.identityMismatch)
                 }
+                // Without rotation the server wallet identity must keep the
+                // address anchor, even when the phrase has a different signing half.
+                proofPublicKey = anchorPublicKey
             }
             if self.backupDisableIsComplete(initialState, prepared: prepared) {
                 return try await self.finishBackupDisable(prepared)
@@ -1228,7 +1243,7 @@ extension WalletContextImpl {
                 _ = try await self.withWalletOwnershipProof(sign: { challenge in
                     _ = try self.backupDisableState(prepared)
                     let signature = try await self.runtime.signBackupDisableProof(
-                        expectedAddress: prepared.walletAddress, expectedPublicKey: signingPublicKey,
+                        expectedAddress: prepared.walletAddress, expectedPublicKey: proofPublicKey,
                         rotationOperationId: prepared.rotation == nil ? nil : prepared.id,
                         domain: challenge.domain, timestamp: UInt64(challenge.timestamp), payload: challenge.payload
                     )
@@ -1239,7 +1254,7 @@ extension WalletContextImpl {
                     if self.backupDisableIsComplete(latest, prepared: prepared) { return latest }
                     let revision = self.serverStateMutationRevision
                     let response = try await WalletSignalRequestContext<TelegramCore.WalletState>().run(
-                        self.engine.wallet.disableBackup(password: password, newPublicKey: signingPublicKey, proof: proof)
+                        self.engine.wallet.disableBackup(password: password, newPublicKey: proofPublicKey, proof: proof)
                     )
                     if self.serverStateMutationRevision == revision { self.applyServerWalletState(response) }
                     return try self.backupDisableState(prepared)
@@ -1585,7 +1600,8 @@ extension WalletContextImpl {
                 throw WalletError.unavailable
             }
             let expectedGasless: Bool
-            if WalletContext.useWalletTransferApi, case .send = record.request {
+            if WalletContext.useWalletTransferApi, case .send = record.request,
+               !WalletContext.isSelfTransfer(recipient: prepared.recipient, walletAddress: info.address) {
                 expectedGasless = WalletContext.isGaslessEligible(
                     amount: prepared.amount,
                     gaslessInfo: self.currentState.gaslessInfo.currentValue,

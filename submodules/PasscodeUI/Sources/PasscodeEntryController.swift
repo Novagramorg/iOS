@@ -75,6 +75,7 @@ public final class PasscodeEntryController: ViewController {
     private let biometricsDisposable = MetaDisposable()
     private var hasOngoingBiometricsRequest = false
     private var skipNextBiometricsRequest = false
+    private var biometricPresentationFallback: (@MainActor () -> Void)?
     
     private var inBackgroundDisposable: Disposable?
     
@@ -287,6 +288,22 @@ public final class PasscodeEntryController: ViewController {
         }
     }
 
+    func requestBiometricsBeforePresentation(fallback: @escaping @MainActor () -> Void) {
+        guard self.authenticationDismissal.phase == .active else { return }
+        guard self.authenticationLifecycle.canAuthenticate, !self.isPasscodeLocked else {
+            self.finishAuthentication(.failure(.cancelled), animated: false)
+            return
+        }
+        // A fallback presentation must not automatically retry biometrics.
+        self.presentationCompleted = nil
+        guard case .enabled = self.biometrics, self.authenticateBiometrics != nil else {
+            fallback()
+            return
+        }
+        self.biometricPresentationFallback = fallback
+        self.requestSecureBiometrics()
+    }
+
     private func requestSecureBiometrics() {
         guard !self.hasOngoingBiometricsRequest, self.authenticationLifecycle.canAuthenticate,
               let authenticateBiometrics = self.authenticateBiometrics else { return }
@@ -315,8 +332,14 @@ public final class PasscodeEntryController: ViewController {
                 if case let .success(session) = result, self.authenticated != nil {
                     self.finishAuthentication(.success(session))
                 } else {
-                    self.controllerNode.animateError()
-                    self.ensureInputFocused()
+                    if case let .success(session) = result { session.invalidate() }
+                    if let fallback = self.biometricPresentationFallback {
+                        self.biometricPresentationFallback = nil
+                        fallback()
+                    } else {
+                        self.controllerNode.animateError()
+                        self.ensureInputFocused()
+                    }
                 }
             }
         }
@@ -476,6 +499,7 @@ public final class PasscodeEntryController: ViewController {
 
     private func stopAuthentication() {
         self.authenticationLifecycle.dismiss()
+        self.biometricPresentationFallback = nil
         self.authenticationContext?.invalidate()
         self.authenticationContext = nil
         self.biometricsDisposable.set(nil)

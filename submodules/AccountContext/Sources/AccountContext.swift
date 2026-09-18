@@ -1391,7 +1391,7 @@ public enum WalletInfoScreenMode: Equatable, CaseIterable {
 public enum WalletImportScreenMode: Equatable {
     case importWallet
     case enterRecoveryPhrase
-    case verify(words: [String], keyRotation: Bool = false)
+    case verify(words: [String], keyRotation: Bool = false, allowsRepeatedCompletion: Bool = false)
 }
 
 public enum WalletWordsScreenMode: Equatable {

@@ -18,6 +18,7 @@ import AlertComponent
 import AlertCheckComponent
 import UndoUI
 import WalletAuthorizationUI
+import WalletImportScreen
 
 private final class WalletSettingsScreenComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
@@ -90,6 +91,7 @@ private final class WalletSettingsScreenComponent: Component {
         private var previousWalletPhraseGeneration: UInt64 = 0
         private var isOpeningPreviousWalletPhrase = false
         private weak var backupWordsController: ViewController?
+        private weak var disableBackupVerificationController: WalletImportScreen?
         private var preparedBackupDisable: WalletContext.PreparedBackupDisable? {
             didSet {
                 if let previous = oldValue, previous.id != self.preparedBackupDisable?.id {
@@ -165,6 +167,7 @@ private final class WalletSettingsScreenComponent: Component {
             self.abandonBackupAccess()
             self.cancelPreviousWalletPhrase()
             self.disableBackupPreparationGeneration &+= 1
+            self.resetBackupDisableVerificationProgress()
             self.disableBackupChoiceDisposable.set(nil)
             self.disableBackupPreparationContent = nil
             self.disableBackupPreparationActions = nil
@@ -911,17 +914,25 @@ private final class WalletSettingsScreenComponent: Component {
             controller.push(wordsController)
         }
 
+        private func resetBackupDisableVerificationProgress() {
+            self.disableBackupVerificationController?.setVerificationInProgress(false)
+            self.disableBackupVerificationController = nil
+        }
+
         private func presentFinalDisableBackupAlert(refresh: Bool = true) {
             guard let component = self.component,
                   let prepared = self.preparedBackupDisable,
                   let controller = self.backupWordsController?.navigationController?.topViewController as? ViewController
                     ?? self.environment?.controller() else {
+                self.resetBackupDisableVerificationProgress()
                 return
             }
             if refresh {
                 guard !self.isDisablingBackup else { return }
                 let generation = self.disableBackupPreparationGeneration
                 self.isDisablingBackup = true
+                self.disableBackupVerificationController = controller as? WalletImportScreen
+                self.disableBackupVerificationController?.setVerificationInProgress(true)
                 self.backupOperationDisposable.set((self.walletFlowAuthorization(for: .disableBackup)
                 |> mapToSignal { session in component.walletContext.refreshPreparedBackupDisable(prepared, session: session) }
                 |> deliverOnMainQueue).start(next: { [weak self] updated in
@@ -935,6 +946,7 @@ private final class WalletSettingsScreenComponent: Component {
                           self.preparedBackupDisable?.id == prepared.id else { return }
                     self.isDisablingBackup = false
                     if error == .preparedBackupDisableExpired {
+                        self.resetBackupDisableVerificationProgress()
                         self.presentDisableBackupAlert(restarting: true)
                         return
                     }
@@ -991,6 +1003,7 @@ private final class WalletSettingsScreenComponent: Component {
                 self.isDisablingBackup = false
             }
             controller.present(alertController, in: .window(.root))
+            self.resetBackupDisableVerificationProgress()
         }
 
         private func submitDisableBackup(prepared: WalletContext.PreparedBackupDisable) {

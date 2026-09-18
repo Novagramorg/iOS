@@ -759,6 +759,20 @@ actor WalletEngineRuntime {
                 throw WalletContext.WalletError.storage(.identityMismatch)
             }
             try Task.checkCancellation()
+            if rotationOperationId == nil {
+                guard expectedPublicKey == descriptor.publicKey else {
+                    throw WalletContext.WalletError.storage(.identityMismatch)
+                }
+                // Match the unchanged anchor sent to disableBackup, just as
+                // signReplacementProof does when importing this wallet.
+                let proof = try await self.lifecycle.signTonConnectProof(request: TonConnectProofSignRequest(
+                    descriptor: descriptor, domain: domain, timestamp: timestamp, payload: payload
+                ))
+                guard proof.signature.count == 64 else {
+                    throw WalletContext.WalletError.proofInvalid
+                }
+                return proof.signature
+            }
             return try walletOwnershipProofSignature(
                 words: words, expectedAnchorPublicKey: descriptor.publicKey,
                 expectedSigningPublicKey: expectedPublicKey, address: expectedAddress,

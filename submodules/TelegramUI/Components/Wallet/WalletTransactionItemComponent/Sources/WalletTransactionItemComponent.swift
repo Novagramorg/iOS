@@ -112,6 +112,7 @@ public final class WalletTransactionItemComponent: Component {
     public let strings: PresentationStrings
     public let dateTimeFormat: PresentationDateTimeFormat
     public let transaction: WalletContext.Transaction?
+    public let walletAddress: String?
     public let content: Content?
 
     public init(
@@ -119,13 +120,15 @@ public final class WalletTransactionItemComponent: Component {
         theme: PresentationTheme,
         strings: PresentationStrings,
         dateTimeFormat: PresentationDateTimeFormat,
-        transaction: WalletContext.Transaction
+        transaction: WalletContext.Transaction,
+        walletAddress: String? = nil
     ) {
         self.context = context
         self.theme = theme
         self.strings = strings
         self.dateTimeFormat = dateTimeFormat
         self.transaction = transaction
+        self.walletAddress = walletAddress
         self.content = nil
     }
 
@@ -141,6 +144,7 @@ public final class WalletTransactionItemComponent: Component {
         self.strings = strings
         self.dateTimeFormat = dateTimeFormat
         self.transaction = nil
+        self.walletAddress = nil
         self.content = content
     }
 
@@ -158,6 +162,9 @@ public final class WalletTransactionItemComponent: Component {
             return false
         }
         if lhs.transaction != rhs.transaction {
+            return false
+        }
+        if lhs.walletAddress != rhs.walletAddress {
             return false
         }
         if lhs.content != rhs.content {
@@ -423,6 +430,9 @@ public final class WalletTransactionItemComponent: Component {
             let isDeployContract = transaction.kind == .deployContract
             let isKeyChange = transaction.kind == .keyChange
             let hasServiceIcon = isDeployContract || isKeyChange
+            let isSelfTransfer = transaction.isSelfTransfer(walletAddress: component.walletAddress)
+            let displayedDirection: WalletContext.Transaction.Direction = isSelfTransfer ? .incoming : transaction.direction
+            let displayedAmount = isSelfTransfer ? abs(transaction.amount) : transaction.amount
             var subtitleText: String
             var amountValue: Int64
             var amountPrefix: String = ""
@@ -444,7 +454,7 @@ public final class WalletTransactionItemComponent: Component {
                 amountIconColor = nil
                 avatarPeer = nil
             } else {
-                switch transaction.direction {
+                switch displayedDirection {
                 case .incoming:
                     if transaction.collectible != nil {
                         //TODO:localize
@@ -457,7 +467,7 @@ public final class WalletTransactionItemComponent: Component {
                             subtitleText = "Deposit"
                         }
                     }
-                    amountValue = transaction.amount
+                    amountValue = displayedAmount
                     if transaction.currency == .usdt {
                         amountColor = UIColor(rgb: 0x0B9696)
                     } else {
@@ -477,7 +487,7 @@ public final class WalletTransactionItemComponent: Component {
                             subtitleText = "Withdrawal"
                         }
                     }
-                    amountValue = transaction.amount
+                    amountValue = displayedAmount
                     amountColor = component.theme.list.itemPrimaryTextColor
                     amountIconColor = transaction.collectible != nil
                         ? component.theme.list.itemSecondaryTextColor
@@ -485,7 +495,7 @@ public final class WalletTransactionItemComponent: Component {
                     avatarPeer = .transaction(.outgoing)
                 case .unknown:
                     subtitleText = ""
-                    amountValue = transaction.amount
+                    amountValue = displayedAmount
                     amountColor = component.theme.list.itemPrimaryTextColor
                     amountIconColor = nil
                     avatarPeer = nil
@@ -707,7 +717,7 @@ public final class WalletTransactionItemComponent: Component {
             let amountText: String
             let amountIconName: String
             if transaction.collectible != nil {
-                amountText = transaction.direction == .incoming ? "+1 item" : "–1 item"
+                amountText = displayedDirection == .incoming ? "+1 item" : "–1 item"
                 amountIconName = "Wallet/TransactionCollectible"
             } else if transaction.currency == .ton {
                 amountText = amountPrefix + formatTonAmountText(

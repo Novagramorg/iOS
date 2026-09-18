@@ -4,10 +4,20 @@ import ComponentFlow
 import Display
 import ViewControllerComponent
 
-public final class WalletPagerView: UIView, UIScrollViewDelegate {
+public final class WalletPagerView: UIView, UIScrollViewDelegate, ComponentTaggedView {
     public typealias EnvironmentType = ViewControllerComponentContainer.Environment
 
+    public final class Tag {
+        public init() {
+        }
+    }
+
+    public func matches(tag: Any) -> Bool {
+        return tag is Tag
+    }
+
     private let dimView: UIView
+    private var isDimHidden = false
     private let scrollView: UIScrollView
     private var itemViews: [String: ComponentHostView<EnvironmentType>] = [:]
     private var pagerState = WalletPagerState()
@@ -46,6 +56,17 @@ public final class WalletPagerView: UIView, UIScrollViewDelegate {
 
     public required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    public func setDimHidden(_ hidden: Bool, animated: Bool) {
+        self.isDimHidden = hidden
+        let transition: ComponentTransition
+        if animated {
+            transition = ComponentTransition(animation: .curve(duration: 0.3, curve: .linear))
+        } else {
+            transition = .immediate
+        }
+        transition.setAlpha(view: self.dimView, alpha: hidden ? 0.0 : 1.0)
     }
 
     private func reportCurrentIndex() {
@@ -210,11 +231,13 @@ public final class WalletPagerView: UIView, UIScrollViewDelegate {
         }
         self.updatePages(transition: transition)
 
-        if let _ = transition.userData(ViewControllerComponentContainer.AnimateInTransition.self) {
-            self.dimView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.3)
-        } else if self.previousIsDisplaying,
-                  let _ = transition.userData(ViewControllerComponentContainer.AnimateOutTransition.self) {
-            self.dimView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.3, removeOnCompletion: false)
+        if !self.isDimHidden {
+            if let _ = transition.userData(ViewControllerComponentContainer.AnimateInTransition.self) {
+                self.dimView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.3)
+            } else if self.previousIsDisplaying,
+                      let _ = transition.userData(ViewControllerComponentContainer.AnimateOutTransition.self) {
+                self.dimView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.3, removeOnCompletion: false)
+            }
         }
         self.previousIsDisplaying = environment[EnvironmentType.self].value.isVisible
 
