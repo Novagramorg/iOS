@@ -157,6 +157,7 @@ actor WalletEngineStorage {
     }
 
     func loadArchivedWallets() throws -> [WalletEngineArchivedWalletRecord] {
+        try self.readCodable(service: self.descriptorService, account: "archived-wallets") ?? []
     }
 
     func archiveWallet(_ descriptor: WalletEngineDescriptorRecord, balance: Int64?, archivedAt: Int32) throws {
