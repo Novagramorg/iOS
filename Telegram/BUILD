@@ -1687,6 +1687,7 @@ plist_fragment(
     <key>NSUserActivityTypes</key>
     <array>
         <string>INSendMessageIntent</string>
+        <string>INStartCallIntent</string>
         <string>RemindAboutChatIntent</string>
     </array>
     <key>UIAppFonts</key>
