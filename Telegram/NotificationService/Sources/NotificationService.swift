@@ -516,6 +516,8 @@ private struct NotificationContent: CustomStringConvertible {
     var userInfo: [AnyHashable: Any] = [:]
     var attachments: [UNNotificationAttachment] = []
     var silent = false
+    // Fenixuz: set by fenixuzIncomingCallFallbackContent; generate() turns it into a ringing call notification
+    var fenixuzIncomingCallIsVideo: Bool?
 
     var senderPerson: INPerson?
     var senderImage: INImage?
@@ -660,6 +662,11 @@ private struct NotificationContent: CustomStringConvertible {
             }
         }
 
+        // Fenixuz: see fenixuzRingingCallContent
+        if #available(iOS 15.2, *), let isVideo = self.fenixuzIncomingCallIsVideo, let ringingContent = fenixuzRingingCallContent(content, caller: self.senderPerson, isVideo: isVideo) {
+            return ringingContent
+        }
+
         if #available(iOS 15.0, *) {
             if self.isLockedMessage == nil, let senderPerson = self.senderPerson, let customIdentifier = senderPerson.customIdentifier {
                 let mePerson = INPerson(
@@ -747,7 +754,7 @@ private struct NotificationContent: CustomStringConvertible {
 // uses when iOS call integration is off instead, with a sound, and point a tap at the caller's chat on
 // the called account so the app connects while the call is still ringing. If the entitlement is ever
 // granted, the hand-off succeeds and this never runs.
-private func fenixuzIncomingCallFallbackContent(callerTitle: String?, callerPeerId: PeerId, accountId: Int64, incomingCallMessage: String, payloadJson: [String: Any]) -> NotificationContent {
+private func fenixuzIncomingCallFallbackContent(callerTitle: String?, callerPeer: Peer?, callerPeerId: PeerId, accountId: Int64, isVideo: Bool, incomingCallMessage: String, payloadJson: [String: Any], mediaBox: MediaBox, accountPeerId: PeerId) -> NotificationContent {
     var content = NotificationContent(isLockedMessage: nil)
     if let callerTitle {
         content.title = callerTitle
@@ -762,7 +769,60 @@ private func fenixuzIncomingCallFallbackContent(callerTitle: String?, callerPeer
     }
     content.userInfo["peerId"] = "\(callerPeerId.toInt64())"
     content.userInfo["accountId"] = "\(accountId)"
+    if let callerPeer {
+        content.addSenderInfo(mediaBox: mediaBox, accountPeerId: accountPeerId, peer: callerPeer, topicTitle: nil, contactIdentifier: nil, isStory: false)
+    }
+    content.fenixuzIncomingCallIsVideo = isVideo
     return content
+}
+
+// Fenixuz: a plain banner with a 3-second sound reads as a text message, so people missed the calls
+// anyway. UNNotificationSound.defaultRingtone plays the user's own ringtone and haptics for 30
+// seconds — the documented replacement for CallKit when an extension cannot use it — but only on
+// content updated from an INStartCallIntent with destinationType .normal (see UNNotificationSound.h).
+// The intent also makes it a communication notification with the caller's avatar. Requires
+// INStartCallIntent in NSUserActivityTypes (Telegram/BUILD). Returns nil when iOS rejects the intent,
+// and generate() then falls back to the plain banner.
+@available(iOS 15.2, *)
+private func fenixuzRingingCallContent(_ content: UNMutableNotificationContent, caller: INPerson?, isVideo: Bool) -> UNNotificationContent? {
+    let callerPerson = caller ?? INPerson(
+        personHandle: INPersonHandle(value: content.title, type: .unknown),
+        nameComponents: nil,
+        displayName: content.title,
+        image: nil,
+        contactIdentifier: nil,
+        customIdentifier: nil
+    )
+    let intent = INStartCallIntent(
+        callRecordFilter: nil,
+        callRecordToCallBack: nil,
+        audioRoute: .unknown,
+        destinationType: .normal,
+        contacts: [callerPerson],
+        callCapability: isVideo ? .videoCall : .audioCall
+    )
+    let interaction = INInteraction(intent: intent, response: nil)
+    interaction.direction = .incoming
+    interaction.donate(completion: nil)
+
+    content.sound = .defaultRingtone
+    do {
+        return try content.updating(from: intent)
+    } catch let e {
+        Logger.shared.log("NotificationService", "Fenixuz ringing call content failed: \(e)")
+        return nil
+    }
+}
+
+private func fenixuzIsVideoCall(updates: String) -> Bool {
+    var updateString = updates.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+    while updateString.count % 4 != 0 {
+        updateString.append("=")
+    }
+    guard let updateData = Data(base64Encoded: updateString), let callUpdate = AccountStateManager.extractIncomingCallUpdate(data: updateData) else {
+        return false
+    }
+    return callUpdate.isVideo
 }
 
 private func getCurrentRenderedTotalUnreadCount(accountManager: AccountManager<TelegramAccountManagerTypes>, postbox: Postbox) -> Signal<(Int32, RenderedTotalUnreadCountType), NoError> {
@@ -1454,7 +1514,7 @@ private final class NotificationServiceHandler {
 
                                             // Fenixuz: see fenixuzIncomingCallFallbackContent
                                             if error != nil {
-                                                updateCurrentContent(fenixuzIncomingCallFallbackContent(callerTitle: callData.peer?.debugDisplayTitle, callerPeerId: callData.fromId, accountId: callData.accountId, incomingCallMessage: incomingCallMessage, payloadJson: payloadJson))
+                                                updateCurrentContent(fenixuzIncomingCallFallbackContent(callerTitle: callData.peer?.debugDisplayTitle, callerPeer: callData.peer?._asPeer(), callerPeerId: callData.fromId, accountId: callData.accountId, isVideo: fenixuzIsVideoCall(updates: callData.updates), incomingCallMessage: incomingCallMessage, payloadJson: payloadJson, mediaBox: stateManager.postbox.mediaBox, accountPeerId: stateManager.accountPeerId))
                                             }
                                             completed()
                                         })
@@ -1503,7 +1563,7 @@ private final class NotificationServiceHandler {
 
                                             // Fenixuz: see fenixuzIncomingCallFallbackContent
                                             if error != nil {
-                                                updateCurrentContent(fenixuzIncomingCallFallbackContent(callerTitle: fromPeer?.debugDisplayTitle, callerPeerId: groupCallData.fromId, accountId: groupCallData.accountId, incomingCallMessage: incomingCallMessage, payloadJson: payloadJson))
+                                                updateCurrentContent(fenixuzIncomingCallFallbackContent(callerTitle: fromPeer?.debugDisplayTitle, callerPeer: fromPeer, callerPeerId: groupCallData.fromId, accountId: groupCallData.accountId, isVideo: groupCallData.isVideo, incomingCallMessage: incomingCallMessage, payloadJson: payloadJson, mediaBox: stateManager.postbox.mediaBox, accountPeerId: stateManager.accountPeerId))
                                             }
                                             completed()
                                         })
