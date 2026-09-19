@@ -5505,6 +5505,32 @@ completed()
 When the hand-off succeeds (once Apple grants the entitlement and the profile is regenerated) this
 never runs, so nothing needs to be removed then.
 
+**2026-09-19 — the fallback now rings like a call.** On a real TestFlight device the plain banner played
+the 3-second message sound, so people took the call for an SMS. Apple's documented CallKit substitute
+(`UNNotificationSound.h`, Swift name `defaultRingtone`) plays the user's ringtone and haptics for 30 seconds on
+content updated from an `INStartCallIntent` with `destinationType .normal`.
+
+- `NotificationContent` gained `var fenixuzIncomingCallIsVideo: Bool?` (next to `silent`).
+- `generate()` — before the `INSendMessageIntent` block:
+
+```swift
+// Fenixuz: see fenixuzRingingCallContent
+if #available(iOS 15.2, *), let isVideo = self.fenixuzIncomingCallIsVideo, let ringingContent = fenixuzRingingCallContent(content, caller: self.senderPerson, isVideo: isVideo) {
+    return ringingContent
+}
+```
+
+- New file-level `fenixuzRingingCallContent(_:caller:isVideo:)` (donates the `INStartCallIntent`, sets
+  `defaultRingtone`, returns `content.updating(from: intent)`, nil on failure → plain banner) and
+  `fenixuzIsVideoCall(updates:)`.
+- `fenixuzIncomingCallFallbackContent` now also takes `callerPeer`, `isVideo`, `mediaBox`, `accountPeerId`,
+  adds the caller's avatar via `addSenderInfo` and sets the flag; both call sites pass them.
+
+### `Telegram/BUILD` (UPSTREAM hook)
+
+`NSUserActivityTypes` in the app Info.plist fragment gained `<string>INStartCallIntent</string>` — iOS only
+accepts `INStartCallIntent` communication notifications from apps that declare it.
+
 ### `submodules/TelegramUI/Sources/SharedAccountContext.swift` (UPSTREAM hook — multi-account section)
 
 - New state next to `fenixuzPinnedAccountsPromise`: `fenixuzCallWakeHolds` (record id → number of calls
