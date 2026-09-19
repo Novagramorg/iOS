@@ -1276,62 +1276,88 @@ func walletHistoryTransactionForPending(_ pending: WalletContext.PendingTransfer
 }
 
 @available(macOS 10.15, *)
-func walletPendingTransfersMatchingBodies(
-    _ pending: [WalletContext.PendingTransfer],
-    walletAddress: String,
-    traceId: String,
-    finality: WalletStreamingFinality,
-    evidence: [WalletStreamingTransferEvidence]
-) -> [WalletContext.PendingTransfer] {
-    guard walletStreamingHash(traceId) != nil else {
-        return pending
+struct WalletStreamingTransferIdentity {
+    let id: String
+    let recipient: String
+    let normalBodyHash: String?
+    let gaslessBodyHash: String?
+
+    init?(pending: WalletContext.PendingTransfer) {
+        guard pending.collectibleAddress == nil, let data = pending.streamingData else { return nil }
+        self.id = pending.id
+        self.recipient = pending.recipient
+        self.normalBodyHash = data.normalBodyHash
+        self.gaslessBodyHash = data.gaslessBodyHash
     }
-    func matches(_ pending: WalletContext.PendingTransfer, _ evidence: WalletStreamingTransferEvidence) -> Bool {
-        guard pending.collectibleAddress == nil,
-              let data = pending.streamingData,
-              let bodyHash = walletStreamingHash(evidence.bodyHash),
+
+    init(record: WalletTransferSubmissionRecord) {
+        self.id = record.operationId
+        self.recipient = record.recipient
+        self.normalBodyHash = record.normalBodyHash
+        self.gaslessBodyHash = record.gaslessBodyHash
+    }
+}
+
+@available(macOS 10.15, *)
+func walletTransferBodyMatches(
+    _ identities: [WalletStreamingTransferIdentity],
+    walletAddress: String,
+    evidence: [WalletStreamingTransferEvidence]
+) -> [String: WalletStreamingTransferEvidence] {
+    func matches(_ identity: WalletStreamingTransferIdentity, _ evidence: WalletStreamingTransferEvidence) -> Bool {
+        guard let bodyHash = walletStreamingHash(evidence.bodyHash),
               walletEngineAddressesEqual(walletAddress, evidence.walletAddress),
               evidence.transaction.direction == .outgoing,
               evidence.transaction.status != .failed,
               let recipient = evidence.transaction.peer.address,
-              walletEngineAddressesEqual(pending.recipient, recipient) else { return false }
-        return [data.normalBodyHash, data.gaslessBodyHash].contains { walletStreamingHash($0) == bodyHash }
+              walletEngineAddressesEqual(identity.recipient, recipient) else { return false }
+        return [identity.normalBodyHash, identity.gaslessBodyHash].contains { walletStreamingHash($0) == bodyHash }
     }
-    return pending.map { transfer in
-        let candidates = evidence.filter { matches(transfer, $0) }
+    var result: [String: WalletStreamingTransferEvidence] = [:]
+    for identity in identities {
+        let candidates = evidence.filter { matches(identity, $0) }
         guard candidates.count == 1, let match = candidates.first,
-              pending.filter({ matches($0, match) }).count == 1 else {
-            return transfer
-        }
-        if transfer.status == .confirmed,
-           finality == .pending || transfer.transactionHash != match.transaction.transactionHash {
-            return transfer
-        }
-        var streamingData = transfer.streamingData
-        streamingData?.traceId = traceId
-        var updated = transfer
-        updated.streamingData = streamingData
-        guard finality != .pending, match.transaction.status == .completed,
-              walletStreamingHash(match.transaction.transactionHash) != nil else {
-            return updated
-        }
-        if let chainTraceId = walletStreamingHash(match.chainTraceId) {
-            if let previous = streamingData?.chainTraceId, walletStreamingHash(previous) != chainTraceId {
-                return transfer
-            }
-            streamingData?.chainTraceId = chainTraceId.base64EncodedString()
-        }
-        return WalletContext.PendingTransfer(
-            id: transfer.id, recipient: transfer.recipient, amount: transfer.amount,
-            comment: transfer.comment, commentEncrypted: transfer.commentEncrypted,
-            collectibleAddress: transfer.collectibleAddress, normalizedHash: transfer.normalizedHash,
-            sentTransfer: transfer.sentTransfer, expectedGasless: transfer.expectedGasless,
-            pendingMessage: transfer.pendingMessage,
-            streamingData: streamingData, fee: transfer.fee,
-            transactionHash: match.transaction.transactionHash, transactionLt: match.transaction.logicalTime,
-            uiExpiresAt: transfer.uiExpiresAt, createdAt: transfer.createdAt, status: .confirmed
-        )
+              identities.filter({ matches($0, match) }).count == 1 else { continue }
+        result[identity.id] = match
     }
+    return result
+}
+
+@available(macOS 10.15, *)
+func walletPendingTransferMatchingBody(
+    _ transfer: WalletContext.PendingTransfer,
+    match: WalletStreamingTransferEvidence,
+    traceId: String,
+    finality: WalletStreamingFinality
+) -> WalletContext.PendingTransfer {
+    if transfer.status == .confirmed,
+       finality == .pending || transfer.transactionHash != match.transaction.transactionHash {
+        return transfer
+    }
+    var streamingData = transfer.streamingData
+    streamingData?.traceId = traceId
+    var updated = transfer
+    updated.streamingData = streamingData
+    guard finality != .pending, match.transaction.status == .completed,
+          walletStreamingHash(match.transaction.transactionHash) != nil else {
+        return updated
+    }
+    if let chainTraceId = walletStreamingHash(match.chainTraceId) {
+        if let previous = streamingData?.chainTraceId, walletStreamingHash(previous) != chainTraceId {
+            return transfer
+        }
+        streamingData?.chainTraceId = chainTraceId.base64EncodedString()
+    }
+    return WalletContext.PendingTransfer(
+        id: transfer.id, recipient: transfer.recipient, amount: transfer.amount,
+        comment: transfer.comment, commentEncrypted: transfer.commentEncrypted,
+        collectibleAddress: transfer.collectibleAddress, normalizedHash: transfer.normalizedHash,
+        sentTransfer: transfer.sentTransfer, expectedGasless: transfer.expectedGasless,
+        pendingMessage: transfer.pendingMessage,
+        streamingData: streamingData, fee: transfer.fee,
+        transactionHash: match.transaction.transactionHash, transactionLt: match.transaction.logicalTime,
+        uiExpiresAt: transfer.uiExpiresAt, createdAt: transfer.createdAt, status: .confirmed
+    )
 }
 
 @available(macOS 10.15, *)
@@ -1642,6 +1668,7 @@ extension WalletContextImpl {
     }
 
     func reconcileStreamingPendingTransfers(traceId: String, finality: WalletStreamingFinality, evidence: [WalletStreamingTransferEvidence], walletAddress: String) -> [PendingTransfer] {
+        guard walletStreamingHash(traceId) != nil else { return self.currentState.pendingTransfers }
         let activeIds = Set(self.currentState.pendingTransfers.map(\.id))
         let awaitingChatTrace = self.outgoingTransactionPresentationIdentities.values.compactMap { identity -> PendingTransfer? in
             let pending = identity.pendingTransfer
@@ -1649,20 +1676,37 @@ extension WalletContextImpl {
                   pending.pendingMessage != nil, pending.streamingData?.chainTraceId == nil else { return nil }
             return pending
         }
-        let original = self.currentState.pendingTransfers + awaitingChatTrace
-        let updated = walletPendingTransfersMatchingBodies(
-            original, walletAddress: walletAddress,
-            traceId: traceId, finality: finality, evidence: evidence
-        )
-        for (previous, transfer) in zip(original, updated) where previous != transfer {
+        let visible = self.currentState.pendingTransfers + awaitingChatTrace
+        let visibleIds = Set(visible.map(\.id))
+        let retained = self.transferSubmissions.entries.values.compactMap { entry -> WalletStreamingTransferIdentity? in
+            let record = entry.record
+            guard record.resolution == .pending, !visibleIds.contains(record.operationId),
+                  walletEngineAddressesEqual(record.walletAddress, walletAddress) else { return nil }
+            return WalletStreamingTransferIdentity(record: record)
+        }
+        let identities = visible.compactMap(WalletStreamingTransferIdentity.init(pending:)) + retained
+        let matches = walletTransferBodyMatches(identities, walletAddress: walletAddress, evidence: evidence)
+        let updated = visible.map { transfer in
+            matches[transfer.id].map {
+                walletPendingTransferMatchingBody(transfer, match: $0, traceId: traceId, finality: finality)
+            } ?? transfer
+        }
+        for identity in retained {
+            guard let match = matches[identity.id], finality != .pending,
+                  match.transaction.status == .completed,
+                  walletStreamingHash(match.transaction.transactionHash) != nil else { continue }
+            self.markWalletTransferConsumed(identity.id)
+        }
+        for (previous, transfer) in zip(visible, updated) where previous != transfer {
             if let previousTrace = previous.streamingTraceId, previousTrace != transfer.streamingTraceId {
                 let expired = self.streamingPresentationOverlay.expirePendingTraces([previousTrace])
                 self.expiredPendingStreamingTraceIds.formUnion(expired.suppressedTraceIds)
             }
             self.logger.log("event=wallet_pending_body_matched operation_id=\(transfer.id) trace_id=\(traceId) finality=\(finality.diagnosticName) transaction_hash=\(transfer.transactionHash ?? "nil") chain_trace_id=\(transfer.streamingData?.chainTraceId ?? "nil")")
+            if transfer.status == .confirmed { self.markWalletTransferConsumed(transfer.id) }
             self.resolveStreamingPendingMessage(transfer)
         }
-        self.rememberOutgoingTransactionPresentationIdentities(Array(updated.dropFirst(self.currentState.pendingTransfers.count)))
+        self.rememberOutgoingTransactionPresentationIdentities(Array(updated.prefix(visible.count).dropFirst(self.currentState.pendingTransfers.count)))
         return Array(updated.prefix(self.currentState.pendingTransfers.count))
     }
 }

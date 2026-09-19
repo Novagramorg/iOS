@@ -28,11 +28,6 @@ import PasscodeCore
 import QrCodeUI
 import UndoUI
 
-private enum WalletSendInputMode: Equatable {
-    case gram
-    case fiat
-}
-
 private enum WalletSendAmountSource: Equatable {
     case manual
     case transferLink
@@ -46,13 +41,19 @@ private enum WalletSendFeeDisplayState: Equatable {
 }
 
 private struct WalletSendFeeRequest: Equatable {
+    let walletAddress: String
+    let walletPublicKey: String
     let address: String
+    let comment: WalletContext.TransferFeeComment
+}
+
+private struct WalletSendTransferRequest {
+    let feeRequest: WalletSendFeeRequest
     let publicKey: Data?
     let amount: Int64
     let sendAll: Bool
     let comment: String?
     let commentEncrypted: Bool
-    let balance: Int64
 }
 
 private func walletSendShortAddress(_ address: String) -> String {
@@ -60,454 +61,6 @@ private func walletSendShortAddress(_ address: String) -> String {
         return address
     }
     return "\(address.prefix(4))…\(address.suffix(4))"
-}
-
-private func walletSendPlainDateTimeFormat(_ value: PresentationDateTimeFormat) -> PresentationDateTimeFormat {
-    return PresentationDateTimeFormat(
-        timeFormat: value.timeFormat,
-        dateFormat: value.dateFormat,
-        dateSeparator: "",
-        dateSuffix: "",
-        requiresFullYear: false,
-        decimalSeparator: value.decimalSeparator,
-        groupingSeparator: ""
-    )
-}
-
-private func walletSendInputText(
-    amount: Int64,
-    mode: WalletSendInputMode,
-    rate: Double?,
-    dateTimeFormat: PresentationDateTimeFormat
-) -> String {
-    guard amount > 0 else {
-        return ""
-    }
-    switch mode {
-    case .gram:
-        return formatTonAmountText(
-            amount,
-            dateTimeFormat: walletSendPlainDateTimeFormat(dateTimeFormat),
-            maxDecimalPositions: 9
-        )
-    case .fiat:
-        guard let rate, rate.isFinite, rate > 0.0 else {
-            return ""
-        }
-        let value = Double(amount) / 1_000_000_000.0 * rate
-        guard value.isFinite else {
-            return ""
-        }
-        return String(
-            format: "%.2f",
-            locale: Locale(identifier: "en_US_POSIX"),
-            value
-        ).replacingOccurrences(
-            of: ".",
-            with: dateTimeFormat.decimalSeparator
-        )
-    }
-}
-
-private func walletSendNanograms(
-    text: String,
-    mode: WalletSendInputMode,
-    rate: Double?,
-    decimalSeparator: String
-) -> Int64? {
-    guard !text.isEmpty else {
-        return 0
-    }
-
-    let normalizedText = text.replacingOccurrences(of: decimalSeparator, with: ".")
-    switch mode {
-    case .gram:
-        let parts = normalizedText.split(separator: ".", maxSplits: 1, omittingEmptySubsequences: false)
-        guard parts.count <= 2 else {
-            return nil
-        }
-        let wholeText = parts.first.map(String.init) ?? ""
-        let whole: Int64
-        if wholeText.isEmpty {
-            whole = 0
-        } else if let value = Int64(wholeText) {
-            whole = value
-        } else {
-            return nil
-        }
-        guard whole >= 0 else {
-            return nil
-        }
-        let scale: Int64 = 1_000_000_000
-        let (scaledWhole, didOverflow) = whole.multipliedReportingOverflow(by: scale)
-        guard !didOverflow else {
-            return nil
-        }
-
-        var fractionalText = parts.count == 2 ? String(parts[1]) : ""
-        guard fractionalText.count <= 9 else {
-            return nil
-        }
-        fractionalText = fractionalText.padding(toLength: 9, withPad: "0", startingAt: 0)
-        let fractional = Int64(fractionalText) ?? 0
-        let (result, didAddOverflow) = scaledWhole.addingReportingOverflow(fractional)
-        return didAddOverflow ? nil : result
-    case .fiat:
-        guard let rate, rate.isFinite, rate > 0.0,
-              let fiatValue = Double(normalizedText), fiatValue.isFinite, fiatValue >= 0.0 else {
-            return nil
-        }
-        let nanograms = fiatValue / rate * 1_000_000_000.0
-        let roundedNanograms = nanograms.rounded()
-        guard roundedNanograms.isFinite,
-              roundedNanograms >= 0.0,
-              roundedNanograms < Double(Int64.max) else {
-            return nil
-        }
-        return Int64(roundedNanograms)
-    }
-}
-
-private final class WalletSendAmountField: UIView, UITextFieldDelegate {
-    private let gramIcon = ComponentView<Empty>()
-    private let fiatIcon = ComponentView<Empty>()
-    private let textField = UITextField()
-    private let suffix = ComponentView<Empty>()
-    private let integralFont = Font.with(
-        size: 48.0,
-        design: .round,
-        weight: .semibold,
-        traits: .monospacedNumbers
-    )
-    private let fractionalFont = Font.with(size: 32.0, design: .round, weight: .semibold)
-
-    private var gramIconSize: CGSize = .zero
-    private var fiatIconSize: CGSize = .zero
-    private var suffixSize: CGSize = .zero
-
-    private var mode: WalletSendInputMode = .gram
-    private var amount: Int64 = 0
-    private var rate: Double?
-    private var dateTimeFormat: PresentationDateTimeFormat?
-    private var isApplyingText = false
-
-    var amountUpdated: ((Int64) -> Void)?
-    var focusUpdated: ((Bool) -> Void)?
-
-    var isInputActive: Bool {
-        return self.textField.isFirstResponder
-    }
-
-    var hasInputText: Bool {
-        return !(self.textField.text ?? "").isEmpty
-    }
-
-    override init(frame: CGRect) {
-        super.init(frame: frame)
-
-        self.textField.delegate = self
-        self.textField.keyboardType = .decimalPad
-        self.textField.autocorrectionType = .no
-        self.textField.autocapitalizationType = .none
-        self.textField.textAlignment = .left
-        self.textField.addTarget(self, action: #selector(self.textChanged), for: .editingChanged)
-        self.addSubview(self.textField)
-
-        let tapGesture = UITapGestureRecognizer(target: self, action: #selector(self.activateInput))
-        self.addGestureRecognizer(tapGesture)
-    }
-
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
-    @objc func activateInput() {
-        self.textField.becomeFirstResponder()
-    }
-
-    private func amountAttributedText(_ text: String) -> NSAttributedString {
-        let textColor = self.textField.textColor ?? UIColor.black
-        guard let dateTimeFormat = self.dateTimeFormat else {
-            return NSAttributedString(
-                string: text,
-                font: self.integralFont,
-                textColor: textColor
-            )
-        }
-        return tonAmountAttributedString(
-            text,
-            integralFont: self.integralFont,
-            fractionalFont: self.fractionalFont,
-            color: textColor,
-            decimalSeparator: dateTimeFormat.decimalSeparator
-        )
-    }
-
-    @objc private func textChanged() {
-        guard !self.isApplyingText, let dateTimeFormat = self.dateTimeFormat else {
-            return
-        }
-        if let amount = walletSendNanograms(
-            text: self.textField.text ?? "",
-            mode: self.mode,
-            rate: self.rate,
-            decimalSeparator: dateTimeFormat.decimalSeparator
-        ) {
-            self.amount = amount
-            self.amountUpdated?(amount)
-        }
-        self.setNeedsLayout()
-    }
-
-    func setAmount(_ amount: Int64) {
-        self.amount = amount
-        guard let dateTimeFormat = self.dateTimeFormat else {
-            return
-        }
-        self.isApplyingText = true
-        let inputText = walletSendInputText(
-            amount: amount,
-            mode: self.mode,
-            rate: self.rate,
-            dateTimeFormat: dateTimeFormat
-        )
-        self.textField.attributedText = self.amountAttributedText(inputText)
-        self.textField.selectedTextRange = self.textField.textRange(
-            from: self.textField.endOfDocument,
-            to: self.textField.endOfDocument
-        )
-        self.isApplyingText = false
-        self.setNeedsLayout()
-    }
-
-    func update(
-        mode: WalletSendInputMode,
-        amount: Int64,
-        rate: Double?,
-        fiatCurrency: WalletContext.FiatCurrency,
-        dateTimeFormat: PresentationDateTimeFormat,
-        theme: PresentationTheme,
-        transition: ComponentTransition
-    ) {
-        let modeChanged = self.mode != mode
-        let amountChanged = self.amount != amount
-        let rateChanged = self.rate != rate
-        let decimalSeparatorChanged = self.dateTimeFormat?.decimalSeparator != dateTimeFormat.decimalSeparator
-        let textColorChanged = self.textField.textColor?.isEqual(theme.list.itemPrimaryTextColor) != true
-        self.mode = mode
-        self.amount = amount
-        self.rate = rate
-        self.dateTimeFormat = dateTimeFormat
-
-        self.textField.font = self.integralFont
-        self.textField.textColor = theme.list.itemPrimaryTextColor
-        self.textField.tintColor = theme.list.itemAccentColor
-        let keyboardAppearance: UIKeyboardAppearance = theme.overallDarkAppearance ? .dark : .light
-        if self.textField.keyboardAppearance != keyboardAppearance {
-            self.textField.keyboardAppearance = keyboardAppearance
-            if self.textField.isFirstResponder {
-                self.textField.reloadInputViews()
-            }
-        }
-        //TODO:localize
-        let zeroPlaceholder = "0"
-        self.textField.attributedPlaceholder = NSAttributedString(
-            string: zeroPlaceholder,
-            font: self.integralFont,
-            textColor: theme.list.itemSecondaryTextColor
-        )
-
-        let suffixText: String
-        switch mode {
-        case .gram:
-            //TODO:localize
-            suffixText = "GRAM"
-        case .fiat:
-            suffixText = fiatCurrency.code
-        }
-
-        self.gramIconSize = self.gramIcon.update(
-            transition: transition,
-            component: AnyComponent(BundleIconComponent(
-                name: "Wallet/SendGram",
-                tintColor: UIColor(rgb: 0x30A1F5),
-                maxSize: CGSize(width: 44.0, height: 44.0)
-            )),
-            environment: {},
-            containerSize: CGSize(width: 44.0, height: 74.0)
-        )
-        if let gramIconView = self.gramIcon.view {
-            if gramIconView.superview == nil {
-                self.addSubview(gramIconView)
-            }
-            transition.setAlpha(view: gramIconView, alpha: mode == .gram ? 1.0 : 0.0)
-        }
-
-        let currencySymbol = fiatCurrency.symbol
-        self.fiatIconSize = self.fiatIcon.update(
-            transition: transition,
-            component: AnyComponent(MultilineTextComponent(
-                text: .plain(NSAttributedString(
-                    string: currencySymbol,
-                    font: Font.with(size: 48.0, design: .round, weight: .bold),
-                    textColor: theme.list.itemSecondaryTextColor
-                )),
-                maximumNumberOfLines: 1
-            )),
-            environment: {},
-            containerSize: CGSize(width: 40.0, height: 74.0)
-        )
-        if let fiatIconView = self.fiatIcon.view {
-            if fiatIconView.superview == nil {
-                self.addSubview(fiatIconView)
-            }
-            transition.setAlpha(view: fiatIconView, alpha: mode == .fiat ? 1.0 : 0.0)
-        }
-
-        self.suffixSize = self.suffix.update(
-            transition: transition,
-            component: AnyComponent(MultilineTextComponent(
-                text: .plain(NSAttributedString(
-                    string: suffixText,
-                    font: self.fractionalFont,
-                    textColor: theme.list.itemSecondaryTextColor
-                )),
-                maximumNumberOfLines: 1
-            )),
-            environment: {},
-            containerSize: CGSize(width: 150.0, height: 74.0)
-        )
-        if let suffixView = self.suffix.view, suffixView.superview == nil {
-            self.addSubview(suffixView)
-        }
-
-        if modeChanged || ((amountChanged || rateChanged || decimalSeparatorChanged) && !self.textField.isFirstResponder) {
-            self.setAmount(amount)
-            self.textField.reloadInputViews()
-        } else if textColorChanged {
-            self.textField.attributedText = self.amountAttributedText(self.textField.text ?? "")
-        }
-        self.setNeedsLayout()
-    }
-
-    override func layoutSubviews() {
-        super.layoutSubviews()
-
-        let iconLayoutSize = CGSize(width: 40.0, height: 40.0)
-        let iconSpacing: CGFloat = self.mode == .fiat ? 0.0 : 2.0
-        let suffixSpacing: CGFloat = 2.0
-        let displayText = (self.textField.text ?? "").isEmpty ? "0" : (self.textField.text ?? "")
-        let displayTextBounds = self.amountAttributedText(displayText).boundingRect(
-            with: CGSize(width: CGFloat.greatestFiniteMagnitude, height: self.bounds.height),
-            options: [],
-            context: nil
-        )
-        let textWidth = min(
-            max(31.0, ceil(displayTextBounds.width) + 5.0),
-            max(31.0, self.bounds.width - 190.0)
-        )
-        let totalWidth = iconLayoutSize.width + iconSpacing + textWidth + suffixSpacing + self.suffixSize.width
-        var x = floorToScreenPixels((self.bounds.width - totalWidth) / 2.0)
-        let centerY = self.bounds.height / 2.0
-
-        if let gramIconView = self.gramIcon.view {
-            gramIconView.frame = CGRect(
-                origin: CGPoint(
-                    x: x + floorToScreenPixels((iconLayoutSize.width - self.gramIconSize.width) / 2.0),
-                    y: floorToScreenPixels(centerY - self.gramIconSize.height / 2.0)
-                ),
-                size: self.gramIconSize
-            )
-        }
-        if let fiatIconView = self.fiatIcon.view {
-            fiatIconView.frame = CGRect(
-                origin: CGPoint(
-                    x: x + floorToScreenPixels((iconLayoutSize.width - self.fiatIconSize.width) / 2.0),
-                    y: floorToScreenPixels(centerY - self.fiatIconSize.height / 2.0)
-                ),
-                size: self.fiatIconSize
-            )
-        }
-        x += iconLayoutSize.width + iconSpacing
-        self.textField.frame = CGRect(
-            origin: CGPoint(x: x, y: 0.0),
-            size: CGSize(width: textWidth, height: self.bounds.height)
-        )
-        x += textWidth + suffixSpacing
-        if let suffixView = self.suffix.view {
-            suffixView.frame = CGRect(
-                origin: CGPoint(x: x, y: floorToScreenPixels(centerY - self.suffixSize.height / 2.0 + 6.0)),
-                size: self.suffixSize
-            )
-        }
-    }
-
-    func textFieldDidBeginEditing(_ textField: UITextField) {
-        self.focusUpdated?(true)
-    }
-
-    func textFieldDidEndEditing(_ textField: UITextField) {
-        self.focusUpdated?(false)
-    }
-
-    func textField(
-        _ textField: UITextField,
-        shouldChangeCharactersIn range: NSRange,
-        replacementString string: String
-    ) -> Bool {
-        guard let dateTimeFormat = self.dateTimeFormat else {
-            return false
-        }
-
-        var replacement = string
-        if replacement == "." || replacement == "," {
-            replacement = dateTimeFormat.decimalSeparator
-        }
-        var updatedText = ((textField.text ?? "") as NSString).replacingCharacters(in: range, with: replacement)
-        let decimalSeparator = dateTimeFormat.decimalSeparator
-
-        let allowedCharacters = CharacterSet.decimalDigits.union(CharacterSet(charactersIn: decimalSeparator))
-        guard updatedText.unicodeScalars.allSatisfy({ allowedCharacters.contains($0) }) else {
-            return false
-        }
-        guard updatedText.components(separatedBy: decimalSeparator).count <= 2 else {
-            return false
-        }
-        let maximumFractionalDigits = self.mode == .gram ? 9 : 2
-        if let range = updatedText.range(of: decimalSeparator) {
-            let fractionalCount = updatedText[range.upperBound...].count
-            guard fractionalCount <= maximumFractionalDigits else {
-                return false
-            }
-        }
-        if updatedText == decimalSeparator {
-            updatedText = "0" + decimalSeparator
-        }
-        if updatedText.count > 1 && updatedText.hasPrefix("0") && !updatedText.hasPrefix("0" + decimalSeparator) {
-            updatedText.removeFirst()
-        }
-        let shouldAppendDecimalSeparator = !replacement.isEmpty && updatedText == "0"
-        if shouldAppendDecimalSeparator {
-            updatedText += decimalSeparator
-        }
-        guard walletSendNanograms(
-            text: updatedText,
-            mode: self.mode,
-            rate: self.rate,
-            decimalSeparator: decimalSeparator
-        ) != nil else {
-            return false
-        }
-
-        self.isApplyingText = true
-        textField.attributedText = self.amountAttributedText(updatedText)
-        if shouldAppendDecimalSeparator {
-            textField.selectedTextRange = textField.textRange(from: textField.endOfDocument, to: textField.endOfDocument)
-        }
-        self.isApplyingText = false
-        self.textChanged()
-        return false
-    }
 }
 
 @MainActor
@@ -610,6 +163,9 @@ fileprivate final class WalletPeerTransferSubmission {
     private weak var submissionUnknownController: ViewController?
     private var walletAddress: String?
     private let observationDisposable = MetaDisposable()
+    private let submissionDisposable = MetaDisposable()
+    private var submissionStage: WalletContext.TransferSubmissionStage = .waitingForPreviousTransfer
+    private var preparedTransfer: WalletContext.PreparedTransfer?
     private var hasObservedTransfer = false
     private var confirmationObserved = false
     private var observationStopped = false
@@ -648,6 +204,7 @@ fileprivate final class WalletPeerTransferSubmission {
 
     func start(walletContext: WalletContext, prepared: WalletContext.PreparedTransfer, session: PasscodeSession?) {
         self.walletContext = walletContext
+        self.preparedTransfer = prepared
         self.commentSession = session
         if case let .wallet(info) = walletContext.stateValue.phase {
             self.walletAddress = info.address
@@ -678,13 +235,20 @@ fileprivate final class WalletPeerTransferSubmission {
             self.hasObservedTransfer = self.hasObservedTransfer || hasTransfer
         }))
 
-        let _ = walletContext.submitTransfer(prepared, recipientPeerId: self.peer.id, pendingMessageCreated: { [weak self] in
+        self.submissionDisposable.set(walletContext.submitTransfer(prepared, recipientPeerId: self.peer.id, pendingMessageCreated: { [weak self] in
             self?.pendingMessageCreated()
-        }, session: session).startStandalone(next: { [self] pending in
+        }, session: session, stageUpdated: { [weak self] stage in
+            guard let self else { return }
+            self.submissionStage = stage
+            if stage == .submitted {
+                self.commentSession?.invalidate()
+                self.commentSession = nil
+            }
+        }).start(next: { [self] pending in
             self.finish(.success(pending))
         }, error: { [self] error in
             self.finish(.failure(error))
-        })
+        }))
     }
 
     private func withCurrentAccount(_ action: @escaping () -> Void) {
@@ -714,6 +278,9 @@ fileprivate final class WalletPeerTransferSubmission {
 
     func formWillDisappear() {
         self.isClosingForm = true
+        if self.submissionStage == .waitingForPreviousTransfer {
+            self.invalidate()
+        }
     }
 
     func formDidDisappear() {
@@ -743,6 +310,7 @@ fileprivate final class WalletPeerTransferSubmission {
 
     private func finish(_ result: Result<WalletContext.PendingTransfer, WalletContext.WalletError>) {
         guard self.result == nil else { return }
+        self.submissionDisposable.set(nil)
         self.commentSession?.invalidate()
         self.commentSession = nil
         self.result = result
@@ -820,6 +388,14 @@ fileprivate final class WalletPeerTransferSubmission {
 
     private func invalidate() {
         self.isInvalidated = true
+        if self.submissionStage == .waitingForPreviousTransfer {
+            self.submissionDisposable.dispose()
+            self.commentSession?.invalidate()
+            self.commentSession = nil
+            if let preparedTransfer, let walletContext = self.walletContext {
+                let _ = walletContext.discardPreparedTransfer(preparedTransfer).startStandalone()
+            }
+        }
         self.stopObserving()
         self.dismissSubmissionUnknown()
         self.detachFromForm()
@@ -916,12 +492,15 @@ private final class WalletSendScreenComponent: Component {
         private let peerAddressDisposable = MetaDisposable()
         private var peerAddressState: PeerAddressState = .notRequested
         private var isVisible = false
+        private let feeDisposable = MetaDisposable()
         private let transferDisposable = MetaDisposable()
         private let signingAccessDisposable = MetaDisposable()
         private var restorationSession: PasscodeSession?
         private var restorationGeneration = 0
-        private let discardTransferDisposables = DisposableSet()
-        private var cachedPreparedTransfer: WalletContext.PreparedTransfer?
+        private var cachedFeeEstimate: WalletContext.TransferFeeEstimate?
+        private var pendingSend: WalletSendTransferRequest?
+        private var sendRevision = 0
+        private var isPreparingActualTransfer = false
         private var submittingTransfer: WalletContext.PreparedTransfer?
         private var feeRequest: WalletSendFeeRequest?
         private var feeRevision = 0
@@ -930,8 +509,6 @@ private final class WalletSendScreenComponent: Component {
         private var commentSession: PasscodeSession?
         private var commentSessionGeneration = 0
         private var commentSessionAvailable = true
-        private var isAuthorizingComment = false
-        private let commentSessionDisposable = MetaDisposable()
         private let commentEnvironmentDisposable = MetaDisposable()
         private let commentCredentialChangesDisposable = MetaDisposable()
         private var walletInfo: WalletContext.WalletInfo?
@@ -954,6 +531,7 @@ private final class WalletSendScreenComponent: Component {
         private var currentFiatCurrency: WalletContext.FiatCurrency = .usd
         private var currentRate: Double?
         private var lastRateText = ""
+        private var lastRateDisplaysGramIcon = false
         private var recipientAddress = ""
         private var recipientPublicKey: Data?
         private var initialAddress: String?
@@ -963,18 +541,13 @@ private final class WalletSendScreenComponent: Component {
 
             self.addSubview(self.amountField)
             self.amountField.amountUpdated = { [weak self] amount in
-                guard let self else {
+                guard let self, !self.isPreparingTransfer, !self.isResolvingSigningAccess, !self.isSubmittingTransfer else {
                     return
                 }
-                let previousAmount = self.amount
-                let previousSendAll = self.shouldSendAll
                 self.amountSource = .manual
                 self.amount = amount
                 if self.inputMode == .gram, !self.validateTransferAmount() {
                     return
-                }
-                if previousAmount != self.amount || previousSendAll != self.shouldSendAll {
-                    self.invalidateFeePreparation()
                 }
                 if !self.isUpdating {
                     self.componentState?.updated(transition: .immediate)
@@ -1014,15 +587,14 @@ private final class WalletSendScreenComponent: Component {
         deinit {
             self.restorationSession?.invalidate()
             self.commentSession?.invalidate()
-            self.commentSessionDisposable.dispose()
             self.commentEnvironmentDisposable.dispose()
             self.commentCredentialChangesDisposable.dispose()
             self.invalidateFeePreparation()
+            self.feeDisposable.dispose()
             self.walletDisposable.dispose()
             self.peerAddressDisposable.dispose()
             self.transferDisposable.dispose()
             self.signingAccessDisposable.dispose()
-            self.discardTransferDisposables.dispose()
         }
 
         func isPanGestureEnabled() -> Bool {
@@ -1041,7 +613,10 @@ private final class WalletSendScreenComponent: Component {
         func viewWillDisappear() {
             self.isVisible = false
             if !self.isSubmittingTransfer {
-                self.invalidateFeePreparation()
+                self.cancelPendingSend()
+                if self.isEstimatingFee {
+                    self.invalidateFeePreparation()
+                }
             }
         }
 
@@ -1118,24 +693,26 @@ private final class WalletSendScreenComponent: Component {
         }
 
         private var commentEncrypted: Bool {
-            return self.component?.peer != nil && self.comment != nil && !self.isCommentPublic
+            return self.component?.peer != nil
+                && self.comment?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+                && !self.isCommentPublic
         }
 
         private var currentFeeRequest: WalletSendFeeRequest? {
-            guard self.walletInfo?.canSign == true,
-                  let balance = self.walletBalance,
-                  self.amount > 0, self.amount <= balance,
-                  !self.recipientAddress.isEmpty else {
-                return nil
+            guard let walletInfo = self.walletInfo, !self.recipientAddress.isEmpty else { return nil }
+            let comment: WalletContext.TransferFeeComment
+            if self.commentEncrypted {
+                comment = .encrypted
+            } else if let text = self.comment?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty {
+                comment = .plainText(byteCount: text.utf8.count)
+            } else {
+                comment = .none
             }
             return WalletSendFeeRequest(
+                walletAddress: walletInfo.address,
+                walletPublicKey: walletInfo.publicKey,
                 address: self.recipientAddress,
-                publicKey: self.recipientPublicKey,
-                amount: self.amount,
-                sendAll: self.shouldSendAll,
-                comment: self.comment,
-                commentEncrypted: self.commentEncrypted,
-                balance: balance
+                comment: comment
             )
         }
 
@@ -1155,30 +732,23 @@ private final class WalletSendScreenComponent: Component {
             )
         }
 
-        private func preparedTransfer(for request: WalletSendFeeRequest) -> WalletContext.PreparedTransfer? {
-            guard self.feeRequest == request,
-                  let prepared = self.cachedPreparedTransfer,
-                  TimeInterval(prepared.expiresAt) > Date().timeIntervalSince1970,
-                  !request.commentEncrypted || self.commentSession?.isValid == true else {
-                return nil
-            }
-            return prepared
-        }
-
         private var feeDisplayState: WalletSendFeeDisplayState {
-            guard self.amount > 0 else { return .hidden }
             if !self.isSelfTransfer {
                 if case .stale = self.gaslessInfo { return .unavailable }
-                guard self.gaslessInfo.currentValue != nil else { return .loading }
+                guard let gaslessInfo = self.gaslessInfo.currentValue else { return .loading }
+                if self.amount == 0 && gaslessInfo.available && gaslessInfo.left > 0 { return .hidden }
             }
             if !self.shouldSendAll && self.feesAreCovered(amount: self.amount) { return .hidden }
-            if let prepared = self.submittingTransfer ?? self.currentFeeRequest.flatMap({ self.preparedTransfer(for: $0) }) {
+            if let prepared = self.submittingTransfer {
                 if self.feesAreCovered(amount: prepared.amount) || prepared.fee == 0 { return .hidden }
                 return .value(prepared.fee)
             }
-            if self.feePreparationFailed || (self.commentEncrypted && self.commentSession?.isValid != true && !self.isAuthorizingComment) {
-                return .unavailable
+            if self.feeRequest == self.currentFeeRequest, let estimate = self.cachedFeeEstimate {
+                let effectiveAmount = self.shouldSendAll ? max(0, self.amount - estimate.fee) : self.amount
+                if self.feesAreCovered(amount: effectiveAmount) || estimate.fee == 0 { return .hidden }
+                return .value(estimate.fee)
             }
+            if self.feePreparationFailed { return .unavailable }
             if self.peerAddressState == .failed || self.peerAddressState == .errorPresented || self.peerAddressState == .cancelled {
                 return .unavailable
             }
@@ -1187,18 +757,21 @@ private final class WalletSendScreenComponent: Component {
         }
 
         private func updateFeePreparation() {
-            guard self.isVisible, self.commentSessionAvailable, !self.isSubmittingTransfer, !self.isAuthorizingComment else { return }
+            guard self.isVisible, self.commentSessionAvailable, !self.isSubmittingTransfer else { return }
             let request = self.currentFeeRequest
             if self.feeRequest != request {
+                if let pendingSend = self.pendingSend, pendingSend.feeRequest != request {
+                    self.cancelPendingSend()
+                }
                 self.invalidateFeePreparation()
                 self.feeRequest = request
             }
-            guard let request, !self.isPreparingTransfer,
-                  !self.isEstimatingFee, !self.feePreparationFailed else { return }
-            if self.preparedTransfer(for: request) != nil { return }
-            guard request.sendAll || !self.feesAreCovered(amount: request.amount) else { return }
-            guard !request.commentEncrypted || self.commentSession?.isValid == true else { return }
-
+            guard let request else { return }
+            if self.cachedFeeEstimate != nil {
+                self.continuePendingSend()
+                return
+            }
+            guard !self.isEstimatingFee, !self.feePreparationFailed else { return }
             self.isEstimatingFee = true
             let revision = self.feeRevision
             Queue.mainQueue().after(0.4) { [weak self] in
@@ -1211,136 +784,67 @@ private final class WalletSendScreenComponent: Component {
             guard let walletContext = self.walletContext,
                   self.isVisible, self.commentSessionAvailable,
                   self.feeRevision == revision, self.currentFeeRequest == request else { return }
-            guard !request.commentEncrypted || self.commentSession?.isValid == true else {
-                self.invalidateCommentSession()
-                self.componentState?.updated(transition: .immediate)
-                return
-            }
-            self.discardCachedTransfer()
             self.isEstimatingFee = true
             self.feePreparationFailed = false
-            let session = request.commentEncrypted ? self.commentSession : nil
-            self.transferDisposable.set((walletContext.state
+            self.feeDisposable.set((walletContext.state
             |> filter { $0.activeOperation == nil }
             |> take(1)
             |> castError(WalletContext.WalletError.self)
             |> mapToSignal { _ in
-                return walletContext.prepareTransfer(
-                    address: request.address,
-                    amount: request.amount,
-                    sendAll: request.sendAll,
-                    comment: request.comment,
-                    commentEncrypted: request.commentEncrypted,
-                    recipientPublicKey: request.publicKey,
-                    session: session
-                )
+                return walletContext.estimateTransferFee(address: request.address, comment: request.comment)
             }
-            |> deliverOnMainQueue).start(next: { [weak self] prepared in
+            |> deliverOnMainQueue).start(next: { [weak self] estimate in
                 guard let self, self.walletContext === walletContext,
-                      self.isVisible, self.feeRevision == revision, self.currentFeeRequest == request else {
-                    let _ = walletContext.discardPreparedTransfer(prepared).startStandalone()
-                    return
-                }
+                      self.isVisible, self.feeRevision == revision, self.currentFeeRequest == request else { return }
                 self.isEstimatingFee = false
-                self.discardCachedTransfer()
-                self.cachedPreparedTransfer = prepared
-                if self.isPreparingTransfer {
-                    self.completePreparedSend(prepared)
-                } else {
-                    self.componentState?.updated(transition: .easeInOut(duration: 0.2))
-                    let delay = max(0.0, TimeInterval(prepared.expiresAt) - Date().timeIntervalSince1970)
-                    Queue.mainQueue().after(delay) { [weak self] in
-                        guard let self, self.cachedPreparedTransfer?.id == prepared.id, !self.isSubmittingTransfer else { return }
-                        self.invalidateFeePreparation()
-                        self.updateFeePreparation()
-                        self.componentState?.updated(transition: .immediate)
-                    }
-                }
+                self.cachedFeeEstimate = estimate
+                self.continuePendingSend()
+                self.componentState?.updated(transition: .easeInOut(duration: 0.2))
             }, error: { [weak self] error in
                 guard let self, self.walletContext === walletContext, self.feeRevision == revision else { return }
-                let wasSending = self.isPreparingTransfer
+                let wasSending = self.pendingSend != nil
                 self.isEstimatingFee = false
-                self.isPreparingTransfer = false
                 self.feePreparationFailed = true
+                if wasSending { self.cancelPendingSend() }
                 self.componentState?.updated(transition: .easeInOut(duration: 0.2))
                 if wasSending { self.presentTransferError(error) }
             }))
         }
 
         fileprivate func invalidateCommentSession() {
-            self.commentSessionGeneration &+= 1
-            self.commentSessionDisposable.set(nil)
-            self.commentSession?.invalidate()
-            self.commentSession = nil
-            self.isAuthorizingComment = false
-            if self.commentEncrypted && !self.isSubmittingTransfer {
-                self.invalidateFeePreparation()
+            if !self.isSubmittingTransfer {
+                self.cancelPendingSend()
             }
         }
 
         private func installCommentSession(_ session: PasscodeSession) {
             self.commentSession = session
             guard let expiresAt = session.expiresAt else { return }
+            let generation = self.commentSessionGeneration
             let delay = max(0.0, expiresAt - ProcessInfo.processInfo.systemUptime)
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self, weak session] in
-                guard let self, let session, self.commentSession === session else { return }
+                guard let self, let session, self.commentSessionGeneration == generation,
+                      self.commentSession === session else { return }
                 self.invalidateCommentSession()
                 self.componentState?.updated(transition: .immediate)
             }
-        }
-
-        private func requestCommentSession(forSend: Bool) {
-            guard !self.isAuthorizingComment, self.commentSessionAvailable,
-                  let walletContext = self.walletContext else { return }
-            if self.commentSession?.isValid == true {
-                self.updateFeePreparation()
-                return
-            }
-            self.invalidateCommentSession()
-            let generation = self.commentSessionGeneration
-            self.isAuthorizingComment = true
-            self.isPreparingTransfer = forSend
-            self.componentState?.updated(transition: .easeInOut(duration: 0.2))
-            self.commentSessionDisposable.set(walletContext.beginCommentEncryptionSession().start(next: { [weak self] session in
-                guard let self, self.commentSessionGeneration == generation,
-                      self.commentSessionAvailable, self.walletContext === walletContext else {
-                    session.invalidate()
-                    return
-                }
-                let shouldSend = forSend && self.isPreparingTransfer
-                self.isAuthorizingComment = false
-                self.isPreparingTransfer = false
-                self.installCommentSession(session)
-                if shouldSend, let component = self.component {
-                    self.performSend(component: component)
-                } else {
-                    self.updateFeePreparation()
-                }
-                self.componentState?.updated(transition: .easeInOut(duration: 0.2))
-            }, error: { [weak self] error in
-                guard let self, self.commentSessionGeneration == generation else { return }
-                self.isAuthorizingComment = false
-                self.isPreparingTransfer = false
-                self.feeRequest = self.currentFeeRequest
-                self.feePreparationFailed = true
-                self.componentState?.updated(transition: .easeInOut(duration: 0.2))
-                self.presentTransferError(error)
-            }))
         }
 
         private func updateRecipient(address: String, publicKey: Data?) {
             guard self.recipientAddress != address || self.recipientPublicKey != publicKey else {
                 return
             }
+            let previousRequest = self.currentFeeRequest
+            self.cancelPendingSend()
             self.recipientAddress = address
             self.recipientPublicKey = publicKey
-            self.invalidateFeePreparation()
+            if previousRequest != self.currentFeeRequest {
+                self.invalidateFeePreparation()
+            }
         }
 
         private func applyRecipient(_ value: String) {
-            let previousAmount = self.amount
-            let previousSendAll = self.shouldSendAll
-            let previousComment = self.comment
+            let previousRequest = self.currentFeeRequest
             var address = value.trimmingCharacters(in: .whitespacesAndNewlines)
             if let components = URLComponents(string: address), components.scheme?.lowercased() == "ton" {
                 if components.host?.lowercased() == "transfer" {
@@ -1358,9 +862,7 @@ private final class WalletSendScreenComponent: Component {
                 }
             }
             self.updateRecipient(address: address, publicKey: nil)
-            if previousAmount != self.amount
-                || previousSendAll != self.shouldSendAll
-                || previousComment != self.comment {
+            if previousRequest != self.currentFeeRequest {
                 self.invalidateFeePreparation()
             }
             if !self.isUpdating {
@@ -1369,7 +871,8 @@ private final class WalletSendScreenComponent: Component {
         }
 
         private func toggleInputMode() {
-            guard let rate = self.currentRate, rate.isFinite, rate > 0.0 else {
+            guard !self.isPreparingTransfer, !self.isResolvingSigningAccess, !self.isSubmittingTransfer,
+                  let rate = self.currentRate, rate.isFinite, rate > 0.0 else {
                 return
             }
             switch self.inputMode {
@@ -1386,6 +889,7 @@ private final class WalletSendScreenComponent: Component {
 
         private func dismiss() {
             self.abandonRestoration()
+            self.cancelPendingSend()
             self.isVisible = false
             self.peerAddressState = .cancelled
             self.peerAddressDisposable.set(nil)
@@ -1425,7 +929,7 @@ private final class WalletSendScreenComponent: Component {
         }
 
         private func showCommentAlert() {
-            guard !self.isPreparingTransfer, !self.isResolvingSigningAccess, !self.isAuthorizingComment,
+            guard !self.isPreparingTransfer, !self.isResolvingSigningAccess, !self.isSubmittingTransfer,
                   let component = self.component, let controller = self.environment?.controller() else {
                 return
             }
@@ -1481,20 +985,16 @@ private final class WalletSendScreenComponent: Component {
                 actions: [
                     AlertScreen.Action(title: cancel),
                     AlertScreen.Action(title: actionTitle, type: .default, action: { [weak self] in
-                        guard let self else {
+                        guard let self, !self.isPreparingTransfer, !self.isSubmittingTransfer else {
                             return
                         }
                         let value = inputState.value.string.trimmingCharacters(in: .whitespacesAndNewlines)
                         let comment = value.isEmpty ? nil : value
-                        if self.comment != comment || self.isCommentPublic != publicCommentState.value {
+                        let previousRequest = self.currentFeeRequest
+                        self.comment = comment
+                        self.isCommentPublic = publicCommentState.value
+                        if previousRequest != self.currentFeeRequest {
                             self.invalidateFeePreparation()
-                            self.comment = comment
-                            self.isCommentPublic = publicCommentState.value
-                        }
-                        if self.commentEncrypted {
-                            self.requestCommentSession(forSend: false)
-                        } else {
-                            self.invalidateCommentSession()
                         }
                         self.componentState?.updated(transition: .spring(duration: 0.35))
                     })
@@ -1561,7 +1061,6 @@ private final class WalletSendScreenComponent: Component {
             }
 
             self.amount = configuration.transferMinAmount
-            self.invalidateFeePreparation()
             self.amountField.setAmount(self.amount)
             self.amountField.layer.addShakeAnimation()
             HapticFeedback().error()
@@ -1573,12 +1072,13 @@ private final class WalletSendScreenComponent: Component {
 
         private func send() {
             guard let component = self.component,
+                  self.isVisible, self.commentSessionAvailable,
                   self.amount > 0,
                   !self.isPreparingTransfer,
                   !self.isSubmittingTransfer,
                   !self.isResolvingSigningAccess,
                   !self.walletIsLoading,
-                  let walletInfo = self.walletInfo,
+                  self.walletInfo != nil,
                   let balance = self.walletBalance,
                   self.amount <= balance else {
                 return
@@ -1589,10 +1089,20 @@ private final class WalletSendScreenComponent: Component {
             guard self.validateTransferAmount() else {
                 return
             }
-            guard walletInfo.canSign else {
-                self.resolveSigningAccess(walletInfo: walletInfo)
-                return
-            }
+            guard let feeRequest = self.currentFeeRequest else { return }
+            self.sendRevision &+= 1
+            self.pendingSend = WalletSendTransferRequest(
+                feeRequest: feeRequest,
+                publicKey: self.recipientPublicKey,
+                amount: self.amount,
+                sendAll: self.shouldSendAll,
+                comment: self.comment,
+                commentEncrypted: self.commentEncrypted
+            )
+            self.isPreparingTransfer = true
+            self.amountField.isUserInteractionEnabled = false
+            self.amountField.endEditing(true)
+            self.componentState?.updated(transition: .immediate)
             self.performSend(component: component)
         }
 
@@ -1637,6 +1147,8 @@ private final class WalletSendScreenComponent: Component {
                     }
                 ))
             } else {
+                self.cancelPendingSend()
+                self.componentState?.updated(transition: .immediate)
                 self.openRecoveryPhraseImport()
             }
         }
@@ -1680,10 +1192,9 @@ private final class WalletSendScreenComponent: Component {
         }
 
         private func finishResolvingSigningAccess(error: WalletContext.WalletError) {
-            self.isResolvingSigningAccess = false
-            self.continueSendingAfterSigningAccess = false
+            self.cancelPendingSend()
             self.componentState?.updated(transition: .easeInOut(duration: 0.2))
-            if error == .authorizationCancelled { self.abandonRestoration(); return }
+            if error == .authorizationCancelled { return }
             guard let component = self.component,
                   let controller = self.environment?.controller() else {
                 return
@@ -1700,8 +1211,8 @@ private final class WalletSendScreenComponent: Component {
                         self.abandonRestoration()
                     }),
                     TextAlertAction(type: .defaultAction, title: "Retry", action: { [weak self] in
-                        guard let self, self.restorationGeneration == generation, let walletInfo = self.walletInfo else { return }
-                        self.resolveSigningAccess(walletInfo: walletInfo)
+                        guard let self, self.restorationGeneration == generation else { return }
+                        self.send()
                     })
                 ],
                 dismissOnOutsideTap: false
@@ -1757,50 +1268,124 @@ private final class WalletSendScreenComponent: Component {
         }
 
         private func performSend(component: WalletSendScreenComponent) {
-            guard self.amount > 0,
-                  !self.isPreparingTransfer,
-                  !self.isSubmittingTransfer,
-                  !self.isResolvingSigningAccess,
-                  !self.isAuthorizingComment,
-                  !self.walletIsLoading,
-                  self.walletInfo?.canSign == true,
-                  let balance = self.walletBalance,
-                  self.amount <= balance,
-                  !self.recipientAddress.isEmpty else {
+            guard self.isVisible, self.commentSessionAvailable,
+                  self.walletContext === component.walletContext,
+                  let request = self.pendingSend,
+                  self.walletInfo != nil else { return }
+            guard self.currentFeeRequest == request.feeRequest else {
+                self.cancelPendingSend()
+                self.componentState?.updated(transition: .immediate)
                 return
             }
-            guard self.validateTransferAmount() else { return }
-            if self.commentEncrypted && self.commentSession?.isValid != true {
-                self.requestCommentSession(forSend: true)
-                return
+            self.feePreparationFailed = false
+            self.updateFeePreparation()
+            self.componentState?.updated(transition: .immediate)
+        }
+
+        private func continuePendingSend() {
+            guard self.isVisible, self.commentSessionAvailable,
+                  !self.isSubmittingTransfer, !self.isResolvingSigningAccess,
+                  !self.isPreparingActualTransfer,
+                  let walletContext = self.walletContext,
+                  let request = self.pendingSend,
+                  self.currentFeeRequest == request.feeRequest,
+                  self.feeRequest == request.feeRequest, self.cachedFeeEstimate != nil else { return }
+            self.isPreparingActualTransfer = true
+            let revision = self.sendRevision
+            self.transferDisposable.set((walletContext.state
+            |> filter { $0.activeOperation == nil }
+            |> take(1)
+            |> castError(WalletContext.WalletError.self)
+            |> deliverOnMainQueue
+            |> mapToSignal { [weak self] state -> Signal<PasscodeSession?, WalletContext.WalletError> in
+                guard let self, self.sendRevision == revision, self.pendingSend != nil,
+                      self.isVisible, self.walletContext === walletContext else { return .fail(.authorizationCancelled) }
+                guard case let .wallet(info) = state.phase else { return .fail(.unavailable) }
+                if !info.canSign {
+                    self.isPreparingActualTransfer = false
+                    self.resolveSigningAccess(walletInfo: info)
+                    return .complete()
+                }
+                guard request.commentEncrypted else { return .single(nil) }
+                return walletContext.beginCommentEncryptionSession()
+                |> mapToSignal { [weak self] session -> Signal<PasscodeSession?, WalletContext.WalletError> in
+                    guard let self, self.sendRevision == revision, self.pendingSend != nil,
+                          self.isVisible, self.commentSessionAvailable, self.walletContext === walletContext else {
+                        session.invalidate()
+                        return .fail(.authorizationCancelled)
+                    }
+                    self.installCommentSession(session)
+                    return .single(session)
+                }
             }
-            guard let request = self.currentFeeRequest else { return }
-            if self.feeRequest != request {
-                self.invalidateFeePreparation()
-                self.feeRequest = request
+            |> mapToSignal { [weak self] session -> Signal<WalletContext.PreparedTransfer, WalletContext.WalletError> in
+                // Another wallet operation may start during authorization.
+                return walletContext.state
+                |> filter { $0.activeOperation == nil }
+                |> take(1)
+                |> castError(WalletContext.WalletError.self)
+                |> deliverOnMainQueue
+                |> mapToSignal { [weak self] state -> Signal<WalletContext.PreparedTransfer, WalletContext.WalletError> in
+                    guard let self, self.sendRevision == revision, self.pendingSend != nil,
+                          self.isVisible, self.commentSessionAvailable, self.walletContext === walletContext,
+                          self.currentFeeRequest == request.feeRequest else { return .fail(.authorizationCancelled) }
+                    guard let balance = state.balance.currentValue, request.amount <= balance else {
+                        return .fail(.insufficientBalance(required: request.amount))
+                    }
+                    // An all-balance send must not silently spend a balance that changed
+                    // while the user was waiting or authorizing this amount.
+                    if request.sendAll && balance != request.amount { return .fail(.previewFailed) }
+                    return walletContext.prepareTransfer(
+                        address: request.feeRequest.address,
+                        amount: request.amount,
+                        sendAll: request.sendAll,
+                        comment: request.comment,
+                        commentEncrypted: request.commentEncrypted,
+                        recipientPublicKey: request.publicKey,
+                        session: session
+                    )
+                }
             }
-            self.isPreparingTransfer = true
-            if let prepared = self.preparedTransfer(for: request) {
+            |> deliverOnMainQueue).start(next: { [weak self] prepared in
+                guard let self, self.sendRevision == revision, self.pendingSend != nil,
+                      self.isVisible, self.walletContext === walletContext else {
+                    let _ = walletContext.discardPreparedTransfer(prepared).startStandalone()
+                    return
+                }
+                self.isPreparingActualTransfer = false
                 self.completePreparedSend(prepared)
-            } else if !self.isEstimatingFee {
-                self.prepareFee(request: request, revision: self.feeRevision)
-            }
-            self.componentState?.updated(transition: .easeInOut(duration: 0.2))
+            }, error: { [weak self] error in
+                guard let self, self.sendRevision == revision, self.walletContext === walletContext else { return }
+                self.cancelPendingSend()
+                self.componentState?.updated(transition: .easeInOut(duration: 0.2))
+                self.presentTransferError(error)
+            }))
         }
 
         private func completePreparedSend(_ prepared: WalletContext.PreparedTransfer) {
             guard self.isVisible, let component = self.component,
-                  let controller = self.environment?.controller() else { return }
+                  let controller = self.environment?.controller() else {
+                if let walletContext = self.walletContext {
+                    let _ = walletContext.discardPreparedTransfer(prepared).startStandalone()
+                }
+                self.cancelPendingSend()
+                self.componentState?.updated(transition: .immediate)
+                return
+            }
             if let peer = component.peer {
-                guard let controller = controller as? WalletSendScreen else { return }
-                self.cachedPreparedTransfer = nil
+                guard let controller = controller as? WalletSendScreen else {
+                    let _ = component.walletContext.discardPreparedTransfer(prepared).startStandalone()
+                    self.cancelPendingSend()
+                    self.componentState?.updated(transition: .immediate)
+                    return
+                }
                 self.submittingTransfer = prepared
                 self.isSubmittingTransfer = true
+                self.pendingSend = nil
                 let session = prepared.commentEncrypted ? self.commentSession : nil
                 // The submission outlives the form and owns the borrowed session until completion.
                 self.commentSession = nil
                 self.commentSessionGeneration &+= 1
-                self.commentSessionDisposable.set(nil)
                 let submission = WalletPeerTransferSubmission(
                     context: component.context,
                     peer: peer,
@@ -1819,9 +1404,7 @@ private final class WalletSendScreenComponent: Component {
                               self.component?.walletContext === component.walletContext else { return false }
                         self.isSubmittingTransfer = false
                         self.submittingTransfer = nil
-                        self.invalidateFeePreparation()
-                        self.feeRequest = self.currentFeeRequest
-                        self.feePreparationFailed = true
+                        self.cancelPendingSend()
                         self.componentState?.updated(transition: .easeInOut(duration: 0.2))
                         self.presentTransferError(error)
                         return true
@@ -1831,7 +1414,7 @@ private final class WalletSendScreenComponent: Component {
                 return
             }
 
-            self.cachedPreparedTransfer = nil
+            self.pendingSend = nil
             self.isPreparingTransfer = false
             let dismissSendScreen: () -> Void = { [weak controller] in
                 guard let controller else { return }
@@ -1854,23 +1437,25 @@ private final class WalletSendScreenComponent: Component {
 
         private func invalidateFeePreparation() {
             self.feeRevision &+= 1
-            self.transferDisposable.set(nil)
+            self.feeDisposable.set(nil)
             self.feeRequest = nil
             self.isEstimatingFee = false
             self.feePreparationFailed = false
-            self.isPreparingTransfer = false
-            self.discardCachedTransfer()
+            self.cachedFeeEstimate = nil
         }
 
-        private func discardCachedTransfer() {
-            guard let walletContext = self.walletContext,
-                  let preparedTransfer = self.cachedPreparedTransfer else {
-                return
-            }
-            self.cachedPreparedTransfer = nil
-            self.discardTransferDisposables.add(
-                walletContext.discardPreparedTransfer(preparedTransfer).start()
-            )
+        private func cancelPendingSend() {
+            guard !self.isSubmittingTransfer else { return }
+            self.sendRevision &+= 1
+            self.pendingSend = nil
+            self.isPreparingTransfer = false
+            self.isPreparingActualTransfer = false
+            self.transferDisposable.set(nil)
+            self.commentSessionGeneration &+= 1
+            self.commentSession?.invalidate()
+            self.commentSession = nil
+            self.abandonRestoration()
+            self.amountField.isUserInteractionEnabled = true
         }
 
         private func presentTransferError(_ error: WalletContext.WalletError? = nil) {
@@ -1919,12 +1504,12 @@ private final class WalletSendScreenComponent: Component {
                 if let amount = component.initialAmountNanograms {
                     self.amount = amount
                     self.amountSource = .transferLink
-                    self.invalidateFeePreparation()
                 }
             }
 
             if self.walletContext !== component.walletContext {
-                self.abandonRestoration()
+                self.isSubmittingTransfer = false
+                self.submittingTransfer = nil
                 self.invalidateCommentSession()
                 self.invalidateFeePreparation()
                 self.walletContext = component.walletContext
@@ -1934,8 +1519,6 @@ private final class WalletSendScreenComponent: Component {
                 self.gaslessInfo = .idle
                 self.walletAddress = nil
                 self.walletIsLoading = true
-                self.isSubmittingTransfer = false
-                self.submittingTransfer = nil
                 self.isResolvingSigningAccess = false
                 self.continueSendingAfterSigningAccess = false
                 self.currentFiatCurrency = .usd
@@ -1967,7 +1550,6 @@ private final class WalletSendScreenComponent: Component {
                     guard let self, self.walletContext === observedWalletContext else {
                         return
                     }
-                    let previousSendAll = self.shouldSendAll
                     if let previousInfo = self.walletInfo {
                         switch walletState.phase {
                         case let .wallet(info) where previousInfo.address == info.address && previousInfo.publicKey == info.publicKey:
@@ -1980,9 +1562,6 @@ private final class WalletSendScreenComponent: Component {
                     }
                     self.walletBalance = walletState.balance.currentValue
                     self.gaslessInfo = walletState.gaslessInfo
-                    if previousSendAll != self.shouldSendAll && !self.isSubmittingTransfer {
-                        self.invalidateFeePreparation()
-                    }
                     if case let .wallet(info) = walletState.phase {
                         self.walletInfo = info
                         self.walletAddress = info.address
@@ -1990,7 +1569,8 @@ private final class WalletSendScreenComponent: Component {
                         self.walletInfo = nil
                         self.walletAddress = nil
                     }
-                    let isOwnPreparation = self.isEstimatingFee && walletState.activeOperation == .preparingTransfer
+                    let isOwnPreparation = (self.isEstimatingFee || self.isPreparingActualTransfer)
+                        && walletState.activeOperation == .preparingTransfer
                     self.walletIsLoading = walletState.balance.currentValue == nil
                         || (walletState.activeOperation != nil && !isOwnPreparation)
                     self.currentFiatCurrency = walletState.fiat.selectedCurrency
@@ -2013,6 +1593,7 @@ private final class WalletSendScreenComponent: Component {
                 self.resolvePeerAddressIfNeeded()
             }
             self.updateFeePreparation()
+            self.amountField.isUserInteractionEnabled = !self.isPreparingTransfer && !self.isResolvingSigningAccess && !self.isSubmittingTransfer
 
             let theme = environment.theme
             self.backgroundColor = theme.list.modalPlainBackgroundColor
@@ -2224,21 +1805,19 @@ private final class WalletSendScreenComponent: Component {
                     )
                     rateText = "~" + formattedFiatValue + fiatSwitchSuffix
                 case .fiat:
-                    let gramValue = formatTonAmountText(
+                    rateText = formatTonAmountText(
                         self.amount,
                         dateTimeFormat: environment.dateTimeFormat,
                         maxDecimalPositions: 3
                     )
-                    //TODO:localize
-                    let gramSuffix = " GRAM"
-                    rateText = gramValue + gramSuffix
                 }
             }
             let showRate = hasAmount && !rateText.isEmpty
             if showRate {
                 self.lastRateText = rateText
+                self.lastRateDisplaysGramIcon = self.inputMode == .fiat
             }
-            let rateItems: [AnyComponentWithIdentity<Empty>] = [
+            var rateItems: [AnyComponentWithIdentity<Empty>] = [
                 AnyComponentWithIdentity(
                     id: "title",
                     component: AnyComponent(AnimatedTextComponent(
@@ -2247,7 +1826,8 @@ private final class WalletSendScreenComponent: Component {
                         items: [
                             AnimatedTextComponent.Item(id: "rate", content: .text(self.lastRateText))
                         ],
-                        noDelay: true
+                        noDelay: true,
+                        blur: true
                     ))
                 ),
                 AnyComponentWithIdentity(
@@ -2259,6 +1839,16 @@ private final class WalletSendScreenComponent: Component {
                     ))
                 )
             ]
+            if self.lastRateDisplaysGramIcon {
+                rateItems.insert(AnyComponentWithIdentity(
+                    id: "gramIcon",
+                    component: AnyComponent(BundleIconComponent(
+                        name: "Wallet/SendGram",
+                        tintColor: UIColor(rgb: 0x30A1F5),
+                        maxSize: CGSize(width: 16.0, height: 16.0)
+                    ))
+                ), at: 0)
+            }
             let rateButtonSize = self.rateButton.update(
                 transition: .easeInOut(duration: 0.2),
                 component: AnyComponent(PlainButtonComponent(
@@ -2302,7 +1892,7 @@ private final class WalletSendScreenComponent: Component {
                 component: AnyComponent(MultilineTextComponent(
                     text: .plain(NSAttributedString(
                         string: insufficientText,
-                        font: Font.regular(13.0),
+                        font: Font.regular(14.0),
                         textColor: theme.list.itemDestructiveColor
                     )),
                     horizontalAlignment: .center,
@@ -2327,7 +1917,7 @@ private final class WalletSendScreenComponent: Component {
                     component: AnyComponent(MultilineTextComponent(
                         text: .plain(NSAttributedString(
                             string: depositTitle,
-                            font: Font.regular(13.0),
+                            font: Font.regular(14.0),
                             textColor: theme.list.itemAccentColor
                         )),
                         maximumNumberOfLines: 1
@@ -2360,42 +1950,39 @@ private final class WalletSendScreenComponent: Component {
             )
             let insufficientOriginX = floorToScreenPixels((availableSize.width - insufficientTextSize.width - 4.0 - depositButtonSize.width) / 2.0)
             let depositButtonFrame = CGRect(
-                x: isInsufficient ? insufficientOriginX + insufficientTextSize.width + 4.0 : 16.0,
-                y: isInsufficient ? insufficientSlotFrame.midY - depositButtonSize.height / 2.0 : usableBottom - 68.0,
+                x: insufficientOriginX + insufficientTextSize.width + 4.0,
+                y: insufficientSlotFrame.midY - depositButtonSize.height / 2.0,
                 width: depositButtonSize.width,
                 height: depositButtonSize.height
             )
+            
+            var insufficientPositionTransition: ComponentTransition = transition
             if let insufficientTextView = self.insufficientText.view {
                 let isNewlyAdded = insufficientTextView.superview == nil
                 var insufficientVisibilityTransition: ComponentTransition = .easeInOut(duration: 0.2)
                 if isNewlyAdded {
-                    insufficientTextView.isUserInteractionEnabled = false
                     self.addSubview(insufficientTextView)
                     insufficientVisibilityTransition = .immediate
+                    insufficientPositionTransition = .immediate
                 }
-                if isNewlyAdded || isInsufficient {
-                    ComponentTransition.immediate.setFrame(
-                        view: insufficientTextView,
-                        frame: CGRect(
-                            x: insufficientOriginX,
-                            y: insufficientSlotFrame.minY + floorToScreenPixels((insufficientSlotFrame.height - insufficientTextSize.height) / 2.0),
-                            width: insufficientTextSize.width,
-                            height: insufficientTextSize.height
-                        )
+                insufficientPositionTransition.setFrame(
+                    view: insufficientTextView,
+                    frame: CGRect(
+                        x: insufficientOriginX,
+                        y: insufficientSlotFrame.minY + floorToScreenPixels((insufficientSlotFrame.height - insufficientTextSize.height) / 2.0),
+                        width: insufficientTextSize.width,
+                        height: insufficientTextSize.height
                     )
-                }
+                )
                 insufficientVisibilityTransition.setAlpha(view: insufficientTextView, alpha: isInsufficient ? 1.0 : 0.0)
             }
             if let depositButtonView = self.depositButton.view {
-                let isNewlyAdded = depositButtonView.superview == nil
                 var depositVisibilityTransition: ComponentTransition = .easeInOut(duration: 0.2)
                 if depositButtonView.superview == nil {
                     self.addSubview(depositButtonView)
                     depositVisibilityTransition = .immediate
                 }
-                if isNewlyAdded || showDeposit {
-                    ComponentTransition.immediate.setFrame(view: depositButtonView, frame: depositButtonFrame)
-                }
+                insufficientPositionTransition.setFrame(view: depositButtonView, frame: depositButtonFrame)
                 depositVisibilityTransition.setAlpha(view: depositButtonView, alpha: showDeposit ? 1.0 : 0.0)
             }
 
@@ -2487,7 +2074,8 @@ private final class WalletSendScreenComponent: Component {
                 formattedBalance = formatTonAmountText(
                     balance,
                     dateTimeFormat: environment.dateTimeFormat,
-                    maxDecimalPositions: 2
+                    maxDecimalPositions: 2,
+                    formatString: environment.strings.Currency_Grams
                 )
             } else {
                 //TODO:localize
@@ -2496,20 +2084,18 @@ private final class WalletSendScreenComponent: Component {
             }
             //TODO:localize
             let balancePrefix = "Balance: "
-            //TODO:localize
-            let balanceSuffix = " Grams"
-            let balanceText = balancePrefix + formattedBalance + balanceSuffix
+            let balanceText = balancePrefix + formattedBalance
 
             let sendButtonY = usableBottom - 68.0
             let showBalance = hasAmount || hasPositiveBalance
             let feeDisplayState = self.feeDisplayState
-            let showFees = showBalance && feeDisplayState != .hidden
+            let showFees = feeDisplayState != .hidden
             let balanceTextSize = self.balanceText.update(
                 transition: transition,
                 component: AnyComponent(MultilineTextComponent(
                     text: .plain(NSAttributedString(
                         string: balanceText,
-                        font: Font.regular(13.0),
+                        font: Font.regular(14.0),
                         textColor: theme.list.itemSecondaryTextColor
                     )),
                     horizontalAlignment: .center,
@@ -2545,8 +2131,12 @@ private final class WalletSendScreenComponent: Component {
             } else {
                 let feeValue: String
                 if case let .value(fee) = feeDisplayState {
-                    //TODO:localize
-                    feeValue = formatTonAmountText(fee, dateTimeFormat: environment.dateTimeFormat, maxDecimalPositions: 5) + " Grams"
+                    feeValue = formatTonAmountText(
+                        fee,
+                        dateTimeFormat: environment.dateTimeFormat,
+                        maxDecimalPositions: 5,
+                        formatString: environment.strings.Currency_Grams
+                    )
                 } else {
                     feeValue = "—"
                 }
@@ -2555,7 +2145,7 @@ private final class WalletSendScreenComponent: Component {
                     component: AnyComponent(MultilineTextComponent(
                         text: .plain(NSAttributedString(
                             string: feeValue,
-                            font: Font.regular(13.0),
+                            font: Font.regular(14.0),
                             textColor: theme.list.itemSecondaryTextColor
                         )),
                         maximumNumberOfLines: 1
@@ -2571,7 +2161,7 @@ private final class WalletSendScreenComponent: Component {
                             text: .plain(NSAttributedString(
                                 //TODO:localize
                                 string: "Network fee:",
-                                font: Font.regular(13.0),
+                                font: Font.regular(14.0),
                                 textColor: theme.list.itemSecondaryTextColor
                             )),
                             maximumNumberOfLines: 1
@@ -2603,23 +2193,31 @@ private final class WalletSendScreenComponent: Component {
             let amountTitle: String
             if self.inputMode == .fiat, self.currentRate != nil {
                 if self.amount > 0 {
-                    amountTitle = walletSendInputText(
+                    let amountText = walletSendInputText(
                         amount: self.amount,
                         mode: .fiat,
                         rate: self.currentRate,
                         dateTimeFormat: environment.dateTimeFormat
-                    ) + " " + self.currentFiatCurrency.code
+                    )
+                    amountTitle = walletSendGroupedAmountText(amountText, dateTimeFormat: environment.dateTimeFormat)
+                        + " " + self.currentFiatCurrency.code
                 } else {
                     amountTitle = self.currentFiatCurrency.code
                 }
                 sendIdentifier = "fiat"
             } else {
                 if self.amount > 0 {
-                    amountTitle = formatTonAmountText(
-                        self.amount,
-                        dateTimeFormat: environment.dateTimeFormat,
-                        maxDecimalPositions: 9,
-                        formatString: environment.strings.Currency_Grams
+                    let amountText = walletSendInputText(
+                        amount: self.amount,
+                        mode: .gram,
+                        rate: nil,
+                        dateTimeFormat: environment.dateTimeFormat
+                    )
+                    let groupedAmountText = walletSendGroupedAmountText(amountText, dateTimeFormat: environment.dateTimeFormat)
+                    let pluralizationValue: Int32 = self.amount == 1_000_000_000 ? 1 : 100
+                    amountTitle = environment.strings.Currency_Grams(pluralizationValue).replacingOccurrences(
+                        of: "\(pluralizationValue)",
+                        with: groupedAmountText
                     )
                 } else {
                     amountTitle = "Grams"
@@ -2638,14 +2236,11 @@ private final class WalletSendScreenComponent: Component {
                 sendTitle = sendPrefix + amountTitle
             }
             let hasRecipient = !self.recipientAddress.isEmpty
-            let isResolvingPeerAddress = component.peer != nil
-                && (self.peerAddressState == .notRequested || self.peerAddressState == .loading)
             let canSend = hasAmount
                 && hasRecipient
                 && !self.isPreparingTransfer
                 && !self.isSubmittingTransfer
                 && !self.isResolvingSigningAccess
-                && !self.isAuthorizingComment
                 && !self.walletIsLoading
                 && !isInsufficient
                 && self.walletInfo != nil
@@ -2672,7 +2267,7 @@ private final class WalletSendScreenComponent: Component {
                         ))
                     ),
                     isEnabled: canSend,
-                    displaysProgress: isResolvingPeerAddress || self.isResolvingSigningAccess || self.isPreparingTransfer,
+                    displaysProgress: self.isResolvingSigningAccess || self.isPreparingTransfer,
                     action: { [weak self] in
                         self?.send()
                     }
@@ -2825,6 +2420,8 @@ public final class WalletSendScreen: ViewControllerComponentContainer, Attachmen
             updatedPresentationData: updatedPresentationData
         )
 
+        self.supportedOrientations = ViewControllerSupportedOrientations(regularSize: .all, compactSize: .portrait)
+        
         self.navigationItem.leftBarButtonItem = UIBarButtonItem(customView: UIView())
     }
 

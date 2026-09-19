@@ -548,7 +548,10 @@ extension ChatControllerImpl {
                             updatedPresentationData: strongSelf.updatedPresentationData,
                             peer: peer,
                             walletContext: walletContext,
-                            displaySuccessToast: false
+                            displaySuccessToast: false,
+                            completed: { [weak self] in
+                                self?.scrollToEndOfHistory()
+                            }
                         )
                         completion(controller, controller.mediaPickerContext)
                         strongSelf.controllerNavigationDisposable.set(nil)

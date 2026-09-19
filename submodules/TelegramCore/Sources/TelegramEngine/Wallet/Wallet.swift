@@ -560,14 +560,6 @@ func _internal_sendWalletTransfer(account: Account, dataNormal: Data, dataGasles
             return .single(result)
         }
     }
-    |> `catch` { error -> Signal<WalletSendTransferResult, WalletSendTransferError> in
-        if let pendingMessage, error == .invalidData || error == .sendFailed {
-            return _internal_removePendingWalletTransferMessage(postbox: account.postbox, reference: pendingMessage)
-            |> castError(WalletSendTransferError.self)
-            |> mapToSignal { _ in .fail(error) }
-        }
-        return .fail(error)
-    }
 }
 
 func _internal_getWalletTransactionsByIDs(account: Account, ids: [String]) -> Signal<WalletTransactions, WalletGetTransactionsError> {

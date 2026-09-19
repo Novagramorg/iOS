@@ -528,7 +528,7 @@ private final class WalletNavigationBalanceComponent: Component {
                     view: gramIconView,
                     frame: CGRect(
                         origin: CGPoint(
-                            x: 0.0,
+                            x: 1.0,
                             y: floor((balanceRowSize.height - iconSize.height) * 0.5) - UIScreenPixel
                         ),
                         size: iconSize
@@ -729,6 +729,9 @@ private final class WalletScreenComponent: Component {
         private var existingWaltBalance: WalletExistingBalance?
         private let existingWaltBalanceDisposable = MetaDisposable()
         private var isLoadingExistingWaltBalance = false
+        private var previousWalletsBalance: Int64 = 0
+        private let previousWalletsDisposable = MetaDisposable()
+        private var previousWalletsGeneration: UInt64 = 0
         private let earningsDisposable = MetaDisposable()
         private let waltBalanceBotAppDisposable = MetaDisposable()
         private var isOpeningWaltBalance = false
@@ -848,6 +851,7 @@ private final class WalletScreenComponent: Component {
             self.walletStateDisposable?.dispose()
             self.accountPeerDisposable?.dispose()
             self.existingWaltBalanceDisposable.dispose()
+            self.previousWalletsDisposable.dispose()
             self.earningsDisposable.dispose()
             self.waltBalanceBotAppDisposable.dispose()
             self.twoStepAuthDataDisposable?.dispose()
@@ -920,6 +924,29 @@ private final class WalletScreenComponent: Component {
                 self.isLoadingExistingWaltBalance = false
                 if self.isWaitingForWaltBalanceUrl {
                     self.presentWaltBalanceError()
+                }
+            }))
+        }
+
+        func reloadPreviousWallets() {
+            guard let walletContext = self.walletContext else {
+                return
+            }
+            self.previousWalletsGeneration &+= 1
+            let generation = self.previousWalletsGeneration
+            self.previousWalletsDisposable.set((walletContext.previousWallets()
+            |> deliverOnMainQueue).start(next: { [weak self] previousWallets in
+                guard let self,
+                      self.previousWalletsGeneration == generation,
+                      self.walletContext === walletContext else {
+                    return
+                }
+                let balance = previousWallets.reduce(Int64(0)) { $0 + ($1.balance ?? 0) }
+                if self.previousWalletsBalance != balance {
+                    self.previousWalletsBalance = balance
+                    if !self.isUpdating {
+                        self.componentState?.updated(transition: .immediate) //.easeInOut(duration: 0.25))
+                    }
                 }
             }))
         }
@@ -1054,7 +1081,7 @@ private final class WalletScreenComponent: Component {
             transition: ComponentTransition
         ) -> CGFloat {
             var items: [AnyComponentWithIdentity<Empty>] = []
-            func appendItem(id: String, title: NSAttributedString) {
+            func appendItem(id: String, title: NSAttributedString, action: @escaping () -> Void) {
                 items.append(AnyComponentWithIdentity(id: id, component: AnyComponent(ListActionItemComponent(
                     theme: environment.theme,
                     style: .glass,
@@ -1063,8 +1090,8 @@ private final class WalletScreenComponent: Component {
                         maximumNumberOfLines: 0
                     )),
                     accessory: .arrow,
-                    action: { [weak self] _ in
-                        self?.openEarnings()
+                    action: { _ in
+                        action()
                     }
                 ))))
             }
@@ -1105,18 +1132,27 @@ private final class WalletScreenComponent: Component {
                 //TODO:localize
                 title.append(NSAttributedString(string: " in Gram Earnings", font: font, textColor: textColor))
                 
-                items.append(AnyComponentWithIdentity(id: "earnings", component: AnyComponent(ListActionItemComponent(
-                    theme: environment.theme,
-                    style: .glass,
-                    title: AnyComponent(MultilineTextComponent(
-                        text: .plain(title),
-                        maximumNumberOfLines: 0
-                    )),
-                    accessory: .arrow,
-                    action: { [weak self] _ in
-                        self?.openEarnings()
-                    }
-                ))))
+                appendItem(id: "earnings", title: title, action: { [weak self] in
+                    self?.openEarnings()
+                })
+            }
+            if self.previousWalletsBalance > 0 {
+                let amount = formatTonAmountText(self.previousWalletsBalance, dateTimeFormat: environment.dateTimeFormat, maxDecimalPositions: 9)
+                //TODO:localize
+                let title = NSMutableAttributedString(string: "You also have ", font: font, textColor: textColor)
+                let amountText = NSMutableAttributedString(string: "💎\(amount)", font: font, textColor: environment.theme.list.itemAccentColor)
+                if let earningsIcon = self.earningsIcon {
+                    let range = (amountText.string as NSString).range(of: "💎")
+                    amountText.addAttribute(.attachment, value: earningsIcon, range: range)
+                    amountText.addAttribute(.baselineOffset, value: 1.5, range: range)
+                    amountText.addAttribute(.kern, value: 0.0, range: range)
+                }
+                title.append(amountText)
+                //TODO:localize
+                title.append(NSAttributedString(string: " in old wallets", font: font, textColor: textColor))
+                appendItem(id: "previousWallets", title: title, action: { [weak self] in
+                    self?.openWalletSettings()
+                })
             }
             guard !items.isEmpty else {
                 self.additionalBalancesSection.view?.removeFromSuperview()
@@ -2158,7 +2194,7 @@ private final class WalletScreenComponent: Component {
                 authorizationCompleted: { [weak controller] result in
                     guard case let .success(session) = result else { return }
                     guard let navigation = controller?.navigationController as? NavigationController else { session.invalidate(); return }
-                    navigation.replaceTopController(passcodeOptionsController(context: context, settingsSession: session), animated: true)
+                    navigation.replaceTopController(PasscodeOptionsScreen(context: context, settingsSession: session), animated: true)
                 }
             ).start(next: { [weak controller] passcodeController in
                 if let passcodeController {
@@ -2357,7 +2393,7 @@ private final class WalletScreenComponent: Component {
             let menuItems = component.walletContext.tonConnectState
             |> map { state -> Bool in
                 return state.sessions.contains { session in
-                    return session.manifest != nil && session.status == .connected
+                    return session.manifest != nil && (session.status == .connected || session.status == .disconnecting)
                 }
             }
             |> distinctUntilChanged
@@ -2597,6 +2633,9 @@ private final class WalletScreenComponent: Component {
                 self.cancelWaltBalanceOpening()
                 self.abandonRestoration()
                 self.walletStateDisposable?.dispose()
+                self.previousWalletsGeneration &+= 1
+                self.previousWalletsDisposable.set(nil)
+                self.previousWalletsBalance = 0
                 self.loadMoreRequestId = nil
                 self.loadMoreDisposable.set(nil)
                 self.suppressedCollectibleAddresses.removeAll()
@@ -2610,6 +2649,7 @@ private final class WalletScreenComponent: Component {
                         return
                     }
                     let isFirstState = self.walletState == nil
+                    let previousPhase = self.walletState?.phase
                     if case let .wallet(previousInfo) = self.walletState?.phase {
                         switch walletState.phase {
                         case let .wallet(info) where previousInfo.address == info.address && previousInfo.publicKey == info.publicKey:
@@ -2621,6 +2661,9 @@ private final class WalletScreenComponent: Component {
                     }
                     self.updateSuppressedCollectiblesWalletIdentity(walletState)
                     self.walletState = walletState
+                    if previousPhase != walletState.phase {
+                        self.reloadPreviousWallets()
+                    }
                     if !self.isUpdating {
                         self.componentState?.updated(transition: isFirstState ? .immediate : .easeInOut(duration: 0.25))
                     }
@@ -2999,7 +3042,8 @@ private final class WalletScreenComponent: Component {
                                     theme: itemTheme,
                                     strings: itemStrings,
                                     dateTimeFormat: itemDateTimeFormat,
-                                    transaction: transaction
+                                    transaction: transaction,
+                                    walletAddress: walletInfo?.address
                                 )),
                                 contentInsets: UIEdgeInsets(top: 9.0, left: 0.0, bottom: 8.0, right: 0.0),
                                 separatorInset: 62.0,
@@ -3389,6 +3433,7 @@ public final class WalletScreen: ViewControllerComponentContainer {
             return
         }
         componentView.refreshTwoStepAuth()
+        componentView.reloadPreviousWallets()
     }
 
     override public func viewDidDisappear(_ animated: Bool) {

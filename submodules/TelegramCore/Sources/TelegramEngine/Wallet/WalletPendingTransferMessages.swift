@@ -219,7 +219,8 @@ func acceptPendingWalletTransferMessage(transaction: Transaction, reference: Wal
 func _internal_removePendingWalletTransferMessage(postbox: Postbox, reference: WalletPendingTransferMessageReference) -> Signal<Void, NoError> {
     return postbox.transaction { transaction in
         guard let pending = transaction.getPendingMessageAction(type: .walletTransfer, id: reference.messageId) as? PendingWalletTransferMessageAttribute,
-              pending.operationId == reference.operationId else {
+              pending.operationId == reference.operationId,
+              pending.transactionId == nil, pending.chainTraceId == nil else {
             return
         }
         removePendingWalletTransferMessage(transaction: transaction, id: reference.messageId)
@@ -251,7 +252,7 @@ func resolvePendingWalletTransferMessage(transaction: Transaction, reference: Wa
         return
     }
     if failed {
-        guard pending.transactionId == nil else {
+        guard pending.transactionId == nil, pending.chainTraceId == nil else {
             return
         }
         removePendingWalletTransferMessage(transaction: transaction, id: reference.messageId)

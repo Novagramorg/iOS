@@ -55,6 +55,7 @@ private final class WalletTransferSheetContent: Component {
         private let domain = ComponentView<Empty>()
         private let card = ComponentView<Empty>()
         private let fee = ComponentView<Empty>()
+        private let dataText = UITextView()
 
         override init(frame: CGRect) {
             super.init(frame: frame)
@@ -116,7 +117,7 @@ private final class WalletTransferSheetContent: Component {
             contentHeight += 18.0
 
             //TODO:localize
-            let titleText = "Confirm Action"
+            let titleText = component.request.signData == nil ? "Confirm Action" : "Sign Data"
             self.title.parentState = state
             let titleSize = self.title.update(
                 transition: .immediate,
@@ -177,6 +178,33 @@ private final class WalletTransferSheetContent: Component {
             }
             contentHeight += domainSize.height
             contentHeight += 20.0
+
+            if let request = component.request.signData {
+                self.card.view?.isHidden = true
+                self.fee.view?.isHidden = true
+                if self.dataText.superview == nil { self.addSubview(self.dataText) }
+                self.dataText.isHidden = false
+                self.dataText.isEditable = false
+                self.dataText.isSelectable = true
+                self.dataText.isScrollEnabled = true
+                self.dataText.backgroundColor = .clear
+                self.dataText.textColor = primaryTextColor
+                self.dataText.font = UIFont.monospacedSystemFont(ofSize: 14.0, weight: .regular)
+                self.dataText.textContainer.lineBreakMode = .byCharWrapping
+                switch request.payload {
+                case let .text(text): self.dataText.text = text
+                case let .binary(bytes):
+                    self.dataText.text = "You are signing unknown binary data.\n\n" + bytes.base64EncodedString()
+                case let .cell(schema, boc):
+                    self.dataText.text = "You are signing unknown cell data.\n\n" + schema + "\n\n" + boc.base64EncodedString()
+                }
+                let height = min(320.0, max(100.0, self.dataText.sizeThatFits(CGSize(width: textWidth, height: .greatestFiniteMagnitude)).height))
+                transition.setFrame(view: self.dataText, frame: CGRect(x: contentCenterX - textWidth / 2.0, y: contentHeight, width: textWidth, height: height))
+                return CGSize(width: availableSize.width, height: contentHeight + height + 20.0 + component.bottomInset)
+            }
+            self.dataText.isHidden = true
+            self.card.view?.isHidden = false
+            self.fee.view?.isHidden = false
 
             let presentation = WalletTransferPresentation(request: component.request, walletState: component.walletState)
             let fiatCurrency = component.walletState?.fiat.selectedCurrency ?? .usd
@@ -504,12 +532,14 @@ private final class WalletTransferSheetComponent: CombinedComponent {
 
             self.isAuthorizing = false
             self.isConfirming = true
+            getController()?.view.isUserInteractionEnabled = false
             self.updated(transition: .easeInOut(duration: 0.2))
             component.confirm({ [weak self] result in
                 Queue.mainQueue().async {
                     guard let self, !self.isFinished else {
                         return
                     }
+                    getController()?.view.isUserInteractionEnabled = true
                     switch result {
                     case .success:
                         self.finish(
@@ -526,7 +556,7 @@ private final class WalletTransferSheetComponent: CombinedComponent {
                             return
                         }
                         //TODO:localize
-                        let errorText = "Unable to send this transaction. Please try again."
+                        let errorText = "Unable to complete this request. Please try again."
                         let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
                         controller.present(textAlertController(
                             context: component.context,

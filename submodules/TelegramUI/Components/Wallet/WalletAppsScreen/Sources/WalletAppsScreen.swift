@@ -21,7 +21,7 @@ private func connectedAppSessions(_ sessions: [WalletContext.TonConnectSession])
         guard session.manifest != nil else {
             return false
         }
-        return session.status == .connected
+        return session.status == .connected || session.status == .disconnecting
     }
 }
 
@@ -59,7 +59,7 @@ private final class WalletAppsScreenComponent: Component {
         private weak var state: EmptyComponentState?
         private var sessions: [WalletContext.TonConnectSession]?
         private var operationId: UUID?
-        private var operationSessionIds = Set<String>()
+        private var operationSessionIds = Set<Int64>()
         private var operationToast: String?
         private var operationCompletion: ((Bool) -> Void)?
         private weak var infoController: WalletAppInfoScreen?
@@ -243,7 +243,7 @@ private final class WalletAppsScreenComponent: Component {
             })
         }
 
-        private func disconnect(ids: Set<String>, all: Bool, toast: String, completion: @escaping (Bool) -> Void) {
+        private func disconnect(ids: Set<Int64>, all: Bool, toast: String, completion: @escaping (Bool) -> Void) {
             guard !self.isDisconnecting, !ids.isEmpty, let component = self.component else {
                 completion(false)
                 return
@@ -275,10 +275,7 @@ private final class WalletAppsScreenComponent: Component {
                 // NoError only means that the command returned. Check the actual session state.
                 if !self.completeAcceptedDisconnect(sessions: tonConnectState.sessions) {
                     self.completeDisconnect(succeeded: false)
-                    // Storage failures are already presented by the account's Ton Connect coordinator.
-                    if !tonConnectState.sessions.contains(where: { ids.contains($0.id) && $0.error == .storageUnavailable }) {
-                        self.presentDisconnectError(all: all)
-                    }
+                    self.presentDisconnectError(all: all)
                 }
             }))
         }
@@ -289,10 +286,7 @@ private final class WalletAppsScreenComponent: Component {
                 return false
             }
             let accepted = self.operationSessionIds.allSatisfy { id in
-                guard let session = sessions.first(where: { $0.id == id }) else {
-                    return true
-                }
-                return session.status == .disconnecting
+                !sessions.contains(where: { $0.id == id })
             }
             if accepted {
                 self.completeDisconnect(succeeded: true)
@@ -352,6 +346,7 @@ private final class WalletAppsScreenComponent: Component {
                 self.pendingToast = nil
                 self.sessions = nil
                 let walletContext = component.walletContext
+                walletContext.refreshTonConnectSessions()
                 self.sessionsDisposable.set((walletContext.tonConnectState
                 |> deliverOnMainQueue).start(next: { [weak self] tonConnectState in
                     guard let self, self.component?.walletContext === walletContext else {

@@ -131,6 +131,8 @@ swift_library(
         "//submodules/TelegramUI/Components/Settings/PasskeysScreen",
         "//submodules/TelegramUI/Components/FaceScanScreen",
         "//submodules/ComponentFlow",
+        "//submodules/Components/ViewControllerComponent",
+        "//submodules/Components/MultilineTextComponent",
         "//submodules/Components/ResizableSheetComponent",
         "//submodules/Components/ComponentDisplayAdapters",
         "//submodules/Components/BundleIconComponent",

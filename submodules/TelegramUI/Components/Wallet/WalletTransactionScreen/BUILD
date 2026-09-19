@@ -20,7 +20,6 @@ swift_library(
         "//submodules/ContextUI",
         "//submodules/Display",
         "//submodules/InvisibleInkDustNode",
-        "//submodules/ActivityIndicator",
         "//submodules/SSignalKit/SwiftSignalKit",
         "//submodules/TelegramCore",
         "//submodules/TelegramNotices",

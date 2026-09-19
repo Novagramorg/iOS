@@ -138,6 +138,17 @@ public final class AccountContextImpl: AccountContext {
     public let starsContext: StarsContext?
     public let tonContext: StarsContext?
     public let walletContext: WalletContext?
+    private let walletTonConnectDisposable = MetaDisposable()
+    private let walletTonConnectDecisionDisposable = MetaDisposable()
+    private var walletTonConnectState: WalletContext.TonConnectState?
+    private var walletTonConnectController: ViewController?
+    private var walletTonConnectPresentationId: String?
+    private var walletTonConnectPresentationToken: UUID?
+    private var walletTonConnectDismissedId: String?
+    private var walletTonConnectCompletion: ((Result<Void, WalletContext.WalletError>) -> Void)?
+    private var walletTonConnectDiagnosticId: UUID?
+    private var walletTonConnectDiagnosticController: ViewController?
+
     public let twoStepAuthData = Promise<TwoStepAuthData?>(nil)
     public let giftAuctionsManager: GiftAuctionsManager?
     
@@ -641,6 +652,10 @@ public final class AccountContextImpl: AccountContext {
         )
 
         if let walletContext = self.walletContext {
+            self.walletTonConnectDisposable.set((walletContext.tonConnectState
+            |> deliverOnMainQueue).start(next: { [weak self] state in
+                self?.updateWalletTonConnectPresentation(state)
+            }))
             walletContext.setAuthorizationPresenter { [weak self] request in
                 guard let self else { throw PasscodeError.cancelled }
                 let settings = try walletProtectionSettings()
@@ -660,6 +675,8 @@ public final class AccountContextImpl: AccountContext {
     }
 
     deinit {
+        self.walletTonConnectDisposable.dispose()
+        self.walletTonConnectDecisionDisposable.dispose()
         self.limitsConfigurationDisposable?.dispose()
         self.managedAppSpecificContactsDisposable?.dispose()
         self.contentSettingsDisposable?.dispose()
@@ -1158,4 +1175,161 @@ private func loadCountryCodes() -> [Country] {
     }
         
     return result
+}
+
+private extension AccountContextImpl {
+    func dismissWalletTonConnectController() {
+        let controller = self.walletTonConnectController
+        self.walletTonConnectController = nil
+        self.walletTonConnectPresentationId = nil
+        self.walletTonConnectPresentationToken = nil
+        self.walletTonConnectCompletion = nil
+        controller?.dismiss(animated: false)
+    }
+
+    func updateWalletTonConnectPresentation(_ state: WalletContext.TonConnectState) {
+        self.walletTonConnectState = state
+        guard state.presentationEnabled else {
+            self.dismissWalletTonConnectController()
+            self.walletTonConnectDiagnosticController?.dismiss()
+            self.walletTonConnectDiagnosticController = nil
+            self.walletTonConnectDiagnosticId = nil
+            return
+        }
+        if self.walletTonConnectDiagnosticId != state.diagnostic?.id {
+            self.walletTonConnectDiagnosticController?.dismiss()
+            self.walletTonConnectDiagnosticController = nil
+            self.walletTonConnectDiagnosticId = nil
+        }
+        if let diagnostic = state.diagnostic, self.walletTonConnectDiagnosticId != diagnostic.id {
+            self.walletTonConnectDiagnosticId = diagnostic.id
+            let strings = self.sharedContext.currentPresentationData.with { $0 }.strings
+            let actions: [TextAlertAction]
+            if let requestId = diagnostic.requestId, let walletContext = self.walletContext {
+                actions = [
+                    TextAlertAction(type: .genericAction, title: strings.Common_Cancel, action: {
+                        walletContext.closeTonConnectPresentation(id: requestId)
+                    }),
+                    TextAlertAction(type: .defaultAction, title: "Retry", action: {
+                        walletContext.retryTonConnectRequest(id: requestId)
+                    })
+                ]
+            } else {
+                actions = [TextAlertAction(type: .defaultAction, title: strings.Common_OK, action: {})]
+            }
+            let controller = textAlertController(context: self, title: nil, text: diagnostic.failure.message,
+                actions: actions, dismissOnOutsideTap: diagnostic.requestId == nil)
+            self.walletTonConnectDiagnosticController = controller
+            self.sharedContext.presentGlobalController(controller, nil)
+        }
+        guard let active = state.active, let walletContext = self.walletContext else {
+            self.dismissWalletTonConnectController()
+            return
+        }
+        if self.walletTonConnectPresentationId != nil && self.walletTonConnectPresentationId != active.id {
+            self.dismissWalletTonConnectController()
+        }
+        switch active.status {
+        case .invalidated:
+            self.dismissWalletTonConnectController()
+            walletContext.closeTonConnectPresentation(id: active.id)
+            return
+        case let .completed(decision):
+            if self.walletTonConnectCompletion != nil { return }
+            self.dismissWalletTonConnectController()
+            walletContext.closeTonConnectPresentation(id: active.id)
+            self.returnFromWalletTonConnect(decision.returnTarget)
+            return
+        case .ready, .processing:
+            break
+        }
+        if self.walletTonConnectDismissedId == active.id { return }
+        if self.walletTonConnectPresentationId == active.id, let controller = self.walletTonConnectController {
+            if let controller = controller as? WalletConnectScreen {
+                switch active.content {
+                case let .connect(request): controller.updateRequest(request)
+                default: break
+                }
+            }
+            controller.view.isUserInteractionEnabled = active.status != .processing
+            return
+        }
+        guard let rootController = self.sharedContext.mainWindow?.viewController as? NavigationController else {
+            return
+        }
+        let id = active.id
+        let token = UUID()
+        self.walletTonConnectPresentationId = id
+        self.walletTonConnectPresentationToken = token
+        self.walletTonConnectDismissedId = nil
+        let cancelled: () -> Void = { [weak self] in
+            guard let self, self.walletTonConnectPresentationToken == token else { return }
+            self.walletTonConnectDismissedId = id
+            self.walletTonConnectController = nil
+            self.walletTonConnectPresentationId = nil
+            self.walletTonConnectPresentationToken = nil
+            walletContext.rejectTonConnectRequest(id: id)
+        }
+        let confirm: (@escaping (Result<Void, WalletContext.WalletError>) -> Void) -> Void = { [weak self] completion in
+            guard let self, self.walletTonConnectPresentationToken == token, self.walletTonConnectCompletion == nil else { return }
+            self.walletTonConnectCompletion = completion
+            self.walletTonConnectDecisionDisposable.set((walletContext.decideTonConnectRequest(id: id, approve: true)
+            |> deliverOnMainQueue).start(next: { [weak self] decision in
+                guard let self, self.walletTonConnectPresentationToken == token else { return }
+                let callback = self.walletTonConnectCompletion
+                self.walletTonConnectCompletion = nil
+                if decision.failure != nil {
+                    callback?(.failure(.unavailable))
+                    self.dismissWalletTonConnectController()
+                    walletContext.closeTonConnectPresentation(id: id)
+                } else {
+                    callback?(.success(()))
+                }
+            }, error: { [weak self] error in
+                guard let self, self.walletTonConnectPresentationToken == token else { return }
+                let callback = self.walletTonConnectCompletion
+                self.walletTonConnectCompletion = nil
+                callback?(.failure(error))
+            }))
+        }
+        let closed: () -> Void = { [weak self] in
+            guard let self, self.walletTonConnectPresentationToken == token else { return }
+            self.walletTonConnectController = nil
+            self.walletTonConnectPresentationId = nil
+            self.walletTonConnectPresentationToken = nil
+            if let current = self.walletTonConnectState?.active, current.id == id,
+               case let .completed(decision) = current.status {
+                walletContext.closeTonConnectPresentation(id: id)
+                self.returnFromWalletTonConnect(decision.returnTarget)
+            }
+        }
+        let controller: ViewController
+        switch active.content {
+        case let .connect(request):
+            let screen = WalletConnectScreen(context: self, walletContext: walletContext, request: request, cancelled: cancelled, connect: confirm)
+            screen.tonConnectClosed = closed
+            controller = screen
+        case let .operation(request):
+            let screen = WalletTransferScreen(context: self, walletContext: walletContext, request: request, cancelled: cancelled, confirm: confirm)
+            screen.tonConnectClosed = closed
+            controller = screen
+        case let .signData(data):
+            let request = WalletContext.TonConnectOperationRequest(id: data.id, applicationName: data.applicationName,
+                domain: data.domain, iconUrl: data.iconUrl, method: .signData, messages: [], feeNanograms: nil,
+                validUntil: nil, relayerWillSubmit: false, needsWalletStateInit: false, warnings: [], actions: [], signData: data)
+            let screen = WalletTransferScreen(context: self, walletContext: walletContext, request: request, cancelled: cancelled, confirm: confirm)
+            screen.tonConnectClosed = closed
+            controller = screen
+        }
+        self.walletTonConnectController = controller
+        controller.view.isUserInteractionEnabled = active.status != .processing
+        rootController.pushViewController(controller)
+    }
+
+    func returnFromWalletTonConnect(_ target: WalletContext.TonConnectReturn) {
+        if case let .url(url) = target {
+            self.sharedContext.openExternalUrl(context: self, urlContext: .external, url: url, forceExternal: true,
+                presentationData: self.sharedContext.currentPresentationData.with { $0 }, navigationController: nil, dismissInput: {})
+        }
+    }
 }

@@ -376,7 +376,7 @@ public enum ResolvedUrl {
     case storyFolder(peerId: EnginePeer.Id, id: Int64)
     case giftCollection(peerId: EnginePeer.Id, id: Int64)
     case sendGift(peerId: EnginePeer.Id?)
-    case sendGrams(transfer: WalletSendRequest?)
+    case sendGrams(transfer: WalletSendRequest?, tonConnectUrl: String? = nil)
     case unknownDeepLink(path: String)
     case oauth(url: String)
     case createBot(parentBot: EnginePeer.Id, username: String?, title: String?)
