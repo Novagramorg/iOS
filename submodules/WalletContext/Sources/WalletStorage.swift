@@ -70,7 +70,7 @@ enum WalletEngineKeyRotationStoragePhase: String, Codable, Equatable, Sendable {
 @available(macOS 10.15, *)
 struct WalletEngineArchivedWalletRecord: Codable, Equatable, Sendable {
     let descriptor: WalletEngineDescriptorRecord
-    let balance: Int64?
+    var balance: Int64?
     let archivedAt: Int32
 }
 
@@ -106,16 +106,12 @@ actor WalletEngineStorage {
     private let descriptorService: String
     private let secretService: String
     private let journalService: String
-    private let tonConnectService: String
-    private let legacyTonConnectService: String
 
     init(namespace: String) {
         self.namespace = namespace
         self.descriptorService = "org.telegram.ton-wallet.engine.v2.descriptor.\(namespace)"
         self.secretService = WalletVault.service(namespace: namespace)
         self.journalService = "org.telegram.ton-wallet.engine.v2.journal.\(namespace)"
-        self.legacyTonConnectService = "org.telegram.ton-wallet.engine.v2.ton-connect.\(namespace)"
-        self.tonConnectService = "org.telegram.ton-wallet.ton-connect.sessions.v1.\(namespace)"
     }
 
     func loadDescriptor() throws -> WalletEngineDescriptorRecord? {
@@ -128,6 +124,27 @@ actor WalletEngineStorage {
 
     func loadTransferReceipts() throws -> [WalletEngineTransferReceipt] {
         try self.readCodable(service: self.descriptorService, account: "transfer-receipts") ?? []
+    }
+
+    func loadTransferSubmissions() throws -> [WalletTransferSubmissionRecord] {
+        try self.readCodable(service: self.descriptorService, account: "transfer-submissions") ?? []
+    }
+
+    func saveTransferSubmission(_ record: WalletTransferSubmissionRecord) throws {
+        var records = try self.loadTransferSubmissions().filter {
+            $0.recordId != record.recordId && !walletEngineAddressesEqual($0.walletAddress, record.walletAddress)
+        }
+        records.append(record)
+        try self.writeCodable(records, service: self.descriptorService, account: "transfer-submissions")
+    }
+
+    func resolveTransferSubmission(operationId: String, resolution: WalletTransferSubmissionRecord.Resolution) throws {
+        var records = try self.loadTransferSubmissions()
+        guard let index = records.firstIndex(where: { $0.operationId == operationId }),
+              records[index].resolution != resolution,
+              records[index].resolution == .pending || resolution == .consumed else { return }
+        records[index].resolution = resolution
+        try self.writeCodable(records, service: self.descriptorService, account: "transfer-submissions")
     }
 
     func saveTransferReceipt(_ receipt: WalletEngineTransferReceipt) throws {
@@ -429,63 +446,6 @@ actor WalletEngineStorage {
         try self.saveDescriptor(descriptor.withSigningPublicKey(publicKey))
     }
 
-    func loadSessions(recordId: String) throws -> [Data] {
-        // Legacy single-session records cannot be restored by this registry.
-        try self.remove(service: self.legacyTonConnectService, account: recordId)
-        #if os(macOS)
-        var query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: self.tonConnectService,
-            kSecAttrSynchronizable as String: false,
-            kSecReturnAttributes as String: true,
-            kSecMatchLimit as String: kSecMatchLimitAll
-        ]
-        #else
-        var query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: self.tonConnectService,
-            kSecAttrSynchronizable as String: false,
-            kSecReturnAttributes as String: true,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitAll
-        ]
-        query[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
-        #endif
-        if let group = try WalletVault.keychainAccessGroup() {
-            query[kSecAttrAccessGroup as String] = group
-        }
-        var result: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
-        if status == errSecItemNotFound { return [] }
-        guard status == errSecSuccess, let items = result as? [[String: Any]] else {
-            throw WalletEngineStorageError.keychainStatus(status)
-        }
-        let prefix = recordId + "/"
-        #if os(macOS)
-        var sessions: [Data] = []
-        for item in items {
-            guard let account = item[kSecAttrAccount as String] as? String, account.hasPrefix(prefix) else { continue }
-            if let data = try self.read(service: self.tonConnectService, account: account) {
-                sessions.append(data)
-            }
-        }
-        return sessions
-        #else
-        return items.compactMap { item -> Data? in
-            guard let account = item[kSecAttrAccount as String] as? String, account.hasPrefix(prefix) else { return nil }
-            return item[kSecValueData as String] as? Data
-        }
-        #endif
-    }
-
-    func saveSession(_ data: Data, recordId: String, sessionId: String) throws {
-        try self.write(data, service: self.tonConnectService, account: recordId + "/" + sessionId)
-    }
-
-    func removeSession(recordId: String, sessionId: String) throws {
-        try self.remove(service: self.tonConnectService, account: recordId + "/" + sessionId)
-    }
-
     func readProtectedSecret(_ request: ProtectedSecretRead) throws -> Data {
         guard let data = try self.read(service: self.secretService, account: request.secretRef.value) else {
             throw protectedSecretFailure(.notFound, "Protected secret was not found")
@@ -643,6 +603,9 @@ actor WalletEnginePlatformHost: WalletPlatformHost {
     let storage: WalletEngineStorage
     private let logger: WalletLogger
     private var authorization: PasscodeSession?
+    private var tonConnectSigningGuard: (@Sendable () throws -> Void)?
+
+    func setTonConnectSigningGuard(_ guardValue: (@Sendable () throws -> Void)?) { self.tonConnectSigningGuard = guardValue }
 
     func setAuthorization(_ grant: PasscodeSession?) { self.authorization = grant }
 
@@ -689,6 +652,7 @@ actor WalletEnginePlatformHost: WalletPlatformHost {
     func readProtectedSecret(request: ProtectedSecretRead) async throws -> Data {
         do {
             if let authorization = self.authorization { try await authorization.waitUntilAvailable() }
+            try self.tonConnectSigningGuard?()
             return try await WalletAuthorizationScope.$session.withValue(self.authorization) {
                 _ = try WalletVault.access(namespace: self.storage.namespace)
                 if let data = self.transientProtectedSecrets[request.secretRef.value] {
@@ -798,6 +762,3 @@ func sanitizedWalletEngineDiagnostic(_ value: String) -> String {
             .prefix(256)
     )
 }
-
-@available(macOS 10.15, *)
-extension WalletEngineStorage: TonConnectSessionStorage {}

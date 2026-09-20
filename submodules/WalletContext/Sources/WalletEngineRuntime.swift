@@ -427,7 +427,6 @@ actor WalletEngineRuntime {
 
     private func promoteReplacementCandidate(_ candidate: WalletEngineDescriptorRecord) async throws {
         let previous = try await self.storage.loadDescriptor()
-        // Persisting the active descriptor is the durable commit point.
         try await self.storage.saveDescriptor(candidate)
         try await self.storage.removeReplacementCandidate()
         if let previous,
@@ -593,6 +592,7 @@ actor WalletEngineRuntime {
 
     func prepareTransfer(operationId: String, intent: SendIntent) async throws -> (recordId: String, data: WalletEngineFFI.PreparedTransfer) {
         try await self.withFfi(priority: .userInitiated) {
+            try await self.ensureApiTransferAllowsSigning()
             try await self.ensureKeyRotationAllowsSigning()
             guard let config = self.clientConfig else {
                 throw WalletContext.WalletError.unavailable
@@ -607,6 +607,7 @@ actor WalletEngineRuntime {
 
     func send(operationId: String, intent: SendIntent) async throws -> WalletEngineSendExecution {
         try await self.withFfi(priority: .userInitiated, cancellation: .send) {
+            try await self.ensureApiTransferAllowsSigning()
             try await self.ensureKeyRotationAllowsSigning()
             let request = SendRequest(operationId: operationId, force: false, intent: intent)
             return try await self.sendRecoveringStuckClient { client in
@@ -626,6 +627,7 @@ actor WalletEngineRuntime {
 
     func sendNft(operationId: String, intent: NftTransferIntent) async throws -> WalletEngineSendExecution {
         try await self.withFfi(priority: .userInitiated, cancellation: .send) {
+            try await self.ensureApiTransferAllowsSigning()
             try await self.ensureKeyRotationAllowsSigning()
             let request = NftTransferRequest(
                 operationId: operationId,
@@ -651,6 +653,7 @@ actor WalletEngineRuntime {
 
     func prepareKeyRotation(validUntil: UInt64) async throws -> PreparedKeyRotation {
         try await self.withFfi {
+            try await self.ensureApiTransferAllowsSigning()
             try await self.ensureKeyRotationAllowsSigning()
             return try await self.requireClient().prepareKeyRotation(request: PrepareKeyRotationRequest(
                 validUntil: validUntil,
@@ -763,8 +766,6 @@ actor WalletEngineRuntime {
                 guard expectedPublicKey == descriptor.publicKey else {
                     throw WalletContext.WalletError.storage(.identityMismatch)
                 }
-                // Match the unchanged anchor sent to disableBackup, just as
-                // signReplacementProof does when importing this wallet.
                 let proof = try await self.lifecycle.signTonConnectProof(request: TonConnectProofSignRequest(
                     descriptor: descriptor, domain: domain, timestamp: timestamp, payload: payload
                 ))
@@ -803,6 +804,7 @@ actor WalletEngineRuntime {
         validUntil: UInt64
     ) async throws -> SendResult {
         try await self.withFfi {
+            try await self.ensureApiTransferAllowsSigning()
             try await self.ensureKeyRotationAllowsSigning()
             guard let descriptor = try await self.storage.loadDescriptor(),
                   descriptor.recordId == self.descriptor?.recordId,
@@ -1084,20 +1086,19 @@ actor WalletEngineRuntime {
         }
     }
 
-    func tonConnectIdentity(recordId: String) async throws -> TonConnectWalletIdentity {
+    func tonConnectIdentity() async throws -> TonConnectWalletIdentity {
         try await self.withFfi {
-            guard let descriptor = self.descriptor, descriptor.recordId == recordId else { throw WalletContext.WalletError.unavailable }
+            guard let descriptor = self.descriptor else { throw WalletContext.WalletError.unavailable }
             let account = try self.lifecycle.tonConnectAccount(descriptor: descriptor)
-            return TonConnectWalletIdentity(recordId: recordId, address: account.address, network: account.network)
+            return TonConnectWalletIdentity(recordId: descriptor.recordId, address: account.address, network: account.network, publicKey: account.publicKey)
         }
     }
 
     private func validateTonConnectWallet(_ wallet: TonConnectWalletIdentity) throws {
         guard let descriptor = self.descriptor, descriptor.recordId == wallet.recordId else { throw WalletContext.WalletError.unavailable }
         let account = try self.lifecycle.tonConnectAccount(descriptor: descriptor)
-        guard walletEngineAddressesEqual(account.address, wallet.address), account.network == wallet.network else {
-            throw WalletContext.WalletError.unavailable
-        }
+        guard walletEngineAddressesEqual(account.address, wallet.address), account.network == wallet.network,
+              wallet.publicKey == account.publicKey else { throw TonConnectFailure.keyMismatch }
     }
 
     func tonConnectAccount(wallet: TonConnectWalletIdentity) async throws -> TonConnectAccountInfo {
@@ -1114,14 +1115,16 @@ actor WalletEngineRuntime {
         wallet: TonConnectWalletIdentity,
         domain: String,
         timestamp: UInt64,
-        payload: String
+        payload: String,
+        beforeSigning: @escaping @Sendable () throws -> Void = {}
     ) async throws -> TonConnectProofSignature {
-        try await self.withFfi {
+        try await self.withFfi(beforeSigning: beforeSigning) {
             try self.validateTonConnectWallet(wallet)
             try await self.ensureKeyRotationAllowsSigning()
             guard let descriptor = self.descriptor else {
                 throw WalletContext.WalletError.unavailable
             }
+            try beforeSigning()
             return try await self.lifecycle.signTonConnectProof(request: TonConnectProofSignRequest(
                 descriptor: descriptor,
                 domain: domain,
@@ -1145,16 +1148,20 @@ actor WalletEngineRuntime {
         }
     }
 
-    func sendTonConnect(_ request: SendRequest, wallet: TonConnectWalletIdentity) async throws -> SendResult {
-        try await self.withFfi(priority: .userInitiated, cancellation: .send) {
+    func sendTonConnect(_ request: SendRequest, wallet: TonConnectWalletIdentity, beforeSigning: @escaping @Sendable () throws -> Void = {}) async throws -> SendResult {
+        try await self.withFfi(priority: .userInitiated, cancellation: .send, beforeSigning: beforeSigning) {
+            try await self.ensureApiTransferAllowsSigning()
             try self.validateTonConnectWallet(wallet)
             try await self.ensureKeyRotationAllowsSigning()
-            return try await self.requireClient().send(request: request)
+            let client = try self.requireClient()
+            try beforeSigning()
+            return try await client.send(request: request)
         }
     }
 
     func signMessage(_ request: SignMessageRequest, wallet: TonConnectWalletIdentity, beforeSigning: @escaping @Sendable () throws -> Void = {}) async throws -> SignMessageResult {
         try await self.withFfi(priority: .userInitiated, cancellation: .send, beforeSigning: beforeSigning) {
+            try await self.ensureApiTransferAllowsSigning()
             try self.validateTonConnectWallet(wallet)
             try await self.ensureKeyRotationAllowsSigning()
             let client = try self.requireClient()
@@ -1284,6 +1291,16 @@ actor WalletEngineRuntime {
         }
     }
 
+    func ensureApiTransferAllowsSigning() async throws {
+        guard let descriptor = self.descriptor else { throw WalletContext.WalletError.unavailable }
+        if let record = try await self.storage.loadTransferSubmissions().first(where: {
+            $0.recordId == descriptor.recordId || walletEngineAddressesEqual($0.walletAddress, descriptor.address)
+        }),
+           record.resolution == .pending {
+            throw WalletContext.WalletError.operationInProgress
+        }
+    }
+
     private func ensureKeyRotationAllowsSigning() async throws {
         if try await self.storage.loadKeyRotation() != nil {
             throw WalletContext.WalletError.operationInProgress
@@ -1352,6 +1369,7 @@ actor WalletEngineRuntime {
         let operationId = UUID()
         self.activeFfiOperation = (operationId, cancellation)
         await self.platformHost.setAuthorization(WalletAuthorizationScope.session)
+        await self.platformHost.setTonConnectSigningGuard(beforeSigning)
         let operationTask = Task { () -> Result<Value, Error> in
             do {
                 return .success(try await operation())
@@ -1366,6 +1384,7 @@ actor WalletEngineRuntime {
                 await self?.cancelActiveFfiOperation(id: operationId, cancellation: cancellation)
             }
         })
+        await self.platformHost.setTonConnectSigningGuard(nil)
         await self.platformHost.setAuthorization(nil)
         try Task.checkCancellation()
         return try result.get()
@@ -1448,4 +1467,104 @@ func walletEngineAddressesEqual(_ lhs: String, _ rhs: String) -> Bool {
         return lhs == rhs
     }
     return left == right
+}
+
+extension WalletEngineRuntime {
+    func validateTonConnectAccess(wallet: TonConnectWalletIdentity) async throws {
+        try await self.withTonConnectAnchor(wallet: wallet) { _ in () }
+    }
+
+    func tonConnectSessionPublicKey(wallet: TonConnectWalletIdentity, session: TelegramCore.WalletTonConnectSession) async throws -> String {
+        try await self.withTonConnectSession(wallet: wallet, session: session, allowPendingRegistration: true) {
+            $0.publicKey.map { String(format: "%02x", $0) }.joined()
+        }
+    }
+
+    func openTonConnectChallenge(_ data: Data, wallet: TonConnectWalletIdentity, session: TelegramCore.WalletTonConnectSession) async throws -> Data {
+        try await self.withTonConnectSession(wallet: wallet, session: session, allowPendingRegistration: true) {
+            try $0.openChallenge(data)
+        }
+    }
+
+    func openTonConnectPacket(_ data: Data, wallet: TonConnectWalletIdentity, session: TelegramCore.WalletTonConnectSession) async throws -> Data {
+        try await self.withTonConnectSession(wallet: wallet, session: session, allowPendingRegistration: false) {
+            try $0.open(data)
+        }
+    }
+
+    func sealTonConnectPacket(_ data: Data, wallet: TonConnectWalletIdentity, session: TelegramCore.WalletTonConnectSession) async throws -> Data {
+        try await self.withTonConnectSession(wallet: wallet, session: session, allowPendingRegistration: true) {
+            try $0.seal(data)
+        }
+    }
+
+    func signTonConnectData(_ digest: Data, wallet: TonConnectWalletIdentity, beforeSigning: @escaping @Sendable () throws -> Void = {}) async throws -> Data {
+        try await self.withTonConnectAnchor(wallet: wallet, beforeSigning: beforeSigning) { anchor in
+            try beforeSigning()
+            return try anchor.sign(digest)
+        }
+    }
+
+    private func withTonConnectAnchor<Value>(wallet: TonConnectWalletIdentity, beforeSigning: (@Sendable () throws -> Void)? = nil, _ operation: @escaping (TonConnectAnchorKey) throws -> Value) async throws -> Value {
+        try await self.withFfi(beforeSigning: beforeSigning) {
+            try self.validateTonConnectWallet(wallet)
+            _ = try self.requireClient()
+            try await self.ensureKeyRotationAllowsSigning()
+            guard let descriptor = self.descriptor else { throw WalletContext.WalletError.unavailable }
+            let account = try self.lifecycle.tonConnectAccount(descriptor: descriptor)
+            guard account.publicKey.count == 32, account.publicKey == descriptor.publicKey else {
+                throw TonConnectFailure.keyMismatch
+            }
+            let phrase = try await self.lifecycle.revealRecoveryPhrase(descriptor: descriptor)
+            var words = normalizedEngineMnemonic(phrase.phrase.split(whereSeparator: { $0.isWhitespace }).map(String.init))
+            defer { words.removeAll(keepingCapacity: false) }
+            let validatedPublicKey = try rotationMnemonicPublicKey(phrase: words.joined(separator: " "))
+            guard validatedPublicKey == account.publicKey else { throw TonConnectFailure.keyMismatch }
+            try await self.ensureKeyRotationAllowsSigning()
+            try self.validateTonConnectWallet(wallet)
+            _ = try self.requireClient()
+            guard self.descriptor?.publicKey == descriptor.publicKey,
+                  self.descriptor?.secretRef.value == descriptor.secretRef.value else {
+                throw TonConnectFailure.keyMismatch
+            }
+            try Task.checkCancellation()
+            let anchor = try TonConnectAnchorKey.derive(validatedRotationMnemonic: words, expectedPublicKey: account.publicKey)
+            return try operation(anchor)
+        }
+    }
+
+    private func withTonConnectSession<Value>(wallet: TonConnectWalletIdentity, session: TelegramCore.WalletTonConnectSession, allowPendingRegistration: Bool, _ operation: @escaping (TonConnectSessionCrypto) throws -> Value) async throws -> Value {
+        let appPublicKey = try Self.tonConnectPublicKey(session.dappClientId)
+        let registeredPublicKey = try session.clientId.map(Self.tonConnectPublicKey)
+        guard registeredPublicKey != nil || (allowPendingRegistration && session.isPending && !session.isClosing && !session.isClosed) else {
+            throw TonConnectFailure.keyMismatch
+        }
+        return try await self.withTonConnectAnchor(wallet: wallet) { anchor in
+            try anchor.withSeed { seed in
+                let crypto = try TonConnectSessionCrypto(anchorSeed: seed, appPublicKey: appPublicKey, serverNonce: session.nonce)
+                if let registeredPublicKey, crypto.publicKey != registeredPublicKey {
+                    throw TonConnectFailure.keyMismatch
+                }
+                return try operation(crypto)
+            }
+        }
+    }
+
+    private static func tonConnectPublicKey(_ value: String) throws -> Data {
+        guard value.utf8.count == 64 else { throw TonConnectFailure.unavailable }
+        let bytes = Array(value.utf8)
+        func nibble(_ byte: UInt8) throws -> UInt8 {
+            switch byte {
+            case 48...57: return byte - 48
+            case 65...70: return byte - 55
+            case 97...102: return byte - 87
+            default: throw TonConnectFailure.unavailable
+            }
+        }
+        var result = Data(capacity: 32)
+        for index in stride(from: 0, to: bytes.count, by: 2) {
+            result.append(try (nibble(bytes[index]) << 4) | nibble(bytes[index + 1]))
+        }
+        return result
+    }
 }

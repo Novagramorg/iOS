@@ -1129,7 +1129,12 @@ func openResolvedUrlImpl(
                     navigationController.pushViewController(controller, animated: true)
                 }
             }
-        case let .sendGrams(transfer):
+        case let .sendGrams(transfer, tonConnectUrl):
+            if let tonConnectUrl {
+                dismissInput()
+                context.walletContext?.processTonConnectUrl(tonConnectUrl)
+                return
+            }
             guard let walletContext = context.walletContext, let navigationController else {
                 return
             }

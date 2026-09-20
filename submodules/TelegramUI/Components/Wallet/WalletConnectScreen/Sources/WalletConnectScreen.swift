@@ -216,18 +216,22 @@ private final class WalletConnectSheetContent: CombinedComponent {
                 return
             }
             self.isConnecting = true
+            // Keep the button spinner visible while preventing the sheet's pan or dim-tap dismissal.
+            self.getController()?.view.isUserInteractionEnabled = false
             self.updated(transition: .easeInOut(duration: 0.2))
             
             component.connect({ [weak self] result in
                 guard let self else {
                     return
                 }
+                self.getController()?.view.isUserInteractionEnabled = true
                 switch result {
                 case .success:
                     self.finish(.connected, animated: true, animateOut: component.animateOut)
-                case .failure:
+                case let .failure(error):
                     self.isConnecting = false
                     self.updated(transition: .easeInOut(duration: 0.2))
+                    if error == .authorizationCancelled { return }
                     guard let controller = self.getController() else {
                         return
                     }
@@ -717,7 +721,9 @@ private final class WalletConnectSheetComponent: CombinedComponent {
 
 public final class WalletConnectScreen: ViewControllerComponentContainer {
     private let context: AccountContext
-    private let applicationName: String
+    private var applicationName: String
+    private let walletContext: WalletContext
+    private let connectAction: (@escaping (Result<Void, WalletContext.WalletError>) -> Void) -> Void
     private let cancelled: () -> Void
     public var tonConnectClosed: (() -> Void)?
     private var finishResult: WalletConnectFinishResult?
@@ -731,6 +737,8 @@ public final class WalletConnectScreen: ViewControllerComponentContainer {
     ) {
         self.context = context
         self.applicationName = request.applicationName
+        self.walletContext = walletContext
+        self.connectAction = connect
         self.cancelled = cancelled
 
         super.init(
@@ -748,6 +756,12 @@ public final class WalletConnectScreen: ViewControllerComponentContainer {
 
         self.navigationPresentation = .flatModal
         self.automaticallyControlPresentationContextLayout = false
+    }
+
+    public func updateRequest(_ request: WalletContext.TonConnectRequest) {
+        self.applicationName = request.applicationName
+        self.updateComponent(component: AnyComponent(WalletConnectSheetComponent(context: self.context,
+            walletContext: self.walletContext, request: request, connect: self.connectAction)), transition: .immediate)
     }
 
     required public init(coder aDecoder: NSCoder) {

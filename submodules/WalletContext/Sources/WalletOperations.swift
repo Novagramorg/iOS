@@ -154,10 +154,6 @@ public extension WalletContext {
         }
     }
 
-    static func isTonConnectUrl(_ value: String) -> Bool {
-        (try? TonConnectLink(value)) != nil
-    }
-
     static func transferAddress(from value: String) -> String? {
         normalizedMainnetAddress(value)
     }
@@ -204,46 +200,6 @@ public extension WalletContext {
         return self.signal(name: "resolve_transfer_recipient") { impl, _ in
             try await impl.resolveTransferRecipient(value)
         }
-    }
-
-    func processTonConnectUrl(_ value: String) {
-        guard Self.isTonConnectUrl(value) else { return }
-        Task { [impl = self.impl] in
-            await impl.processTonConnectUrl(value)
-        }
-    }
-
-    func approveTonConnectRequest(id: String) -> Signal<Void, WalletError> {
-        self.signal(name: "approve_ton_connect_request", cancelOnDispose: false) { impl, _ in
-            try await impl.approveTonConnectRequest(id: id)
-        }
-    }
-
-    func approveTonConnectOperation(id: String) -> Signal<Void, WalletError> {
-        self.signal(name: "approve_ton_connect_operation", cancelOnDispose: false) { impl, _ in
-            try await impl.approveTonConnectOperation(id: id)
-        }
-    }
-
-    func rejectTonConnectRequest(id: String) -> Signal<Void, NoError> {
-        self.noErrorSignal { impl in
-            await impl.rejectTonConnectRequest(id: id)
-        }
-    }
-
-    func tonConnectPresentationClosed(id: String, rejectIfPending: Bool) -> Signal<TonConnectReturn?, NoError> {
-        self.signal(name: "ton_connect_presentation_closed", cancelOnDispose: false) { impl, _ in
-            await impl.tonConnectCoordinator?.presentationClosed(id: id, rejectIfPending: rejectIfPending)
-        }
-        |> `catch` { _ in .single(nil) }
-    }
-
-    func disconnectTonConnectSession(id: String) -> Signal<Void, NoError> {
-        self.noErrorSignal { impl in await impl.tonConnectCoordinator?.disconnect(id: id) }
-    }
-
-    func disconnectAllTonConnectSessions() -> Signal<Void, NoError> {
-        self.noErrorSignal { impl in await impl.tonConnectCoordinator?.disconnect(id: nil) }
     }
 
     func setFiatCurrency(_ currency: FiatCurrency) {
@@ -448,10 +404,14 @@ public extension WalletContext {
         _ prepared: PreparedTransfer,
         recipientPeerId: EnginePeer.Id? = nil,
         pendingMessageCreated: (@MainActor @Sendable () -> Void)? = nil,
-        session: PasscodeSession? = nil
+        session: PasscodeSession? = nil,
+        stageUpdated: (@MainActor @Sendable (TransferSubmissionStage) -> Void)? = nil
     ) -> Signal<PendingTransfer, WalletError> {
-        self.signal(name: "submitting_transfer", cancelOnDispose: false) { impl, operationId in
-            try await impl.submitTransfer(prepared, recipientPeerId: recipientPeerId, pendingMessageCreated: pendingMessageCreated, session: session, operationId: operationId)
+        Signal { subscriber in
+            let control = WalletTransferSubmissionControl()
+            return self.signal(name: "submitting_transfer", cancelOnDispose: false, submissionControl: control) { impl, operationId in
+                try await impl.submitTransfer(prepared, recipientPeerId: recipientPeerId, pendingMessageCreated: pendingMessageCreated, session: session, operationId: operationId, control: control, stageUpdated: stageUpdated)
+            }.start(next: subscriber.putNext, error: subscriber.putError, completed: subscriber.putCompletion)
         }
     }
 
@@ -546,57 +506,6 @@ extension WalletContextImpl {
             return nil
         }
         return ResolvedTransferRecipient(address: normalized, displayName: value)
-    }
-
-    func processTonConnectUrl(_ value: String) async {
-        guard !self.isShutdown else { return }
-        guard case let .wallet(info) = self.currentState.phase, info.canSign,
-              let coordinator = self.tonConnectCoordinator else {
-            switch self.currentState.phase {
-            case .restoring, .creating:
-                if self.pendingTonConnectLinks.count < 32 {
-                    if !self.pendingTonConnectLinks.contains(value) { self.pendingTonConnectLinks.append(value) }
-                } else { self.reportTonConnectFailure(.capacityExceeded) }
-            default: self.reportTonConnectFailure(.unavailable)
-            }
-            return
-        }
-        do {
-            try await coordinator.start(link: value)
-        } catch {
-            self.logger.error("wallet_ton_connect_start_failed", error)
-            self.reportTonConnectFailure(error as? TonConnectFailure ?? .unavailable)
-        }
-    }
-
-    func approveTonConnectRequest(id: String) async throws {
-        guard !self.isShutdown,
-              case let .wallet(info) = self.currentState.phase,
-              info.canSign,
-              let coordinator = self.tonConnectCoordinator else {
-            throw WalletError.unavailable
-        }
-        let grant = try await self.authorization.authorize(id: UUID(), reason: "Connect wallet")
-        defer { self.authorization.finish(grant) }
-        try await self.authorization.withSession(grant) { try await coordinator.approveConnection(id: id) }
-    }
-
-    func approveTonConnectOperation(id: String) async throws {
-        guard !self.isShutdown,
-              case let .wallet(info) = self.currentState.phase,
-              info.canSign,
-              let coordinator = self.tonConnectCoordinator else {
-            throw WalletError.unavailable
-        }
-        let grant = try await self.authorization.authorize(id: UUID(), reason: "Confirm wallet operation")
-        defer { self.authorization.finish(grant) }
-        try await self.authorization.withSession(grant) { try await coordinator.approveOperation(id: id) }
-        self.requestSynchronization(scope: .all, force: true)
-    }
-
-    func rejectTonConnectRequest(id: String) async {
-        guard !self.isShutdown else { return }
-        await self.tonConnectCoordinator?.reject(id: id)
     }
 
     func setFiatCurrency(_ currency: FiatCurrency, revision: UInt64) {
@@ -961,6 +870,10 @@ extension WalletContextImpl {
     }
 
     func prepareDisableBackup(updateSecretPhrase: Bool, session: PasscodeSession? = nil, operationId: UUID) async throws -> PreparedBackupDisable {
+        if updateSecretPhrase, case let .wallet(wallet) = self.currentState.phase {
+            _ = try await self.waitForPreviousWalletTransfer(wallet: wallet, generation: self.activationGeneration,
+                operationId: operationId, expiresAt: currentWalletTimestamp() + 300, requireAuthorizationAvailable: session?.lifetime != .ownerManaged)
+        }
         return try await self.performOperation(.preparingBackupDisable, operationId: operationId, session: session) {
             guard case let .wallet(info) = self.currentState.phase, info.canSign, info.backupEnabled else {
                 throw WalletError.unavailable
@@ -1137,6 +1050,10 @@ extension WalletContextImpl {
     }
 
     func disableBackup(_ prepared: PreparedBackupDisable, password: String?, session: PasscodeSession? = nil, operationId: UUID) async throws -> WalletInfo {
+        if prepared.rotation != nil, case let .wallet(wallet) = self.currentState.phase {
+            _ = try await self.waitForPreviousWalletTransfer(wallet: wallet, generation: self.activationGeneration,
+                operationId: operationId, expiresAt: currentWalletTimestamp() + 300, requireAuthorizationAvailable: session?.lifetime != .ownerManaged)
+        }
         return try await self.performOperation(.disablingBackup, operationId: operationId, session: session) {
             let initialState = try self.backupDisableState(prepared)
             let signingPublicKey = try walletMnemonicSigningPublicKey(words: prepared.words)
@@ -1540,8 +1457,57 @@ extension WalletContextImpl {
         recipientPeerId: EnginePeer.Id? = nil,
         pendingMessageCreated: (@MainActor @Sendable () -> Void)? = nil,
         session: PasscodeSession? = nil,
-        operationId: UUID
+        operationId: UUID,
+        control: WalletTransferSubmissionControl,
+        stageUpdated: (@MainActor @Sendable (WalletContext.TransferSubmissionStage) -> Void)? = nil
     ) async throws -> PendingTransfer {
+        let generation = self.activationGeneration
+        guard case let .wallet(wallet) = self.currentState.phase else { throw WalletError.unavailable }
+        let requireAuthorizationAvailable = session?.lifetime != .ownerManaged
+        let authorizationGeneration = try self.authorization.operationGeneration(requireAvailable: requireAuthorizationAvailable)
+        await stageUpdated?(.waitingForPreviousTransfer)
+        try await self.transferSubmissionCoordinator.acquire(operationId)
+        let submission: WalletTransferSubmission
+        do {
+            while true {
+                try self.authorization.validateGeneration(authorizationGeneration, requireAvailable: requireAuthorizationAvailable)
+                let minimumSeqno = try await self.waitForPreviousWalletTransfer(wallet: wallet, generation: generation,
+                    operationId: operationId, expiresAt: prepared.expiresAt, requireAuthorizationAvailable: requireAuthorizationAvailable)
+                try Task.checkCancellation()
+                await stageUpdated?(.signing)
+                do {
+                    submission = try await self.prepareTransferSubmission(prepared, recipientPeerId: recipientPeerId, pendingMessageCreated: pendingMessageCreated, session: session, operationId: operationId, control: control, minimumSeqno: minimumSeqno)
+                    break
+                } catch WalletTransferSubmissionError.staleSequenceNumber {
+                    // The engine's provider can lag behind the admission read.
+                    // Release the wallet while waiting to prepare a fresh BOC.
+                    await stageUpdated?(.waitingForPreviousTransfer)
+                    try await self.transferSubmissionClock.sleep(1_000_000_000)
+                }
+            }
+        } catch {
+            await self.transferSubmissionCoordinator.release(operationId)
+            throw error
+        }
+        await self.transferSubmissionCoordinator.release(operationId)
+        await stageUpdated?(.submitted)
+        switch submission {
+        case let .completed(pending): return pending
+        case let .api(submission):
+            self.logger.log("event=wallet_transfer_wallet_released operation_id=\(prepared.id) elapsed_ms=\(Int((ProcessInfo.processInfo.systemUptime - submission.startedAt) * 1000.0))")
+            return try await self.finishWalletApiSubmission(submission)
+        }
+    }
+
+    private func prepareTransferSubmission(
+        _ prepared: PreparedTransfer,
+        recipientPeerId: EnginePeer.Id?,
+        pendingMessageCreated: (@MainActor @Sendable () -> Void)?,
+        session: PasscodeSession?,
+        operationId: UUID,
+        control: WalletTransferSubmissionControl,
+        minimumSeqno: UInt32?
+    ) async throws -> WalletTransferSubmission {
         if let session {
             guard let record = self.preparedTransfers[prepared.id],
                   record.transfer == prepared, record.sessionId == session.id else { throw PasscodeError.staleAuthorization }
@@ -1623,6 +1589,20 @@ extension WalletContextImpl {
                 createdAt: createdAt,
                 status: .broadcasting
             )
+            if WalletContext.useWalletTransferApi, case let .send(intent) = record.request {
+                let submission = try await self.beginWalletApiSubmission(
+                    prepared: prepared,
+                    intent: intent,
+                    pending: pending,
+                    randomId: randomId,
+                    walletAddress: record.walletAddress,
+                    generation: activationGenerationBeforeSend,
+                    control: control,
+                    minimumSeqno: minimumSeqno
+                )
+                if pendingMessage != nil { await pendingMessageCreated?() }
+                return .api(submission)
+            }
             var values = self.currentState.pendingTransfers.filter { $0.id != pending.id }
             values.append(pending)
             self.replaceState(
@@ -1632,33 +1612,7 @@ extension WalletContextImpl {
                 pendingTransfers: values,
                 activeOperation: self.currentState.activeOperation
             )
-            if pendingMessage != nil, let pendingMessageCreated {
-                await pendingMessageCreated()
-                guard !Task.isCancelled, !self.isShutdown, self.activationGeneration == activationGenerationBeforeSend else {
-                    self.preparedTransfers[prepared.id] = nil
-                    if let pendingMessage {
-                        let _ = self.engine.wallet.removePendingTransferMessage(pendingMessage).start()
-                    }
-                    self.replaceState(
-                        phase: self.currentState.phase,
-                        balance: self.currentState.balance,
-                        transactions: self.currentState.transactions,
-                        pendingTransfers: self.currentState.pendingTransfers.filter { $0.id != pending.id },
-                        activeOperation: self.currentState.activeOperation
-                    )
-                    throw WalletError.unavailable
-                }
-            }
-            if WalletContext.useWalletTransferApi, case let .send(intent) = record.request {
-                return try await self.submitTransferThroughWalletApi(
-                    prepared: prepared,
-                    intent: intent,
-                    pending: pending,
-                    randomId: randomId,
-                    walletAddress: record.walletAddress,
-                    generation: activationGenerationBeforeSend
-                )
-            }
+            try control.commit()
             let clientRevisionBeforeSend = await self.runtime.currentClientRevision()
 
             let applyAcceptedSubmission: (SendPhase, String?) -> PendingTransfer? = { phase, messageHash in
@@ -1715,7 +1669,7 @@ extension WalletContextImpl {
                     }
                     throw WalletError.engine("wallet-engine send ended in \(result.phase)")
                 }
-                return submitted
+                return .completed(submitted)
             } catch {
                 self.logger.error("wallet_send_failed", error)
                 var preparedTransferWasInvalidated = false
@@ -1735,7 +1689,7 @@ extension WalletContextImpl {
                     )
                     if snapshot.send.operationId == pending.id,
                        let submitted = applyAcceptedSubmission(snapshot.send.phase, nil) {
-                        return submitted
+                        return .completed(submitted)
                     }
                     if snapshot.send.operationId == pending.id,
                        walletEngineSendPhaseIsTerminal(snapshot.send.phase) {
@@ -2012,11 +1966,6 @@ extension WalletContextImpl {
         self.cancelWalletStateFallbackRefresh()
         self.preparedTransfers.removeAll()
         self.deferredSynchronizationScope = []
-        let coordinator = self.tonConnectCoordinator
-        self.tonConnectCoordinator = nil
-        self.currentTonConnectState = .empty
-        self.output.publish(tonConnect: .empty)
-        await coordinator?.shutdown()
         return generation
     }
 
@@ -2059,19 +2008,6 @@ extension WalletContextImpl {
             activeOperation: self.currentState.activeOperation
         )
         self.beginObserving(snapshot: activation.snapshot, generation: generation)
-        if activation.canSign {
-            let coordinator = WalletTonConnectCoordinator(
-                runtime: self.runtime,
-                storage: self.storage,
-                logger: self.logger,
-                recordId: activation.snapshot.recordId,
-                event: { [weak self] event, revision in
-                    await self?.handleTonConnectState(event, generation: generation, revision: revision)
-                }
-            )
-            self.tonConnectCoordinator = coordinator
-            Task { [weak self] in await self?.restoreTonConnect(coordinator, generation: generation) }
-        }
         if !preserveCurrentWalletState {
             self.pendingScreenSynchronizationScope.formUnion(self.visibleScreenSynchronizationScope)
         }
@@ -2107,7 +2043,7 @@ extension WalletContextImpl {
             throw WalletError.operationInProgress
         }
         switch activeOperation {
-        case .preparingTransfer, .submittingTransfer, .decryptingComment:
+        case .preparingTransfer, .submittingTransfer, .tonConnect, .decryptingComment:
             if !self.activeSynchronizationScope.isEmpty {
                 self.deferredSynchronizationScope.formUnion(self.activeSynchronizationScope.subtracting(self.pendingScreenSynchronizationScope))
                 self.cancelSynchronization()
@@ -2228,7 +2164,7 @@ extension WalletContextImpl {
             return true
         }
         switch self.currentState.activeOperation {
-        case .preparingTransfer, .submittingTransfer, .decryptingComment:
+        case .preparingTransfer, .submittingTransfer, .tonConnect, .decryptingComment:
             return true
         case .none, .creating, .importing, .recoveringPhrase, .preparingRecoveryPhraseImport,
              .completingRecoveryPhraseImport, .enablingBackup, .preparingBackupDisable,

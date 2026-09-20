@@ -448,7 +448,7 @@ private final class WalletCollectibleContentComponent: Component {
             let configuration = WalletConfiguration.with(appConfiguration: component.context.currentAppConfiguration.with { $0 })
             let explorerUrl = walletCollectibleExplorerUrl(explorerUrl: configuration.explorerUrl, address: component.collectible.address)
             let item = ContextMenuActionItem(
-                text: "View In Explorer",
+                text: "View in Explorer",
                 icon: { theme in
                     return generateTintedImage(
                         image: UIImage(bundleImageName: "Chat/Context Menu/Search"),

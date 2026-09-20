@@ -62,6 +62,46 @@ public extension TelegramEngine {
 
         public func transferUpdates() -> Signal<[WalletTransferUpdate], NoError> {
             return self.account.stateManager.walletTransferUpdates()
+		}
+
+        public func tonConnectCreateSession(dappClientId: String, manifestUrl: String) -> Signal<WalletTonConnectSession, WalletTonConnectError> {
+            return _internal_walletTonConnectCreateSession(account: self.account, dappClientId: dappClientId, manifestUrl: manifestUrl)
+        }
+
+        public func tonConnectRegisterKey(sessionId: Int64, clientId: String) -> Signal<WalletTonConnectChallenge, WalletTonConnectError> {
+            return _internal_walletTonConnectRegisterKey(account: self.account, sessionId: sessionId, clientId: clientId)
+        }
+
+        public func tonConnectSubmitConnectResult(sessionId: Int64, challengeAnswer: Data, body: Data, isError: Bool = false, traceId: String? = nil) -> Signal<Bool, WalletTonConnectError> {
+            return _internal_walletTonConnectSubmitConnectResult(account: self.account, sessionId: sessionId, challengeAnswer: challengeAnswer, body: body, isError: isError, traceId: traceId)
+        }
+
+        public func tonConnectGetPending(lookup: WalletTonConnectLookup) -> Signal<WalletTonConnectPending, WalletTonConnectError> {
+            return _internal_walletTonConnectGetPending(account: self.account, lookup: lookup)
+        }
+
+        public func tonConnectClaimRequest(sessionId: Int64, msgId: Int64, appRequestId: Int64, challengeAnswer: Data? = nil, declined: Bool = false) -> Signal<Bool, WalletTonConnectError> {
+            return _internal_walletTonConnectClaimRequest(account: self.account, sessionId: sessionId, msgId: msgId, appRequestId: appRequestId, challengeAnswer: challengeAnswer, declined: declined)
+        }
+
+        public func tonConnectSubmitResponse(sessionId: Int64, msgId: Int64, body: Data, traceId: String? = nil) -> Signal<Bool, WalletTonConnectError> {
+            return _internal_walletTonConnectSubmitResponse(account: self.account, sessionId: sessionId, msgId: msgId, body: body, traceId: traceId)
+        }
+
+        public func tonConnectNextEventId(sessionId: Int64) -> Signal<Int64, WalletTonConnectError> {
+            return _internal_walletTonConnectNextEventId(account: self.account, sessionId: sessionId)
+        }
+
+        public func tonConnectCloseSession(sessionId: Int64, body: Data) -> Signal<Bool, WalletTonConnectError> {
+            return _internal_walletTonConnectCloseSession(account: self.account, sessionId: sessionId, body: body)
+        }
+
+        public func tonConnectGetSessions() -> Signal<[WalletTonConnectSession], WalletTonConnectError> {
+            return _internal_walletTonConnectGetSessions(account: self.account)
+        }
+
+        public func tonConnectUpdates() -> Signal<[WalletTonConnectEvent], NoError> {
+            return self.account.stateManager.walletTonConnectUpdates()
         }
 
         public func stateUpdates() -> Signal<WalletState, NoError> {

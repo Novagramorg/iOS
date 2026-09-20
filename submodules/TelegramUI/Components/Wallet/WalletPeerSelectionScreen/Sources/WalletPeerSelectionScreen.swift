@@ -390,6 +390,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
         private var displaysNoResults = false
         private var resolvingPeerId: EnginePeer.Id?
         private var isPreparingTransfer = false
+        private var actionGeneration = 0
         private var hasPasteboardText = UIPasteboard.general.hasStrings
         private var navigationButtonsVisible = true
         private var navigationButtonsFieldAlpha: CGFloat = 1.0
@@ -441,6 +442,17 @@ private final class WalletPeerSelectionScreenComponent: Component {
             self.peerAddressDisposable.dispose()
             self.transferDisposable.dispose()
             self.walletStateDisposable.dispose()
+        }
+
+        func cancelPendingActions() {
+            self.actionGeneration &+= 1
+            self.peerAddressDisposable.set(nil)
+            self.transferDisposable.set(nil)
+            self.resolvingPeerId = nil
+            self.isPreparingTransfer = false
+            if !self.isUpdating {
+                self.state?.updated(transition: .immediate)
+            }
         }
 
         @objc private func pasteboardDidChange(_ notification: Notification) {
@@ -663,6 +675,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
                 return
             }
             self.resolvingPeerId = peer.id
+            let generation = self.actionGeneration
 
             let addressSignal: Signal<String?, WalletGetUserAddressesError> = component.context.engine.wallet.getUserAddresses(
                 userIds: [peer.id],
@@ -681,7 +694,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
 
             self.peerAddressDisposable.set((addressSignal
             |> deliverOnMainQueue).start(next: { [weak self] address in
-                guard let self, self.resolvingPeerId == peer.id else {
+                guard let self, self.actionGeneration == generation, self.resolvingPeerId == peer.id else {
                     return
                 }
                 self.resolvingPeerId = nil
@@ -697,7 +710,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
                     self.presentRecipientErrorAlert()
                 }
             }, error: { [weak self] _ in
-                guard let self, self.resolvingPeerId == peer.id else {
+                guard let self, self.actionGeneration == generation, self.resolvingPeerId == peer.id else {
                     return
                 }
                 self.resolvingPeerId = nil
@@ -795,7 +808,9 @@ private final class WalletPeerSelectionScreenComponent: Component {
                       let recipient = WalletContext.transferRecipient(from: value) else {
                     return
                 }
+                let generation = self.actionGeneration
                 Queue.mainQueue().after(0.15) { [self, controller] in
+                    guard self.actionGeneration == generation else { return }
                     scanner?.dismiss()
                     if case .transfer = component.mode {
                         self.peerAddressDisposable.set((component.context.engine.wallet.getUserAddresses(addresses: [recipient.address])
@@ -809,7 +824,8 @@ private final class WalletPeerSelectionScreenComponent: Component {
                             return component.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: userId))
                         }
                         |> deliverOnMainQueue).start(next: { [weak self, weak controller] peer in
-                            guard let self, let controller, controller.navigationController?.viewControllers.last === controller else {
+                            guard let self, self.actionGeneration == generation,
+                                  let controller, controller.navigationController?.viewControllers.last === controller else {
                                 return
                             }
                             self.openSendScreen(peer: peer, address: recipient.transferInput)
@@ -898,6 +914,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
             case let .collectible(collectible):
                 self.searchBarNode?.deactivate(clear: false)
                 self.isPreparingTransfer = true
+                let generation = self.actionGeneration
                 self.state?.updated(transition: .easeInOut(duration: 0.2))
                 self.transferDisposable.set((component.walletContext.prepareCollectibleTransfer(
                     address: recipient.address,
@@ -905,7 +922,10 @@ private final class WalletPeerSelectionScreenComponent: Component {
                     comment: nil
                 )
                 |> deliverOnMainQueue).start(next: { [weak self, weak controller] preparedTransfer in
-                    guard let self, let controller, let component = self.component else {
+                    guard let self, self.actionGeneration == generation,
+                          self.component?.walletContext === component.walletContext,
+                          let controller, controller.navigationController?.topViewController === controller else {
+                        let _ = component.walletContext.discardPreparedTransfer(preparedTransfer).startStandalone()
                         return
                     }
                     self.isPreparingTransfer = false
@@ -930,7 +950,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
                         dismissSendScreen: dismissSourceScreens
                     ))
                 }, error: { [weak self] _ in
-                    guard let self else {
+                    guard let self, self.actionGeneration == generation else {
                         return
                     }
                     self.isPreparingTransfer = false
@@ -1150,6 +1170,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
             }
 
             if self.walletContext !== component.walletContext {
+                self.cancelPendingActions()
                 self.walletContext = component.walletContext
                 self.walletStateDisposable.set(component.walletContext.state.start(next: { _ in
                 }))
@@ -1729,5 +1750,10 @@ public final class WalletPeerSelectionScreen: ViewControllerComponentContainer {
 
     required public init(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    public override func viewWillDisappear(_ animated: Bool) {
+        (self.node.hostView.componentView as? WalletPeerSelectionScreenComponent.View)?.cancelPendingActions()
+        super.viewWillDisappear(animated)
     }
 }

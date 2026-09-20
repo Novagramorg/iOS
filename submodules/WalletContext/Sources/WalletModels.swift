@@ -222,6 +222,7 @@ public extension WalletContext {
         public enum Method: Equatable, Sendable {
             case sendTransaction
             case signMessage
+            case signData
         }
 
         public struct Message: Equatable, Sendable {
@@ -276,6 +277,7 @@ public extension WalletContext {
         public let messages: [Message]
         public let feeNanograms: String?
         public let validUntil: UInt64?
+        public let signData: TonConnectSignDataRequest?
         public let relayerWillSubmit: Bool
         public let needsWalletStateInit: Bool
         public let warnings: [String]
@@ -293,7 +295,8 @@ public extension WalletContext {
             relayerWillSubmit: Bool,
             needsWalletStateInit: Bool,
             warnings: [String],
-            actions: [Action]
+            actions: [Action],
+            signData: TonConnectSignDataRequest? = nil
         ) {
             self.id = id
             self.applicationName = applicationName
@@ -307,7 +310,18 @@ public extension WalletContext {
             self.needsWalletStateInit = needsWalletStateInit
             self.warnings = warnings
             self.actions = actions
+            self.signData = signData
         }
+    }
+
+    struct TonConnectSignDataRequest: Equatable, Sendable {
+        public let id: String
+        public let applicationName: String
+        public let domain: String
+        public let iconUrl: String?
+        public let payload: TonConnectSignDataPayload.Content
+        public let address: String
+        public let network: String
     }
 
     typealias TonConnectSession = TonConnectSessionInfo
@@ -318,13 +332,15 @@ public extension WalletContext {
         public enum Content: Equatable, Sendable {
             case connect(TonConnectRequest)
             case operation(TonConnectOperationRequest)
+            case signData(TonConnectSignDataRequest)
         }
         public let content: Content
-        public let status: TonConnectActiveInteraction.Status
+        public let status: TonConnectRequestStatus
         public var id: String {
             switch self.content {
             case let .connect(value): return value.id
             case let .operation(value): return value.id
+            case let .signData(value): return value.id
             }
         }
     }
@@ -858,6 +874,12 @@ public extension WalletContext {
         }
     }
 
+    enum TransferSubmissionStage: Equatable, Sendable {
+        case waitingForPreviousTransfer
+        case signing
+        case submitted
+    }
+
     enum ActiveOperation: Equatable, Sendable {
         case creating
         case importing
@@ -869,6 +891,7 @@ public extension WalletContext {
         case disablingBackup
         case preparingTransfer
         case submittingTransfer
+        case tonConnect
         case decryptingComment
         case loadingMoreTransactions
         case loadingMoreCollectibles
@@ -1020,7 +1043,7 @@ extension WalletContext.ActiveOperation {
         case .creating, .importing, .preparingRecoveryPhraseImport, .completingRecoveryPhraseImport, .disablingBackup:
             return true
         case .recoveringPhrase, .enablingBackup, .preparingBackupDisable,
-             .preparingTransfer, .submittingTransfer, .decryptingComment, .loadingMoreTransactions, .loadingMoreCollectibles:
+             .preparingTransfer, .submittingTransfer, .tonConnect, .decryptingComment, .loadingMoreTransactions, .loadingMoreCollectibles:
             return false
         }
     }

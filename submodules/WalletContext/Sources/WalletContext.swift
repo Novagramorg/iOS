@@ -9,8 +9,8 @@ import TelegramUIPreferences
 @available(macOS 10.15, *)
 final class WalletContextOutput {
     private let stateValue: Atomic<WalletContext.State>
+    let tonConnectStatePromise = ValuePromise<WalletContext.TonConnectState>(.empty, ignoreRepeated: true)
     let statePromise: ValuePromise<WalletContext.State>
-    let tonConnectState = ValuePromise<WalletContext.TonConnectState>(.empty, ignoreRepeated: true)
     private let cancelOperationImpl: (UUID) -> Void
 
     init(initialState: WalletContext.State, cancelOperation: @escaping (UUID) -> Void) {
@@ -26,10 +26,6 @@ final class WalletContextOutput {
 
     func currentState() -> WalletContext.State {
         self.stateValue.with { $0 }
-    }
-
-    func publish(tonConnect: WalletContext.TonConnectState) {
-        self.tonConnectState.set(tonConnect)
     }
 
     func cancelOperation(id: UUID) {
@@ -87,10 +83,12 @@ public final class WalletContext {
     private let credentialChangesDisposable = MetaDisposable()
     let impl: WalletContextImpl
     let logger: WalletLogger
-    private let output: WalletContextOutput
+    let output: WalletContextOutput
     private let environmentDisposable = MetaDisposable()
     private let walletConfigurationDisposable = MetaDisposable()
     private let walletStateUpdatesDisposable = MetaDisposable()
+    private let tonConnectUpdatesDisposable = MetaDisposable()
+    private var tonConnectUpdatesTask: Task<Void, Never>?
     private let walletTransferUpdatesDisposable = MetaDisposable()
     private var walletTransferUpdatesTask: Task<Void, Never>?
     private let storedStateDisposable = MetaDisposable()
@@ -142,11 +140,6 @@ public final class WalletContext {
 
     public var stateValue: State {
         self.output.currentState()
-    }
-
-    public var tonConnectState: Signal<TonConnectState, NoError> {
-        self.output.tonConnectState.get()
-        |> deliverOnMainQueue
     }
 
     public func beginWalletScreenUpdates() -> Disposable {
@@ -294,6 +287,18 @@ public final class WalletContext {
             }
         }
 
+        let tonConnectUpdates = AsyncStream<[WalletTonConnectEvent]> { continuation in
+            self.tonConnectUpdatesDisposable.set(engine.wallet.tonConnectUpdates().start(next: {
+                continuation.yield($0)
+            }, completed: { continuation.finish() }))
+        }
+        self.tonConnectUpdatesTask = Task {
+            for await updates in tonConnectUpdates {
+                guard !Task.isCancelled else { return }
+                await impl.receiveTonConnectUpdates(updates)
+            }
+        }
+
         self.environmentDisposable.set(combineLatest(
             applicationInForeground |> distinctUntilChanged,
             accountIsCurrent |> distinctUntilChanged,
@@ -351,6 +356,8 @@ public final class WalletContext {
         self.walletStateUpdatesDisposable.dispose()
         self.walletTransferUpdatesDisposable.dispose()
         self.walletTransferUpdatesTask?.cancel()
+        self.tonConnectUpdatesDisposable.dispose()
+        self.tonConnectUpdatesTask?.cancel()
         self.storedStateDisposable.dispose()
         self.operationTaskRegistry.shutdown()
         let impl = self.impl
@@ -362,6 +369,7 @@ public final class WalletContext {
     func signal<Value: Sendable>(
         name: String,
         cancelOnDispose: Bool = true,
+        submissionControl: WalletTransferSubmissionControl? = nil,
         deliverWhenAvailable: Bool = false,
         discardResult: (@Sendable (Value) -> Void)? = nil,
         discardOnCancel: (@Sendable () -> Void)? = nil,
@@ -479,7 +487,7 @@ public final class WalletContext {
                 lock.lock(); defer { lock.unlock() }
                 cancelled = true
                 deliveryCancellation.cancel()
-                if cancelOnDispose {
+                if cancelOnDispose || submissionControl?.cancelBeforeCommit() == true {
                     registry.cancel(id: operationId)
                 }
                 if !delivered {

@@ -39,7 +39,6 @@ import TelegramUIPreferences
 import TelegramNotices
 import InvisibleInkDustNode
 import WalletAuthorizationUI
-import ActivityIndicator
 
 private struct WalletTransactionPreviewSource: Equatable {
     let id: String
@@ -738,7 +737,6 @@ private final class WalletTransactionContentComponent: Component {
         private var commentText = ComponentView<Empty>()
         private let commentButton = ComponentView<Empty>()
         private var commentDustNode: InvisibleInkDustNode?
-        private var commentActivityIndicator: ActivityIndicator?
         private var decryptedComment: String?
         private var commentDecryptionInProgress = false
         private var commentDecryptionRevision = 0
@@ -782,6 +780,7 @@ private final class WalletTransactionContentComponent: Component {
         private var dismissSendScreen: (() -> Void)?
         private var didDismissSendScreen = false
         private var previewOperation: PreviewOperation = .ready
+        private var submissionStage: WalletContext.TransferSubmissionStage?
         private var preparingForSend = false
         private var previewTimestamp = Int32(Date().timeIntervalSince1970)
         private var latestWalletState: WalletContext.State?
@@ -888,6 +887,7 @@ private final class WalletTransactionContentComponent: Component {
             self.dismissSendScreen = nil
             self.didDismissSendScreen = false
             self.previewOperation = .ready
+            self.submissionStage = nil
             self.preparingForSend = false
             self.latestWalletState = nil
             self.didShowSuccess = false
@@ -1043,7 +1043,16 @@ private final class WalletTransactionContentComponent: Component {
             self.invalidateCommentSession()
             self.resetCommentDecryption()
             switch self.previewOperation {
-            case .submitting, .submissionUnknown, .confirmed:
+            case .submitting:
+                if self.submissionStage == .waitingForPreviousTransfer {
+                    self.transferDisposable.set(nil)
+                    self.discardCurrentPreparedTransfer()
+                    self.previewOperation = .ready
+                    self.submissionStage = nil
+                } else {
+                    self.dismissSendScreenIfNeeded()
+                }
+            case .submissionUnknown, .confirmed:
                 self.dismissSendScreenIfNeeded()
             case .ready, .preparing:
                 self.commentRevision += 1
@@ -1356,6 +1365,12 @@ private final class WalletTransactionContentComponent: Component {
         }
 
         fileprivate func invalidateCommentSession() {
+            if self.previewOperation == .submitting && self.submissionStage == .waitingForPreviousTransfer {
+                self.transferDisposable.set(nil)
+                self.discardCurrentPreparedTransfer()
+                self.previewOperation = .ready
+                self.submissionStage = nil
+            }
             self.commentSessionGeneration &+= 1
             self.commentSession?.invalidate()
             self.commentSession = nil
@@ -1623,13 +1638,22 @@ private final class WalletTransactionContentComponent: Component {
             }
             self.submittedTransfer = nil
             self.previewOperation = .submitting
+            self.submissionStage = .waitingForPreviousTransfer
             self.componentState?.updated(transition: .easeInOut(duration: 0.2))
-            self.transferDisposable.set((walletContext.submitTransfer(preparedTransfer, session: self.previewCommentEncrypted ? self.commentSession : nil)
+            self.transferDisposable.set((walletContext.submitTransfer(preparedTransfer, session: self.previewCommentEncrypted ? self.commentSession : nil, stageUpdated: { [weak self] stage in
+                guard let self else { return }
+                self.submissionStage = stage
+                if stage == .submitted {
+                    self.commentSession?.invalidate()
+                    self.commentSession = nil
+                }
+            })
             |> deliverOnMainQueue).start(next: { [weak self] pendingTransfer in
                 guard let self else {
                     return
                 }
                 self.submittedTransfer = pendingTransfer
+                self.submissionStage = nil
                 self.preparedTransferNeedsRefresh = false
                 self.dismissSendScreenIfNeeded()
                 switch pendingTransfer.status {
@@ -1658,6 +1682,7 @@ private final class WalletTransactionContentComponent: Component {
                     self.preparedTransferNeedsRefresh = false
                 }
                 self.previewOperation = .ready
+                self.submissionStage = nil
                 self.componentState?.updated(transition: .easeInOut(duration: 0.2))
                 self.presentTransferError(error)
             }))
@@ -2008,7 +2033,7 @@ private final class WalletTransactionContentComponent: Component {
             let configuration = WalletConfiguration.with(appConfiguration: component.context.currentAppConfiguration.with { $0 })
             let explorerUrl = walletTransactionExplorerUrl(explorerUrl: configuration.explorerUrl, id: transaction.transactionHash ?? transaction.id)
             //TODO:localize
-            let viewInExplorer = "View In Explorer"
+            let viewInExplorer = "View in Explorer"
             let whatIsGram = "What is Gram?"
             let item = ContextMenuActionItem(
                 text: viewInExplorer,
@@ -2375,10 +2400,6 @@ private final class WalletTransactionContentComponent: Component {
                     dustNode.view.removeFromSuperview()
                 })
             }
-            if !displaysCommentBubble || !isCommentConcealed || !self.commentDecryptionInProgress {
-                self.commentActivityIndicator?.view.removeFromSuperview()
-                self.commentActivityIndicator = nil
-            }
             if displaysCommentBubble, isCommentConcealed || displayedComment != nil {
                 contentHeight += 22.0
                 let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
@@ -2453,19 +2474,6 @@ private final class WalletTransactionContentComponent: Component {
                     let rect = CGRect(origin: CGPoint(x: 3.0, y: 3.0), size: commentSize).insetBy(dx: 0.0, dy: 2.0)
                     dustNode.update(size: dustNode.frame.size, color: theme.actionSheet.primaryTextColor, textColor: theme.actionSheet.primaryTextColor, rects: [rect], wordRects: [rect])
                     transition.setAlpha(view: dustNode.view, alpha: self.commentDecryptionInProgress ? 0.25 : 1.0)
-                    if self.commentDecryptionInProgress {
-                        let indicator: ActivityIndicator
-                        if let current = self.commentActivityIndicator {
-                            indicator = current
-                        } else {
-                            indicator = ActivityIndicator(type: .custom(theme.actionSheet.primaryTextColor, 16.0, 1.5, false))
-                            indicator.isUserInteractionEnabled = false
-                            self.commentActivityIndicator = indicator
-                            self.addSubview(indicator.view)
-                        }
-                        indicator.type = .custom(theme.actionSheet.primaryTextColor, 16.0, 1.5, false)
-                        indicator.frame = CGRect(x: floorToScreenPixels(bubbleFrame.midX - 8.0), y: floorToScreenPixels(bubbleFrame.midY - 8.0), width: 16.0, height: 16.0)
-                    }
                     let _ = self.commentButton.update(
                         transition: .immediate,
                         component: AnyComponent(PlainButtonComponent(

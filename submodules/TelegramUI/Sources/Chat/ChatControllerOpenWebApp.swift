@@ -127,16 +127,26 @@ func openWebAppImpl(
         botPeer = bot
     }
             
-    let _ = combineLatest(queue: Queue.mainQueue(),
-        context.engine.data.get(TelegramEngine.EngineData.Item.Peer.BotAppSettings(id: botPeer.id)),
-        ApplicationSpecificNotice.getBotGameNotice(accountManager: context.sharedContext.accountManager, peerId: botPeer.id),
-        context.engine.messages.attachMenuBots(),
-        context.engine.messages.getAttachMenuBot(botId: botPeer.id, cached: true)
-        |> map(Optional.init)
-        |> `catch` { _ -> Signal<AttachMenuBot?, NoError> in
-          return .single(nil)
+    let botAppData: Signal<(BotAppSettings?, Bool, [AttachMenuBot], AttachMenuBot?), NoError>
+    if isOnramp {
+        botAppData = context.engine.data.get(TelegramEngine.EngineData.Item.Peer.BotAppSettings(id: botPeer.id))
+        |> map { appSettings in
+            return (appSettings, false, [], nil)
         }
-    ).start(next: { [parentController] appSettings, noticed, attachMenuBots, attachMenuBot in
+        |> deliverOnMainQueue
+    } else {
+        botAppData = combineLatest(queue: Queue.mainQueue(),
+            context.engine.data.get(TelegramEngine.EngineData.Item.Peer.BotAppSettings(id: botPeer.id)),
+            ApplicationSpecificNotice.getBotGameNotice(accountManager: context.sharedContext.accountManager, peerId: botPeer.id),
+            context.engine.messages.attachMenuBots(),
+            context.engine.messages.getAttachMenuBot(botId: botPeer.id, cached: true)
+            |> map(Optional.init)
+            |> `catch` { _ -> Signal<AttachMenuBot?, NoError> in
+                return .single(nil)
+            }
+        )
+    }
+    let _ = botAppData.start(next: { [parentController] appSettings, noticed, attachMenuBots, attachMenuBot in
         let openWebView: (Bool) -> Void = { [weak parentController] justInstalled in
             guard let parentController else {
                 return
@@ -375,6 +385,11 @@ func openWebAppImpl(
             }
         }
         
+        if isOnramp {
+            openWebView(false)
+            return
+        }
+
         var isAttachMenuBotInstalled: Bool?
         if let _ = attachMenuBot {
             if let _ = attachMenuBots.first(where: { $0.peer.id == botPeer.id && !$0.flags.contains(.notActivated) }) {
@@ -835,6 +850,15 @@ public extension ChatControllerImpl {
                 })
             }
             
+            if isOnramp {
+                let _ = (context.engine.data.get(TelegramEngine.EngineData.Item.Peer.BotAppSettings(id: botPeer.id))
+                |> deliverOnMainQueue).startStandalone(next: { [weak chatController] appSettings in
+                    chatController?.chatDisplayNode.dismissInput()
+                    openBotApp(false, false, appSettings)
+                })
+                return
+            }
+
             let _ = combineLatest(
                 queue: Queue.mainQueue(),
                 ApplicationSpecificNotice.getBotGameNotice(accountManager: context.sharedContext.accountManager, peerId: botPeer.id),

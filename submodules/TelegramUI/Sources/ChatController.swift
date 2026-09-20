@@ -869,6 +869,11 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 return false
             }
             
+            if let request = walletTonConnectRequestRoute(message: message, accountPeerId: self.context.account.peerId) {
+                self.context.walletContext?.openTonConnectRequest(sessionId: request.sessionId, messageId: request.messageId)
+                return true
+            }
+
             if let contextController = self.currentContextController {
                 self.present(contextController, in: .window(.root))
                 Queue.mainQueue().after(0.15) {

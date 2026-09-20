@@ -35,31 +35,26 @@ final class WalletSignalRequestContext<Value>: @unchecked Sendable {
     private let lock = NSLock()
     private var continuation: CheckedContinuation<Value, Error>?
     private var disposable: Disposable?
-    private var finished = false
+    private var result: Result<Value, Error>?
+    private var started = false
+
+    deinit {
+        self.disposable?.dispose()
+    }
 
     func run<SignalError: Error>(_ signal: Signal<Value, SignalError>) async throws -> Value {
         try Task.checkCancellation()
-        return try await withTaskCancellationHandler(operation: {
-            try await withCheckedThrowingContinuation { continuation in
-                self.start(signal, continuation: continuation)
-            }
-        }, onCancel: {
-            self.finish(.failure(CancellationError()))
-        })
+        self.start(signal)
+        return try await self.value()
     }
 
-    private func start<SignalError: Error>(
-        _ signal: Signal<Value, SignalError>,
-        continuation: CheckedContinuation<Value, Error>
-    ) {
+    func start<SignalError: Error>(_ signal: Signal<Value, SignalError>) {
         self.lock.lock()
-        if self.finished {
-            self.lock.unlock()
-            continuation.resume(throwing: CancellationError())
-            return
-        }
-        self.continuation = continuation
+        precondition(!self.started)
+        self.started = true
+        let alreadyFinished = self.result != nil
         self.lock.unlock()
+        guard !alreadyFinished else { return }
 
         let disposable = signal.start(next: { [weak self] value in
             self?.finish(.success(value))
@@ -70,7 +65,7 @@ final class WalletSignalRequestContext<Value>: @unchecked Sendable {
         })
 
         self.lock.lock()
-        let disposeImmediately = self.finished
+        let disposeImmediately = self.result != nil
         if !disposeImmediately {
             self.disposable = disposable
         }
@@ -80,13 +75,31 @@ final class WalletSignalRequestContext<Value>: @unchecked Sendable {
         }
     }
 
+    func value() async throws -> Value {
+        try await withTaskCancellationHandler(operation: {
+            try await withCheckedThrowingContinuation { continuation in
+                self.lock.lock()
+                if let result = self.result {
+                    self.lock.unlock()
+                    continuation.resume(with: result)
+                } else {
+                    precondition(self.continuation == nil)
+                    self.continuation = continuation
+                    self.lock.unlock()
+                }
+            }
+        }, onCancel: {
+            self.finish(.failure(CancellationError()))
+        })
+    }
+
     private func finish(_ result: Result<Value, Error>) {
         self.lock.lock()
-        guard !self.finished else {
+        guard self.result == nil else {
             self.lock.unlock()
             return
         }
-        self.finished = true
+        self.result = result
         let continuation = self.continuation
         let disposable = self.disposable
         self.continuation = nil
@@ -94,12 +107,7 @@ final class WalletSignalRequestContext<Value>: @unchecked Sendable {
         self.lock.unlock()
 
         disposable?.dispose()
-        switch result {
-        case let .success(value):
-            continuation?.resume(returning: value)
-        case let .failure(error):
-            continuation?.resume(throwing: error)
-        }
+        continuation?.resume(with: result)
     }
 }
 

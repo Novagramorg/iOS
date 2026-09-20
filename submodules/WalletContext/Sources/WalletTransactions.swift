@@ -22,6 +22,18 @@ struct ResolvedTransferInput {
 }
 
 @available(macOS 10.15, *)
+func normalizedWalletTransferAddress(_ address: String) throws -> String {
+    guard let info = try? parseTonAddress(value: address), !isTestnetAddress(info.format),
+          let normalized = try? convertTonAddress(
+            value: address,
+            format: .userFriendly(bounceable: false, testnet: false)
+          ) else {
+        throw WalletContext.WalletError.invalidAddress
+    }
+    return normalized
+}
+
+@available(macOS 10.15, *)
 func resolveTransferInput(address: String, amount: Int64, comment: String?) throws -> ResolvedTransferInput {
     let trimmed = address.trimmingCharacters(in: .whitespacesAndNewlines)
     let link: ParsedTonTransferLink?
@@ -36,13 +48,7 @@ func resolveTransferInput(address: String, amount: Int64, comment: String?) thro
     }
 
     let recipient = link?.recipient ?? trimmed
-    guard let info = try? parseTonAddress(value: recipient), !isTestnetAddress(info.format),
-          let normalized = try? convertTonAddress(
-            value: recipient,
-            format: .userFriendly(bounceable: false, testnet: false)
-          ) else {
-        throw WalletContext.WalletError.invalidAddress
-    }
+    let normalized = try normalizedWalletTransferAddress(recipient)
 
     if let link {
         guard case .gram = link.asset else {

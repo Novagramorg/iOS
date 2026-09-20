@@ -332,6 +332,7 @@ public final class AccountStateManager {
         }
 
         fileprivate let walletTransferUpdatesPipe = ValuePipe<[WalletTransferUpdate]>()
+        fileprivate let walletTonConnectUpdatesPipe = ValuePipe<[WalletTonConnectEvent]>()
 
         fileprivate let walletStateUpdatesPipe = ValuePipe<Api.WalletState>()
         var walletStateUpdates: Signal<Api.WalletState, NoError> {
@@ -1142,6 +1143,9 @@ public final class AccountStateManager {
                             }
                             if !events.walletTransferUpdates.isEmpty {
                                 strongSelf.walletTransferUpdatesPipe.putNext(events.walletTransferUpdates)
+                            }
+                            if !events.walletTonConnectEvents.isEmpty {
+                                strongSelf.walletTonConnectUpdatesPipe.putNext(events.walletTonConnectEvents)
                             }
                             if let updatedWalletState = events.updatedWalletState {
                                 strongSelf.walletStateUpdatesPipe.putNext(updatedWalletState)
@@ -2246,6 +2250,12 @@ public final class AccountStateManager {
         }
     }
 
+    func walletTonConnectUpdates() -> Signal<[WalletTonConnectEvent], NoError> {
+        return self.impl.signalWith { impl, subscriber in
+            return impl.walletTonConnectUpdatesPipe.signal().start(next: subscriber.putNext, error: subscriber.putError, completed: subscriber.putCompletion)
+        }
+    }
+
     func walletStateUpdates() -> Signal<Api.WalletState, NoError> {
         return self.impl.signalWith { impl, subscriber in
             return impl.walletStateUpdates.start(next: subscriber.putNext, error: subscriber.putError, completed: subscriber.putCompletion)
@@ -2257,7 +2267,6 @@ public final class AccountStateManager {
             return impl.updatedStarsRevenueStatus().start(next: subscriber.putNext, error: subscriber.putError, completed: subscriber.putCompletion)
         }
     }
-    
     
     public func updatedStarGiftAuctionState() -> Signal<[Int64: GiftAuctionContext.State.AuctionState], NoError> {
         return self.impl.signalWith { impl, subscriber in

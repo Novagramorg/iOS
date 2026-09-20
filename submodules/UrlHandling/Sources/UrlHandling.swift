@@ -886,6 +886,12 @@ private func resolvedForumTopicUrl(channel: TelegramChannel, threadId: Int64, me
 private func resolveInternalUrl(context: AccountContext, url: ParsedInternalUrl) -> Signal<ResolveInternalUrlResult, NoError> {
     switch url {
         case let .sendGrams(queryItems):
+            var walletUrl = URLComponents(string: "https://t.me/sendgrams")!
+            walletUrl.queryItems = queryItems
+            walletUrl.percentEncodedQuery = walletUrl.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
+            if let value = walletUrl.string, WalletContext.isTonConnectUrl(value) {
+                return .single(.result(.sendGrams(transfer: nil, tonConnectUrl: value)))
+            }
             guard let link = SendGramsLink(queryItems: queryItems) else {
                 return .complete()
             }

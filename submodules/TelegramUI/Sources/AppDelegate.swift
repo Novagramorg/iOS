@@ -1549,9 +1549,9 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         })
         
         if let url = launchOptions?[.url] {
-            if let url = url as? URL, url.scheme == "tg" || url.scheme == "ton" || url.scheme == buildConfig.appSpecificUrlScheme {
+            if let url = url as? URL, url.scheme == "tg" || url.scheme == "ton" || url.scheme == buildConfig.appSpecificUrlScheme || WalletContext.isTonConnectUrl(url.absoluteString) {
                 self.openUrlWhenReady(url: url, external: true)
-            } else if let urlString = url as? String, urlString.lowercased().hasPrefix("tg:") || urlString.lowercased().hasPrefix("ton:") || urlString.lowercased().hasPrefix("\(buildConfig.appSpecificUrlScheme):"), let url = URL(string: urlString) {
+            } else if let urlString = url as? String, urlString.lowercased().hasPrefix("tg:") || urlString.lowercased().hasPrefix("ton:") || urlString.lowercased().hasPrefix("\(buildConfig.appSpecificUrlScheme):") || WalletContext.isTonConnectUrl(urlString), let url = URL(string: urlString) {
                 self.openUrlWhenReady(url: url, external: true)
             }
         }
@@ -1768,7 +1768,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
 
         for context in connectionOptions.urlContexts {
             let url = context.url
-            if let buildConfig = self.buildConfig, url.scheme == "tg" || url.scheme == "ton" || url.scheme == buildConfig.appSpecificUrlScheme {
+            if let buildConfig = self.buildConfig, url.scheme == "tg" || url.scheme == "ton" || url.scheme == buildConfig.appSpecificUrlScheme || WalletContext.isTonConnectUrl(url.absoluteString) {
                 self.openUrlWhenReady(url: url, external: true)
             } else {
                 self.handleOpenURL(url)
@@ -2871,6 +2871,14 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
     }
     
     private func openChatWhenReady(accountId: AccountRecordId?, peerId: PeerId, threadId: Int64?, messageId: MessageId? = nil, activateInput: Bool = false, storyId: StoryId?, openAppIfAny: Bool = false, alwaysKeepMessageId: Bool = false) {
+        if let messageId, messageId.namespace == Namespaces.Message.Cloud,
+           peerId == PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(777000)) {
+            if self.walletTonConnectNotifications.enqueue(accountId: accountId, messageId: messageId, alwaysKeepMessageId: alwaysKeepMessageId) {
+                self.openNextWalletTonConnectNotification()
+            }
+            return
+        }
+
         let signal = self.sharedContextPromise.get()
         |> take(1)
         |> deliverOnMainQueue
@@ -2893,6 +2901,39 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         }))
     }
     
+    private var walletTonConnectNotifications = WalletTonConnectNotificationQueue<AccountRecordId, MessageId>()
+    private let walletTonConnectNotificationDisposable = MetaDisposable()
+
+    private func openNextWalletTonConnectNotification() {
+        guard let route = self.walletTonConnectNotifications.next() else { return }
+        let signal = self.sharedContextPromise.get()
+        |> take(1)
+        |> deliverOnMainQueue
+        |> mapToSignal { sharedContext -> Signal<AuthorizedApplicationContext, NoError> in
+            if let id = route.accountId {
+                sharedContext.sharedContext.switchToAccount(id: id)
+                return self.authorizedContext() |> filter { $0.context.account.id == id } |> take(1)
+            }
+            return self.authorizedContext() |> take(1)
+        }
+        |> mapToSignal { context -> Signal<(AuthorizedApplicationContext, EngineMessage?), NoError> in
+            context.context.engine.messages.downloadMessage(messageId: route.messageId)
+            |> map { (context, $0) }
+        }
+        |> deliverOnMainQueue
+        self.walletTonConnectNotificationDisposable.set(signal.start(next: { [weak self] context, message in
+            guard let self else { return }
+            if let message, let request = walletTonConnectRequestRoute(message: message._asMessage(), accountPeerId: context.context.account.peerId) {
+                context.context.walletContext?.openTonConnectRequest(sessionId: request.sessionId, messageId: request.messageId)
+            } else {
+                context.openChatWithPeerId(peerId: route.messageId.peerId, threadId: nil, messageId: route.messageId,
+                    activateInput: false, storyId: nil, openAppIfAny: false, alwaysKeepMessageId: route.alwaysKeepMessageId)
+            }
+            self.walletTonConnectNotifications.complete()
+            Queue.mainQueue().async { [weak self] in self?.openNextWalletTonConnectNotification() }
+        }))
+    }
+
     private var openUrlInProgress: URL?
     private func openUrlWhenReady(accountId: AccountRecordId? = nil, url: URL, external: Bool = false) {
         self.openUrlInProgress = url

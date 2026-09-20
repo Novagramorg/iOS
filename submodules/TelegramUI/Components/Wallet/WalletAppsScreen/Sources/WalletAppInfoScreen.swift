@@ -301,12 +301,12 @@ private final class WalletAppInfoSheetComponent: CombinedComponent {
 }
 
 final class WalletAppInfoScreen: ViewControllerComponentContainer {
-    let sessionId: String
+    let sessionId: Int64
     private let closed: () -> Void
     fileprivate var isDisconnecting = false
     fileprivate var isFinishing = false
 
-    init(context: AccountContext, sessionId: String, manifest: TonConnectManifestInfo, disconnect: @escaping (@escaping (Bool) -> Void) -> Void, closed: @escaping () -> Void) {
+    init(context: AccountContext, sessionId: Int64, manifest: TonConnectManifestInfo, disconnect: @escaping (@escaping (Bool) -> Void) -> Void, closed: @escaping () -> Void) {
         self.sessionId = sessionId
         self.closed = closed
         super.init(
