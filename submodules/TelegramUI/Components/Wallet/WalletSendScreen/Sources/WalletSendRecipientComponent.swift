@@ -83,7 +83,7 @@ final class WalletSendRecipientComponent: Component {
             let hasPeer = component.peer != nil
             let canOpenInfo = !component.isLoading && !component.address.isEmpty
             let textOriginX: CGFloat = hasPeer ? 60.0 : 16.0
-            let textWidth = max(1.0, availableSize.width - textOriginX - 56.0)
+            let textWidth = max(1.0, availableSize.width - textOriginX - 42.0)
             let addressFont = Font.monospace(14.0)
             let addressKerning = ("0" as NSString).size(withAttributes: [.font: addressFont]).width * 0.08
             let addressAttributes: [NSAttributedString.Key: Any] = [
@@ -103,13 +103,26 @@ final class WalletSendRecipientComponent: Component {
             let displaysPlaceholder = hasPeer && component.isLoading
             let addressText = displaysPlaceholder ? String(repeating: "0", count: 48) : (component.address.isEmpty ? "—" : component.address)
             let addressLines = Self.addressLines(addressText, groupsPerLine: groupsPerLine)
+            let attributedAddress = NSMutableAttributedString()
+            for (row, line) in addressLines.enumerated() {
+                if row != 0 {
+                    attributedAddress.append(NSAttributedString(string: "\n", attributes: addressAttributes))
+                }
+                for (column, group) in line.split(separator: " ").enumerated() {
+                    if column != 0 {
+                        attributedAddress.append(NSAttributedString(string: " ", attributes: addressAttributes))
+                    }
+                    var groupAttributes = addressAttributes
+                    groupAttributes[.foregroundColor] = (row + column).isMultiple(of: 2)
+                        ? component.theme.list.itemPrimaryTextColor
+                        : component.theme.list.itemSecondaryTextColor
+                    attributedAddress.append(NSAttributedString(string: String(group), attributes: groupAttributes))
+                }
+            }
             let addressSize = self.address.update(
                 transition: transition,
                 component: AnyComponent(MultilineTextComponent(
-                    text: .plain(NSAttributedString(
-                        string: addressLines.joined(separator: "\n"),
-                        attributes: addressAttributes
-                    )),
+                    text: .plain(attributedAddress),
                     maximumNumberOfLines: 0,
                     lineSpacing: 0.2
                 )),

@@ -452,7 +452,7 @@ final class WalletSendAmountField: UIView, UITextFieldDelegate {
                 content: LottieComponent.AppBundleContent(name: "TonDiamond"),
                 startingPosition: .begin,
                 size: self.gramAnimationSize,
-                loop: true,
+                loop: false,
                 lottieSettings: lottieSettings
             )),
             environment: {},
@@ -463,6 +463,7 @@ final class WalletSendAmountField: UIView, UITextFieldDelegate {
             if gramIconView.superview == nil {
                 gramIconView.isUserInteractionEnabled = false
                 self.contentView.addSubview(gramIconView)
+                gramIconView.playOnce()
             }
             transition.setAlpha(view: gramIconView, alpha: mode == .gram ? 1.0 : 0.0)
         }

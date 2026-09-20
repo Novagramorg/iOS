@@ -2271,7 +2271,7 @@ private final class WalletTransactionContentComponent: Component {
                             content: LottieComponent.AppBundleContent(name: "TonDiamond"),
                             startingPosition: .begin,
                             size: animationSize,
-                            loop: true,
+                            loop: false,
                             lottieSettings: component.context.lottieRenderingSettings
                         )),
                         environment: {},
@@ -2279,9 +2279,11 @@ private final class WalletTransactionContentComponent: Component {
                     )
                     contentHeight = 10.0
                     if let animationView = self.gramAnimation.view as? LottieComponent.View {
+                        animationView.externalShouldPlay = environment.isVisible
                         if animationView.superview == nil {
                             animationView.isUserInteractionEnabled = false
                             self.addSubview(animationView)
+                            animationView.playOnce()
                         }
                         transition.setFrame(view: animationView, frame: CGRect(
                             x: floorToScreenPixels((availableSize.width - animationSize.width) / 2.0),
@@ -2290,7 +2292,6 @@ private final class WalletTransactionContentComponent: Component {
                             height: animationSize.height
                         ))
                         transition.setAlpha(view: animationView, alpha: 1.0)
-                        animationView.externalShouldPlay = environment.isVisible
                     }
                     // TonDiamond includes transparent padding below the diamond.
                     contentHeight += animationSize.height - 16.0
