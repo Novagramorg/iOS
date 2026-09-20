@@ -729,6 +729,7 @@ private final class WalletTransactionContentComponent: Component {
         private let controlButtons = ComponentView<Empty>()
         private let keyUpdateHeader = ComponentView<Empty>()
         private let collectibleHeader = ComponentView<Empty>()
+        private let gramAnimation = ComponentView<Empty>()
         private let amount = ComponentView<Empty>()
         private let usdValue = ComponentView<Empty>()
         private let processingDot = ComponentView<Empty>()
@@ -749,6 +750,7 @@ private final class WalletTransactionContentComponent: Component {
         private var isRestoringCommentKey = false
         private var commentIsVisible = true
         private let table = ComponentView<Empty>()
+        private let gramInfoButton = ComponentView<Empty>()
         private let inputBackground = ComponentView<Empty>()
         private let inputField = ComponentView<Empty>()
         private let commentEncryptionButton = ComponentView<Empty>()
@@ -2184,6 +2186,11 @@ private final class WalletTransactionContentComponent: Component {
             let fiatCurrency = self.latestWalletState?.fiat.selectedCurrency ?? .usd
             let fiatRate = self.latestWalletState?.fiat.selectedRate
             let isKeyChange = transaction.kind == .keyChange
+            let displaysGramHeader = transaction.currency == .ton && transaction.collectible == nil && !isKeyChange
+            if !displaysGramHeader, let animationView = self.gramAnimation.view as? LottieComponent.View {
+                transition.setAlpha(view: animationView, alpha: 0.0)
+                animationView.externalShouldPlay = false
+            }
             if !isKeyChange, let headerView = self.keyUpdateHeader.view {
                 transition.setAlpha(view: headerView, alpha: 0.0)
             }
@@ -2256,6 +2263,38 @@ private final class WalletTransactionContentComponent: Component {
                 }
                 contentHeight += headerSize.height
             } else {
+                if displaysGramHeader {
+                    let animationSize = CGSize(width: 118.0, height: 118.0)
+                    let _ = self.gramAnimation.update(
+                        transition: transition,
+                        component: AnyComponent(LottieComponent(
+                            content: LottieComponent.AppBundleContent(name: "TonDiamond"),
+                            startingPosition: .begin,
+                            size: animationSize,
+                            loop: true,
+                            lottieSettings: component.context.lottieRenderingSettings
+                        )),
+                        environment: {},
+                        containerSize: animationSize
+                    )
+                    contentHeight = 10.0
+                    if let animationView = self.gramAnimation.view as? LottieComponent.View {
+                        if animationView.superview == nil {
+                            animationView.isUserInteractionEnabled = false
+                            self.addSubview(animationView)
+                        }
+                        transition.setFrame(view: animationView, frame: CGRect(
+                            x: floorToScreenPixels((availableSize.width - animationSize.width) / 2.0),
+                            y: contentHeight,
+                            width: animationSize.width,
+                            height: animationSize.height
+                        ))
+                        transition.setAlpha(view: animationView, alpha: 1.0)
+                        animationView.externalShouldPlay = environment.isVisible
+                    }
+                    // TonDiamond includes transparent padding below the diamond.
+                    contentHeight += animationSize.height - 16.0
+                }
                 let amountSize = self.amount.update(
                     transition: transition,
                     component: AnyComponent(WalletTransactionAmountComponent(
@@ -2518,7 +2557,7 @@ private final class WalletTransactionContentComponent: Component {
                     (commentView as? TransactionCommentComponent.View)?.cancelSelection()
                     transition.setAlpha(view: commentView, alpha: 0.0)
                 }
-                contentHeight += !isKeyChange && transaction.collectible == nil ? 44.0 : 22.0
+                contentHeight += displaysGramHeader ? 32.0 : (!isKeyChange && transaction.collectible == nil ? 44.0 : 22.0)
             }
 
             let valueFont = Font.regular(15.0)
@@ -2820,6 +2859,56 @@ private final class WalletTransactionContentComponent: Component {
             }
             contentHeight += tableSize.height
 
+            let displaysGramInfo = displaysGramHeader && !self.isPreview
+            if displaysGramInfo {
+                contentHeight += 4.0
+                //TODO:localize
+                let gramInfoTitle = "What's Gram?"
+                let gramInfoSize = self.gramInfoButton.update(
+                    transition: transition,
+                    component: AnyComponent(PlainButtonComponent(
+                        content: AnyComponent(Text(
+                            text: gramInfoTitle,
+                            font: Font.regular(14.0),
+                            color: theme.actionSheet.controlAccentColor
+                        )),
+                        minSize: CGSize(width: 44.0, height: 44.0),
+                        action: { [weak self] in
+                            guard let self, let component = self.component else {
+                                return
+                            }
+                            self.environment?.controller()?.push(component.context.sharedContext.makeWalletInfoScreen(
+                                context: component.context,
+                                mode: .gram,
+                                completion: nil
+                            ))
+                        }
+                    )),
+                    environment: {},
+                    containerSize: CGSize(width: tableWidth, height: 44.0)
+                )
+                if let gramInfoView = self.gramInfoButton.view {
+                    if gramInfoView.superview == nil {
+                        self.addSubview(gramInfoView)
+                    }
+                    gramInfoView.isUserInteractionEnabled = true
+                    gramInfoView.isAccessibilityElement = true
+                    gramInfoView.accessibilityLabel = gramInfoTitle
+                    gramInfoView.accessibilityTraits = .button
+                    transition.setFrame(view: gramInfoView, frame: CGRect(
+                        x: floorToScreenPixels((availableSize.width - gramInfoSize.width) / 2.0),
+                        y: contentHeight,
+                        width: gramInfoSize.width,
+                        height: gramInfoSize.height
+                    ))
+                    transition.setAlpha(view: gramInfoView, alpha: 1.0)
+                }
+                contentHeight += gramInfoSize.height
+            } else if let gramInfoView = self.gramInfoButton.view {
+                gramInfoView.isUserInteractionEnabled = false
+                transition.setAlpha(view: gramInfoView, alpha: 0.0)
+            }
+
             let displaysInput = self.isPreview && !self.isFinishedPreview
             let displaysCommentEncryption = displaysInput && transaction.collectible == nil
             if displaysInput {
@@ -2917,7 +3006,6 @@ private final class WalletTransactionContentComponent: Component {
                             content: AnyComponent(LottieComponent(
                                 content: LottieComponent.AppBundleContent(
                                     name: "WalletCommentLock",
-                                    // The animation opens at frame 10 and closes again at frame 29 of 180.
                                     frameRange: commentEncrypted ? (10.0 / 180.0 ..< 30.0 / 180.0) : (0.0 ..< 11.0 / 180.0)
                                 ),
                                 color: commentEncrypted ? theme.actionSheet.controlAccentColor : theme.actionSheet.inputPlaceholderColor,
@@ -2962,7 +3050,7 @@ private final class WalletTransactionContentComponent: Component {
                 contentHeight += inputSize.height
                 contentHeight += 24.0
             } else {
-                contentHeight += 30.0
+                contentHeight += displaysGramInfo ? 2.0 : 30.0
                 if let backgroundView = self.inputBackground.view {
                     transition.setAlpha(view: backgroundView, alpha: 0.0)
                 }

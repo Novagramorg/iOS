@@ -58,6 +58,7 @@ final class WalletTransactionAmountComponent: Component {
         private let contentContainer = UIView()
         private let shimmerView = ShimmeringMaskView(peakAlpha: 0.3, duration: 1.0)
         private let amount = ComponentView<Empty>()
+        private let suffix = ComponentView<Empty>()
         private let iconView = UIImageView()
         private var currentIconName: String?
 
@@ -89,7 +90,7 @@ final class WalletTransactionAmountComponent: Component {
             if case .outgoing = component.direction, normalizedAmount > 0 {
                 normalizedAmount *= -1
             }
-            let iconName: String
+            let iconName: String?
             switch component.currency {
             case .ton:
                 formattedAmountText = formatTonAmountText(
@@ -97,7 +98,7 @@ final class WalletTransactionAmountComponent: Component {
                     dateTimeFormat: component.dateTimeFormat,
                     maxDecimalPositions: 3
                 )
-                iconName = "Wallet/TransactionGramLarge"
+                iconName = nil
             case .usdt:
                 formattedAmountText = formatWalletTransactionTokenAmountText(
                     normalizedAmount,
@@ -108,7 +109,7 @@ final class WalletTransactionAmountComponent: Component {
             }
             if self.currentIconName != iconName {
                 self.currentIconName = iconName
-                self.iconView.image = UIImage(bundleImageName: iconName)?.withRenderingMode(.alwaysOriginal)
+                self.iconView.image = iconName.flatMap { UIImage(bundleImageName: $0)?.withRenderingMode(.alwaysOriginal) }
             }
 
             let amountText: String
@@ -130,14 +131,39 @@ final class WalletTransactionAmountComponent: Component {
             }
 
             let textColor = component.pending ? component.theme.actionSheet.secondaryTextColor : regularTextColor
+            let integralFont = Font.with(size: 48.0, design: .round, weight: .semibold)
+            let fractionalFont = Font.with(size: 32.0, design: .round, weight: .semibold)
             let amountAttributedString = tonAmountAttributedString(
                 amountText,
-                integralFont: Font.with(size: 48.0, design: .round, weight: .semibold),
-                fractionalFont: Font.with(size: 32.0, design: .round, weight: .semibold),
+                integralFont: integralFont,
+                fractionalFont: fractionalFont,
                 color: .white,
                 decimalSeparator: component.dateTimeFormat.decimalSeparator
             )
 
+            let displaysGramSuffix = component.currency == .ton
+            let suffixSize: CGSize
+            if displaysGramSuffix {
+                suffixSize = self.suffix.update(
+                    transition: transition,
+                    component: AnyComponent(MultilineTextComponent(
+                        text: .plain(NSAttributedString(
+                            string: "GRAM",
+                            font: fractionalFont,
+                            textColor: UIColor(rgb: 0x30A1F5)
+                        )),
+                        maximumNumberOfLines: 1
+                    )),
+                    environment: {},
+                    containerSize: CGSize(width: availableSize.width, height: 100.0)
+                )
+            } else {
+                suffixSize = .zero
+            }
+            let spacing: CGFloat = displaysGramSuffix ? 10.0 : 2.0 - UIScreenPixel
+            let amountWidth = displaysGramSuffix
+                ? availableSize.width - 60.0 - spacing - suffixSize.width
+                : availableSize.width - 104.0
             let amountSize = self.amount.update(
                 transition: transition,
                 component: AnyComponent(MultilineTextComponent(
@@ -146,18 +172,19 @@ final class WalletTransactionAmountComponent: Component {
                     tintColor: textColor
                 )),
                 environment: {},
-                containerSize: CGSize(width: max(0.0, availableSize.width - 104.0), height: 100.0)
+                containerSize: CGSize(width: max(0.0, amountWidth), height: 100.0)
             )
             let iconSize = (self.iconView.image?.size ?? CGSize()).aspectFitted(
                 CGSize(width: 44.0, height: 44.0)
             )
 
-            let spacing: CGFloat = 2.0 - UIScreenPixel
+            let suffixOffsetY = floorToScreenPixels(integralFont.ascender) - floorToScreenPixels(fractionalFont.ascender)
             let size = CGSize(
-                width: amountSize.width + spacing + iconSize.width,
-                height: max(amountSize.height, iconSize.height)
+                width: amountSize.width + spacing + (displaysGramSuffix ? suffixSize.width : iconSize.width),
+                height: max(amountSize.height, displaysGramSuffix ? suffixOffsetY + suffixSize.height : iconSize.height)
             )
             let bounds = CGRect(origin: .zero, size: size)
+            let amountOriginY = floor((size.height - amountSize.height) / 2.0)
 
             self.contentContainer.frame = bounds
             if let amountView = self.amount.view {
@@ -167,12 +194,24 @@ final class WalletTransactionAmountComponent: Component {
                 transition.setFrame(
                     view: amountView,
                     frame: CGRect(
-                        origin: CGPoint(x: 0.0, y: floor((size.height - amountSize.height) / 2.0)),
+                        origin: CGPoint(x: 0.0, y: amountOriginY),
                         size: amountSize
                     )
                 )
             }
-            transition.setAlpha(view: self.iconView, alpha: component.pending ? 0.5 : 1.0)
+            if let suffixView = self.suffix.view {
+                if suffixView.superview == nil {
+                    self.contentContainer.addSubview(suffixView)
+                }
+                transition.setAlpha(view: suffixView, alpha: displaysGramSuffix ? (component.pending ? 0.5 : 1.0) : 0.0)
+                if displaysGramSuffix {
+                    transition.setFrame(view: suffixView, frame: CGRect(
+                        origin: CGPoint(x: amountSize.width + spacing, y: amountOriginY + suffixOffsetY),
+                        size: suffixSize
+                    ))
+                }
+            }
+            transition.setAlpha(view: self.iconView, alpha: displaysGramSuffix ? 0.0 : (component.pending ? 0.5 : 1.0))
             transition.setFrame(
                 view: self.iconView,
                 frame: CGRect(
