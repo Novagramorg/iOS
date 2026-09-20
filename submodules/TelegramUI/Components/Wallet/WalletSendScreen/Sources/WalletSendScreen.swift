@@ -471,6 +471,8 @@ private final class WalletSendScreenComponent: Component {
 
         private let controlButtons = ComponentView<Empty>()
         private let title = ComponentView<Empty>()
+        private let recipient = ComponentView<Empty>()
+        private var recipientInfoAlert: AlertScreen?
         private let amountField = WalletSendAmountField()
         private let emptyHint = ComponentView<Empty>()
         private let rateButton = ComponentView<Empty>()
@@ -926,6 +928,73 @@ private final class WalletSendScreenComponent: Component {
             } else {
                 controller.push(receiveController)
             }
+        }
+
+        private func showRecipientInfoAlert() {
+            guard self.recipientInfoAlert == nil, self.isVisible,
+                  !self.isPreparingTransfer, !self.isResolvingSigningAccess, !self.isSubmittingTransfer,
+                  let component = self.component,
+                  !self.recipientAddress.isEmpty,
+                  let controller = self.environment?.controller() else {
+                return
+            }
+
+            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+            let title: String
+            let recipientName: String?
+            if let peer = component.peer {
+                let fullName = peer.displayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder)
+                let shortName = peer.compactDisplayTitle.isEmpty ? fullName : peer.compactDisplayTitle
+                //TODO:localize
+                title = "\(shortName)’s wallet"
+                if let username = peer.addressName, !username.isEmpty {
+                    recipientName = "@\(username)"
+                } else {
+                    recipientName = fullName
+                }
+            } else {
+                //TODO:localize
+                title = "Wallet address"
+                recipientName = nil
+            }
+            let peerId = component.peer?.id
+            let recipientAddress = self.recipientAddress
+            let restoreInputFocus = self.amountField.isInputActive
+            let alertController = AlertScreen(
+                context: component.context,
+                configuration: AlertScreen.Configuration(dismissOnOutsideTap: true, allowInputInset: false),
+                content: [
+                    AnyComponentWithIdentity(
+                        id: "recipientInfo",
+                        component: AnyComponent(WalletSendRecipientAlertContentComponent(
+                            title: title,
+                            recipientName: recipientName,
+                            address: recipientAddress
+                        ))
+                    )
+                ],
+                actions: [
+                    AlertScreen.Action(title: presentationData.strings.Common_OK, type: .default)
+                ]
+            )
+            self.recipientInfoAlert = alertController
+            alertController.dismissed = { [weak self, weak controller, weak alertController] _ in
+                // AlertScreen calls this before removing itself and ends editing when dismissed.
+                DispatchQueue.main.async { [weak self, weak controller, weak alertController] in
+                    guard let self, self.recipientInfoAlert === alertController else {
+                        return
+                    }
+                    self.recipientInfoAlert = nil
+                    guard restoreInputFocus, self.isVisible, self.window != nil,
+                          let controller, self.environment?.controller() === controller, !controller.isBeingDismissed,
+                          self.component?.peer?.id == peerId, self.recipientAddress == recipientAddress,
+                          !self.isPreparingTransfer, !self.isResolvingSigningAccess, !self.isSubmittingTransfer else {
+                        return
+                    }
+                    self.amountField.activateInput()
+                }
+            }
+            controller.present(alertController, in: .window(.root))
         }
 
         private func showCommentAlert() {
@@ -1709,6 +1778,45 @@ private final class WalletSendScreenComponent: Component {
                 )
             }
 
+            var recipientFrame: CGRect?
+            if component.peer != nil || !self.recipientAddress.isEmpty {
+                let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+                let recipientSize = self.recipient.update(
+                    transition: transition,
+                    component: AnyComponent(WalletSendRecipientComponent(
+                        context: component.context,
+                        theme: theme,
+                        peer: component.peer,
+                        peerName: component.peer?.displayTitle(strings: environment.strings, displayOrder: presentationData.nameDisplayOrder) ?? "",
+                        address: self.recipientAddress,
+                        isLoading: self.recipientAddress.isEmpty && (self.peerAddressState == .notRequested || self.peerAddressState == .loading),
+                        openInfo: { [weak self] in
+                            self?.showRecipientInfoAlert()
+                        }
+                    )),
+                    environment: {},
+                    containerSize: CGSize(width: controlButtonsWidth, height: .greatestFiniteMagnitude)
+                )
+                let frame = CGRect(
+                    x: environment.safeInsets.left + 16.0,
+                    y: headerOriginY + headerButtonSize.height + 14.0,
+                    width: recipientSize.width,
+                    height: recipientSize.height
+                )
+                recipientFrame = frame
+                if let recipientView = self.recipient.view {
+                    if recipientView.superview == nil {
+                        self.addSubview(recipientView)
+                    }
+                    recipientView.isUserInteractionEnabled = true
+                    transition.setFrame(view: recipientView, frame: frame)
+                    transition.setAlpha(view: recipientView, alpha: 1.0)
+                }
+            } else if let recipientView = self.recipient.view {
+                recipientView.isUserInteractionEnabled = false
+                transition.setAlpha(view: recipientView, alpha: 0.0)
+            }
+
             let keyboardHeight = environment.inputHeight
             let effectiveBottomInset = max(
                 keyboardHeight,
@@ -1734,10 +1842,13 @@ private final class WalletSendScreenComponent: Component {
                 minimumAmountHeaderSpacing = 75.0
             }
             let amountWidth = max(1.0, availableSize.width - environment.safeInsets.left - environment.safeInsets.right - 32.0)
-            let amountCenterY = max(
+            var amountCenterY = max(
                 headerOriginY + headerButtonSize.height + minimumAmountHeaderSpacing,
                 min(availableSize.height * 0.39, usableBottom - amountBottomReserve)
             )
+            if let recipientFrame {
+                amountCenterY = max(amountCenterY, recipientFrame.maxY + 12.0 + 37.0)
+            }
             let amountFrame = CGRect(
                 x: environment.safeInsets.left + 16.0,
                 y: floorToScreenPixels(amountCenterY - 37.0),
@@ -1752,6 +1863,8 @@ private final class WalletSendScreenComponent: Component {
                 fiatCurrency: self.currentFiatCurrency,
                 dateTimeFormat: environment.dateTimeFormat,
                 theme: theme,
+                lottieSettings: component.context.lottieRenderingSettings,
+                isVisible: environment.isVisible,
                 transition: transition
             )
             if shouldFocusAmountField {
@@ -1869,7 +1982,7 @@ private final class WalletSendScreenComponent: Component {
             )
             let rateButtonFrame = CGRect(
                 x: floorToScreenPixels((availableSize.width - rateButtonSize.width) / 2.0),
-                y: amountFrame.maxY + 7.0,
+                y: amountFrame.maxY - 1.0,
                 width: rateButtonSize.width,
                 height: rateButtonSize.height
             )

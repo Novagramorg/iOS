@@ -3,7 +3,8 @@ import UIKit
 import CoreText
 import Display
 import ComponentFlow
-import BundleIconComponent
+import LottieComponent
+import LottieSettings
 import MultilineTextComponent
 import TelegramPresentationData
 import PresentationDataUtils
@@ -254,7 +255,8 @@ final class WalletSendAmountField: UIView, UITextFieldDelegate {
     )
     private let fractionalFont = Font.with(size: 32.0, design: .round, weight: .semibold)
 
-    private var gramIconSize: CGSize = .zero
+    private let gramIconLayoutSize = CGSize(width: 44.0, height: 44.0)
+    private let gramAnimationSize = CGSize(width: 48.0, height: 48.0)
     private var fiatIconSize: CGSize = .zero
     private var suffixSize: CGSize = .zero
 
@@ -399,6 +401,8 @@ final class WalletSendAmountField: UIView, UITextFieldDelegate {
         fiatCurrency: WalletContext.FiatCurrency,
         dateTimeFormat: PresentationDateTimeFormat,
         theme: PresentationTheme,
+        lottieSettings: LottieRenderingSettings,
+        isVisible: Bool,
         transition: ComponentTransition
     ) {
         let modeChanged = self.mode != mode
@@ -442,18 +446,22 @@ final class WalletSendAmountField: UIView, UITextFieldDelegate {
             suffixText = fiatCurrency.code
         }
 
-        self.gramIconSize = self.gramIcon.update(
+        let _ = self.gramIcon.update(
             transition: transition,
-            component: AnyComponent(BundleIconComponent(
-                name: "Wallet/SendGram",
-                tintColor: UIColor(rgb: 0x30A1F5),
-                maxSize: CGSize(width: 44.0, height: 44.0)
+            component: AnyComponent(LottieComponent(
+                content: LottieComponent.AppBundleContent(name: "TonDiamond"),
+                startingPosition: .begin,
+                size: self.gramAnimationSize,
+                loop: true,
+                lottieSettings: lottieSettings
             )),
             environment: {},
-            containerSize: CGSize(width: 44.0, height: 74.0)
+            containerSize: self.gramAnimationSize
         )
-        if let gramIconView = self.gramIcon.view {
+        if let gramIconView = self.gramIcon.view as? LottieComponent.View {
+            gramIconView.externalShouldPlay = mode == .gram && isVisible
             if gramIconView.superview == nil {
+                gramIconView.isUserInteractionEnabled = false
                 self.contentView.addSubview(gramIconView)
             }
             transition.setAlpha(view: gramIconView, alpha: mode == .gram ? 1.0 : 0.0)
@@ -530,7 +538,7 @@ final class WalletSendAmountField: UIView, UITextFieldDelegate {
 
         let iconLayoutSize = CGSize(width: 40.0, height: 40.0)
         let iconSpacing: CGFloat = self.mode == .fiat ? 0.0 : 2.0
-        let suffixSpacing: CGFloat = 2.0
+        let suffixSpacing: CGFloat = -1.0
         let displayText = (self.textField.text ?? "").isEmpty ? "0" : (self.textField.text ?? "")
         let displayTextBounds = self.amountTextLayout(displayText).attributedText.boundingRect(
             with: CGSize(width: CGFloat.greatestFiniteMagnitude, height: self.bounds.height),
@@ -538,8 +546,8 @@ final class WalletSendAmountField: UIView, UITextFieldDelegate {
             context: nil
         )
         let textWidth = max(31.0, ceil(displayTextBounds.width) + 5.0)
-        let iconWidth = self.mode == .gram ? self.gramIconSize.width : self.fiatIconSize.width
-        // Include any part of the icon extending beyond its fixed layout slot.
+        let iconWidth = self.mode == .gram ? self.gramIconLayoutSize.width : self.fiatIconSize.width
+
         let iconLeadingInset = max(0.0, -floorToScreenPixels((iconLayoutSize.width - iconWidth) / 2.0))
         let totalWidth = iconLeadingInset + iconLayoutSize.width + iconSpacing + textWidth + suffixSpacing + self.suffixSize.width
         let scale = min(1.0, self.bounds.width / totalWidth)
@@ -553,10 +561,10 @@ final class WalletSendAmountField: UIView, UITextFieldDelegate {
         if let gramIconView = self.gramIcon.view {
             gramIconView.frame = CGRect(
                 origin: CGPoint(
-                    x: x + floorToScreenPixels((iconLayoutSize.width - self.gramIconSize.width) / 2.0),
-                    y: floorToScreenPixels(centerY - self.gramIconSize.height / 2.0)
+                    x: x + floorToScreenPixels((iconLayoutSize.width - self.gramAnimationSize.width) / 2.0) - 1.0,
+                    y: floorToScreenPixels(centerY - self.gramAnimationSize.height / 2.0) - 1.0
                 ),
-                size: self.gramIconSize
+                size: self.gramAnimationSize
             )
         }
         if let fiatIconView = self.fiatIcon.view {
