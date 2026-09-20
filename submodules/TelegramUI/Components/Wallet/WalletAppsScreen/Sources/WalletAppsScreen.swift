@@ -472,13 +472,16 @@ public final class WalletAppsScreen: ViewControllerComponentContainer {
             context: context,
             component: WalletAppsScreenComponent(context: context, walletContext: walletContext),
             navigationBarAppearance: .default,
-            presentationMode: .modal,
             theme: .default
         )
         //TODO:localize
         self.title = "Connected Apps"
-        self.navigationPresentation = .modal
-        self.navigationItem.leftBarButtonItem = UIBarButtonItem(title: "___close", style: .plain, target: self, action: #selector(self.closePressed))
+        self.attemptNavigation = { [weak self] _ in
+            guard let self else {
+                return true
+            }
+            return (self.node.hostView.componentView as? WalletAppsScreenComponent.View)?.isDisconnecting != true
+        }
         self.scrollToTop = { [weak self] in
             (self?.node.hostView.componentView as? WalletAppsScreenComponent.View)?.scrollToTop()
         }
@@ -488,17 +491,20 @@ public final class WalletAppsScreen: ViewControllerComponentContainer {
         fatalError("init(coder:) has not been implemented")
     }
 
+    override public func preferredContentSizeForLayout(_ layout: ContainerViewLayout) -> CGSize? {
+        guard layout.metrics.widthClass == .regular else {
+            return nil
+        }
+        return CGSize(
+            width: min(480.0, layout.size.width - 20.0),
+            height: min(layout.size.width, layout.size.height) - 88.0
+        )
+    }
+
     public override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         self.hasAppeared = true
         (self.node.hostView.componentView as? WalletAppsScreenComponent.View)?.scheduleReconciliation()
-    }
-
-    @objc private func closePressed() {
-        guard (self.node.hostView.componentView as? WalletAppsScreenComponent.View)?.isDisconnecting != true else {
-            return
-        }
-        self.finish(toast: nil)
     }
 
     fileprivate func finish(toast: String?) {
