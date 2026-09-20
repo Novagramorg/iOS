@@ -11,7 +11,7 @@ This repo has been patched to support native macOS arm64 builds (`darwin_arm64` 
 
 ### Vendored webrtc seams for tgcalls (no behaviour patches)
 
-The fork carries four additive seams, each marked
+The fork carries five additive seams, each marked
 `TGCALLS SEAM (<consumer>)` in the source. None changes behaviour for a caller
 that does not opt in. When bumping webrtc, carry these forward, and drop one
 the moment upstream grows an equivalent.
@@ -21,6 +21,7 @@ the moment upstream grows an equivalent.
 | `PeerConnectionDependencies::dtls_transport_factory` | `api/peer_connection_interface.h`, `pc/peer_connection.{h,cc}` (plumbed to the `JsepTransportController::Config` field that already existed) | `tgcalls::MtProtoDtlsTransportFactory` |
 | `PeerConnectionFactoryInterface::Options::external_transport_security` | `api/peer_connection_interface.h`; `pc/peer_connection.cc` in `InitializeTransportController_n` (`config.disable_encryption`) and `SrtpRequired()` | `InstanceV2ReferenceImpl`, `CallCoreHost` under `network_use_mtproto` |
 | `PeerConnectionObserver::OnUnDemuxableRtpPacket(const RtpPacketReceived&)` | `api/peer_connection_interface.h`; `pc/peer_connection.cc` in `InitializeUnDemuxablePacketHandler` (network thread, before the hand-off to `Call`) | `GroupInstanceReferenceImpl` late-speaker SSRC discovery |
+| `RTCConfiguration::disable_payload_type_demuxing` | `api/peer_connection_interface.h`; `pc/peer_connection.cc` (equality struct); read in `SdpOfferAnswerHandler::UpdatePayloadTypeDemuxingState` in `pc/sdp_offer_answer.cc` | `GroupInstanceReferenceImpl` (2026-09-19): with the MID extension stripped from the answer, stock WebRTC routes unknown SSRCs by payload type to whichever audio m-line is the only receiving one, creating unsignaled receive streams there; this engine signals every SSRC and discovers new ones from the dropped packets, so it opts out |
 | `PeerConnectionSdpMethods::ResetSctpDataMidAfterRollback()` | `pc/peer_connection_internal.h`, `pc/peer_connection.{h,cc}`; called from `SdpOfferAnswerHandler::Rollback` in `pc/sdp_offer_answer.cc` | every PeerConnection engine, no opt-in — the one seam that changes stock behaviour, and only in a state stock never recovers from (below) |
 
 The rollback seam (2026-09-17) closes a wedge that stock WebRTC cannot leave:
@@ -216,7 +217,7 @@ GroupInstanceReferenceImpl
 |--------|-----------|---------------|
 | Transport | Manual ICE/DTLS/SRTP via GroupNetworkManager | WebRTC PeerConnection |
 | SDP | None (custom JSON protocol) | Local SDP construction, translates to/from JSON |
-| SSRC discovery | `unknownSsrcPacketReceived` on raw RTP | Audio: the signalling roster via `addSsrcs`, plus `GRAudioFrameTransformer` on mid=0's unsignaled receiver as a fallback that dies at the first renegotiation (see below). Video: `ActiveVideoSsrcs` data channel message from SFU |
+| SSRC discovery | `unknownSsrcPacketReceived` on raw RTP | Audio: the packets `RtpDemuxer` drops, via the `OnUnDemuxableRtpPacket` seam — the only path; mid=0 is sendonly and payload-type demuxing is off (see below). Video: `ActiveVideoSsrcs` data channel message from SFU |
 | Audio channels | Manual `IncomingAudioChannel` per SSRC | PeerConnection recvonly transceivers |
 | Audio levels | RTP header extension parsing | Per-receiver `GRAudioLevelSink` reading real PCM levels |
 | Video outgoing | Manual `cricket::VideoChannel` with direct SSRC control | PeerConnection sendonly transceiver + SDP munging for simulcast SSRCs |
@@ -226,7 +227,7 @@ GroupInstanceReferenceImpl
 
 ### Join Flow (SDP Translation)
 
-1. Create PeerConnection with Opus audio transceiver, sendonly video transceiver (no track), and data channel
+1. Create PeerConnection with a **sendonly** Opus audio transceiver (mid=0 never receives), sendonly video transceiver (no track), and data channel; `RTCConfiguration::disable_payload_type_demuxing = true`
 2. `createOffer` → munge video SSRCs (replace PeerConnection's auto-generated SSRCs with pre-allocated simulcast SSRCs) → `SetLocalDescription` → extract ICE/DTLS params from local SDP
 3. Serialize as JSON (same format as CustomImpl): `{ssrc, ufrag, pwd, fingerprints, ssrc-groups}`
 4. Parse SFU response JSON → construct `JsepSessionDescription("answer")` programmatically via `cricket::SessionDescription` API (no SDP string parsing)
@@ -236,43 +237,39 @@ GroupInstanceReferenceImpl
 
 ### Dynamic Participant Handling
 
-**Audio (per-receiver frame transformer):**
-1. The first packet for an unknown SSRC X reaches mid=0's receiver — PeerConnection's catch-all for unsignaled audio. The voice channel creates a `WebRtcAudioReceiveStream` for X and attaches `GRAudioFrameTransformer` (registered as `unsignaled_frame_transformer_` on mid=0).
-2. The transformer's `Transform(frame)` reads `frame->GetSsrc() = X`, sees X for the first time, posts the SSRC to the media thread, and forwards the frame straight through — there is **no buffering**. (An earlier design buffered into a per-SSRC FIFO and drained it via `releaseSsrc`; that was removed. CustomImpl does not buffer either: `MissingSsrcPacketBuffer` is vestigial, its `add()` is never called and `maybeDeliverBufferedPackets` is commented out, and `GroupNetworkManager` discards the packet after reporting `(ssrc, payloadType)`.)
+**Audio (one recvonly m-line per SSRC, discovered from dropped packets):**
+1. The first packet for an unknown SSRC X matches no m-line: mid=0 is sendonly, every recvonly audio m-line signals its own SSRC, the answer carries no MID extension and payload-type demuxing is disabled for the PeerConnection (`RTCConfiguration::disable_payload_type_demuxing`, a seam). `RtpDemuxer` drops it and `RtpTransport` reports the drop through `PeerConnectionObserver::OnUnDemuxableRtpPacket` (another seam), parsed and SRTP-unprotected, on the network thread.
+2. `GRPeerConnectionObserver::onUnDemuxableRtpPacket` matches payload type 111 (Opus is pinned in group calls, so audio is identifiable without parsing the payload), reads `packet.Ssrc()`, de-dupes under `AudioSsrcTap`, and posts `handleDiscoveredAudioSsrc(X)` to the media thread. Nothing is buffered; CustomImpl does not buffer either (`MissingSsrcPacketBuffer` is vestigial), so X is inaudible until step 4, as it is there.
 3. `handleDiscoveredAudioSsrc(X)` inserts X into `_remoteSsrcs` with a fresh mid, fires `_requestMediaChannelDescriptions({X}, ...)` (matches CustomImpl's contract), and calls `scheduleDiscoveryRenegotiation()` (250 ms debounce).
-4. After the debounce, `renegotiate()` adds a recvonly audio transceiver bound to mid=`_nextMid++` for every entry in `_remoteSsrcs` that doesn't have one. `buildRemoteAnswer` includes X on the new m-line; each recvonly transceiver gets its **own** `SetDepacketizerToDecoderFrameTransformer` instance, installed right after `AddTransceiver` and before the SDP cycle assigns the signaled SSRC.
-5. `onRenegotiationComplete` runs `wireRemoteAudioLevelSinks()`, attaching a `GRAudioLevelSink` per receiver.
-6. Once the transceiver is negotiated, frames for X arrive at that receiver's **per-receiver** transformer, not the mid=0 tap. Measured 2026-09-04: `perRecv[...]: first Transform ssrc=... sink=ok` fires for the promoted SSRC. (This settles a contradiction that stood in this file: the claim that the unsignaled stream is promoted in place and the tap stays attached was wrong.) The per-receiver `GRAudioLevelSink` reads real PCM levels.
+4. After the debounce, `renegotiate()` adds a recvonly audio transceiver bound to mid=`_nextMid++` for every entry in `_remoteSsrcs` that doesn't have one. `buildRemoteAnswer` includes X on the new m-line; each recvonly transceiver gets its **own** `SetDepacketizerToDecoderFrameTransformer` instance (pass-through, or the e2e decryptor), installed right after `AddTransceiver` and before the SDP cycle assigns the signaled SSRC.
+5. `onRenegotiationComplete` runs `wireRemoteAudioLevelSinks()`, attaching a `GRAudioLevelSink` per receiver; that sink is the only source of the participant's level, so a receiver that never gets packets is a participant who is never shown speaking.
+
+Measured with the CLI (3 reference participants): first level data ~280 ms after the first dropped packet (the debounce plus one offer/answer), versus immediate playback when mid=0 still received. CustomImpl pays the same delay.
 
 The `colibriClass=ActiveAudioSsrcs` data-channel mechanism (test-SFU only) was removed. Removed-SSRC handling is the same as CustomImpl: stale recvonly transceivers stay in the SDP indefinitely; participant departures are tracked at the application layer (MTProto).
 
-**The mid=0 tap dies at the first renegotiation; a transport-level tap is what actually carries
-discovery (fixed 2026-09-08).** The frame-transformer tap can only fire while WebRTC is still willing
-to route an unknown SSRC to mid=0, and it stops being willing the moment this engine negotiates its
-**second receiving audio m-line**.
-`SdpOfferAnswerHandler::UpdatePayloadTypeDemuxingState` disables payload-type demuxing for a BUNDLE
-group as soon as two receiving m-lines of one kind advertise the same payload type; every audio
-m-line here advertises Opus 111 (sendrecv mid=0 + one recvonly per remote SSRC), so **the first
-discovery renegotiation trips it permanently** — it also calls `ResetUnsignaledRecvStream()` and
-clears the PT criteria. After that an unknown SSRC has no MID extension (`buildRemoteAnswer` strips
-it), no SSRC binding and no payload type to fall back on, so `RtpDemuxer` drops the packet, no
-unsignaled stream is created, and `handleDiscoveredAudioSsrc` never runs. **A participant who
-unmutes (or starts sending) after that point is inaudible for the rest of the call**, and a rejoin
-only recovers whoever happens to be transmitting during the ~250 ms before the first renegotiation —
-join a quiet room and the call can have no audio at all. CustomImpl is immune: it receives all remote
-audio on ONE channel and never adds a second m-line.
+**Why mid=0 must not receive (history).** Until 2026-09-19 mid=0 was sendrecv and acted as WebRTC's
+catch-all: unknown SSRCs were routed to it by payload type, the voice channel created an unsignaled
+`WebRtcAudioReceiveStream` per SSRC, and a `GRAudioFrameTransformer` registered as mid=0's
+`unsignaled_frame_transformer_` reported each SSRC on first sight while the frame played through.
+That design failed twice:
 
-Discovery therefore happens **where the demuxer drops the packet**: `RtpTransport` reports every
-demux failure, and the vendored webrtc forwards it to
-`PeerConnectionObserver::OnUnDemuxableRtpPacket` (a `TGCALLS SEAM`, see "Vendored webrtc seams"
-above), parsed and SRTP-unprotected, on the network thread. `GRPeerConnectionObserver::
-onUnDemuxableRtpPacket` matches payload type 111 (Opus is pinned in group calls, so audio is
-identifiable without parsing the payload), reads `packet.Ssrc()`, de-dupes under `AudioSsrcTap`, and
-posts `handleDiscoveredAudioSsrc` to the media thread. It fires only for packets the demuxer
-dropped, so it costs nothing for the steady state. Packets that still reach the mid=0 catch-all are
-demuxed, never arrive there, and are covered by `GRAudioFrameTransformer` as before. (Until
-2026-09-16 this was a pass-through `MtProtoIceTransport` decorator injected through
-`ice_transport_factory` that inspected every inbound packet; that class is gone.)
+1. *It died at the first renegotiation* (fixed 2026-09-08 with the un-demuxable tap).
+   `SdpOfferAnswerHandler::UpdatePayloadTypeDemuxingState` disables payload-type demuxing for a
+   BUNDLE group as soon as two receiving m-lines of one kind advertise the same payload type, and
+   every audio m-line here advertises Opus 111, so the first discovery renegotiation tripped it
+   permanently; a participant who started sending afterwards was dropped by `RtpDemuxer` before any
+   stream existed and was inaudible for the rest of the call.
+2. *The reset raced the packets in flight* (found 2026-09-19 in the CLI, fixed by this design). The
+   same renegotiation calls `ResetUnsignaledRecvStream()` on mid=0 — but a packet the network thread
+   had already handed to the worker recreated an unsignaled stream right after the reset, mid=0 was
+   never reset again, and that stream kept the SSRC's binding in the Call's `RtpDemuxer`. The
+   dedicated m-line added for the SSRC then logged `Sink could not be added for SSRC=...`: the
+   participant stayed audible through the stray stream but their `GRAudioLevelSink`, on the dead
+   receiver, never fired, so peers never saw them as speaking. In a 3-participant run 2 of 6 level
+   sinks were dead. With mid=0 sendonly there is no channel for WebRTC to create such a stream on,
+   and with payload-type demuxing off the lone recvonly m-line cannot become the catch-all either
+   (it did, for a late unmuter, in the first attempt at this change — `unmute-after` scored 0/2).
 
 An app-side roster (`addSsrcs` from the participant list) was implemented first and rejected: this
 engine adds one recvonly m-line per SSRC and a voice chat's roster runs to thousands.

@@ -8,6 +8,7 @@ import WebProxyTransport
 import Display
 import TelegramPresentationData
 import TelegramCallsUI
+import TelegramAudio
 import TelegramUIPreferences
 import TelegramStringFormatting
 import AccountContext
@@ -533,6 +534,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         let _ = immediateExperimentalUISettingsValue.swap(initialPresentationDataAndSettings.experimentalUISettings)
         
         GlassBackgroundView.useCustomGlassImpl = immediateExperimentalUISettingsValue.with({ $0.fakeGlass })
+        ManagedAudioSessionImpl.respectsSystemRecordingInput = immediateExperimentalUISettingsValue.with({ $0.respectSystemMicrophone })
         
         self.experimentalUISettingsDisposable = (self.accountManager.sharedData(keys: [ApplicationSpecificSharedDataKeys.experimentalUISettings])
         |> deliverOnMainQueue).start(next: { sharedData in
@@ -541,6 +543,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
                 
                 flatBuffers_checkedGet = settings.checkSerializedData
                 GlassBackgroundView.useCustomGlassImpl = settings.fakeGlass
+                ManagedAudioSessionImpl.respectsSystemRecordingInput = settings.respectSystemMicrophone
             }
         })
         
