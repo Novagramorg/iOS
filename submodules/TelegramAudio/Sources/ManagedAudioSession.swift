@@ -13,6 +13,19 @@ func managedAudioSessionLog(_ what: @autoclosure () -> String) {
     managedAudioSessionLogger(what())
 }
 
+private func describeAudioPort(_ port: AVAudioSessionPortDescription) -> String {
+    return "\(port.portName) [\(port.portType.rawValue)]"
+}
+
+/// Everything needed to tell "the app pinned this input" apart from "the system chose this input".
+func audioInputStateDescription() -> String {
+    let session = AVAudioSession.sharedInstance()
+    let preferred = session.preferredInput.map(describeAudioPort) ?? "<none>"
+    let current = session.currentRoute.inputs.map(describeAudioPort).joined(separator: ", ")
+    let available = (session.availableInputs ?? []).map(describeAudioPort).joined(separator: ", ")
+    return "preferredInput=\(preferred) route.inputs=[\(current)] available=[\(available)]"
+}
+
 
 public enum ManagedAudioSessionType: Equatable {
     case ambient
@@ -317,6 +330,12 @@ public var sharedManagedAudioSession: ManagedAudioSession? {
 }
 
 public final class ManagedAudioSessionImpl: NSObject, ManagedAudioSession {
+    /// When enabled, recording sessions (voice messages, video messages, the story camera) never pin
+    /// a preferred input port and instead follow the system-wide microphone selection
+    /// (Settings ▸ Sounds & Haptics ▸ Input, or the iOS 26 Control Center input picker).
+    /// Set from Debug Settings ▸ "Recording: respect system microphone".
+    public static var respectsSystemRecordingInput: Bool = false
+
     private var nextId: Int32 = 0
     private let queue: Queue
     private let hasLoudspeaker: Bool
@@ -420,6 +439,8 @@ public final class ManagedAudioSessionImpl: NSObject, ManagedAudioSession {
     }
     
     private func updateCurrentAudioRouteInfo() {
+        managedAudioSessionLog("ManagedAudioSession current route: \(audioInputStateDescription())")
+
         let value = self.isHeadsetPluggedIn()
         if self.isHeadsetPluggedInValue != value {
             self.isHeadsetPluggedInValue = value
@@ -1059,6 +1080,10 @@ public final class ManagedAudioSessionImpl: NSObject, ManagedAudioSession {
     
     private func setupOutputMode(_ outputMode: AudioSessionOutputMode, type: ManagedAudioSessionType) throws {
         managedAudioSessionLog("ManagedAudioSession setup \(outputMode) for \(type)")
+        managedAudioSessionLog("ManagedAudioSession input before setupOutputMode: \(audioInputStateDescription()) headset=\(self.isHeadsetPluggedInValue) options=\(AVAudioSession.sharedInstance().categoryOptions.rawValue)")
+        defer {
+            managedAudioSessionLog("ManagedAudioSession input after setupOutputMode: \(audioInputStateDescription())")
+        }
         var resetToBuiltin = false
         switch outputMode {
         case .system:
@@ -1098,6 +1123,7 @@ public final class ManagedAudioSessionImpl: NSObject, ManagedAudioSession {
         }
         
         if case let .record(_, video, _) = type, video, let input = AVAudioSession.sharedInstance().availableInputs?.first {
+            managedAudioSessionLog("ManagedAudioSession picking a data source on the first available input \(describeAudioPort(input))")
             if let dataSources = input.dataSources {
                 for source in dataSources {
                     if source.dataSourceName.contains("Bottom") {
@@ -1118,7 +1144,14 @@ public final class ManagedAudioSessionImpl: NSObject, ManagedAudioSession {
                     try AVAudioSession.sharedInstance().overrideOutputAudioPort(.speaker)
                 case .voiceCall, .playWithPossiblePortOverride, .record(true, _, _):
                     try AVAudioSession.sharedInstance().overrideOutputAudioPort(.none)
-                    if let routes = AVAudioSession.sharedInstance().availableInputs {
+                    if ManagedAudioSessionImpl.respectsSystemRecordingInput, updatedType.isRecord {
+                        // Recording follows the system-wide microphone selection. Pinning a preferred
+                        // input here would override the user's choice (Settings ▸ Sounds & Haptics ▸
+                        // Input, or the Control Center input picker), so clear any preference this
+                        // app set earlier instead.
+                        managedAudioSessionLog("ManagedAudioSession following the system input selection for \(updatedType), clearing the preferred input")
+                        let _ = try? AVAudioSession.sharedInstance().setPreferredInput(nil)
+                    } else if let routes = AVAudioSession.sharedInstance().availableInputs {
                         var alreadySet = false
                         if self.isHeadsetPluggedInValue {
                             if case .voiceCall = updatedType, case .custom(.builtin) = outputMode {
@@ -1126,6 +1159,7 @@ public final class ManagedAudioSessionImpl: NSObject, ManagedAudioSession {
                                 loop: for route in routes {
                                     switch route.portType {
                                     case .headphones, .bluetoothA2DP, .bluetoothHFP, .bluetoothLE:
+                                        managedAudioSessionLog("ManagedAudioSession pinning preferred input -> \(describeAudioPort(route)) for \(updatedType)")
                                         let _ = try? AVAudioSession.sharedInstance().setPreferredInput(route)
                                         alreadySet = true
                                         break loop
