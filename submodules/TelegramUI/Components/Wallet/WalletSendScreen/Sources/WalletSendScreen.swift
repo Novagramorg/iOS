@@ -962,7 +962,7 @@ private final class WalletSendScreenComponent: Component {
             let restoreInputFocus = self.amountField.isInputActive
             let alertController = AlertScreen(
                 context: component.context,
-                configuration: AlertScreen.Configuration(dismissOnOutsideTap: true, allowInputInset: false),
+                configuration: AlertScreen.Configuration(dismissOnOutsideTap: true, allowInputInset: true),
                 content: [
                     AnyComponentWithIdentity(
                         id: "recipientInfo",

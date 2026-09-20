@@ -764,7 +764,7 @@ public func passcodeOptionsController(context: AccountContext, focusOnItemTag: P
     return controller
 }
 
-public func passcodeOptionsAccessController(context: AccountContext, replaceController: @escaping (ViewController) -> Void, authorizationCompleted: @escaping (Result<PasscodeSession, PasscodeError>) -> Void) -> Signal<ViewController?, NoError> {
+public func passcodeOptionsAccessController(context: AccountContext, preferredModalWidth: CGFloat? = nil, replaceController: @escaping (ViewController) -> Void, authorizationCompleted: @escaping (Result<PasscodeSession, PasscodeError>) -> Void) -> Signal<ViewController?, NoError> {
     return context.sharedContext.accountManager.transaction { transaction -> PostboxAccessChallengeData in
         transaction.getAccessChallengeData()
     }
@@ -773,14 +773,14 @@ public func passcodeOptionsAccessController(context: AccountContext, replaceCont
         if case .none = challenge {
             weak var introController: PrivacyIntroController?
             var didProceed = false
-            let controller = PrivacyIntroController(context: context, mode: .passcode, proceedAction: {
+            let controller = PrivacyIntroController(context: context, mode: .passcode, preferredModalWidth: preferredModalWidth, proceedAction: {
                 guard !didProceed, let introController,
                       let navigation = introController.navigationController as? NavigationController,
                       navigation.topViewController === introController else {
                     return
                 }
                 didProceed = true
-                let setupController = applicationPasscodeSetupController(context: context, session: nil, change: false, settingsSessionCompleted: { session in
+                let setupController = applicationPasscodeSetupController(context: context, session: nil, change: false, preferredModalWidth: preferredModalWidth, settingsSessionCompleted: { session in
                     authorizationCompleted(.success(session))
                 }, cancelled: { authorizationCompleted(.failure(.cancelled)) }, completion: { _ in
                     deleteAllSendMessageIntents()
@@ -790,6 +790,6 @@ public func passcodeOptionsAccessController(context: AccountContext, replaceCont
             introController = controller
             return controller
         }
-        return settingsPasscodeSessionController(context: context, completion: authorizationCompleted)
+        return settingsPasscodeSessionController(context: context, preferredModalWidth: preferredModalWidth, completion: authorizationCompleted)
     }
 }

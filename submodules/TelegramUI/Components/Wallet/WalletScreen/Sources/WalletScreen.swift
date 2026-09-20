@@ -2487,7 +2487,9 @@ private final class WalletScreenComponent: Component {
                 containerSize: CGSize(width: availableSize.width, height: 44.0)
             )
             let headerOriginY: CGFloat
-            if environment.statusBarHeight < 1.0 {
+            if environment.metrics.widthClass == .regular {
+                headerOriginY = 16.0
+            } else if environment.statusBarHeight < 1.0 {
                 headerOriginY = 0.0
             } else {
                 headerOriginY = environment.statusBarHeight + 10.0
@@ -3409,6 +3411,8 @@ public final class WalletScreen: ViewControllerComponentContainer {
             theme: .default
         )
 
+        self.navigationPresentation = .modalInLargeLayout
+
         self.navigationItem.leftBarButtonItem = UIBarButtonItem(customView: UIView())
         
         self.supportedOrientations = ViewControllerSupportedOrientations(regularSize: .all, compactSize: .portrait)
@@ -3419,6 +3423,16 @@ public final class WalletScreen: ViewControllerComponentContainer {
             }
             componentView.scrollToTop()
         }
+    }
+
+    override public func preferredContentSizeForLayout(_ layout: ContainerViewLayout) -> CGSize? {
+        guard layout.metrics.widthClass == .regular else {
+            return nil
+        }
+        return CGSize(
+            width: min(480.0, layout.size.width - 20.0),
+            height: min(layout.size.width, layout.size.height) - 88.0
+        )
     }
 
     override public func viewWillAppear(_ animated: Bool) {

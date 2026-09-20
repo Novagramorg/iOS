@@ -2061,6 +2061,16 @@ public final class WalletSettingsScreen: ViewControllerComponentContainer {
         fatalError("init(coder:) has not been implemented")
     }
 
+    override public func preferredContentSizeForLayout(_ layout: ContainerViewLayout) -> CGSize? {
+        guard layout.metrics.widthClass == .regular else {
+            return nil
+        }
+        return CGSize(
+            width: min(480.0, layout.size.width - 20.0),
+            height: min(layout.size.width, layout.size.height) - 88.0
+        )
+    }
+
     override public func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         (self.node.hostView.componentView as? WalletSettingsScreenComponent.View)?.visibilityUpdated(true)

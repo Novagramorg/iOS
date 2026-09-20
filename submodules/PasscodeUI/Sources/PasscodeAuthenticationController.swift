@@ -13,6 +13,7 @@ private enum PasscodeAuthenticationPresentation {
 
 public func settingsPasscodeSessionController(
     context: AccountContext,
+    preferredModalWidth: CGFloat? = nil,
     completion: @escaping (Result<PasscodeSession, PasscodeError>) -> Void
 ) -> ViewController? {
     weak var source: PasscodeSetupController?
@@ -26,7 +27,7 @@ public func settingsPasscodeSessionController(
         finished = true
         completion(result)
     }
-    let controller = settingsPasscodeAuthenticationController(context: context, scope: .settings, completion: { result in
+    let controller = settingsPasscodeAuthenticationController(context: context, scope: .settings, preferredModalWidth: preferredModalWidth, completion: { result in
         guard case let .success(session) = result else {
             if case let .failure(error) = result { finish(.failure(error)) }
             return
@@ -76,6 +77,7 @@ public func settingsPasscodeSessionController(
 public func settingsPasscodeAuthenticationController(
     context: AccountContext,
     scope: PasscodeSession.Scope = .settings,
+    preferredModalWidth: CGFloat? = nil,
     completion: @escaping (Result<PasscodeSession, PasscodeError>) -> Void
 ) -> ViewController? {
     precondition(Thread.isMainThread)
@@ -95,7 +97,7 @@ public func settingsPasscodeAuthenticationController(
         completion(.failure(error as? PasscodeError ?? .unavailable))
         return nil
     }
-    let controller = PasscodeSetupController(context: context, mode: .entry(accessChallengeData(reference: reference)), authenticationScope: scope)
+    let controller = PasscodeSetupController(context: context, mode: .entry(accessChallengeData(reference: reference)), authenticationScope: scope, preferredModalWidth: preferredModalWidth)
     var finished = false
     controller.authenticationCompleted = { result in
         guard !finished else {

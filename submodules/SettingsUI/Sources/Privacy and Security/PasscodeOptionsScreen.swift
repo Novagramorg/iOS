@@ -261,7 +261,7 @@ private final class PasscodeOptionsScreenModel {
                 return
             }
             weak var authenticationController: ViewController?
-            if let controller = settingsPasscodeSessionController(context: self.context, completion: { [weak self] result in
+            if let controller = settingsPasscodeSessionController(context: self.context, preferredModalWidth: 480.0, completion: { [weak self] result in
                 switch result {
                 case let .success(session):
                     guard let self, self.sessionState.accepts(operation: operation), self.isControllerAvailable,
@@ -418,7 +418,7 @@ private final class PasscodeOptionsScreenModel {
         }
         let generation = self.sessionState.generation
         weak var setupController: ViewController?
-        let controller = applicationPasscodeSetupController(context: self.context, session: session, change: session != nil, ownsAuthorizationSession: false, settingsSessionCompleted: { [weak self] session in
+        let controller = applicationPasscodeSetupController(context: self.context, session: session, change: session != nil, ownsAuthorizationSession: false, preferredModalWidth: 480.0, settingsSessionCompleted: { [weak self] session in
             guard let self, self.sessionState.accepts(operation: operation) else {
                 session.invalidate()
                 return
@@ -958,6 +958,16 @@ public final class PasscodeOptionsScreen: ViewControllerComponentContainer {
 
     deinit {
         self.model.close()
+    }
+
+    override public func preferredContentSizeForLayout(_ layout: ContainerViewLayout) -> CGSize? {
+        guard layout.metrics.widthClass == .regular else {
+            return nil
+        }
+        return CGSize(
+            width: min(480.0, layout.size.width - 20.0),
+            height: min(layout.size.width, layout.size.height) - 88.0
+        )
     }
 
     override public func viewDidAppear(_ animated: Bool) {

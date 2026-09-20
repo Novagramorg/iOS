@@ -23,6 +23,7 @@ public final class PasscodeSetupController: ViewController {
     
     private let context: AccountContext
     private var mode: PasscodeSetupControllerMode
+    private let preferredModalWidth: CGFloat?
     
     public var complete: ((String, Bool) -> Void)?
     var authenticationCompleted: ((Result<PasscodeSession, PasscodeError>) -> Void)?
@@ -41,9 +42,10 @@ public final class PasscodeSetupController: ViewController {
     
     private var nextAction: UIBarButtonItem?
     
-    public init(context: AccountContext, mode: PasscodeSetupControllerMode, authenticationScope: PasscodeSession.Scope = .settings) {
+    public init(context: AccountContext, mode: PasscodeSetupControllerMode, authenticationScope: PasscodeSession.Scope = .settings, preferredModalWidth: CGFloat? = nil) {
         self.context = context
         self.mode = mode
+        self.preferredModalWidth = preferredModalWidth
         self.presentationData = context.sharedContext.currentPresentationData.with { $0 }
         if case let .entry(challenge) = mode {
             let reference = passcodeCredentialReference(from: challenge)
@@ -81,6 +83,16 @@ public final class PasscodeSetupController: ViewController {
         fatalError("init(coder:) has not been implemented")
     }
     
+    override public func preferredContentSizeForLayout(_ layout: ContainerViewLayout) -> CGSize? {
+        guard layout.metrics.widthClass == .regular, let preferredModalWidth = self.preferredModalWidth else {
+            return nil
+        }
+        return CGSize(
+            width: min(preferredModalWidth, layout.size.width - 20.0),
+            height: min(layout.size.width, layout.size.height) - 88.0
+        )
+    }
+
     override public func loadDisplayNode() {
         self.displayNode = PasscodeSetupControllerNode(presentationData: self.presentationData, mode: self.mode)
         self.displayNodeDidLoad()
@@ -294,11 +306,12 @@ public func applicationPasscodeSetupController(
     session authorizationSession: PasscodeSession?,
     change: Bool,
     ownsAuthorizationSession: Bool = true,
+    preferredModalWidth: CGFloat? = nil,
     settingsSessionCompleted: ((PasscodeSession) -> Void)? = nil,
     cancelled: (() -> Void)? = nil,
     completion: @escaping (PasscodeCredentialReference) -> Void
 ) -> ViewController {
-    let controller = PasscodeSetupController(context: context, mode: .setup(change: change, .digits6))
+    let controller = PasscodeSetupController(context: context, mode: .setup(change: change, .digits6), preferredModalWidth: preferredModalWidth)
     let lifecycle = PasscodeSetupSessionState(authorizationSession: authorizationSession, ownsAuthorizationSession: ownsAuthorizationSession)
     var savingTask: Task<Void, Never>?
     controller.setupCancelled = {
