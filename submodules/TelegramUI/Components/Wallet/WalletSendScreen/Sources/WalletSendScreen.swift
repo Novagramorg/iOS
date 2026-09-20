@@ -1828,34 +1828,18 @@ private final class WalletSendScreenComponent: Component {
                 && !self.walletIsLoading
                 && self.walletBalance.map { self.amount > $0 } == true
             let hasPositiveBalance = self.walletBalance.map { $0 > 0 } == true
-            let displaysComment = component.peer != nil && self.comment != nil
-            let amountBottomReserve: CGFloat
-            if displaysComment {
-                amountBottomReserve = 330.0
-            } else {
-                amountBottomReserve = 290.0
-            }
-            let minimumAmountHeaderSpacing: CGFloat
-            if displaysComment {
-                minimumAmountHeaderSpacing = 55.0
-            } else {
-                minimumAmountHeaderSpacing = 75.0
-            }
+            // Measure the central group in local coordinates before placing it between the recipient and footer.
+            var centralContentLayouts: [(view: UIView, frame: CGRect, transition: ComponentTransition)] = []
             let amountWidth = max(1.0, availableSize.width - environment.safeInsets.left - environment.safeInsets.right - 32.0)
-            var amountCenterY = max(
-                headerOriginY + headerButtonSize.height + minimumAmountHeaderSpacing,
-                min(availableSize.height * 0.39, usableBottom - amountBottomReserve)
-            )
-            if let recipientFrame {
-                amountCenterY = max(amountCenterY, recipientFrame.maxY + 12.0 + 37.0)
-            }
             let amountFrame = CGRect(
                 x: environment.safeInsets.left + 16.0,
-                y: floorToScreenPixels(amountCenterY - 37.0),
+                y: 0.0,
                 width: amountWidth,
                 height: 74.0
             )
-            transition.setFrame(view: self.amountField, frame: amountFrame)
+            var centralContentFrame = amountFrame
+            transition.setBounds(view: self.amountField, bounds: CGRect(origin: .zero, size: amountFrame.size))
+            centralContentLayouts.append((self.amountField, amountFrame, transition))
             self.amountField.update(
                 mode: self.inputMode,
                 amount: self.amount,
@@ -1867,9 +1851,6 @@ private final class WalletSendScreenComponent: Component {
                 isVisible: environment.isVisible,
                 transition: transition
             )
-            if shouldFocusAmountField {
-                self.amountField.activateInput()
-            }
 
             //TODO:localize
             let emptyHint = "Tap to set amount"
@@ -1887,20 +1868,22 @@ private final class WalletSendScreenComponent: Component {
                 environment: {},
                 containerSize: CGSize(width: availableSize.width - 32.0, height: 24.0)
             )
+            let emptyHintFrame = CGRect(
+                x: floorToScreenPixels((availableSize.width - emptyHintSize.width) / 2.0),
+                y: amountFrame.maxY + 5.0,
+                width: emptyHintSize.width,
+                height: emptyHintSize.height
+            )
+            let showEmptyHint = !shouldFocusAmountField && !self.amountField.isInputActive && !self.amountField.hasInputText
+            if showEmptyHint {
+                centralContentFrame = centralContentFrame.union(emptyHintFrame)
+            }
             if let emptyHintView = self.emptyHint.view {
                 if emptyHintView.superview == nil {
                     self.addSubview(emptyHintView)
                 }
-                transition.setFrame(
-                    view: emptyHintView,
-                    frame: CGRect(
-                        x: floorToScreenPixels((availableSize.width - emptyHintSize.width) / 2.0),
-                        y: amountFrame.maxY + 5.0,
-                        width: emptyHintSize.width,
-                        height: emptyHintSize.height
-                    )
-                )
-                let showEmptyHint = !self.amountField.isInputActive && !self.amountField.hasInputText
+                transition.setBounds(view: emptyHintView, bounds: CGRect(origin: .zero, size: emptyHintFrame.size))
+                centralContentLayouts.append((emptyHintView, emptyHintFrame, transition))
                 transition.setAlpha(view: emptyHintView, alpha: showEmptyHint ? 1.0 : 0.0)
             }
 
@@ -1986,6 +1969,10 @@ private final class WalletSendScreenComponent: Component {
                 width: rateButtonSize.width,
                 height: rateButtonSize.height
             )
+            // Keep the rate row's space while the amount is empty so entering it does not move the field.
+            if self.currentRate != nil {
+                centralContentFrame = centralContentFrame.union(rateButtonFrame)
+            }
             if let rateButtonView = self.rateButton.view {
                 var rateVisibilityTransition: ComponentTransition = .easeInOut(duration: 0.2)
                 if rateButtonView.superview == nil {
@@ -1993,7 +1980,7 @@ private final class WalletSendScreenComponent: Component {
                     rateVisibilityTransition = .immediate
                 }
                 rateButtonView.bounds = CGRect(origin: .zero, size: rateButtonFrame.size)
-                transition.setPosition(view: rateButtonView, position: rateButtonFrame.center)
+                centralContentLayouts.append((rateButtonView, rateButtonFrame, transition))
                 rateVisibilityTransition.setAlpha(view: rateButtonView, alpha: showRate ? 1.0 : 0.0)
                 rateVisibilityTransition.setScale(view: rateButtonView, scale: showRate ? 1.0 : 0.01)
             }
@@ -2068,6 +2055,18 @@ private final class WalletSendScreenComponent: Component {
                 width: depositButtonSize.width,
                 height: depositButtonSize.height
             )
+            let insufficientTextFrame = CGRect(
+                x: insufficientOriginX,
+                y: insufficientSlotFrame.minY + floorToScreenPixels((insufficientSlotFrame.height - insufficientTextSize.height) / 2.0),
+                width: insufficientTextSize.width,
+                height: insufficientTextSize.height
+            )
+            if isInsufficient {
+                centralContentFrame = centralContentFrame.union(insufficientTextFrame)
+            }
+            if showDeposit {
+                centralContentFrame = centralContentFrame.union(depositButtonFrame)
+            }
             
             var insufficientPositionTransition: ComponentTransition = transition
             if let insufficientTextView = self.insufficientText.view {
@@ -2078,15 +2077,8 @@ private final class WalletSendScreenComponent: Component {
                     insufficientVisibilityTransition = .immediate
                     insufficientPositionTransition = .immediate
                 }
-                insufficientPositionTransition.setFrame(
-                    view: insufficientTextView,
-                    frame: CGRect(
-                        x: insufficientOriginX,
-                        y: insufficientSlotFrame.minY + floorToScreenPixels((insufficientSlotFrame.height - insufficientTextSize.height) / 2.0),
-                        width: insufficientTextSize.width,
-                        height: insufficientTextSize.height
-                    )
-                )
+                insufficientPositionTransition.setBounds(view: insufficientTextView, bounds: CGRect(origin: .zero, size: insufficientTextFrame.size))
+                centralContentLayouts.append((insufficientTextView, insufficientTextFrame, insufficientPositionTransition))
                 insufficientVisibilityTransition.setAlpha(view: insufficientTextView, alpha: isInsufficient ? 1.0 : 0.0)
             }
             if let depositButtonView = self.depositButton.view {
@@ -2095,7 +2087,8 @@ private final class WalletSendScreenComponent: Component {
                     self.addSubview(depositButtonView)
                     depositVisibilityTransition = .immediate
                 }
-                insufficientPositionTransition.setFrame(view: depositButtonView, frame: depositButtonFrame)
+                insufficientPositionTransition.setBounds(view: depositButtonView, bounds: CGRect(origin: .zero, size: depositButtonFrame.size))
+                centralContentLayouts.append((depositButtonView, depositButtonFrame, insufficientPositionTransition))
                 depositVisibilityTransition.setAlpha(view: depositButtonView, alpha: showDeposit ? 1.0 : 0.0)
             }
 
@@ -2105,7 +2098,7 @@ private final class WalletSendScreenComponent: Component {
                 if isInitialCommentLayout {
                     commentTransition = .immediate
                 }
-                let commentPositionTransition: ComponentTransition = isInitialCommentLayout ? .immediate : .easeInOut(duration: 0.2)
+                let commentPositionTransition: ComponentTransition = isInitialCommentLayout ? .immediate : transition
 
                 self.commentBackgroundView.isUserInteractionEnabled = true
 
@@ -2132,7 +2125,7 @@ private final class WalletSendScreenComponent: Component {
                             textColor: theme.list.itemSecondaryTextColor
                         )),
                         horizontalAlignment: .natural,
-                        maximumNumberOfLines: 5
+                        maximumNumberOfLines: 1
                     )),
                     environment: {},
                     containerSize: CGSize(width: availableSize.width - 120.0, height: 1000.0)
@@ -2150,11 +2143,12 @@ private final class WalletSendScreenComponent: Component {
                     width: bubbleSize.width,
                     height: bubbleSize.height
                 )
+                centralContentFrame = centralContentFrame.union(bubbleFrame)
                 ComponentTransition.immediate.setBounds(
                     view: self.commentBackgroundView,
                     bounds: CGRect(origin: .zero, size: bubbleFrame.size)
                 )
-                commentPositionTransition.setPosition(view: self.commentBackgroundView, position: bubbleFrame.center)
+                centralContentLayouts.append((self.commentBackgroundView, bubbleFrame, commentPositionTransition))
                 if let commentTextView = self.commentText.view {
                     if commentTextView.superview == nil {
                         commentTextView.isUserInteractionEnabled = false
@@ -2170,7 +2164,8 @@ private final class WalletSendScreenComponent: Component {
                         view: commentTextView,
                         bounds: CGRect(origin: .zero, size: commentTextFrame.size)
                     )
-                    commentPositionTransition.setPosition(view: commentTextView, position: commentTextFrame.center.offsetBy(dx: 2.0 - UIScreenPixel, dy: 0.0))
+                    let positionedCommentTextFrame = commentTextFrame.offsetBy(dx: 2.0 - UIScreenPixel, dy: 0.0)
+                    centralContentLayouts.append((commentTextView, positionedCommentTextFrame, commentPositionTransition))
                     transition.setAlpha(view: commentTextView, alpha: 1.0)
                 }
                 transition.setAlpha(view: self.commentBackgroundView, alpha: 1.0)
@@ -2200,6 +2195,7 @@ private final class WalletSendScreenComponent: Component {
             let balanceText = balancePrefix + formattedBalance
 
             let sendButtonY = usableBottom - 68.0
+            let showSendButton = hasAmount || component.peer != nil || !component.initialAddress.isEmpty
             let showBalance = hasAmount || hasPositiveBalance
             let feeDisplayState = self.feeDisplayState
             let showFees = feeDisplayState != .hidden
@@ -2217,19 +2213,17 @@ private final class WalletSendScreenComponent: Component {
                 environment: {},
                 containerSize: CGSize(width: availableSize.width - 32.0, height: 24.0)
             )
+            let balanceTextFrame = CGRect(
+                x: floorToScreenPixels((availableSize.width - balanceTextSize.width) / 2.0),
+                y: sendButtonY - (showFees ? 58.0 : 36.0) + floorToScreenPixels((24.0 - balanceTextSize.height) / 2.0),
+                width: balanceTextSize.width,
+                height: balanceTextSize.height
+            )
             if let balanceTextView = self.balanceText.view {
                 if balanceTextView.superview == nil {
                     self.addSubview(balanceTextView)
                 }
-                transition.setFrame(
-                    view: balanceTextView,
-                    frame: CGRect(
-                        x: floorToScreenPixels((availableSize.width - balanceTextSize.width) / 2.0),
-                        y: sendButtonY - (showFees ? 58.0 : 36.0) + floorToScreenPixels((24.0 - balanceTextSize.height) / 2.0),
-                        width: balanceTextSize.width,
-                        height: balanceTextSize.height
-                    )
-                )
+                transition.setFrame(view: balanceTextView, frame: balanceTextFrame)
                 transition.setAlpha(view: balanceTextView, alpha: showBalance ? 1.0 : 0.0)
             }
 
@@ -2285,21 +2279,39 @@ private final class WalletSendScreenComponent: Component {
                 environment: {},
                 containerSize: CGSize(width: availableSize.width - 32.0, height: 24.0)
             )
+            let feeTextFrame = CGRect(
+                x: floorToScreenPixels((availableSize.width - feeTextSize.width) / 2.0),
+                y: sendButtonY - 24.0 - floorToScreenPixels(feeTextSize.height / 2.0),
+                width: feeTextSize.width,
+                height: feeTextSize.height
+            )
             if let feeTextView = self.feeText.view {
                 if feeTextView.superview == nil {
                     feeTextView.isUserInteractionEnabled = false
                     self.addSubview(feeTextView)
                 }
-                transition.setFrame(
-                    view: feeTextView,
-                    frame: CGRect(
-                        x: floorToScreenPixels((availableSize.width - feeTextSize.width) / 2.0),
-                        y: sendButtonY - 24.0 - floorToScreenPixels(feeTextSize.height / 2.0),
-                        width: feeTextSize.width,
-                        height: feeTextSize.height
-                    )
-                )
+                transition.setFrame(view: feeTextView, frame: feeTextFrame)
                 transition.setAlpha(view: feeTextView, alpha: showFees ? 1.0 : 0.0)
+            }
+
+            let centralContentTop = recipientFrame?.maxY ?? (headerOriginY + headerButtonSize.height)
+            var centralContentBottom = showSendButton ? sendButtonY : usableBottom
+            if showBalance {
+                centralContentBottom = min(centralContentBottom, balanceTextFrame.minY)
+            }
+            if showFees {
+                centralContentBottom = min(centralContentBottom, feeTextFrame.minY)
+            }
+            let centralContentOriginY = floorToScreenPixels(centralContentTop + max(
+                12.0,
+                (centralContentBottom - centralContentTop - centralContentFrame.height) / 2.0
+            ))
+            let centralContentOffsetY = centralContentOriginY - centralContentFrame.minY
+            for layout in centralContentLayouts {
+                layout.transition.setPosition(view: layout.view, position: layout.frame.center.offsetBy(dx: 0.0, dy: centralContentOffsetY))
+            }
+            if shouldFocusAmountField {
+                self.amountField.activateInput()
             }
 
             var sendIdentifier: String
@@ -2404,7 +2416,7 @@ private final class WalletSendScreenComponent: Component {
                         height: sendButtonSize.height
                     )
                 )
-                transition.setAlpha(view: sendButtonView, alpha: hasAmount || component.peer != nil || !component.initialAddress.isEmpty ? 1.0 : 0.0)
+                transition.setAlpha(view: sendButtonView, alpha: showSendButton ? 1.0 : 0.0)
                 sendButtonView.isUserInteractionEnabled = hasAmount
             }
 
