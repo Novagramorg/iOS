@@ -954,7 +954,7 @@ private final class WalletSendScreenComponent: Component {
                 }
             } else {
                 //TODO:localize
-                title = "Wallet address"
+                title = "Unlinked wallet"
                 recipientName = nil
             }
             let peerId = component.peer?.id
@@ -1767,6 +1767,7 @@ private final class WalletSendScreenComponent: Component {
                     component: AnyComponent(WalletSendRecipientComponent(
                         context: component.context,
                         theme: theme,
+                        strings: environment.strings,
                         nameDisplayOrder: presentationData.nameDisplayOrder,
                         peer: component.peer,
                         address: self.recipientAddress,
@@ -1809,7 +1810,7 @@ private final class WalletSendScreenComponent: Component {
                 && !self.walletIsLoading
                 && self.walletBalance.map { self.amount > $0 } == true
             let hasPositiveBalance = self.walletBalance.map { $0 > 0 } == true
-            // Measure the central group in local coordinates before placing it between the recipient and footer.
+            
             var centralContentLayouts: [(view: UIView, frame: CGRect, transition: ComponentTransition)] = []
             let amountWidth = max(1.0, availableSize.width - environment.safeInsets.left - environment.safeInsets.right - 32.0)
             let amountFrame = CGRect(
@@ -1926,6 +1927,7 @@ private final class WalletSendScreenComponent: Component {
                     ))
                 ), at: 0)
             }
+            
             let rateButtonSize = self.rateButton.update(
                 transition: .easeInOut(duration: 0.2),
                 component: AnyComponent(PlainButtonComponent(
@@ -1950,7 +1952,6 @@ private final class WalletSendScreenComponent: Component {
                 width: rateButtonSize.width,
                 height: rateButtonSize.height
             )
-            // Keep the rate row's space while the amount is empty so entering it does not move the field.
             if self.currentRate != nil {
                 centralContentFrame = centralContentFrame.union(rateButtonFrame)
             }

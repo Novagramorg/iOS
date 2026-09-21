@@ -242,10 +242,14 @@ public extension WalletContext {
         }
     }
 
-    func previousWallets() -> Signal<[PreviousWallet], WalletError> {
-        self.signal(name: "previous_wallets") { impl, _ in
+    func previousWallets(refreshBalances: Bool = false) -> Signal<[PreviousWallet], WalletError> {
+        let cached = self.signal(name: "previous_wallets") { impl, _ in
             try await impl.previousWallets()
         }
+        guard refreshBalances else { return cached }
+        return cached |> then(self.signal(name: "refreshing_previous_wallet_balances", cancelOnDispose: false) { impl, _ in
+            try await impl.refreshPreviousWalletBalances()
+        })
     }
 
     func forgetPreviousWallet(id: String) -> Signal<Void, WalletError> {
@@ -624,6 +628,25 @@ extension WalletContextImpl {
 
     func previousWallets() async throws -> [WalletContext.PreviousWallet] {
         try await self.runtime.archivedWallets()
+    }
+
+    func refreshPreviousWalletBalances() async throws -> [WalletContext.PreviousWallet] {
+        if let task = self.previousWalletBalancesTask {
+            return try await task.value
+        }
+        let task = Task {
+            defer { self.previousWalletBalancesTask = nil }
+            let wallets = try await self.runtime.archivedWallets()
+            guard !wallets.isEmpty, self.canUseNetworkRuntime else { return wallets }
+            let now = ProcessInfo.processInfo.systemUptime
+            if let lastAttemptAt = self.previousWalletBalancesLastAttemptAt, now - lastAttemptAt < 10 * 60 {
+                return wallets
+            }
+            self.previousWalletBalancesLastAttemptAt = now
+            return try await self.runtime.refreshArchivedWalletBalances(wallets)
+        }
+        self.previousWalletBalancesTask = task
+        return try await task.value
     }
 
     func forgetPreviousWallet(id: String) async throws {
@@ -2055,6 +2078,12 @@ extension WalletContextImpl {
         }
         let initialActivationGeneration = self.activationGeneration
         self.activeOperationId = operationId
+        let changesWalletLocally = activeOperation == .creating
+            || activeOperation == .importing
+            || activeOperation == .completingRecoveryPhraseImport
+        if changesWalletLocally {
+            self.isChangingWalletLocally = true
+        }
         self.replaceState(
             phase: self.currentState.phase,
             balance: self.currentState.balance,
@@ -2088,6 +2117,9 @@ extension WalletContextImpl {
                 }
                 self.resumeDeferredSynchronizationIfNeeded()
                 self.scheduleAutomaticPhraseRecoveryIfNeeded()
+            }
+            if changesWalletLocally {
+                self.isChangingWalletLocally = false
             }
         }
         let needsAuthorization: Bool

@@ -232,7 +232,10 @@ private final class WalletSettingsScreenComponent: Component {
                       self.component?.walletContext === walletContext else {
                     return
                 }
+                var seenAddresses = Set<String>()
                 self.previousWallets = previousWallets
+                    .sorted { $0.lastUsedAt > $1.lastUsedAt }
+                    .filter { seenAddresses.insert($0.address).inserted }
                 if !self.isUpdating {
                     self.state?.updated(transition: .easeInOut(duration: 0.25))
                 }
@@ -1852,7 +1855,7 @@ private final class WalletSettingsScreenComponent: Component {
                         balanceText = formatTonAmountText(
                             balance,
                             dateTimeFormat: environment.dateTimeFormat,
-                            maxDecimalPositions: 9,
+                            maxDecimalPositions: 2,
                             formatString: environment.strings.Currency_Grams
                         )
                     } else {

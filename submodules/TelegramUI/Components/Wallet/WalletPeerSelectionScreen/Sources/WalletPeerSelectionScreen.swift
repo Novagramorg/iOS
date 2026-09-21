@@ -48,7 +48,8 @@ private final class WalletPeerSelectionRecipientView: UIControl {
     override init(frame: CGRect) {
         super.init(frame: frame)
 
-        self.iconView.contentMode = .scaleAspectFit
+        self.iconView.contentMode = .scaleAspectFill
+        self.iconView.clipsToBounds = true
         self.iconView.image = UIImage(bundleImageName: "Wallet/Ton")
         self.addSubview(self.iconView)
 
@@ -114,6 +115,7 @@ private final class WalletPeerSelectionRecipientView: UIControl {
 
         let sideInset: CGFloat = 16.0
         let iconSize = CGSize(width: 40.0, height: 40.0)
+        self.iconView.layer.cornerRadius = iconSize.width / 2.0
         transition.setFrame(
             view: self.iconView,
             frame: CGRect(

@@ -3,6 +3,7 @@ import UIKit
 import CoreText
 import Display
 import ComponentFlow
+import AnimatedTextComponent
 import LottieComponent
 import LottieSettings
 import MultilineTextComponent
@@ -477,6 +478,8 @@ final class WalletSendAmountField: UIView, UITextFieldDelegate {
             suffixText = fiatCurrency.code
         }
 
+        let currencyTransition: ComponentTransition = self.gramIcon.view == nil ? .immediate : transition
+        let iconBlurRadius: CGFloat = 6.0
         let _ = self.gramIcon.update(
             transition: transition,
             component: AnyComponent(LottieComponent(
@@ -496,7 +499,8 @@ final class WalletSendAmountField: UIView, UITextFieldDelegate {
                 self.contentView.addSubview(gramIconView)
                 gramIconView.playOnce()
             }
-            transition.setAlpha(view: gramIconView, alpha: mode == .gram ? 1.0 : 0.0)
+            currencyTransition.setAlpha(view: gramIconView, alpha: mode == .gram ? 1.0 : 0.0)
+            currencyTransition.setBlur(layer: gramIconView.layer, radius: mode == .gram ? 0.0 : iconBlurRadius)
         }
 
         let currencySymbol = fiatCurrency.symbol
@@ -506,7 +510,7 @@ final class WalletSendAmountField: UIView, UITextFieldDelegate {
                 text: .plain(NSAttributedString(
                     string: currencySymbol,
                     font: Font.with(size: 48.0, design: .round, weight: .bold),
-                    textColor: theme.list.itemSecondaryTextColor
+                    textColor: UIColor(rgb: 0x219949)
                 )),
                 maximumNumberOfLines: 1
             )),
@@ -517,18 +521,19 @@ final class WalletSendAmountField: UIView, UITextFieldDelegate {
             if fiatIconView.superview == nil {
                 self.contentView.addSubview(fiatIconView)
             }
-            transition.setAlpha(view: fiatIconView, alpha: mode == .fiat ? 1.0 : 0.0)
+            currencyTransition.setAlpha(view: fiatIconView, alpha: mode == .fiat ? 1.0 : 0.0)
+            currencyTransition.setBlur(layer: fiatIconView.layer, radius: mode == .fiat ? 0.0 : iconBlurRadius)
         }
 
         self.suffixSize = self.suffix.update(
-            transition: transition,
-            component: AnyComponent(MultilineTextComponent(
-                text: .plain(NSAttributedString(
-                    string: suffixText,
-                    font: self.fractionalFont,
-                    textColor: theme.list.itemSecondaryTextColor
-                )),
-                maximumNumberOfLines: 1
+            transition: currencyTransition,
+            component: AnyComponent(AnimatedTextComponent(
+                font: self.fractionalFont,
+                color: UIColor(rgb: mode == .gram ? 0x0088ff : 0x219949),
+                items: [
+                    AnimatedTextComponent.Item(id: "currency", content: .text(suffixText))
+                ],
+                noDelay: true
             )),
             environment: {},
             containerSize: CGSize(width: 150.0, height: 74.0)

@@ -232,6 +232,52 @@ actor WalletEngineStatuslessHost: WalletStatuslessHost {
         return publicKey
     }
 
+    func walletBalance(address: String) async throws -> Int64 {
+        try Task.checkCancellation()
+        guard !address.isEmpty else { throw WalletEngineRelayError.invalidRequest }
+        var components = URLComponents()
+        components.queryItems = [URLQueryItem(name: "address", value: address)]
+        let query = components.percentEncodedQuery
+        let engine = self.engine
+        let response: String = try await withThrowingTaskGroup(of: String.self) { group in
+            group.addTask {
+                try await WalletSignalRequestContext<String>().run(
+                    engine.wallet.performGetRequest(endpoint: "/api/v2/getAddressInformation", query: query)
+                )
+            }
+            group.addTask {
+                try await Task.sleep(nanoseconds: 15_000_000_000)
+                throw Self.failure(.timeout, "Provider request timed out")
+            }
+            defer { group.cancelAll() }
+            guard let value = try await group.next() else {
+                throw Self.failure(.other, "Provider request produced no response")
+            }
+            return value
+        }
+        let data = Data(response.utf8)
+        guard data.count <= walletEngineMaximumStatuslessResponseBytes else {
+            throw WalletEngineRelayError.responseTooLarge
+        }
+        guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              root["ok"] as? Bool == true,
+              let result = root["result"] as? [String: Any] else {
+            throw WalletEngineRelayError.invalidResponse
+        }
+        let nanograms: String?
+        if let value = result["balance"] as? String {
+            nanograms = value
+        } else if let value = result["balance"] as? NSNumber, CFGetTypeID(value) != CFBooleanGetTypeID() {
+            nanograms = value.stringValue
+        } else {
+            nanograms = nil
+        }
+        guard let nanograms, let balance = walletEngineBalance(nanograms) else {
+            throw WalletEngineRelayError.invalidResponse
+        }
+        return balance
+    }
+
     private static func perform(
         _ request: HttpRequest,
         engine: TelegramEngine,

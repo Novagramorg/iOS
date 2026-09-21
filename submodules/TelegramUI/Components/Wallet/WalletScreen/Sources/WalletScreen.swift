@@ -934,14 +934,18 @@ private final class WalletScreenComponent: Component {
             }
             self.previousWalletsGeneration &+= 1
             let generation = self.previousWalletsGeneration
-            self.previousWalletsDisposable.set((walletContext.previousWallets()
+            self.previousWalletsDisposable.set((walletContext.previousWallets(refreshBalances: true)
             |> deliverOnMainQueue).start(next: { [weak self] previousWallets in
                 guard let self,
                       self.previousWalletsGeneration == generation,
                       self.walletContext === walletContext else {
                     return
                 }
-                let balance = previousWallets.reduce(Int64(0)) { $0 + ($1.balance ?? 0) }
+                var seenAddresses = Set<String>()
+                let balance = previousWallets
+                    .sorted { $0.lastUsedAt > $1.lastUsedAt }
+                    .filter { seenAddresses.insert($0.address).inserted }
+                    .reduce(Int64(0)) { $0 + ($1.balance ?? 0) }
                 if self.previousWalletsBalance != balance {
                     self.previousWalletsBalance = balance
                     if !self.isUpdating {
@@ -1137,7 +1141,7 @@ private final class WalletScreenComponent: Component {
                 })
             }
             if self.previousWalletsBalance > 0 {
-                let amount = formatTonAmountText(self.previousWalletsBalance, dateTimeFormat: environment.dateTimeFormat, maxDecimalPositions: 9)
+                let amount = formatTonAmountText(self.previousWalletsBalance, dateTimeFormat: environment.dateTimeFormat, maxDecimalPositions: 2)
                 //TODO:localize
                 let title = NSMutableAttributedString(string: "You also have ", font: font, textColor: textColor)
                 let amountText = NSMutableAttributedString(string: "💎\(amount)", font: font, textColor: environment.theme.list.itemAccentColor)
@@ -2188,6 +2192,7 @@ private final class WalletScreenComponent: Component {
             let context = component.context
             let _ = passcodeOptionsAccessController(
                 context: context,
+                preferredModalWidth: 480.0,
                 replaceController: { [weak controller] passcodeController in
                     (controller?.navigationController as? NavigationController)?.replaceTopController(passcodeController, animated: true)
                 },

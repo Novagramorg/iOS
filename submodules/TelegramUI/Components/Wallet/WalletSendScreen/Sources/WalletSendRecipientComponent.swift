@@ -1,6 +1,7 @@
 import Foundation
 import UIKit
 import Display
+import AppBundle
 import AccountContext
 import TelegramCore
 import TelegramPresentationData
@@ -15,15 +16,26 @@ import ShimmeringMask
 final class WalletSendRecipientComponent: Component {
     let context: AccountContext
     let theme: PresentationTheme
+    let strings: PresentationStrings
     let nameDisplayOrder: PresentationPersonNameOrder
     let peer: EnginePeer?
     let address: String
     let isLoading: Bool
     let openInfo: () -> Void
 
-    init(context: AccountContext, theme: PresentationTheme, nameDisplayOrder: PresentationPersonNameOrder, peer: EnginePeer?, address: String, isLoading: Bool, openInfo: @escaping () -> Void) {
+    init(
+        context: AccountContext,
+        theme: PresentationTheme,
+        strings: PresentationStrings,
+        nameDisplayOrder: PresentationPersonNameOrder,
+        peer: EnginePeer?,
+        address: String,
+        isLoading: Bool,
+        openInfo: @escaping () -> Void
+    ) {
         self.context = context
         self.theme = theme
+        self.strings = strings
         self.nameDisplayOrder = nameDisplayOrder
         self.peer = peer
         self.address = address
@@ -43,6 +55,7 @@ final class WalletSendRecipientComponent: Component {
     final class View: UIView {
         private let backgroundView = UIView()
         private let avatar = ComponentView<Empty>()
+        private let tonIconView = UIImageView()
         private let name = ComponentView<Empty>()
         private let username = ComponentView<Empty>()
         private let address = ComponentView<Empty>()
@@ -55,6 +68,13 @@ final class WalletSendRecipientComponent: Component {
 
             self.backgroundView.isUserInteractionEnabled = false
             self.addSubview(self.backgroundView)
+
+            self.tonIconView.image = UIImage(bundleImageName: "Wallet/Ton")
+            self.tonIconView.contentMode = .scaleAspectFill
+            self.tonIconView.clipsToBounds = true
+            self.tonIconView.isUserInteractionEnabled = false
+            self.tonIconView.accessibilityElementsHidden = true
+            self.addSubview(self.tonIconView)
         }
 
         required init?(coder: NSCoder) {
@@ -83,7 +103,7 @@ final class WalletSendRecipientComponent: Component {
         func update(component: WalletSendRecipientComponent, availableSize: CGSize, transition: ComponentTransition) -> CGSize {
             let hasPeer = component.peer != nil
             let canOpenInfo = !component.isLoading && !component.address.isEmpty
-            let textOriginX: CGFloat = hasPeer ? 60.0 : 16.0
+            let textOriginX: CGFloat = 60.0
             let textWidth = max(1.0, availableSize.width - textOriginX - 42.0)
             let addressFont = Font.monospace(14.0)
             let addressKerning = ("0" as NSString).size(withAttributes: [.font: addressFont]).width * 0.08
@@ -158,20 +178,20 @@ final class WalletSendRecipientComponent: Component {
                         containerSize: CGSize(width: floor(textWidth * 0.45), height: 30.0)
                     )
                 }
-                nameSize = self.name.update(
-                    transition: transition,
-                    component: AnyComponent(MultilineTextComponent(
-                        text: .plain(NSAttributedString(
-                            string: component.peer?.compactDisplayTitle ?? "Gram Wallet",
-                            font: Font.semibold(16.0),
-                            textColor: component.theme.list.itemPrimaryTextColor
-                        )),
-                        maximumNumberOfLines: 1
-                    )),
-                    environment: {},
-                    containerSize: CGSize(width: max(1.0, textWidth - usernameSize.width - (usernameText == nil ? 0.0 : 6.0)), height: 30.0)
-                )
             }
+            nameSize = self.name.update(
+                transition: transition,
+                component: AnyComponent(MultilineTextComponent(
+                    text: .plain(NSAttributedString(
+                        string: component.peer?.displayTitle(strings: component.strings, displayOrder: component.nameDisplayOrder) ?? "Gram Wallet",
+                        font: Font.semibold(16.0),
+                        textColor: component.theme.list.itemPrimaryTextColor
+                    )),
+                    maximumNumberOfLines: 1
+                )),
+                environment: {},
+                containerSize: CGSize(width: max(1.0, textWidth - usernameSize.width - (usernameText == nil ? 0.0 : 6.0)), height: 30.0)
+            )
             let infoButtonSize = self.infoButton.update(
                 transition: transition,
                 component: AnyComponent(PlainButtonComponent(
@@ -188,8 +208,8 @@ final class WalletSendRecipientComponent: Component {
                 containerSize: CGSize(width: 44.0, height: 44.0)
             )
 
-            let titleHeight = hasPeer ? max(19.0, max(nameSize.height, usernameSize.height)) : 0.0
-            let titleSpacing: CGFloat = hasPeer ? 2.0 : 0.0
+            let titleHeight = max(19.0, max(nameSize.height, usernameSize.height))
+            let titleSpacing: CGFloat = 2.0
             let textHeight = titleHeight + titleSpacing + addressSize.height
             let size = CGSize(width: availableSize.width, height: max(68.0, textHeight + 12.0))
             let textOriginY = floorToScreenPixels((size.height - textHeight) / 2.0) + 1.0
@@ -199,13 +219,18 @@ final class WalletSendRecipientComponent: Component {
             transition.setFrame(view: self.backgroundView, frame: CGRect(origin: .zero, size: size))
             transition.setCornerRadius(layer: self.backgroundView.layer, cornerRadius: size.height / 2.0)
 
+            let avatarFrame = CGRect(x: 16.0, y: floorToScreenPixels((size.height - avatarSize.height) / 2.0), width: avatarSize.width, height: avatarSize.height)
+            transition.setFrame(view: self.tonIconView, frame: avatarFrame)
+            self.tonIconView.layer.cornerRadius = avatarSize.width / 2.0
+            transition.setAlpha(view: self.tonIconView, alpha: hasPeer ? 0.0 : 1.0)
+
             if let avatarView = self.avatar.view {
                 if avatarView.superview == nil {
                     avatarView.isUserInteractionEnabled = false
                     avatarView.accessibilityElementsHidden = true
                     self.addSubview(avatarView)
                 }
-                transition.setFrame(view: avatarView, frame: CGRect(x: 16.0, y: floorToScreenPixels((size.height - avatarSize.height) / 2.0), width: avatarSize.width, height: avatarSize.height))
+                transition.setFrame(view: avatarView, frame: avatarFrame)
                 transition.setAlpha(view: avatarView, alpha: hasPeer ? 1.0 : 0.0)
             }
             if let nameView = self.name.view {
@@ -214,7 +239,6 @@ final class WalletSendRecipientComponent: Component {
                     self.addSubview(nameView)
                 }
                 transition.setFrame(view: nameView, frame: CGRect(x: textOriginX, y: textOriginY - 1.0, width: nameSize.width, height: nameSize.height))
-                transition.setAlpha(view: nameView, alpha: hasPeer ? 1.0 : 0.0)
             }
             if let usernameView = self.username.view {
                 if usernameView.superview == nil {

@@ -73,7 +73,7 @@ final class WalletSendRecipientAlertContentComponent: Component {
                 text.append(NSAttributedString(string: " on Telegram.", font: Font.regular(17.0), textColor: theme.actionSheet.primaryTextColor))
             } else {
                 //TODO:localize
-                text.append(NSAttributedString(string: "This TON Blockchain address is not linked to a Telegram user.", font: Font.regular(17.0), textColor: theme.actionSheet.primaryTextColor))
+                text.append(NSAttributedString(string: "This TON Blockchain address has no linked Telegram account.", font: Font.regular(17.0), textColor: theme.actionSheet.primaryTextColor))
             }
             let textSize = self.text.update(
                 transition: transition,
