@@ -5593,3 +5593,50 @@ The app never logged which engine version and server flags (`custom_parameters`,
 (`uz.fenixuz.app.NotificationService`), requested with the incoming-call use case. After approval:
 regenerate `Fenixuz_AppStore_NotificationService.mobileprovision` and widen the bundle-id gate in
 `Telegram/BUILD`.
+
+---
+
+## 📌 Story video scrubbed past its last frame — Timer.start crash (2026-09-21)
+
+Organizer, build 78: `EXC_BREAKPOINT` in `OS_dispatch_source_timer.scheduleRepeating(deadline:interval:leeway:) + 332`
+← `Timer.start()` ← `MediaPlayerNode.startPolling()` ← `MediaPlayerNode.pollInner` (153 devices in 14 days,
+iOS 16–26). `+332` (disassembled from the iOS 26.6.1 `libswiftDispatch`) is the `UInt64(interval * 1e9)`
+"greater than UInt64.max" trap — the polling timer got a finite interval of at least 1.84e10 s.
+The crashing interval sits in `x23` in the crash logs: `6.0048e14 = 2^63 / 15360` plus a 4–7 s frame time.
+
+Chain: `MediaPlayerStreaming.story.isSeekable == false`, so `FFMpegMediaFrameSourceContext` stores the video
+duration as `CMTimeMake(value: Int64.min, …)` (FFmpeg's `AV_NOPTS_VALUE` gives the same value for streams with
+an unknown duration). A seek whose target is past the last video frame (scrubbing a story to its end) fell
+back to `actualPts = videoStream.duration`, so `MediaPlayer.seekingCompleted` set the control timebase to
+`Int64.min / timescale` ≈ -6e14 s. Seen on a device with temporary logging: `actualPts=-600479950316066.1
+dur=-9223372036854775808/15360`. With sound the audio renderer re-anchors the timebase a moment later; for a
+video without an audio track nothing does, and `pollInner` computed `maxTakenTime - layerTime` ≈ 6e14 s.
+Note: the Novagram app config has no `ios_video_legacyplayer`, so every `NativeVideoContent` (stories included)
+runs on this legacy `MediaPlayer`.
+
+### `submodules/MediaPlayer/Sources/FFMpegMediaFrameSourceContext.swift` (UPSTREAM hook)
+
+In `seek(timestamp:completed:)`, when no frame reaches the target, the stream duration is only used if it
+is known; otherwise the last frame read is used (the upstream `else` branch that was unreachable before):
+
+```swift
+// Fenixuz: duration is Int64.min when unknown (non-seekable story streams, AV_NOPTS_VALUE),
+// so seeking past the last frame put the timebase at about -1e14 s
+if let videoStream = initializedState.videoStream, videoStream.duration.value != Int64.min {
+    actualPts = videoStream.duration
+} else {
+    actualPts = extraVideoFrames.last!.pts
+}
+```
+
+### `submodules/MediaPlayer/Sources/MediaPlayerNode.swift` (UPSTREAM hook)
+
+The poll delay is a repeat interval that only re-checks `isReadyForMoreMediaData`; it is now capped at 1 s,
+so no future bad timebase can reach the Dispatch trap:
+
+```swift
+// Fenixuz: capped, DispatchSourceTimer traps when the repeat interval is >= 2^64 ns (~584 years)
+completion(.delay(min(max(1.0 / 30.0, state.maxTakenTime - layerTime), 1.0)))
+```
+
+Normal delays are well under 1 s, so ordinary playback is unchanged; a larger value only re-polls sooner.
