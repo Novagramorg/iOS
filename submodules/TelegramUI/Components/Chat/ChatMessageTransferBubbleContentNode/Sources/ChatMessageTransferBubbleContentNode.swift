@@ -3,6 +3,8 @@ import LottieSettings
 import UIKit
 import AsyncDisplayKit
 import Display
+import ComponentFlow
+import LottieComponent
 import SwiftSignalKit
 import TelegramCore
 import AccountContext
@@ -15,9 +17,21 @@ import ChatMessageBubbleContentNode
 import ChatMessageItemCommon
 import TextSelectionNode
 import InvisibleInkDustNode
-import ActivityIndicator
 import ShimmerEffect
 import WalletContext
+
+private let transferCardIconGlowSize = CGSize(width: 56.0, height: 56.0)
+private let transferCardIconGlowImage = generateImage(transferCardIconGlowSize, rotatedContext: { size, context in
+    context.clear(CGRect(origin: .zero, size: size))
+
+    let color = UIColor(rgb: 0x1aa6fe)
+    let colors: [CGColor] = [color.cgColor, color.withAlphaComponent(0.0).cgColor]
+    var locations: [CGFloat] = [0.0, 1.0]
+    if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors as CFArray, locations: &locations) {
+        let center = CGPoint(x: size.width * 0.5, y: size.height * 0.5)
+        context.drawRadialGradient(gradient, startCenter: center, startRadius: 0.0, endCenter: center, endRadius: size.width * 0.5, options: [])
+    }
+})
 
 private enum TransferCardStatus: Equatable {
     case waiting
@@ -135,8 +149,6 @@ private final class TransferCardShimmerView: UIView {
 }
 
 public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleContentNode {
-    private static let pendingIndicatorEnabled = false
-
     private let labelNode: TextNode
     private var labelBackgroundNode: WallpaperBubbleBackgroundNode?
     private let labelBackgroundMaskNode: ASImageNode
@@ -145,8 +157,9 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
     private var mediaBackgroundContent: WallpaperBubbleBackgroundNode?
     private let cardNode: ASDisplayNode
     private let cardBackgroundNode: ASImageNode
-    private let cardIconNode: ASImageNode
-    private var pendingIndicator: ActivityIndicator?
+    private let cardIconGlowNode: ASImageNode
+    private var cardIcon = ComponentView<Empty>()
+    private var cardIconPlayedOnce = false
     private let amountNode: TextNode
     private let nameNode: TextNode
     private let addressNode: TextNode
@@ -167,6 +180,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
     private var transferOperationId: String?
     private var transferTransactionHash: Data?
     private var transferStatus: TransferCardStatus?
+    private var isIncomingTransfer = false
 
     private var cachedLabelBackgroundImage: (CGPoint, UIImage, [CGRect])?
     private var absoluteRect: (CGRect, CGSize)?
@@ -205,11 +219,11 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
         self.cardBackgroundNode.contentMode = .scaleAspectFill
         self.cardBackgroundNode.image = UIImage(bundleImageName: "Wallet/CardChatMock")
 
-        self.cardIconNode = ASImageNode()
-        self.cardIconNode.displaysAsynchronously = false
-        self.cardIconNode.displayWithoutProcessing = true
-        self.cardIconNode.contentMode = .scaleAspectFit
-        self.cardIconNode.image = UIImage(bundleImageName: "Wallet/CardGram")
+        self.cardIconGlowNode = ASImageNode()
+        self.cardIconGlowNode.isUserInteractionEnabled = false
+        self.cardIconGlowNode.displaysAsynchronously = false
+        self.cardIconGlowNode.displayWithoutProcessing = true
+        self.cardIconGlowNode.image = transferCardIconGlowImage
 
         self.amountNode = TextNode()
         self.amountNode.isUserInteractionEnabled = false
@@ -234,6 +248,10 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
         self.ribbonBackgroundNode = ASImageNode()
         self.ribbonBackgroundNode.displaysAsynchronously = false
         self.ribbonBackgroundNode.displayWithoutProcessing = true
+        self.ribbonBackgroundNode.image = generateTintedImage(
+            image: UIImage(bundleImageName: "Chat/Message/GiftRibbon"),
+            color: .white
+        )
 
         self.ribbonTextNode = TextNode()
         self.ribbonTextNode.isUserInteractionEnabled = false
@@ -254,7 +272,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
         super.init(lottieSettings: lottieSettings)
 
         self.cardNode.addSubnode(self.cardBackgroundNode)
-        self.cardNode.addSubnode(self.cardIconNode)
+        self.cardNode.addSubnode(self.cardIconGlowNode)
         self.cardNode.addSubnode(self.amountNode)
         self.cardNode.addSubnode(self.nameNode)
         self.cardNode.addSubnode(self.addressNode)
@@ -376,7 +394,20 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
         }
         self.finishCompletionAnimation()
         self.updateShimmer(animated: animated && previousStatus != nil)
-        if status == .completed && previousStatus != nil && animated && self.visibility != .none {
+        let animateCompletion = status == .completed && previousStatus != nil && animated && self.visibility != .none
+        let ribbonColor: UIColor
+        if self.isIncomingTransfer {
+            ribbonColor = UIColor(rgb: 0x0075f6)
+        } else if status == .completed {
+            ribbonColor = UIColor(rgb: 0x00cf00)
+        } else {
+            ribbonColor = UIColor(rgb: 0x5ec2ff)
+        }
+        let ribbonTransition: ContainedViewLayoutTransition = animateCompletion
+            ? .animated(duration: 0.28, curve: .easeInOut)
+            : .immediate
+        ribbonTransition.updateTintColor(layer: self.ribbonBackgroundNode.layer, color: ribbonColor)
+        if animateCompletion {
             self.animateCompletion()
         }
     }
@@ -417,6 +448,8 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
     }
 
     private func finishCompletionAnimation() {
+        // The model tint already holds the final color; removing the animation settles it immediately.
+        self.ribbonBackgroundNode.layer.removeAnimation(forKey: "contentsMultiplyColor")
         self.ribbonTextNode.layer.removeAnimation(forKey: "position")
         self.ribbonTextNode.layer.removeAnimation(forKey: "opacity")
         self.ribbonSendingTextNode.layer.removeAnimation(forKey: "position")
@@ -572,7 +605,6 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                     })
                 }
                 let isIncoming = engineMessage.effectivelyIncoming(item.context.account.peerId)
-                let displayPendingIndicator = Self.pendingIndicatorEnabled && item.message.attributes.contains(where: { $0 is PendingWalletTransferMessageAttribute })
                 let caption = commentEncrypted ? "" : (comment ?? "")
                 let hasEncryptedCaption = commentEncrypted && comment?.isEmpty == false
 
@@ -746,15 +778,12 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                     : captionLayout.size
 
                 let ribbonTitle: String
-                let ribbonColor: UIColor
                 if isIncoming {
                     //TODO:localize
                     ribbonTitle = "received"
-                    ribbonColor = UIColor(rgb: 0x0075f6)
                 } else {
                     //TODO:localize
                     ribbonTitle = "sent"
-                    ribbonColor = UIColor(rgb: 0x5ec2ff)
                 }
                 let ribbonTextLayoutArguments = TextNodeLayoutArguments(
                     attributedString: NSAttributedString(
@@ -835,7 +864,12 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                         let isSameMessage = self.item?.context.account === item.context.account
                             && self.item?.message.id.peerId == item.message.id.peerId
                             && self.item?.message.stableId == item.message.stableId
+                        if !isSameMessage {
+                            self.cardIcon.view?.removeFromSuperview()
+                            self.cardIcon = ComponentView<Empty>()
+                        }
                         self.item = item
+                        self.isIncomingTransfer = isIncoming
 
                         let _ = labelApply()
                         let _ = amountApply()
@@ -864,24 +898,46 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                         self.cardBackgroundNode.frame = CGRect(origin: .zero, size: cardSize)
 
                         let iconSize = CGSize(width: 40.0, height: 40.0)
-                        self.cardIconNode.frame = CGRect(
+                        let iconFrame = CGRect(
                             origin: CGPoint(x: floorToScreenPixels((cardSize.width - iconSize.width) * 0.5), y: 20.0),
                             size: iconSize
                         )
-                        self.cardIconNode.isHidden = displayPendingIndicator
-                        if displayPendingIndicator {
-                            let indicator: ActivityIndicator
-                            if let current = self.pendingIndicator {
-                                indicator = current
-                            } else {
-                                indicator = ActivityIndicator(type: .custom(.white, 28.0, 2.0, false))
-                                self.pendingIndicator = indicator
-                                self.cardNode.addSubnode(indicator)
+                        self.cardIconGlowNode.frame = CGRect(
+                            x: iconFrame.midX - transferCardIconGlowSize.width * 0.5,
+                            y: iconFrame.midY - transferCardIconGlowSize.height * 0.5,
+                            width: transferCardIconGlowSize.width,
+                            height: transferCardIconGlowSize.height
+                        )
+                        let animationSize = CGSize(width: 48.0, height: 48.0)
+                        let _ = self.cardIcon.update(
+                            transition: .immediate,
+                            component: AnyComponent(LottieComponent(
+                                content: LottieComponent.AppBundleContent(name: "TonDiamond"),
+                                startingPosition: .end,
+                                size: animationSize,
+                                loop: false,
+                                lottieSettings: item.context.lottieRenderingSettings
+                            )),
+                            environment: {},
+                            containerSize: animationSize
+                        )
+                        if let iconView = self.cardIcon.view as? LottieComponent.View {
+                            iconView.externalShouldPlay = self.visibility != .none
+                            if iconView.superview == nil {
+                                iconView.isUserInteractionEnabled = false
+                                self.cardNode.view.addSubview(iconView)
                             }
-                            indicator.frame = self.cardIconNode.frame.insetBy(dx: 6.0, dy: 6.0)
-                        } else if let indicator = self.pendingIndicator {
-                            indicator.removeFromSupernode()
-                            self.pendingIndicator = nil
+                            iconView.frame = CGRect(
+                                x: iconFrame.midX - animationSize.width * 0.5,
+                                y: iconFrame.midY - animationSize.height * 0.5,
+                                width: animationSize.width,
+                                height: animationSize.height
+                            )
+                            
+                            if !self.cardIconPlayedOnce {
+                                self.cardIconPlayedOnce = true
+                                iconView.playOnce()
+                            }
                         }
                         self.amountNode.frame = CGRect(
                             origin: CGPoint(x: floorToScreenPixels((cardSize.width - amountLayout.size.width) * 0.5), y: 61.0),
@@ -901,10 +957,6 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                         let ribbonFrame = CGRect(
                             origin: CGPoint(x: cardFrame.maxX - ribbonSize.width + 2.0, y: cardFrame.minY - 2.0),
                             size: ribbonSize
-                        )
-                        self.ribbonBackgroundNode.image = generateTintedImage(
-                            image: UIImage(bundleImageName: "Chat/Message/GiftRibbon"),
-                            color: ribbonColor
                         )
                         self.ribbonBackgroundNode.frame = ribbonFrame
                         self.ribbonTextContainerNode.frame = ribbonFrame

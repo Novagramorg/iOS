@@ -11,6 +11,7 @@ swift_library(
     ],
     deps = [
         "//submodules/AsyncDisplayKit",
+        "//submodules/ComponentFlow",
         "//submodules/LottieSettings:LottieSettings",
         "//submodules/Display",
         "//submodules/SSignalKit/SwiftSignalKit",
@@ -23,6 +24,7 @@ swift_library(
         "//submodules/WallpaperBackgroundNode",
         "//submodules/TelegramUI/Components/Chat/ChatMessageBubbleContentNode",
         "//submodules/TelegramUI/Components/Chat/ChatMessageItemCommon",
+        "//submodules/TelegramUI/Components/LottieComponent",
         "//submodules/TextSelectionNode",
         "//submodules/InvisibleInkDustNode",
         "//submodules/ActivityIndicator",

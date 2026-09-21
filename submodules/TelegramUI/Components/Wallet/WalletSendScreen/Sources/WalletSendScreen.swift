@@ -979,7 +979,6 @@ private final class WalletSendScreenComponent: Component {
             )
             self.recipientInfoAlert = alertController
             alertController.dismissed = { [weak self, weak controller, weak alertController] _ in
-                // AlertScreen calls this before removing itself and ends editing when dismissed.
                 DispatchQueue.main.async { [weak self, weak controller, weak alertController] in
                     guard let self, self.recipientInfoAlert === alertController else {
                         return

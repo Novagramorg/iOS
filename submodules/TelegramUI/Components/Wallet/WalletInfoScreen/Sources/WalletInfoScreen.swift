@@ -68,7 +68,7 @@ private func walletInfoContent(
         let buttonTitle = "Got it"
 
         return WalletInfoContent(
-            logo: WalletInfoLogo(name: "Diamond", loop: true),
+            logo: WalletInfoLogo(name: "TonDiamond", loop: true),
             title: title,
             text: text,
             items: [
@@ -125,7 +125,7 @@ private func walletInfoContent(
         let buttonTitle = "Got it"
 
         return WalletInfoContent(
-            logo: WalletInfoLogo(name: "Diamond", loop: true),
+            logo: WalletInfoLogo(name: "TonDiamond", loop: true),
             title: title,
             text: text,
             items: [
@@ -182,7 +182,7 @@ private func walletInfoContent(
         let buttonTitle = "Got it"
 
         return WalletInfoContent(
-            logo: WalletInfoLogo(name: "Diamond", loop: true),
+            logo: WalletInfoLogo(name: "TonDiamond", loop: true),
             title: title,
             text: text,
             items: [

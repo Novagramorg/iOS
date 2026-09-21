@@ -44,7 +44,6 @@ final class WalletSendRecipientAlertContentComponent: Component {
 
         func update(component: WalletSendRecipientAlertContentComponent, availableSize: CGSize, environment: Environment<AlertComponentEnvironment>, transition: ComponentTransition) -> CGSize {
             let theme = environment[AlertComponentEnvironment.self].theme
-            // AlertScreen provides 30 pt side insets; align text at 24 pt and the address block at 16 pt.
             let textInset: CGFloat = -6.0
             let addressInset: CGFloat = -14.0
             let textWidth = availableSize.width - textInset * 2.0
@@ -103,7 +102,7 @@ final class WalletSendRecipientAlertContentComponent: Component {
             while index < component.address.endIndex {
                 let row = groupIndex / 4
                 let column = groupIndex % 4
-                let color = (row + column).isMultiple(of: 2) ? theme.actionSheet.primaryTextColor : theme.actionSheet.secondaryTextColor
+                let color = (row + column).isMultiple(of: 2) ? theme.actionSheet.primaryTextColor : theme.actionSheet.primaryTextColor.withMultipliedAlpha(0.32)
                 if groupIndex != 0 {
                     addressText.append(NSAttributedString(string: column == 0 ? "\n" : " ", font: addressFont, textColor: color))
                 }

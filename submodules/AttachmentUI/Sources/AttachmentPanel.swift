@@ -158,6 +158,7 @@ private final class AttachButtonComponent: CombinedComponent {
     let type: AttachmentButtonType
     let isFirstOrLast: Bool
     let isSelected: Bool
+    let isAnimating: Bool
     let strings: PresentationStrings
     let theme: PresentationTheme
     let action: () -> Void
@@ -169,6 +170,7 @@ private final class AttachButtonComponent: CombinedComponent {
         type: AttachmentButtonType,
         isFirstOrLast: Bool,
         isSelected: Bool,
+        isAnimating: Bool,
         strings: PresentationStrings,
         theme: PresentationTheme,
         action: @escaping () -> Void,
@@ -179,6 +181,7 @@ private final class AttachButtonComponent: CombinedComponent {
         self.type = type
         self.isFirstOrLast = isFirstOrLast
         self.isSelected = isSelected
+        self.isAnimating = isAnimating
         self.strings = strings
         self.theme = theme
         self.action = action
@@ -201,6 +204,9 @@ private final class AttachButtonComponent: CombinedComponent {
         if lhs.isSelected != rhs.isSelected {
             return false
         }
+        if lhs.isAnimating != rhs.isAnimating {
+            return false
+        }
         if lhs.strings !== rhs.strings {
             return false
         }
@@ -220,6 +226,9 @@ private final class AttachButtonComponent: CombinedComponent {
             let name: String
             let imageName: String
             var imageFile: TelegramMediaFile?
+            var animationName: String?
+            var animationScale: CGFloat = 1.0
+            var animationOffset: CGFloat = 0.0
             var animationFile: TelegramMediaFile?
             var botPeer: EnginePeer?
 
@@ -229,29 +238,39 @@ private final class AttachButtonComponent: CombinedComponent {
             switch component.type {
             case .gallery:
                 name = strings.Attachment_Gallery
-                imageName = "Chat/Attach Menu/Gallery"
+                animationName = "TabPhoto"
+                imageName = ""
             case .file:
                 name = strings.Attachment_File
-                imageName = "Chat/Attach Menu/File"
+                animationName = "TabFile"
+                imageName = ""
             case .money:
                 //TODO:localize
                 name = "Money"
-                imageName = "Chat/Attach Menu/Money"
+                animationName = "TabMoney"
+                imageName = ""
             case .location:
                 name = strings.Attachment_Location
-                imageName = "Chat/Attach Menu/Location"
+                animationName = "TabLocation"
+                imageName = ""
             case .todo:
                 name = strings.Attachment_Todo
-                imageName = "Chat/Attach Menu/Todo"
+                animationName = "TabTodo"
+                imageName = ""
             case .contact:
                 name = strings.Attachment_Contact
-                imageName = "Chat/Attach Menu/Contact"
+                animationName = "TabContacts"
+                animationScale = 1.78
+                animationOffset = UIScreenPixel
+                imageName = ""
             case .poll:
                 name = strings.Attachment_Poll
-                imageName = "Chat/Attach Menu/Poll"
+                animationName = "TabPoll"
+                imageName = ""
             case .gift:
                 name = strings.Attachment_Gift
-                imageName = "Chat/Attach Menu/Gift"
+                animationName = "TabGift"
+                imageName = ""
             case .sticker:
                 name = strings.Attachment_Sticker
                 imageName = "Chat/Attach Menu/Sticker"
@@ -260,7 +279,8 @@ private final class AttachButtonComponent: CombinedComponent {
                 imageName = "Chat/Attach Menu/Emoji"
             case .audio:
                 name = strings.Attachment_Audio
-                imageName = "Chat/Attach Menu/Audio"
+                animationName = "TabAudio"
+                imageName = ""
             case .link:
                 name = strings.Attachment_Link
                 imageName = "Chat/Attach Menu/Link"
@@ -284,7 +304,8 @@ private final class AttachButtonComponent: CombinedComponent {
                 imageName = "Chat/Attach Menu/Reply"
             case .richText:
                 name = strings.Attachment_Article
-                imageName = "Chat/Attach Menu/Article"
+                animationName = "TabArticle"
+                imageName = ""
             }
 
             let tintColor: UIColor
@@ -303,8 +324,28 @@ private final class AttachButtonComponent: CombinedComponent {
                 spacing += UIScreenPixel
             }
 
-            let iconFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((context.availableSize.width - iconSize.width) / 2.0), y: topInset), size: iconSize)
-            if let animationFile = animationFile {
+            let iconFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((context.availableSize.width - iconSize.width) / 2.0), y: topInset + animationOffset), size: iconSize)
+            if let animationName {
+                let icon = animatedIcon.update(
+                    component: AnimatedStickerComponent(
+                        account: component.context.account,
+                        animation: AnimatedStickerComponent.Animation(
+                            source: .bundle(name: animationName),
+                            scale: UIScreenScale,
+                            loop: false
+                        ),
+                        tintColor: tintColor,
+                        isAnimating: component.isAnimating,
+                        size: CGSize(width: iconSize.width * animationScale, height: iconSize.height * animationScale),
+                        lottieSettings: component.context.lottieRenderingSettings
+                    ),
+                    availableSize: iconSize,
+                    transition: context.transition
+                )
+                context.add(icon
+                    .position(CGPoint(x: iconFrame.midX, y: iconFrame.midY))
+                )
+            } else if let animationFile = animationFile {
                 let icon = animatedIcon.update(
                     component: AnimatedStickerComponent(
                         account: component.context.account,
@@ -314,8 +355,8 @@ private final class AttachButtonComponent: CombinedComponent {
                             loop: false
                         ),
                         tintColor: tintColor,
-                        isAnimating: component.isSelected,
-                        size: CGSize(width: iconSize.width, height: iconSize.height),
+                        isAnimating: component.isAnimating,
+                        size: CGSize(width: iconSize.width * animationScale, height: iconSize.height * animationScale),
                         lottieSettings: component.context.lottieRenderingSettings
                     ),
                     availableSize: iconSize,
@@ -2138,6 +2179,7 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate, ASGestureRecog
                     type: type,
                     isFirstOrLast: i == 0 || i == buttons.count - 1,
                     isSelected: false,
+                    isAnimating: i == self.selectedIndex,
                     strings: self.presentationData.strings,
                     theme: self.presentationData.theme,
                     action: { [weak self] in
@@ -2172,6 +2214,7 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate, ASGestureRecog
                     type: type,
                     isFirstOrLast: i == 0 || i == buttons.count - 1,
                     isSelected: true,
+                    isAnimating: i == self.selectedIndex,
                     strings: self.presentationData.strings,
                     theme: self.presentationData.theme,
                     action: {
