@@ -28,7 +28,7 @@ public final class AnimatedTextComponent: Component {
         public enum Content: Equatable {
             case text(String)
             case number(Int, minDigits: Int)
-            case icon(String, tint: Bool, offset: CGPoint)
+            case icon(String, tint: Bool, offset: CGPoint, scaleFactor: CGFloat = 1.0)
         }
         
         public var id: AnyHashable
@@ -167,7 +167,7 @@ public final class AnimatedTextComponent: Component {
                     } else {
                         itemText = valueText.map(String.init)
                     }
-                case let .icon(iconName, _, _):
+                case let .icon(iconName, _, _, _):
                     let characterKey = CharacterKey(itemId: item.id, index: 0, value: iconName)
                     validKeys.append(characterKey)
                 }
@@ -206,11 +206,11 @@ public final class AnimatedTextComponent: Component {
             for item in component.items {
                 enum AnimatedTextCharacter {
                     case text(String)
-                    case icon(String, Bool, CGPoint)
+                    case icon(String, Bool, CGPoint, CGFloat)
                     
                     var value: String {
                         switch self {
-                        case let .text(value), let .icon(value, _, _):
+                        case let .text(value), let .icon(value, _, _, _):
                             return value
                         }
                     }
@@ -234,8 +234,8 @@ public final class AnimatedTextComponent: Component {
                     } else {
                         itemText = valueText.map { .text(String($0)) }
                     }
-                case let .icon(iconName, tint, offset):
-                    itemText = [.icon(iconName, tint, offset)]
+                case let .icon(iconName, tint, offset, scaleFactor):
+                    itemText = [.icon(iconName, tint, offset, scaleFactor)]
                 }
                 var index = 0
                 characterLoop: for character in itemText {
@@ -271,10 +271,11 @@ public final class AnimatedTextComponent: Component {
                                 text: .plain(NSAttributedString(string: text, font: component.font, textColor: component.color))
                             ))
                         }
-                    case let .icon(iconName, tint, offset):
+                    case let .icon(iconName, tint, offset, scaleFactor):
                         characterComponent = AnyComponent(BundleIconComponent(
                             name: iconName,
-                            tintColor: tint ? component.color : nil
+                            tintColor: tint ? component.color : nil,
+                            scaleFactor: scaleFactor
                         ))
                         characterOffset = offset
                     }

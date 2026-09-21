@@ -4,6 +4,7 @@ import Display
 import AccountContext
 import TelegramCore
 import TelegramPresentationData
+import TelegramUIPreferences
 import ComponentFlow
 import AvatarComponent
 import BundleIconComponent
@@ -14,17 +15,17 @@ import ShimmeringMask
 final class WalletSendRecipientComponent: Component {
     let context: AccountContext
     let theme: PresentationTheme
+    let nameDisplayOrder: PresentationPersonNameOrder
     let peer: EnginePeer?
-    let peerName: String
     let address: String
     let isLoading: Bool
     let openInfo: () -> Void
 
-    init(context: AccountContext, theme: PresentationTheme, peer: EnginePeer?, peerName: String, address: String, isLoading: Bool, openInfo: @escaping () -> Void) {
+    init(context: AccountContext, theme: PresentationTheme, nameDisplayOrder: PresentationPersonNameOrder, peer: EnginePeer?, address: String, isLoading: Bool, openInfo: @escaping () -> Void) {
         self.context = context
         self.theme = theme
+        self.nameDisplayOrder = nameDisplayOrder
         self.peer = peer
-        self.peerName = peerName
         self.address = address
         self.isLoading = isLoading
         self.openInfo = openInfo
@@ -33,8 +34,8 @@ final class WalletSendRecipientComponent: Component {
     static func ==(lhs: WalletSendRecipientComponent, rhs: WalletSendRecipientComponent) -> Bool {
         return lhs.context === rhs.context
             && lhs.theme === rhs.theme
+            && lhs.nameDisplayOrder == rhs.nameDisplayOrder
             && lhs.peer == rhs.peer
-            && lhs.peerName == rhs.peerName
             && lhs.address == rhs.address
             && lhs.isLoading == rhs.isLoading
     }
@@ -161,7 +162,7 @@ final class WalletSendRecipientComponent: Component {
                     transition: transition,
                     component: AnyComponent(MultilineTextComponent(
                         text: .plain(NSAttributedString(
-                            string: component.peerName,
+                            string: component.peer?.compactDisplayTitle ?? "Gram Wallet",
                             font: Font.semibold(16.0),
                             textColor: component.theme.list.itemPrimaryTextColor
                         )),
@@ -212,8 +213,6 @@ final class WalletSendRecipientComponent: Component {
                     nameView.isUserInteractionEnabled = false
                     self.addSubview(nameView)
                 }
-                nameView.isAccessibilityElement = hasPeer
-                nameView.accessibilityLabel = component.peerName
                 transition.setFrame(view: nameView, frame: CGRect(x: textOriginX, y: textOriginY - 1.0, width: nameSize.width, height: nameSize.height))
                 transition.setAlpha(view: nameView, alpha: hasPeer ? 1.0 : 0.0)
             }
@@ -243,10 +242,6 @@ final class WalletSendRecipientComponent: Component {
                 if infoButtonView.superview == nil {
                     self.addSubview(infoButtonView)
                 }
-                infoButtonView.isAccessibilityElement = true
-                //TODO:localize
-                infoButtonView.accessibilityLabel = "Recipient information"
-                infoButtonView.accessibilityTraits = canOpenInfo ? [.button] : [.button, .notEnabled]
                 infoButtonView.isUserInteractionEnabled = canOpenInfo
                 transition.setFrame(view: infoButtonView, frame: CGRect(x: size.width - 6.0 - infoButtonSize.width, y: floorToScreenPixels((size.height - infoButtonSize.height) / 2.0), width: infoButtonSize.width, height: infoButtonSize.height))
                 transition.setAlpha(view: infoButtonView, alpha: 1.0)

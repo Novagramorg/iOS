@@ -182,6 +182,25 @@ private final class WalletSendAmountTextField: UITextField {
         fatalError("init(coder:) has not been implemented")
     }
 
+    override func buildMenu(with builder: UIMenuBuilder) {
+        super.buildMenu(with: builder)
+
+        builder.remove(menu: .replace)
+        builder.remove(menu: .lookup)
+        builder.remove(menu: .learn)
+        builder.remove(menu: .share)
+        if #available(iOS 17.0, *) {
+            builder.remove(menu: .autoFill)
+        }
+    }
+
+    override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
+        if #available(iOS 15.0, *), action == #selector(captureTextFromCamera(_:)) {
+            return false
+        }
+        return super.canPerformAction(action, withSender: sender)
+    }
+
     func update(layout: WalletSendAmountTextLayout, selection: NSRange?) {
         self.textLayout = layout
         if self.attributedText?.isEqual(to: layout.attributedText) != true {
@@ -287,6 +306,18 @@ final class WalletSendAmountField: UIView, UITextFieldDelegate {
         self.textField.keyboardType = .decimalPad
         self.textField.autocorrectionType = .no
         self.textField.autocapitalizationType = .none
+        self.textField.spellCheckingType = .no
+        self.textField.smartQuotesType = .no
+        self.textField.smartDashesType = .no
+        self.textField.smartInsertDeleteType = .no
+        self.textField.textContentType = nil
+        if #available(iOS 17.0, *) {
+            self.textField.inlinePredictionType = .no
+        }
+        if #available(iOS 18.0, *) {
+            self.textField.writingToolsBehavior = .none
+            self.textField.mathExpressionCompletionType = .no
+        }
         self.textField.textAlignment = .left
         self.textField.addTarget(self, action: #selector(self.textChanged), for: .editingChanged)
         self.contentView.addSubview(self.textField)

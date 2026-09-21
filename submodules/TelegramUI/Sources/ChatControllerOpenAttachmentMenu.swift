@@ -1706,6 +1706,7 @@ extension ChatControllerImpl {
             context: self.context,
             updatedPresentationData: self.updatedPresentationData,
             style: .glass,
+            warpContentsOnEdges: true,
             peer: (self.presentationInterfaceState.renderedPeer?.peer).flatMap(EnginePeer.init),
             threadTitle: self.contentData?.state.threadInfo?.title,
             chatLocation: self.chatLocation,

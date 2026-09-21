@@ -553,7 +553,7 @@ final class NavigationModalContainer: ASDisplayNode, ASScrollViewDelegate, ASGes
             return self.dim.view
         }
         if self.isFlat {
-            if result === self.container.view {
+            if result === self.container.view && !self.container.isTransitioning {
                 return nil
             }
             return result

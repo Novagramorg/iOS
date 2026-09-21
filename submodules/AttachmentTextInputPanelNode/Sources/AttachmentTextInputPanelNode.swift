@@ -252,7 +252,7 @@ public class AttachmentTextInputPanelNode: ASDisplayNode, TGCaptionPanelView, AS
     private let context: AccountContext
 
     private let glass: Bool
-    public let inputPanelBottomSpacing: CGFloat
+    public var inputPanelBottomSpacing: CGFloat
     private let isCaption: Bool
     private let isAttachment: Bool
     private let customEmojiAvailable: Bool

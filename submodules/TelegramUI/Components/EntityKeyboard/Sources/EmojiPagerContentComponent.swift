@@ -3,6 +3,7 @@ import LottieSettings
 import UIKit
 import Display
 import ComponentFlow
+import EdgeEffect
 import PagerComponent
 import TelegramPresentationData
 import TelegramCore
@@ -4601,11 +4602,11 @@ public final class EmojiPagerContentComponent: Component {
             }
             if let warpView = self.warpView {
                 transition.setFrame(view: warpView, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: availableSize))
-                warpView.update(size: CGSize(width: availableSize.width, height: availableSize.height), topInset: topWarpInset, warpHeight: warpHeight, theme: keyboardChildEnvironment.theme, transition: transition)
+                warpView.update(size: CGSize(width: availableSize.width, height: availableSize.height), topInset: topWarpInset, warpHeight: warpHeight, transition: transition)
             }
             if let mirrorContentWarpView = self.mirrorContentWarpView {
                 transition.setFrame(view: mirrorContentWarpView, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: availableSize))
-                mirrorContentWarpView.update(size: CGSize(width: availableSize.width, height: availableSize.height), topInset: topWarpInset, warpHeight: warpHeight, theme: keyboardChildEnvironment.theme, transition: transition)
+                mirrorContentWarpView.update(size: CGSize(width: availableSize.width, height: availableSize.height), topInset: topWarpInset, warpHeight: warpHeight, transition: transition)
             }
             
             if scrollSize.height > previousSize.height || transition.animation.isImmediate {

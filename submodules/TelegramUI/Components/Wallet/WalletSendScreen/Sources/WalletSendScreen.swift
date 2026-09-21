@@ -1666,30 +1666,12 @@ private final class WalletSendScreenComponent: Component {
             let theme = environment.theme
             self.backgroundColor = theme.list.modalPlainBackgroundColor
 
-            let peerName = component.peer?.compactDisplayTitle
-            let addressTitle = self.recipientAddress.isEmpty ? nil : walletSendShortAddress(self.recipientAddress)
-            let recipientTitle = peerName ?? addressTitle
-            let titlePrefix: String
-            if recipientTitle == nil {
-                //TODO:localize
-                titlePrefix = "Send Money"
-            } else {
-                //TODO:localize
-                titlePrefix = "Send Money to "
-            }
-            let titleText = NSMutableAttributedString()
-            titleText.append(NSAttributedString(
-                string: titlePrefix,
+            //TODO:localize
+            let titleText = NSAttributedString(
+                string: "Send Money to ",
                 font: Font.semibold(17.0),
                 textColor: theme.list.itemPrimaryTextColor
-            ))
-            if let recipientTitle {
-                titleText.append(NSAttributedString(
-                    string: recipientTitle,
-                    font: Font.semibold(17.0),
-                    textColor: theme.list.itemAccentColor
-                ))
-            }
+            )
 
             let headerButtonSize = CGSize(width: 44.0, height: 44.0)
             let headerOriginY = environment.safeInsets.top + 16.0
@@ -1785,8 +1767,8 @@ private final class WalletSendScreenComponent: Component {
                     component: AnyComponent(WalletSendRecipientComponent(
                         context: component.context,
                         theme: theme,
+                        nameDisplayOrder: presentationData.nameDisplayOrder,
                         peer: component.peer,
-                        peerName: component.peer?.displayTitle(strings: environment.strings, displayOrder: presentationData.nameDisplayOrder) ?? "",
                         address: self.recipientAddress,
                         isLoading: self.recipientAddress.isEmpty && (self.peerAddressState == .notRequested || self.peerAddressState == .loading),
                         openInfo: { [weak self] in
