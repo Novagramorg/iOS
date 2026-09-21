@@ -523,6 +523,12 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
     private let chatLocationContextHolder: Atomic<ChatLocationContextHolder?>
     private let source: ChatHistoryListSource
     private let subject: ChatControllerSubject?
+    // The subject this node was created with. It can differ from the owning controller's `subject`: an in-place
+    // thread switch seeds the new node with a `.message` subject while the controller's own stays nil, and the
+    // controller's initial-scroll checks (missing-message toast, `?t=` timecode) must then read this one.
+    var initialSubject: ChatControllerSubject? {
+        return self.subject
+    }
     private(set) var tag: HistoryViewInputTag?
     private let controllerInteraction: ChatControllerInteraction
     private let selectedMessages: Signal<Set<MessageId>?, NoError>

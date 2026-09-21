@@ -5862,7 +5862,10 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         return leftIndex < rightIndex
     }
     
-    func createHistoryNodeForChatLocation(chatLocation: ChatLocation, chatLocationContextHolder: Atomic<ChatLocationContextHolder?>) -> ChatHistoryListNodeImpl {
+    // `subject` is the history node's own initial subject (e.g. `.message` opens the history at that message
+    // with the highlight, exactly as a freshly pushed `ChatControllerImpl` with that subject would). It is NOT
+    // the controller's `subject`, which stays as it was so that a later in-place thread switch still matches.
+    func createHistoryNodeForChatLocation(chatLocation: ChatLocation, chatLocationContextHolder: Atomic<ChatLocationContextHolder?>, subject: ChatControllerSubject? = nil) -> ChatHistoryListNodeImpl {
         let historyNode = ChatHistoryListNodeImpl(
             context: self.context,
             updatedPresentationData: self.controller?.updatedPresentationData ?? (self.context.sharedContext.currentPresentationData.with({ $0 }), self.context.sharedContext.presentationData),
@@ -5871,7 +5874,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             adMessagesContext: self.adMessagesContext,
             tag: nil,
             source: .default,
-            subject: nil,
+            subject: subject,
             controllerInteraction: self.controllerInteraction,
             selectedMessages: self.selectedMessagesPromise.get(),
             rotated: self.controllerInteraction.chatIsRotated,

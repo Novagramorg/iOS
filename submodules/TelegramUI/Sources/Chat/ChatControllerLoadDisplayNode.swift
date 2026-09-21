@@ -5422,9 +5422,13 @@ extension ChatControllerImpl {
             strongSelf.chatDisplayNode.updatePlainInputSeparatorAlpha(plainInputSeparatorAlpha, transition: .animated(duration: 0.2, curve: .easeInOut))
         }
         
-        historyNode.scrolledToIndex = { [weak self] toSubject, initial in
+        historyNode.scrolledToIndex = { [weak self, weak historyNode] toSubject, initial in
             if let strongSelf = self, case let .message(index) = toSubject.index {
-                if case let .message(messageSubject, _, _, _) = strongSelf.subject, initial, case let .id(messageId) = messageSubject, messageId != index.id {
+                // A history node created by an in-place thread switch carries its own `.message` subject while the
+                // controller's stays nil; the initial-scroll checks below must see that subject or a link to a
+                // missing message silently highlights its neighbour and a `?t=` timecode is dropped.
+                let initialSubject = strongSelf.subject ?? historyNode?.initialSubject
+                if case let .message(messageSubject, _, _, _) = initialSubject, initial, case let .id(messageId) = messageSubject, messageId != index.id {
                     if messageId.peerId == index.id.peerId {
                         strongSelf.present(UndoOverlayController(presentationData: strongSelf.presentationData, content: .info(title: nil, text: strongSelf.presentationData.strings.Conversation_MessageDoesntExist, timeout: nil, customUndoText: nil), elevatedLayout: false, action: { _ in return true }), in: .current)
                     }
@@ -5475,7 +5479,7 @@ extension ChatControllerImpl {
                                     let _ = strongSelf.controllerInteraction?.openMessage(message, OpenMessageParams(mode: .timecode(timecode)))
                                 }
                             }
-                        } else if case let .message(_, _, maybeTimecode, _) = strongSelf.subject, let timecode = maybeTimecode, initial {
+                        } else if case let .message(_, _, maybeTimecode, _) = initialSubject, let timecode = maybeTimecode, initial {
                             Queue.mainQueue().after(0.2) {
                                 let _ = strongSelf.controllerInteraction?.openMessage(message, OpenMessageParams(mode: .timecode(timecode)))
                             }
