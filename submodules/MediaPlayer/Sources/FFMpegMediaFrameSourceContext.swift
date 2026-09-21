@@ -751,7 +751,9 @@ final class FFMpegMediaFrameSourceContext: NSObject {
                     if let closestFrame = closestFrame {
                         actualPts = closestFrame.pts
                     } else {
-                        if let videoStream = initializedState.videoStream {
+                        // Fenixuz: duration is Int64.min when unknown (non-seekable story streams, AV_NOPTS_VALUE),
+                        // so seeking past the last frame put the timebase at about -1e14 s
+                        if let videoStream = initializedState.videoStream, videoStream.duration.value != Int64.min {
                             actualPts = videoStream.duration
                         } else {
                             actualPts = extraVideoFrames.last!.pts
