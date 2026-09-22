@@ -283,6 +283,7 @@ public protocol MediaManager: AnyObject {
     func audioRecorder(
         resumeData: AudioRecorderResumeData?,
         beginWithTone: Bool,
+        pauseMusicOnRecording: Bool,
         applicationBindings: TelegramApplicationBindings,
         beganWithTone: @escaping (Bool) -> Void
     ) -> Signal<ManagedAudioRecorder?, NoError>

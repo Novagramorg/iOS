@@ -137,6 +137,7 @@ extension ChatControllerImpl {
                 self.context.sharedContext.mediaManager.audioRecorder(
                     resumeData: resumeData,
                     beginWithTone: beginWithTone,
+                    pauseMusicOnRecording: self.context.sharedContext.currentMediaInputSettings.with({ $0.pauseMusicOnRecording }),
                     applicationBindings: self.context.sharedContext.applicationBindings,
                     beganWithTone: { _ in
                     }

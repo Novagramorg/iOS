@@ -52,6 +52,17 @@ public enum ManagedAudioSessionType: Equatable {
             return false
         }
     }
+    
+    /// The session a voice-message recording asks for.
+    ///
+    /// `pauseMusicOnRecording` is the Data & Storage "Pause Music While Recording" toggle. When it is
+    /// off the session mixes with other apps' audio instead of interrupting it, the same mapping the
+    /// round-video recorder (`VideoMessageCameraScreen`) and the legacy camera bridge
+    /// (`TelegramInitializeLegacyComponents`) apply; the story camera and media editor always mix
+    /// (bugs.telegram.org/c/24902).
+    public static func voiceMessageRecording(beginWithTone: Bool, pauseMusicOnRecording: Bool) -> ManagedAudioSessionType {
+        return .record(speaker: beginWithTone, video: false, withOthers: !pauseMusicOnRecording)
+    }
 }
 
 private func nativeCategoryForType(_ type: ManagedAudioSessionType, headphones: Bool, outputMode: AudioSessionOutputMode) -> AVAudioSession.Category {
@@ -788,11 +799,15 @@ public final class ManagedAudioSessionImpl: NSObject, ManagedAudioSession {
                         }
                     } else {
                         if activeIndex != self.holders.count - 1 {
-                            if lastIsRecordWithOthers {
+                            if self.holders[activeIndex].audioSessionType == .voiceCall {
+                                // A call keeps its session against anything pushed on top of it,
+                                // including a recording that mixes with other audio: deactivating the
+                                // call's holder, even temporarily, makes PresentationCall drop its
+                                // audio-session control and tear down the call's audio device.
+                                deactivate = false
+                            } else if lastIsRecordWithOthers {
                                 deactivate = true
                                 temporary = true
-                            } else if self.holders[activeIndex].audioSessionType == .voiceCall {
-                                deactivate = false
                             } else {
                                 deactivate = true
                             }
