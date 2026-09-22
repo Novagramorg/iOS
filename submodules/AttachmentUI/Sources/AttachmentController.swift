@@ -435,6 +435,7 @@ public class AttachmentController: ViewController, MinimizableController {
     private let style: Style
     private let chatLocation: ChatLocation?
     private let isScheduledMessages: Bool
+    private let isEditingMessage: Bool
     private var buttons: [AttachmentButtonType]
     private let initialButton: AttachmentButtonType
     private let fromMenu: Bool
@@ -617,7 +618,7 @@ public class AttachmentController: ViewController, MinimizableController {
                 panelStyle = .legacy
             }
 
-            self.panel = AttachmentPanel(controller: controller, style: panelStyle, context: controller.context, chatLocation: controller.chatLocation, isScheduledMessages: controller.isScheduledMessages, customEmojiAvailable: controller.customEmojiAvailable, updatedPresentationData: controller.updatedPresentationData)
+            self.panel = AttachmentPanel(controller: controller, style: panelStyle, context: controller.context, chatLocation: controller.chatLocation, isScheduledMessages: controller.isScheduledMessages, isEditingMessage: controller.isEditingMessage, customEmojiAvailable: controller.customEmojiAvailable, updatedPresentationData: controller.updatedPresentationData)
             self.panel.fromMenu = controller.fromMenu
             self.panel.isStandalone = controller.isStandalone
 
@@ -1585,6 +1586,9 @@ public class AttachmentController: ViewController, MinimizableController {
         style: Style = .legacy,
         chatLocation: ChatLocation?,
         isScheduledMessages: Bool = false,
+        /// The result replaces the media of a message being edited rather than sending a new message, so
+        /// send options (schedule, silent, effects) are never offered.
+        isEditingMessage: Bool = false,
         buttons: [AttachmentButtonType],
         initialButton: AttachmentButtonType = .gallery,
         fromMenu: Bool = false,
@@ -1599,6 +1603,7 @@ public class AttachmentController: ViewController, MinimizableController {
         self.style = style
         self.chatLocation = chatLocation
         self.isScheduledMessages = isScheduledMessages
+        self.isEditingMessage = isEditingMessage
         self.buttons = buttons
         self.initialButton = initialButton
         self.fromMenu = fromMenu

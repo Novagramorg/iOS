@@ -36,6 +36,7 @@ swift_library(
     deps = [
         ":Postbox",
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
+        "//submodules/sqlcipher:sqlcipher",
     ],
 )
 

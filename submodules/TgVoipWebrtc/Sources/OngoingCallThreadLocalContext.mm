@@ -2925,6 +2925,18 @@ useReferenceImpl:(bool)useReferenceImpl {
             .e2eEncryptDecrypt = mappedEncryptDecrypt,
             .isConference = isConference
         };
+        if (_videoContentType == tgcalls::VideoContentType::Screencast && !useReferenceImpl) {
+            // The screencast context has no microphone. Its audio is the app-audio stream
+            // handed over by the broadcast extension (addExternalAudioData), which
+            // GroupInstanceCustomImpl consumes through its FakeAudioDeviceModule — and it
+            // only creates that module when no audio device hook is supplied. A real
+            // AudioDeviceModuleIOS with recording disabled never delivers capture frames,
+            // so with the hooks set the injected samples were buffered and never sent
+            // (bugs.telegram.org/c/22966). GroupInstanceReferenceImpl has no such branch and
+            // ignores external audio altogether, so this applies to the custom impl only.
+            descriptor.createAudioDeviceModule = nullptr;
+            descriptor.createWrappedAudioDeviceModule = nullptr;
+        }
         if (useReferenceImpl) {
             _instance.reset(new tgcalls::GroupInstanceReferenceImpl(std::move(descriptor)));
         } else {

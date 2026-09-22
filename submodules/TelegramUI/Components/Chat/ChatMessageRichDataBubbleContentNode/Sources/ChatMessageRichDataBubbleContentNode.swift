@@ -105,6 +105,9 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
     // this, the cached layout would shadow newly-arrived content during streaming.
     private var currentPageLayout: (boundingWidth: CGFloat,
                                     presentationThemeIdentity: ObjectIdentifier,
+                                    // Text Size does not change the theme object, so it needs its own key or a
+                                    // size change keeps serving the old layout.
+                                    baseFontSize: CGFloat,
                                     expandedDetails: [Int: Bool],
                                     expandedQuotePaths: Set<[Int]>,
                                     messageStableVersion: UInt32,
@@ -809,11 +812,17 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                     }
 
                     let presentationThemeIdentity = ObjectIdentifier(item.presentationData.theme.theme)
+                    // Settings ▸ Appearance ▸ Text Size (bugs.telegram.org/c/62776). A rich message is a
+                    // bubble like any other, so the whole page — fonts and the geometry tuned against them —
+                    // scales by the same step a plain bubble's `messageFont` takes. The theme above stays
+                    // authored at 17pt; the renderer applies the scale once.
+                    let baseFontSize = item.presentationData.fontSize.baseDisplaySize
                     let currentMessageStableVersion = item.message.stableVersion
                     let currentPendingEditKey = (item.attributes.updatingMedia?.richText).map({ ObjectIdentifier($0) })
                     if let current = currentPageLayout,
                        current.boundingWidth == suggestedBoundingWidth,
                        current.presentationThemeIdentity == presentationThemeIdentity,
+                       current.baseFontSize == baseFontSize,
                        current.expandedDetails == currentExpandedDetails,
                        current.expandedQuotePaths == currentExpandedQuotePaths,
                        current.showMoreExpanded == showMoreExpanded,
@@ -849,7 +858,8 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                             expandedQuotePaths: currentExpandedQuotePaths,
                             fitToWidth: true,
                             computeRevealCharacterRects: hasDraft || hadDraft,
-                            edgeSpacingReduction: pageContentInset
+                            edgeSpacingReduction: pageContentInset,
+                            contentScale: instantPageChatMessageContentScale(baseFontSize: baseFontSize)
                         )
                     }
                 }
@@ -1016,7 +1026,8 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                 var showMoreFramePageLocal: CGRect?
                 if showMore, let pageLayout {
                     let title = item.presentationData.strings.Chat_RichText_ShowMore
-                    let attributedTitle = NSAttributedString(string: title, font: Font.regular(17.0), textColor: messageTheme.linkTextColor)
+                    // The link is body text, so it takes the body size the page was just laid out at.
+                    let attributedTitle = NSAttributedString(string: title, font: Font.regular(item.presentationData.fontSize.baseDisplaySize), textColor: messageTheme.linkTextColor)
                     // The link only fits within the existing bubble width (it does not widen the
                     // bubble the way the status node does); the short fixed string never needs more,
                     // and `.end` truncation is a safe fallback for a pathologically narrow bubble.
@@ -1288,6 +1299,7 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                             self.currentPageLayout = (
                                 suggestedBoundingWidth,
                                 ObjectIdentifier(item.presentationData.theme.theme),
+                                item.presentationData.fontSize.baseDisplaySize,
                                 self.currentExpandedDetails,
                                 self.currentExpandedQuotePaths,
                                 item.message.stableVersion,

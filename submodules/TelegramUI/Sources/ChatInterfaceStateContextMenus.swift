@@ -408,32 +408,35 @@ func messageMediaEditingOptions(message: EngineRawMessage) -> MessageMediaEditin
     }
     
     var options: MessageMediaEditingOptions = []
+    // The media class the server files a grouped item under: a photo or a (non-animated) video belongs to a
+    // photo/video album, any other document to a file album. This is deliberately not the bubble's rendering
+    // test (`isVideo || (isAnimated && dimensions != nil)`): a GIF sent as a file is tagged animated with a
+    // size by the server yet stays a document, and its album stays a file album.
+    var isPhotoOrVideo = false
     
     for media in message.media {
         if let _ = media as? TelegramMediaImage {
+            isPhotoOrVideo = true
             options.formUnion([.imageOrVideo, .file])
         } else if let file = media as? TelegramMediaFile {
+            if file.isVideo && !file.isAnimated {
+                isPhotoOrVideo = true
+            }
             for attribute in file.attributes {
                 switch attribute {
                     case .Sticker:
                         return []
-                    case .Animated:
-                        break
                     case let .Video(_, _, flags, _, _, _):
                         if flags.contains(.instantRoundVideo) {
                             return []
-                        } else {
-                            options.formUnion([.imageOrVideo, .file])
                         }
                     case let .Audio(isVoice, _, _, _, _):
                         if isVoice {
                             return []
-                        } else {
-                            if let _ = message.groupingKey {
-                                return []
-                            } else {
-                                options.formUnion([.imageOrVideo, .file])
-                            }
+                        }
+                        // Album audio cannot be replaced piecemeal.
+                        if let _ = message.groupingKey {
+                            return []
                         }
                     default:
                         break
@@ -443,8 +446,10 @@ func messageMediaEditingOptions(message: EngineRawMessage) -> MessageMediaEditin
         }
     }
     
+    // An album holds one kind of media, so a replacement must stay in that kind: photo/video albums take
+    // only photos and videos, file albums only files (music albums refused above).
     if message.groupingKey != nil {
-        options.remove(.file)
+        options.remove(isPhotoOrVideo ? .file : .imageOrVideo)
     }
     
     return options
@@ -2636,6 +2641,22 @@ private func canPerformDeleteActions(limits: LimitsConfiguration, accountPeerId:
     return false
 }
 
+/// Whether a channel that authored a message or a reaction in `chatPeerId` can be banned there.
+///
+/// A channel that posts in a group via "send as" is a participant and can be banned. The group itself
+/// (anonymous admins) and the group's linked channel are not: banning the linked channel from its own
+/// discussion group detaches every comment thread from its post. The linked channel is only known once
+/// the group's cached data is loaded, so an unknown value refuses rather than allows.
+func chatChannelAuthorIsBannable(authorId: EnginePeer.Id, chatPeerId: EnginePeer.Id, linkedDiscussionPeerId: EnginePeerCachedInfoItem<EnginePeer.Id?>?) -> Bool {
+    if authorId == chatPeerId {
+        return false
+    }
+    guard let linkedDiscussionPeerId, case let .known(linkedPeerId) = linkedDiscussionPeerId else {
+        return false
+    }
+    return linkedPeerId != authorId
+}
+
 func chatAvailableMessageActionsImpl(engine: TelegramEngine, accountPeerId: EnginePeer.Id, messageIds: Set<EngineMessage.Id>, messages: [EngineMessage.Id: EngineRawMessage] = [:], peers: [EnginePeer.Id: EngineRawPeer] = [:], keepUpdated: Bool) -> Signal<ChatAvailableMessageActions, NoError> {
     return engine.data.subscribe(
         TelegramEngine.EngineData.Item.Configuration.Limits(),
@@ -2643,10 +2664,11 @@ func chatAvailableMessageActionsImpl(engine: TelegramEngine, accountPeerId: Engi
         EngineDataMap(Set(messageIds).map(TelegramEngine.EngineData.Item.Messages.Message.init)),
         EngineDataMap(Set(messageIds.map(\.peerId)).map(TelegramEngine.EngineData.Item.Peer.CopyProtectionEnabled.init)),
         EngineDataMap(Set(messageIds.map(\.peerId)).map(TelegramEngine.EngineData.Item.Peer.MyCopyProtectionEnabled.init)),
+        EngineDataMap(Set(messageIds.map(\.peerId)).map(TelegramEngine.EngineData.Item.Peer.LinkedDiscussionPeerId.init)),
         TelegramEngine.EngineData.Item.Peer.Peer(id: accountPeerId)
     )
     |> take(keepUpdated ? Int.max : 1)
-    |> map { limitsConfiguration, peerMap, messageMap, copyProtectionMap, myCopyProtectionMap, accountPeer -> ChatAvailableMessageActions in
+    |> map { limitsConfiguration, peerMap, messageMap, copyProtectionMap, myCopyProtectionMap, linkedDiscussionPeerIdMap, accountPeer -> ChatAvailableMessageActions in
         let isPremium: Bool
         if let accountPeer {
             isPremium = accountPeer.isPremium
@@ -2811,22 +2833,22 @@ func chatAvailableMessageActionsImpl(engine: TelegramEngine, accountPeerId: Engi
                         if (channel.hasPermission(.banMembers) || channel.hasPermission(.deleteAllMessages)), case .group = channel.info {
                             if message.flags.contains(.Incoming) {
                                 if let author = message.author {
+                                    let isBannableAuthor: Bool
                                     if author is TelegramUser {
-                                        if !hadBanPeerId {
-                                            hadBanPeerId = true
-                                            banPeer = author
-                                        } else if banPeer?.id != message.author?.id {
-                                            banPeer = nil
-                                        }
-                                        
-                                        if !banPeers.contains(where: { $0.id == author.id }) {
-                                            banPeers.append(author)
-                                        }
+                                        isBannableAuthor = true
                                     } else if author is TelegramChannel {
+                                        // A cross-posted channel post stays excluded even if the group has since been
+                                        // unlinked: the channel never was a participant here.
+                                        isBannableAuthor = chatChannelAuthorIsBannable(authorId: author.id, chatPeerId: id.peerId, linkedDiscussionPeerId: linkedDiscussionPeerIdMap[id.peerId]) && message.sourceReference?.messageId.peerId != author.id
+                                    } else {
+                                        isBannableAuthor = false
+                                    }
+                                    
+                                    if isBannableAuthor {
                                         if !hadBanPeerId {
                                             hadBanPeerId = true
                                             banPeer = author
-                                        } else if banPeer?.id != message.author?.id {
+                                        } else if banPeer?.id != author.id {
                                             banPeer = nil
                                         }
                                         

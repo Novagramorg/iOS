@@ -27,13 +27,14 @@ public extension InstantPageTheme {
     /// content.
     ///
     /// The heading ladder comes from `headingTextAttributes(level:link:)` rather than being restated,
-    /// so H1–H6's derivation from the subheader (and its response to the reader's font-size slider) is
-    /// shared rather than duplicated. The block scalars come from `InstantPageMetrics.unscaled`, the
-    /// same source the renderer reads at page scale.
+    /// so H1–H6's scaling by the theme's `fontSizeMultiplier` (the reader's slider, the chat's Text Size)
+    /// is shared rather than duplicated. The block scalars come from `InstantPageMetrics.unscaled`, the
+    /// same source the renderer reads at page scale — this projection is of the UNSCALED page; the
+    /// editor hosts do not follow Text Size today (see docs/instantpage-richtext.md, "Text Size").
     ///
-    /// `codeBlock` deliberately reports the metrics' 15pt and NOT this theme's nominal 14pt `codeBlock`
-    /// category: `layoutCodeBlock` overrides the category with an absolute 15pt, so 14 is a size the
-    /// renderer never actually uses.
+    /// `codeBlock` reports the metrics' `codeBlockFontSize` (15 at page scale), because that — not the
+    /// theme's `codeBlock` category — is what `layoutCodeBlock` sizes code from. The chat table declares
+    /// 15 too; the Instant View themes still say 14, a size V2 never draws.
     func richTextRenderMetrics(edgeSpacingReduction: CGFloat = 0.0) -> RichTextRenderMetrics {
         let m = InstantPageMetrics.unscaled
         var codeBlock = richTextFontSpec(self.textCategories.codeBlock)

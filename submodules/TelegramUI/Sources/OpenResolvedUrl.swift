@@ -350,13 +350,21 @@ func openResolvedUrlImpl(
                     context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: navigationController, context: context, chatLocation: .replyThread(replyThreadMessage), subject: .message(id: .id(messageId), highlight: ChatControllerSubject.MessageHighlight(quote: nil), timecode: nil, setupReply: false), keepStack: .always))
                 }
             } else if let navigationController = navigationController, let effectiveMessageId = replyThreadMessage.effectiveMessageId {
+                // A link tapped in a message carries its inline progress; the thread fetch then shimmers the link
+                // instead of covering the chat with a modal spinner.
                 let _ = ChatControllerImpl.openMessageReplies(context: context, navigationController: navigationController, present: { c, a in
                     present(c, a)
-                }, messageId: effectiveMessageId, isChannelPost: replyThreadMessage.isChannelPost, atMessage: messageId, displayModalProgress: true).startStandalone()
+                }, messageId: effectiveMessageId, isChannelPost: replyThreadMessage.isChannelPost, atMessage: messageId, displayModalProgress: true, progress: progress).startStandalone()
             }
         case let .replyThread(messageId):
             if let navigationController = navigationController {
-                let _ = context.sharedContext.navigateToForumThread(context: context, peerId: messageId.peerId, threadId: Int64(messageId.id), messageId: nil, navigationController: navigationController, activateInput: nil, scrollToEndIfExists: false, keepStack: .always, animated: true).startStandalone()
+                let progressDisposable = progress.flatMap(startInlineLinkProgress)
+                let _ = (context.sharedContext.navigateToForumThread(context: context, peerId: messageId.peerId, threadId: Int64(messageId.id), messageId: nil, navigationController: navigationController, activateInput: nil, scrollToEndIfExists: false, keepStack: .always, animated: true)
+                |> afterDisposed {
+                    Queue.mainQueue().async {
+                        progressDisposable?.dispose()
+                    }
+                }).startStandalone()
             }
         case let .stickerPack(name, _):
             dismissInput()

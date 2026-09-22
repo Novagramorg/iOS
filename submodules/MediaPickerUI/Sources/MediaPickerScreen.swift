@@ -2036,6 +2036,12 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
     fileprivate let mainButtonStatePromise = Promise<AttachmentMainButtonState?>(nil)
     fileprivate let secondaryButtonStatePromise = Promise<AttachmentMainButtonState?>(nil)
 
+    // With `mainButtonHidesOnSelection`, a main button supplied at init is an alternative to picking
+    // something new (e.g. "Edit Current Photo" while editing a message): it is shown only while nothing is
+    // selected, the panel's Send takes over once an asset is selected, and it returns when the selection
+    // is cleared. Other pickers (wallpaper, avatar) keep their main button regardless of selection.
+    private let initialMainButtonState: AttachmentMainButtonState?
+    private let mainButtonHidesOnSelection: Bool
     private let mainButtonAction: (() -> Void)?
     private let secondaryButtonAction: (() -> Void)?
     
@@ -2062,6 +2068,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
         selectionContext: TGMediaSelectionContext? = nil,
         saveEditedPhotos: Bool = false,
         mainButtonState: AttachmentMainButtonState? = nil,
+        mainButtonHidesOnSelection: Bool = false,
         mainButtonAction: (() -> Void)? = nil,
         secondaryButtonAction: (() -> Void)? = nil
     ) {
@@ -2086,6 +2093,8 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
         self.subject = subject
         self.forCollage = forCollage
         self.saveEditedPhotos = saveEditedPhotos
+        self.initialMainButtonState = mainButtonState
+        self.mainButtonHidesOnSelection = mainButtonHidesOnSelection
         self.mainButtonStatePromise.set(.single(mainButtonState))
         self.mainButtonAction = mainButtonAction
         self.secondaryButtonAction = secondaryButtonAction
@@ -2839,9 +2848,11 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                 self.mainButtonStatePromise.set(.single(nil))
                 self.secondaryButtonStatePromise.set(.single(nil))
             }
+        } else if self.mainButtonHidesOnSelection, let initialMainButtonState = self.initialMainButtonState {
+            self.mainButtonStatePromise.set(.single(self.selectionCount > 0 ? nil : initialMainButtonState))
         }
     }
-    
+
     private func updateThemeAndStrings() {
         var navigationBarPresentationData: NavigationBarPresentationData
         if case .glass = style {

@@ -1,6 +1,18 @@
 import Foundation
 import UIKit
 
+/// The body size the chat-message table below is authored against — the `.regular` Text Size step. A
+/// chat host passes `baseDisplaySize / instantPageChatMessageAuthoredFontSize` as the layout's
+/// `contentScale`, so `.regular` is exactly 1.0 and every other step scales the whole page.
+public let instantPageChatMessageAuthoredFontSize: CGFloat = 17.0
+
+/// The `contentScale` a chat host passes to `layoutInstantPageV2` for a body size — `.regular` (17) is exactly
+/// 1.0. One function so every chat surface (bubble, send preview, attachment editor previews) derives it the
+/// same way and a policy change lands once.
+public func instantPageChatMessageContentScale(baseFontSize: CGFloat) -> CGFloat {
+    return baseFontSize / instantPageChatMessageAuthoredFontSize
+}
+
 public extension InstantPageTextCategories {
     /// The text categories a rich message renders with in a chat bubble.
     ///
@@ -23,7 +35,10 @@ public extension InstantPageTextCategories {
             credit: InstantPageTextAttributes(font: InstantPageFont(style: .sans, size: 13.0, lineSpacingFactor: 1.0), color: secondaryText),
             table: InstantPageTextAttributes(font: InstantPageFont(style: .sans, size: 15.0, lineSpacingFactor: 1.0), color: primaryText),
             article: InstantPageTextAttributes(font: InstantPageFont(style: .serif, size: 18.0, lineSpacingFactor: 1.0), color: primaryText),
-            codeBlock: InstantPageTextAttributes(font: InstantPageFont(style: .monospace, size: 14.0, lineSpacingFactor: 1.0), color: primaryText)
+            // One step below body, like `table` and a quote's body — 15, not the Instant View themes' 14.
+            // V2's `layoutCodeBlock` sizes code from `InstantPageMetrics.codeBlockFontSize` (the same 15
+            // at page scale), so this is what actually renders, stated here so the table reads true.
+            codeBlock: InstantPageTextAttributes(font: InstantPageFont(style: .monospace, size: 15.0, lineSpacingFactor: 1.0), color: primaryText)
         )
     }
 }

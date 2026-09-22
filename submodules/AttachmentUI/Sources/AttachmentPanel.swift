@@ -40,11 +40,15 @@ private let iconSize = CGSize(width: 30.0, height: 30.0)
 private let glassPanelInset: CGFloat = 22.0
 private let glassTextPanelInset: CGFloat = 28.0
 private let smallPanelWidth: CGFloat = 240.0
+// Two tabs (e.g. gallery + file while editing a message) keep the 3-tab spacing: 3 + 72 + 82 + 3.
+private let twoButtonPanelWidth: CGFloat = 160.0
 
 private func glassTabBarFrame(layout: ContainerViewLayout, buttonCount: Int) -> CGRect {
     let availableWidth = layout.size.width - layout.safeInsets.left - layout.safeInsets.right
     let width: CGFloat
-    if buttonCount == 3 {
+    if buttonCount == 2 {
+        width = twoButtonPanelWidth
+    } else if buttonCount == 3 {
         width = smallPanelWidth
     } else if buttonCount == 4 {
         width = 300.0
@@ -1033,6 +1037,9 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate, ASGestureRecog
     private weak var controller: AttachmentController?
     private let context: AccountContext
     private let isScheduledMessages: Bool
+    // While a message is being edited the result replaces that message's media, so the long-press
+    // send options (schedule, silent, effects) do not apply and the sheet is never offered.
+    private let isEditingMessage: Bool
     private var presentationData: PresentationData
     private var updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?
     private var presentationDataDisposable: Disposable?
@@ -1140,13 +1147,14 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate, ASGestureRecog
     var onMainButtonPressed: () -> Void = { }
     var onSecondaryButtonPressed: () -> Void = { }
 
-    init(controller: AttachmentController, style: Style, context: AccountContext, chatLocation: ChatLocation?, isScheduledMessages: Bool, customEmojiAvailable: Bool, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?) {
+    init(controller: AttachmentController, style: Style, context: AccountContext, chatLocation: ChatLocation?, isScheduledMessages: Bool, isEditingMessage: Bool = false, customEmojiAvailable: Bool, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?) {
         self.controller = controller
         self.context = context
         self.panelStyle = style
         self.updatedPresentationData = updatedPresentationData
         self.presentationData = updatedPresentationData?.initial ?? context.sharedContext.currentPresentationData.with { $0 }
         self.isScheduledMessages = isScheduledMessages
+        self.isEditingMessage = isEditingMessage
         self.customEmojiAvailable = customEmojiAvailable
 
         self.presentationInterfaceState = ChatPresentationInterfaceState(chatWallpaper: .builtin(WallpaperSettings()), theme: self.presentationData.theme, preferredGlassType: .default, strings: self.presentationData.strings, dateTimeFormat: self.presentationData.dateTimeFormat, nameDisplayOrder: self.presentationData.nameDisplayOrder, limitsConfiguration: self.context.currentLimitsConfiguration.with { $0 }, fontSize: self.presentationData.chatFontSize, bubbleCorners: self.presentationData.chatBubbleCorners, accountPeerId: self.context.account.peerId, mode: .standard(.default), chatLocation: chatLocation ?? .peer(id: context.account.peerId), subject: nil, greetingData: nil, pendingUnpinnedAllMessages: false, activeGroupCallInfo: nil, hasActiveGroupCall: false, threadData: nil, isGeneralThreadClosed: nil, replyMessage: nil, accountPeerColor: nil, businessIntro: nil).updatedCustomEmojiAvailable(customEmojiAvailable)
@@ -1341,6 +1349,9 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate, ASGestureRecog
         }, displaySlowmodeTooltip: { _, _ in
         }, displaySendMessageOptions: { [weak self] node, gesture in
             guard let strongSelf = self, let textInputPanelNode = strongSelf.textInputPanelNode else {
+                return
+            }
+            if strongSelf.isEditingMessage {
                 return
             }
             textInputPanelNode.loadTextInputNodeIfNeeded()
@@ -2544,7 +2555,11 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate, ASGestureRecog
 
         self.scrollNode.isUserInteractionEnabled = !isSelecting
 
-        let isAnyButtonVisible = self.mainButtonState.isVisible || self.secondaryButtonState.isVisible
+        // A main button that keeps the tab row (AttachmentMainButtonState.keepsTabRow) is laid out above the
+        // tabs rather than replacing them, so for the rest of the layout it does not count as a visible button.
+        // Once the user selects something the tab row goes away anyway and the button follows the normal rules.
+        let inlineMainButton = self.mainButtonState.isVisible && self.mainButtonState.keepsTabRow && !isSelecting
+        let isAnyButtonVisible = (self.mainButtonState.isVisible && !inlineMainButton) || self.secondaryButtonState.isVisible
         let isNarrowButton = isAnyButtonVisible && self.mainButtonState.font == .regular
 
         let isTwoVerticalButtons = self.mainButtonState.isVisible && self.secondaryButtonState.isVisible && [.top, .bottom].contains(self.secondaryButtonState.position)
@@ -2570,12 +2585,16 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate, ASGestureRecog
             bottomOffset = 0.0
         }
 
-        let topAccessoryHeight: CGFloat
+        let mediaAccessoryHeight: CGFloat
         if self.hasMediaAccessoryPanel {
-            topAccessoryHeight = MediaNavigationAccessoryHeaderNode.minimizedHeight
+            mediaAccessoryHeight = MediaNavigationAccessoryHeaderNode.minimizedHeight
         } else {
-            topAccessoryHeight = 0.0
+            mediaAccessoryHeight = 0.0
         }
+        // The inline main button occupies the top of the panel; everything else (media accessory, tab pill,
+        // lens) is pushed down by its height, the same way the media accessory pushes the tab pill down.
+        let inlineButtonHeight: CGFloat = inlineMainButton ? (self.panelStyle == .glass ? 52.0 : 50.0) + 8.0 : 0.0
+        let topAccessoryHeight: CGFloat = inlineButtonHeight + mediaAccessoryHeight
 
         if isSelecting {
             self.loadTextNodeIfNeeded()
@@ -2670,11 +2689,11 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate, ASGestureRecog
             }
 
             let basePanelHeight = isSelecting ? max(0.0, visualTextPanelHeight - (self.textInputPanelNode?.inputPanelBottomSpacing ?? glassTextPanelInset)) : glassPanelHeight
-            var panelSize = CGSize(width: isSelecting ? textPanelWidth : tabBarFrame.width, height: basePanelHeight + topAccessoryHeight)
+            var panelSize = CGSize(width: isSelecting ? textPanelWidth : tabBarFrame.width, height: basePanelHeight + mediaAccessoryHeight)
             if !isSelecting && shouldCollapseTabRow {
                 // Collapse the empty button row to the accessory height (zero when there's no accessory panel),
                 // so a single-tab picker doesn't render an empty glass bar.
-                panelSize.height = topAccessoryHeight
+                panelSize.height = mediaAccessoryHeight
             }
 
             let cornerRadius: CGFloat
@@ -2696,7 +2715,7 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate, ASGestureRecog
             transition.updatePosition(layer: liquidLensView.layer, position: CGPoint(x: backgroundOriginX + panelSize.width * 0.5, y: topAccessoryHeight + lensPanelSize.height * 0.5))
             transition.updateBounds(layer: liquidLensView.layer, bounds: CGRect(origin: .zero, size: CGSize(width: lensPanelSize.width - 3.0 * 2.0, height: lensPanelSize.height - 3.0 * 2.0)))
 
-            transition.updatePosition(layer: backgroundView.layer, position: CGPoint(x: backgroundOriginX + panelSize.width * 0.5, y: panelSize.height * 0.5))
+            transition.updatePosition(layer: backgroundView.layer, position: CGPoint(x: backgroundOriginX + panelSize.width * 0.5, y: inlineButtonHeight + panelSize.height * 0.5))
             transition.updateBounds(layer: backgroundView.layer, bounds: CGRect(origin: .zero, size: panelSize))
 
             let itemsContainerFrame = CGRect(origin: .zero, size: CGSize(width: lensPanelSize.width - 3.0 * 2.0, height: lensPanelSize.height - 3.0 * 2.0))
@@ -2705,8 +2724,8 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate, ASGestureRecog
             transition.updatePosition(layer: self.itemsContainer.layer, position: itemsContainerFrame.center)
             transition.updatePosition(layer: self.selectedItemsContainer.layer, position: itemsContainerFrame.center)
 
-            if topAccessoryHeight > 0.0 {
-                mediaAccessoryPanelFrame = CGRect(origin: CGPoint(x: backgroundOriginX, y: 0.0), size: CGSize(width: panelSize.width, height: topAccessoryHeight))
+            if mediaAccessoryHeight > 0.0 {
+                mediaAccessoryPanelFrame = CGRect(origin: CGPoint(x: backgroundOriginX, y: inlineButtonHeight), size: CGSize(width: panelSize.width, height: mediaAccessoryHeight))
             }
         }
         self.updateMediaAccessoryPanel(frame: mediaAccessoryPanelFrame, transition: transition)
@@ -2910,7 +2929,14 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate, ASGestureRecog
 
         if !self.animatingTransition {
             let buttonOriginX = layout.safeInsets.left + buttonSideInset
-            let buttonOriginY = isAnyButtonVisible || self.fromMenu ? topAccessoryHeight + buttonTopInset : containerFrame.height
+            let buttonOriginY: CGFloat
+            if inlineMainButton {
+                buttonOriginY = 0.0
+            } else if isAnyButtonVisible || self.fromMenu {
+                buttonOriginY = topAccessoryHeight + buttonTopInset
+            } else {
+                buttonOriginY = containerFrame.height
+            }
             var mainButtonFrame: CGRect?
             var secondaryButtonFrame: CGRect?
             if self.secondaryButtonState.isVisible && self.mainButtonState.isVisible, let position = self.secondaryButtonState.position {

@@ -199,7 +199,9 @@ private final class ButtonPreviewItemComponent: Component {
                 dateTimeFormat: presentationData.dateTimeFormat,
                 cachedMessageSyntaxHighlight: nil,
                 expandedDetails: [:],
-                fitToWidth: true
+                fitToWidth: true,
+                // This previews the bubble, which follows Text Size — so must the preview.
+                contentScale: instantPageChatMessageContentScale(baseFontSize: presentationData.chatFontSize.baseDisplaySize)
             )
             self.pageView.update(layout: layout, theme: pageTheme, animation: .None)
 
