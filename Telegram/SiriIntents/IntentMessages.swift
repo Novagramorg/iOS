@@ -45,13 +45,92 @@ func unreadMessagesIncludePeer(_ peerId: PeerId) -> Bool {
     }
 }
 
+/// The first emission of `signal` that `isSettled` accepts, or, if none arrives within
+/// `timeout` seconds, the latest emission so far. A hole-filling view emits an empty
+/// loading state first and the filled one once the network has answered; the scan wants
+/// the filled one but must not come back empty-handed if the fill never completes.
+func firstSettledValue<T>(_ signal: Signal<T, NoError>, isSettled: @escaping (T) -> Bool, timeout: Double) -> Signal<T, NoError> {
+    return Signal { subscriber in
+        let latest = Atomic<T?>(value: nil)
+        let disposable = MetaDisposable()
+        let timer = Timer(timeout: timeout, repeat: false, completion: {
+            disposable.dispose()
+            if let value = latest.with({ $0 }) {
+                subscriber.putNext(value)
+            }
+            subscriber.putCompletion()
+        }, queue: Queue.concurrentDefaultQueue())
+        disposable.set(signal.start(next: { value in
+            if isSettled(value) {
+                timer.invalidate()
+                subscriber.putNext(value)
+                subscriber.putCompletion()
+            } else {
+                let _ = latest.swap(value)
+            }
+        }, completed: {
+            timer.invalidate()
+            if let value = latest.with({ $0 }) {
+                subscriber.putNext(value)
+            }
+            subscriber.putCompletion()
+        }))
+        timer.start()
+        return ActionDisposable {
+            timer.invalidate()
+            disposable.dispose()
+        }
+    }
+}
+
+/// The views the unread scan reads: the main chat list, and one chat's newest messages.
+struct UnreadMessagesViews {
+    var chatList: Signal<ChatListView, NoError>
+    var history: (PeerId, MessageHistoryViewReadState?) -> Signal<MessageHistoryView, NoError>
+}
+
+/// How long the scan waits for a view to settle. Each chat list or history fill is one
+/// network round trip; Siri gives the extension about ten seconds in total.
+private let unreadMessagesSettleTimeout: Double = 3.0
+
+/// "Read my messages" on a live account: the account's hole-filling views, settled. The
+/// raw store views emit nothing beneath a hole and never fill it, so a chat list or a chat
+/// whose top is not loaded would otherwise read as "no new messages".
 @available(iOSApplicationExtension 10.0, iOS 10.0, *)
 func unreadMessages(account: Account) -> Signal<[INMessage], NoError> {
-    return account.postbox.tailChatListView(groupId: .root, count: 20, summaryComponents: ChatListEntrySummaryComponents())
+    return unreadMessages(views: UnreadMessagesViews(
+        chatList: firstSettledValue(account.viewTracker.tailChatListView(groupId: .root, count: 20) |> map { $0.0 }, isSettled: { view in
+            return !view.entries.contains(where: { entry in
+                if case .HoleEntry = entry {
+                    return true
+                }
+                return false
+            })
+        }, timeout: unreadMessagesSettleTimeout),
+        history: { peerId, fixedCombinedReadStates in
+            return firstSettledValue(account.viewTracker.aroundMessageHistoryViewForLocation(.peer(peerId: peerId, threadId: nil), index: .upperBound, anchorIndex: .upperBound, count: 10, fixedCombinedReadStates: fixedCombinedReadStates, orderStatistics: .combinedLocation) |> map { $0.0 }, isSettled: { !$0.isLoading }, timeout: unreadMessagesSettleTimeout)
+        }
+    ))
+}
+
+/// The same scan over the raw store, for tests; a store without holes reads the same.
+@available(iOSApplicationExtension 10.0, iOS 10.0, *)
+func unreadMessages(postbox: Postbox) -> Signal<[INMessage], NoError> {
+    return unreadMessages(views: UnreadMessagesViews(
+        chatList: postbox.tailChatListView(groupId: .root, count: 20, summaryComponents: ChatListEntrySummaryComponents()) |> take(1) |> map { $0.0 },
+        history: { peerId, fixedCombinedReadStates in
+            return postbox.aroundMessageHistoryViewForLocation(.peer(peerId: peerId, threadId: nil), anchor: .upperBound, ignoreMessagesInTimestampRange: nil, ignoreMessageIds: Set(), count: 10, fixedCombinedReadStates: fixedCombinedReadStates, topTaggedMessageIdNamespaces: Set(), tag: nil, appendMessagesFromTheSameGroup: false, namespaces: .not(Namespaces.Message.allNonRegular), orderStatistics: .combinedLocation) |> take(1) |> map { $0.0 }
+        }
+    ))
+}
+
+@available(iOSApplicationExtension 10.0, iOS 10.0, *)
+func unreadMessages(views: UnreadMessagesViews) -> Signal<[INMessage], NoError> {
+    return views.chatList
     |> take(1)
     |> mapToSignal { view -> Signal<[INMessage], NoError> in
         var signals: [Signal<[INMessage], NoError>] = []
-        for entry in view.0.entries {
+        for entry in view.entries {
             if case let .MessageEntry(entryData) = entry {
                 let index = entryData.index
                 let readState = entryData.readState
@@ -69,11 +148,11 @@ func unreadMessages(account: Account) -> Signal<[INMessage], NoError> {
                 }
                 
                 if !isMuted && hasUnread {
-                    signals.append(account.postbox.aroundMessageHistoryViewForLocation(.peer(peerId: index.messageIndex.id.peerId, threadId: nil), anchor: .upperBound, ignoreMessagesInTimestampRange: nil, ignoreMessageIds: Set(), count: 10, fixedCombinedReadStates: fixedCombinedReadStates, topTaggedMessageIdNamespaces: Set(), tag: nil, appendMessagesFromTheSameGroup: false, namespaces: .not(Namespaces.Message.allNonRegular), orderStatistics: .combinedLocation)
+                    signals.append(views.history(index.messageIndex.id.peerId, fixedCombinedReadStates)
                     |> take(1)
                     |> map { view -> [INMessage] in
                         var messages: [INMessage] = []
-                        for entry in view.0.entries {
+                        for entry in view.entries {
                             var isRead = true
                             if let readState = readState {
                                 isRead = readState.state.isIncomingMessageIndexRead(entry.message.index)

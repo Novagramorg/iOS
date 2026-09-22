@@ -9,57 +9,21 @@ import TelegramCore
 /// `INSearchForMessagesIntent` with that one message. Both sides go through the shared
 /// account postbox, so this exercises the real store.
 final class NotificationRequestMessageIdsTests: XCTestCase {
-    private var basePath: String!
-    private var postbox: Postbox!
+    private var store: TestPostbox!
 
     override func setUpWithError() throws {
         try super.setUpWithError()
-        self.basePath = NSTemporaryDirectory() + "notification-request-ids-" + UUID().uuidString
-        let encryptionParameters = ValueBoxEncryptionParameters(
-            forceEncryptionIfNoSet: false,
-            key: ValueBoxEncryptionParameters.Key(data: Data(count: 32))!,
-            salt: ValueBoxEncryptionParameters.Salt(data: Data(count: 16))!
-        )
-        let opened = DispatchSemaphore(value: 0)
-        var postbox: Postbox?
-        let disposable = openPostbox(
-            basePath: self.basePath,
-            seedConfiguration: telegramPostboxSeedConfiguration,
-            encryptionParameters: encryptionParameters,
-            timestampForAbsoluteTimeBasedOperations: Int32(Date().timeIntervalSince1970),
-            isMainProcess: true,
-            isTemporary: true,
-            isReadOnly: false,
-            useCopy: false,
-            useCaches: false,
-            removeDatabaseOnError: true
-        ).start(next: { result in
-            if case let .postbox(value) = result {
-                postbox = value
-                opened.signal()
-            }
-        })
-        XCTAssertEqual(opened.wait(timeout: .now() + 30.0), .success, "postbox did not open")
-        disposable.dispose()
-        self.postbox = try XCTUnwrap(postbox)
+        self.store = try TestPostbox(name: "notification-request-ids")
     }
 
     override func tearDownWithError() throws {
-        self.postbox = nil
-        let _ = try? FileManager.default.removeItem(atPath: self.basePath)
+        self.store.close()
+        self.store = nil
         try super.tearDownWithError()
     }
 
     private func transaction<T>(_ f: @escaping (Transaction) -> T) -> T? {
-        let done = DispatchSemaphore(value: 0)
-        var result: T?
-        let disposable = self.postbox.transaction(f).start(next: { value in
-            result = value
-            done.signal()
-        })
-        XCTAssertEqual(done.wait(timeout: .now() + 30.0), .success, "transaction did not finish")
-        disposable.dispose()
-        return result
+        return self.store.transaction(f)
     }
 
     private func messageId(peer: Int64, id: Int32) -> MessageId {
