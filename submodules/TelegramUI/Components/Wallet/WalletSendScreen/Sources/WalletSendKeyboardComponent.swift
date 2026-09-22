@@ -43,6 +43,66 @@ final class WalletSendKeyboardComponent: Component {
             && lhs.isEnabled == rhs.isEnabled
     }
 
+    private final class KeyTrackingGestureRecognizer: UIGestureRecognizer {
+        private var trackedTouch: UITouch?
+        private(set) var currentLocation: CGPoint = .zero
+        var shouldBegin: ((CGPoint) -> Bool)?
+
+        override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
+            super.touchesBegan(touches, with: event)
+
+            guard self.trackedTouch == nil, let touch = touches.first else {
+                for touch in touches {
+                    self.ignore(touch, for: event)
+                }
+                return
+            }
+            for otherTouch in touches where otherTouch !== touch {
+                self.ignore(otherTouch, for: event)
+            }
+            self.currentLocation = touch.location(in: self.view)
+            guard self.shouldBegin?(self.currentLocation) == true else {
+                self.state = .failed
+                return
+            }
+            self.trackedTouch = touch
+            self.state = .began
+        }
+
+        override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
+            super.touchesMoved(touches, with: event)
+            guard self.state == .began || self.state == .changed,
+                  let touch = self.trackedTouch, touches.contains(touch) else { return }
+            self.currentLocation = touch.location(in: self.view)
+            self.state = .changed
+        }
+
+        override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) {
+            super.touchesEnded(touches, with: event)
+            guard self.state == .began || self.state == .changed,
+                  let touch = self.trackedTouch, touches.contains(touch) else { return }
+            self.currentLocation = touch.location(in: self.view)
+            self.state = .ended
+        }
+
+        override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) {
+            super.touchesCancelled(touches, with: event)
+            self.cancel()
+        }
+
+        func cancel() {
+            if self.state == .began || self.state == .changed {
+                self.state = .cancelled
+            }
+        }
+
+        override func reset() {
+            super.reset()
+            self.trackedTouch = nil
+            self.currentLocation = .zero
+        }
+    }
+
     private final class KeyButton: HighlightTrackingButton {
         private let numberText = ComponentView<Empty>()
         private let lettersText = ComponentView<Empty>()
@@ -55,6 +115,7 @@ final class WalletSendKeyboardComponent: Component {
         private var usesAlphaHighlight = false
         private var repeatTimer: Foundation.Timer?
         private var isPressActive = false
+        private var hasRepeatedDeletion = false
 
         var action: ((Action) -> Void)?
 
@@ -83,10 +144,6 @@ final class WalletSendKeyboardComponent: Component {
             self.highligthedChanged = { [weak self] highlighted in
                 self?.updateHighlightAlpha(highlighted)
             }
-
-            self.addTarget(self, action: #selector(self.touchDown), for: .touchDown)
-            self.addTarget(self, action: #selector(self.touchUpInside), for: .touchUpInside)
-            self.addTarget(self, action: #selector(self.cancelPress), for: [.touchCancel, .touchUpOutside, .touchDragExit])
         }
 
         required init?(coder: NSCoder) {
@@ -104,21 +161,21 @@ final class WalletSendKeyboardComponent: Component {
             }
         }
 
-        @objc private func touchDown() {
+        func beginPress() {
             guard self.isEnabled else { return }
             self.isPressActive = true
+            self.hasRepeatedDeletion = false
+            self.isHighlighted = true
+            self.highligthedChanged(true)
             if self.keyAction == .deleteBackward {
-                self.action?(self.keyAction)
-                if self.isPressActive, self.isEnabled {
-                    self.scheduleRepeat(after: 0.5)
-                }
+                self.scheduleRepeat(after: 0.5)
             }
         }
 
-        @objc private func touchUpInside() {
-            let shouldInsert = self.isEnabled && self.isPressActive && self.keyAction != .deleteBackward
+        func endPress() {
+            let shouldPerformAction = self.isEnabled && self.isPressActive && !self.hasRepeatedDeletion
             self.cancelPress()
-            if shouldInsert {
+            if shouldPerformAction {
                 self.action?(self.keyAction)
             }
         }
@@ -127,6 +184,7 @@ final class WalletSendKeyboardComponent: Component {
             self.repeatTimer?.invalidate()
             let timer = Foundation.Timer(timeInterval: delay, repeats: false, block: { [weak self] _ in
                 guard let self, self.isPressActive, self.isEnabled, self.window != nil else { return }
+                self.hasRepeatedDeletion = true
                 self.action?(self.keyAction)
                 if self.isPressActive, self.isEnabled {
                     self.scheduleRepeat(after: 0.1)
@@ -147,12 +205,13 @@ final class WalletSendKeyboardComponent: Component {
             }
         }
 
-        @objc func cancelPress() {
+        func cancelPress() {
             self.repeatTimer?.invalidate()
             self.repeatTimer = nil
             self.isPressActive = false
+            self.hasRepeatedDeletion = false
             self.isHighlighted = false
-            self.updateHighlightAlpha(false)
+            self.highligthedChanged(false)
         }
 
         override func accessibilityActivate() -> Bool {
@@ -281,6 +340,8 @@ final class WalletSendKeyboardComponent: Component {
     final class View: UIView {
         private var buttons: [KeyButton] = []
         private var component: WalletSendKeyboardComponent?
+        private let keyTrackingGesture = KeyTrackingGestureRecognizer(target: nil, action: nil)
+        private var highlightedButton: KeyButton?
 
         override init(frame: CGRect) {
             super.init(frame: frame)
@@ -289,6 +350,14 @@ final class WalletSendKeyboardComponent: Component {
             self.layer.cornerCurve = .continuous
             self.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
             self.clipsToBounds = true
+            self.isExclusiveTouch = true
+
+            self.keyTrackingGesture.shouldBegin = { [weak self] point in
+                guard let self, self.component?.isEnabled == true else { return false }
+                return self.button(at: point) != nil
+            }
+            self.keyTrackingGesture.addTarget(self, action: #selector(self.trackKey(_:)))
+            self.addGestureRecognizer(self.keyTrackingGesture)
 
             for _ in 0 ..< 12 {
                 let button = KeyButton(frame: .zero)
@@ -310,7 +379,55 @@ final class WalletSendKeyboardComponent: Component {
             NotificationCenter.default.removeObserver(self)
         }
 
+        override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+            guard let result = super.hitTest(point, with: event) else { return nil }
+            // One touch session owns the whole keyboard, even when it crosses key boundaries.
+            return result.isDescendant(of: self) ? self : result
+        }
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            if self.window == nil {
+                self.cancelKeyPresses()
+            }
+        }
+
+        private func button(at point: CGPoint) -> KeyButton? {
+            guard self.bounds.contains(point) else { return nil }
+            return self.buttons.first(where: {
+                // Split the 6 pt gaps between adjacent keys without leaving dead zones.
+                $0.isEnabled && $0.frame.insetBy(dx: -3.0, dy: -3.0).contains(point)
+            })
+        }
+
+        private func updateHighlightedButton(at point: CGPoint) {
+            let button = self.button(at: point)
+            guard self.highlightedButton !== button else { return }
+            self.highlightedButton?.cancelPress()
+            self.highlightedButton = button
+            button?.beginPress()
+        }
+
+        @objc private func trackKey(_ recognizer: KeyTrackingGestureRecognizer) {
+            switch recognizer.state {
+            case .began, .changed:
+                self.updateHighlightedButton(at: recognizer.currentLocation)
+            case .ended:
+                self.updateHighlightedButton(at: recognizer.currentLocation)
+                let button = self.highlightedButton
+                self.highlightedButton = nil
+                button?.endPress()
+            case .cancelled, .failed:
+                self.highlightedButton?.cancelPress()
+                self.highlightedButton = nil
+            default:
+                break
+            }
+        }
+
         @objc func cancelKeyPresses() {
+            self.keyTrackingGesture.cancel()
+            self.highlightedButton = nil
             for button in self.buttons {
                 button.cancelPress()
             }
@@ -318,6 +435,10 @@ final class WalletSendKeyboardComponent: Component {
 
         func update(component: WalletSendKeyboardComponent, availableSize: CGSize, transition: ComponentTransition) -> CGSize {
             self.component = component
+            self.keyTrackingGesture.isEnabled = component.isEnabled
+            if !component.isEnabled {
+                self.cancelKeyPresses()
+            }
             self.backgroundColor = UIColor(rgb: component.theme.overallDarkAppearance ? 0x2c2c2e : 0xe2e3e7)
 
             let keyHeight: CGFloat = 48.0

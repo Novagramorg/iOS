@@ -2193,6 +2193,7 @@ private final class WalletScreenComponent: Component {
             let _ = passcodeOptionsAccessController(
                 context: context,
                 preferredModalWidth: 480.0,
+                initialAutolockTimeout: nil,
                 replaceController: { [weak controller] passcodeController in
                     (controller?.navigationController as? NavigationController)?.replaceTopController(passcodeController, animated: true)
                 },

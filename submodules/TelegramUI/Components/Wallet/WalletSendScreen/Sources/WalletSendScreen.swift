@@ -628,10 +628,6 @@ private final class WalletSendScreenComponent: Component {
             self.signingAccessDisposable.dispose()
         }
 
-        func isPanGestureEnabled() -> Bool {
-            return !self.amountField.isInputActive
-        }
-
         func viewDidAppear() {
             self.isVisible = true
             self.resolvePeerAddressIfNeeded()
@@ -2632,16 +2628,6 @@ public final class WalletSendScreen: ViewControllerComponentContainer, Attachmen
     }
     public var mediaPickerContext: AttachmentMediaPickerContext?
     public var isMinimized = false
-
-    public var isPanGestureEnabled: (() -> Bool)? {
-        return { [weak self] in
-            guard let self,
-                  let componentView = self.node.hostView.componentView as? WalletSendScreenComponent.View else {
-                return true
-            }
-            return componentView.isPanGestureEnabled()
-        }
-    }
 
     public init(
         context: AccountContext,

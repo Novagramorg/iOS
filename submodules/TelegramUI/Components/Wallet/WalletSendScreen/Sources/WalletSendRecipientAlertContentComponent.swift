@@ -150,7 +150,7 @@ final class WalletSendRecipientAlertContentComponent: Component {
                         cornerRadius: 14.0
                     )),
                     minSize: CGSize(width: addressWidth, height: 0.0),
-                    contentInsets: UIEdgeInsets(top: 16.0, left: 16.0, bottom: 16.0, right: 16.0),
+                    contentInsets: UIEdgeInsets(top: 16.0, left: 16.0, bottom: 13.0, right: 16.0),
                     action: component.copyAddress,
                     isEnabled: !component.address.isEmpty
                 )),
