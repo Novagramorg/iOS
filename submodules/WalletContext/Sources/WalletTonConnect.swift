@@ -8,12 +8,14 @@ import WalletEngineFFI
 import UIKit
 #endif
 
+@available(macOS 10.15, *)
 struct TonConnectMessageKey: Hashable {
     let sessionId: Int64
     let msgId: Int64
 }
 
 /// Actor-owned state; `valid` is also read by the runtime signing guard.
+@available(macOS 10.15, *)
 final class TonConnectPendingInteraction {
     enum Source {
         case connect(TonConnectLink, TonConnectConnectRequest)
@@ -60,6 +62,7 @@ final class TonConnectPendingInteraction {
 }
 
 /// Never retry a claim, including after a lost RPC reply or signing failure.
+@available(macOS 10.15, *)
 struct TonConnectRequestLifecycle {
     enum Phase { case pending, claiming, claimed, executing, prepared, completed, stopped }
     private(set) var phase: Phase = .pending
@@ -89,6 +92,7 @@ struct TonConnectRequestLifecycle {
     }
 }
 
+@available(macOS 10.15, *)
 public extension WalletContext {
     var tonConnectState: Signal<TonConnectState, NoError> {
         self.output.tonConnectStatePromise.get() |> deliverOnMainQueue
@@ -143,6 +147,7 @@ public extension WalletContext {
     }
 }
 
+@available(macOS 10.15, *)
 extension WalletContextImpl {
     private func logTonConnect(_ stage: String, _ active: TonConnectPendingInteraction, walletClientId: String? = nil, body: Data? = nil, outcome: String? = nil, error: Error? = nil) {
         let traceId: String?
@@ -903,6 +908,7 @@ extension WalletContextImpl {
     }
 }
 
+@available(macOS 10.15, *)
 extension WalletContextImpl {
     private static func tonConnectPrompt(
         id: String,

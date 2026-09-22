@@ -1,5 +1,6 @@
 import Foundation
 
+@available(macOS 10.15, *)
 public struct TonConnectLink: Equatable, Sendable {
     public let peerId: String
     public let request: String?
