@@ -142,6 +142,7 @@ public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessag
     
     public let sendContainerNode: ASDisplayNode
     public let sendButtonBackgroundView: UIImageView
+    private var sendButtonBackgroundImageDiameter: CGFloat?
     private var sendButtonBackgroundEffectLayer: StarsParticleEffectLayer?
     public let sendButton: HighlightTrackingButtonNode
     public var sendButtonRadialStatusNode: ChatSendButtonRadialStatusNode?
@@ -209,7 +210,8 @@ public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessag
         self.sendContainerNode.layer.allowsGroupOpacity = true
         
         self.sendButtonBackgroundView = UIImageView()
-        self.sendButtonBackgroundView.image = generateStretchableFilledCircleImage(diameter: 34.0, color: .white)?.withRenderingMode(.alwaysTemplate)
+        // The image is (re)generated in `updateLayout` for the frame's `min(width, height)`, so the capsule's
+        // radius is always half its shorter side rather than a baked-in constant.
         self.sendButton = HighlightTrackingButtonNode(pointerStyle: nil)
         
         self.textNode = ImmediateAnimatedCountLabelNode()
@@ -418,6 +420,14 @@ public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessag
         }
         
         let sendButtonBackgroundFrame = CGRect(origin: CGPoint(), size: innerSize).insetBy(dx: 3.0, dy: 3.0)
+        // Corner radius = min(width, height) / 2: a true capsule whatever the frame. The stretchable image
+        // must be generated at that diameter — a fixed one (it was 34) reads as a rounded rect the moment
+        // the frame's shorter side differs from it.
+        let sendButtonCornerDiameter = min(sendButtonBackgroundFrame.width, sendButtonBackgroundFrame.height)
+        if self.sendButtonBackgroundImageDiameter != sendButtonCornerDiameter {
+            self.sendButtonBackgroundImageDiameter = sendButtonCornerDiameter
+            self.sendButtonBackgroundView.image = generateStretchableFilledCircleImage(diameter: sendButtonCornerDiameter, color: .white)?.withRenderingMode(.alwaysTemplate)
+        }
         
         let slowmodeInset: CGFloat = 4.0
         
@@ -442,7 +452,7 @@ public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessag
             
             if slowmodeProgressLayer.bounds.size != sendButtonBackgroundFrame.size {
                 let pathFrame = CGRect(origin: CGPoint(), size: sendButtonBackgroundFrame.size).insetBy(dx: 2.0, dy: 2.0)
-                slowmodeProgressLayer.path = UIBezierPath(roundedRect: pathFrame, cornerRadius: pathFrame.height * 0.5).cgPath
+                slowmodeProgressLayer.path = UIBezierPath(roundedRect: pathFrame, cornerRadius: min(pathFrame.width, pathFrame.height) * 0.5).cgPath
             }
             slowmodeProgressTransition.updateFrame(layer: slowmodeProgressLayer, frame: sendButtonBackgroundFrame)
             
@@ -503,7 +513,7 @@ public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessag
                 }
             }
             transition.updateFrame(layer: sendButtonBackgroundEffectLayer, frame: CGRect(origin: CGPoint(), size: sendButtonBackgroundFrame.size))
-            sendButtonBackgroundEffectLayer.update(color: UIColor(white: 1.0, alpha: 0.5), size: sendButtonBackgroundFrame.size, cornerRadius: sendButtonBackgroundFrame.height * 0.5, transition: ComponentTransition(sendButtonBackgroundEffectLayerTransition))
+            sendButtonBackgroundEffectLayer.update(color: UIColor(white: 1.0, alpha: 0.5), size: sendButtonBackgroundFrame.size, cornerRadius: sendButtonCornerDiameter * 0.5, transition: ComponentTransition(sendButtonBackgroundEffectLayerTransition))
         } else if let sendButtonBackgroundEffectLayer = self.sendButtonBackgroundEffectLayer {
             self.sendButtonBackgroundEffectLayer = nil
             transition.updateFrame(layer: sendButtonBackgroundEffectLayer, frame: CGRect(origin: CGPoint(), size: sendButtonBackgroundFrame.size))

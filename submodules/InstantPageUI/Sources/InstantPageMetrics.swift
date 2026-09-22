@@ -55,9 +55,11 @@ struct InstantPageMetrics {
     // MARK: Code blocks
 
     let codeBlockVerticalInset: CGFloat
-    /// `layoutCodeBlock` overrides the theme's 14pt `codeBlock` category with an absolute 15pt.
-    /// As a metric it still yields exactly 15.0 unscaled, and shrinks inside a quote instead of
-    /// leaving code at full size while its surroundings scale.
+    /// `layoutCodeBlock` sizes code from this rather than from the theme's `codeBlock` category (15
+    /// in the chat table, 14 in the Instant View themes). It is a FONT size, so it takes the fonts'
+    /// whole-point floor and not the pixel snap the geometry constants take: code, `table` and a
+    /// quote's body are all "one step below body" and must stay equal at every content scale, which
+    /// a 16.67pt code face against a 16pt table would break. `InstantPageContentScaleTests` pins it.
     let codeBlockFontSize: CGFloat
     /// Gap between the code block's bold language line and its first code line.
     let codeBlockLanguageSpacing: CGFloat
@@ -93,9 +95,11 @@ struct InstantPageMetrics {
     let blockButtonHeight: CGFloat
     let blockButtonSpacing: CGFloat
 
-    init(scale: CGFloat) {
+    /// `screenScale` is injectable so a test can pin the pixel grid (2x/3x) instead of inheriting
+    /// whatever `UIScreen.main` reports in the test process; production always takes the default.
+    init(scale: CGFloat, screenScale: CGFloat = UIScreenScale) {
         func s(_ value: CGFloat) -> CGFloat {
-            return floorToScreenPixels(value * scale)
+            return floor(value * scale * screenScale) / screenScale
         }
 
         self.baseBlockSpacing = s(instantPageBaseBlockSpacing)
@@ -117,7 +121,7 @@ struct InstantPageMetrics {
         self.quoteAttributionGap = s(3.0)
 
         self.codeBlockVerticalInset = s(14.0)
-        self.codeBlockFontSize = s(15.0)
+        self.codeBlockFontSize = floor(15.0 * scale)
         self.codeBlockLanguageSpacing = s(3.0)
 
         self.listIndexSpacing = s(8.0)

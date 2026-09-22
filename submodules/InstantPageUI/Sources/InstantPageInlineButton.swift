@@ -82,7 +82,8 @@ public let instantPageInlineButtonAdjacentSpacing: CGFloat = 3.0
 
 /// Button labels carry their own typography rather than inheriting the paragraph's — semibold in both
 /// cases, one point smaller inline than in a block row. Fixed sizes, so they do not scale with the
-/// Instant View font-size setting; the chat bubble's own text categories are likewise fixed.
+/// Instant View font-size setting nor with the chat's Text Size (`contentScale`): a pill is a control
+/// with its own typography, and a wider pill would move line breaks the editor has to mirror.
 public let instantPageInlineButtonFontSize: CGFloat = 15.0
 public let instantPageBlockButtonFontSize: CGFloat = 16.0
 

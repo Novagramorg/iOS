@@ -6,6 +6,80 @@ A rich message is a `RichTextMessageAttribute` carrying an `InstantPage` (sent w
 
 These are detailed, non-obvious invariants — read the relevant section before touching the corresponding code. (Moved out of `CLAUDE.md` to keep that file focused; `CLAUDE.md` retains a brief pointer back to here.)
 
+## Text Size / content scale (bugs.telegram.org/c/62776, 2026-09-22)
+
+A rich message follows Settings ▸ Appearance ▸ Text Size like a plain bubble. Before this, nothing on the
+rich path read a font size: the bubble built its theme from the fixed chat-message table, `layoutInstantPageV2`
+always used `InstantPageMetrics.unscaled`, "Show more" was `Font.regular(17.0)`, and the node's layout cache
+was keyed on theme identity only — so even a scaled theme would have kept serving the old layout.
+
+### Where things live
+
+| File | What |
+|---|---|
+| `InstantPageUI/Sources/InstantPageV2ContentScale.swift` | `InstantPageV2ScaledLayoutInputs` — page theme, page metrics, quote theme, quote metrics from the BASE theme and ONE `contentScale`. The testable seam (`layoutInstantPageV2` needs `PresentationStrings`, which no test bundle can build). |
+| `InstantPageUI/Sources/InstantPageV2Layout.swift` | `layoutInstantPageV2(…, contentScale: CGFloat = 1.0)`. `theme` must be the UNSCALED theme. |
+| `InstantPageUI/Sources/InstantPageChatMessageTheme.swift` | `instantPageChatMessageAuthoredFontSize` (17) — the divisor; `codeBlock` category now 15. |
+| `InstantPageUI/Sources/InstantPageTheme.swift` | `fontSizeMultiplier` stored on the theme; the H1–H6 ladder scales by it. |
+| `InstantPageUI/Sources/InstantPageMetrics.swift` | `codeBlockFontSize = floor(15 · scale)`; `init(scale:screenScale:)`. |
+| `ChatMessageRichDataBubbleContentNode.swift`, `ChatSendMessageRichTextPreview.swift`, `ButtonEditorScreen.swift` | Pass `instantPageChatMessageContentScale(baseFontSize:)` (the button editor previews the bubble's 17pt table, so it scales with it); the bubble's and the send preview's layout caches are keyed on the font size; "Show more" at the base size. |
+| `InstantPageUI/Tests/InstantPageContentScaleTests.swift` | The rounding contract, all seven steps. |
+
+### Non-obvious invariants
+
+- **One scale, applied once.** `contentScale = baseDisplaySize / 17` is fractional at six of the seven steps
+  (0.824 … 1.529). It is consumed at exactly two rounding chokepoints: `withUpdatedFontStyles` floors every
+  font to whole points, and `InstantPageMetrics(scale:)` snaps every geometry constant to the pixel grid — the
+  same two paths the nested-quote scale (15/17) already went through. Nothing downstream multiplies by it again;
+  a quote inside a scaled page is `base × (contentScale · quoteScale)`, rounded once, never a scaled theme scaled
+  again. Rounding twice happens to agree for the paragraph at all seven steps, which is luck, not a property.
+- **Code = table = quote body**, all "one step below body" (15 at 17), and they stay equal at every step AND
+  inside a quote at every step. Code rides `InstantPageMetrics`, so it must take the fonts' whole-point floor,
+  not the pixel snap — `floorToScreenPixels(15 × 19/17)` is 16.67 against a 16pt table.
+- **The theme's stored `fontSizeMultiplier`** is what the heading ladder scales by. Recovering it from the
+  floored subheader drifts by a point (H2 = 21 instead of 22 at `.large`). This also moves the **full-page
+  Instant View reader** (V1 `InstantPageLayout` heading blocks) at every non-standard reader font size —
+  e.g. reader `.large` (1.15): H2 was floor(20 × 25/22) = 22, is floor(20 × 1.15) = 23. Deliberate: the
+  ladder now scales by the same number as the body text beside it.
+  `InstantPageContentScaleTests.testInstantViewReaderLadderScalesWithItsBodyAtEveryReaderSize` pins it.
+- **`layoutInstantPageV2` asserts** `theme.fontSizeMultiplier == 1.0 || contentScale == 1.0`. A pre-scaled
+  theme scaled again floors its categories twice while the multiplier compounds exactly, and the ladder
+  and body drift apart. The reader's themes arrive pre-scaled and pass 1.0; chat hosts pass the authored
+  theme plus the scale.
+- **The test process reports a 1x screen** (`UIScreen.main.scale == 1.0`, measured 2026-09-22), on which a
+  pixel snap IS a floor. Any test about the grid passes `screenScale: 3.0` explicitly, or it cannot fail.
+- **Text Size does not change the theme object**, so the bubble's and the preview's layout caches carry the
+  font size as their own key.
+- **Not scaled, on purpose:** inline/block button labels (15/16pt, see "Inline buttons"); the NATIVE editor,
+  which lays out at `RichTextRenderMetrics.default` (17pt, pinned equal to the unscaled chat table by
+  `RichTextV2MetricsParityTests`) and carries its own `baseFontSize = 17.0` in `RichTextEditorChatInputNode`.
+  Scaling it is a separate decision — it needs the presentation font size plumbed in and the parity tests
+  widened to a scale parameter. Until then the dual-field switch latching to native shows a size jump for
+  non-`.regular` users.
+- **The LEGACY composer follows Text Size everywhere** (2026-09-22). `ChatTextInputPanelNode` read the font
+  size at fourteen sites and eight of them — inherited from upstream, which still has them — carried an
+  always-true `if "".isEmpty { baseFontSize = 17.0 }` pin: the placeholder font, the empty-field minimum
+  height, the vertical text insets and the initial rendering config. The per-keystroke re-decoration was not
+  pinned, so typed text scaled on the first keystroke while the placeholder stayed 17pt and an empty field
+  opened at 31 and animated to the scaled height when its text node loaded. All reads now go through
+  `chatTextInputBaseFontSize(for:)` / `chatTextInputFieldMinHeight(for:)` /
+  `chatTextInputFieldVerticalInsets(for:)` (`ChatTextInputFontMetrics.swift`; the latter two switch
+  exhaustively on `PresentationFontSize`, so a new step fails to compile rather than silently taking 31), a Text Size change
+  rebuilds the placeholder and re-decorates live text (`fontSizeUpdated`, beside `themeUpdated`), and
+  `ChatTextInputFontMetricsTests` asserts the minimum height equals what the legacy text view measures for
+  an empty field at every step — the exact property whose violation was the animation.
+  Two knock-ons of the field growing. The panel holds two `ChatTextInputActionButtonsNode`s: `mediaActionButtons`
+  (the mic, OUTSIDE the field beside the attachment button) and `sendActionButtons` (the send capsule, INSIDE
+  the field). Both used to be sized to the field's minimal height, equal to 40 only while pinned. The mic is
+  now a fixed 40×40 like the attachment button; the send node keeps following the field so its capsule
+  (inset 3pt) fits it at every step — 40×34 at 17pt, 40×41 at 23pt. And that capsule's background was a
+  stretchable circle baked at diameter 34, a constant 17pt radius: it is now regenerated for
+  `min(width, height)` of its frame, and the slowmode ring and stars effect layer take the same radius.
+- Two `layoutInstantPageV2` callers stay at 1.0 on purpose: `TextProcessingRichContentView` (the
+  text-processing screen, not a chat bubble) and `FormulaEditorScreen`, whose preview theme is authored at a
+  22pt paragraph as a stylised preview — the bubble's divisor would compound onto a base that is not 17.
+  The bubble, the send preview and the button editor preview pass the chat scale.
+
 ## AI streaming animation (rich-text bubbles)
 
 `ChatMessageRichDataBubbleContentNode` progressively reveals InstantPage V2 content while `TypingDraftMessageAttribute` is on the message. Mirrors the older animation in `ChatMessageTextBubbleContentNode`, adapted to the heterogeneous V2 layout. The "Thinking…" indicator is now server-sent as `InstantPageBlock.thinking` rendered inside the pageView (see "InstantPage thinking blocks" section).
@@ -813,8 +887,9 @@ model layer from the V2 rendering built on top of it.
 | Width | label ink + 2·hPad + (icon ? 14 : 0), capped at the line width | justify: equal share of the row, wrapping at 8; left/center/right: label ink + 2·(badge ? 18 : 7), greedy wrap |
 | Type icon | trailing the label: 4pt gap + a 10×10 box, centred on the label's **cap** box | 10×10 badge inset 8/6 from the top-right corner |
 
-Font sizes are **fixed**, not scaled by the Instant View font-size setting — the chat bubble's own text
-categories are hardcoded too. The two pill shapes therefore read differently side by side: a block pill
+Font sizes are **fixed**, not scaled by the Instant View font-size setting and not by the chat's Text Size
+(`contentScale`, see "Text Size / content scale") — a pill is a control with its own typography, and a wider
+pill would move line breaks the editor has to mirror. The two pill shapes therefore read differently side by side: a block pill
 is much taller than an inline one, and its radius is correspondingly larger. If they ever need to look
 related, a fixed radius rather than `height / 2` is the lever.
 
@@ -1453,12 +1528,15 @@ sees the message. `InstantPageTheme.richTextRenderMetrics(edgeSpacingReduction:)
 (`InstantPageRichTextMetricsAdapter.swift`) projects any theme into the editor's `RichTextRenderMetrics`
 contract, and `chatMessageRenderMetrics()` is the convenience both editor hosts call. The heading ladder
 comes from `headingTextAttributes(level:link:)` rather than being restated, so H1–H6's derivation from the
-subheader (and its response to the reader's font-size slider) stays shared. That ladder is **22 / 20 / 18 /
-17 / 16 / 15** serif medium (retuned 2026-08-17); H1 and H2 carry their own base sizes there rather than
-returning the `header` / `subheader` categories, which stay at 24 / 22 for the page title/subtitle and the
-`pageBlockHeader` / `pageBlockSubheader` blocks. `codeBlock` reports the
-metrics' 15pt, not the theme's nominal 14pt, because `layoutCodeBlock` overrides the category with an
-absolute 15 — 14 is a size the renderer never uses.
+subheader's authored 22 (and its response to the reader's font-size slider and the chat's Text Size) stays
+shared. That ladder is **22 / 20 / 18 / 17 / 16 / 15** serif medium (retuned 2026-08-17); H1 and H2 carry
+their own base sizes there rather than returning the `header` / `subheader` categories, which stay at 24 / 22
+for the page title/subtitle and the `pageBlockHeader` / `pageBlockSubheader` blocks. The ladder scales by the
+theme's stored `fontSizeMultiplier` (the product of every `withUpdatedFontStyles` applied), **not** by a ratio
+recovered from the live subheader size: that size is already floored, and at the chat `.large` step the
+recovered 24/22 put H2 on 21 where floor(20 × 19/17) is 22. `codeBlock` reports the metrics'
+`codeBlockFontSize` (15 at page scale), the size `layoutCodeBlock` actually draws; the chat table now says 15
+too, while the Instant View themes keep their 14.
 
 **`InstantPageUI` gained a direct dep on `RichTextEditorUIKit`**, which it already had transitively via
 `ChatRichTextEditorComposer`, so there is no cycle. The adapter has to live on this side: the composer

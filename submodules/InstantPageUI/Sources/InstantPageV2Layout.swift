@@ -515,7 +515,12 @@ public func layoutInstantPageV2(
     /// the rounded container rather than being clipped by it — this gives that inset back out of the
     /// page's own outer padding, so the blocks keep their absolute positions and the host keeps its
     /// size. Default 0: the other V2 surfaces place the page flush and must not lose padding.
-    edgeSpacingReduction: CGFloat = 0.0
+    edgeSpacingReduction: CGFloat = 0.0,
+    /// The host's typography scale over the theme's authored sizes — a chat bubble passes
+    /// `baseDisplaySize / 17` so a rich message follows Settings ▸ Appearance ▸ Text Size like a plain
+    /// one. Applied ONCE, to fonts and geometry alike, in `InstantPageV2ScaledLayoutInputs`; `theme`
+    /// must therefore be the UNSCALED theme. Default 1.0: every other V2 surface is unchanged.
+    contentScale: CGFloat = 1.0
 ) -> InstantPageV2Layout {
     guard case let .Loaded(loadedContent) = webpage.content else {
         return InstantPageV2Layout(contentSize: .zero, items: [], detailsIndices: [])
@@ -541,24 +546,18 @@ public func layoutInstantPageV2(
         return stringForEntityFormattedDate(timestamp: timestamp, format: format, strings: strings, dateTimeFormat: dateTimeFormat)
     }
 
-    // Quoted content sits one step below body. `lineSpacingFactor: 1.0` because that field is
-    // already a FACTOR on the font size and would double-apply; `forceSerif: theme.serif` preserves
-    // the reader's serif setting rather than silently clearing it.
-    //
-    // NOTE: `withUpdatedFontStyles` reconstructs the theme field by field, and any field it omits
-    // silently reverts to an `init` default — the chat bubble's theme carries eight theme-derived
-    // colours that would revert with no compile error. Re-read it before changing it.
-    let quoteTheme = theme.withUpdatedFontStyles(
-        sizeMultiplier: InstantPageMetrics.quoteScale,
-        lineSpacingFactor: 1.0,
-        forceSerif: theme.serif
-    )
+    // A scaled theme scaled again floors its categories twice while `fontSizeMultiplier` compounds
+    // exactly, so body text and the heading ladder drift apart by a point. The Instant View reader's
+    // themes arrive pre-scaled by the reader's slider and pass 1.0 here; a chat host passes the authored
+    // theme and the scale. Anything else is a bug at the call site, not something to reconcile here.
+    assert(theme.fontSizeMultiplier == 1.0 || contentScale == 1.0, "layoutInstantPageV2: pass an unscaled theme with contentScale, or a scaled theme with contentScale 1.0 — never both")
+    let scaled = InstantPageV2ScaledLayoutInputs(baseTheme: theme, contentScale: contentScale)
 
     var context = LayoutContext(
-        theme: theme,
-        metrics: .unscaled,
-        quoteTheme: quoteTheme,
-        quoteMetrics: InstantPageMetrics(scale: InstantPageMetrics.quoteScale),
+        theme: scaled.theme,
+        metrics: scaled.metrics,
+        quoteTheme: scaled.quoteTheme,
+        quoteMetrics: scaled.quoteMetrics,
         strings: strings,
         dateTimeFormat: dateTimeFormat,
         formatDate: formatDate,
@@ -2794,9 +2793,9 @@ private func layoutCodeBlock(
 
     let styleStack = InstantPageTextStyleStack()
     setupStyleStack(styleStack, theme: context.theme, category: .codeBlock, link: false)
-    // A deliberate override of the theme's 14pt `codeBlock` category. As a metric it still yields
-    // exactly 15pt at page scale, and shrinks inside a quote rather than leaving code at full size
-    // while everything around it scales.
+    // Code is sized from the metrics, not from the theme's `codeBlock` category (15 in the chat table,
+    // 14 in the Instant View themes): a whole-point floor of 15 × scale, equal to the table and quote-body
+    // sizes at every content scale, and shrinking inside a quote with everything around it.
     styleStack.push(.fontSize(context.metrics.codeBlockFontSize))
     // `attributedStringForRichText` returns an immutable `NSAttributedString`, so take a mutable copy to
     // overlay onto — the same move V1's `attributedStringForPreformattedText` makes.
