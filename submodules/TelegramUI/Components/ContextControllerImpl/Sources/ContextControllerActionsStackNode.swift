@@ -607,7 +607,12 @@ public final class ContextControllerActionsListActionItemNode: HighlightTracking
             if let iconSize {
                 let iconY: CGFloat
                 if case .secondLineWithAttributedValue = self.item.textLayout {
-                    iconY = titleFrame.minY + floor((titleFrame.height - iconSize.height) / 2.0)
+                    if self.item.iconSource != nil {
+                        let textBlockFrame = titleFrame.union(subtitleFrame)
+                        iconY = floor(textBlockFrame.midY - iconSize.height * 0.5)
+                    } else {
+                        iconY = titleFrame.minY + floor((titleFrame.height - iconSize.height) / 2.0)
+                    }
                 } else {
                     iconY = floor((size.height - iconSize.height) / 2.0)
                 }

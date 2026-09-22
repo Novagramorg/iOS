@@ -1184,6 +1184,9 @@ private extension AccountContextImpl {
         self.walletTonConnectPresentationId = nil
         self.walletTonConnectPresentationToken = nil
         self.walletTonConnectCompletion = nil
+        self.walletTonConnectDecisionDisposable.set(nil)
+        if let controller = controller as? WalletConnectScreen { controller.tonConnectClosed = nil }
+        if let controller = controller as? WalletTransferScreen { controller.tonConnectClosed = nil }
         controller?.dismiss(animated: false)
     }
 
@@ -1268,6 +1271,8 @@ private extension AccountContextImpl {
             self.walletTonConnectController = nil
             self.walletTonConnectPresentationId = nil
             self.walletTonConnectPresentationToken = nil
+            self.walletTonConnectCompletion = nil
+            self.walletTonConnectDecisionDisposable.set(nil)
             walletContext.rejectTonConnectRequest(id: id)
         }
         let confirm: (@escaping (Result<Void, WalletContext.WalletError>) -> Void) -> Void = { [weak self] completion in
@@ -1279,7 +1284,6 @@ private extension AccountContextImpl {
                 let callback = self.walletTonConnectCompletion
                 self.walletTonConnectCompletion = nil
                 if decision.failure != nil {
-                    callback?(.failure(.unavailable))
                     self.dismissWalletTonConnectController()
                     walletContext.closeTonConnectPresentation(id: id)
                 } else {
@@ -1297,6 +1301,8 @@ private extension AccountContextImpl {
             self.walletTonConnectController = nil
             self.walletTonConnectPresentationId = nil
             self.walletTonConnectPresentationToken = nil
+            self.walletTonConnectCompletion = nil
+            self.walletTonConnectDecisionDisposable.set(nil)
             if let current = self.walletTonConnectState?.active, current.id == id,
                case let .completed(decision) = current.status {
                 walletContext.closeTonConnectPresentation(id: id)

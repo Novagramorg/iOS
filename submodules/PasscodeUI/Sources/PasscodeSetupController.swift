@@ -307,6 +307,7 @@ public func applicationPasscodeSetupController(
     change: Bool,
     ownsAuthorizationSession: Bool = true,
     preferredModalWidth: CGFloat? = nil,
+    initialAutolockTimeout: Int32? = 60 * 60,
     settingsSessionCompleted: ((PasscodeSession) -> Void)? = nil,
     cancelled: (() -> Void)? = nil,
     completion: @escaping (PasscodeCredentialReference) -> Void
@@ -362,7 +363,7 @@ public func applicationPasscodeSetupController(
                 let _ = (context.sharedContext.accountManager.transaction { transaction -> Void in
                     transaction.setAccessChallengeData(accessChallengeData(reference: reference))
                     if !change {
-                        updatePresentationPasscodeSettingsInternal(transaction: transaction, { $0.withUpdatedAutolockTimeout(60 * 60).withUpdatedBiometricsDomainState(LocalAuth.evaluatedPolicyDomainState) })
+                        updatePresentationPasscodeSettingsInternal(transaction: transaction, { $0.withUpdatedAutolockTimeout(initialAutolockTimeout).withUpdatedBiometricsDomainState(LocalAuth.evaluatedPolicyDomainState) })
                     }
                 } |> deliverOnMainQueue).start(completed: { [weak controller] in
                     guard controller != nil else { session?.invalidate(); return }

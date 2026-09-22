@@ -536,7 +536,7 @@ private final class WalletTransferSheetComponent: CombinedComponent {
             self.updated(transition: .easeInOut(duration: 0.2))
             component.confirm({ [weak self] result in
                 Queue.mainQueue().async {
-                    guard let self, !self.isFinished else {
+                    guard let self, !self.isFinished, let controller = getController() as? WalletTransferScreen, !controller.isDismissed else {
                         return
                     }
                     getController()?.view.isUserInteractionEnabled = true
@@ -761,6 +761,12 @@ public final class WalletTransferScreen: ViewControllerComponentContainer {
     private let cancelled: () -> Void
     public var tonConnectClosed: (() -> Void)?
     private var finishResult: WalletTransferFinishResult?
+    fileprivate var isDismissed = false
+
+    public override func dismiss(animated flag: Bool, completion: (() -> Void)? = nil) {
+        self.isDismissed = true
+        super.dismiss(animated: flag, completion: completion)
+    }
 
     public init(
         context: AccountContext,
