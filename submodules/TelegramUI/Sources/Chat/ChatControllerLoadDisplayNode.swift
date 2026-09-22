@@ -2684,7 +2684,11 @@ extension ChatControllerImpl {
                 strongSelf.startBot(payload)
             }
         }, botSwitchChatWithPayload: { [weak self] peerId, payload in
-            if let strongSelf = self, case let .peer(currentPeerId) = strongSelf.chatLocation {
+            // The location may be a forum topic or a comment thread, not only a plain peer; the
+            // thread id travels with the return address so the bot's switch-inline answer comes
+            // back to this composer rather than to the forum's topic list.
+            if let strongSelf = self, let currentPeerId = strongSelf.chatLocation.peerId {
+                let currentThreadId = strongSelf.chatLocation.threadId
                 var isScheduled = false
                 if case .scheduledMessages = strongSelf.presentationInterfaceState.subject {
                     isScheduled = true
@@ -2692,7 +2696,7 @@ extension ChatControllerImpl {
                 let _ = (strongSelf.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: peerId))
                 |> deliverOnMainQueue).startStandalone(next: { peer in
                     if let strongSelf = self, let peer = peer {
-                        strongSelf.openPeer(peer: peer, navigation: .withBotStartPayload(ChatControllerInitialBotStart(payload: payload, behavior: .automatic(returnToPeerId: currentPeerId, scheduled: isScheduled))), fromMessage: nil)
+                        strongSelf.openPeer(peer: peer, navigation: .withBotStartPayload(ChatControllerInitialBotStart(payload: payload, behavior: .automatic(returnToPeerId: currentPeerId, returnToThreadId: currentThreadId, scheduled: isScheduled))), fromMessage: nil)
                     }
                 })
             }

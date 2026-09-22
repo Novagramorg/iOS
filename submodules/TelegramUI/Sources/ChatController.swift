@@ -3296,13 +3296,35 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 strongSelf.present(textAlertController(context: strongSelf.context, updatedPresentationData: strongSelf.updatedPresentationData, title: nil, text: strongSelf.presentationData.strings.ScheduledMessages_BotActionUnavailable, actions: [TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
                 return
             }
-            if let botStart = strongSelf.botStart, case let .automatic(returnToPeerId, scheduled) = botStart.behavior {
-                let _ = (strongSelf.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: returnToPeerId))
-                |> deliverOnMainQueue).startStandalone(next: { peer in
-                    if let strongSelf = self, let peer = peer {
-                        strongSelf.openPeer(peer: peer, navigation: .chat(textInputState: ChatTextInputState(inputText: NSAttributedString(string: inputString)), subject: scheduled ? .scheduledMessages : nil, peekData: nil), fromMessage: nil)
+            if let botStart = strongSelf.botStart, case let .automatic(returnToPeerId, returnToThreadId, scheduled) = botStart.behavior {
+                let textInputState = ChatTextInputState(inputText: NSAttributedString(string: inputString))
+                if let returnToThreadId {
+                    // The switch started inside a forum topic or a comment thread. `openPeer` with the
+                    // bare peer would land in the forum's topic list, so go back to the thread's own
+                    // controller, which is normally still below this one on the stack.
+                    let returnSubject: ChatControllerSubject? = scheduled ? .scheduledMessages : nil
+                    if let navigationController = strongSelf.effectiveNavigationController, let controller = navigationController.viewControllers.compactMap({ $0 as? ChatControllerImpl }).last(where: { $0.chatLocation.peerId == returnToPeerId && $0.chatLocation.threadId == returnToThreadId && $0.subject == returnSubject }) {
+                        controller.updateTextInputState(textInputState)
+                        let _ = navigationController.popToViewController(controller, animated: true)
+                    } else {
+                        let _ = (ChatInterfaceState.update(engine: strongSelf.context.engine, peerId: returnToPeerId, threadId: returnToThreadId, { currentState in
+                            return currentState.withUpdatedComposeInputState(textInputState)
+                        })
+                        |> deliverOnMainQueue).startStandalone(completed: {
+                            guard let strongSelf = self, let navigationController = strongSelf.effectiveNavigationController else {
+                                return
+                            }
+                            let _ = strongSelf.context.sharedContext.navigateToForumThread(context: strongSelf.context, peerId: returnToPeerId, threadId: returnToThreadId, messageId: nil, navigationController: navigationController, activateInput: .text, scrollToEndIfExists: false, keepStack: .default, animated: true).startStandalone()
+                        })
                     }
-                })
+                } else {
+                    let _ = (strongSelf.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: returnToPeerId))
+                    |> deliverOnMainQueue).startStandalone(next: { peer in
+                        if let strongSelf = self, let peer = peer {
+                            strongSelf.openPeer(peer: peer, navigation: .chat(textInputState: textInputState, subject: scheduled ? .scheduledMessages : nil, peekData: nil), fromMessage: nil)
+                        }
+                    })
+                }
             } else {
                 if let peerId = peerId {
                     let _ = (strongSelf.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: peerId))

@@ -339,7 +339,7 @@ public enum ChatHistoryMessageSelection: Equatable {
 
 public enum ChatControllerInitialBotStartBehavior {
     case interactive
-    case automatic(returnToPeerId: EnginePeer.Id, scheduled: Bool)
+    case automatic(returnToPeerId: EnginePeer.Id, returnToThreadId: Int64?, scheduled: Bool)
 }
 
 public struct ChatControllerInitialBotStart {
