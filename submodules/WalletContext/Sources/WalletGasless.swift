@@ -13,6 +13,11 @@ public extension WalletContext {
 
 @available(macOS 10.15, *)
 extension WalletContextImpl {
+    func requestGaslessInfoIfNeeded() {
+        guard case .idle = self.currentState.gaslessInfo else { return }
+        self.requestGaslessInfo()
+    }
+
     func requestGaslessInfo() {
         guard WalletContext.useWalletTransferApi, self.canUseNetworkRuntime, case .wallet = self.currentState.phase,
               self.gaslessInfoTask == nil else { return }
@@ -35,7 +40,7 @@ extension WalletContextImpl {
         }
         do {
             let engine = self.engine
-            _ = try await withThrowingTaskGroup(of: WalletGaslessInfo.self) { group in
+            let info = try await withThrowingTaskGroup(of: WalletGaslessInfo.self) { group in
                 group.addTask {
                     try await WalletSignalRequestContext<WalletGaslessInfo>().run(engine.wallet.getGaslessInfo())
                 }
@@ -51,6 +56,8 @@ extension WalletContextImpl {
             guard self.activationGeneration == generation, self.gaslessInfoTaskId == taskId else {
                 return
             }
+            guard quotaRevision == self.gaslessQuotaRevision else { return }
+            self.applyGaslessInfo(info)
         } catch is CancellationError {
         } catch {
             guard self.activationGeneration == generation, self.gaslessInfoTaskId == taskId else {

@@ -182,6 +182,22 @@ actor WalletEngineStorage {
         }
     }
 
+    func updateArchivedWalletBalances(_ balances: [String: Int64]) throws {
+        try Task.checkCancellation()
+        guard !balances.isEmpty else { return }
+        var records = try self.loadArchivedWallets()
+        var changed = false
+        for index in records.indices {
+            if let balance = balances[records[index].descriptor.address], records[index].balance != balance {
+                records[index].balance = balance
+                changed = true
+            }
+        }
+        if changed {
+            try self.writeCodable(records, service: self.descriptorService, account: "archived-wallets")
+        }
+    }
+
     func removeArchivedWallet(recordId: String) throws {
         let records = try self.loadArchivedWallets()
         guard let record = records.first(where: { $0.descriptor.recordId == recordId }) else {

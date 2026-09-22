@@ -5,6 +5,7 @@ import ComponentFlow
 import TelegramPresentationData
 import AlertComponent
 import MultilineTextComponent
+import PlainButtonComponent
 
 final class WalletSendRecipientAlertContentComponent: Component {
     typealias EnvironmentType = AlertComponentEnvironment
@@ -12,30 +13,31 @@ final class WalletSendRecipientAlertContentComponent: Component {
     let title: String
     let recipientName: String?
     let address: String
+    let openChat: (() -> Void)?
+    let copyAddress: () -> Void
 
-    init(title: String, recipientName: String?, address: String) {
+    init(title: String, recipientName: String?, address: String, openChat: (() -> Void)?, copyAddress: @escaping () -> Void) {
         self.title = title
         self.recipientName = recipientName
         self.address = address
+        self.openChat = openChat
+        self.copyAddress = copyAddress
     }
 
     static func ==(lhs: WalletSendRecipientAlertContentComponent, rhs: WalletSendRecipientAlertContentComponent) -> Bool {
         return lhs.title == rhs.title
             && lhs.recipientName == rhs.recipientName
             && lhs.address == rhs.address
+            && (lhs.openChat == nil) == (rhs.openChat == nil)
     }
 
     final class View: UIView {
         private let title = ComponentView<Empty>()
         private let text = ComponentView<Empty>()
         private let address = ComponentView<Empty>()
-        private let addressBackground = UIView()
 
         override init(frame: CGRect) {
             super.init(frame: frame)
-
-            self.isUserInteractionEnabled = false
-            self.addSubview(self.addressBackground)
         }
 
         required init?(coder: NSCoder) {
@@ -66,21 +68,35 @@ final class WalletSendRecipientAlertContentComponent: Component {
             }
 
             let text = NSMutableAttributedString()
+            let recipientLinkAttribute = NSAttributedString.Key("WalletRecipientPeer")
             if let recipientName = component.recipientName {
                 //TODO:localize
                 text.append(NSAttributedString(string: "This TON Blockchain address is linked to ", font: Font.regular(17.0), textColor: theme.actionSheet.primaryTextColor))
-                text.append(NSAttributedString(string: recipientName, font: Font.regular(17.0), textColor: theme.actionSheet.controlAccentColor))
+                let recipientText = NSMutableAttributedString(string: recipientName, font: Font.regular(17.0), textColor: theme.actionSheet.controlAccentColor)
+                if component.openChat != nil {
+                    recipientText.addAttribute(recipientLinkAttribute, value: true, range: NSRange(location: 0, length: recipientText.length))
+                }
+                text.append(recipientText)
                 text.append(NSAttributedString(string: " on Telegram.", font: Font.regular(17.0), textColor: theme.actionSheet.primaryTextColor))
             } else {
                 //TODO:localize
-                text.append(NSAttributedString(string: "This TON Blockchain address is not linked to a Telegram user.", font: Font.regular(17.0), textColor: theme.actionSheet.primaryTextColor))
+                text.append(NSAttributedString(string: "This TON Blockchain address has no linked Telegram account.", font: Font.regular(17.0), textColor: theme.actionSheet.primaryTextColor))
             }
             let textSize = self.text.update(
                 transition: transition,
                 component: AnyComponent(MultilineTextComponent(
                     text: .plain(text),
                     maximumNumberOfLines: 0,
-                    lineSpacing: 0.2
+                    lineSpacing: 0.2,
+                    highlightColor: theme.actionSheet.controlAccentColor.withMultipliedAlpha(0.2),
+                    highlightAction: { attributes in
+                        return attributes[recipientLinkAttribute] != nil ? recipientLinkAttribute : nil
+                    },
+                    tapAction: { attributes, _ in
+                        if attributes[recipientLinkAttribute] != nil {
+                            component.openChat?()
+                        }
+                    }
                 )),
                 environment: {},
                 containerSize: CGSize(width: textWidth, height: .greatestFiniteMagnitude)
@@ -92,6 +108,14 @@ final class WalletSendRecipientAlertContentComponent: Component {
                 }
                 textView.isAccessibilityElement = true
                 textView.accessibilityLabel = text.string
+                if let recipientName = component.recipientName, let openChat = component.openChat {
+                    textView.accessibilityCustomActions = [UIAccessibilityCustomAction(name: recipientName, actionHandler: { _ in
+                        openChat()
+                        return true
+                    })]
+                } else {
+                    textView.accessibilityCustomActions = nil
+                }
                 transition.setFrame(view: textView, frame: textFrame)
             }
 
@@ -114,26 +138,33 @@ final class WalletSendRecipientAlertContentComponent: Component {
             let addressWidth = availableSize.width - addressInset * 2.0
             let addressSize = self.address.update(
                 transition: transition,
-                component: AnyComponent(MultilineTextComponent(
-                    text: .plain(addressText),
-                    horizontalAlignment: .center,
-                    maximumNumberOfLines: 0,
-                    lineSpacing: 0.2
+                component: AnyComponent(PlainButtonComponent(
+                    content: AnyComponent(MultilineTextComponent(
+                        text: .plain(addressText),
+                        horizontalAlignment: .center,
+                        maximumNumberOfLines: 0,
+                        lineSpacing: 0.2
+                    )),
+                    background: AnyComponent(RoundedRectangle(
+                        color: theme.actionSheet.primaryTextColor.withMultipliedAlpha(0.1),
+                        cornerRadius: 14.0
+                    )),
+                    minSize: CGSize(width: addressWidth, height: 0.0),
+                    contentInsets: UIEdgeInsets(top: 16.0, left: 16.0, bottom: 16.0, right: 16.0),
+                    action: component.copyAddress,
+                    isEnabled: !component.address.isEmpty
                 )),
                 environment: {},
-                containerSize: CGSize(width: addressWidth - 32.0, height: .greatestFiniteMagnitude)
+                containerSize: CGSize(width: addressWidth, height: .greatestFiniteMagnitude)
             )
-            let addressFrame = CGRect(x: addressInset, y: textFrame.maxY + 14.0, width: addressWidth, height: addressSize.height + 32.0)
-            self.addressBackground.backgroundColor = theme.actionSheet.primaryTextColor.withMultipliedAlpha(0.1)
-            transition.setFrame(view: self.addressBackground, frame: addressFrame)
-            transition.setCornerRadius(layer: self.addressBackground.layer, cornerRadius: 14.0)
+            let addressFrame = CGRect(x: addressInset, y: textFrame.maxY + 14.0, width: addressWidth, height: addressSize.height)
             if let addressView = self.address.view {
                 if addressView.superview == nil {
                     self.addSubview(addressView)
                 }
                 addressView.isAccessibilityElement = true
                 addressView.accessibilityLabel = component.address
-                transition.setFrame(view: addressView, frame: CGRect(origin: CGPoint(x: addressFrame.minX + floorToScreenPixels((addressFrame.width - addressSize.width) / 2.0), y: addressFrame.minY + 16.0), size: addressSize))
+                transition.setFrame(view: addressView, frame: addressFrame)
             }
 
             return CGSize(width: availableSize.width, height: addressFrame.maxY)

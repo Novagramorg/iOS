@@ -48,7 +48,8 @@ private final class WalletPeerSelectionRecipientView: UIControl {
     override init(frame: CGRect) {
         super.init(frame: frame)
 
-        self.iconView.contentMode = .scaleAspectFit
+        self.iconView.contentMode = .scaleAspectFill
+        self.iconView.clipsToBounds = true
         self.iconView.image = UIImage(bundleImageName: "Wallet/Ton")
         self.addSubview(self.iconView)
 
@@ -114,6 +115,7 @@ private final class WalletPeerSelectionRecipientView: UIControl {
 
         let sideInset: CGFloat = 16.0
         let iconSize = CGSize(width: 40.0, height: 40.0)
+        self.iconView.layer.cornerRadius = iconSize.width / 2.0
         transition.setFrame(
             view: self.iconView,
             frame: CGRect(
@@ -1750,6 +1752,16 @@ public final class WalletPeerSelectionScreen: ViewControllerComponentContainer {
 
     required public init(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    override public func preferredContentSizeForLayout(_ layout: ContainerViewLayout) -> CGSize? {
+        guard layout.metrics.widthClass == .regular else {
+            return nil
+        }
+        return CGSize(
+            width: min(480.0, layout.size.width - 20.0),
+            height: min(layout.size.width, layout.size.height) - 88.0
+        )
     }
 
     public override func viewWillDisappear(_ animated: Bool) {

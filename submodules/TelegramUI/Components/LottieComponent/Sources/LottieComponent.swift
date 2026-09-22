@@ -154,7 +154,7 @@ public final class LottieComponent: Component {
         private var component: LottieComponent?
         
         private var scheduledPlayOnce: Bool = false
-        private var isPlaying: Bool = false
+        public private(set) var isPlaying: Bool = false
         
         private var playOnceCompletion: (() -> Void)?
         private var animationInstance: LottieInstance?
@@ -249,7 +249,7 @@ public final class LottieComponent: Component {
             }
         }
         
-        public func playOnce(delay: Double = 0.0, force: Bool = false,  completion: (() -> Void)? = nil) {
+        public func playOnce(delay: Double = 0.0, force: Bool = false, completion: (() -> Void)? = nil) {
             self.playOnceCompletion = completion
             
             guard let _ = self.animationInstance, let animationFrameRange = self.animationFrameRange else {

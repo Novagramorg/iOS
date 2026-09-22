@@ -618,6 +618,7 @@ extension ChatControllerImpl {
                             peer: peer,
                             walletContext: walletContext,
                             displaySuccessToast: false,
+                            allowOpenRecipientChat: false,
                             completed: { [weak self] in
                                 self?.scrollToEndOfHistory()
                             }
@@ -1504,6 +1505,7 @@ extension ChatControllerImpl {
             context: self.context,
             updatedPresentationData: self.updatedPresentationData,
             style: .glass,
+            warpContentsOnEdges: true,
             peer: (self.presentationInterfaceState.renderedPeer?.peer).flatMap(EnginePeer.init),
             threadTitle: self.contentData?.state.threadInfo?.title,
             chatLocation: self.chatLocation,

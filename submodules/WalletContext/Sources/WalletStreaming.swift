@@ -687,8 +687,7 @@ enum WalletStreamingEventParser {
                 bounced: message.bounced == true
             ))
         }
-        // An internal signed request can fund gas in in_msg and send TON in
-        // out_msgs. Present the single outgoing transfer, not the gas funding.
+
         let outgoing = candidates.filter { $0.direction == .outgoing }
         let supported = outgoing.isEmpty ? candidates : outgoing
         guard supported.count == 1, let candidate = supported.first,
@@ -696,11 +695,11 @@ enum WalletStreamingEventParser {
             log?("reason=unsupported_transfer_count transaction_hash=\(value.hash) incoming=\(candidates.filter { $0.direction == .incoming }.count) outgoing=\(candidates.filter { $0.direction == .outgoing }.count)")
             return nil
         }
-
+        
         let status: WalletContext.Transaction.Status
         if (candidate.bounced || value.description?.aborted == true
             || value.description?.compute_ph?.success == false || value.description?.action?.success == false) && candidate.direction != .incoming {
-            status = .failed
+            return nil
         } else if finality == .pending || value.emulated == true {
             status = .pending
         } else {

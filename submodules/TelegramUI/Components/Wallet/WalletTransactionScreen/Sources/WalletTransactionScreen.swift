@@ -835,6 +835,13 @@ private final class WalletTransactionContentComponent: Component {
             self.commentAuthorizationDisposable.dispose()
         }
 
+        @objc private func gramAnimationTapped() {
+            guard let animationView = self.gramAnimation.view as? LottieComponent.View, !animationView.isPlaying else {
+                return
+            }
+            animationView.playOnce()
+        }
+
         private var isPreview: Bool {
             return self.walletContext != nil
         }
@@ -2268,7 +2275,7 @@ private final class WalletTransactionContentComponent: Component {
                     let _ = self.gramAnimation.update(
                         transition: transition,
                         component: AnyComponent(LottieComponent(
-                            content: LottieComponent.AppBundleContent(name: "TonDiamond"),
+                            content: LottieComponent.AppBundleContent(name: "GramDiamond"),
                             startingPosition: .begin,
                             size: animationSize,
                             loop: false,
@@ -2281,7 +2288,11 @@ private final class WalletTransactionContentComponent: Component {
                     if let animationView = self.gramAnimation.view as? LottieComponent.View {
                         animationView.externalShouldPlay = environment.isVisible
                         if animationView.superview == nil {
-                            animationView.isUserInteractionEnabled = false
+                            animationView.isUserInteractionEnabled = true
+                            animationView.addGestureRecognizer(UITapGestureRecognizer(
+                                target: self,
+                                action: #selector(self.gramAnimationTapped)
+                            ))
                             self.addSubview(animationView)
                             animationView.playOnce()
                         }

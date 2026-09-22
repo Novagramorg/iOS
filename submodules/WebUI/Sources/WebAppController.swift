@@ -4330,9 +4330,11 @@ public func standaloneWebAppController(
         fromMenu: params.source == .menu,
         hasTextInput: false,
         isFullSize: params.fullSize,
+        roundsTopCornersInRegularLayout: params.isOnramp,
         makeEntityInputView: {
         return nil
     })
+    controller.animateAppearance = params.isOnramp
     controller.requestController = { _, present in
         let webAppController = WebAppController(context: context, updatedPresentationData: updatedPresentationData, params: params, replyToMessageId: nil, threadId: threadId)
         webAppController.openUrl = openUrl

@@ -2,9 +2,8 @@ import Foundation
 import UIKit
 import Display
 import ComponentFlow
-import TelegramPresentationData
 
-final class WarpView: UIView {
+public final class WarpView: UIView {
     private final class WarpPartView: UIView {
         let cloneView: PortalView
         
@@ -32,7 +31,7 @@ final class WarpView: UIView {
         }
     }
     
-    let contentView: PortalSourceView
+    public let contentView: PortalSourceView
     
     private let clippingView: UIView
     
@@ -40,7 +39,7 @@ final class WarpView: UIView {
     private let warpMaskContainer: UIView
     private let warpMaskGradientLayer: SimpleGradientLayer
     
-    override init(frame: CGRect) {
+    public override init(frame: CGRect) {
         self.contentView = PortalSourceView()
         self.clippingView = UIView()
         
@@ -68,9 +67,10 @@ final class WarpView: UIView {
         fatalError("init(coder:) has not been implemented")
     }
     
-    func update(size: CGSize, topInset: CGFloat, warpHeight: CGFloat, theme: PresentationTheme, transition: ComponentTransition) {
+    public func update(size: CGSize, topInset: CGFloat, bottomInset: CGFloat = 0.0, warpHeight: CGFloat, transition: ComponentTransition) {
         transition.setFrame(view: self.contentView, frame: CGRect(origin: CGPoint(), size: size))
         
+        let visibleHeight = size.height - bottomInset
         let allItemsHeight = warpHeight * 0.5
         for i in 0 ..< self.warpViews.count {
             let itemHeight = warpHeight / CGFloat(self.warpViews.count)
@@ -96,7 +96,7 @@ final class WarpView: UIView {
             transform = CATransform3DTranslate(transform, 0.0, prevPt.x * allItemsHeight, (1.0 - prevPt.y) * allItemsHeight)
             transform = CATransform3DRotate(transform, angle, 1.0, 0.0, 0.0)
             
-            let positionY = size.height - allItemsHeight + 4.0 + CGFloat(i) * itemLength
+            let positionY = visibleHeight - allItemsHeight + 4.0 + CGFloat(i) * itemLength
             let rect = CGRect(origin: CGPoint(x: 0.0, y: positionY), size: CGSize(width: size.width, height: itemLength))
             transition.setPosition(view: self.warpViews[i], position: CGPoint(x: rect.midX, y: 4.0))
             transition.setBounds(view: self.warpViews[i], bounds: CGRect(origin: CGPoint(), size: CGSize(width: size.width, height: itemLength)))
@@ -105,12 +105,12 @@ final class WarpView: UIView {
         }
         
         let clippingTopInset: CGFloat = topInset
-        let frame = CGRect(origin: CGPoint(x: 0.0, y: clippingTopInset), size: CGSize(width: size.width, height: -clippingTopInset + size.height - 21.0))
+        let frame = CGRect(origin: CGPoint(x: 0.0, y: clippingTopInset), size: CGSize(width: size.width, height: -clippingTopInset + visibleHeight - 21.0))
         transition.setPosition(view: self.clippingView, position: frame.center)
         transition.setBounds(view: self.clippingView, bounds: CGRect(origin: CGPoint(x: 0.0, y: clippingTopInset), size: frame.size))
         self.clippingView.clipsToBounds = true
         
-        transition.setFrame(view: self.warpMaskContainer, frame: CGRect(origin: CGPoint(x: 0.0, y: size.height - allItemsHeight), size: CGSize(width: size.width, height: allItemsHeight)))
+        transition.setFrame(view: self.warpMaskContainer, frame: CGRect(origin: CGPoint(x: 0.0, y: visibleHeight - allItemsHeight), size: CGSize(width: size.width, height: allItemsHeight)))
         
         var locations: [NSNumber] = []
         var colors: [CGColor] = []
@@ -132,7 +132,7 @@ final class WarpView: UIView {
         transition.setFrame(layer: self.warpMaskGradientLayer, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: size.width, height: allItemsHeight)))
     }
     
-    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+    public override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         return self.contentView.hitTest(point, with: event)
     }
 }

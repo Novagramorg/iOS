@@ -3,6 +3,7 @@ import UIKit
 import CoreText
 import Display
 import ComponentFlow
+import AnimatedTextComponent
 import LottieComponent
 import LottieSettings
 import MultilineTextComponent
@@ -182,6 +183,25 @@ private final class WalletSendAmountTextField: UITextField {
         fatalError("init(coder:) has not been implemented")
     }
 
+    override func buildMenu(with builder: UIMenuBuilder) {
+        super.buildMenu(with: builder)
+
+        builder.remove(menu: .replace)
+        builder.remove(menu: .lookup)
+        builder.remove(menu: .learn)
+        builder.remove(menu: .share)
+        if #available(iOS 17.0, *) {
+            builder.remove(menu: .autoFill)
+        }
+    }
+
+    override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
+        if #available(iOS 15.0, *), action == #selector(captureTextFromCamera(_:)) {
+            return false
+        }
+        return super.canPerformAction(action, withSender: sender)
+    }
+
     func update(layout: WalletSendAmountTextLayout, selection: NSRange?) {
         self.textLayout = layout
         if self.attributedText?.isEqual(to: layout.attributedText) != true {
@@ -223,7 +243,6 @@ private final class WalletSendAmountTextField: UITextField {
             textOriginX = startCaret.minX
             centerY = startCaret.midY
         } else {
-            // UIKit may not expose caret geometry before the field starts editing.
             let textRect = self.isEditing ? self.editingRect(forBounds: self.bounds) : self.textRect(forBounds: self.bounds)
             textOriginX = textRect.minX
             centerY = textRect.midY
@@ -284,9 +303,23 @@ final class WalletSendAmountField: UIView, UITextFieldDelegate {
 
         self.textField.font = self.integralFont
         self.textField.delegate = self
-        self.textField.keyboardType = .decimalPad
+        self.textField.inputView = UIView(frame: .zero)
+        self.textField.inputAssistantItem.leadingBarButtonGroups = []
+        self.textField.inputAssistantItem.trailingBarButtonGroups = []
         self.textField.autocorrectionType = .no
         self.textField.autocapitalizationType = .none
+        self.textField.spellCheckingType = .no
+        self.textField.smartQuotesType = .no
+        self.textField.smartDashesType = .no
+        self.textField.smartInsertDeleteType = .no
+        self.textField.textContentType = nil
+        if #available(iOS 17.0, *) {
+            self.textField.inlinePredictionType = .no
+        }
+        if #available(iOS 18.0, *) {
+            self.textField.writingToolsBehavior = .none
+            self.textField.mathExpressionCompletionType = .no
+        }
         self.textField.textAlignment = .left
         self.textField.addTarget(self, action: #selector(self.textChanged), for: .editingChanged)
         self.contentView.addSubview(self.textField)
@@ -300,7 +333,29 @@ final class WalletSendAmountField: UIView, UITextFieldDelegate {
     }
 
     @objc func activateInput() {
+        guard self.isUserInteractionEnabled else { return }
         self.textField.becomeFirstResponder()
+    }
+
+    func insertText(_ text: String) {
+        guard self.isUserInteractionEnabled else { return }
+        self.activateInput()
+        let range = self.textField.selectionRange ?? NSRange(location: (self.textField.text ?? "").utf16.count, length: 0)
+        self.replaceText(in: range, with: text)
+    }
+
+    func deleteBackward() {
+        guard self.isUserInteractionEnabled else { return }
+        self.activateInput()
+        let text = (self.textField.text ?? "") as NSString
+        var range = self.textField.selectionRange ?? NSRange(location: text.length, length: 0)
+        guard range.location != NSNotFound, range.location >= 0, range.location <= text.length,
+              range.length >= 0, range.length <= text.length - range.location else { return }
+        if range.length == 0 {
+            guard range.location > 0 else { return }
+            range = text.rangeOfComposedCharacterSequence(at: range.location - 1)
+        }
+        self.replaceText(in: range, with: "")
     }
 
     private func amountTextLayout(_ text: String) -> WalletSendAmountTextLayout {
@@ -326,7 +381,6 @@ final class WalletSendAmountField: UIView, UITextFieldDelegate {
         if !groupingSeparator.isEmpty, integralLength > 3 {
             groupingOffsets = Array(stride(from: integralLength - 3, through: 1, by: -3).reversed())
             for offset in groupingOffsets {
-                // Reserve drawing space without introducing a selectable character.
                 attributedText.addAttribute(.kern, value: separatorSize.width, range: NSRange(location: offset - 1, length: 1))
             }
         }
@@ -343,7 +397,6 @@ final class WalletSendAmountField: UIView, UITextFieldDelegate {
                 CTRunGetPositions(run, range, &positions)
                 CTRunGetStringIndices(run, range, &indices)
                 for index in 0 ..< glyphCount where groupingOffsets.contains(indices[index]) {
-                    // A caret can sit inside the kerned gap; use the next glyph's actual origin.
                     groupingPositions.append(positions[index].x)
                 }
             }
@@ -422,13 +475,6 @@ final class WalletSendAmountField: UIView, UITextFieldDelegate {
             self.textField.textColor = theme.list.itemPrimaryTextColor
         }
         self.textField.tintColor = theme.list.itemAccentColor
-        let keyboardAppearance: UIKeyboardAppearance = theme.overallDarkAppearance ? .dark : .light
-        if self.textField.keyboardAppearance != keyboardAppearance {
-            self.textField.keyboardAppearance = keyboardAppearance
-            if self.textField.isFirstResponder {
-                self.textField.reloadInputViews()
-            }
-        }
         //TODO:localize
         let zeroPlaceholder = "0"
         self.textField.attributedPlaceholder = NSAttributedString(
@@ -440,16 +486,17 @@ final class WalletSendAmountField: UIView, UITextFieldDelegate {
         let suffixText: String
         switch mode {
         case .gram:
-            //TODO:localize
             suffixText = "GRAM"
         case .fiat:
             suffixText = fiatCurrency.code
         }
 
+        let currencyTransition: ComponentTransition = self.gramIcon.view == nil ? .immediate : transition
+        let iconBlurRadius: CGFloat = 6.0
         let _ = self.gramIcon.update(
             transition: transition,
             component: AnyComponent(LottieComponent(
-                content: LottieComponent.AppBundleContent(name: "TonDiamond"),
+                content: LottieComponent.AppBundleContent(name: "GramDiamond"),
                 startingPosition: .begin,
                 size: self.gramAnimationSize,
                 loop: false,
@@ -465,7 +512,8 @@ final class WalletSendAmountField: UIView, UITextFieldDelegate {
                 self.contentView.addSubview(gramIconView)
                 gramIconView.playOnce()
             }
-            transition.setAlpha(view: gramIconView, alpha: mode == .gram ? 1.0 : 0.0)
+            currencyTransition.setAlpha(view: gramIconView, alpha: mode == .gram ? 1.0 : 0.0)
+            currencyTransition.setBlur(layer: gramIconView.layer, radius: mode == .gram ? 0.0 : iconBlurRadius)
         }
 
         let currencySymbol = fiatCurrency.symbol
@@ -475,7 +523,7 @@ final class WalletSendAmountField: UIView, UITextFieldDelegate {
                 text: .plain(NSAttributedString(
                     string: currencySymbol,
                     font: Font.with(size: 48.0, design: .round, weight: .bold),
-                    textColor: theme.list.itemSecondaryTextColor
+                    textColor: UIColor(rgb: 0x219949)
                 )),
                 maximumNumberOfLines: 1
             )),
@@ -486,18 +534,20 @@ final class WalletSendAmountField: UIView, UITextFieldDelegate {
             if fiatIconView.superview == nil {
                 self.contentView.addSubview(fiatIconView)
             }
-            transition.setAlpha(view: fiatIconView, alpha: mode == .fiat ? 1.0 : 0.0)
+            currencyTransition.setAlpha(view: fiatIconView, alpha: mode == .fiat ? 1.0 : 0.0)
+            currencyTransition.setBlur(layer: fiatIconView.layer, radius: mode == .fiat ? 0.0 : iconBlurRadius)
         }
 
         self.suffixSize = self.suffix.update(
-            transition: transition,
-            component: AnyComponent(MultilineTextComponent(
-                text: .plain(NSAttributedString(
-                    string: suffixText,
-                    font: self.fractionalFont,
-                    textColor: theme.list.itemSecondaryTextColor
-                )),
-                maximumNumberOfLines: 1
+            transition: currencyTransition,
+            component: AnyComponent(AnimatedTextComponent(
+                font: self.fractionalFont,
+                color: UIColor(rgb: mode == .gram ? 0x0088ff : 0x219949),
+                items: [
+                    AnimatedTextComponent.Item(id: "currency", content: .text(suffixText))
+                ],
+                noDelay: true,
+                blur: true
             )),
             environment: {},
             containerSize: CGSize(width: 150.0, height: 74.0)
@@ -508,7 +558,6 @@ final class WalletSendAmountField: UIView, UITextFieldDelegate {
 
         if modeChanged || ((amountChanged || rateChanged) && !self.textField.isFirstResponder) {
             self.setAmount(amount)
-            self.textField.reloadInputViews()
         } else if textColorChanged || decimalSeparatorChanged || groupingSeparatorChanged {
             var text = self.textField.text ?? ""
             var selection = previousSelection
@@ -610,33 +659,39 @@ final class WalletSendAmountField: UIView, UITextFieldDelegate {
         shouldChangeCharactersIn range: NSRange,
         replacementString string: String
     ) -> Bool {
-        guard let dateTimeFormat = self.dateTimeFormat else {
-            return false
+        self.replaceText(in: range, with: string)
+        return false
+    }
+
+    private func replaceText(in range: NSRange, with string: String) {
+        guard self.isUserInteractionEnabled,
+              let dateTimeFormat = self.dateTimeFormat, !dateTimeFormat.decimalSeparator.isEmpty else {
+            return
         }
 
         var replacement = walletSendNormalizedDigits(string)
         if replacement == "." || replacement == "," {
             replacement = dateTimeFormat.decimalSeparator
         }
-        let previousText = (textField.text ?? "") as NSString
+        let previousText = (self.textField.text ?? "") as NSString
         guard range.location != NSNotFound, range.location >= 0, range.location <= previousText.length,
-              range.length >= 0, range.length <= previousText.length - range.location else { return false }
+              range.length >= 0, range.length <= previousText.length - range.location else { return }
         var updatedText = previousText.replacingCharacters(in: range, with: replacement)
         var selectionOffset = range.location + replacement.utf16.count
         let decimalSeparator = dateTimeFormat.decimalSeparator
 
         let allowedCharacters = CharacterSet(charactersIn: "0123456789" + decimalSeparator)
         guard updatedText.unicodeScalars.allSatisfy({ allowedCharacters.contains($0) }) else {
-            return false
+            return
         }
         guard updatedText.components(separatedBy: decimalSeparator).count <= 2 else {
-            return false
+            return
         }
         let maximumFractionalDigits = self.mode == .gram ? 9 : 2
         if let range = updatedText.range(of: decimalSeparator) {
             let fractionalCount = updatedText[range.upperBound...].count
             guard fractionalCount <= maximumFractionalDigits else {
-                return false
+                return
             }
         }
         if updatedText == decimalSeparator {
@@ -658,11 +713,10 @@ final class WalletSendAmountField: UIView, UITextFieldDelegate {
             rate: self.rate,
             decimalSeparator: decimalSeparator
         ) != nil else {
-            return false
+            return
         }
 
         self.applyText(updatedText, selection: NSRange(location: selectionOffset, length: 0))
         self.textChanged()
-        return false
     }
 }

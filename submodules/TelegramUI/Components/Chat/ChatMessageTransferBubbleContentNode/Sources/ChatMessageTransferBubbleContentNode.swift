@@ -20,19 +20,6 @@ import InvisibleInkDustNode
 import ShimmerEffect
 import WalletContext
 
-private let transferCardIconGlowSize = CGSize(width: 56.0, height: 56.0)
-private let transferCardIconGlowImage = generateImage(transferCardIconGlowSize, rotatedContext: { size, context in
-    context.clear(CGRect(origin: .zero, size: size))
-
-    let color = UIColor(rgb: 0x1aa6fe)
-    let colors: [CGColor] = [color.cgColor, color.withAlphaComponent(0.0).cgColor]
-    var locations: [CGFloat] = [0.0, 1.0]
-    if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors as CFArray, locations: &locations) {
-        let center = CGPoint(x: size.width * 0.5, y: size.height * 0.5)
-        context.drawRadialGradient(gradient, startCenter: center, startRadius: 0.0, endCenter: center, endRadius: size.width * 0.5, options: [])
-    }
-})
-
 private enum TransferCardStatus: Equatable {
     case waiting
     case pending
@@ -157,7 +144,6 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
     private var mediaBackgroundContent: WallpaperBubbleBackgroundNode?
     private let cardNode: ASDisplayNode
     private let cardBackgroundNode: ASImageNode
-    private let cardIconGlowNode: ASImageNode
     private var cardIcon = ComponentView<Empty>()
     private var cardIconPlayedOnce = false
     private let amountNode: TextNode
@@ -219,12 +205,6 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
         self.cardBackgroundNode.contentMode = .scaleAspectFill
         self.cardBackgroundNode.image = UIImage(bundleImageName: "Wallet/CardChatMock")
 
-        self.cardIconGlowNode = ASImageNode()
-        self.cardIconGlowNode.isUserInteractionEnabled = false
-        self.cardIconGlowNode.displaysAsynchronously = false
-        self.cardIconGlowNode.displayWithoutProcessing = true
-        self.cardIconGlowNode.image = transferCardIconGlowImage
-
         self.amountNode = TextNode()
         self.amountNode.isUserInteractionEnabled = false
         self.amountNode.displaysAsynchronously = false
@@ -272,7 +252,6 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
         super.init(lottieSettings: lottieSettings)
 
         self.cardNode.addSubnode(self.cardBackgroundNode)
-        self.cardNode.addSubnode(self.cardIconGlowNode)
         self.cardNode.addSubnode(self.amountNode)
         self.cardNode.addSubnode(self.nameNode)
         self.cardNode.addSubnode(self.addressNode)
@@ -899,21 +878,15 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
 
                         let iconSize = CGSize(width: 40.0, height: 40.0)
                         let iconFrame = CGRect(
-                            origin: CGPoint(x: floorToScreenPixels((cardSize.width - iconSize.width) * 0.5), y: 20.0),
+                            origin: CGPoint(x: floorToScreenPixels((cardSize.width - iconSize.width) * 0.5), y: 18.0),
                             size: iconSize
-                        )
-                        self.cardIconGlowNode.frame = CGRect(
-                            x: iconFrame.midX - transferCardIconGlowSize.width * 0.5,
-                            y: iconFrame.midY - transferCardIconGlowSize.height * 0.5,
-                            width: transferCardIconGlowSize.width,
-                            height: transferCardIconGlowSize.height
                         )
                         let animationSize = CGSize(width: 48.0, height: 48.0)
                         let _ = self.cardIcon.update(
                             transition: .immediate,
                             component: AnyComponent(LottieComponent(
-                                content: LottieComponent.AppBundleContent(name: "TonDiamond"),
-                                startingPosition: .end,
+                                content: LottieComponent.AppBundleContent(name: "GramDiamondLight"),
+                                startingPosition: .begin,
                                 size: animationSize,
                                 loop: false,
                                 lottieSettings: item.context.lottieRenderingSettings

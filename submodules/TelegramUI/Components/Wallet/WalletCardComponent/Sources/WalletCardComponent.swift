@@ -279,7 +279,7 @@ public final class WalletCardComponent: Component {
         ) -> CGSize {
             self.component = component
 
-            let referenceSize = CGSize(width: 361.0, height: 220.0)
+            let referenceSize = CGSize(width: 370.0, height: 220.0)
             let width = max(0.0, availableSize.width)
             let scale = width / referenceSize.width
             let size = CGSize(width: width, height: referenceSize.height * scale)
@@ -377,20 +377,32 @@ public final class WalletCardComponent: Component {
 
             let mainColor = UIColor.white
             let secondaryColor = UIColor(rgb: 0x6ddcff)
+            let integralFont = Font.with(
+                size: 22.0 * scale,
+                design: .round,
+                weight: .semibold,
+                traits: .monospacedNumbers
+            )
+            let fractionalFont = Font.with(
+                size: 18.0 * scale,
+                design: .round,
+                weight: .semibold,
+                traits: .monospacedNumbers
+            )
+            let currencyFont = Font.with(
+                size: 22.0 * scale,
+                design: .round,
+                weight: .semibold
+            )
             let integralSize = self.integralBalance.update(
                 transition: transition,
                 component: AnyComponent(AnimatedTextComponent(
-                    font: Font.with(
-                        size: 22.0,
-                        design: .round,
-                        weight: .semibold,
-                        traits: .monospacedNumbers
-                    ),
+                    font: integralFont,
                     color: mainColor,
                     items: [
                         AnimatedTextComponent.Item(
                             id: "gramIcon",
-                            content: .icon("Wallet/CardGram", tint: false, offset: CGPoint(x: 0.0, y: -1.0))
+                            content: .icon("Wallet/CardGram", tint: false, offset: CGPoint(x: 0.0, y: -1.0 * scale), scaleFactor: scale)
                         ),
                         AnimatedTextComponent.Item(id: "gramIntegral", content: .text(integralText))
                     ],
@@ -402,12 +414,7 @@ public final class WalletCardComponent: Component {
             let fractionalSize = self.fractionalBalance.update(
                 transition: transition,
                 component: AnyComponent(AnimatedTextComponent(
-                    font: Font.with(
-                        size: 18.0,
-                        design: .round,
-                        weight: .semibold,
-                        traits: .monospacedNumbers
-                    ),
+                    font: fractionalFont,
                     color: mainColor,
                     items: [
                         AnimatedTextComponent.Item(id: "gramFraction", content: .text(fractionalText))
@@ -420,11 +427,7 @@ public final class WalletCardComponent: Component {
             let currencySize = self.currency.update(
                 transition: transition,
                 component: AnyComponent(AnimatedTextComponent(
-                    font: Font.with(
-                        size: 22.0,
-                        design: .round,
-                        weight: .semibold
-                    ),
+                    font: currencyFont,
                     color: secondaryColor,
                     items: [
                         AnimatedTextComponent.Item(id: "gramCurrency", content: .text("GRAM"))
@@ -435,29 +438,30 @@ public final class WalletCardComponent: Component {
                 containerSize: CGSize(width: width, height: 100.0)
             )
 
-            let mainCenterY = 94.0
+            let mainCenterY = 94.0 * scale
             let integralOriginY = floor(mainCenterY - integralSize.height * 0.5)
-            let integralBottomY = integralOriginY + integralSize.height
-            var mainOriginX = 20.0
+            
+            let mainBaselineY = integralOriginY + floorToScreenPixels(integralFont.ascender)
+            var mainOriginX = 20.0 * scale
             let integralFrame = CGRect(
                 origin: CGPoint(x: mainOriginX, y: integralOriginY),
                 size: integralSize
             )
             mainOriginX += integralSize.width
             if !fractionalText.isEmpty {
-                mainOriginX += 1.0
+                mainOriginX += 1.0 * scale
             }
             let fractionalFrame = CGRect(
                 origin: CGPoint(
                     x: mainOriginX,
-                    y: floor(integralBottomY - fractionalSize.height - 2.0) - 1.0 - UIScreenPixel
+                    y: mainBaselineY - floorToScreenPixels(fractionalFont.ascender)
                 ),
                 size: fractionalSize
             )
             mainOriginX += fractionalSize.width
-            mainOriginX += 5.0
+            mainOriginX += 5.0 * scale
             let currencyFrame = CGRect(
-                origin: CGPoint(x: mainOriginX, y: floor(integralBottomY - currencySize.height - 2.0)),
+                origin: CGPoint(x: mainOriginX, y: mainBaselineY - floorToScreenPixels(currencyFont.ascender)),
                 size: currencySize
             )
 
@@ -475,11 +479,15 @@ public final class WalletCardComponent: Component {
                 position: primaryBalanceBaseFrame.center
             )
 
-            if let gramIconSize = UIImage(bundleImageName: "Wallet/CardGram")?.size {
+            if var gramIconSize = UIImage(bundleImageName: "Wallet/CardGram")?.size {
+                if scale != 1.0 {
+                    gramIconSize.width = floor(gramIconSize.width * scale)
+                    gramIconSize.height = floor(gramIconSize.height * scale)
+                }
                 self.gramIconContentFrame = CGRect(
                     origin: CGPoint(
                         x: integralFrame.minX - primaryBalanceBaseFrame.minX,
-                        y: integralFrame.minY - primaryBalanceBaseFrame.minY - 1.0
+                        y: integralFrame.minY - primaryBalanceBaseFrame.minY - 1.0 * scale
                     ),
                     size: gramIconSize
                 )
@@ -528,7 +536,7 @@ public final class WalletCardComponent: Component {
                 transition: transition,
                 component: AnyComponent(AnimatedTextComponent(
                     font: Font.with(
-                        size: 14.0,
+                        size: 14.0 * scale,
                         design: .round,
                         weight: .semibold,
                         traits: .monospacedNumbers
@@ -543,7 +551,7 @@ public final class WalletCardComponent: Component {
                 containerSize: CGSize(width: width, height: 100.0)
             )
             self.secondaryBalanceBaseFrame = CGRect(
-                origin: CGPoint(x: 24.0, y: 114.0),
+                origin: CGPoint(x: 24.0 * scale, y: 114.0 * scale),
                 size: secondarySize
             )
             ComponentTransition.immediate.setBounds(
@@ -569,7 +577,7 @@ public final class WalletCardComponent: Component {
                 component: AnyComponent(MultilineTextComponent(
                     text: .plain(NSAttributedString(
                         string: component.name,
-                        font: Font.with(size: 14.0, design: .monospace, weight: .semibold),
+                        font: Font.with(size: 14.0 * scale, design: .monospace, weight: .semibold),
                         textColor: mainColor
                     )),
                     maximumNumberOfLines: 1
@@ -585,7 +593,7 @@ public final class WalletCardComponent: Component {
                 transition.setFrame(
                     view: nameView,
                     frame: CGRect(
-                        origin: CGPoint(x: 24.0, y: size.height - 35.0),
+                        origin: CGPoint(x: 24.0 * scale, y: size.height - nameSize.height - 19.0 * scale),
                         size: nameSize
                     )
                 )
@@ -614,7 +622,7 @@ public final class WalletCardComponent: Component {
                 transition.setFrame(
                     view: qrView,
                     frame: CGRect(
-                        origin: CGPoint(x: width - 97.0 * scale, y: 82.0 * scale),
+                        origin: CGPoint(x: width - qrSize.width - 47.0 * scale, y: 82.0 * scale),
                         size: qrSize
                     )
                 )
@@ -627,11 +635,11 @@ public final class WalletCardComponent: Component {
                 component: AnyComponent(MultilineTextComponent(
                     text: .plain(NSAttributedString(
                         string: addressText.uppercased(),
-                        font: Font.monospace(11.0),
+                        font: Font.monospace(11.0 * scale),
                         textColor: UIColor(rgb: 0xffffff, alpha: 0.1)
                     )),
                     maximumNumberOfLines: 2,
-                    lineSpacing: -0.05
+                    lineSpacing: -0.05 * scale
                 )),
                 environment: {},
                 containerSize: CGSize(width: size.height, height: 50.0)
@@ -641,11 +649,11 @@ public final class WalletCardComponent: Component {
                 component: AnyComponent(MultilineTextComponent(
                     text: .plain(NSAttributedString(
                         string: addressText.uppercased(),
-                        font: Font.monospace(11.0),
+                        font: Font.monospace(11.0 * scale),
                         textColor: UIColor(rgb: 0x055ac4, alpha: 0.8)
                     )),
                     maximumNumberOfLines: 2,
-                    lineSpacing: -0.05
+                    lineSpacing: -0.05 * scale
                 )),
                 environment: {},
                 containerSize: CGSize(width: size.height, height: 50.0)
@@ -657,7 +665,7 @@ public final class WalletCardComponent: Component {
                 }
                 addressView.transform = .identity
                 addressView.bounds = CGRect(origin: CGPoint(), size: addressSize)
-                addressView.center = CGPoint(x: width - 27.0, y: size.height * 0.5 + 1.0)
+                addressView.center = CGPoint(x: width - addressSize.height - 7.0 * scale, y: size.height * 0.5 + 1.0)
                 addressView.transform = CGAffineTransform(rotationAngle: .pi / 2.0)
             }
             if let addressView = self.address.view {
@@ -667,7 +675,7 @@ public final class WalletCardComponent: Component {
                 }
                 addressView.transform = .identity
                 addressView.bounds = CGRect(origin: CGPoint(), size: addressSize)
-                addressView.center = CGPoint(x: width - 27.0, y: size.height * 0.5)
+                addressView.center = CGPoint(x: width - addressSize.height - 7.0 * scale, y: size.height * 0.5)
                 addressView.transform = CGAffineTransform(rotationAngle: .pi / 2.0)
             }
 

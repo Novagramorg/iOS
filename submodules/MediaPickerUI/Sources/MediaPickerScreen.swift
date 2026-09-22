@@ -219,6 +219,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
     private var presentationDataDisposable: Disposable?
     private let updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?
     private let style: Style
+    private let warpContentsOnEdges: Bool
     
     fileprivate var interaction: MediaPickerInteraction?
     
@@ -322,6 +323,9 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
         private let containerNode: ASDisplayNode
         private let backgroundView: GlassBackgroundView?
         private let backgroundNode: NavigationBackgroundNode
+        private let gridContainerNode: ASDisplayNode
+        private let gridContentNode: ASDisplayNode
+        private let warpView: WarpView?
         fileprivate let gridNode: GridNode
         fileprivate let topEdgeEffectView: EdgeEffectView
         fileprivate let bottomEdgeEffectView: EdgeEffectView
@@ -400,6 +404,9 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                 self.backgroundView = nil
             }
         
+            self.gridContainerNode = ASDisplayNode()
+            self.gridContentNode = ASDisplayNode()
+            self.warpView = controller.warpContentsOnEdges ? WarpView(frame: CGRect()) : nil
             self.gridNode = GridNode()
             self.scrollingArea = SparseItemGridScrollingArea()
             
@@ -431,7 +438,14 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
             } else {
                 self.containerNode.addSubnode(self.backgroundNode)
             }
-            self.containerNode.addSubnode(self.gridNode)
+            self.containerNode.addSubnode(self.gridContainerNode)
+            if let warpView = self.warpView {
+                self.gridContainerNode.view.addSubview(warpView)
+                warpView.contentView.addSubview(self.gridContentNode.view)
+            } else {
+                self.gridContainerNode.addSubnode(self.gridContentNode)
+            }
+            self.gridContentNode.addSubnode(self.gridNode)
             self.containerNode.addSubnode(self.scrollingArea)
             
             if case .glass = controller.style {
@@ -1762,7 +1776,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                         placeholderNode.boostPressed = { [weak controller] in
                             controller?.openBoost()
                         }
-                        self.containerNode.insertSubnode(placeholderNode, aboveSubnode: self.gridNode)
+                        self.containerNode.insertSubnode(placeholderNode, aboveSubnode: self.gridContainerNode)
                         self.placeholderNode = placeholderNode
                         
                         placeholderTransition = .immediate
@@ -1818,6 +1832,12 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                         
             let cleanGridInsets = UIEdgeInsets(top: insets.top, left: layout.safeInsets.left, bottom: layout.intrinsicInsets.bottom, right: layout.safeInsets.right)
             let gridInsets = UIEdgeInsets(top: insets.top + manageHeight, left: layout.safeInsets.left, bottom: layout.intrinsicInsets.bottom, right: layout.safeInsets.right)
+            transition.updateFrame(node: self.gridContainerNode, frame: innerBounds)
+            transition.updateFrame(node: self.gridContentNode, frame: innerBounds)
+            if let warpView = self.warpView {
+                transition.updateFrame(view: warpView, frame: innerBounds)
+                warpView.update(size: bounds.size, topInset: 0.0, bottomInset: layout.additionalInsets.bottom, warpHeight: 50.0, transition: ComponentTransition(transition))
+            }
             transition.updateFrame(node: self.gridNode, frame: innerBounds)
             self.scrollingArea.frame = innerBounds
             
@@ -1871,7 +1891,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
             if let selectionNode = self.selectionNode, let controller = self.controller {
                 let selectionTransition = selectionNode.supernode == nil ? .immediate : transition
                 if selectionNode.supernode == nil {
-                    self.containerNode.insertSubnode(selectionNode, aboveSubnode: self.gridNode)
+                    self.containerNode.insertSubnode(selectionNode, aboveSubnode: self.gridContainerNode)
                 }
                 
                 let selectedItems = controller.interaction?.selectionState?.selectedItems() as? [TGMediaSelectableItem] ?? []
@@ -1961,7 +1981,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                         self?.dismissInput()
                         self?.controller?.openCamera?(nil)
                     }
-                    self.containerNode.insertSubnode(placeholderNode, aboveSubnode: self.gridNode)
+                    self.containerNode.insertSubnode(placeholderNode, aboveSubnode: self.gridContainerNode)
                     self.placeholderNode = placeholderNode
                     
                     if transition.isAnimated {
@@ -2029,6 +2049,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
         context: AccountContext,
         updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? = nil,
         style: Style = .legacy,
+        warpContentsOnEdges: Bool = false,
         peer: EnginePeer?,
         threadTitle: String?,
         chatLocation: ChatLocation?,
@@ -2057,6 +2078,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
         self.presentationData = presentationData
         self.updatedPresentationData = updatedPresentationData
         self.style = style
+        self.warpContentsOnEdges = warpContentsOnEdges
         self.peer = peer
         self.threadTitle = threadTitle
         self.chatLocation = chatLocation
@@ -2964,7 +2986,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
         var updateNavigationStackImpl: ((AttachmentContainable) -> Void)?
         let groupsController = MediaGroupsScreen(context: self.context, updatedPresentationData: self.updatedPresentationData, mediaAssetsContext: self.controllerNode.mediaAssetsContext, embedded: embedded, openGroup: { [weak self] collection in
             if let strongSelf = self {
-                let mediaPicker = MediaPickerScreenImpl(context: strongSelf.context, updatedPresentationData: strongSelf.updatedPresentationData, peer: strongSelf.peer, threadTitle: strongSelf.threadTitle, chatLocation: strongSelf.chatLocation, isScheduledMessages: strongSelf.isScheduledMessages, bannedSendPhotos: strongSelf.bannedSendPhotos, bannedSendVideos: strongSelf.bannedSendVideos, subject: .assets(collection, mode), editingContext: strongSelf.interaction?.editingState, selectionContext: strongSelf.interaction?.selectionState)
+                let mediaPicker = MediaPickerScreenImpl(context: strongSelf.context, updatedPresentationData: strongSelf.updatedPresentationData, warpContentsOnEdges: strongSelf.warpContentsOnEdges, peer: strongSelf.peer, threadTitle: strongSelf.threadTitle, chatLocation: strongSelf.chatLocation, isScheduledMessages: strongSelf.isScheduledMessages, bannedSendPhotos: strongSelf.bannedSendPhotos, bannedSendVideos: strongSelf.bannedSendVideos, subject: .assets(collection, mode), editingContext: strongSelf.interaction?.editingState, selectionContext: strongSelf.interaction?.selectionState)
                 
                 mediaPicker.presentSchedulePicker = strongSelf.presentSchedulePicker
                 mediaPicker.presentTimerPicker = strongSelf.presentTimerPicker

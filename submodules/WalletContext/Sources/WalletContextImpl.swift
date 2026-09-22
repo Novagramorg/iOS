@@ -68,6 +68,7 @@ actor WalletContextImpl {
     var transferGaslessMinAmount = WalletConfiguration.defaultValue.transferGaslessMinAmount
     var storedState = WalletStoredState()
     var serverWalletState: TelegramCore.WalletState?
+    var isChangingWalletLocally = false
     var pendingInitialServerWalletState: (state: TelegramCore.WalletState, refreshIfStreamingUnavailable: Bool)?
     var deferredServerWalletState: (state: TelegramCore.WalletState, refreshIfStreamingUnavailable: Bool)?
     var serverStateRefreshRequested = false
@@ -101,6 +102,8 @@ actor WalletContextImpl {
     var transferSubmissionClock = WalletTransferSubmissionClock()
     var transferSubmissions = WalletTransferSubmissionRegistry()
     var isShutdown = false
+    var previousWalletBalancesLastAttemptAt: TimeInterval?
+    var previousWalletBalancesTask: Task<[WalletContext.PreviousWallet], Error>?
     var serverStateTask: Task<Void, Never>?
     var activationTask: Task<Void, Never>?
     var synchronizationTask: Task<Void, Never>?
@@ -200,6 +203,7 @@ actor WalletContextImpl {
         }
         self.stateSubscriberCount = 0
         self.screenDemand = WalletScreenDemand()
+        self.previousWalletBalancesTask?.cancel()
         self.serverStateTask?.cancel()
         self.activationTask?.cancel()
         self.synchronizationTask?.cancel()
@@ -481,6 +485,7 @@ actor WalletContextImpl {
                         serverAddress: address,
                         serverPublicKey: publicKey,
                         discardMismatch: true,
+                        archivePreviousWallet: !self.isChangingWalletLocally,
                         serverStateRevision: revision
                     )
                 } else if case .empty = value {
@@ -647,6 +652,7 @@ actor WalletContextImpl {
             } ?? false
             let previousBalance = isSameCachedIdentity ? self.currentState.balance.currentValue : nil
             let supersededBalance = isSameCachedIdentity ? nil : self.currentState.balance.currentValue
+            let archivePreviousWallet = !self.isChangingWalletLocally
             self.observationTask?.cancel()
             self.observationTask = nil
             self.cancelSynchronization()
@@ -672,6 +678,7 @@ actor WalletContextImpl {
                     address: address,
                     publicKey: publicKey,
                     supersededBalance: supersededBalance,
+                    archivePreviousWallet: archivePreviousWallet,
                     generation: generation,
                     serverStateRevision: serverStateRevision
                 )
@@ -686,6 +693,7 @@ actor WalletContextImpl {
         address: String,
         publicKey: Data,
         supersededBalance: Int64?,
+        archivePreviousWallet: Bool,
         generation: UInt64,
         serverStateRevision: UInt64
     ) async {
@@ -747,6 +755,7 @@ actor WalletContextImpl {
                         recordId: prepared.recordId,
                         serverAddress: address,
                         serverPublicKey: publicKey,
+                        archivePreviousWallet: archivePreviousWallet,
                         serverStateRevision: serverStateRevision
                     )
                 } catch {
@@ -754,6 +763,7 @@ actor WalletContextImpl {
                     activation = try await self.runtime.activate(
                         serverAddress: address,
                         serverPublicKey: publicKey,
+                        archivePreviousWallet: archivePreviousWallet,
                         serverStateRevision: serverStateRevision
                     )
                 }
@@ -761,6 +771,7 @@ actor WalletContextImpl {
                 activation = try await self.runtime.activate(
                     serverAddress: address,
                     serverPublicKey: publicKey,
+                    archivePreviousWallet: archivePreviousWallet,
                     serverStateRevision: serverStateRevision
                 )
             }

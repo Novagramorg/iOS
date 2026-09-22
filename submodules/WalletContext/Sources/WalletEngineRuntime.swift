@@ -90,6 +90,7 @@ actor WalletEngineRuntime {
     func activate(
         serverAddress: String,
         serverPublicKey: Data,
+        archivePreviousWallet: Bool = false,
         serverStateRevision: UInt64? = nil
     ) async throws -> WalletEngineActivation {
         let revision = serverStateRevision ?? self.serverStateRevision
@@ -97,6 +98,7 @@ actor WalletEngineRuntime {
             try await self.activateUnlocked(
                 serverAddress: serverAddress,
                 serverPublicKey: serverPublicKey,
+                archivePreviousWallet: archivePreviousWallet,
                 serverStateRevision: revision
             )
         }
@@ -254,6 +256,7 @@ actor WalletEngineRuntime {
         recordId: String,
         serverAddress: String,
         serverPublicKey: Data,
+        archivePreviousWallet: Bool = false,
         serverStateRevision: UInt64? = nil
     ) async throws -> WalletEngineActivation {
         let revision = serverStateRevision ?? self.serverStateRevision
@@ -271,10 +274,11 @@ actor WalletEngineRuntime {
             }
             let signingPublicKey = try await self.signingPublicKey(for: candidate)
             guard self.serverStateRevision == revision else { throw CancellationError() }
-            try await self.promoteReplacementCandidate(candidate.withSigningPublicKey(signingPublicKey))
+            try await self.promoteReplacementCandidate(candidate.withSigningPublicKey(signingPublicKey), archivePreviousWallet: archivePreviousWallet)
             return try await self.activateUnlocked(
                 serverAddress: serverAddress,
                 serverPublicKey: serverPublicKey,
+                archivePreviousWallet: false,
                 serverStateRevision: revision
             )
         }
@@ -284,6 +288,7 @@ actor WalletEngineRuntime {
         serverAddress: String,
         serverPublicKey: Data,
         discardMismatch: Bool,
+        archivePreviousWallet: Bool = false,
         serverStateRevision: UInt64? = nil
     ) async throws -> Bool {
         let revision = serverStateRevision ?? self.serverStateRevision
@@ -305,7 +310,7 @@ actor WalletEngineRuntime {
                candidate.publicKey == serverPublicKey,
                candidate.descriptor != nil {
                 let verifiedCandidate = signingPublicKey.map { candidate.withSigningPublicKey($0) } ?? candidate
-                try await self.promoteReplacementCandidate(verifiedCandidate)
+                try await self.promoteReplacementCandidate(verifiedCandidate, archivePreviousWallet: archivePreviousWallet)
                 return true
             } else if discardMismatch, signingPublicKey != nil,
                       !walletEngineAddressesEqual(candidate.address, serverAddress) {
@@ -345,6 +350,7 @@ actor WalletEngineRuntime {
     private func activateUnlocked(
         serverAddress: String,
         serverPublicKey: Data,
+        archivePreviousWallet: Bool,
         serverStateRevision: UInt64
     ) async throws -> WalletEngineActivation {
         guard serverPublicKey.count == 32 else {
@@ -405,7 +411,8 @@ actor WalletEngineRuntime {
         let client = try self.makeClient(config: config)
         do {
             try await self.storage.saveDescriptor(record)
-            if let stored,
+            if archivePreviousWallet, let stored,
+               !walletEngineAddressesEqual(stored.address, serverAddress),
                stored.recordId != record.recordId,
                stored.secretRef != record.secretRef {
                 try await self.archiveLocalWallet(stored)
@@ -425,11 +432,12 @@ actor WalletEngineRuntime {
         )
     }
 
-    private func promoteReplacementCandidate(_ candidate: WalletEngineDescriptorRecord) async throws {
+    private func promoteReplacementCandidate(_ candidate: WalletEngineDescriptorRecord, archivePreviousWallet: Bool) async throws {
         let previous = try await self.storage.loadDescriptor()
         try await self.storage.saveDescriptor(candidate)
         try await self.storage.removeReplacementCandidate()
-        if let previous,
+        if archivePreviousWallet, let previous,
+           !walletEngineAddressesEqual(previous.address, candidate.address),
            previous.recordId != candidate.recordId,
            previous.secretRef != candidate.secretRef {
             try await self.archiveLocalWallet(previous)
@@ -492,6 +500,22 @@ actor WalletEngineRuntime {
                 lastUsedAt: $0.archivedAt
             )
         }
+    }
+
+    func refreshArchivedWalletBalances(_ wallets: [WalletContext.PreviousWallet]) async throws -> [WalletContext.PreviousWallet] {
+        var balances: [String: Int64] = [:]
+        for address in Set(wallets.map(\.address)) {
+            try Task.checkCancellation()
+            do {
+                balances[address] = try await self.statuslessHost.walletBalance(address: address)
+            } catch {
+                try Task.checkCancellation()
+                self.logger.error("wallet_archived_balance_refresh_failed", error)
+            }
+        }
+        try Task.checkCancellation()
+        try await self.storage.updateArchivedWalletBalances(balances)
+        return try await self.archivedWallets()
     }
 
     func forgetArchivedWallet(recordId: String) async throws {

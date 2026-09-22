@@ -305,7 +305,8 @@ private final class AttachButtonComponent: CombinedComponent {
                 imageFile = nil
             case .quickReply:
                 name = strings.Attachment_Reply
-                imageName = "Chat/Attach Menu/Reply"
+                animationName = "TabReply"
+                imageName = ""
             case .richText:
                 name = strings.Attachment_Article
                 animationName = "TabArticle"
@@ -2349,8 +2350,13 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate, ASGestureRecog
                 }
             }
             textInputPanelNode.focusUpdated = { [weak self] focus in
-                if let strongSelf = self, focus {
-                    strongSelf.beganTextEditing()
+                if let strongSelf = self {
+                    if focus {
+                        strongSelf.beganTextEditing()
+                    }
+                    if strongSelf.panelStyle == .glass && strongSelf.isSelecting {
+                        strongSelf.requestLayout()
+                    }
                 }
             }
             textInputPanelNode.updateHeight = { [weak self] _ in
@@ -2596,7 +2602,8 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate, ASGestureRecog
             self.textInputPanelNode?.ensureUnfocused()
         }
 
-        let textPanelSideInset: CGFloat = self.panelStyle == .glass ? glassTextPanelInset : 16.0
+        let isTextInputFocused = isSelecting && self.textInputPanelNode?.isFocused == true
+        let textPanelSideInset: CGFloat = self.panelStyle == .glass && !isTextInputFocused ? glassTextPanelInset : 16.0
         let textInputSideInset = textPanelSideInset - 16.0
         let defaultPanelSideInset: CGFloat = self.panelStyle == .glass ? glassPanelInset : 20.0
         let panelSideInset: CGFloat = (isSelecting ? textPanelSideInset : defaultPanelSideInset) + layout.safeInsets.left
@@ -2606,6 +2613,9 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate, ASGestureRecog
         var textPanelWidth: CGFloat = 0.0
         if let textInputPanelNode = self.textInputPanelNode {
             textInputPanelNode.isUserInteractionEnabled = isSelecting
+            if self.panelStyle == .glass {
+                textInputPanelNode.inputPanelBottomSpacing = isTextInputFocused ? 8.0 : glassTextPanelInset
+            }
 
             var panelTransition = transition
             if textInputPanelNode.frame.width.isZero {

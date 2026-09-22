@@ -1536,6 +1536,7 @@ private final class WalletReceiveSheetComponent: CombinedComponent {
                         self.presentOnrampError(getController: getController)
                         return
                     }
+                    var didBeginAnimatedDismiss = false
                     context.sharedContext.openBotApp(
                         context: context,
                         parentController: parentController,
@@ -1545,14 +1546,23 @@ private final class WalletReceiveSheetComponent: CombinedComponent {
                         mode: botAppStart.mode,
                         isOnramp: true,
                         willOpen: { [weak controller] in
-                            if let controller = controller as? WalletReceiveScreen, let view = controller.node.hostView.findTaggedView(
+                            guard !didBeginAnimatedDismiss, let controller = controller as? WalletReceiveScreen else {
+                                return
+                            }
+                            if let view = controller.node.hostView.findTaggedView(
                                 tag: SheetComponent<ViewControllerComponentContainer.Environment>.View.Tag()
                             ) as? SheetComponent<ViewControllerComponentContainer.Environment>.View {
                                 view.setDimHidden(true, animated: true)
                             }
+                            if controller.validLayout?.metrics.widthClass == .regular {
+                                didBeginAnimatedDismiss = true
+                                controller.dismissAnimated()
+                            }
                         },
                         completion: { [weak controller] in
-                            controller?.dismiss(animated: false)
+                            if !didBeginAnimatedDismiss {
+                                controller?.dismiss(animated: false)
+                            }
                         }
                     )
                 }))

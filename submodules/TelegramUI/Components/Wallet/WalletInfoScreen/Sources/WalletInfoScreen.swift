@@ -68,7 +68,7 @@ private func walletInfoContent(
         let buttonTitle = "Got it"
 
         return WalletInfoContent(
-            logo: WalletInfoLogo(name: "TonDiamond", loop: true),
+            logo: WalletInfoLogo(name: "GramDiamond", loop: true),
             title: title,
             text: text,
             items: [
@@ -125,7 +125,7 @@ private func walletInfoContent(
         let buttonTitle = "Got it"
 
         return WalletInfoContent(
-            logo: WalletInfoLogo(name: "TonDiamond", loop: true),
+            logo: WalletInfoLogo(name: "GramDiamond", loop: true),
             title: title,
             text: text,
             items: [
@@ -182,7 +182,7 @@ private func walletInfoContent(
         let buttonTitle = "Got it"
 
         return WalletInfoContent(
-            logo: WalletInfoLogo(name: "TonDiamond", loop: true),
+            logo: WalletInfoLogo(name: "GramDiamond", loop: true),
             title: title,
             text: text,
             items: [
@@ -403,7 +403,8 @@ private final class WalletInfoSheetContent: CombinedComponent {
             let spacing: CGFloat = 16.0
             var contentSize = CGSize(width: context.availableSize.width, height: 33.0)
 
-            let animationSize = CGSize(width: 100.0, height: 100.0)
+            let animationSide: CGFloat = content.logo.name == "GramDiamond" ? 118.0 : 100.0
+            let animationSize = CGSize(width: animationSide, height: animationSide)
             let animation = animation.update(
                 component: LottieComponent(
                     content: LottieComponent.AppBundleContent(name: content.logo.name),
