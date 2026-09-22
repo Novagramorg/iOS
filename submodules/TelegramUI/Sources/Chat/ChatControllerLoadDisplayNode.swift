@@ -1253,7 +1253,7 @@ extension ChatControllerImpl {
                     if case let .media(options) = editMessageState.content {
                         editMediaOptions = options
                     }
-                    strongSelf.presentEditingAttachmentMenu(editMediaOptions: editMediaOptions, editMediaReference: originalMediaReference)
+                    strongSelf.presentAttachmentMenu(subject: .edit(mediaOptions: editMediaOptions, mediaReference: originalMediaReference))
                 })
             } else {
                 strongSelf.presentAttachmentMenu(subject: .default)
