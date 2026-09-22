@@ -292,6 +292,10 @@ final class WalletSendAmountField: UIView, UITextFieldDelegate {
         return self.textField.isFirstResponder
     }
 
+    var hasInputText: Bool {
+        return !(self.textField.text ?? "").isEmpty
+    }
+
     override init(frame: CGRect) {
         super.init(frame: frame)
 
