@@ -71,6 +71,21 @@ final class IntentMessageConversionTests: XCTestCase {
         XCTAssertNil(intentMessage?.groupName)
     }
 
+    /// Siri matches the sender it read a message from against the recipient it resolves for
+    /// the reply by handle, so both must describe a user the same way.
+    func testSenderIsDescribedLikeAResolvedRecipient() {
+        let author = IntentMessageFixtures.user(1001, firstName: "Alice", phone: "15551234567")
+        let message = IntentMessageFixtures.message(in: author, author: author)
+
+        let sender = messageWithTelegramMessage(message)?.sender
+        let recipient = personWithUser(stableId: "tg\(author.id.toInt64())", user: author)
+
+        XCTAssertEqual(sender?.personHandle?.value, recipient.personHandle?.value)
+        XCTAssertEqual(sender?.personHandle?.type, recipient.personHandle?.type)
+        XCTAssertEqual(sender?.displayName, recipient.displayName)
+        XCTAssertEqual(sender?.customIdentifier, recipient.customIdentifier)
+    }
+
     func testServiceNotificationsAreNotReadOut() {
         let service = IntentMessageFixtures.user(777000, firstName: "Telegram")
         let message = IntentMessageFixtures.message(in: service, author: service, text: "Login code: 12345")

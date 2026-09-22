@@ -32,22 +32,29 @@ func siriSendMessageTarget(conversationIdentifier: String?, recipientCustomIdent
 /// monoforum, because `INMessage.conversationIdentifier` names the chat only and the reply
 /// would land in the wrong topic.
 ///
-/// `cachedData` is the peer's `CachedUserData` when the store has it; without it the user's
-/// own flags decide, the way the chat list does before the full data is fetched.
-func peerAcceptsSiriMessages(_ peer: Peer, cachedData: CachedPeerData? = nil, accountIsPremium: Bool = false) -> Bool {
+/// `cachedData` is the peer's `CachedUserData` when the store has it; it is refreshed only when
+/// the chat is opened, while the user's own flags arrive with every update, so either source
+/// saying the chat is gated is enough to refuse. `isAccountPeer` is the account itself (Saved
+/// Messages), which is never gated.
+func peerAcceptsSiriMessages(_ peer: Peer, cachedData: CachedPeerData? = nil, accountIsPremium: Bool = false, isAccountPeer: Bool = false) -> Bool {
     switch peer {
     case let user as TelegramUser:
-        if user.isDeleted || user.id.id._internalGetInt64Value() == 777000 {
+        if user.isDeleted || isServicePeer(user) {
             return false
         }
+        if isAccountPeer {
+            return true
+        }
         if let cachedData = cachedData as? CachedUserData {
+            if cachedData.isBlocked {
+                return false
+            }
             if cachedData.sendPaidMessageStars != nil {
                 return false
             }
             if cachedData.flags.contains(.premiumRequired) && !accountIsPremium {
                 return false
             }
-            return true
         }
         if user.flags.contains(.mutualContact) {
             return true
@@ -100,11 +107,11 @@ enum SiriRecipientDecision {
 
 /// Every recipient Siri resolves goes through this, so `peerAcceptsSiriMessages` is applied
 /// before Siri ever confirms a message, not only when the send runs.
-func siriRecipientDecision(for peer: Peer?, cachedData: CachedPeerData? = nil, accountIsPremium: Bool = false) -> SiriRecipientDecision {
+func siriRecipientDecision(for peer: Peer?, cachedData: CachedPeerData? = nil, accountIsPremium: Bool = false, isAccountPeer: Bool = false) -> SiriRecipientDecision {
     guard let peer else {
         return .unknown
     }
-    if !peerAcceptsSiriMessages(peer, cachedData: cachedData, accountIsPremium: accountIsPremium) {
+    if !peerAcceptsSiriMessages(peer, cachedData: cachedData, accountIsPremium: accountIsPremium, isAccountPeer: isAccountPeer) {
         return .refused
     }
     return .person(personWithPeer(stableId: "tg\(peer.id.toInt64())", peer: peer))
@@ -118,6 +125,7 @@ func siriRecipientDecision(transaction: Transaction, accountPeerId: PeerId, peer
     return siriRecipientDecision(
         for: transaction.getPeer(peerId),
         cachedData: transaction.getPeerCachedData(peerId: peerId),
-        accountIsPremium: accountIsPremium
+        accountIsPremium: accountIsPremium,
+        isAccountPeer: peerId == accountPeerId
     )
 }

@@ -287,25 +287,9 @@ private func intentSender(for author: Peer) -> INPerson? {
         if user.id.id._internalGetInt64Value() == 777000 {
             return nil
         }
-        let personHandle: INPersonHandle
-        if #available(iOSApplicationExtension 10.2, iOS 10.2, *) {
-            var type: INPersonHandleType
-            var label: INPersonHandleLabel?
-            if let username = user.addressName {
-                label = INPersonHandleLabel(rawValue: "@\(username)")
-                type = .unknown
-            } else if let phone = user.phone {
-                label = INPersonHandleLabel(rawValue: formatPhoneNumber(phone))
-                type = .phoneNumber
-            } else {
-                label = nil
-                type = .unknown
-            }
-            personHandle = INPersonHandle(value: user.phone ?? "", type: type, label: label)
-        } else {
-            personHandle = INPersonHandle(value: user.phone ?? "", type: .phoneNumber)
-        }
-        return INPerson(personHandle: personHandle, nameComponents: nil, displayName: user.nameOrPhone, image: nil, contactIdentifier: personIdentifier, customIdentifier: personIdentifier)
+        // The same builder recipient resolution uses: Siri matches the sender it read from
+        // against the recipient of a reply by handle.
+        return personWithUser(stableId: personIdentifier, user: user)
     } else if author is TelegramChannel {
         return personWithPeer(stableId: personIdentifier, peer: author)
     } else {

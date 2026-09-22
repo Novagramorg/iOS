@@ -63,6 +63,36 @@ final class SiriSendMessageTargetTests: XCTestCase {
         XCTAssertFalse(peerAcceptsSiriMessages(IntentMessageFixtures.user(1007, firstName: "Stars", flags: [.requireStars]), cachedData: nil, accountIsPremium: true), "no cached data, user flag says stars required")
     }
 
+    func testBlockedUserIsRefused() {
+        let blocked = CachedUserData().withUpdatedIsBlocked(true)
+
+        XCTAssertFalse(peerAcceptsSiriMessages(IntentMessageFixtures.user(1008, firstName: "Blocked"), cachedData: blocked, accountIsPremium: true))
+    }
+
+    /// Cached data is refreshed only when the chat is opened; the user's own flags arrive
+    /// with every update. Either source saying the chat is gated is enough to refuse.
+    func testFreshUserFlagsOverrideStaleCachedData() {
+        let staleNoFee = CachedUserData()
+
+        XCTAssertFalse(peerAcceptsSiriMessages(IntentMessageFixtures.user(1009, firstName: "Stars", flags: [.requireStars]), cachedData: staleNoFee, accountIsPremium: true))
+        XCTAssertFalse(peerAcceptsSiriMessages(IntentMessageFixtures.user(1010, firstName: "Premium", flags: [.requirePremium]), cachedData: staleNoFee, accountIsPremium: false))
+    }
+
+    func testEveryServicePeerIsRefused() {
+        for id: Int64 in [777000, 333000, 1271266957, 489000, 708513] {
+            XCTAssertFalse(peerAcceptsSiriMessages(IntentMessageFixtures.user(id, firstName: "Service")), "\(id)")
+        }
+    }
+
+    /// Messaging yourself (Saved Messages) is always allowed, whatever gates the account has
+    /// set for others.
+    func testTheAccountItselfIsNeverGated() {
+        let me = IntentMessageFixtures.user(1011, firstName: "Me", flags: [.requirePremium, .requireStars])
+
+        XCTAssertTrue(peerAcceptsSiriMessages(me, cachedData: nil, accountIsPremium: false, isAccountPeer: true))
+        XCTAssertFalse(peerAcceptsSiriMessages(me, cachedData: nil, accountIsPremium: false, isAccountPeer: false))
+    }
+
     func testMigratedOrDeactivatedLegacyGroupsAreRefused() {
         XCTAssertFalse(peerAcceptsSiriMessages(IntentMessageFixtures.group(2004, title: "Upgraded", migratedTo: peerId(Namespaces.Peer.CloudChannel, 3001))))
         XCTAssertFalse(peerAcceptsSiriMessages(IntentMessageFixtures.group(2005, title: "Deactivated", flags: [.deactivated])))
