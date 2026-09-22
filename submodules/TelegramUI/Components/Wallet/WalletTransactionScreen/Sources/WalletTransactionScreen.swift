@@ -2275,7 +2275,7 @@ private final class WalletTransactionContentComponent: Component {
                     let _ = self.gramAnimation.update(
                         transition: transition,
                         component: AnyComponent(LottieComponent(
-                            content: LottieComponent.AppBundleContent(name: "TonDiamond"),
+                            content: LottieComponent.AppBundleContent(name: "GramDiamond"),
                             startingPosition: .begin,
                             size: animationSize,
                             loop: false,

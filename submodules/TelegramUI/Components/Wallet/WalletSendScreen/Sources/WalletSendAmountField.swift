@@ -496,7 +496,7 @@ final class WalletSendAmountField: UIView, UITextFieldDelegate {
         let _ = self.gramIcon.update(
             transition: transition,
             component: AnyComponent(LottieComponent(
-                content: LottieComponent.AppBundleContent(name: "TonDiamond"),
+                content: LottieComponent.AppBundleContent(name: "GramDiamond"),
                 startingPosition: .begin,
                 size: self.gramAnimationSize,
                 loop: false,
