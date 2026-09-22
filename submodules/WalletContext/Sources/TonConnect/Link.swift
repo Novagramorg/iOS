@@ -14,13 +14,17 @@ public struct TonConnectLink: Equatable, Sendable {
         let host = url.host?.lowercased()
         let telegramScheme = scheme == "tg" || scheme == "telegram"
         if scheme == "tc" || (telegramScheme && host == "ton-connect") { return true }
+        let items = url.queryItems ?? []
+        let carriesStart = items.contains { $0.name == "startapp" && $0.value?.hasPrefix("tonconnect-") == true }
         let walletLink = (scheme == "https" && host == "t.me" && ["/sendgrams", "/sendgrams/"].contains(url.path.lowercased()))
             || (telegramScheme && host == "sendgrams")
-        guard walletLink else { return false }
-        return (url.queryItems ?? []).contains {
-            ["id", "v", "r"].contains($0.name)
-                || ($0.name == "startapp" && $0.value?.hasPrefix("tonconnect-") == true)
+        if walletLink {
+            return carriesStart || items.contains { ["id", "v", "r"].contains($0.name) }
         }
+        // The same request also arrives addressed to the wallet by name.
+        let resolvesWallet = telegramScheme && host == "resolve"
+            && items.contains { $0.name == "domain" && $0.value?.lowercased() == "sendgrams" }
+        return resolvesWallet && carriesStart
     }
 
     public init(_ value: String) throws {
