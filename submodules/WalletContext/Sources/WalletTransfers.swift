@@ -7,11 +7,13 @@ import WalletEngineFFI
 private let walletTransferResolutionInterval: Int32 = 15
 private let walletTransferSubmissionTimeout: UInt64 = 45_000_000_000
 
+@available(macOS 10.15, *)
 struct WalletTransferSubmissionClock: Sendable {
     var now: @Sendable () -> Int32 = { Int32(clamping: Int64(Date().timeIntervalSince1970)) }
     var sleep: @Sendable (UInt64) async throws -> Void = { try await Task.sleep(nanoseconds: $0) }
 }
 
+@available(macOS 10.15, *)
 struct WalletTransferSubmissionRecord: Codable, Equatable, Sendable {
     enum Resolution: String, Codable, Sendable {
         case pending, consumed, rejected, expired
@@ -39,11 +41,13 @@ struct WalletTransferSubmissionRecord: Codable, Equatable, Sendable {
     }
 }
 
+@available(macOS 10.15, *)
 enum WalletTransferSubmissionError: Error {
     case staleSequenceNumber
     case invalidChainState
 }
 
+@available(macOS 10.15, *)
 struct WalletTransferChainState: Equatable, Sendable {
     let seqno: UInt32
     let providerTime: UInt64
@@ -154,6 +158,7 @@ struct WalletTransferSubmissionRegistry {
     }
 }
 
+@available(macOS 10.15, *)
 actor WalletTransferSubmissionCoordinator {
     private var owner: UUID?
     private var waiters: [(UUID, CheckedContinuation<Void, Error>)] = []
@@ -198,6 +203,7 @@ actor WalletTransferSubmissionCoordinator {
     }
 }
 
+@available(macOS 10.15, *)
 final class WalletTransferSubmissionControl: @unchecked Sendable {
     private let lock = NSLock()
     private var cancelled = false

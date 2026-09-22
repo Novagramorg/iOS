@@ -121,10 +121,15 @@ final class PasscodeKeychain: PasscodeStorage {
     }
 
     func read(_ account: String, context: LAContext? = nil) throws -> Data? {
+        if let value = try self.rawRead(account, context: context) {
+            return value
+        }
         #if os(macOS)
-        self.adoptGroupedItemsIfNeeded()
+        if !account.hasPrefix("biometric.") {
+            return self.adoptGroupedItem(account)
+        }
         #endif
-        return try self.rawRead(account, context: context)
+        return nil
     }
 
     private func rawRead(_ account: String, context: LAContext?) throws -> Data? {
@@ -141,32 +146,22 @@ final class PasscodeKeychain: PasscodeStorage {
     }
 
     #if os(macOS)
-    private static let adoptionLock = NSLock()
-    private static var didAdoptGroupedItems = false
-
-    private func adoptGroupedItemsIfNeeded() {
-        PasscodeKeychain.adoptionLock.lock()
-        defer { PasscodeKeychain.adoptionLock.unlock() }
-        guard !PasscodeKeychain.didAdoptGroupedItems else { return }
-        PasscodeKeychain.didAdoptGroupedItems = true
-        guard ((try? self.rawRead("grouped-adoption.v1", context: nil)) ?? nil) == nil,
-              let group = try? self.environment.sharedAccessGroup() else {
-            return
+    private func adoptGroupedItem(_ account: String) -> Data? {
+        guard let group = try? self.environment.sharedAccessGroup(),
+              var query = try? self.query(account) else {
+            return nil
         }
-        for account in ["credential", "device", "attempts"] {
-            guard var query = try? self.query(account) else { continue }
-            query[kSecAttrAccessGroup as String] = group
-            query[kSecUseDataProtectionKeychain as String] = true
-            query[kSecReturnData as String] = true
-            query[kSecMatchLimit as String] = kSecMatchLimitOne
-            var result: CFTypeRef?
-            guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
-                  let data = result as? Data else {
-                continue
-            }
-            try? self.write(data, account: account)
+        query[kSecAttrAccessGroup as String] = group
+        query[kSecUseDataProtectionKeychain as String] = true
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        var result: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
+              let data = result as? Data else {
+            return nil
         }
-        try? self.write(Data([1]), account: "grouped-adoption.v1")
+        try? self.write(data, account: account)
+        return data
     }
     #endif
 
@@ -292,6 +287,16 @@ public final class PasscodeCredentialStore: @unchecked Sendable {
         self.mutex.lock()
         self.lockPath = directory + "/passcode-v1.lock"
         self.mutex.unlock()
+    }
+
+    /// Whether a credential record is present. Answering this must not depend on
+    /// `requireExistingCredential`, since the caller asks precisely to decide
+    /// whether requiring one can be honoured.
+    public func hasStoredCredential() throws -> Bool {
+        try self.serialized {
+            guard let data = try self.storage.read("credential", context: nil) else { return false }
+            return (try? JSONDecoder().decode(Record.self, from: data)) != nil
+        }
     }
 
     public func requireExistingCredential() {

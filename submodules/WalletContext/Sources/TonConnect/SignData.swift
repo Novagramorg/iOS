@@ -1,6 +1,7 @@
 import Foundation
 import CryptoKit
 
+@available(macOS 10.15, *)
 public struct TonConnectSignDataPayload: Equatable, Sendable {
     public enum Content: Equatable, Sendable {
         case text(String)
@@ -139,6 +140,7 @@ public struct TonConnectSignDataPayload: Equatable, Sendable {
     }
 }
 
+@available(macOS 10.15, *)
 private struct TonConnectSignDataBits {
     private var bytes: [UInt8] = []
     private var count = 0

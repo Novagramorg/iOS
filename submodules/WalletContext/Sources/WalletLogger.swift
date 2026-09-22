@@ -267,6 +267,7 @@ extension WalletLogger {
     }
 }
 
+@available(macOS 10.15, *)
 func tonConnectErrorKind(_ error: Error) -> String? {
     if let error = error as? TonConnectFailure {
         switch error {
