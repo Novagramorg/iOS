@@ -203,7 +203,7 @@ private func synchronizeChatInputState(transaction: Transaction, postbox: Postbo
             
             var replyToPeer: Api.InputPeer?
             var discard = false
-            if replySubject.messageId.peerId != peerId {
+            if outgoingReplyRequiresExplicitPeer(destinationPeer: peer, destinationThreadId: threadId, replyMessageId: replySubject.messageId, replyThreadId: transaction.getMessage(replySubject.messageId)?.threadId) {
                 replyToPeer = transaction.getPeer(replySubject.messageId.peerId).flatMap(apiInputPeer)
                 if replyToPeer == nil {
                     discard = true

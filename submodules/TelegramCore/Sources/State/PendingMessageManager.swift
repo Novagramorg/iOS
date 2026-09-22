@@ -1230,7 +1230,7 @@ public final class PendingMessageManager {
                 for attribute in messages[0].0.attributes {
                     if let replyAttribute = attribute as? ReplyMessageAttribute {
                         replyMessageId = replyAttribute.messageId.id
-                        if peerId != replyAttribute.messageId.peerId {
+                        if outgoingReplyRequiresExplicitPeer(destinationPeer: peer, destinationThreadId: messages[0].0.threadId, replyMessageId: replyAttribute.messageId, replyThreadId: transaction.getMessage(replyAttribute.messageId)?.threadId ?? replyAttribute.threadMessageId.flatMap { Int64($0.id) }) {
                             replyPeerId = replyAttribute.messageId.peerId
                         }
                         if replyAttribute.isQuote {
@@ -1769,7 +1769,7 @@ public final class PendingMessageManager {
                 for attribute in message.attributes {
                     if let replyAttribute = attribute as? ReplyMessageAttribute {
                         replyMessageId = replyAttribute.messageId.id
-                        if peer.id != replyAttribute.messageId.peerId {
+                        if outgoingReplyRequiresExplicitPeer(destinationPeer: peer, destinationThreadId: message.threadId, replyMessageId: replyAttribute.messageId, replyThreadId: transaction.getMessage(replyAttribute.messageId)?.threadId ?? replyAttribute.threadMessageId.flatMap { Int64($0.id) }) {
                             replyPeerId = replyAttribute.messageId.peerId
                         }
                         if replyAttribute.isQuote {

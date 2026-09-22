@@ -55,17 +55,19 @@ final class InstantPageMetricsTests: XCTestCase {
         XCTAssertEqual(m.blockButtonSpacing, 6.0)
     }
 
-    /// The quote scale actually shrinks, and lands on the screen-pixel grid rather than on
-    /// arbitrary fractions. Values are asserted against `floorToScreenPixels` rather than hardcoded
-    /// because the grid is 2x or 3x depending on the device the test runs on.
+    /// The quote scale actually shrinks, and geometry lands on the screen-pixel grid rather than on
+    /// arbitrary fractions. The grid is pinned to 3x: the test process reports a 1x screen (see
+    /// `InstantPageContentScaleTests`), on which a pixel snap is indistinguishable from a floor. The
+    /// code FONT size is the one exception — a whole-point floor like every other font, so it stays
+    /// equal to the table and quote-body sizes.
     func testQuoteScaleShrinksAndSnapsToScreenPixels() {
         let scale = InstantPageMetrics.quoteScale
-        let m = InstantPageMetrics(scale: scale)
+        let m = InstantPageMetrics(scale: scale, screenScale: 3.0)
 
-        XCTAssertEqual(m.baseBlockSpacing, floorToScreenPixels(8.0 * scale))
-        XCTAssertEqual(m.captionTopPad, floorToScreenPixels(9.0 * scale))
-        XCTAssertEqual(m.codeBlockFontSize, floorToScreenPixels(15.0 * scale))
-        XCTAssertEqual(m.quoteLineInset, floorToScreenPixels(9.0 * scale))
+        XCTAssertEqual(m.baseBlockSpacing, floor(8.0 * scale * 3.0) / 3.0)
+        XCTAssertEqual(m.captionTopPad, floor(9.0 * scale * 3.0) / 3.0)
+        XCTAssertEqual(m.codeBlockFontSize, floor(15.0 * scale))
+        XCTAssertEqual(m.quoteLineInset, floor(9.0 * scale * 3.0) / 3.0)
 
         XCTAssertLessThan(m.baseBlockSpacing, InstantPageMetrics.unscaled.baseBlockSpacing)
         XCTAssertLessThan(m.captionTopPad, InstantPageMetrics.unscaled.captionTopPad)

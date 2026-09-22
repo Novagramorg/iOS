@@ -62,6 +62,7 @@ swift_library(
         "//submodules/TelegramUI/Components/RichTextEditor:RichTextEditorUIKit",
         "//submodules/TelegramUI/Components/RichTextEditor:RichTextEditorCore",
         "//submodules/TelegramPresentationData:TelegramPresentationData",
+        "//submodules/TelegramUIPreferences:TelegramUIPreferences",
         "//submodules/Display:Display",
         "//submodules/TelegramCore:TelegramCore",
         "//submodules/TextFormat:TextFormat",

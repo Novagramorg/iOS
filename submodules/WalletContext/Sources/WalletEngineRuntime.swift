@@ -1493,6 +1493,7 @@ func walletEngineAddressesEqual(_ lhs: String, _ rhs: String) -> Bool {
     return left == right
 }
 
+@available(macOS 10.15, *)
 extension WalletEngineRuntime {
     func validateTonConnectAccess(wallet: TonConnectWalletIdentity) async throws {
         try await self.withTonConnectAnchor(wallet: wallet) { _ in () }

@@ -17,6 +17,7 @@ final class ChatSendMessageRichTextPreview: ChatSendMessageContextScreenRichText
 
     private var cachedBoundingWidth: CGFloat?
     private var cachedThemeIdentity: ObjectIdentifier?
+    private var cachedFontSize: PresentationFontSize?
     private var cachedContentSize: CGSize = .zero
 
     var view: UIView {
@@ -72,7 +73,7 @@ final class ChatSendMessageRichTextPreview: ChatSendMessageContextScreenRichText
 
     func update(boundingWidth: CGFloat, presentationData: PresentationData, transition: ComponentTransition) -> CGSize {
         let themeIdentity = ObjectIdentifier(presentationData.theme)
-        if self.cachedBoundingWidth == boundingWidth, self.cachedThemeIdentity == themeIdentity {
+        if self.cachedBoundingWidth == boundingWidth, self.cachedThemeIdentity == themeIdentity, self.cachedFontSize == presentationData.chatFontSize {
             return self.cachedContentSize
         }
 
@@ -129,7 +130,9 @@ final class ChatSendMessageRichTextPreview: ChatSendMessageContextScreenRichText
             dateTimeFormat: presentationData.dateTimeFormat,
             cachedMessageSyntaxHighlight: nil,
             expandedDetails: [:],
-            fitToWidth: true
+            fitToWidth: true,
+            // The bubble this previews follows Text Size, so the preview must too or it stops being one.
+            contentScale: instantPageChatMessageContentScale(baseFontSize: presentationData.chatFontSize.baseDisplaySize)
         )
         self.pageView.update(layout: layout, theme: pageTheme, animation: .None)
         // The parent (MessageItemView) owns and sets `pageView`'s frame; `update` only
@@ -138,6 +141,7 @@ final class ChatSendMessageRichTextPreview: ChatSendMessageContextScreenRichText
 
         self.cachedBoundingWidth = boundingWidth
         self.cachedThemeIdentity = themeIdentity
+        self.cachedFontSize = presentationData.chatFontSize
         self.cachedContentSize = layout.contentSize
         return layout.contentSize
     }

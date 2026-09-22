@@ -164,6 +164,7 @@ public struct Namespaces {
         public static let richTextComposerDrafts: Int8 = 55
         public static let cachedCurrencyRates: Int8 = 56
         public static let cachedExistingWaltBalance: Int8 = 57
+        public static let notificationRequestMessageIds: Int8 = 58
     }
     
     public struct UnorderedItemList {

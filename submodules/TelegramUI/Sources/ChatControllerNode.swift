@@ -261,6 +261,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
     
     private let titleAccessoryPanelContainer: ChatControllerTitlePanelNodeContainer
     private var currentTitleAccessoryPanelNode: ChatTitleAccessoryPanelNode?
+    private var currentManagingBotTitlePanelNode: ChatManagingBotTitlePanelNode?
     
     private var floatingTopicsPanelContainer: ChatControllerTitlePanelNodeContainer
     private var floatingTopicsPanel: (view: ComponentView<ChatSidePanelEnvironment>, component: ChatFloatingTopicsPanel)?
@@ -1613,7 +1614,28 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             )
         }
         
-        if !hideTopPanels, let titleAccessoryPanelNode = titlePanelForChatPresentationInterfaceState(self.chatPresentationInterfaceState, context: self.context, currentPanel: self.currentTitleAccessoryPanelNode, controllerInteraction: self.controllerInteraction, interfaceInteraction: self.interfaceInteraction, force: false) {
+        var titleAccessoryPanelNode: ChatTitleAccessoryPanelNode?
+        if !hideTopPanels {
+            titleAccessoryPanelNode = titlePanelForChatPresentationInterfaceState(self.chatPresentationInterfaceState, context: self.context, currentPanel: self.currentTitleAccessoryPanelNode, controllerInteraction: self.controllerInteraction, interfaceInteraction: self.interfaceInteraction, force: false)
+        }
+        
+        // The container lays panels out in append order (`orderIndex` only takes part in `Panel ==`),
+        // so appending the bot bar before the title accessory panel is what puts it above the pinned bar.
+        if !hideTopPanels, let managingBotPanelNode = managingBotTitlePanelForChatPresentationInterfaceState(self.chatPresentationInterfaceState, context: self.context, displayedTitlePanel: titleAccessoryPanelNode, currentPanel: self.currentManagingBotTitlePanelNode, interfaceInteraction: self.interfaceInteraction) {
+            self.currentManagingBotTitlePanelNode = managingBotPanelNode
+            headerPanels.append(HeaderPanelContainerComponent.Panel(
+                key: "managingBot",
+                orderIndex: 3,
+                component: AnyComponent(LegacyChatHeaderPanelComponent(
+                    panelNode: managingBotPanelNode,
+                    interfaceState: self.chatPresentationInterfaceState
+                )))
+            )
+        } else {
+            self.currentManagingBotTitlePanelNode = nil
+        }
+        
+        if let titleAccessoryPanelNode {
             self.currentTitleAccessoryPanelNode = titleAccessoryPanelNode
             let panelKey = "\(type(of: titleAccessoryPanelNode))"
             headerPanels.append(HeaderPanelContainerComponent.Panel(
@@ -5862,7 +5884,10 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         return leftIndex < rightIndex
     }
     
-    func createHistoryNodeForChatLocation(chatLocation: ChatLocation, chatLocationContextHolder: Atomic<ChatLocationContextHolder?>) -> ChatHistoryListNodeImpl {
+    // `subject` is the history node's own initial subject (e.g. `.message` opens the history at that message
+    // with the highlight, exactly as a freshly pushed `ChatControllerImpl` with that subject would). It is NOT
+    // the controller's `subject`, which stays as it was so that a later in-place thread switch still matches.
+    func createHistoryNodeForChatLocation(chatLocation: ChatLocation, chatLocationContextHolder: Atomic<ChatLocationContextHolder?>, subject: ChatControllerSubject? = nil) -> ChatHistoryListNodeImpl {
         let historyNode = ChatHistoryListNodeImpl(
             context: self.context,
             updatedPresentationData: self.controller?.updatedPresentationData ?? (self.context.sharedContext.currentPresentationData.with({ $0 }), self.context.sharedContext.presentationData),
@@ -5871,7 +5896,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             adMessagesContext: self.adMessagesContext,
             tag: nil,
             source: .default,
-            subject: nil,
+            subject: subject,
             controllerInteraction: self.controllerInteraction,
             selectedMessages: self.selectedMessagesPromise.get(),
             rotated: self.controllerInteraction.chatIsRotated,

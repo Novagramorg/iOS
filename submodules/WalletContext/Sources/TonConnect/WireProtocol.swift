@@ -78,6 +78,7 @@ public struct TonConnectSessionInfo: Equatable, Sendable {
     public let error: TonConnectFailure?
 }
 
+@available(macOS 10.15, *)
 public enum TonConnectRequestStatus: Equatable, Sendable {
     case ready, processing, completed(TonConnectDecision), invalidated
 }
@@ -95,6 +96,7 @@ public struct TonConnectDiagnostic: Equatable, Sendable {
 }
 
 /// JSON values retained without a floating-point round trip for protocol integers.
+@available(macOS 10.15, *)
 public enum TonConnectJSONValue: Codable, Equatable, Sendable {
     case object([String: TonConnectJSONValue]), array([TonConnectJSONValue]), string(String)
     case integer(Int64), unsigned(UInt64), decimal(Double), bool(Bool), null
@@ -137,6 +139,7 @@ public enum TonConnectJSONValue: Codable, Equatable, Sendable {
     }
 }
 
+@available(macOS 10.15, *)
 public struct TonConnectRequestId: Equatable, Hashable, Codable, Sendable {
     public let rawValue: String
     public let apiValue: Int64
@@ -155,6 +158,7 @@ public struct TonConnectRequestId: Equatable, Hashable, Codable, Sendable {
     }
 }
 
+@available(macOS 10.15, *)
 public enum TonConnectWireErrorCode: Int, Codable, Sendable {
     case unknown = 0, badRequest = 1, manifestNotFound = 2, invalidManifest = 3, unknownApp = 100, userDeclined = 300, methodNotSupported = 400
 
@@ -171,6 +175,7 @@ public enum TonConnectWireErrorCode: Int, Codable, Sendable {
     }
 }
 
+@available(macOS 10.15, *)
 public struct TonConnectWireFailure: Error, Equatable, Sendable {
     public let requestId: TonConnectRequestId?
     public let code: TonConnectWireErrorCode
@@ -183,6 +188,7 @@ public struct TonConnectWireFailure: Error, Equatable, Sendable {
     }
 }
 
+@available(macOS 10.15, *)
 public enum TonConnectWireRequest: Sendable {
     case sendTransaction(id: TonConnectRequestId, request: SendRequest)
     case signMessage(id: TonConnectRequestId, request: SignMessageRequest)
@@ -216,6 +222,7 @@ public enum TonConnectWireRequest: Sendable {
     }
 }
 
+@available(macOS 10.15, *)
 public struct TonConnectConnectRequest: Equatable, Sendable {
     public let prompt: TonConnectConnectPrompt
     public let itemNames: [String]
@@ -252,6 +259,7 @@ public struct TonConnectConnectRequest: Equatable, Sendable {
     }
 }
 
+@available(macOS 10.15, *)
 public enum TonConnectWireCodec {
     public static let maximumPacketBytes = 1024 * 1024
 
@@ -429,6 +437,7 @@ public enum TonConnectWireCodec {
 }
 
 /// Reject duplicate keys (including escaped aliases) before JSONDecoder discards them.
+@available(macOS 10.15, *)
 private struct TonConnectJSONStructure {
     private let bytes: [UInt8]
     private var offset = 0

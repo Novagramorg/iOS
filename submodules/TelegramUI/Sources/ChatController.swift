@@ -3296,13 +3296,35 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 strongSelf.present(textAlertController(context: strongSelf.context, updatedPresentationData: strongSelf.updatedPresentationData, title: nil, text: strongSelf.presentationData.strings.ScheduledMessages_BotActionUnavailable, actions: [TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
                 return
             }
-            if let botStart = strongSelf.botStart, case let .automatic(returnToPeerId, scheduled) = botStart.behavior {
-                let _ = (strongSelf.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: returnToPeerId))
-                |> deliverOnMainQueue).startStandalone(next: { peer in
-                    if let strongSelf = self, let peer = peer {
-                        strongSelf.openPeer(peer: peer, navigation: .chat(textInputState: ChatTextInputState(inputText: NSAttributedString(string: inputString)), subject: scheduled ? .scheduledMessages : nil, peekData: nil), fromMessage: nil)
+            if let botStart = strongSelf.botStart, case let .automatic(returnToPeerId, returnToThreadId, scheduled) = botStart.behavior {
+                let textInputState = ChatTextInputState(inputText: NSAttributedString(string: inputString))
+                if let returnToThreadId {
+                    // The switch started inside a forum topic or a comment thread. `openPeer` with the
+                    // bare peer would land in the forum's topic list, so go back to the thread's own
+                    // controller, which is normally still below this one on the stack.
+                    let returnSubject: ChatControllerSubject? = scheduled ? .scheduledMessages : nil
+                    if let navigationController = strongSelf.effectiveNavigationController, let controller = navigationController.viewControllers.compactMap({ $0 as? ChatControllerImpl }).last(where: { $0.chatLocation.peerId == returnToPeerId && $0.chatLocation.threadId == returnToThreadId && $0.subject == returnSubject }) {
+                        controller.updateTextInputState(textInputState)
+                        let _ = navigationController.popToViewController(controller, animated: true)
+                    } else {
+                        let _ = (ChatInterfaceState.update(engine: strongSelf.context.engine, peerId: returnToPeerId, threadId: returnToThreadId, { currentState in
+                            return currentState.withUpdatedComposeInputState(textInputState)
+                        })
+                        |> deliverOnMainQueue).startStandalone(completed: {
+                            guard let strongSelf = self, let navigationController = strongSelf.effectiveNavigationController else {
+                                return
+                            }
+                            let _ = strongSelf.context.sharedContext.navigateToForumThread(context: strongSelf.context, peerId: returnToPeerId, threadId: returnToThreadId, messageId: nil, navigationController: navigationController, activateInput: .text, scrollToEndIfExists: false, keepStack: .default, animated: true).startStandalone()
+                        })
                     }
-                })
+                } else {
+                    let _ = (strongSelf.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: returnToPeerId))
+                    |> deliverOnMainQueue).startStandalone(next: { peer in
+                        if let strongSelf = self, let peer = peer {
+                            strongSelf.openPeer(peer: peer, navigation: .chat(textInputState: textInputState, subject: scheduled ? .scheduledMessages : nil, peekData: nil), fromMessage: nil)
+                        }
+                    })
+                }
             } else {
                 if let peerId = peerId {
                     let _ = (strongSelf.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: peerId))
@@ -11149,6 +11171,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             
             self.currentChatSwitchDirection = nil
             self.chatLocation = updatedChatLocation
+            self.chatLocationContextHolder = chatLocationContextHolder
             historyNode.areContentAnimationsEnabled = true
             self.chatDisplayNode.prepareSwitchToChatLocation(chatLocation: chatLocation, historyNode: historyNode, animationDirection: nil)
             
@@ -11195,9 +11218,10 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             
             self.currentChatSwitchDirection = nil
             self.chatLocation = updatedChatLocation
+            self.chatLocationContextHolder = chatLocationContextHolder
             historyNode.areContentAnimationsEnabled = true
             self.chatDisplayNode.prepareSwitchToChatLocation(chatLocation: updatedChatLocation, historyNode: historyNode, animationDirection: nil)
-            
+
             apply(.animated(duration: 0.4, curve: .spring))
             
             self.currentChatSwitchDirection = nil
@@ -11205,7 +11229,25 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         })
     }
     
-    public func updateChatLocationThread(threadId: Int64?, animationDirection: ChatControllerAnimateInnerChatSwitchDirection? = nil, replaceInline: Bool = false, transferInputState: Bool = false, completion: (() -> Void)? = nil) {
+    // The slide direction for an in-place thread switch that was not initiated by a directional gesture (a link
+    // or reply to a message in another topic). `updateChatLocationThread` swaps the history node instantly when
+    // the direction is nil, so this never returns nil: when the forum shows a topics panel the direction follows
+    // the tab order, exactly like a tap on a message's topic header; otherwise the new thread slides in from the
+    // right, like a pushed screen.
+    func chatLocationThreadSwitchDirection(to threadId: Int64?) -> ChatControllerAnimateInnerChatSwitchDirection {
+        if self.isNodeLoaded, let direction = self.chatDisplayNode.chatLocationTabSwitchDirection(from: self.chatLocation.threadId, to: threadId) {
+            return direction ? .right : .left
+        }
+        return .right
+    }
+
+    // `subject` seeds the NEW history node (e.g. `.message` opens the target thread directly at that message,
+    // highlighted), so a cross-thread "open topic A at message M" does not have to open A at its default anchor
+    // and then search for M afterwards. It is honoured only when a new history node is created, i.e. not with
+    // `replaceInline`, and it never becomes the controller's own `subject`. Callers that need to know whether
+    // the switch actually happened compare `chatLocation.threadId` in `completion`: every early return below
+    // calls `completion` too, and in those cases the subject was not applied.
+    public func updateChatLocationThread(threadId: Int64?, animationDirection: ChatControllerAnimateInnerChatSwitchDirection? = nil, replaceInline: Bool = false, transferInputState: Bool = false, subject: ChatControllerSubject? = nil, completion: (() -> Void)? = nil) {
         Task { @MainActor [weak self] in
             guard let self else {
                 completion?()
@@ -11241,6 +11283,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                     peerId = replyThreadMessage.peerId
                     currentThreadId = replyThreadMessage.threadId
                 case .customChatContents:
+                    completion?()
                     return
                 }
                 
@@ -11296,7 +11339,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             let avatarSnapshot = self.chatInfoNavigationButton?.buttonItem.customDisplayNode?.view.window != nil ? (self.chatInfoNavigationButton?.buttonItem.customDisplayNode as? ChatAvatarNavigationNode)?.prepareSnapshotState() : nil
             
             let chatLocationContextHolder = Atomic<ChatLocationContextHolder?>(value: nil)
-            let historyNode = replaceInline ? self.chatDisplayNode.historyNode : self.chatDisplayNode.createHistoryNodeForChatLocation(chatLocation: updatedChatLocation, chatLocationContextHolder: chatLocationContextHolder)
+            let historyNode = replaceInline ? self.chatDisplayNode.historyNode : self.chatDisplayNode.createHistoryNodeForChatLocation(chatLocation: updatedChatLocation, chatLocationContextHolder: chatLocationContextHolder, subject: subject)
             self.isUpdatingChatLocationThread = true
             if !replaceInline {
                 self.chatDisplayNode.historyNode.stopHistoryUpdates()
@@ -11305,9 +11348,14 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 guard let self, let historyNode else {
                     return
                 }
-                
+
                 self.currentChatSwitchDirection = animationDirection
                 self.chatLocation = updatedChatLocation
+                // Keep the controller's own holder in step with the location: `navigateToMessage`,
+                // `scrollToPointInHistory` and the unread-count subscription all read `self.chatLocationContextHolder`
+                // together with `self.chatLocation`, and a holder left over from the previous thread would pair a
+                // stale thread context with the new location.
+                self.chatLocationContextHolder = chatLocationContextHolder
                 historyNode.areContentAnimationsEnabled = true
                 self.chatDisplayNode.prepareSwitchToChatLocation(chatLocation: updatedChatLocation, historyNode: historyNode, animationDirection: animationDirection)
                 

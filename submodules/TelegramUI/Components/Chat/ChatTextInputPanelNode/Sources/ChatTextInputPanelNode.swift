@@ -73,56 +73,16 @@ public let chatTextInputMinFontSize: CGFloat = 5.0
 private let minInputFontSize = chatTextInputMinFontSize
 
 private func calclulateTextFieldMinHeight(_ presentationInterfaceState: ChatPresentationInterfaceState, metrics: LayoutMetrics) -> CGFloat {
-    var baseFontSize = max(minInputFontSize, presentationInterfaceState.fontSize.baseDisplaySize)
-    if "".isEmpty {
-        baseFontSize = 17.0
-    }
-    var result: CGFloat
-    if baseFontSize.isEqual(to: 26.0) {
-        result = 42.0
-    } else if baseFontSize.isEqual(to: 23.0) {
-        result = 38.0
-    } else if baseFontSize.isEqual(to: 17.0) {
-        result = 31.0
-    } else if baseFontSize.isEqual(to: 19.0) {
-        result = 33.0
-    } else if baseFontSize.isEqual(to: 21.0) {
-        result = 35.0
-    } else {
-        result = 31.0
-    }
-    
-    return result
+    return chatTextInputFieldMinHeight(for: presentationInterfaceState.fontSize)
 }
 
 private func calculateTextFieldRealInsets(presentationInterfaceState: ChatPresentationInterfaceState, accessoryButtonsWidth: CGFloat, actionControlsWidth: CGFloat) -> UIEdgeInsets {
-    var baseFontSize = max(minInputFontSize, presentationInterfaceState.fontSize.baseDisplaySize)
-    if "".isEmpty {
-        baseFontSize = 17.0
-    }
-    let top: CGFloat
-    let bottom: CGFloat
-    if baseFontSize.isEqual(to: 14.0) {
-        top = 2.0
-        bottom = 1.0
-    } else if baseFontSize.isEqual(to: 15.0) {
-        top = 1.0
-        bottom = 1.0
-    } else if baseFontSize.isEqual(to: 16.0) {
-        top = 0.5
-        bottom = 0.0
-    } else {
-        top = 0.0
-        bottom = 0.0
-    }
-    
-    var right: CGFloat = 0.0
-    right += max(0.0, accessoryButtonsWidth - 14.0)
+    var insets = chatTextInputFieldVerticalInsets(for: presentationInterfaceState.fontSize)
+    insets.right += max(0.0, accessoryButtonsWidth - 14.0)
     if actionControlsWidth != 0.0 {
-        right += actionControlsWidth - 10.0
+        insets.right += actionControlsWidth - 10.0
     }
-    
-    return UIEdgeInsets(top: 4.5 + top, left: 0.0, bottom: 5.5 + bottom, right: right)
+    return insets
 }
 
 public enum ChatTextInputPanelPasteData {
@@ -484,10 +444,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 textColor = presentationInterfaceState.theme.chat.inputPanel.inputTextColor
                 primaryTextColor = presentationInterfaceState.theme.chat.inputPanel.primaryTextColor
                 accentTextColor = presentationInterfaceState.theme.chat.inputPanel.panelControlAccentColor
-                baseFontSize = max(minInputFontSize, presentationInterfaceState.fontSize.baseDisplaySize)
-            }
-            if "".isEmpty {
-                baseFontSize = 17.0
+                baseFontSize = chatTextInputBaseFontSize(for: presentationInterfaceState.fontSize)
             }
 
             let selection = ChatInputSelection(nsRange: NSMakeRange(updatedState.selectionRange.lowerBound, updatedState.selectionRange.count), in: content)
@@ -563,7 +520,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 textColor = presentationInterfaceState.theme.chat.inputPanel.inputTextColor
                 primaryTextColor = presentationInterfaceState.theme.chat.inputPanel.primaryTextColor
                 accentTextColor = presentationInterfaceState.theme.chat.inputPanel.panelControlAccentColor
-                baseFontSize = max(minInputFontSize, presentationInterfaceState.fontSize.baseDisplaySize)
+                baseFontSize = chatTextInputBaseFontSize(for: presentationInterfaceState.fontSize)
             }
             if richTextInputNode.usesNativeRichTextEngine {
                 // Pass the model content DIRECTLY (not via `state.inputText`, which flattens structural blocks through
@@ -613,7 +570,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 textColor = presentationInterfaceState.theme.chat.inputPanel.inputTextColor
                 primaryTextColor = presentationInterfaceState.theme.chat.inputPanel.primaryTextColor
                 accentTextColor = presentationInterfaceState.theme.chat.inputPanel.panelControlAccentColor
-                baseFontSize = max(minInputFontSize, presentationInterfaceState.fontSize.baseDisplaySize)
+                baseFontSize = chatTextInputBaseFontSize(for: presentationInterfaceState.fontSize)
             }
             if richTextInputNode.usesNativeRichTextEngine {
                 // Pass the model content DIRECTLY (not via `state.inputText`, which flattens structural blocks through
@@ -663,10 +620,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                     textColor = presentationInterfaceState.theme.chat.inputPanel.inputTextColor
                     primaryTextColor = presentationInterfaceState.theme.chat.inputPanel.primaryTextColor
                     accentTextColor = presentationInterfaceState.theme.chat.inputPanel.panelControlAccentColor
-                    baseFontSize = max(minInputFontSize, presentationInterfaceState.fontSize.baseDisplaySize)
-                }
-                if "".isEmpty {
-                    baseFontSize = 17.0
+                    baseFontSize = chatTextInputBaseFontSize(for: presentationInterfaceState.fontSize)
                 }
                 // Route the plain-text set through the model so the node owns decoration (no baked font/color here).
                 if let context = self.context {
@@ -1204,7 +1158,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
 
             textColor = presentationInterfaceState.theme.chat.inputPanel.inputTextColor
             tintColor = presentationInterfaceState.theme.list.itemAccentColor
-            baseFontSize = max(minInputFontSize, presentationInterfaceState.fontSize.baseDisplaySize)
+            baseFontSize = chatTextInputBaseFontSize(for: presentationInterfaceState.fontSize)
             keyboardAppearance = presentationInterfaceState.theme.rootController.keyboardColor.keyboardAppearance
         }
         
@@ -1215,7 +1169,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         paragraphStyle.maximumLineHeight = 20.0
         paragraphStyle.minimumLineHeight = 20.0
         
-        richTextInputNode.inputTypingAttributes = [NSAttributedString.Key.font: Font.regular(max(minInputFontSize, baseFontSize)), NSAttributedString.Key.foregroundColor: textColor, NSAttributedString.Key.paragraphStyle: paragraphStyle]
+        richTextInputNode.inputTypingAttributes = [NSAttributedString.Key.font: Font.regular(baseFontSize), NSAttributedString.Key.foregroundColor: textColor, NSAttributedString.Key.paragraphStyle: paragraphStyle]
         richTextInputNode.inputClipsToBounds = false
         richTextInputNode.inputDelegate = self
         if #available(iOS 16.0, *) {
@@ -1935,6 +1889,10 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         var placeholderHasStar = false
         
         let themeUpdated = self.presentationInterfaceState?.theme !== interfaceState.theme
+        // Text Size changes the placeholder font and the live text's decoration; neither is theme-keyed.
+        // False on the first layout (no previous state): the placeholder is built by `initializedPlaceholder`
+        // and the text decorated by the theme block below, so this must not decorate a second time.
+        let fontSizeUpdated = self.presentationInterfaceState.map { $0.fontSize != interfaceState.fontSize } ?? false
         
         var buttonTitleUpdated = false
         var menuTextSize = self.menuButtonTextNode.frame.size
@@ -2006,15 +1964,18 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             if (previousState?.interfaceState.editMessage != nil) != (interfaceState.interfaceState.editMessage != nil) {
                 updateSendButtonIcon = true
             }
+            if fontSizeUpdated, let richTextInputNode = self.richTextInputNode, let context = self.context {
+                // Text Size changed under live content: re-decorate now so the typed text and the typing
+                // attributes take the new size immediately rather than on the next keystroke.
+                let fullTranslucency = context.sharedContext.energyUsageSettings.fullTranslucency
+                richTextInputNode.decorateAfterTextChange(context: context, baseFontSize: chatTextInputBaseFontSize(for: interfaceState.fontSize), textColor: interfaceState.theme.chat.inputPanel.inputTextColor, primaryTextColor: interfaceState.theme.chat.inputPanel.primaryTextColor, accentTextColor: interfaceState.theme.chat.inputPanel.panelControlAccentColor, spoilersRevealed: richTextInputNode.spoilersRevealed, fullTranslucency: fullTranslucency, availableEmojis: (self.context?.animatedEmojiStickersValue.keys).flatMap(Set.init) ?? Set(), emojiViewProvider: self.emojiViewProvider)
+            }
             if self.theme !== interfaceState.theme {
                 updateSendButtonIcon = true
                 
                 if self.theme == nil || !self.theme!.chat.inputPanel.inputTextColor.isEqual(interfaceState.theme.chat.inputPanel.inputTextColor) {
                     let textColor = interfaceState.theme.chat.inputPanel.inputTextColor
-                    var baseFontSize = max(minInputFontSize, interfaceState.fontSize.baseDisplaySize)
-                    if "".isEmpty {
-                        baseFontSize = 17.0
-                    }
+                    let baseFontSize = chatTextInputBaseFontSize(for: interfaceState.fontSize)
                     
                     if let richTextInputNode = self.richTextInputNode, let context = self.context {
                         // Re-color through the node's decoration rather than a naive full-range `foregroundColor`
@@ -2529,8 +2490,16 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 }
             }
             
+            // Two instances of the same node class with different jobs, so two sizes:
+            // - `sendActionButtons` sits INSIDE the field capsule and shows only the send button (its mic is
+            //   alpha 0 in init). It follows the field's minimal height so the send capsule, inset 3pt, fits
+            //   the field at every Text Size (34 tall at 17pt, 41 at 23pt); its corner is min(w, h) / 2.
+            // - `mediaActionButtons` sits OUTSIDE the field beside the attachment button and shows the mic
+            //   (its send container is alpha 0). It is a fixed 40pt circle like the attachment button; the
+            //   two were only ever equal to `minimalHeight` while the field was pinned to 17pt, and sizing
+            //   the mic from the field stretched it into a pill at every other step.
             sendActionButtonsSize = self.sendActionButtons.updateLayout(size: CGSize(width: 40.0, height: minimalHeight), isMediaInputExpanded: isMediaInputExpanded, showTitle: showTitle, currentMessageEffectId: presentationInterfaceState.interfaceState.sendMessageEffect, transition: transition, interfaceState: presentationInterfaceState)
-            mediaActionButtonsSize = self.mediaActionButtons.updateLayout(size: CGSize(width: 40.0, height: minimalHeight), isMediaInputExpanded: isMediaInputExpanded, showTitle: false, currentMessageEffectId: presentationInterfaceState.interfaceState.sendMessageEffect, transition: transition, interfaceState: presentationInterfaceState)
+            mediaActionButtonsSize = self.mediaActionButtons.updateLayout(size: CGSize(width: 40.0, height: 40.0), isMediaInputExpanded: isMediaInputExpanded, showTitle: false, currentMessageEffectId: presentationInterfaceState.interfaceState.sendMessageEffect, transition: transition, interfaceState: presentationInterfaceState)
         }
         
         var starReactionButtonSize: CGSize?
@@ -3321,13 +3290,10 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         let textPlaceholderSize: CGSize
         let textPlaceholderMaxWidth: CGFloat = max(1.0, nextButtonTopRight.x - 12.0)
         
-        if (updatedPlaceholder != nil && self.currentPlaceholder != updatedPlaceholder) || themeUpdated {
+        if (updatedPlaceholder != nil && self.currentPlaceholder != updatedPlaceholder) || themeUpdated || fontSizeUpdated {
             let currentPlaceholder = updatedPlaceholder ?? self.currentPlaceholder ?? ""
             self.currentPlaceholder = currentPlaceholder
-            var baseFontSize = max(minInputFontSize, interfaceState.fontSize.baseDisplaySize)
-            if "".isEmpty {
-                baseFontSize = 17.0
-            }
+            let baseFontSize = chatTextInputBaseFontSize(for: interfaceState.fontSize)
             
             let attributedPlaceholder = NSMutableAttributedString(string: currentPlaceholder, font: Font.regular(baseFontSize), textColor: placeholderColor.withAlphaComponent(1.0))
             if placeholderHasStar, let range = attributedPlaceholder.string.range(of: "#") {
@@ -4017,7 +3983,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             return
         }
         if let richTextInputNode = self.richTextInputNode, let presentationInterfaceState = self.presentationInterfaceState, let context = self.context {
-            let baseFontSize = max(minInputFontSize, presentationInterfaceState.fontSize.baseDisplaySize)
+            let baseFontSize = chatTextInputBaseFontSize(for: presentationInterfaceState.fontSize)
             let fullTranslucency = self.context?.sharedContext.energyUsageSettings.fullTranslucency ?? true
             // The node owns the per-keystroke decoration (in-place fix-up + caret typing attrs + spoiler/emoji
             // overlays) now; the panel hands it the current theme/energy inputs and then reads interface state back.
@@ -4907,15 +4873,12 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 self.inputMenu.hide()
             }
 
-            var baseFontSize = max(minInputFontSize, presentationInterfaceState.fontSize.baseDisplaySize)
-            if "".isEmpty {
-                baseFontSize = 17.0
-            }
+            let baseFontSize = chatTextInputBaseFontSize(for: presentationInterfaceState.fontSize)
             richTextInputNode.refreshTextInputTypingAttributes(textColor: presentationInterfaceState.theme.chat.inputPanel.primaryTextColor, baseFontSize: baseFontSize)
 
             // The node owns the spoiler-reveal flow now; the panel just hands it the live theme inputs.
             if let context = self.context {
-                richTextInputNode.updateSpoilersRevealed(context: context, baseFontSize: max(minInputFontSize, presentationInterfaceState.fontSize.baseDisplaySize), textColor: presentationInterfaceState.theme.chat.inputPanel.inputTextColor, primaryTextColor: presentationInterfaceState.theme.chat.inputPanel.primaryTextColor, accentTextColor: presentationInterfaceState.theme.chat.inputPanel.panelControlAccentColor, availableEmojis: (self.context?.animatedEmojiStickersValue.keys).flatMap(Set.init) ?? Set(), emojiViewProvider: self.emojiViewProvider, animated: true)
+                richTextInputNode.updateSpoilersRevealed(context: context, baseFontSize: chatTextInputBaseFontSize(for: presentationInterfaceState.fontSize), textColor: presentationInterfaceState.theme.chat.inputPanel.inputTextColor, primaryTextColor: presentationInterfaceState.theme.chat.inputPanel.primaryTextColor, accentTextColor: presentationInterfaceState.theme.chat.inputPanel.panelControlAccentColor, availableEmojis: (self.context?.animatedEmojiStickersValue.keys).flatMap(Set.init) ?? Set(), emojiViewProvider: self.emojiViewProvider, animated: true)
             }
 
             self.updateInputField(textInputFrame: richTextInputNode.textFieldFrame, transition: .immediate)
@@ -5388,7 +5351,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
 
         // The node owns the spoiler-reveal flow now; the panel just hands it the live theme inputs.
         if let richTextInputNode = self.richTextInputNode, let presentationInterfaceState = self.presentationInterfaceState, let context = self.context {
-            richTextInputNode.updateSpoilersRevealed(context: context, baseFontSize: max(minInputFontSize, presentationInterfaceState.fontSize.baseDisplaySize), textColor: presentationInterfaceState.theme.chat.inputPanel.inputTextColor, primaryTextColor: presentationInterfaceState.theme.chat.inputPanel.primaryTextColor, accentTextColor: presentationInterfaceState.theme.chat.inputPanel.panelControlAccentColor, availableEmojis: (self.context?.animatedEmojiStickersValue.keys).flatMap(Set.init) ?? Set(), emojiViewProvider: self.emojiViewProvider, animated: animated)
+            richTextInputNode.updateSpoilersRevealed(context: context, baseFontSize: chatTextInputBaseFontSize(for: presentationInterfaceState.fontSize), textColor: presentationInterfaceState.theme.chat.inputPanel.inputTextColor, primaryTextColor: presentationInterfaceState.theme.chat.inputPanel.primaryTextColor, accentTextColor: presentationInterfaceState.theme.chat.inputPanel.panelControlAccentColor, availableEmojis: (self.context?.animatedEmojiStickersValue.keys).flatMap(Set.init) ?? Set(), emojiViewProvider: self.emojiViewProvider, animated: animated)
         }
     }
     
@@ -5417,10 +5380,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         if let presentationInterfaceState = self.presentationInterfaceState {
             textColor = presentationInterfaceState.theme.chat.inputPanel.inputTextColor
             accentTextColor = presentationInterfaceState.theme.chat.inputPanel.panelControlAccentColor
-            baseFontSize = max(minInputFontSize, presentationInterfaceState.fontSize.baseDisplaySize)
-            if "".isEmpty {
-                baseFontSize = 17.0
-            }
+            baseFontSize = chatTextInputBaseFontSize(for: presentationInterfaceState.fontSize)
         }
         // The node owns fragment decoration now (it applies font/colors + the node's own spoilers-revealed
         // flag); the panel just splices the returned fragment in. No `textAttributedStringForStateText` here.

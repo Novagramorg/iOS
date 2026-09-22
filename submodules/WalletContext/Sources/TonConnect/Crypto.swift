@@ -144,6 +144,7 @@ func tonConnectConstantTimeEqual(_ lhs: Data, _ rhs: Data) -> Bool {
     }
 }
 
+@available(macOS 10.15, *)
 final class TonConnectSessionCrypto {
     private let privateKey: Curve25519.KeyAgreement.PrivateKey
     private let appBox: TonConnectNaClBox
@@ -213,6 +214,7 @@ final class TonConnectSessionCrypto {
 
 /// NaCl crypto_box: X25519 -> HSalsa20 -> XSalsa20-Poly1305. Its output is
 /// tag16 || ciphertext; the session layer adds the random nonce24 prefix.
+@available(macOS 10.15, *)
 final class TonConnectNaClBox {
     static let maximumPacketLength = 1_048_576
     static let maximumPlaintextLength = maximumPacketLength - 24 - 16

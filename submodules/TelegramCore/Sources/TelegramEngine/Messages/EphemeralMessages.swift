@@ -111,7 +111,13 @@ private func preparedEphemeralReply(replyTo replySubject: EngineMessageReplySubj
     }
 
     var replyToPeerId: Api.InputPeer?
-    if replySubject.messageId.peerId != peerId {
+    let requiresExplicitReplyPeer: Bool
+    if let destinationPeer = transaction.getPeer(peerId) {
+        requiresExplicitReplyPeer = outgoingReplyRequiresExplicitPeer(destinationPeer: destinationPeer, destinationThreadId: threadId, replyMessageId: replySubject.messageId, replyThreadId: transaction.getMessage(replySubject.messageId)?.threadId)
+    } else {
+        requiresExplicitReplyPeer = replySubject.messageId.peerId != peerId
+    }
+    if requiresExplicitReplyPeer {
         guard let replyPeer = transaction.getPeer(replySubject.messageId.peerId), let inputReplyPeer = apiInputPeer(replyPeer) else {
             return nil
         }
