@@ -11,7 +11,17 @@ final class TestPostbox {
     let basePath: String
     private(set) var postbox: Postbox!
 
+    /// The extension installs a shared logger before anything else; code under test logs
+    /// through it, and without one the logger traps. Installed once, writing nowhere.
+    private static let installSilentLogger: Void = {
+        let logger = Logger(rootPath: NSTemporaryDirectory(), basePath: NSTemporaryDirectory())
+        logger.logToFile = false
+        logger.logToConsole = false
+        Logger.setSharedLogger(logger)
+    }()
+
     init(name: String) throws {
+        let _ = TestPostbox.installSilentLogger
         // The extension registers TelegramCore's stored types before it opens the account;
         // without this the seeded peers do not decode and every chat renders as absent.
         initializeAccountManagement()

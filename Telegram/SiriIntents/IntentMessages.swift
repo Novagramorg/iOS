@@ -130,52 +130,73 @@ func unreadMessages(views: UnreadMessagesViews) -> Signal<[INMessage], NoError> 
     |> take(1)
     |> mapToSignal { view -> Signal<[INMessage], NoError> in
         var signals: [Signal<[INMessage], NoError>] = []
+        // What the scan decided about each chat, for the extension's log: this is the only
+        // way to see why "read my messages" came back empty on a device.
+        var considered: [String] = []
+        var holes = 0
         for entry in view.entries {
-            if case let .MessageEntry(entryData) = entry {
-                let index = entryData.index
-                let readState = entryData.readState
-                let isMuted = entryData.isRemovedFromTotalUnreadCount
-                
-                if !unreadMessagesIncludePeer(index.messageIndex.id.peerId) {
-                    continue
-                }
-                
-                var hasUnread = false
-                var fixedCombinedReadStates: MessageHistoryViewReadState?
-                if let readState = readState {
-                    hasUnread = readState.state.count != 0
-                    fixedCombinedReadStates = .peer([index.messageIndex.id.peerId: readState.state])
-                }
-                
-                if !isMuted && hasUnread {
-                    signals.append(views.history(index.messageIndex.id.peerId, fixedCombinedReadStates)
-                    |> take(1)
-                    |> map { view -> [INMessage] in
-                        var messages: [INMessage] = []
-                        for entry in view.entries {
-                            var isRead = true
-                            if let readState = readState {
-                                isRead = readState.state.isIncomingMessageIndexRead(entry.message.index)
-                            }
-                            
-                            if !isRead {
-                                if let message = messageWithTelegramMessage(entry.message) {
-                                    messages.append(message)
-                                }
-                            }
-                        }
-                        return messages
-                    })
-                }
+            guard case let .MessageEntry(entryData) = entry else {
+                holes += 1
+                continue
             }
+            let index = entryData.index
+            let peerId = index.messageIndex.id.peerId
+            let readState = entryData.readState
+            let isMuted = entryData.isRemovedFromTotalUnreadCount
+            
+            if !unreadMessagesIncludePeer(peerId) {
+                considered.append("\(peerId): excluded namespace")
+                continue
+            }
+            
+            var hasUnread = false
+            var fixedCombinedReadStates: MessageHistoryViewReadState?
+            if let readState = readState {
+                hasUnread = readState.state.count != 0
+                fixedCombinedReadStates = .peer([peerId: readState.state])
+            }
+            
+            guard !isMuted, hasUnread else {
+                considered.append("\(peerId): \(isMuted ? "muted" : "no unread") (readState: \(readState.map { "\($0.state)" } ?? "nil"))")
+                continue
+            }
+            considered.append("\(peerId): scanning")
+            
+            signals.append(views.history(peerId, fixedCombinedReadStates)
+            |> take(1)
+            |> map { view -> [INMessage] in
+                var messages: [INMessage] = []
+                var unreadEntries = 0
+                var unconvertible = 0
+                for entry in view.entries {
+                    var isRead = true
+                    if let readState = readState {
+                        isRead = readState.state.isIncomingMessageIndexRead(entry.message.index)
+                    }
+                    
+                    if !isRead {
+                        unreadEntries += 1
+                        if let message = messageWithTelegramMessage(entry.message) {
+                            messages.append(message)
+                        } else {
+                            unconvertible += 1
+                        }
+                    }
+                }
+                Logger.shared.log("SiriIntents", "unreadMessages \(peerId): history entries: \(view.entries.count), isLoading: \(view.isLoading), holeLater: \(view.holeLater), unread: \(unreadEntries), unconvertible: \(unconvertible), read state: \(readState.map { "\($0.state)" } ?? "nil")")
+                return messages
+            })
         }
+        Logger.shared.log("SiriIntents", "unreadMessages chat list: \(view.entries.count) entries, \(holes) holes; \(considered.joined(separator: "; "))")
         
         if signals.isEmpty {
             return .single([])
         } else {
             return combineLatest(signals)
             |> map { results -> [INMessage] in
-                return results.flatMap { $0 }.sorted { $0.dateSent!.compare($1.dateSent!) == .orderedDescending }
+                let messages = results.flatMap { $0 }.sorted { $0.dateSent!.compare($1.dateSent!) == .orderedDescending }
+                Logger.shared.log("SiriIntents", "unreadMessages result: \(messages.count) messages")
+                return messages
             }
         }
     }
