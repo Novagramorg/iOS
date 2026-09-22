@@ -1754,6 +1754,16 @@ public final class WalletPeerSelectionScreen: ViewControllerComponentContainer {
         fatalError("init(coder:) has not been implemented")
     }
 
+    override public func preferredContentSizeForLayout(_ layout: ContainerViewLayout) -> CGSize? {
+        guard layout.metrics.widthClass == .regular else {
+            return nil
+        }
+        return CGSize(
+            width: min(480.0, layout.size.width - 20.0),
+            height: min(layout.size.width, layout.size.height) - 88.0
+        )
+    }
+
     public override func viewWillDisappear(_ animated: Bool) {
         (self.node.hostView.componentView as? WalletPeerSelectionScreenComponent.View)?.cancelPendingActions()
         super.viewWillDisappear(animated)

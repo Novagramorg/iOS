@@ -158,6 +158,13 @@ public final class WalletContext {
         }
     }
 
+    public func ensureGaslessInfo() {
+        let impl = self.impl
+        Task {
+            await impl.requestGaslessInfoIfNeeded()
+        }
+    }
+
     public func refreshBalance() -> Disposable {
         let id = UUID()
         self.updateScreenDemand { $0.balanceRequests.insert(id) }

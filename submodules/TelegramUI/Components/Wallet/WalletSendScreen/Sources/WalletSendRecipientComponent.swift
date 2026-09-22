@@ -21,6 +21,8 @@ final class WalletSendRecipientComponent: Component {
     let peer: EnginePeer?
     let address: String
     let isLoading: Bool
+    let openChat: (() -> Void)?
+    let copyAddress: () -> Void
     let openInfo: () -> Void
 
     init(
@@ -31,6 +33,8 @@ final class WalletSendRecipientComponent: Component {
         peer: EnginePeer?,
         address: String,
         isLoading: Bool,
+        openChat: (() -> Void)?,
+        copyAddress: @escaping () -> Void,
         openInfo: @escaping () -> Void
     ) {
         self.context = context
@@ -40,6 +44,8 @@ final class WalletSendRecipientComponent: Component {
         self.peer = peer
         self.address = address
         self.isLoading = isLoading
+        self.openChat = openChat
+        self.copyAddress = copyAddress
         self.openInfo = openInfo
     }
 
@@ -50,6 +56,7 @@ final class WalletSendRecipientComponent: Component {
             && lhs.peer == rhs.peer
             && lhs.address == rhs.address
             && lhs.isLoading == rhs.isLoading
+            && (lhs.openChat == nil) == (rhs.openChat == nil)
     }
 
     final class View: UIView {
@@ -142,10 +149,15 @@ final class WalletSendRecipientComponent: Component {
             }
             let addressSize = self.address.update(
                 transition: transition,
-                component: AnyComponent(MultilineTextComponent(
-                    text: .plain(attributedAddress),
-                    maximumNumberOfLines: 0,
-                    lineSpacing: 0.2
+                component: AnyComponent(PlainButtonComponent(
+                    content: AnyComponent(MultilineTextComponent(
+                        text: .plain(attributedAddress),
+                        maximumNumberOfLines: 0,
+                        lineSpacing: 0.2
+                    )),
+                    action: component.copyAddress,
+                    isEnabled: canOpenInfo,
+                    animateScale: false
                 )),
                 environment: {},
                 containerSize: CGSize(width: textWidth, height: .greatestFiniteMagnitude)
@@ -158,7 +170,13 @@ final class WalletSendRecipientComponent: Component {
             if let peer = component.peer {
                 let _ = self.avatar.update(
                     transition: transition,
-                    component: AnyComponent(AvatarComponent(context: component.context, theme: component.theme, peer: peer, size: avatarSize)),
+                    component: AnyComponent(PlainButtonComponent(
+                        content: AnyComponent(AvatarComponent(context: component.context, theme: component.theme, peer: peer, size: avatarSize)),
+                        action: { component.openChat?() },
+                        isEnabled: component.openChat != nil,
+                        animateAlpha: false,
+                        animateScale: false
+                    )),
                     environment: {},
                     containerSize: avatarSize
                 )
@@ -226,10 +244,11 @@ final class WalletSendRecipientComponent: Component {
 
             if let avatarView = self.avatar.view {
                 if avatarView.superview == nil {
-                    avatarView.isUserInteractionEnabled = false
-                    avatarView.accessibilityElementsHidden = true
                     self.addSubview(avatarView)
                 }
+                avatarView.isUserInteractionEnabled = hasPeer && component.openChat != nil
+                avatarView.isAccessibilityElement = hasPeer && component.openChat != nil
+                avatarView.accessibilityLabel = component.peer?.displayTitle(strings: component.strings, displayOrder: component.nameDisplayOrder)
                 transition.setFrame(view: avatarView, frame: avatarFrame)
                 transition.setAlpha(view: avatarView, alpha: hasPeer ? 1.0 : 0.0)
             }
@@ -253,9 +272,9 @@ final class WalletSendRecipientComponent: Component {
             }
             if let addressView = self.address.view {
                 if addressView.superview == nil {
-                    addressView.isUserInteractionEnabled = false
                     self.addSubview(addressView)
                 }
+                addressView.isUserInteractionEnabled = canOpenInfo
                 addressView.isAccessibilityElement = !displaysPlaceholder
                 addressView.accessibilityLabel = component.address
                 transition.setFrame(view: addressView, frame: addressFrame)

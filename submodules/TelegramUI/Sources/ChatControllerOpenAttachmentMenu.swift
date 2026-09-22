@@ -549,6 +549,7 @@ extension ChatControllerImpl {
                             peer: peer,
                             walletContext: walletContext,
                             displaySuccessToast: false,
+                            allowOpenRecipientChat: false,
                             completed: { [weak self] in
                                 self?.scrollToEndOfHistory()
                             }

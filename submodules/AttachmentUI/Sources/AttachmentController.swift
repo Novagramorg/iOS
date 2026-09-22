@@ -440,6 +440,7 @@ public class AttachmentController: ViewController, MinimizableController {
     private let fromMenu: Bool
     private var hasTextInput: Bool
     private let isFullSize: Bool
+    private let roundsTopCornersInRegularLayout: Bool
     private let customEmojiAvailable: Bool
     public var animateAppearance: Bool = false
 
@@ -605,7 +606,7 @@ public class AttachmentController: ViewController, MinimizableController {
             self.wrapperNode = ASDisplayNode()
             self.wrapperNode.clipsToBounds = true
 
-            self.container = AttachmentContainer(presentationData: self.presentationData, isFullSize: controller.isFullSize, glass: controller._hasGlassStyle, hasPill: controller.style == .glass)
+            self.container = AttachmentContainer(presentationData: self.presentationData, isFullSize: controller.isFullSize, glass: controller._hasGlassStyle, hasPill: controller.style == .glass, roundsTopCornersInRegularLayout: controller.roundsTopCornersInRegularLayout)
             self.container.canHaveKeyboardFocus = true
 
             let panelStyle: AttachmentPanel.Style
@@ -1131,24 +1132,51 @@ public class AttachmentController: ViewController, MinimizableController {
         }
 
         private var isAnimating = false
+        private var pendingRegularLayoutAnimateIn = false
+
+        override func didEnterHierarchy() {
+            super.didEnterHierarchy()
+
+            if self.pendingRegularLayoutAnimateIn {
+                self.pendingRegularLayoutAnimateIn = false
+                if !self.isDismissing {
+                    self.animateIn()
+                }
+            }
+        }
+
         func animateIn() {
             guard let layout = self.validLayout, let controller = self.controller else {
+                return
+            }
+
+            if layout.metrics.widthClass == .regular, controller.animateAppearance, controller.roundsTopCornersInRegularLayout, !self.isInHierarchy {
+                self.pendingRegularLayoutAnimateIn = true
                 return
             }
 
             self.isAnimating = true
             if case .regular = layout.metrics.widthClass {
                 if controller.animateAppearance {
-                    let targetPosition = self.position
-                    let startPosition = targetPosition.offsetBy(dx: 0.0, dy: layout.size.height)
-
-                    self.position = startPosition
                     let transition = ContainedViewLayoutTransition.animated(duration: 0.4, curve: .spring)
-                    transition.animateView(allowUserInteraction: true, {
-                        self.position = targetPosition
-                    }, completion: {  _ in
-                        self.isAnimating = false
-                    })
+                    if controller.roundsTopCornersInRegularLayout {
+                        // Navigation owns the root node's frame. Animate the panel layers
+                        // additively so subsequent layout updates preserve the entrance.
+                        transition.animatePositionAdditive(node: self.wrapperNode, offset: layout.size.height, completion: { [weak self] _ in
+                            self?.isAnimating = false
+                        })
+                        transition.animatePositionAdditive(node: self.shadowNode, offset: layout.size.height, completion: { _ in })
+                    } else {
+                        let targetPosition = self.position
+                        let startPosition = targetPosition.offsetBy(dx: 0.0, dy: layout.size.height)
+
+                        self.position = startPosition
+                        transition.animateView(allowUserInteraction: true, {
+                            self.position = targetPosition
+                        }, completion: { _ in
+                            self.isAnimating = false
+                        })
+                    }
                 } else {
                     self.isAnimating = false
                 }
@@ -1402,7 +1430,7 @@ public class AttachmentController: ViewController, MinimizableController {
                     let inputHeight = layout.inputHeight ?? 0.0
                     let availableHeight = layout.size.height - inputHeight
 
-                    let size = CGSize(width: 390.0, height: min(620.0, availableHeight))
+                    let size = CGSize(width: 390.0, height: min(660.0, availableHeight))
 
                     let insets = layout.insets(options: [.input])
                     let masterWidth = min(max(320.0, floor(layout.size.width / 3.0)), floor(layout.size.width / 2.0))
@@ -1562,6 +1590,7 @@ public class AttachmentController: ViewController, MinimizableController {
         fromMenu: Bool = false,
         hasTextInput: Bool = true,
         isFullSize: Bool = false,
+        roundsTopCornersInRegularLayout: Bool = false,
         makeEntityInputView: @escaping () -> UIView? = { return nil },
         customEmojiAvailable: Bool = true)
     {
@@ -1575,6 +1604,7 @@ public class AttachmentController: ViewController, MinimizableController {
         self.fromMenu = fromMenu
         self.hasTextInput = hasTextInput
         self.isFullSize = isFullSize
+        self.roundsTopCornersInRegularLayout = roundsTopCornersInRegularLayout
         self.customEmojiAvailable = customEmojiAvailable
 
         super.init(navigationBarPresentationData: nil)

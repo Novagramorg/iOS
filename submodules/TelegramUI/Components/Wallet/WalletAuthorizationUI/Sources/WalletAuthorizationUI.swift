@@ -5,10 +5,12 @@ import ComponentFlow
 import Display
 import SwiftSignalKit
 import TelegramCore
+import TelegramPresentationData
 import WalletContext
 
 private final class WalletAuthorizedOperation<Value>: Disposable {
     private let context: AccountContext
+    private let updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?
     private let present: (ViewController) -> Void
     private let operation: (String?) -> Signal<Value, WalletContext.WalletError>
     private let next: (Value) -> Void
@@ -22,12 +24,14 @@ private final class WalletAuthorizedOperation<Value>: Disposable {
 
     init(
         context: AccountContext,
+        updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?,
         present: @escaping (ViewController) -> Void,
         operation: @escaping (String?) -> Signal<Value, WalletContext.WalletError>,
         next: @escaping (Value) -> Void,
         failed: @escaping (WalletContext.WalletError) -> Void
     ) {
         self.context = context
+        self.updatedPresentationData = updatedPresentationData
         self.present = present
         self.operation = operation
         self.next = next
@@ -170,7 +174,7 @@ private final class WalletAuthorizedOperation<Value>: Disposable {
                     progress: progress.get()
                 )
             ],
-            updatedPresentationData: (
+            updatedPresentationData: self.updatedPresentationData ?? (
                 self.context.sharedContext.currentPresentationData.with { $0 },
                 self.context.sharedContext.presentationData
             )
@@ -189,6 +193,7 @@ private final class WalletAuthorizedOperation<Value>: Disposable {
 
 public func performWalletAuthorizedOperation<Value>(
     context: AccountContext,
+    updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? = nil,
     present: @escaping (ViewController) -> Void,
     operation: @escaping (String?) -> Signal<Value, WalletContext.WalletError>,
     next: @escaping (Value) -> Void,
@@ -196,6 +201,7 @@ public func performWalletAuthorizedOperation<Value>(
 ) -> Disposable {
     WalletAuthorizedOperation(
         context: context,
+        updatedPresentationData: updatedPresentationData,
         present: present,
         operation: operation,
         next: next,

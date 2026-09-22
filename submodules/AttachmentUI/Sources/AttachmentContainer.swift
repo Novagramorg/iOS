@@ -31,6 +31,7 @@ public func attachmentDefaultTopInset(layout: ContainerViewLayout?) -> CGFloat {
 final class AttachmentContainer: ASDisplayNode, ASGestureRecognizerDelegate {
     private let glass: Bool
     private let hasPill: Bool
+    private let roundsTopCornersInRegularLayout: Bool
     
     let wrappingNode: ASDisplayNode
     let clipNode: ASDisplayNode
@@ -87,7 +88,7 @@ final class AttachmentContainer: ASDisplayNode, ASGestureRecognizerDelegate {
     var isInnerPanGestureEnabled: (() -> Bool)?
     var onExpandAnimationCompleted: () -> Void = {}
     
-    init(presentationData: PresentationData, isFullSize: Bool, glass: Bool, hasPill: Bool) {
+    init(presentationData: PresentationData, isFullSize: Bool, glass: Bool, hasPill: Bool, roundsTopCornersInRegularLayout: Bool = false) {
         self.presentationData = presentationData
         self.isFullSize = isFullSize
         if isFullSize {
@@ -95,6 +96,7 @@ final class AttachmentContainer: ASDisplayNode, ASGestureRecognizerDelegate {
         }
         self.glass = glass
         self.hasPill = hasPill
+        self.roundsTopCornersInRegularLayout = roundsTopCornersInRegularLayout
         
         self.wrappingNode = ASDisplayNode()
         self.clipNode = ASDisplayNode()
@@ -548,6 +550,9 @@ final class AttachmentContainer: ASDisplayNode, ASGestureRecognizerDelegate {
         let isFullscreen = controllers.last?.isFullscreen == true
         if case .compact = layout.metrics.widthClass {
             self.clipNode.clipsToBounds = true
+            if self.roundsTopCornersInRegularLayout, #available(iOS 11.0, *) {
+                self.clipNode.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner, .layerMinXMaxYCorner, .layerMaxXMaxYCorner]
+            }
             
             if isLandscape {
                 self.clipNode.cornerRadius = 0.0
@@ -606,6 +611,15 @@ final class AttachmentContainer: ASDisplayNode, ASGestureRecognizerDelegate {
                 clipFrame = CGRect(x: containerFrame.minX + overflowInset, y: containerFrame.minY + clipTopOffset, width: containerFrame.width - overflowInset * 2.0, height: containerFrame.height - topPortion)
             }
         } else {
+            if self.roundsTopCornersInRegularLayout {
+                self.clipNode.clipsToBounds = !isFullscreen
+                self.clipNode.cornerRadius = isFullscreen ? 0.0 : self.bottomClipNode.cornerRadius
+                if #available(iOS 11.0, *) {
+                    self.clipNode.layer.maskedCorners = isFullscreen
+                        ? [.layerMinXMinYCorner, .layerMaxXMinYCorner, .layerMinXMaxYCorner, .layerMaxXMaxYCorner]
+                        : [.layerMinXMinYCorner, .layerMaxXMinYCorner]
+                }
+            }
             containerLayout = ContainerViewLayout(size: layout.size, metrics: layout.metrics, deviceMetrics: layout.deviceMetrics, intrinsicInsets: UIEdgeInsets(top: 0.0, left: 0.0, bottom: layout.intrinsicInsets.bottom, right: 0.0), safeInsets: .zero, additionalInsets: .zero, statusBarHeight: isFullscreen ? layout.statusBarHeight : nil, inputHeight: isFullscreen ? layout.inputHeight : nil, inputHeightIsInteractivellyChanging: false, inVoiceOver: layout.inVoiceOver)
             
             let unscaledFrame = CGRect(origin: CGPoint(), size: containerLayout.size)
