@@ -400,16 +400,27 @@ class DefaultIntentHandler: INExtension, INSendMessageIntentHandling, INSearchFo
             
             let signal = account
             |> castError(IntentHandlingError.self)
-            |> mapToSignal { account -> Signal<INPerson?, IntentHandlingError> in
+            |> mapToSignal { account -> Signal<INSendMessageRecipientResolutionResult, IntentHandlingError> in
                 if let account = account {
-                    return matchingCloudContact(postbox: account.postbox, peerId: PeerId(peerId))
+                    // The conversation is the chat whose message Siri read: a user, or a group
+                    // when the message was a group message. A group is "recipient" enough for
+                    // Siri; the send handler routes by the conversation anyway.
+                    return account.postbox.transaction { transaction -> Peer? in
+                        return transaction.getPeer(PeerId(peerId))
+                    }
                     |> castError(IntentHandlingError.self)
-                    |> map { user -> INPerson? in
-                        if let user = user {
-                            return personWithUser(stableId: "tg\(peerId)", user: user)
-                        } else {
-                            return nil
+                    |> map { peer -> INSendMessageRecipientResolutionResult in
+                        guard let peer else {
+                            return .needsValue()
                         }
+                        if !peerAcceptsSiriMessages(peer) {
+                            return .unsupported(forReason: .messagingServiceNotEnabledForRecipient)
+                        }
+                        if let user = peer as? TelegramUser {
+                            return .success(with: personWithUser(stableId: "tg\(peerId)", user: user))
+                        }
+                        let handle = INPersonHandle(value: peer.addressName.flatMap { "@\($0)" } ?? peer.debugDisplayTitle, type: .unknown)
+                        return .success(with: INPerson(personHandle: handle, nameComponents: nil, displayName: peer.debugDisplayTitle, image: nil, contactIdentifier: "tg\(peerId)", customIdentifier: "tg\(peerId)"))
                     }
                 } else {
                     return .fail(.generic)
@@ -417,12 +428,8 @@ class DefaultIntentHandler: INExtension, INSendMessageIntentHandling, INSearchFo
             }
             
             self.resolvePersonsDisposable.set((signal
-            |> deliverOnMainQueue).start(next: { person in
-                if let person = person {
-                    completion([INSendMessageRecipientResolutionResult.success(with: person)])
-                } else {
-                    completion([INSendMessageRecipientResolutionResult.needsValue()])
-                }
+            |> deliverOnMainQueue).start(next: { result in
+                completion([result])
             }, error: { error in
                 completion([INSendMessageRecipientResolutionResult.unsupported(forReason: .noAccount)])
             }))
@@ -494,26 +501,26 @@ class DefaultIntentHandler: INExtension, INSendMessageIntentHandling, INSearchFo
             guard let account = account else {
                 return .fail(.generic)
             }
-            guard let recipient = intent.recipients?.first, let customIdentifier = recipient.customIdentifier, customIdentifier.hasPrefix("tg") else {
-                return .fail(.generic)
-            }
-            
-            guard let peerIdValue = Int64(String(customIdentifier[customIdentifier.index(customIdentifier.startIndex, offsetBy: 2)...])) else {
-                return .fail(.generic)
-            }
-            
-            let peerId = PeerId(peerIdValue)
-            if peerId.namespace != Namespaces.Peer.CloudUser {
+            guard let peerId = siriSendMessageTarget(conversationIdentifier: intent.conversationIdentifier, recipientCustomIdentifier: intent.recipients?.first?.customIdentifier) else {
                 return .fail(.generic)
             }
             
             account.shouldBeServiceTaskMaster.set(.single(.now))
-            return standaloneSendMessage(account: account, peerId: peerId, text: intent.content ?? "", attributes: [], media: nil, replyToMessageId: nil)
-            |> mapError { _ -> IntentHandlingError in
-                return .generic
+            return account.postbox.transaction { transaction -> Peer? in
+                return transaction.getPeer(peerId)
             }
-            |> mapToSignal { _ -> Signal<Void, IntentHandlingError> in
-                return .complete()
+            |> castError(IntentHandlingError.self)
+            |> mapToSignal { peer -> Signal<Void, IntentHandlingError> in
+                guard let peer, peerAcceptsSiriMessages(peer) else {
+                    return .fail(.generic)
+                }
+                return standaloneSendMessage(account: account, peerId: peerId, text: intent.content ?? "", attributes: [], media: nil, replyToMessageId: nil)
+                |> mapError { _ -> IntentHandlingError in
+                    return .generic
+                }
+                |> mapToSignal { _ -> Signal<Void, IntentHandlingError> in
+                    return .complete()
+                }
             }
             |> afterDisposed {
                 account.shouldBeServiceTaskMaster.set(.single(.never))

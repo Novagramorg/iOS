@@ -34,6 +34,17 @@ func getMessages(account: Account, ids: [MessageId]) -> Signal<[INMessage], NoEr
     }
 }
 
+/// Which chats "read my messages" looks at: private chats, groups and channels. Secret chats
+/// stay out (their messages cannot be read or replied to from the extension).
+func unreadMessagesIncludePeer(_ peerId: PeerId) -> Bool {
+    switch peerId.namespace {
+    case Namespaces.Peer.CloudUser, Namespaces.Peer.CloudGroup, Namespaces.Peer.CloudChannel:
+        return true
+    default:
+        return false
+    }
+}
+
 @available(iOSApplicationExtension 10.0, iOS 10.0, *)
 func unreadMessages(account: Account) -> Signal<[INMessage], NoError> {
     return account.postbox.tailChatListView(groupId: .root, count: 20, summaryComponents: ChatListEntrySummaryComponents())
@@ -46,7 +57,7 @@ func unreadMessages(account: Account) -> Signal<[INMessage], NoError> {
                 let readState = entryData.readState
                 let isMuted = entryData.isRemovedFromTotalUnreadCount
                 
-                if index.messageIndex.id.peerId.namespace != Namespaces.Peer.CloudUser {
+                if !unreadMessagesIncludePeer(index.messageIndex.id.peerId) {
                     continue
                 }
                 
@@ -166,34 +177,73 @@ private func callWithTelegramMessage(_ telegramMessage: Message, account: Accoun
     return CallRecord(identifier: identifier, date: date, caller: caller, duration: duration, unseen: true)
 }
 
+/// The Siri-facing sender of a message: its author when that is a user (the Telegram service
+/// account excepted), or the channel itself for a channel post. Anything else has no sender
+/// Siri could name, and such a message is not read out.
 @available(iOSApplicationExtension 10.0, iOS 10.0, *)
-private func messageWithTelegramMessage(_ telegramMessage: Message) -> INMessage? {
-    guard let author = telegramMessage.author, let user = telegramMessage.peers[author.id] as? TelegramUser, user.id.id._internalGetInt64Value() != 777000 else {
+private func intentSender(for author: Peer) -> INPerson? {
+    let personIdentifier = "tg\(author.id.toInt64())"
+    if let user = author as? TelegramUser {
+        if user.id.id._internalGetInt64Value() == 777000 {
+            return nil
+        }
+        let personHandle: INPersonHandle
+        if #available(iOSApplicationExtension 10.2, iOS 10.2, *) {
+            var type: INPersonHandleType
+            var label: INPersonHandleLabel?
+            if let username = user.addressName {
+                label = INPersonHandleLabel(rawValue: "@\(username)")
+                type = .unknown
+            } else if let phone = user.phone {
+                label = INPersonHandleLabel(rawValue: formatPhoneNumber(phone))
+                type = .phoneNumber
+            } else {
+                label = nil
+                type = .unknown
+            }
+            personHandle = INPersonHandle(value: user.phone ?? "", type: type, label: label)
+        } else {
+            personHandle = INPersonHandle(value: user.phone ?? "", type: .phoneNumber)
+        }
+        return INPerson(personHandle: personHandle, nameComponents: nil, displayName: user.nameOrPhone, image: nil, contactIdentifier: personIdentifier, customIdentifier: personIdentifier)
+    } else if let channel = author as? TelegramChannel {
+        let handleValue = channel.addressName.flatMap { "@\($0)" } ?? channel.title
+        let personHandle = INPersonHandle(value: handleValue, type: .unknown)
+        return INPerson(personHandle: personHandle, nameComponents: nil, displayName: channel.title, image: nil, contactIdentifier: personIdentifier, customIdentifier: personIdentifier)
+    } else {
         return nil
     }
+}
+
+/// The name Siri prefixes a message with when it was posted in a group ("Alice in Weekend
+/// Ride"). Private chats and channels have none: there the sender is the conversation. Nor
+/// does a message the group itself wrote (an anonymous admin), whose sender already is the
+/// group.
+private func intentGroupName(for chatPeer: Peer?, author: Peer) -> String? {
+    if let chatPeer, chatPeer.id == author.id {
+        return nil
+    }
+    switch chatPeer {
+    case let group as TelegramGroup:
+        return group.title
+    case let channel as TelegramChannel:
+        if case .group = channel.info {
+            return channel.title
+        }
+        return nil
+    default:
+        return nil
+    }
+}
+
+@available(iOSApplicationExtension 10.0, iOS 10.0, *)
+func messageWithTelegramMessage(_ telegramMessage: Message) -> INMessage? {
+    guard let author = telegramMessage.author, let sender = intentSender(for: author) else {
+        return nil
+    }
+    let groupName = intentGroupName(for: telegramMessage.peers[telegramMessage.id.peerId], author: author)
     
     let identifier = intentMessageIdentifier(telegramMessage.id)
-    let personHandle: INPersonHandle
-    if #available(iOSApplicationExtension 10.2, iOS 10.2, *) {
-        var type: INPersonHandleType
-        var label: INPersonHandleLabel?
-        if let username = user.addressName {
-            label = INPersonHandleLabel(rawValue: "@\(username)")
-            type = .unknown
-        } else if let phone = user.phone {
-            label = INPersonHandleLabel(rawValue: formatPhoneNumber(phone))
-            type = .phoneNumber
-        } else {
-            label = nil
-            type = .unknown
-        }
-        personHandle = INPersonHandle(value: user.phone ?? "", type: type, label: label)
-    } else {
-        personHandle = INPersonHandle(value: user.phone ?? "", type: .phoneNumber)
-    }
-    
-    let personIdentifier = "tg\(user.id.toInt64())"
-    let sender = INPerson(personHandle: personHandle, nameComponents: nil, displayName: user.nameOrPhone, image: nil, contactIdentifier: personIdentifier, customIdentifier: personIdentifier)
     let date = Date(timeIntervalSince1970: TimeInterval(telegramMessage.timestamp))
     
     let message: INMessage
@@ -237,7 +287,7 @@ private func messageWithTelegramMessage(_ telegramMessage: Message) -> INMessage
             return nil
         }
     
-        message = INMessage(identifier: identifier, conversationIdentifier: "\(telegramMessage.id.peerId.toInt64())", content: telegramMessage.text, dateSent: date, sender: sender, recipients: [], groupName: nil, messageType: messageType)
+        message = INMessage(identifier: identifier, conversationIdentifier: "\(telegramMessage.id.peerId.toInt64())", content: telegramMessage.text, dateSent: date, sender: sender, recipients: [], groupName: groupName.flatMap { INSpeakableString(spokenPhrase: $0) }, messageType: messageType)
     } else {
         if telegramMessage.text.isEmpty {
             return nil
