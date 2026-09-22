@@ -206,10 +206,8 @@ private func intentSender(for author: Peer) -> INPerson? {
             personHandle = INPersonHandle(value: user.phone ?? "", type: .phoneNumber)
         }
         return INPerson(personHandle: personHandle, nameComponents: nil, displayName: user.nameOrPhone, image: nil, contactIdentifier: personIdentifier, customIdentifier: personIdentifier)
-    } else if let channel = author as? TelegramChannel {
-        let handleValue = channel.addressName.flatMap { "@\($0)" } ?? channel.title
-        let personHandle = INPersonHandle(value: handleValue, type: .unknown)
-        return INPerson(personHandle: personHandle, nameComponents: nil, displayName: channel.title, image: nil, contactIdentifier: personIdentifier, customIdentifier: personIdentifier)
+    } else if author is TelegramChannel {
+        return personWithPeer(stableId: personIdentifier, peer: author)
     } else {
         return nil
     }

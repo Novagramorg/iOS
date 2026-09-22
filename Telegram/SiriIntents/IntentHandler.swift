@@ -232,6 +232,8 @@ class DefaultIntentHandler: INExtension, INSendMessageIntentHandling, INSearchFo
         case noResult
         /// A peer that exists but may not be messaged (see `peerAcceptsSiriMessages`).
         case refused
+        /// No account is logged in.
+        case noAccount
         case skip
         
         @available(iOSApplicationExtension 11.0, iOS 11.0, *)
@@ -247,6 +249,8 @@ class DefaultIntentHandler: INExtension, INSendMessageIntentHandling, INSearchFo
                     return .unsupported()
                 case .refused:
                     return .unsupported(forReason: .messagingServiceNotEnabledForRecipient)
+                case .noAccount:
+                    return .unsupported(forReason: .noAccount)
                 case .skip:
                     return .notRequired()
             }
@@ -260,7 +264,7 @@ class DefaultIntentHandler: INExtension, INSendMessageIntentHandling, INSearchFo
                 return .disambiguation(with: persons)
             case .needsValue:
                 return .needsValue()
-            case .noResult, .refused:
+            case .noResult, .refused, .noAccount:
                 return .unsupported()
             case .skip:
                 return .notRequired()
@@ -275,7 +279,7 @@ class DefaultIntentHandler: INExtension, INSendMessageIntentHandling, INSearchFo
                 return .disambiguation(with: persons)
             case .needsValue:
                 return .needsValue()
-            case .noResult, .refused:
+            case .noResult, .refused, .noAccount:
                 return .unsupported()
             case .skip:
                 return .notRequired()
@@ -338,16 +342,18 @@ class DefaultIntentHandler: INExtension, INSendMessageIntentHandling, INSearchFo
             }
             self.resolvePersonsDisposable.set((account
             |> take(1)
-            |> mapToSignal { account -> Signal<Peer?, NoError> in
+            |> mapToSignal { account -> Signal<SiriRecipientDecision?, NoError> in
                 guard let account else {
                     return .single(nil)
                 }
-                return account.postbox.transaction { transaction -> Peer? in
-                    return transaction.getPeer(peerId)
+                return account.postbox.transaction { transaction -> SiriRecipientDecision? in
+                    return siriRecipientDecision(transaction: transaction, accountPeerId: account.peerId, peerId: peerId)
                 }
             }
-            |> deliverOnMainQueue).start(next: { peer in
-                switch siriRecipientDecision(for: peer) {
+            |> deliverOnMainQueue).start(next: { decision in
+                switch decision {
+                case .none:
+                    completion([.noAccount])
                 case .unknown:
                     completion([.noResult])
                 case .refused:
@@ -435,12 +441,12 @@ class DefaultIntentHandler: INExtension, INSendMessageIntentHandling, INSearchFo
                     // The conversation is the chat whose message Siri read: a user, or a group
                     // when the message was a group message. A group is "recipient" enough for
                     // Siri; the send handler routes by the conversation anyway.
-                    return account.postbox.transaction { transaction -> Peer? in
-                        return transaction.getPeer(PeerId(peerId))
+                    return account.postbox.transaction { transaction -> SiriRecipientDecision in
+                        return siriRecipientDecision(transaction: transaction, accountPeerId: account.peerId, peerId: PeerId(peerId))
                     }
                     |> castError(IntentHandlingError.self)
-                    |> map { peer -> INSendMessageRecipientResolutionResult in
-                        switch siriRecipientDecision(for: peer) {
+                    |> map { decision -> INSendMessageRecipientResolutionResult in
+                        switch decision {
                         case .unknown:
                             return .needsValue()
                         case .refused:
@@ -533,12 +539,12 @@ class DefaultIntentHandler: INExtension, INSendMessageIntentHandling, INSearchFo
             }
             
             account.shouldBeServiceTaskMaster.set(.single(.now))
-            return account.postbox.transaction { transaction -> Peer? in
-                return transaction.getPeer(peerId)
+            return account.postbox.transaction { transaction -> SiriRecipientDecision in
+                return siriRecipientDecision(transaction: transaction, accountPeerId: account.peerId, peerId: peerId)
             }
             |> castError(IntentHandlingError.self)
-            |> mapToSignal { peer -> Signal<Void, IntentHandlingError> in
-                guard let peer, peerAcceptsSiriMessages(peer) else {
+            |> mapToSignal { decision -> Signal<Void, IntentHandlingError> in
+                guard case .person = decision else {
                     return .fail(.generic)
                 }
                 return standaloneSendMessage(account: account, peerId: peerId, text: intent.content ?? "", attributes: [], media: nil, replyToMessageId: nil)

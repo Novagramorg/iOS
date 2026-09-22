@@ -50,6 +50,30 @@ final class SiriSendMessageTargetTests: XCTestCase {
         XCTAssertFalse(peerAcceptsSiriMessages(IntentMessageFixtures.supergroup(3005, title: "Paid", sendPaidMessageStars: StarsAmount(value: 10, nanos: 0))))
     }
 
+    func testUsersTheUserCannotWriteToAreRefused() {
+        XCTAssertFalse(peerAcceptsSiriMessages(IntentMessageFixtures.user(1002, firstName: nil)), "deleted account")
+        XCTAssertFalse(peerAcceptsSiriMessages(IntentMessageFixtures.user(777000, firstName: "Telegram")), "service notifications")
+        let paid = CachedUserData().withUpdatedSendPaidMessageStars(StarsAmount(value: 5, nanos: 0))
+        XCTAssertFalse(peerAcceptsSiriMessages(IntentMessageFixtures.user(1003, firstName: "Paid"), cachedData: paid, accountIsPremium: true), "paid messages, whatever the account")
+        let premiumOnly = CachedUserData().withUpdatedFlags([.premiumRequired])
+        XCTAssertFalse(peerAcceptsSiriMessages(IntentMessageFixtures.user(1004, firstName: "Premium"), cachedData: premiumOnly, accountIsPremium: false), "premium required, account is not")
+        XCTAssertTrue(peerAcceptsSiriMessages(IntentMessageFixtures.user(1004, firstName: "Premium"), cachedData: premiumOnly, accountIsPremium: true), "premium required, account is premium")
+        XCTAssertFalse(peerAcceptsSiriMessages(IntentMessageFixtures.user(1005, firstName: "Gated", flags: [.requirePremium]), cachedData: nil, accountIsPremium: false), "no cached data, user flag says premium required")
+        XCTAssertTrue(peerAcceptsSiriMessages(IntentMessageFixtures.user(1006, firstName: "Friend", flags: [.requirePremium, .mutualContact]), cachedData: nil, accountIsPremium: false), "mutual contacts are exempt")
+        XCTAssertFalse(peerAcceptsSiriMessages(IntentMessageFixtures.user(1007, firstName: "Stars", flags: [.requireStars]), cachedData: nil, accountIsPremium: true), "no cached data, user flag says stars required")
+    }
+
+    func testMigratedOrDeactivatedLegacyGroupsAreRefused() {
+        XCTAssertFalse(peerAcceptsSiriMessages(IntentMessageFixtures.group(2004, title: "Upgraded", migratedTo: peerId(Namespaces.Peer.CloudChannel, 3001))))
+        XCTAssertFalse(peerAcceptsSiriMessages(IntentMessageFixtures.group(2005, title: "Deactivated", flags: [.deactivated])))
+    }
+
+    func testPaidUserRecipientIsRefusedAtResolution() {
+        let paid = CachedUserData().withUpdatedSendPaidMessageStars(StarsAmount(value: 5, nanos: 0))
+
+        XCTAssertTrue(decisionIsRefused(siriRecipientDecision(for: IntentMessageFixtures.user(1003, firstName: "Paid"), cachedData: paid, accountIsPremium: true)))
+    }
+
     /// `INMessage.conversationIdentifier` names the chat only, so a reply into a forum would
     /// land in the wrong topic; until the topic travels with it, forums are not a target.
     func testForumsAndMonoforumsAreNotATarget() {

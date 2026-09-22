@@ -159,3 +159,14 @@ func personWithUser(stableId: String, user: TelegramUser) -> INPerson {
     
     return INPerson(personHandle: personHandle, nameComponents: nameComponents, displayName: user.debugDisplayTitle, image: nil, contactIdentifier: stableId, customIdentifier: "tg\(user.id.toInt64())")
 }
+
+/// The `INPerson` standing for any peer Siri can name: a user through `personWithUser`, a
+/// group or channel by its title (its handle is the public @username when it has one).
+@available(iOSApplicationExtension 10.0, iOS 10.0, *)
+func personWithPeer(stableId: String, peer: Peer) -> INPerson {
+    if let user = peer as? TelegramUser {
+        return personWithUser(stableId: stableId, user: user)
+    }
+    let personHandle = INPersonHandle(value: peer.addressName.flatMap { "@\($0)" } ?? peer.debugDisplayTitle, type: .unknown)
+    return INPerson(personHandle: personHandle, nameComponents: nil, displayName: peer.debugDisplayTitle, image: nil, contactIdentifier: stableId, customIdentifier: "tg\(peer.id.toInt64())")
+}

@@ -24,17 +24,46 @@ func siriSendMessageTarget(conversationIdentifier: String?, recipientCustomIdent
 /// Whether Siri may send a message to this peer.
 ///
 /// The standalone send swallows the server's refusal, so a chat the user cannot write to has to
-/// be refused here or Siri would report the reply as sent: users and groups the user is still a
-/// member of and may post text in, never a broadcast channel (Siri can read its posts, but a
-/// "reply" there is not a thing the user can be offered), never a chat that charges for
-/// messages, and not yet a forum or monoforum, because `INMessage.conversationIdentifier`
-/// names the chat only and the reply would land in the wrong topic.
-func peerAcceptsSiriMessages(_ peer: Peer) -> Bool {
+/// be refused here or Siri would report the reply as sent: users that still exist and do not
+/// gate their messages (paid messages are never spent from Siri; a Premium gate is honoured
+/// unless the account is Premium), groups the user is still a member of and may post text in,
+/// never a broadcast channel (Siri can read its posts, but a "reply" there is not a thing the
+/// user can be offered), never a chat that charges for messages, and not yet a forum or
+/// monoforum, because `INMessage.conversationIdentifier` names the chat only and the reply
+/// would land in the wrong topic.
+///
+/// `cachedData` is the peer's `CachedUserData` when the store has it; without it the user's
+/// own flags decide, the way the chat list does before the full data is fetched.
+func peerAcceptsSiriMessages(_ peer: Peer, cachedData: CachedPeerData? = nil, accountIsPremium: Bool = false) -> Bool {
     switch peer {
-    case is TelegramUser:
+    case let user as TelegramUser:
+        if user.isDeleted || user.id.id._internalGetInt64Value() == 777000 {
+            return false
+        }
+        if let cachedData = cachedData as? CachedUserData {
+            if cachedData.sendPaidMessageStars != nil {
+                return false
+            }
+            if cachedData.flags.contains(.premiumRequired) && !accountIsPremium {
+                return false
+            }
+            return true
+        }
+        if user.flags.contains(.mutualContact) {
+            return true
+        }
+        if user.flags.contains(.requireStars) {
+            return false
+        }
+        if user.flags.contains(.requirePremium) && !accountIsPremium {
+            return false
+        }
         return true
     case let group as TelegramGroup:
         if group.membership != .Member {
+            return false
+        }
+        if group.flags.contains(.deactivated) || group.migrationReference != nil {
             return false
         }
         return !group.hasBannedPermission(.banSendText)
@@ -71,17 +100,24 @@ enum SiriRecipientDecision {
 
 /// Every recipient Siri resolves goes through this, so `peerAcceptsSiriMessages` is applied
 /// before Siri ever confirms a message, not only when the send runs.
-func siriRecipientDecision(for peer: Peer?) -> SiriRecipientDecision {
+func siriRecipientDecision(for peer: Peer?, cachedData: CachedPeerData? = nil, accountIsPremium: Bool = false) -> SiriRecipientDecision {
     guard let peer else {
         return .unknown
     }
-    if !peerAcceptsSiriMessages(peer) {
+    if !peerAcceptsSiriMessages(peer, cachedData: cachedData, accountIsPremium: accountIsPremium) {
         return .refused
     }
-    let stableId = "tg\(peer.id.toInt64())"
-    if let user = peer as? TelegramUser {
-        return .person(personWithUser(stableId: stableId, user: user))
-    }
-    let handle = INPersonHandle(value: peer.addressName.flatMap { "@\($0)" } ?? peer.debugDisplayTitle, type: .unknown)
-    return .person(INPerson(personHandle: handle, nameComponents: nil, displayName: peer.debugDisplayTitle, image: nil, contactIdentifier: stableId, customIdentifier: stableId))
+    return .person(personWithPeer(stableId: "tg\(peer.id.toInt64())", peer: peer))
+}
+
+/// The same decision, read out of the store: the peer, its cached data and whether the account
+/// itself is Premium. Recipient resolution and the send both go through this, so the send can
+/// never accept a peer that resolution refused.
+func siriRecipientDecision(transaction: Transaction, accountPeerId: PeerId, peerId: PeerId) -> SiriRecipientDecision {
+    let accountIsPremium = transaction.getPeer(accountPeerId)?.isPremium ?? false
+    return siriRecipientDecision(
+        for: transaction.getPeer(peerId),
+        cachedData: transaction.getPeerCachedData(peerId: peerId),
+        accountIsPremium: accountIsPremium
+    )
 }

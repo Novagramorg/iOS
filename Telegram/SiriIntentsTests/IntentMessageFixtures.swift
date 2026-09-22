@@ -5,7 +5,7 @@ import TelegramCore
 /// Minimal peers and messages for the intents extension's message conversion. Only the
 /// fields the conversion reads are meaningful; everything else is empty.
 enum IntentMessageFixtures {
-    static func user(_ id: Int64, firstName: String, phone: String? = nil) -> TelegramUser {
+    static func user(_ id: Int64, firstName: String?, phone: String? = nil, flags: UserInfoFlags = []) -> TelegramUser {
         return TelegramUser(
             id: PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(id)),
             accessHash: nil,
@@ -16,7 +16,7 @@ enum IntentMessageFixtures {
             photo: [],
             botInfo: nil,
             restrictionInfo: nil,
-            flags: [],
+            flags: flags,
             emojiStatus: nil,
             usernames: [],
             storiesHidden: nil,
@@ -29,7 +29,7 @@ enum IntentMessageFixtures {
         )
     }
 
-    static func group(_ id: Int64, title: String, membership: TelegramGroupMembership = .Member, defaultBannedRights: TelegramChatBannedRights? = nil) -> TelegramGroup {
+    static func group(_ id: Int64, title: String, membership: TelegramGroupMembership = .Member, defaultBannedRights: TelegramChatBannedRights? = nil, flags: TelegramGroupFlags = [], migratedTo: PeerId? = nil) -> TelegramGroup {
         return TelegramGroup(
             id: PeerId(namespace: Namespaces.Peer.CloudGroup, id: PeerId.Id._internalFromInt64Value(id)),
             title: title,
@@ -37,9 +37,9 @@ enum IntentMessageFixtures {
             participantCount: 3,
             role: .member,
             membership: membership,
-            flags: [],
+            flags: flags,
             defaultBannedRights: defaultBannedRights,
-            migrationReference: nil,
+            migrationReference: migratedTo.map { TelegramGroupToChannelMigrationReference(peerId: $0, accessHash: 0) },
             creationDate: 0,
             version: 0
         )
