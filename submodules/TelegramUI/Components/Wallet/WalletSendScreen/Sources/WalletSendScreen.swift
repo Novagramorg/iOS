@@ -614,7 +614,6 @@ private final class WalletSendScreenComponent: Component {
         func viewDidAppear() {
             self.isVisible = true
             self.resolvePeerAddressIfNeeded()
-            self.presentRecipientErrorIfNeeded()
             self.feePreparationFailed = false
             self.updateFeePreparation()
             self.componentState?.updated(transition: .immediate)
@@ -674,29 +673,6 @@ private final class WalletSendScreenComponent: Component {
                 self.peerAddressState = .failed
             }
             self.componentState?.updated(transition: .easeInOut(duration: 0.2))
-            self.presentRecipientErrorIfNeeded()
-        }
-
-        private func presentRecipientErrorIfNeeded() {
-            guard self.isVisible,
-                  self.peerAddressState == .failed,
-                  let component = self.component,
-                  let environment = self.environment,
-                  let controller = environment.controller() as? WalletSendScreen else {
-                return
-            }
-            self.peerAddressState = .errorPresented
-            //TODO:localize
-            let text = "An unknown error occurred. Please try again later."
-            controller.present(textAlertController(
-                context: component.context,
-                title: nil,
-                text: text,
-                actions: [TextAlertAction(type: .defaultAction, title: environment.strings.Common_OK, action: { [weak self] in
-                    self?.dismiss()
-                })],
-                dismissOnOutsideTap: false
-            ), in: .window(.root))
         }
 
         private var shouldSendAll: Bool {
@@ -1040,7 +1016,7 @@ private final class WalletSendScreenComponent: Component {
                         context: component.context,
                         initialValue: NSAttributedString(string: self.comment ?? ""),
                         placeholder: placeholder,
-                        maxHeight: (controller.view.window?.bounds.height ?? UIScreen.main.bounds.height) * 0.5,
+                        maxHeight: (controller.view.window?.bounds.height ?? UIScreen.main.bounds.height) * 0.31,
                         returnKeyType: .default,
                         keyboardType: .default,
                         autocapitalizationType: .sentences,
@@ -1860,6 +1836,13 @@ private final class WalletSendScreenComponent: Component {
                 && !self.walletIsLoading
                 && self.walletBalance.map { self.amount > $0 } == true
             let hasPositiveBalance = self.walletBalance.map { $0 > 0 } == true
+            let hasZeroBalance = self.walletBalance == 0
+            let sendButtonY = usableBottom - 68.0
+            let showSendButton = hasAmount || component.peer != nil || !component.initialAddress.isEmpty
+            let showBalance = (hasAmount || hasPositiveBalance) && !hasZeroBalance
+            let feeDisplayState = self.feeDisplayState
+            let showFees = feeDisplayState != .hidden
+            let balanceSlotY = sendButtonY - (showFees ? 58.0 : 36.0)
             
             var centralContentLayouts: [(view: UIView, frame: CGRect, transition: ComponentTransition)] = []
             let amountWidth = max(1.0, availableSize.width - environment.safeInsets.left - environment.safeInsets.right - 32.0)
@@ -2042,8 +2025,8 @@ private final class WalletSendScreenComponent: Component {
             )
             //TODO:localize
             let depositTitle = "Deposit funds"
-            let showDeposit = isInsufficient || (!hasAmount && !hasPositiveBalance)
-            let isDepositInline = hasAmount || hasPositiveBalance
+            let showDeposit = hasZeroBalance || isInsufficient || (!hasAmount && !hasPositiveBalance)
+            let isDepositInline = !hasZeroBalance && (hasAmount || hasPositiveBalance)
             let depositItems: [AnyComponentWithIdentity<Empty>] = [
                 AnyComponentWithIdentity(
                     id: "title",
@@ -2081,10 +2064,10 @@ private final class WalletSendScreenComponent: Component {
                     height: 40.0
                 )
             )
-            let insufficientOriginX = floorToScreenPixels((availableSize.width - insufficientTextSize.width - 4.0 - depositButtonSize.width) / 2.0)
+            let insufficientOriginX = floorToScreenPixels((availableSize.width - insufficientTextSize.width - (isDepositInline ? 4.0 + depositButtonSize.width : 0.0)) / 2.0)
             let depositButtonFrame = CGRect(
-                x: insufficientOriginX + insufficientTextSize.width + 4.0,
-                y: insufficientSlotFrame.midY - depositButtonSize.height / 2.0,
+                x: isDepositInline ? insufficientOriginX + insufficientTextSize.width + 4.0 : floorToScreenPixels((availableSize.width - depositButtonSize.width) / 2.0),
+                y: (isDepositInline ? insufficientSlotFrame.midY : balanceSlotY + 12.0) - depositButtonSize.height / 2.0,
                 width: depositButtonSize.width,
                 height: depositButtonSize.height
             )
@@ -2097,7 +2080,7 @@ private final class WalletSendScreenComponent: Component {
             if isInsufficient {
                 centralContentFrame = centralContentFrame.union(insufficientTextFrame)
             }
-            if showDeposit {
+            if showDeposit && isDepositInline {
                 centralContentFrame = centralContentFrame.union(depositButtonFrame)
             }
             
@@ -2115,13 +2098,19 @@ private final class WalletSendScreenComponent: Component {
                 insufficientVisibilityTransition.setAlpha(view: insufficientTextView, alpha: isInsufficient ? 1.0 : 0.0)
             }
             if let depositButtonView = self.depositButton.view {
+                var depositPositionTransition = transition
                 var depositVisibilityTransition: ComponentTransition = .easeInOut(duration: 0.2)
                 if depositButtonView.superview == nil {
                     self.addSubview(depositButtonView)
+                    depositPositionTransition = .immediate
                     depositVisibilityTransition = .immediate
                 }
-                insufficientPositionTransition.setBounds(view: depositButtonView, bounds: CGRect(origin: .zero, size: depositButtonFrame.size))
-                centralContentLayouts.append((depositButtonView, depositButtonFrame, insufficientPositionTransition))
+                depositPositionTransition.setBounds(view: depositButtonView, bounds: CGRect(origin: .zero, size: depositButtonFrame.size))
+                if isDepositInline {
+                    centralContentLayouts.append((depositButtonView, depositButtonFrame, depositPositionTransition))
+                } else {
+                    depositPositionTransition.setPosition(view: depositButtonView, position: depositButtonFrame.center)
+                }
                 depositVisibilityTransition.setAlpha(view: depositButtonView, alpha: showDeposit ? 1.0 : 0.0)
             }
 
@@ -2166,7 +2155,7 @@ private final class WalletSendScreenComponent: Component {
                 let bubbleSize = CGSize(width: commentSize.width + 34.0, height: max(34.0, commentSize.height + 14.0))
                 let commentOriginY: CGFloat
                 if isInsufficient {
-                    commentOriginY = depositButtonFrame.maxY + 8.0
+                    commentOriginY = (isDepositInline ? depositButtonFrame.maxY : insufficientTextFrame.maxY) + 8.0
                 } else {
                     commentOriginY = rateButtonFrame.maxY + 15.0
                 }
@@ -2227,11 +2216,6 @@ private final class WalletSendScreenComponent: Component {
             let balancePrefix = "Balance: "
             let balanceText = balancePrefix + formattedBalance
 
-            let sendButtonY = usableBottom - 68.0
-            let showSendButton = hasAmount || component.peer != nil || !component.initialAddress.isEmpty
-            let showBalance = hasAmount || hasPositiveBalance
-            let feeDisplayState = self.feeDisplayState
-            let showFees = feeDisplayState != .hidden
             let balanceTextSize = self.balanceText.update(
                 transition: transition,
                 component: AnyComponent(MultilineTextComponent(
@@ -2248,7 +2232,7 @@ private final class WalletSendScreenComponent: Component {
             )
             let balanceTextFrame = CGRect(
                 x: floorToScreenPixels((availableSize.width - balanceTextSize.width) / 2.0),
-                y: sendButtonY - (showFees ? 58.0 : 36.0) + floorToScreenPixels((24.0 - balanceTextSize.height) / 2.0),
+                y: balanceSlotY + floorToScreenPixels((24.0 - balanceTextSize.height) / 2.0),
                 width: balanceTextSize.width,
                 height: balanceTextSize.height
             )
@@ -2331,6 +2315,9 @@ private final class WalletSendScreenComponent: Component {
             var centralContentBottom = showSendButton ? sendButtonY : usableBottom
             if showBalance {
                 centralContentBottom = min(centralContentBottom, balanceTextFrame.minY)
+            }
+            if showDeposit && !isDepositInline {
+                centralContentBottom = min(centralContentBottom, depositButtonFrame.minY)
             }
             if showFees {
                 centralContentBottom = min(centralContentBottom, feeTextFrame.minY)

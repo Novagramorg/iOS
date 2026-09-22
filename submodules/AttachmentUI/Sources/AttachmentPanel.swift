@@ -301,7 +301,8 @@ private final class AttachButtonComponent: CombinedComponent {
                 imageFile = nil
             case .quickReply:
                 name = strings.Attachment_Reply
-                imageName = "Chat/Attach Menu/Reply"
+                animationName = "TabReply"
+                imageName = ""
             case .richText:
                 name = strings.Attachment_Article
                 animationName = "TabArticle"
