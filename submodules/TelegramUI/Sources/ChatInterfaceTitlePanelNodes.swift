@@ -154,7 +154,25 @@ func titlePanelForChatPresentationInterfaceState(_ chatPresentationInterfaceStat
         }
     }
     
-    let displayActionsPanel = shouldDisplayPeerActionsPanel(chatPresentationInterfaceState, inhibitTitlePanelDisplay: inhibitTitlePanelDisplay)
+    var displayActionsPanel = false
+    if !chatPresentationInterfaceState.peerIsBlocked && !inhibitTitlePanelDisplay, let contactStatus = chatPresentationInterfaceState.contactStatus {
+        if let peerStatusSettings = contactStatus.peerStatusSettings {
+            if !peerStatusSettings.flags.isEmpty {
+                if contactStatus.canAddContact && peerStatusSettings.contains(.canAddContact) {
+                    displayActionsPanel = true
+                } else if peerStatusSettings.contains(.canReport) || peerStatusSettings.contains(.canBlock) || peerStatusSettings.contains(.autoArchived) {
+                    displayActionsPanel = true
+                } else if peerStatusSettings.contains(.canShareContact) {
+                    displayActionsPanel = true
+                } else if peerStatusSettings.contains(.suggestAddMembers) {
+                    displayActionsPanel = true
+                }
+            }
+            if peerStatusSettings.requestChatTitle != nil {
+                displayActionsPanel = true
+            }
+        }
+    }
     
     if (selectedContext == nil || selectedContext! <= .pinnedMessage) {
         if displayActionsPanel {
@@ -214,29 +232,6 @@ func titlePanelForChatPresentationInterfaceState(_ chatPresentationInterfaceStat
     return nil
 }
 
-private func shouldDisplayPeerActionsPanel(_ chatPresentationInterfaceState: ChatPresentationInterfaceState, inhibitTitlePanelDisplay: Bool) -> Bool {
-    var displayActionsPanel = false
-    if !chatPresentationInterfaceState.peerIsBlocked && !inhibitTitlePanelDisplay, let contactStatus = chatPresentationInterfaceState.contactStatus {
-        if let peerStatusSettings = contactStatus.peerStatusSettings {
-            if !peerStatusSettings.flags.isEmpty {
-                if contactStatus.canAddContact && peerStatusSettings.contains(.canAddContact) {
-                    displayActionsPanel = true
-                } else if peerStatusSettings.contains(.canReport) || peerStatusSettings.contains(.canBlock) || peerStatusSettings.contains(.autoArchived) {
-                    displayActionsPanel = true
-                } else if peerStatusSettings.contains(.canShareContact) {
-                    displayActionsPanel = true
-                } else if peerStatusSettings.contains(.suggestAddMembers) {
-                    displayActionsPanel = true
-                }
-            }
-            if peerStatusSettings.requestChatTitle != nil {
-                displayActionsPanel = true
-            }
-        }
-    }
-    return displayActionsPanel
-}
-
 /// The "bot manages this chat" bar of a business chat.
 ///
 /// It is deliberately NOT one of the mutually exclusive panels returned by
@@ -244,9 +239,15 @@ private func shouldDisplayPeerActionsPanel(_ chatPresentationInterfaceState: Cha
 /// context, so for as long as a business bot managed a chat the pinned-message bar was replaced by
 /// the bot bar and the pinned messages were unreachable from the chat (bugs.telegram.org/c/45791).
 /// The chat node gives this panel its own slot in the header-panel stack, above the pinned bar,
-/// so both are visible. It still yields to the peer-actions (report / add contact) bar, which is
-/// dismissable and reappears in the same "contact status" position it always had.
-func managingBotTitlePanelForChatPresentationInterfaceState(_ chatPresentationInterfaceState: ChatPresentationInterfaceState, context: AccountContext, currentPanel: ChatManagingBotTitlePanelNode?, interfaceInteraction: ChatPanelInterfaceInteraction?) -> ChatManagingBotTitlePanelNode? {
+/// so both are visible.
+///
+/// `displayedTitlePanel` is the panel `titlePanelForChatPresentationInterfaceState` chose for the
+/// same state. The bot bar still yields to the two dismissable notices that outranked it before,
+/// the peer-actions (report / add contact) bar and the peer-verification bar, but only while one
+/// of them is actually on screen: deciding from the bar's *eligibility* instead would blank the
+/// bot bar for the lifetime of every transient context (an in-progress request, a toast) that
+/// displaces the report bar without showing it.
+func managingBotTitlePanelForChatPresentationInterfaceState(_ chatPresentationInterfaceState: ChatPresentationInterfaceState, context: AccountContext, displayedTitlePanel: ChatTitleAccessoryPanelNode?, currentPanel: ChatManagingBotTitlePanelNode?, interfaceInteraction: ChatPanelInterfaceInteraction?) -> ChatManagingBotTitlePanelNode? {
     guard let contactStatus = chatPresentationInterfaceState.contactStatus, contactStatus.managingBot != nil else {
         return nil
     }
@@ -278,7 +279,7 @@ func managingBotTitlePanelForChatPresentationInterfaceState(_ chatPresentationIn
     guard case .peer = chatPresentationInterfaceState.chatLocation else {
         return nil
     }
-    if shouldDisplayPeerActionsPanel(chatPresentationInterfaceState, inhibitTitlePanelDisplay: false) {
+    if displayedTitlePanel is ChatReportPeerTitlePanelNode || displayedTitlePanel is ChatVerifiedPeerTitlePanelNode {
         return nil
     }
     

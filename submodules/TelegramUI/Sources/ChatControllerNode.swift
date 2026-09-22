@@ -1614,7 +1614,14 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             )
         }
         
-        if !hideTopPanels, let managingBotPanelNode = managingBotTitlePanelForChatPresentationInterfaceState(self.chatPresentationInterfaceState, context: self.context, currentPanel: self.currentManagingBotTitlePanelNode, interfaceInteraction: self.interfaceInteraction) {
+        var titleAccessoryPanelNode: ChatTitleAccessoryPanelNode?
+        if !hideTopPanels {
+            titleAccessoryPanelNode = titlePanelForChatPresentationInterfaceState(self.chatPresentationInterfaceState, context: self.context, currentPanel: self.currentTitleAccessoryPanelNode, controllerInteraction: self.controllerInteraction, interfaceInteraction: self.interfaceInteraction, force: false)
+        }
+        
+        // The container lays panels out in append order (`orderIndex` only takes part in `Panel ==`),
+        // so appending the bot bar before the title accessory panel is what puts it above the pinned bar.
+        if !hideTopPanels, let managingBotPanelNode = managingBotTitlePanelForChatPresentationInterfaceState(self.chatPresentationInterfaceState, context: self.context, displayedTitlePanel: titleAccessoryPanelNode, currentPanel: self.currentManagingBotTitlePanelNode, interfaceInteraction: self.interfaceInteraction) {
             self.currentManagingBotTitlePanelNode = managingBotPanelNode
             headerPanels.append(HeaderPanelContainerComponent.Panel(
                 key: "managingBot",
@@ -1628,7 +1635,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             self.currentManagingBotTitlePanelNode = nil
         }
         
-        if !hideTopPanels, let titleAccessoryPanelNode = titlePanelForChatPresentationInterfaceState(self.chatPresentationInterfaceState, context: self.context, currentPanel: self.currentTitleAccessoryPanelNode, controllerInteraction: self.controllerInteraction, interfaceInteraction: self.interfaceInteraction, force: false) {
+        if let titleAccessoryPanelNode {
             self.currentTitleAccessoryPanelNode = titleAccessoryPanelNode
             let panelKey = "\(type(of: titleAccessoryPanelNode))"
             headerPanels.append(HeaderPanelContainerComponent.Panel(
