@@ -261,6 +261,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
     
     private let titleAccessoryPanelContainer: ChatControllerTitlePanelNodeContainer
     private var currentTitleAccessoryPanelNode: ChatTitleAccessoryPanelNode?
+    private var currentManagingBotTitlePanelNode: ChatManagingBotTitlePanelNode?
     
     private var floatingTopicsPanelContainer: ChatControllerTitlePanelNodeContainer
     private var floatingTopicsPanel: (view: ComponentView<ChatSidePanelEnvironment>, component: ChatFloatingTopicsPanel)?
@@ -1611,6 +1612,20 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                     }
                 )))
             )
+        }
+        
+        if !hideTopPanels, let managingBotPanelNode = managingBotTitlePanelForChatPresentationInterfaceState(self.chatPresentationInterfaceState, context: self.context, currentPanel: self.currentManagingBotTitlePanelNode, interfaceInteraction: self.interfaceInteraction) {
+            self.currentManagingBotTitlePanelNode = managingBotPanelNode
+            headerPanels.append(HeaderPanelContainerComponent.Panel(
+                key: "managingBot",
+                orderIndex: 3,
+                component: AnyComponent(LegacyChatHeaderPanelComponent(
+                    panelNode: managingBotPanelNode,
+                    interfaceState: self.chatPresentationInterfaceState
+                )))
+            )
+        } else {
+            self.currentManagingBotTitlePanelNode = nil
         }
         
         if !hideTopPanels, let titleAccessoryPanelNode = titlePanelForChatPresentationInterfaceState(self.chatPresentationInterfaceState, context: self.context, currentPanel: self.currentTitleAccessoryPanelNode, controllerInteraction: self.controllerInteraction, interfaceInteraction: self.interfaceInteraction, force: false) {

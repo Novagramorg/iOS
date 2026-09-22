@@ -154,25 +154,7 @@ func titlePanelForChatPresentationInterfaceState(_ chatPresentationInterfaceStat
         }
     }
     
-    var displayActionsPanel = false
-    if !chatPresentationInterfaceState.peerIsBlocked && !inhibitTitlePanelDisplay, let contactStatus = chatPresentationInterfaceState.contactStatus {
-        if let peerStatusSettings = contactStatus.peerStatusSettings {
-            if !peerStatusSettings.flags.isEmpty {
-                if contactStatus.canAddContact && peerStatusSettings.contains(.canAddContact) {
-                    displayActionsPanel = true
-                } else if peerStatusSettings.contains(.canReport) || peerStatusSettings.contains(.canBlock) || peerStatusSettings.contains(.autoArchived) {
-                    displayActionsPanel = true
-                } else if peerStatusSettings.contains(.canShareContact) {
-                    displayActionsPanel = true
-                } else if peerStatusSettings.contains(.suggestAddMembers) {
-                    displayActionsPanel = true
-                }
-            }
-            if peerStatusSettings.requestChatTitle != nil {
-                displayActionsPanel = true
-            }
-        }
-    }
+    let displayActionsPanel = shouldDisplayPeerActionsPanel(chatPresentationInterfaceState, inhibitTitlePanelDisplay: inhibitTitlePanelDisplay)
     
     if (selectedContext == nil || selectedContext! <= .pinnedMessage) {
         if displayActionsPanel {
@@ -180,14 +162,6 @@ func titlePanelForChatPresentationInterfaceState(_ chatPresentationInterfaceStat
                 return currentPanel
             } else if let controllerInteraction = controllerInteraction {
                 let panel = ChatReportPeerTitlePanelNode(context: context, animationCache: controllerInteraction.presentationContext.animationCache, animationRenderer: controllerInteraction.presentationContext.animationRenderer)
-                panel.interfaceInteraction = interfaceInteraction
-                return panel
-            }
-        } else if !chatPresentationInterfaceState.peerIsBlocked && !inhibitTitlePanelDisplay, let contactStatus = chatPresentationInterfaceState.contactStatus, contactStatus.managingBot != nil {
-            if let currentPanel = currentPanel as? ChatManagingBotTitlePanelNode {
-                return currentPanel
-            } else {
-                let panel = ChatManagingBotTitlePanelNode(context: context)
                 panel.interfaceInteraction = interfaceInteraction
                 return panel
             }
@@ -238,6 +212,82 @@ func titlePanelForChatPresentationInterfaceState(_ chatPresentationInterfaceStat
     }
     
     return nil
+}
+
+private func shouldDisplayPeerActionsPanel(_ chatPresentationInterfaceState: ChatPresentationInterfaceState, inhibitTitlePanelDisplay: Bool) -> Bool {
+    var displayActionsPanel = false
+    if !chatPresentationInterfaceState.peerIsBlocked && !inhibitTitlePanelDisplay, let contactStatus = chatPresentationInterfaceState.contactStatus {
+        if let peerStatusSettings = contactStatus.peerStatusSettings {
+            if !peerStatusSettings.flags.isEmpty {
+                if contactStatus.canAddContact && peerStatusSettings.contains(.canAddContact) {
+                    displayActionsPanel = true
+                } else if peerStatusSettings.contains(.canReport) || peerStatusSettings.contains(.canBlock) || peerStatusSettings.contains(.autoArchived) {
+                    displayActionsPanel = true
+                } else if peerStatusSettings.contains(.canShareContact) {
+                    displayActionsPanel = true
+                } else if peerStatusSettings.contains(.suggestAddMembers) {
+                    displayActionsPanel = true
+                }
+            }
+            if peerStatusSettings.requestChatTitle != nil {
+                displayActionsPanel = true
+            }
+        }
+    }
+    return displayActionsPanel
+}
+
+/// The "bot manages this chat" bar of a business chat.
+///
+/// It is deliberately NOT one of the mutually exclusive panels returned by
+/// `titlePanelForChatPresentationInterfaceState`: it used to be, ranked above the pinned-message
+/// context, so for as long as a business bot managed a chat the pinned-message bar was replaced by
+/// the bot bar and the pinned messages were unreachable from the chat (bugs.telegram.org/c/45791).
+/// The chat node gives this panel its own slot in the header-panel stack, above the pinned bar,
+/// so both are visible. It still yields to the peer-actions (report / add contact) bar, which is
+/// dismissable and reappears in the same "contact status" position it always had.
+func managingBotTitlePanelForChatPresentationInterfaceState(_ chatPresentationInterfaceState: ChatPresentationInterfaceState, context: AccountContext, currentPanel: ChatManagingBotTitlePanelNode?, interfaceInteraction: ChatPanelInterfaceInteraction?) -> ChatManagingBotTitlePanelNode? {
+    guard let contactStatus = chatPresentationInterfaceState.contactStatus, contactStatus.managingBot != nil else {
+        return nil
+    }
+    if chatPresentationInterfaceState.peerIsBlocked {
+        return nil
+    }
+    switch chatPresentationInterfaceState.mode {
+    case .standard(.embedded), .overlay:
+        return nil
+    default:
+        break
+    }
+    if chatPresentationInterfaceState.renderedPeer?.peer?.restrictionText(platform: "ios", contentSettings: context.currentContentSettings.with { $0 }) != nil {
+        return nil
+    }
+    if chatPresentationInterfaceState.search != nil {
+        return nil
+    }
+    switch chatPresentationInterfaceState.subject {
+    case .messageOptions, .scheduledMessages, .pinnedMessages:
+        return nil
+    case let .customChatContents(customChatContents):
+        if case .businessLinkSetup = customChatContents.kind {
+            return nil
+        }
+    default:
+        break
+    }
+    guard case .peer = chatPresentationInterfaceState.chatLocation else {
+        return nil
+    }
+    if shouldDisplayPeerActionsPanel(chatPresentationInterfaceState, inhibitTitlePanelDisplay: false) {
+        return nil
+    }
+    
+    if let currentPanel {
+        return currentPanel
+    }
+    let panel = ChatManagingBotTitlePanelNode(context: context)
+    panel.interfaceInteraction = interfaceInteraction
+    return panel
 }
 
 func headerTopicsPanelForChatPresentationInterfaceState(_ chatPresentationInterfaceState: ChatPresentationInterfaceState, context: AccountContext, controllerInteraction: ChatControllerInteraction?, interfaceInteraction: ChatPanelInterfaceInteraction?, force: Bool) -> AnyComponent<Empty>? {
