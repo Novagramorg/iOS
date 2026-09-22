@@ -45,27 +45,19 @@ func peerAcceptsSiriMessages(_ peer: Peer, cachedData: CachedPeerData? = nil, ac
         if isAccountPeer {
             return true
         }
-        if let cachedData = cachedData as? CachedUserData {
-            if cachedData.isBlocked {
-                return false
-            }
-            if cachedData.sendPaidMessageStars != nil {
-                return false
-            }
-            if cachedData.flags.contains(.premiumRequired) && !accountIsPremium {
-                return false
-            }
+        if let cachedData = cachedData as? CachedUserData, cachedData.isBlocked {
+            return false
         }
-        if user.flags.contains(.mutualContact) {
+        // The same gate the app applies before it asks the server; Siri cannot ask, and a
+        // paid message is never something to spend from a voice reply.
+        switch localRequirementToContact(peer: user, cachedData: cachedData) {
+        case .stars:
+            return false
+        case .premium:
+            return accountIsPremium
+        case nil:
             return true
         }
-        if user.flags.contains(.requireStars) {
-            return false
-        }
-        if user.flags.contains(.requirePremium) && !accountIsPremium {
-            return false
-        }
-        return true
     case let group as TelegramGroup:
         if group.membership != .Member {
             return false
@@ -117,15 +109,36 @@ func siriRecipientDecision(for peer: Peer?, cachedData: CachedPeerData? = nil, a
     return .person(personWithPeer(stableId: "tg\(peer.id.toInt64())", peer: peer))
 }
 
+/// Everything the recipient decision reads from the store for one peer.
+private struct SiriRecipientContext {
+    var peer: Peer?
+    var cachedData: CachedPeerData?
+    var accountIsPremium: Bool
+    var isAccountPeer: Bool
+
+    init(transaction: Transaction, accountPeerId: PeerId, peerId: PeerId) {
+        self.peer = transaction.getPeer(peerId)
+        self.cachedData = transaction.getPeerCachedData(peerId: peerId)
+        self.accountIsPremium = transaction.getPeer(accountPeerId)?.isPremium ?? false
+        self.isAccountPeer = peerId == accountPeerId
+    }
+}
+
 /// The same decision, read out of the store: the peer, its cached data and whether the account
-/// itself is Premium. Recipient resolution and the send both go through this, so the send can
-/// never accept a peer that resolution refused.
+/// itself is Premium. Recipient resolution goes through this; the send goes through
+/// `siriRecipientAccepted`, which reads the same rows, so the send can never accept a peer
+/// that resolution refused.
 func siriRecipientDecision(transaction: Transaction, accountPeerId: PeerId, peerId: PeerId) -> SiriRecipientDecision {
-    let accountIsPremium = transaction.getPeer(accountPeerId)?.isPremium ?? false
-    return siriRecipientDecision(
-        for: transaction.getPeer(peerId),
-        cachedData: transaction.getPeerCachedData(peerId: peerId),
-        accountIsPremium: accountIsPremium,
-        isAccountPeer: peerId == accountPeerId
-    )
+    let context = SiriRecipientContext(transaction: transaction, accountPeerId: accountPeerId, peerId: peerId)
+    return siriRecipientDecision(for: context.peer, cachedData: context.cachedData, accountIsPremium: context.accountIsPremium, isAccountPeer: context.isAccountPeer)
+}
+
+/// Whether the send may go ahead: the yes/no half of `siriRecipientDecision`, without building
+/// the person Siri would be handed (the send has nobody to hand it to).
+func siriRecipientAccepted(transaction: Transaction, accountPeerId: PeerId, peerId: PeerId) -> Bool {
+    let context = SiriRecipientContext(transaction: transaction, accountPeerId: accountPeerId, peerId: peerId)
+    guard let peer = context.peer else {
+        return false
+    }
+    return peerAcceptsSiriMessages(peer, cachedData: context.cachedData, accountIsPremium: context.accountIsPremium, isAccountPeer: context.isAccountPeer)
 }

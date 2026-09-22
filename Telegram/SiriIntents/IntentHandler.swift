@@ -566,14 +566,16 @@ class DefaultIntentHandler: INExtension, INSendMessageIntentHandling, INSearchFo
             }
             
             account.shouldBeServiceTaskMaster.set(.single(.now))
-            return account.postbox.transaction { transaction -> SiriRecipientDecision in
-                return siriRecipientDecision(transaction: transaction, accountPeerId: account.peerId, peerId: peerId)
+            return account.postbox.transaction { transaction -> Bool in
+                return siriRecipientAccepted(transaction: transaction, accountPeerId: account.peerId, peerId: peerId)
             }
             |> castError(IntentHandlingError.self)
-            |> mapToSignal { decision -> Signal<Void, IntentHandlingError> in
-                guard case .person = decision else {
+            |> mapToSignal { accepted -> Signal<Void, IntentHandlingError> in
+                guard accepted else {
                     return .fail(.generic)
                 }
+                // A refused send fails here (StandaloneSendMessage no longer swallows the
+                // server's answer), and Siri reports the failure instead of "sent".
                 return standaloneSendMessage(account: account, peerId: peerId, text: intent.content ?? "", attributes: [], media: nil, replyToMessageId: nil)
                 |> mapError { _ -> IntentHandlingError in
                     return .generic
