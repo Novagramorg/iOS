@@ -12,7 +12,21 @@ import UIKit
 import GeneratedSources
 import WidgetItems
 
+/// The account the extension opened for an earlier request. The process outlives a single
+/// request, and opening an account costs time Siri does not give us, so it is kept - but only
+/// while it is still the account the app has current (see `cachedAccountIsCurrent`).
 private var accountCache: Account?
+
+/// Whether an account cached from an earlier request may answer this one: only if it is the
+/// account the app currently has selected. After the user switches accounts in the app the
+/// cached one would otherwise keep answering Siri with the other account's messages until
+/// the extension process happens to be killed.
+func cachedAccountIsCurrent(cachedId: AccountRecordId?, currentId: AccountRecordId?) -> Bool {
+    guard let cachedId, let currentId else {
+        return false
+    }
+    return cachedId == currentId
+}
 
 private var installedSharedLogger = false
 
@@ -186,11 +200,14 @@ class DefaultIntentHandler: INExtension, INSendMessageIntentHandling, INSearchFo
             }
         })
         
-        let account: Signal<Account?, NoError>
-        if let accountCache = accountCache {
-            account = .single(accountCache)
-        } else {
-            account = currentAccount(allocateIfNotExists: false, networkArguments: NetworkInitializationArguments(apiId: apiId, apiHash: apiHash, languagesCategory: languagesCategory, appVersion: appVersion, voipMaxLayer: 0, voipVersions: [], appData: .single(buildConfig.bundleData(withAppToken: nil, tokenType: nil, tokenEnvironment: nil, signatureDict: nil)), externalRequestVerificationStream: .never(), externalRecaptchaRequestVerification: { _, _ in return .never() }, autolockDeadine: .single(nil), encryptionProvider: OpenSSLEncryptionProvider(), deviceModelName: nil, useBetaFeatures: !buildConfig.isAppStoreBuild, isICloudEnabled: false), supplementary: true, manager: accountManager, rootPath: rootPath, auxiliaryMethods: accountAuxiliaryMethods, encryptionParameters: encryptionParameters)
+        let account: Signal<Account?, NoError> = accountManager.currentAccountRecord(allocateIfNotExists: false)
+        |> take(1)
+        |> mapToSignal { record -> Signal<Account?, NoError> in
+            if let accountCache, cachedAccountIsCurrent(cachedId: accountCache.id, currentId: record?.0) {
+                return .single(accountCache)
+            }
+            accountCache = nil
+            return currentAccount(allocateIfNotExists: false, networkArguments: NetworkInitializationArguments(apiId: apiId, apiHash: apiHash, languagesCategory: languagesCategory, appVersion: appVersion, voipMaxLayer: 0, voipVersions: [], appData: .single(buildConfig.bundleData(withAppToken: nil, tokenType: nil, tokenEnvironment: nil, signatureDict: nil)), externalRequestVerificationStream: .never(), externalRecaptchaRequestVerification: { _, _ in return .never() }, autolockDeadine: .single(nil), encryptionProvider: OpenSSLEncryptionProvider(), deviceModelName: nil, useBetaFeatures: !buildConfig.isAppStoreBuild, isICloudEnabled: false), supplementary: true, manager: accountManager, rootPath: rootPath, auxiliaryMethods: accountAuxiliaryMethods, encryptionParameters: encryptionParameters)
             |> mapToSignal { account -> Signal<Account?, NoError> in
                 if let account = account {
                     switch account {
