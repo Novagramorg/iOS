@@ -123,7 +123,12 @@ actor WalletEngineStorage {
     }
 
     func loadTransferReceipts() throws -> [WalletEngineTransferReceipt] {
-        try self.readCodable(service: self.descriptorService, account: "transfer-receipts") ?? []
+        do {
+            return try self.readCodable(service: self.descriptorService, account: "transfer-receipts") ?? []
+        } catch WalletEngineStorageError.corrupted {
+            try? self.remove(service: self.descriptorService, account: "transfer-receipts")
+            return []
+        }
     }
 
     func loadTransferSubmissions() throws -> [WalletTransferSubmissionRecord] {
