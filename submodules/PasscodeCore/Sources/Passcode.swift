@@ -289,6 +289,16 @@ public final class PasscodeCredentialStore: @unchecked Sendable {
         self.mutex.unlock()
     }
 
+    /// Whether a credential record is present. Answering this must not depend on
+    /// `requireExistingCredential`, since the caller asks precisely to decide
+    /// whether requiring one can be honoured.
+    public func hasStoredCredential() throws -> Bool {
+        try self.serialized {
+            guard let data = try self.storage.read("credential", context: nil) else { return false }
+            return (try? JSONDecoder().decode(Record.self, from: data)) != nil
+        }
+    }
+
     public func requireExistingCredential() {
         self.mutex.lock()
         self.expectsCredential = true
