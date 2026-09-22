@@ -16,6 +16,11 @@ extension MessageId {
     }
 }
 
+/// The `INMessage.identifier` handed to Siri for a message; `MessageId.init(string:)` parses it back.
+func intentMessageIdentifier(_ id: MessageId) -> String {
+    return "\(id.peerId.toInt64())_\(id.namespace)_\(id.id)"
+}
+
 @available(iOSApplicationExtension 10.0, iOS 10.0, *)
 func getMessages(account: Account, ids: [MessageId]) -> Signal<[INMessage], NoError> {
     return account.postbox.transaction { transaction -> [INMessage] in
@@ -128,7 +133,7 @@ private func callWithTelegramMessage(_ telegramMessage: Message, account: Accoun
         return nil
     }
     
-    let identifier = "\(telegramMessage.id.peerId.toInt64())_\(telegramMessage.id.namespace)_\(telegramMessage.id.id)"
+    let identifier = intentMessageIdentifier(telegramMessage.id)
     let personHandle: INPersonHandle
     if #available(iOSApplicationExtension 10.2, iOS 10.2, *) {
         var type: INPersonHandleType
@@ -167,7 +172,7 @@ private func messageWithTelegramMessage(_ telegramMessage: Message) -> INMessage
         return nil
     }
     
-    let identifier = "\(telegramMessage.id.peerId.toInt64())_\(telegramMessage.id.namespace)_\(telegramMessage.id.id)"
+    let identifier = intentMessageIdentifier(telegramMessage.id)
     let personHandle: INPersonHandle
     if #available(iOSApplicationExtension 10.2, iOS 10.2, *) {
         var type: INPersonHandleType

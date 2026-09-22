@@ -12,6 +12,7 @@ load("@build_bazel_rules_apple//apple:ios.bzl",
     "ios_framework",
     "ios_ui_test",
     "ios_ui_test_suite",
+    "ios_unit_test",
 )
 
 load(
@@ -1363,6 +1364,38 @@ swift_library(
         "//submodules/PasscodeCore",
         "//Telegram:GeneratedSources",
         "//submodules/WidgetItems:WidgetItems",
+    ],
+)
+
+swift_library(
+    name = "IntentsExtensionTestsLib",
+    testonly = True,
+    srcs = glob([
+        "SiriIntentsTests/**/*.swift",
+    ]),
+    deps = [
+        ":IntentsExtensionLib",
+        "//submodules/Postbox:Postbox",
+        "//submodules/TelegramCore:TelegramCore",
+        "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
+    ],
+)
+
+ios_test_runner(
+    name = "IntentsExtensionTestRunner",
+    device_type = "iPhone 17",
+    os_version = "26.5",
+)
+
+ios_unit_test(
+    name = "IntentsExtensionTests",
+    minimum_os_version = minimum_os_version,
+    runner = ":IntentsExtensionTestRunner",
+    deps = [
+        ":IntentsExtensionTestsLib",
+    ],
+    visibility = [
+        "//visibility:public",
     ],
 )
 

@@ -567,11 +567,44 @@ class DefaultIntentHandler: INExtension, INSendMessageIntentHandling, INSearchFo
             |> castError(IntentHandlingError.self)
             |> take(1)
             |> mapToSignal { _ -> Signal<[INMessage], IntentHandlingError> in
+                let scope = messageSearchScope(for: intent)
+                Logger.shared.log("SiriIntents", "INSearchForMessagesIntent notificationIdentifiers: \(intent.notificationIdentifiers ?? []), operator: \(intent.notificationIdentifiersOperator.rawValue), identifiers: \(intent.identifiers ?? []), scope: \(scope)")
+
                 let messages: Signal<[INMessage], NoError>
-                if let identifiers = intent.identifiers, !identifiers.isEmpty {
-                    messages = getMessages(account: account, ids: identifiers.compactMap(MessageId.init(string:)))
-                } else {
-                    messages = unreadMessages(account: account)
+                switch scope {
+                case let .notifications(requestIdentifiers):
+                    // An announce: only what these notifications stand for. A notification
+                    // this build never recorded yields nothing rather than the unread backlog.
+                    // The link is looked up in the current account only, which is also the
+                    // account a Siri reply would be sent from; a notification of another
+                    // logged-in account therefore resolves to nothing here.
+                    messages = account.postbox.transaction { transaction -> [MessageId] in
+                        return requestIdentifiers.compactMap { requestIdentifier in
+                            return _internal_getNotificationRequestMessageId(transaction: transaction, requestIdentifier: requestIdentifier)
+                        }
+                    }
+                    |> mapToSignal { ids -> Signal<[INMessage], NoError> in
+                        Logger.shared.log("SiriIntents", "INSearchForMessagesIntent resolved \(ids.count) of \(requestIdentifiers.count) notification identifiers: \(ids)")
+                        return getMessages(account: account, ids: ids)
+                    }
+                case let .messages(ids):
+                    messages = getMessages(account: account, ids: ids)
+                case let .unread(excludingNotifications):
+                    if excludingNotifications.isEmpty {
+                        messages = unreadMessages(account: account)
+                    } else {
+                        messages = account.postbox.transaction { transaction -> Set<String> in
+                            return Set(excludingNotifications.compactMap { requestIdentifier in
+                                return _internal_getNotificationRequestMessageId(transaction: transaction, requestIdentifier: requestIdentifier)
+                            }.map(intentMessageIdentifier))
+                        }
+                        |> mapToSignal { excludedIdentifiers -> Signal<[INMessage], NoError> in
+                            return unreadMessages(account: account)
+                            |> map { messages -> [INMessage] in
+                                return messages.filter { !excludedIdentifiers.contains($0.identifier) }
+                            }
+                        }
+                    }
                 }
                 return messages
                 |> castError(IntentHandlingError.self)

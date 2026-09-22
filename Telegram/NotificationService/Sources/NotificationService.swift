@@ -745,7 +745,7 @@ private final class NotificationServiceHandler {
     // budget started ticking; the connection deadline on the poll path counts from here.
     private let startTimestamp = CFAbsoluteTimeGetCurrent()
 
-    init?(queue: Queue, episode: String, updateCurrentContent: @escaping (NotificationContent) -> Void, completed: @escaping () -> Void, payload: [AnyHashable: Any]) {
+    init?(queue: Queue, episode: String, updateCurrentContent: @escaping (NotificationContent) -> Void, completed: @escaping () -> Void, requestIdentifier: String, payload: [AnyHashable: Any]) {
         //debug_linker_fail_test()
         self.queue = queue
 
@@ -1002,6 +1002,10 @@ private final class NotificationServiceHandler {
                     var messageId: MessageId.Id?
                     var storyId: Int32?
                     var mediaAttachment: Media?
+                    // Commits the notification → message link Siri's announce flow looks up;
+                    // the poll path runs it ahead of the fetch so the content is handed to the
+                    // system only after the link is stored.
+                    var recordNotificationLink: Signal<Never, NoError> = .complete()
                     var downloadNotificationSound: (file: TelegramMediaFile, path: String, fileName: String)?
 
                     var interactionAuthorId: PeerId?
@@ -1328,8 +1332,20 @@ private final class NotificationServiceHandler {
                                     enableInlineEmoji = false
                                 }
                                 action = .poll(peerId: peerId, content: content, messageId: messageIdValue, reportDelivery: reportDelivery, enableInlineEmoji: enableInlineEmoji)
+
+                                // Siri's announce flow asks the intents extension for the message
+                                // behind a delivered notification by the request identifier the
+                                // system assigned to it. That identifier exists only here. Reactions
+                                // are left out: their category never routes through the search
+                                // intent, and the link would read the reacted-to message as new.
+                                if let messageIdValue, !isReaction {
+                                    recordNotificationLink = stateManager.postbox.transaction { transaction -> Void in
+                                        _internal_setNotificationRequestMessageId(transaction: transaction, requestIdentifier: requestIdentifier, messageId: messageIdValue)
+                                    }
+                                    |> ignoreValues
+                                }
                             }
-                            
+
                             updateCurrentContent(content)
                         } else if let aps = payloadJson["aps"] as? [String: Any], let url = payloadJson["url"] as? String {
                             var content: NotificationContent = NotificationContent(isLockedMessage: nil)
@@ -2137,7 +2153,14 @@ private final class NotificationServiceHandler {
 
                                 var updatedContent = initialContent
                                 var updatedMedia: Media?
-                                strongSelf.pollDisposable.set(combineLatest(pollWithUpdatedContent, reportDeliverySignal).start(next: { contentAndMedia, _ in
+                                // The link is stored before any network work so the deadline and
+                                // payload-only fallbacks, which still deliver this notification, find
+                                // it committed; `then` keeps the fetch behind it.
+                                let linkedPollWithUpdatedContent = (recordNotificationLink
+                                |> map { _ -> (NotificationContent, Media?) in })
+                                |> then(pollWithUpdatedContent)
+
+                                strongSelf.pollDisposable.set(combineLatest(linkedPollWithUpdatedContent, reportDeliverySignal).start(next: { contentAndMedia, _ in
                                     updatedContent = contentAndMedia.0
                                     updatedMedia = contentAndMedia.1
                                 }, completed: {
@@ -2677,6 +2700,7 @@ final class NotificationService: UNNotificationServiceExtension {
                         Logger.shared.log("NotificationService \(episode)", "Attempted to repeatedly complete handling notification")
                     }
                 },
+                requestIdentifier: request.identifier,
                 payload: request.content.userInfo
             ))
         })
