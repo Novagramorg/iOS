@@ -63,4 +63,58 @@ final class SiriSendMessageTargetTests: XCTestCase {
         XCTAssertTrue(peerAcceptsSiriMessages(IntentMessageFixtures.supergroup(3001, title: "Supergroup")))
         XCTAssertFalse(peerAcceptsSiriMessages(IntentMessageFixtures.broadcastChannel(4001, title: "Channel")))
     }
+
+    // MARK: - Recipient resolution
+
+    private func decisionIsRefused(_ decision: SiriRecipientDecision) -> Bool {
+        if case .refused = decision {
+            return true
+        }
+        return false
+    }
+
+    private func person(in decision: SiriRecipientDecision) -> INPerson? {
+        if case let .person(person) = decision {
+            return person
+        }
+        return nil
+    }
+
+    /// Both ways Siri names a recipient - the conversation of a message it read, and a person
+    /// this extension handed it earlier - are decided here, so a channel is refused at
+    /// resolution and never reaches the send.
+    func testBroadcastChannelRecipientIsRefused() {
+        let channel = IntentMessageFixtures.broadcastChannel(4001, title: "Daily News")
+
+        XCTAssertTrue(decisionIsRefused(siriRecipientDecision(for: channel)))
+    }
+
+    func testForumRecipientIsRefused() {
+        XCTAssertTrue(decisionIsRefused(siriRecipientDecision(for: IntentMessageFixtures.supergroup(3006, title: "Forum", flags: [.isForum]))))
+    }
+
+    func testUnknownPeerNeedsAValue() {
+        if case .unknown = siriRecipientDecision(for: nil) {
+        } else {
+            XCTFail("a peer that is not in the store cannot be refused or accepted")
+        }
+    }
+
+    func testUserRecipientResolvesToThatUser() {
+        let user = IntentMessageFixtures.user(1001, firstName: "Alice", phone: "15551234567")
+
+        let person = self.person(in: siriRecipientDecision(for: user))
+
+        XCTAssertEqual(person?.customIdentifier, "tg\(user.id.toInt64())")
+        XCTAssertEqual(person?.displayName, "Alice")
+    }
+
+    func testGroupRecipientResolvesToAPersonNamedAfterTheGroup() {
+        let group = IntentMessageFixtures.supergroup(3001, title: "Big Group")
+
+        let person = self.person(in: siriRecipientDecision(for: group))
+
+        XCTAssertEqual(person?.customIdentifier, "tg\(group.id.toInt64())")
+        XCTAssertEqual(person?.displayName, "Big Group")
+    }
 }

@@ -1,4 +1,5 @@
 import Foundation
+import Intents
 import Postbox
 import TelegramCore
 
@@ -54,4 +55,33 @@ func peerAcceptsSiriMessages(_ peer: Peer) -> Bool {
     default:
         return false
     }
+}
+
+/// What recipient resolution says about a peer Siri named, by conversation or by a person
+/// this extension handed it earlier.
+enum SiriRecipientDecision {
+    /// The peer is not in the store; Siri has to ask again.
+    case unknown
+    /// The peer exists but is not something the user may message (a channel, a forum, a chat
+    /// they cannot write to). Siri says so, and no send is attempted.
+    case refused
+    /// The peer Siri should address, as the person it will hand back in the send.
+    case person(INPerson)
+}
+
+/// Every recipient Siri resolves goes through this, so `peerAcceptsSiriMessages` is applied
+/// before Siri ever confirms a message, not only when the send runs.
+func siriRecipientDecision(for peer: Peer?) -> SiriRecipientDecision {
+    guard let peer else {
+        return .unknown
+    }
+    if !peerAcceptsSiriMessages(peer) {
+        return .refused
+    }
+    let stableId = "tg\(peer.id.toInt64())"
+    if let user = peer as? TelegramUser {
+        return .person(personWithUser(stableId: stableId, user: user))
+    }
+    let handle = INPersonHandle(value: peer.addressName.flatMap { "@\($0)" } ?? peer.debugDisplayTitle, type: .unknown)
+    return .person(INPerson(personHandle: handle, nameComponents: nil, displayName: peer.debugDisplayTitle, image: nil, contactIdentifier: stableId, customIdentifier: stableId))
 }

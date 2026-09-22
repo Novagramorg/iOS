@@ -230,6 +230,8 @@ class DefaultIntentHandler: INExtension, INSendMessageIntentHandling, INSearchFo
         case disambiguation([INPerson])
         case needsValue
         case noResult
+        /// A peer that exists but may not be messaged (see `peerAcceptsSiriMessages`).
+        case refused
         case skip
         
         @available(iOSApplicationExtension 11.0, iOS 11.0, *)
@@ -243,6 +245,8 @@ class DefaultIntentHandler: INExtension, INSendMessageIntentHandling, INSearchFo
                     return .needsValue()
                 case .noResult:
                     return .unsupported()
+                case .refused:
+                    return .unsupported(forReason: .messagingServiceNotEnabledForRecipient)
                 case .skip:
                     return .notRequired()
             }
@@ -256,7 +260,7 @@ class DefaultIntentHandler: INExtension, INSendMessageIntentHandling, INSearchFo
                 return .disambiguation(with: persons)
             case .needsValue:
                 return .needsValue()
-            case .noResult:
+            case .noResult, .refused:
                 return .unsupported()
             case .skip:
                 return .notRequired()
@@ -271,7 +275,7 @@ class DefaultIntentHandler: INExtension, INSendMessageIntentHandling, INSearchFo
                 return .disambiguation(with: persons)
             case .needsValue:
                 return .needsValue()
-            case .noResult:
+            case .noResult, .refused:
                 return .unsupported()
             case .skip:
                 return .notRequired()
@@ -325,7 +329,33 @@ class DefaultIntentHandler: INExtension, INSendMessageIntentHandling, INSearchFo
         }
         
         if allPersonsAlreadyMatched && filteredPersons.count == 1 {
-            completion([.success(filteredPersons[0])])
+            // A person this extension handed Siri earlier - typically the sender of a message
+            // it just read. That sender may be a channel, which is not a recipient: decide by
+            // the peer, never by the identifier alone.
+            guard let peerId = siriSendMessageTarget(conversationIdentifier: nil, recipientCustomIdentifier: filteredPersons[0].customIdentifier) else {
+                completion([.noResult])
+                return
+            }
+            self.resolvePersonsDisposable.set((account
+            |> take(1)
+            |> mapToSignal { account -> Signal<Peer?, NoError> in
+                guard let account else {
+                    return .single(nil)
+                }
+                return account.postbox.transaction { transaction -> Peer? in
+                    return transaction.getPeer(peerId)
+                }
+            }
+            |> deliverOnMainQueue).start(next: { peer in
+                switch siriRecipientDecision(for: peer) {
+                case .unknown:
+                    completion([.noResult])
+                case .refused:
+                    completion([.refused])
+                case let .person(person):
+                    completion([.success(person)])
+                }
+            }))
             return
         }
         
@@ -410,17 +440,14 @@ class DefaultIntentHandler: INExtension, INSendMessageIntentHandling, INSearchFo
                     }
                     |> castError(IntentHandlingError.self)
                     |> map { peer -> INSendMessageRecipientResolutionResult in
-                        guard let peer else {
+                        switch siriRecipientDecision(for: peer) {
+                        case .unknown:
                             return .needsValue()
-                        }
-                        if !peerAcceptsSiriMessages(peer) {
+                        case .refused:
                             return .unsupported(forReason: .messagingServiceNotEnabledForRecipient)
+                        case let .person(person):
+                            return .success(with: person)
                         }
-                        if let user = peer as? TelegramUser {
-                            return .success(with: personWithUser(stableId: "tg\(peerId)", user: user))
-                        }
-                        let handle = INPersonHandle(value: peer.addressName.flatMap { "@\($0)" } ?? peer.debugDisplayTitle, type: .unknown)
-                        return .success(with: INPerson(personHandle: handle, nameComponents: nil, displayName: peer.debugDisplayTitle, image: nil, contactIdentifier: "tg\(peerId)", customIdentifier: "tg\(peerId)"))
                     }
                 } else {
                     return .fail(.generic)
