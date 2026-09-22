@@ -179,8 +179,14 @@ The group call implementation in `tgcalls/group/GroupInstanceCustomImpl.cpp` (~4
 
 // Client → SFU
 {"colibriClass": "ReceiverVideoConstraints", "defaultConstraints": {"maxHeight": 0},
- "constraints": {"endpoint1": {"minHeight": 720, "maxHeight": 720}}}
+ "onStageEndpoints": ["endpoint1"],
+ "constraints": {"endpoint1": {"minHeight": 180, "maxHeight": 720}}}
 ```
+
+Heights are on the layer scale 180/360/720 (thumbnail/medium/full): `minHeight` from the channel's
+`minQuality`, `maxHeight` from its `maxQuality`, and every `maxQuality == Full` endpoint is listed in
+`onStageEndpoints` (`maybeUpdateRemoteVideoConstraints`). Both engines must send exactly this shape;
+see "Receiver video constraints" under ReferenceImpl for what happened when one did not.
 
 ### Key Files
 - `tgcalls/group/GroupInstanceCustomImpl.h/.cpp` — main implementation
@@ -480,6 +486,22 @@ PeerConnection's API doesn't support SSRC-based simulcast directly (only RID-bas
 Group calls never negotiate payload types per pair: every client sends with the table `GroupInstanceCustomImpl::assignPayloadTypes` produces — VP8 100, VP9 102, H264 104, each followed by its RTX at +1 — and the SFU forwards RTP unchanged. PeerConnection's **receive** table comes from the LOCAL description (`VideoChannel::SetLocalContent_w`; the remote answer only syncs codec parameters by name), and `CreateOffer` numbers it by walking the platform factory's format list (96, 98, 100, ... with RTX at +1). On iOS that list is H264, H264, VP8, VP9, H265, so PT 104 was **H265**: a remote participant's H264 packets went to the H265 depacketizer, nothing decoded, and `VideoReceiveStream2` sat "active" (RTP timestamps advancing) logging `No decodable frame in 200ms requesting keyframe` forever. The host testbench never saw it because the builtin macOS factory lists five H264 profiles and lands one on PT 104 by luck.
 
 `mungeVideoCodecsInOffer()` therefore rewrites the codec list of EVERY video m-line in every local offer (initial and renegotiation, outgoing and recvonly) to that table, copying each entry from the engine's own codec list (so feedback params stay what the engine supports; H264 = the constrained-baseline packetization-mode 1 entry, VP9 = profile 0) and dropping red/ulpfec/flexfec. The synthesized answer (`buildRemoteAnswer`) already speaks 104/105. Do not "clean this up" by removing the munge or by trusting `SetCodecPreferences` — preferences reorder but never renumber. The CLI reproduces the failure because `FakeInterface` now advertises formats in the iOS order (`--builtin-codec-order` restores the raw one): with the munge removed, `--participants 1 --reference-participants 1 --video` fails 1/2 pairs.
+
+### Receiver video constraints must be CustomImpl's, byte for byte in shape (2026-09-22)
+
+`sendReceiverVideoConstraints` used to send `minHeight = maxHeight` = 90/180/360, derived from
+`maxQuality` alone, and no `onStageEndpoints`. The app requests `minQuality: .thumbnail` always and a
+`.thumbnail` max for most grid tiles, so this engine routinely asked the SFU for `maxHeight 90`, below
+the lowest simulcast layer (180). In a device log (2026-09-22) two endpoints re-requested this way
+received **zero RTP** for 9 s and 48 s while every client-side step (transceiver, receive stream,
+demuxer entries, sink proxy, constraints resent 3–4 times over a healthy data channel) was identical
+to the earlier requests that worked — a frozen tile with nothing wrong on the client. The message is
+now CustomImpl's (see "Colibri Data Channel Messages"), and it is logged whole
+(`GroupRef: Sent ReceiverVideoConstraints {...}`) so the next such log shows exactly what was asked.
+Causation on the production SFU is inferred, not measured: the log carried no requested qualities.
+The CLI could not catch it: the Go SFU mapped heights on ReferenceImpl's own scale and the harness
+always requested Full/Full. Regression: `--video-quality thumbnail` (the SFU now refuses a height
+below 180) fails reference receivers on the old mapping and passes on the new.
 
 ### Incoming Video: SSRC-Based Demux
 
