@@ -1,0 +1,374 @@
+import Foundation
+import UIKit
+import Display
+import ComponentFlow
+import BundleIconComponent
+import MultilineTextComponent
+import TelegramPresentationData
+
+final class WalletSendKeyboardComponent: Component {
+    enum Action: Equatable {
+        case insertText(String)
+        case deleteBackward
+    }
+
+    let theme: PresentationTheme
+    let safeInsets: UIEdgeInsets
+    let decimalSeparator: String
+    let deleteTitle: String
+    let isEnabled: Bool
+    let action: (Action) -> Void
+
+    init(
+        theme: PresentationTheme,
+        safeInsets: UIEdgeInsets,
+        decimalSeparator: String,
+        deleteTitle: String,
+        isEnabled: Bool,
+        action: @escaping (Action) -> Void
+    ) {
+        self.theme = theme
+        self.safeInsets = safeInsets
+        self.decimalSeparator = decimalSeparator
+        self.deleteTitle = deleteTitle
+        self.isEnabled = isEnabled
+        self.action = action
+    }
+
+    static func ==(lhs: WalletSendKeyboardComponent, rhs: WalletSendKeyboardComponent) -> Bool {
+        return lhs.theme === rhs.theme
+            && lhs.safeInsets == rhs.safeInsets
+            && lhs.decimalSeparator == rhs.decimalSeparator
+            && lhs.deleteTitle == rhs.deleteTitle
+            && lhs.isEnabled == rhs.isEnabled
+    }
+
+    private final class KeyButton: HighlightTrackingButton {
+        private let numberText = ComponentView<Empty>()
+        private let lettersText = ComponentView<Empty>()
+        private var numberTextSize: CGSize = .zero
+        private var lettersTextSize: CGSize = .zero
+        private var icon: ComponentView<Empty>?
+        private var keyAction: Action = .deleteBackward
+        private var normalColor: UIColor = .clear
+        private var pressedColor: UIColor = .clear
+        private var usesAlphaHighlight = false
+        private var repeatTimer: Foundation.Timer?
+        private var isPressActive = false
+
+        var action: ((Action) -> Void)?
+
+        override var isHighlighted: Bool {
+            didSet {
+                self.backgroundColor = self.isHighlighted ? self.pressedColor : self.normalColor
+            }
+        }
+
+        override var isEnabled: Bool {
+            didSet {
+                if !self.isEnabled {
+                    self.cancelPress()
+                }
+            }
+        }
+
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+
+            self.layer.cornerRadius = 12.0
+            self.layer.cornerCurve = .continuous
+            self.isExclusiveTouch = true
+            self.isAccessibilityElement = true
+
+            self.highligthedChanged = { [weak self] highlighted in
+                self?.updateHighlightAlpha(highlighted)
+            }
+
+            self.addTarget(self, action: #selector(self.touchDown), for: .touchDown)
+            self.addTarget(self, action: #selector(self.touchUpInside), for: .touchUpInside)
+            self.addTarget(self, action: #selector(self.cancelPress), for: [.touchCancel, .touchUpOutside, .touchDragExit])
+        }
+
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+
+        deinit {
+            self.repeatTimer?.invalidate()
+        }
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            if self.window == nil {
+                self.cancelPress()
+            }
+        }
+
+        @objc private func touchDown() {
+            guard self.isEnabled else { return }
+            self.isPressActive = true
+            if self.keyAction == .deleteBackward {
+                self.action?(self.keyAction)
+                if self.isPressActive, self.isEnabled {
+                    self.scheduleRepeat(after: 0.5)
+                }
+            }
+        }
+
+        @objc private func touchUpInside() {
+            let shouldInsert = self.isEnabled && self.isPressActive && self.keyAction != .deleteBackward
+            self.cancelPress()
+            if shouldInsert {
+                self.action?(self.keyAction)
+            }
+        }
+
+        private func scheduleRepeat(after delay: TimeInterval) {
+            self.repeatTimer?.invalidate()
+            let timer = Foundation.Timer(timeInterval: delay, repeats: false, block: { [weak self] _ in
+                guard let self, self.isPressActive, self.isEnabled, self.window != nil else { return }
+                self.action?(self.keyAction)
+                if self.isPressActive, self.isEnabled {
+                    self.scheduleRepeat(after: 0.1)
+                }
+            })
+            self.repeatTimer = timer
+            RunLoop.main.add(timer, forMode: .common)
+        }
+
+        private func updateHighlightAlpha(_ highlighted: Bool) {
+            if highlighted && self.usesAlphaHighlight {
+                self.layer.removeAnimation(forKey: "opacity")
+                self.alpha = 0.7
+            } else if self.alpha != 1.0 {
+                let previousAlpha = self.alpha
+                self.alpha = 1.0
+                self.layer.animateAlpha(from: previousAlpha, to: 1.0, duration: 0.2)
+            }
+        }
+
+        @objc func cancelPress() {
+            self.repeatTimer?.invalidate()
+            self.repeatTimer = nil
+            self.isPressActive = false
+            self.isHighlighted = false
+            self.updateHighlightAlpha(false)
+        }
+
+        override func accessibilityActivate() -> Bool {
+            guard self.isEnabled else { return false }
+            self.action?(self.keyAction)
+            return true
+        }
+
+        func update(action: Action, letters: String, size: CGSize, component: WalletSendKeyboardComponent) {
+            if self.keyAction != action {
+                self.cancelPress()
+            }
+            self.keyAction = action
+            self.isEnabled = component.isEnabled
+            self.accessibilityTraits = component.isEnabled ? [.keyboardKey] : [.keyboardKey, .notEnabled]
+
+            let isDark = component.theme.overallDarkAppearance
+            let textColor: UIColor = isDark ? .white : .black
+            let isDecimal = action == .insertText(component.decimalSeparator)
+            let hasBackground: Bool
+            let number: String
+            switch action {
+            case let .insertText(text):
+                number = text
+                if let icon = self.icon {
+                    icon.view?.removeFromSuperview()
+                    self.icon = nil
+                }
+                self.accessibilityLabel = text
+                hasBackground = !isDecimal
+            case .deleteBackward:
+                number = ""
+                let icon = self.icon ?? ComponentView<Empty>()
+                self.icon = icon
+                let iconSize = icon.update(
+                    transition: .immediate,
+                    component: AnyComponent(BundleIconComponent(name: "Wallet/Backspace", tintColor: textColor)),
+                    environment: {},
+                    containerSize: size
+                )
+                if let iconView = icon.view {
+                    if iconView.superview == nil {
+                        iconView.isUserInteractionEnabled = false
+                        iconView.isAccessibilityElement = false
+                        iconView.accessibilityElementsHidden = true
+                        self.addSubview(iconView)
+                    }
+                    iconView.frame = CGRect(
+                        origin: CGPoint(
+                            x: floorToScreenPixels((size.width - iconSize.width) / 2.0),
+                            y: floorToScreenPixels((size.height - iconSize.height) / 2.0)
+                        ),
+                        size: iconSize
+                    )
+                }
+                self.accessibilityLabel = component.deleteTitle
+                hasBackground = false
+            }
+            self.numberTextSize = self.numberText.update(
+                transition: .immediate,
+                component: AnyComponent(MultilineTextComponent(
+                    text: .plain(NSAttributedString(string: number, font: Font.regular(22.0), textColor: textColor)),
+                    horizontalAlignment: .center,
+                    maximumNumberOfLines: 1
+                )),
+                environment: {},
+                containerSize: CGSize(width: size.width, height: 28.0)
+            )
+            if let numberTextView = self.numberText.view {
+                if numberTextView.superview == nil {
+                    numberTextView.isUserInteractionEnabled = false
+                    numberTextView.isAccessibilityElement = false
+                    numberTextView.accessibilityElementsHidden = true
+                    self.addSubview(numberTextView)
+                }
+                numberTextView.isHidden = number.isEmpty
+            }
+            self.lettersTextSize = self.lettersText.update(
+                transition: .immediate,
+                component: AnyComponent(MultilineTextComponent(
+                    text: .plain(NSAttributedString(string: letters, attributes: [
+                        .font: Font.semibold(9.0),
+                        .foregroundColor: textColor,
+                        .kern: 2.0
+                    ])),
+                    horizontalAlignment: .center,
+                    maximumNumberOfLines: 1
+                )),
+                environment: {},
+                containerSize: CGSize(width: size.width, height: 12.0)
+            )
+            if let lettersTextView = self.lettersText.view {
+                if lettersTextView.superview == nil {
+                    lettersTextView.isUserInteractionEnabled = false
+                    lettersTextView.isAccessibilityElement = false
+                    lettersTextView.accessibilityElementsHidden = true
+                    self.addSubview(lettersTextView)
+                }
+                lettersTextView.isHidden = letters.isEmpty
+            }
+            self.normalColor = hasBackground ? (isDark ? UIColor(rgb: 0x6b6b6f) : .white) : .clear
+            self.pressedColor = hasBackground ? (isDark ? UIColor(rgb: 0x8c8c90) : UIColor(rgb: 0xe9eaed)) : .clear
+            self.usesAlphaHighlight = !hasBackground
+            self.backgroundColor = self.isHighlighted ? self.pressedColor : self.normalColor
+            self.updateHighlightAlpha(self.isHighlighted)
+
+            if let numberTextView = self.numberText.view {
+                numberTextView.frame = CGRect(
+                    x: floorToScreenPixels((size.width - self.numberTextSize.width) / 2.0),
+                    y: 5.0 + floorToScreenPixels((28.0 - self.numberTextSize.height) / 2.0) + (isDecimal ? 3.0 : 0.0),
+                    width: self.numberTextSize.width,
+                    height: self.numberTextSize.height
+                )
+            }
+            if let lettersTextView = self.lettersText.view {
+                lettersTextView.frame = CGRect(
+                    x: floorToScreenPixels((size.width - self.lettersTextSize.width) / 2.0) + 1.0,
+                    y: 33.0 + floorToScreenPixels((12.0 - self.lettersTextSize.height) / 2.0) - UIScreenPixel,
+                    width: self.lettersTextSize.width,
+                    height: self.lettersTextSize.height
+                )
+            }
+        }
+    }
+
+    final class View: UIView {
+        private var buttons: [KeyButton] = []
+        private var component: WalletSendKeyboardComponent?
+
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+
+            self.layer.cornerRadius = 28.0
+            self.layer.cornerCurve = .continuous
+            self.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
+            self.clipsToBounds = true
+
+            for _ in 0 ..< 12 {
+                let button = KeyButton(frame: .zero)
+                button.action = { [weak self] action in
+                    guard let self, let component = self.component, component.isEnabled else { return }
+                    component.action(action)
+                }
+                self.buttons.append(button)
+                self.addSubview(button)
+            }
+            NotificationCenter.default.addObserver(self, selector: #selector(self.cancelKeyPresses), name: UIApplication.willResignActiveNotification, object: nil)
+        }
+
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+
+        deinit {
+            NotificationCenter.default.removeObserver(self)
+        }
+
+        @objc func cancelKeyPresses() {
+            for button in self.buttons {
+                button.cancelPress()
+            }
+        }
+
+        func update(component: WalletSendKeyboardComponent, availableSize: CGSize, transition: ComponentTransition) -> CGSize {
+            self.component = component
+            self.backgroundColor = UIColor(rgb: component.theme.overallDarkAppearance ? 0x2c2c2e : 0xe2e3e7)
+
+            let keyHeight: CGFloat = 48.0
+            let spacing: CGFloat = 6.0
+            let topInset: CGFloat = 16.0
+            let bottomInset: CGFloat = 30.0
+            let leftInset: CGFloat = 5.0 + component.safeInsets.left
+            let rightInset: CGFloat = 5.0 + component.safeInsets.right
+            let contentWidth = max(0.0, availableSize.width - leftInset - rightInset)
+            let keyWidth = max(0.0, (contentWidth - spacing * 2.0) / 3.0)
+            let size = CGSize(width: availableSize.width, height: topInset + keyHeight * 4.0 + spacing * 3.0 + bottomInset)
+            let letters = ["", "ABC", "DEF", "GHI", "JKL", "MNO", "PQRS", "TUV", "WXYZ", "", "", ""]
+
+            for (index, button) in self.buttons.enumerated() {
+                let action: Action
+                switch index {
+                case 9:
+                    action = .insertText(component.decimalSeparator)
+                case 10:
+                    action = .insertText("0")
+                case 11:
+                    action = .deleteBackward
+                default:
+                    action = .insertText(String(index + 1))
+                }
+                let column = CGFloat(index % 3)
+                let left = floorToScreenPixels(leftInset + column * (keyWidth + spacing))
+                let right = floorToScreenPixels(leftInset + column * (keyWidth + spacing) + keyWidth)
+                button.update(action: action, letters: letters[index], size: CGSize(width: right - left, height: keyHeight), component: component)
+                transition.setFrame(view: button, frame: CGRect(
+                    x: left,
+                    y: topInset + CGFloat(index / 3) * (keyHeight + spacing),
+                    width: right - left,
+                    height: keyHeight
+                ))
+            }
+            return size
+        }
+    }
+
+    func makeView() -> View {
+        return View(frame: .zero)
+    }
+
+    func update(
+        view: View,
+        availableSize: CGSize,
+        state: EmptyComponentState,
+        environment: Environment<Empty>,
+        transition: ComponentTransition
+    ) -> CGSize {
+        return view.update(component: self, availableSize: availableSize, transition: transition)
+    }
+}

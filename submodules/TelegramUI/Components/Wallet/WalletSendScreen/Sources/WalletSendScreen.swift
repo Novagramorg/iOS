@@ -474,7 +474,7 @@ private final class WalletSendScreenComponent: Component {
         private let recipient = ComponentView<Empty>()
         private var recipientInfoAlert: AlertScreen?
         private let amountField = WalletSendAmountField()
-        private let emptyHint = ComponentView<Empty>()
+        private let keyboard = ComponentView<Empty>()
         private let rateButton = ComponentView<Empty>()
         private let insufficientText = ComponentView<Empty>()
         private let depositButton = ComponentView<Empty>()
@@ -563,6 +563,9 @@ private final class WalletSendScreenComponent: Component {
                     controller.requestAttachmentMenuExpansion()
                     controller.cancelPanGesture()
                 }
+                if !focused {
+                    (self.keyboard.view as? WalletSendKeyboardComponent.View)?.cancelKeyPresses()
+                }
                 if !self.isUpdating {
                     self.componentState?.updated(transition: .easeInOut(duration: 0.2))
                 }
@@ -614,6 +617,7 @@ private final class WalletSendScreenComponent: Component {
 
         func viewWillDisappear() {
             self.isVisible = false
+            (self.keyboard.view as? WalletSendKeyboardComponent.View)?.cancelKeyPresses()
             if !self.isSubmittingTransfer {
                 self.cancelPendingSend()
                 if self.isEstimatingFee {
@@ -882,6 +886,8 @@ private final class WalletSendScreenComponent: Component {
                 self.inputMode = .fiat
             case .fiat:
                 self.inputMode = .gram
+                // Keep the converted amount itself at three decimal places in GRAM.
+                self.amount = (self.amount / 1_000_000) * 1_000_000
                 guard self.validateTransferAmount() else {
                     return
                 }
@@ -1661,7 +1667,8 @@ private final class WalletSendScreenComponent: Component {
                 self.resolvePeerAddressIfNeeded()
             }
             self.updateFeePreparation()
-            self.amountField.isUserInteractionEnabled = !self.isPreparingTransfer && !self.isResolvingSigningAccess && !self.isSubmittingTransfer
+            let isAmountInputEnabled = !self.isPreparingTransfer && !self.isResolvingSigningAccess && !self.isSubmittingTransfer
+            self.amountField.isUserInteractionEnabled = isAmountInputEnabled
 
             let theme = environment.theme
             self.backgroundColor = theme.list.modalPlainBackgroundColor
@@ -1799,12 +1806,44 @@ private final class WalletSendScreenComponent: Component {
                 transition.setAlpha(view: recipientView, alpha: 0.0)
             }
 
-            let keyboardHeight = environment.inputHeight
-            let effectiveBottomInset = max(
-                keyboardHeight,
-                environment.additionalInsets.bottom + environment.safeInsets.bottom
+            let keyboardSize = self.keyboard.update(
+                transition: transition,
+                component: AnyComponent(WalletSendKeyboardComponent(
+                    theme: theme,
+                    safeInsets: environment.safeInsets,
+                    decimalSeparator: environment.dateTimeFormat.decimalSeparator,
+                    deleteTitle: environment.strings.Common_Delete,
+                    isEnabled: isAmountInputEnabled && environment.isVisible,
+                    action: { [weak self] action in
+                        HapticFeedback().tap()
+                        guard let self, self.isVisible,
+                              !self.isPreparingTransfer, !self.isResolvingSigningAccess, !self.isSubmittingTransfer else {
+                            return
+                        }
+                        switch action {
+                        case let .insertText(text):
+                            self.amountField.insertText(text)
+                        case .deleteBackward:
+                            self.amountField.deleteBackward()
+                        }
+                    }
+                )),
+                environment: {},
+                containerSize: availableSize
             )
-            let usableBottom = availableSize.height - effectiveBottomInset
+            let keyboardFrame = CGRect(
+                x: 0.0,
+                y: availableSize.height - environment.additionalInsets.bottom - keyboardSize.height,
+                width: keyboardSize.width,
+                height: keyboardSize.height
+            )
+            if let keyboardView = self.keyboard.view {
+                if keyboardView.superview == nil {
+                    self.addSubview(keyboardView)
+                }
+                transition.setFrame(view: keyboardView, frame: keyboardFrame)
+            }
+            let usableBottom = keyboardFrame.minY
             let hasAmount = self.amount > 0
             let isInsufficient = hasAmount
                 && !self.walletIsLoading
@@ -1833,41 +1872,6 @@ private final class WalletSendScreenComponent: Component {
                 isVisible: environment.isVisible,
                 transition: transition
             )
-
-            //TODO:localize
-            let emptyHint = "Tap to set amount"
-            let emptyHintSize = self.emptyHint.update(
-                transition: transition,
-                component: AnyComponent(MultilineTextComponent(
-                    text: .plain(NSAttributedString(
-                        string: emptyHint,
-                        font: Font.regular(15.0),
-                        textColor: theme.list.itemSecondaryTextColor
-                    )),
-                    horizontalAlignment: .center,
-                    maximumNumberOfLines: 1
-                )),
-                environment: {},
-                containerSize: CGSize(width: availableSize.width - 32.0, height: 24.0)
-            )
-            let emptyHintFrame = CGRect(
-                x: floorToScreenPixels((availableSize.width - emptyHintSize.width) / 2.0),
-                y: amountFrame.maxY + 5.0,
-                width: emptyHintSize.width,
-                height: emptyHintSize.height
-            )
-            let showEmptyHint = !shouldFocusAmountField && !self.amountField.isInputActive && !self.amountField.hasInputText
-            if showEmptyHint {
-                centralContentFrame = centralContentFrame.union(emptyHintFrame)
-            }
-            if let emptyHintView = self.emptyHint.view {
-                if emptyHintView.superview == nil {
-                    self.addSubview(emptyHintView)
-                }
-                transition.setBounds(view: emptyHintView, bounds: CGRect(origin: .zero, size: emptyHintFrame.size))
-                centralContentLayouts.append((emptyHintView, emptyHintFrame, transition))
-                transition.setAlpha(view: emptyHintView, alpha: showEmptyHint ? 1.0 : 0.0)
-            }
 
             var rateText = ""
             if hasAmount, let rate = self.currentRate {
