@@ -1015,6 +1015,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-1678197867] = { return Api.RichText.parse_textStrike($0) }
     dict[-311786236] = { return Api.RichText.parse_textSubscript($0) }
     dict[-939827711] = { return Api.RichText.parse_textSuperscript($0) }
+    dict[1020437354] = { return Api.RichText.parse_textTonAddress($0) }
     dict[-1054465340] = { return Api.RichText.parse_textUnderline($0) }
     dict[1009288385] = { return Api.RichText.parse_textUrl($0) }
     dict[289586518] = { return Api.SavedContact.parse_savedPhoneContact($0) }

@@ -298,6 +298,9 @@ private func hashStructure(richText: RichText, into hasher: inout Hasher) {
     case let .textAutoUrl(text):
         hasher.combine(20)
         hashStructure(richText: text, into: &hasher)
+    case let .textTonAddress(text):
+        hasher.combine(30)
+        hashStructure(richText: text, into: &hasher)
     case let .textBankCard(text):
         hasher.combine(21)
         hashStructure(richText: text, into: &hasher)

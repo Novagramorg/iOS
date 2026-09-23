@@ -158,7 +158,7 @@ struct WalletStoredTransaction: Codable, Equatable, Sendable {
 
 @available(macOS 10.15, *)
 struct WalletStoredTonConnectRequest: Codable, Equatable, Sendable {
-    enum Phase: String, Codable, Sendable { case received, claiming, claimed, executing, prepared }
+    enum Phase: String, Codable, Sendable { case received, claiming, claimed, executing, prepared, closing }
 
     let accountId: Int64
     let authorizationId: Int64
@@ -172,8 +172,10 @@ struct WalletStoredTonConnectRequest: Codable, Equatable, Sendable {
     var approved: Bool?
     var phase: Phase
     var response: Data?
+    var closeSessionAfterResponse: Bool?
 
     var expires: Int32 { min(self.envelope.expires, Int32(clamping: self.validUntil ?? UInt64(Int32.max))) }
+    var isFinishingDisconnect: Bool { self.closeSessionAfterResponse == true && (self.phase == .prepared || self.phase == .closing) }
     var key: TonConnectMessageKey { TonConnectMessageKey(sessionId: self.envelope.sessionId, msgId: self.envelope.msgId) }
 }
 

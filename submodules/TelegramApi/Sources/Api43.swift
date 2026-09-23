@@ -15088,12 +15088,15 @@ public extension Api.functions.wallet {
     }
 }
 public extension Api.functions.wallet {
-    static func tonConnectCloseSession(sessionId: Int64, body: Buffer) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Bool>) {
+    static func tonConnectCloseSession(flags: Int32, sessionId: Int64, body: Buffer?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Bool>) {
         let buffer = Buffer()
-        buffer.appendInt32(-1715353029)
+        buffer.appendInt32(-700489266)
+        serializeInt32(flags, buffer: buffer, boxed: false)
         serializeInt64(sessionId, buffer: buffer, boxed: false)
-        serializeBytes(body, buffer: buffer, boxed: false)
-        return (FunctionDescription(name: "wallet.tonConnectCloseSession", parameters: [("sessionId", ConstructorParameterDescription(sessionId)), ("body", ConstructorParameterDescription(body))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Bool? in
+        if Int(flags) & Int(1 << 0) != 0 {
+            serializeBytes(body!, buffer: buffer, boxed: false)
+        }
+        return (FunctionDescription(name: "wallet.tonConnectCloseSession", parameters: [("flags", ConstructorParameterDescription(flags)), ("sessionId", ConstructorParameterDescription(sessionId)), ("body", ConstructorParameterDescription(body))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Bool? in
             let reader = BufferReader(buffer)
             var result: Api.Bool?
             if let signature = reader.readInt32() {

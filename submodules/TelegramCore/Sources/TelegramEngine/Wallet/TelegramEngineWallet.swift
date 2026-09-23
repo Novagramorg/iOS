@@ -92,7 +92,7 @@ public extension TelegramEngine {
             return _internal_walletTonConnectNextEventId(account: self.account, sessionId: sessionId)
         }
 
-        public func tonConnectCloseSession(sessionId: Int64, body: Data) -> Signal<Bool, WalletTonConnectError> {
+        public func tonConnectCloseSession(sessionId: Int64, body: Data? = nil) -> Signal<Bool, WalletTonConnectError> {
             return _internal_walletTonConnectCloseSession(account: self.account, sessionId: sessionId, body: body)
         }
 

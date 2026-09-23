@@ -347,12 +347,13 @@ func _internal_walletTonConnectNextEventId(account: Account, sessionId: Int64) -
     }
 }
 
-func _internal_walletTonConnectCloseSession(account: Account, sessionId: Int64, body: Data) -> Signal<Bool, WalletTonConnectError> {
-    guard body.count <= 1_048_576 else {
+func _internal_walletTonConnectCloseSession(account: Account, sessionId: Int64, body: Data? = nil) -> Signal<Bool, WalletTonConnectError> {
+    guard (body?.count ?? 0) <= 1_048_576 else {
         return .fail(.invalidPayload)
     }
 
-    return account.network.request(Api.functions.wallet.tonConnectCloseSession(sessionId: sessionId, body: Buffer(data: body)), automaticFloodWait: false)
+    let flags: Int32 = body == nil ? 0 : 1 << 0
+    return account.network.request(Api.functions.wallet.tonConnectCloseSession(flags: flags, sessionId: sessionId, body: body.map { Buffer(data: $0) }), automaticFloodWait: false)
     |> mapError { error in
         return WalletTonConnectError(code: error.errorCode, description: error.errorDescription ?? "")
     }

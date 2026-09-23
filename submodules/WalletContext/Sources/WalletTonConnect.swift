@@ -55,7 +55,7 @@ final class TonConnectPendingInteraction {
             _ = self.lifecycle.beginClaim()
             if journal.phase != .claiming { _ = self.lifecycle.claimSucceeded() }
             if journal.phase == .executing { _ = self.lifecycle.beginExecution() }
-            if journal.phase == .prepared { self.lifecycle.prepared() }
+            if journal.phase == .prepared || journal.phase == .closing { self.lifecycle.prepared() }
         }
         self.source = source
         self.preparationIsUserInitiated = userInitiated
@@ -215,7 +215,7 @@ extension WalletContextImpl {
         let epoch = self.tonConnectEpoch
         let wallet = try await self.runtime.tonConnectIdentity()
         for record in self.storedState.tonConnectRequests {
-            if record.expires <= self.tonConnectNow {
+            if record.expires <= self.tonConnectNow && !record.isFinishingDisconnect {
                 self.removeTonConnectJournal(record.key)
                 continue
             }
@@ -278,8 +278,10 @@ extension WalletContextImpl {
 
     func publishTonConnectState() {
         let sessions = self.tonConnectSessions.values.filter { !$0.isClosed }.sorted { $0.date > $1.date }.map { session in
-            TonConnectSessionInfo(id: session.id, manifest: session.manifest.map(TonConnectManifestInfo.init),
-                status: session.isClosing || self.tonConnectDisconnectBodies[session.id] != nil ? .disconnecting : session.isPending ? .connecting : .connected,
+            let isDisconnecting = session.isClosing || self.tonConnectDisconnectBodies[session.id] != nil
+                || self.storedState.tonConnectRequests.contains(where: { $0.session.id == session.id && $0.isFinishingDisconnect })
+            return TonConnectSessionInfo(id: session.id, manifest: session.manifest.map(TonConnectManifestInfo.init),
+                status: isDisconnecting ? .disconnecting : session.isPending ? .connecting : .connected,
                 error: self.tonConnectSessionErrors[session.id])
         }
         let active = self.tonConnectActive.flatMap { interaction -> WalletContext.TonConnectActiveRequest? in
@@ -338,13 +340,15 @@ extension WalletContextImpl {
             for id in Array(self.tonConnectSessions.keys) where !ids.contains(id) && (self.tonConnectSessionRevisions[id] ?? 0) <= revision {
                 self.removeTonConnectSession(id)
                 if let active = self.tonConnectActive, active.session?.id == id, active.session?.isActive == true,
-                   active.lifecycle.phase != .completed {
+                   active.lifecycle.phase != .completed, active.journal?.isFinishingDisconnect != true {
                     self.invalidateTonConnect(active, failure: .unavailable)
                 }
             }
             for session in sessions { self.mergeTonConnectSession(session, fetchedAt: revision) }
+            await self.refreshTonConnectPending(sessionIds: ids.union(self.storedState.tonConnectRequests.map { $0.session.id }), epoch: epoch)
+            guard !Task.isCancelled, !self.isShutdown, epoch == self.tonConnectEpoch else { return }
             self.publishTonConnectState()
-            if let active = self.tonConnectActive, active.publication != nil, active.status == .ready {
+            if let active = self.tonConnectActive, active.publication != nil || active.journal?.phase == .closing, active.status == .ready {
                 if (try? await self.decideTonConnectRequest(id: active.id, approve: active.approved, operationId: UUID(), showErrors: false)) != nil, active.content == nil || active.wantsRejection {
                     self.finishTonConnect(active)
                 }
@@ -352,6 +356,28 @@ extension WalletContextImpl {
             await self.finishPendingTonConnectDisconnects()
             self.advanceTonConnectQueue()
         } catch { self.logger.error("ton_connect_refresh_failed", error) }
+    }
+
+    private func refreshTonConnectPending(sessionIds: Set<Int64>, epoch: UInt64) async {
+        for id in sessionIds.sorted() {
+            guard !Task.isCancelled, !self.isShutdown, epoch == self.tonConnectEpoch else { return }
+            let revision = self.tonConnectRevision
+            do {
+                let pending = try await WalletSignalRequestContext<WalletTonConnectPending>().run(self.engine.wallet.tonConnectGetPending(lookup: .sessionId(id)))
+                guard !Task.isCancelled, !self.isShutdown, epoch == self.tonConnectEpoch else { return }
+                self.mergeTonConnectSession(pending.session, fetchedAt: revision)
+                guard let session = self.tonConnectSessions[id], !session.isClosed, !session.isClosing,
+                      session.dappClientId == pending.session.dappClientId, session.clientId == pending.session.clientId,
+                      session.nonce == pending.session.nonce else { continue }
+                for request in pending.requests where request.sessionId == id && request.expires > self.tonConnectNow {
+                    let key = TonConnectMessageKey(sessionId: id, msgId: request.msgId)
+                    if let record = self.storedState.tonConnectRequests.first(where: { $0.key == key }) {
+                        guard record.phase != .executing, record.envelope.body == request.body else { continue }
+                    }
+                    self.enqueueTonConnectRequest(sessionId: id, msgId: request.msgId, userInitiated: false)
+                }
+            } catch { self.logger.error("ton_connect_pending_refresh_failed", error) }
+        }
     }
 
     func mergeTonConnectSession(_ session: WalletTonConnectSession, fetchedAt revision: UInt64? = nil) {
@@ -365,11 +391,12 @@ extension WalletContextImpl {
             let previousManifest = active.session?.manifest
             active.session = session
             self.logTonConnect("session_update", active, outcome: session.isActive ? "active" : session.isClosed ? "closed" : session.isClosing ? "closing" : "pending")
+            if session.isClosed, active.journal?.isFinishingDisconnect == true { return }
             if case .connect = active.source, active.content != nil, previousManifest != session.manifest {
                 self.invalidateTonConnect(active, failure: .invalidManifest)
             } else if let previousKey, session.clientId != previousKey {
                 self.invalidateTonConnect(active, failure: .keyMismatch)
-            } else if session.isClosed || session.isClosing {
+            } else if (session.isClosed || session.isClosing) && active.journal?.isFinishingDisconnect != true {
                 self.invalidateTonConnect(active, failure: .unavailable)
             } else if session.isActive, case .connect = active.source,
                       active.lifecycle.phase == .pending, active.publication == nil {
@@ -394,8 +421,7 @@ extension WalletContextImpl {
             case let .request(message):
                 let key = TonConnectMessageKey(sessionId: message.sessionId, msgId: message.msgId)
                 if message.isAccepted || message.isDeclined {
-                    if self.storedState.tonConnectRequests.contains(where: { $0.key == key && $0.phase != .received }),
-                       self.tonConnectActive?.messageKey != key || self.tonConnectActive?.lifecycle.ownsClaimAttempt == true {
+                    if self.storedState.tonConnectRequests.contains(where: { $0.key == key && $0.phase != .received }) {
                         self.enqueueTonConnectRequest(sessionId: message.sessionId, msgId: message.msgId, userInitiated: false)
                         continue
                     }
@@ -465,6 +491,7 @@ extension WalletContextImpl {
             return
         }
         let record = self.storedState.tonConnectRequests.first { $0.key == key }
+        guard record?.phase != .executing else { return }
         let interaction = TonConnectPendingInteraction(.request(.sessionId(sessionId), msgId: msgId, returnTarget: record?.returnTarget ?? .none), userInitiated: userInitiated, journal: record)
         self.tonConnectQueue.append(interaction)
         self.advanceTonConnectQueue()
@@ -534,7 +561,7 @@ extension WalletContextImpl {
                 let info = TonConnectManifestInfo(manifest)
                 guard !info.domain.isEmpty else { throw TonConnectFailure.invalidManifest }
                 active.wallet = wallet
-                active.content = .connect(Self.tonConnectPrompt(id: active.id, manifest: info, request: request))
+                active.content = .connect(try Self.tonConnectPrompt(id: active.id, manifest: info, request: request))
                 self.logTonConnect("manifest_ready", active)
             case let .request(lookup, msgId, _):
                 let session: WalletTonConnectSession
@@ -550,6 +577,11 @@ extension WalletContextImpl {
                     active.wallet = wallet
                     try self.checkTonConnect(active)
                     if record.phase == .executing { throw TonConnectFailure.outcomeUnknown }
+                    if record.phase == .closing {
+                        _ = try await self.publishTonConnect(active, showErrors: false)
+                        self.finishTonConnect(active)
+                        return
+                    }
                     if let response = record.response, record.phase == .prepared {
                         active.publication = .response(msgId: envelope.msgId, body: response, traceId: envelope.traceId)
                         active.approved = record.approved ?? false
@@ -639,7 +671,7 @@ extension WalletContextImpl {
             guard self.tonConnectActive === active else { return }
             if active.status == .invalidated || (error as? TonConnectFailure) == .handledElsewhere || (error as? TonConnectFailure) == .expired {
                 self.invalidateTonConnect(active, failure: error as? TonConnectFailure ?? .unavailable)
-            } else if active.publication != nil {
+            } else if active.publication != nil || active.journal?.phase == .closing {
                 active.status = .ready
                 self.publishTonConnectState()
             } else if !self.canPresentTonConnect, active.valid.with({ $0 }) {
@@ -689,6 +721,7 @@ extension WalletContextImpl {
         try Task.checkCancellation()
         guard self.tonConnectActive === active, active.status != .invalidated else { throw CancellationError() }
         guard active.valid.with({ $0 }), self.canPresentTonConnect else { throw TonConnectFailure.unavailable }
+        if active.journal?.isFinishingDisconnect == true { return }
         if let envelope = active.envelope, envelope.expires <= self.tonConnectNow { throw TonConnectFailure.expired }
         if let until = active.request?.validUntil ?? active.journal?.validUntil, until <= UInt64(max(0, self.tonConnectNow)) { throw TonConnectFailure.expired }
     }
@@ -709,6 +742,7 @@ extension WalletContextImpl {
     func scheduleTonConnectExpiry(_ active: TonConnectPendingInteraction) {
         guard let envelope = active.envelope else { return }
         active.expiryTask?.cancel()
+        if active.journal?.isFinishingDisconnect == true { return }
         let expiry = min(Int64(envelope.expires), Int64(clamping: active.request?.validUntil ?? active.journal?.validUntil ?? UInt64(Int32.max)))
         let delay = max(0, expiry - Int64(self.tonConnectNow))
         active.expiryTask = Task { [weak self, weak active] in
@@ -720,6 +754,7 @@ extension WalletContextImpl {
 
     func invalidateTonConnect(_ active: TonConnectPendingInteraction, failure: TonConnectFailure) {
         guard self.tonConnectActive === active else { return }
+        if failure == .expired, active.journal?.isFinishingDisconnect == true { return }
         self.logTonConnect("invalidated", active, error: failure)
         _ = active.valid.swap(false)
         if active.status != .processing || !active.lifecycle.ownsClaimAttempt { active.lifecycle.stop() }
@@ -793,7 +828,7 @@ extension WalletContextImpl {
         active.status = .processing
         self.publishTonConnectState()
         do {
-            if active.publication != nil { return try await self.publishTonConnect(active, showErrors: showErrors) }
+            if active.publication != nil || active.journal?.phase == .closing { return try await self.publishTonConnect(active, showErrors: showErrors) }
             try self.checkTonConnect(active)
             if active.journal?.phase == .received {
                 try await self.storeTonConnect(active, phase: .received, approved: approve)
@@ -855,20 +890,18 @@ extension WalletContextImpl {
                     active.session = registered
                     self.logTonConnect("challenge_verified", active)
                     if approve {
-                        guard let manifest = session.manifest else { throw TonConnectFailure.invalidManifest }
-                        let domain = TonConnectManifestInfo(manifest).domain
                         let account = try await self.runtime.tonConnectAccount(wallet: wallet)
                         _ = try self.checkTonConnectConnection(active, matching: session, clientId: key)
                         if let network = request.prompt.requestedNetwork, network != account.network { throw TonConnectFailure.wrongNetwork }
                         let timestamp = UInt64(max(0, self.tonConnectNow))
                         let proof: TonConnectProofSignature?
                         if let payload = request.prompt.proofPayload {
-                            proof = try await self.runtime.signTonConnectProof(wallet: wallet, domain: domain, timestamp: timestamp,
+                            proof = try await self.runtime.signTonConnectProof(wallet: wallet, manifestUrl: request.prompt.manifestUrl, timestamp: timestamp,
                                 payload: payload, beforeSigning: beforeSigning)
                         } else { proof = nil }
                         let device = await Self.tonConnectDevice()
                         response = try TonConnectWireCodec.connectEvent(serverEventId: challenge.eventId, request: request,
-                            account: account, domain: domain, timestamp: timestamp, proof: proof,
+                            account: account, timestamp: timestamp, proof: proof,
                             appName: "Telegram", appVersion: device.version, platform: device.platform)
                     } else {
                         response = try TonConnectWireCodec.connectErrorEvent(serverEventId: challenge.eventId, code: .userDeclined)
@@ -883,47 +916,14 @@ extension WalletContextImpl {
                     guard let envelope = active.envelope, let requestId = active.request?.id ?? active.validationError?.requestId else {
                         throw TonConnectFailure.unavailable
                     }
-                    try await self.runtime.validateTonConnectAccess(wallet: wallet)
-                    var answer: Data?
-                    if !session.isClosed && !session.isClosing && !self.tonConnectProvenSessions.contains(session.id) {
-                        let key = try await self.runtime.tonConnectSessionPublicKey(wallet: wallet, session: session)
-                        let challenge = try await WalletSignalRequestContext<WalletTonConnectChallenge>().run(
-                            self.engine.wallet.tonConnectRegisterKey(sessionId: session.id, clientId: key))
-                        answer = try await self.runtime.openTonConnectChallenge(challenge.challenge, wallet: wallet, session: session)
-                    }
-                    try beforeSigning()
-                    guard let record = active.journal, record.phase != .executing, record.phase != .prepared,
-                          record.phase == .received || record.approved == nil || record.approved == approve else { throw TonConnectFailure.outcomeUnknown }
-                    try await self.validateTonConnectBinding(record, wallet: wallet)
-                    try await self.storeTonConnect(active, phase: .claiming, approved: approve)
-                    guard active.lifecycle.beginClaim() else { throw TonConnectFailure.outcomeUnknown }
-                    do {
-                        let claimed = try await WalletSignalRequestContext<Bool>().run(self.engine.wallet.tonConnectClaimRequest(
-                            sessionId: session.id, msgId: envelope.msgId, appRequestId: requestId.rawValue,
-                            challengeAnswer: answer, declined: !approve))
-                        guard claimed else { throw TonConnectFailure.handledElsewhere }
-                        guard active.lifecycle.claimSucceeded() else { throw TonConnectFailure.outcomeUnknown }
-                    } catch {
-                        if case let WalletTonConnectError.rpc(_, description) = error {
-                            switch description {
-                            case "TONCONNECT_REQUEST_ALREADY_CLAIMED", "TONCONNECT_REQUEST_NOT_FOUND": throw TonConnectFailure.handledElsewhere
-                            case "TONCONNECT_REQUEST_EXPIRED": throw TonConnectFailure.expired
-                            default: break
-                            }
-                        }
-                        throw error
-                    }
-                    try await self.storeTonConnect(active, phase: .claimed)
-                    try await self.validateTonConnectBinding(record, wallet: self.runtime.tonConnectIdentity())
-                    self.tonConnectProvenSessions.insert(session.id)
-                    self.tonConnectHandledRequests.insert(TonConnectMessageKey(sessionId: session.id, msgId: envelope.msgId))
-                    try self.checkTonConnect(active)
+                    try await self.claimTonConnectRequest(active, session: session, wallet: wallet, approve: approve, beforeSigning: beforeSigning)
                     if !approve {
                         response = try TonConnectWireCodec.errorResponse(id: requestId, code: .userDeclined)
                     } else if let failure = active.validationError {
                         response = try TonConnectWireCodec.errorResponse(id: requestId, code: failure.code)
                     } else if case .disconnect = active.request {
                         response = try TonConnectWireCodec.successResponse(id: requestId, result: .object([:]))
+                        active.journal?.closeSessionAfterResponse = true
                     } else {
                         try await self.storeTonConnect(active, phase: .executing)
                         guard active.lifecycle.beginExecution() else { throw TonConnectFailure.outcomeUnknown }
@@ -977,7 +977,7 @@ extension WalletContextImpl {
                 active.lifecycle.stop()
                 self.invalidateTonConnect(active, failure: failure)
                 throw CancellationError()
-            } else if active.publication != nil {
+            } else if active.publication != nil || active.journal?.phase == .closing {
                 active.status = .ready
             } else if active.lifecycle.phase == .claiming || active.lifecycle.phase == .claimed {
                 active.status = .ready
@@ -994,13 +994,61 @@ extension WalletContextImpl {
         }
     }
 
-    func publishTonConnect(_ active: TonConnectPendingInteraction, showErrors: Bool) async throws -> TonConnectDecision {
-        guard !self.isShutdown, self.tonConnectActive === active, let session = active.session, let publication = active.publication else { throw TonConnectFailure.unavailable }
+    private func claimTonConnectRequest(_ active: TonConnectPendingInteraction, session: WalletTonConnectSession,
+                                        wallet: TonConnectWalletIdentity, approve: Bool, beforeSigning: @Sendable () throws -> Void) async throws {
+        guard let record = active.journal, let envelope = active.envelope,
+              record.phase == .received || record.phase == .claiming || record.phase == .claimed,
+              record.phase == .received || record.approved == nil || record.approved == approve else { throw TonConnectFailure.outcomeUnknown }
+        try await self.validateTonConnectBinding(record, wallet: wallet)
+        try await self.runtime.validateTonConnectAccess(wallet: wallet)
+        if record.phase != .claimed {
+            var answer: Data?
+            if !session.isClosed && !session.isClosing && !self.tonConnectProvenSessions.contains(session.id) {
+                let key = try await self.runtime.tonConnectSessionPublicKey(wallet: wallet, session: session)
+                let challenge = try await WalletSignalRequestContext<WalletTonConnectChallenge>().run(
+                    self.engine.wallet.tonConnectRegisterKey(sessionId: session.id, clientId: key))
+                answer = try await self.runtime.openTonConnectChallenge(challenge.challenge, wallet: wallet, session: session)
+            }
+            try beforeSigning()
+            try await self.storeTonConnect(active, phase: .claiming, approved: approve)
+            guard active.lifecycle.beginClaim() else { throw TonConnectFailure.outcomeUnknown }
+            do {
+                let claimed = try await WalletSignalRequestContext<Bool>().run(self.engine.wallet.tonConnectClaimRequest(
+                    sessionId: session.id, msgId: envelope.msgId, appRequestId: record.appRequestId.rawValue,
+                    challengeAnswer: answer, declined: !approve))
+                guard claimed else { throw TonConnectFailure.handledElsewhere }
+                guard active.lifecycle.claimSucceeded() else { throw TonConnectFailure.outcomeUnknown }
+            } catch {
+                if case let WalletTonConnectError.rpc(_, description) = error {
+                    switch description {
+                    case "TONCONNECT_REQUEST_ALREADY_CLAIMED", "TONCONNECT_REQUEST_NOT_FOUND": throw TonConnectFailure.handledElsewhere
+                    case "TONCONNECT_REQUEST_EXPIRED": throw TonConnectFailure.expired
+                    default: break
+                    }
+                }
+                throw error
+            }
+            try await self.storeTonConnect(active, phase: .claimed)
+        }
+        try await self.validateTonConnectBinding(record, wallet: self.runtime.tonConnectIdentity())
+        try beforeSigning()
+        self.tonConnectProvenSessions.insert(session.id)
+        self.tonConnectHandledRequests.insert(record.key)
         try self.checkTonConnect(active)
+    }
+
+    func publishTonConnect(_ active: TonConnectPendingInteraction, showErrors: Bool) async throws -> TonConnectDecision {
+        guard !self.isShutdown, self.tonConnectActive === active, let session = active.session else { throw TonConnectFailure.unavailable }
+        try self.checkTonConnect(active)
+        if active.journal?.phase == .closing || (active.journal?.isFinishingDisconnect == true && session.isClosed) {
+            return try await self.finishTonConnectDisconnect(active)
+        }
+        guard let publication = active.publication else { throw TonConnectFailure.unavailable }
         if case let .response(_, body, _) = publication {
             guard let record = active.journal else { throw WalletError.unavailable }
             try await self.validateTonConnectBinding(record, wallet: self.runtime.tonConnectIdentity())
             try await self.storeTonConnect(active, phase: .prepared, approved: active.approved, response: body)
+            if active.journal?.isFinishingDisconnect == true { active.expiryTask?.cancel() }
         }
         let signal: Signal<Bool, WalletTonConnectError>
         let packet: Data
@@ -1023,6 +1071,18 @@ extension WalletContextImpl {
                 self.invalidateTonConnect(active, failure: .handledElsewhere)
                 throw CancellationError()
             }
+            if case .response = publication, case let WalletTonConnectError.rpc(_, description) = error {
+                switch description {
+                case "TONCONNECT_REQUEST_EXPIRED":
+                    active.journal?.closeSessionAfterResponse = nil
+                    self.invalidateTonConnect(active, failure: .expired)
+                    throw CancellationError()
+                case "TONCONNECT_REQUEST_NOT_FOUND", "TONCONNECT_SESSION_NOT_FOUND", "TONCONNECT_REQUEST_ALREADY_CLAIMED":
+                    self.invalidateTonConnect(active, failure: .handledElsewhere)
+                    throw CancellationError()
+                default: break
+                }
+            }
             throw error
         }
         // RPC acceptance is not an acknowledgement from the dApp.
@@ -1030,6 +1090,11 @@ extension WalletContextImpl {
         guard !self.isShutdown, self.tonConnectActive === active, active.status != .invalidated else { throw CancellationError() }
         guard accepted else { throw TonConnectFailure.bridgeUnavailable }
         active.publication = nil
+        if active.journal?.closeSessionAfterResponse == true {
+            active.journal?.phase = .closing
+            active.expiryTask?.cancel()
+            return try await self.finishTonConnectDisconnect(active)
+        }
         if let key = active.messageKey { self.removeTonConnectJournal(key) }
         active.lifecycle.completed()
         active.expiryTask?.cancel()
@@ -1044,11 +1109,41 @@ extension WalletContextImpl {
                         nonce: session.nonce, manifest: session.manifest, manifestError: nil, date: session.date))
                 }
             }
-        } else if case .disconnect = active.request {
-            self.removeTonConnectSession(session.id)
         }
         let decision = TonConnectDecision(approved: active.approved && active.failure == nil, failure: active.failure, returnTarget: active.returnTarget)
         if showErrors, let failure = decision.failure { self.presentTonConnectError(failure) }
+        active.status = .completed(decision)
+        self.publishTonConnectState()
+        return decision
+    }
+
+    private func finishTonConnectDisconnect(_ active: TonConnectPendingInteraction) async throws -> TonConnectDecision {
+        guard let record = active.journal, record.isFinishingDisconnect else { throw TonConnectFailure.unavailable }
+        try self.checkTonConnect(active)
+        try await self.validateTonConnectBinding(record, wallet: self.runtime.tonConnectIdentity())
+        try self.checkTonConnect(active)
+        if active.session?.isClosed != true {
+            try await self.storeTonConnect(active, phase: .closing)
+            do {
+                let accepted = try await WalletSignalRequestContext<Bool>().run(self.engine.wallet.tonConnectCloseSession(sessionId: record.session.id, body: nil))
+                guard accepted else { throw TonConnectFailure.bridgeUnavailable }
+            } catch WalletTonConnectError.rpc(_, "TONCONNECT_SESSION_NOT_FOUND") {
+                // A previous close may have succeeded before the connection was lost.
+            } catch {
+                self.logTonConnect("close_failed", active, error: error)
+                throw error
+            }
+        }
+        guard !self.isShutdown, self.tonConnectActive === active, active.status != .invalidated else { throw CancellationError() }
+        self.removeTonConnectJournal(record.key)
+        self.tonConnectDisconnectBodies[record.session.id] = nil
+        self.tonConnectPendingDisconnects.remove(record.session.id)
+        self.tonConnectSessionErrors[record.session.id] = nil
+        self.removeTonConnectSession(record.session.id)
+        active.publication = nil
+        active.lifecycle.completed()
+        active.expiryTask?.cancel()
+        let decision = TonConnectDecision(approved: true, failure: nil, returnTarget: active.returnTarget)
         active.status = .completed(decision)
         self.publishTonConnectState()
         return decision
@@ -1062,6 +1157,7 @@ extension WalletContextImpl {
                 let wallet = try await self.runtime.tonConnectIdentity()
                 for id in ids {
                     guard epoch == self.tonConnectEpoch, !self.isShutdown else { return }
+                    if self.storedState.tonConnectRequests.contains(where: { $0.session.id == id && $0.isFinishingDisconnect }) { continue }
                     guard let session = self.tonConnectSessions[id], !session.isClosed else { continue }
                     do {
                         if self.tonConnectDisconnectBodies[id] == nil {
@@ -1117,7 +1213,7 @@ extension WalletContextImpl {
         id: String,
         manifest: TonConnectManifestInfo,
         request: TonConnectConnectRequest
-    ) -> WalletContext.TonConnectRequest {
+    ) throws -> WalletContext.TonConnectRequest {
         var permissions = [WalletContext.TonConnectPermission(
             name: "ton_addr",
             title: "Wallet address",
@@ -1127,7 +1223,7 @@ extension WalletContextImpl {
             permissions.append(WalletContext.TonConnectPermission(
                 name: "ton_proof",
                 title: "Ownership proof",
-                text: "Sign a domain-bound wallet ownership proof"
+                text: "Sign a wallet ownership proof for \(try TonConnectWireCodec.proofDomain(manifestUrl: request.prompt.manifestUrl))"
             ))
         }
         return WalletContext.TonConnectRequest(

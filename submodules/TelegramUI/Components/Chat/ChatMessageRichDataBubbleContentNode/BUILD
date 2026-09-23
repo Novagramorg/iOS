@@ -17,6 +17,7 @@ swift_library(
         "//submodules/TelegramPresentationData",
         "//submodules/SSignalKit/SwiftSignalKit",
         "//submodules/AccountContext",
+        "//submodules/WalletContext",
         "//submodules/InstantPageUI",
         "//submodules/TextFormat:TextFormat",
         "//submodules/TelegramUI/Components/Chat/ChatMessageBubbleContentNode",

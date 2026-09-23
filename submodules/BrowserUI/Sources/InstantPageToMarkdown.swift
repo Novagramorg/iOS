@@ -109,6 +109,8 @@ private func markdownInline(from richText: RichText) -> String {
         return "[\(markdownInline(from: text))](mailto:\(email))"
     case let .phone(text, phone):
         return "[\(markdownInline(from: text))](tel:\(phone))"
+    case let .textTonAddress(text):
+        return markdownInline(from: text)
     case let .concat(parts):
         return parts.map { markdownInline(from: $0) }.joined()
     case let .anchor(text, _):

@@ -1145,12 +1145,13 @@ actor WalletEngineRuntime {
 
     func signTonConnectProof(
         wallet: TonConnectWalletIdentity,
-        domain: String,
+        manifestUrl: String,
         timestamp: UInt64,
         payload: String,
         beforeSigning: @escaping @Sendable () throws -> Void = {}
     ) async throws -> TonConnectProofSignature {
-        try await self.withFfi(beforeSigning: beforeSigning) {
+        let domain = try TonConnectWireCodec.proofDomain(manifestUrl: manifestUrl)
+        return try await self.withFfi(beforeSigning: beforeSigning) {
             try self.validateTonConnectWallet(wallet)
             try await self.ensureKeyRotationAllowsSigning()
             guard let descriptor = self.descriptor else {

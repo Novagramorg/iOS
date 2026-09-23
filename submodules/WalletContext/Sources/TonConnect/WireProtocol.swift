@@ -251,6 +251,7 @@ public struct TonConnectConnectRequest: Equatable, Sendable {
             }
         }
         guard names.contains("ton_addr") else { throw TonConnectWireFailure(code: .badRequest) }
+        if proof != nil { _ = try TonConnectWireCodec.proofDomain(manifestUrl: manifest) }
         self.prompt = TonConnectConnectPrompt(manifestUrl: manifest, requestedNetwork: network, proofPayload: proof)
         self.itemNames = names
     }
@@ -259,6 +260,15 @@ public struct TonConnectConnectRequest: Equatable, Sendable {
 @available(macOS 10.15, *)
 public enum TonConnectWireCodec {
     public static let maximumPacketBytes = 1024 * 1024
+
+    static func proofDomain(manifestUrl: String) throws -> String {
+        guard let url = URLComponents(string: manifestUrl), url.scheme?.lowercased() == "https",
+              let host = url.url?.host?.lowercased(), !host.isEmpty,
+              url.user == nil, url.password == nil, url.fragment == nil else { throw TonConnectFailure.invalidLink }
+        let domain = host.replacingOccurrences(of: "\\.+$", with: "", options: .regularExpression)
+        guard !domain.isEmpty, domain != "telegram.org" else { throw TonConnectFailure.invalidLink }
+        return domain
+    }
 
     public static func decodeRequest(_ data: Data, wallet: TonConnectWalletIdentity, now: UInt64, operationId: String) throws -> TonConnectWireRequest {
         let object = try self.object(data)
@@ -311,7 +321,7 @@ public enum TonConnectWireCodec {
     }
 
     public static func connectEvent(serverEventId: Int64, request: TonConnectConnectRequest, account: TonConnectAccountInfo,
-                                    domain: String, timestamp: UInt64, proof: TonConnectProofSignature?, appName: String, appVersion: String, platform: String = "iphone") throws -> Data {
+                                    timestamp: UInt64, proof: TonConnectProofSignature?, appName: String, appVersion: String, platform: String = "iphone") throws -> Data {
         guard account.publicKey.count == 32, !appName.isEmpty, !appVersion.isEmpty,
               request.prompt.requestedNetwork == nil || request.prompt.requestedNetwork == account.network else { throw TonConnectWireFailure(code: .badRequest) }
         let rawAddress = try parseTonAddress(value: account.address).raw
@@ -325,6 +335,7 @@ public enum TonConnectWireCodec {
                     "walletStateInit": .string(account.walletStateInit), "publicKey": .string(account.publicKey.map { String(format: "%02x", $0) }.joined())]))
             case "ton_proof":
                 guard let proof, proof.signature.count == 64, let payload = request.prompt.proofPayload else { throw TonConnectWireFailure(code: .badRequest) }
+                let domain = try self.proofDomain(manifestUrl: request.prompt.manifestUrl)
                 items.append(.object(["name": .string(name), "proof": .object([
                     "timestamp": .string(String(timestamp)), "domain": .object(["lengthBytes": .unsigned(UInt64(domain.utf8.count)), "value": .string(domain)]),
                     "payload": .string(payload), "signature": .string(proof.signature.base64EncodedString())])]))

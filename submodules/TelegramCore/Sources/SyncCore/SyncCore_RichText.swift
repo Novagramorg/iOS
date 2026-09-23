@@ -33,6 +33,7 @@ private enum RichTextTypes: Int32 {
     case textSpoiler = 27
     case textDate = 28
     case textButton = 29
+    case textTonAddress = 30
 }
 
 public indirect enum RichText: PostboxCoding, Equatable {
@@ -58,6 +59,7 @@ public indirect enum RichText: PostboxCoding, Equatable {
     case textAutoPhone(text: RichText)
     case textAutoUrl(text: RichText)
     case textBankCard(text: RichText)
+    case textTonAddress(text: RichText)
     case textBotCommand(text: RichText)
     case textCashtag(text: RichText)
     case textHashtag(text: RichText)
@@ -121,6 +123,8 @@ public indirect enum RichText: PostboxCoding, Equatable {
                 self = .textAutoUrl(text: decoder.decodeObjectForKey("t", decoder: { RichText(decoder: $0) }) as! RichText)
             case RichTextTypes.textBankCard.rawValue:
                 self = .textBankCard(text: decoder.decodeObjectForKey("t", decoder: { RichText(decoder: $0) }) as! RichText)
+            case RichTextTypes.textTonAddress.rawValue:
+                self = .textTonAddress(text: decoder.decodeObjectForKey("t", decoder: { RichText(decoder: $0) }) as! RichText)
             case RichTextTypes.textBotCommand.rawValue:
                 self = .textBotCommand(text: decoder.decodeObjectForKey("t", decoder: { RichText(decoder: $0) }) as! RichText)
             case RichTextTypes.textCashtag.rawValue:
@@ -223,6 +227,9 @@ public indirect enum RichText: PostboxCoding, Equatable {
                 encoder.encodeObject(text, forKey: "t")
             case let .textBankCard(text):
                 encoder.encodeInt32(RichTextTypes.textBankCard.rawValue, forKey: "r")
+                encoder.encodeObject(text, forKey: "t")
+            case let .textTonAddress(text):
+                encoder.encodeInt32(RichTextTypes.textTonAddress.rawValue, forKey: "r")
                 encoder.encodeObject(text, forKey: "t")
             case let .textBotCommand(text):
                 encoder.encodeInt32(RichTextTypes.textBotCommand.rawValue, forKey: "r")
@@ -376,6 +383,8 @@ public indirect enum RichText: PostboxCoding, Equatable {
                 if case .textAutoUrl(text) = rhs { return true } else { return false }
             case let .textBankCard(text):
                 if case .textBankCard(text) = rhs { return true } else { return false }
+            case let .textTonAddress(text):
+                if case .textTonAddress(text) = rhs { return true } else { return false }
             case let .textBotCommand(text):
                 if case .textBotCommand(text) = rhs { return true } else { return false }
             case let .textCashtag(text):
@@ -446,6 +455,8 @@ public extension RichText {
             case let .textAutoUrl(text):
                 return text.plainText
             case let .textBankCard(text):
+                return text.plainText
+            case let .textTonAddress(text):
                 return text.plainText
             case let .textBotCommand(text):
                 return text.plainText
@@ -582,6 +593,11 @@ extension RichText {
                 throw FlatBuffersError.missingRequiredField()
             }
             self = .textBankCard(text: try RichText(flatBuffersObject: value.text))
+        case .richtextTonaddress:
+            guard let value = flatBuffersObject.value(type: TelegramCore_RichText_TonAddress.self) else {
+                throw FlatBuffersError.missingRequiredField()
+            }
+            self = .textTonAddress(text: try RichText(flatBuffersObject: value.text))
         case .richtextBotcommand:
             guard let value = flatBuffersObject.value(type: TelegramCore_RichText_BotCommand.self) else {
                 throw FlatBuffersError.missingRequiredField()
@@ -776,6 +792,12 @@ extension RichText {
             let start = TelegramCore_RichText_BankCard.startRichText_BankCard(&builder)
             TelegramCore_RichText_BankCard.add(text: textOffset, &builder)
             offset = TelegramCore_RichText_BankCard.endRichText_BankCard(&builder, start: start)
+        case let .textTonAddress(text):
+            valueType = .richtextTonaddress
+            let textOffset = text.encodeToFlatBuffers(builder: &builder)
+            let start = TelegramCore_RichText_TonAddress.startRichText_TonAddress(&builder)
+            TelegramCore_RichText_TonAddress.add(text: textOffset, &builder)
+            offset = TelegramCore_RichText_TonAddress.endRichText_TonAddress(&builder, start: start)
         case let .textBotCommand(text):
             valueType = .richtextBotcommand
             let textOffset = text.encodeToFlatBuffers(builder: &builder)
