@@ -3,7 +3,7 @@ import TelegramCore
 import WalletEngineFFI
 
 @available(macOS 10.15, *)
-public struct TonConnectWalletIdentity: Equatable, Sendable {
+public struct TonConnectWalletIdentity: Equatable, Codable, Sendable {
     public let recordId: String
     public let address: String
     public let network: String
@@ -44,19 +44,19 @@ public enum TonConnectFailure: Error, Equatable, Sendable {
 public struct TonConnectManifestInfo: Equatable, Sendable {
     public let url: String
     public let name: String
-    public let iconUrl: String
+    public let icon: WalletTonConnectIcon?
     public let domain: String
 
     init(_ value: WalletTonConnectManifest) {
         self.url = value.url
         self.name = value.name
-        self.iconUrl = value.iconUrl
+        self.icon = value.icon
         self.domain = URL(string: value.url)?.host?.lowercased() ?? ""
     }
 }
 
 @available(macOS 10.15, *)
-public enum TonConnectReturnTarget: Equatable, Sendable {
+public enum TonConnectReturnTarget: Equatable, Codable, Sendable {
     case back, none, url(String)
 }
 
@@ -142,13 +142,10 @@ public enum TonConnectJSONValue: Codable, Equatable, Sendable {
 @available(macOS 10.15, *)
 public struct TonConnectRequestId: Equatable, Hashable, Codable, Sendable {
     public let rawValue: String
-    public let apiValue: Int64
 
     public init(_ value: String) throws {
-        guard !value.isEmpty, value.utf8.allSatisfy({ (48 ... 57).contains($0) }),
-              let apiValue = Int64(value) else { throw TonConnectWireFailure(code: .badRequest) }
+        guard (1 ... 100).contains(value.utf8.count), value.utf8.allSatisfy({ (0x20 ... 0x7e).contains($0) }) else { throw TonConnectWireFailure(code: .badRequest) }
         self.rawValue = value
-        self.apiValue = apiValue
     }
 
     public init(from decoder: Decoder) throws { try self.init(decoder.singleValueContainer().decode(String.self)) }

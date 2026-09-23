@@ -34,6 +34,7 @@ swift_library(
     deps = [
         ":TextFormat",
         "//submodules/TelegramCore:TelegramCore",
+        "//submodules/TelegramPresentationData:TelegramPresentationData",
         "//submodules/Postbox:Postbox",
         # Needed by ReplyMarkupButtonActionTests to construct Api.ButtonType /
         # Api.InlineButtonType values for the shared action mappers.

@@ -1321,7 +1321,7 @@ private extension AccountContextImpl {
             controller = screen
         case let .signData(data):
             let request = WalletContext.TonConnectOperationRequest(id: data.id, applicationName: data.applicationName,
-                domain: data.domain, iconUrl: data.iconUrl, method: .signData, messages: [], feeNanograms: nil,
+                domain: data.domain, icon: data.icon, method: .signData, messages: [], feeNanograms: nil,
                 validUntil: nil, relayerWillSubmit: false, needsWalletStateInit: false, warnings: [], actions: [], signData: data)
             let screen = WalletTransferScreen(context: self, walletContext: walletContext, request: request, cancelled: cancelled, confirm: confirm)
             screen.tonConnectClosed = closed

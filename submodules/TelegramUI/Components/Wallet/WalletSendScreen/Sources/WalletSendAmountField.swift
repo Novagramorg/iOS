@@ -12,82 +12,6 @@ import PresentationDataUtils
 import TelegramStringFormatting
 import WalletContext
 
-enum WalletSendInputMode: Equatable {
-    case gram
-    case fiat
-}
-
-func walletSendNormalizedDigits(_ text: String) -> String {
-    return String(text.unicodeScalars.map { scalar -> Character in
-        let character = Character(String(scalar))
-        if CharacterSet.decimalDigits.contains(scalar), let digit = character.wholeNumberValue {
-            return Character(String(digit))
-        }
-        return character
-    })
-}
-
-func walletSendNanograms(
-    text: String,
-    mode: WalletSendInputMode,
-    rate: Double?,
-    decimalSeparator: String
-) -> Int64? {
-    guard !text.isEmpty else {
-        return 0
-    }
-
-    guard !decimalSeparator.isEmpty else { return nil }
-    let normalizedText = walletSendNormalizedDigits(text).replacingOccurrences(of: decimalSeparator, with: ".")
-    let parts = normalizedText.split(separator: ".", omittingEmptySubsequences: false)
-    guard parts.count <= 2,
-          parts.allSatisfy({ $0.utf8.allSatisfy({ (48 ... 57).contains($0) }) }) else {
-        return nil
-    }
-    switch mode {
-    case .gram:
-        let wholeText = parts.first.map(String.init) ?? ""
-        let whole: Int64
-        if wholeText.isEmpty {
-            whole = 0
-        } else if let value = Int64(wholeText) {
-            whole = value
-        } else {
-            return nil
-        }
-        guard whole >= 0 else {
-            return nil
-        }
-        let scale: Int64 = 1_000_000_000
-        let (scaledWhole, didOverflow) = whole.multipliedReportingOverflow(by: scale)
-        guard !didOverflow else {
-            return nil
-        }
-
-        var fractionalText = parts.count == 2 ? String(parts[1]) : ""
-        guard fractionalText.count <= 9 else {
-            return nil
-        }
-        fractionalText = fractionalText.padding(toLength: 9, withPad: "0", startingAt: 0)
-        guard let fractional = Int64(fractionalText) else { return nil }
-        let (result, didAddOverflow) = scaledWhole.addingReportingOverflow(fractional)
-        return didAddOverflow ? nil : result
-    case .fiat:
-        guard let rate, rate.isFinite, rate > 0.0,
-              let fiatValue = Double(normalizedText), fiatValue.isFinite, fiatValue >= 0.0 else {
-            return nil
-        }
-        let nanograms = fiatValue / rate * 1_000_000_000.0
-        let roundedNanograms = nanograms.rounded()
-        guard roundedNanograms.isFinite,
-              roundedNanograms >= 0.0,
-              roundedNanograms < Double(Int64.max) else {
-            return nil
-        }
-        return Int64(roundedNanograms)
-    }
-}
-
 func walletSendInputText(
     amount: Int64,
     mode: WalletSendInputMode,
@@ -132,38 +56,54 @@ func walletSendInputText(
 }
 
 func walletSendGroupedAmountText(_ text: String, dateTimeFormat: PresentationDateTimeFormat) -> String {
-    guard !dateTimeFormat.groupingSeparator.isEmpty else {
-        return text
-    }
-    let integralEnd = text.range(of: dateTimeFormat.decimalSeparator)?.lowerBound ?? text.endIndex
-    let integralPart = text[..<integralEnd]
-    let integralLength = integralPart.count
-    guard integralLength > 3 else {
-        return text
-    }
-
-    var result = ""
-    for (index, character) in integralPart.enumerated() {
-        if index > 0 && (integralLength - index) % 3 == 0 {
-            result.append(contentsOf: dateTimeFormat.groupingSeparator)
-        }
-        result.append(character)
-    }
-    result.append(contentsOf: text[integralEnd...])
-    return result
+    return walletSendGroupedAmountText(text, decimalSeparator: dateTimeFormat.decimalSeparator, groupingSeparator: dateTimeFormat.groupingSeparator)
 }
 
-private struct WalletSendAmountTextLayout {
+struct WalletSendAmountTextLayout {
     let attributedText: NSAttributedString
     let groupingSeparator: NSAttributedString
     let groupingSeparatorSize: CGSize
     let groupingPositions: [CGFloat]
 }
 
-private final class WalletSendAmountTextField: UITextField {
+final class WalletSendAmountTextField: UITextField {
     private let groupingView = UIView()
     private var groupingLabels: [UILabel] = []
     private var textLayout: WalletSendAmountTextLayout?
+    var interactionBegan: (() -> Void)?
+    var caretColor: UIColor = .clear {
+        didSet {
+            self.tintColor = self.displaysNativeCaret ? self.caretColor : .clear
+        }
+    }
+    var displaysNativeCaret = true {
+        didSet {
+            guard self.displaysNativeCaret != oldValue else { return }
+            self.tintColor = self.displaysNativeCaret ? self.caretColor : .clear
+            self.setNeedsLayout()
+        }
+    }
+    var rendersText = true {
+        didSet {
+            guard self.rendersText != oldValue, let layout = self.textLayout else { return }
+            self.update(layout: layout, selection: self.selectionRange)
+        }
+    }
+
+    override func caretRect(for position: UITextPosition) -> CGRect {
+        return self.displaysNativeCaret ? self.nativeCaretRect(for: position) : .zero
+    }
+
+    func nativeCaretRect(for position: UITextPosition) -> CGRect {
+        return super.caretRect(for: position)
+    }
+
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        if self.point(inside: point, with: event), event?.type == .touches {
+            self.interactionBegan?()
+        }
+        return super.hitTest(point, with: event)
+    }
 
     var selectionRange: NSRange? {
         guard let selection = self.selectedTextRange else { return nil }
@@ -204,9 +144,14 @@ private final class WalletSendAmountTextField: UITextField {
 
     func update(layout: WalletSendAmountTextLayout, selection: NSRange?) {
         self.textLayout = layout
-        if self.attributedText?.isEqual(to: layout.attributedText) != true {
-            self.attributedText = layout.attributedText
+        let renderedText = NSMutableAttributedString(attributedString: layout.attributedText)
+        if !self.rendersText {
+            renderedText.addAttribute(.foregroundColor, value: UIColor.clear, range: NSRange(location: 0, length: renderedText.length))
         }
+        if self.attributedText?.isEqual(to: renderedText) != true {
+            self.attributedText = renderedText
+        }
+        self.groupingView.isHidden = !self.rendersText
         if let selection {
             let textLength = layout.attributedText.length
             let start = min(textLength, max(0, selection.location))
@@ -236,7 +181,7 @@ private final class WalletSendAmountTextField: UITextField {
             self.groupingView.addSubview(label)
             self.groupingLabels.append(label)
         }
-        let startCaret = self.caretRect(for: self.beginningOfDocument)
+        let startCaret = self.nativeCaretRect(for: self.beginningOfDocument)
         let textOriginX: CGFloat
         let centerY: CGFloat
         if !startCaret.isNull, !startCaret.isInfinite, startCaret.height > 0.0 {
@@ -260,30 +205,33 @@ private final class WalletSendAmountTextField: UITextField {
     }
 }
 
-final class WalletSendAmountField: UIView, UITextFieldDelegate {
-    private let contentView = UIView()
-    private let gramIcon = ComponentView<Empty>()
-    private let fiatIcon = ComponentView<Empty>()
-    private let textField = WalletSendAmountTextField(frame: .zero)
-    private let suffix = ComponentView<Empty>()
-    private let integralFont = Font.with(
+class WalletSendAmountField: UIView, UITextFieldDelegate {
+    let contentView = UIView()
+    let gramIcon = ComponentView<Empty>()
+    let fiatIcon = ComponentView<Empty>()
+    let textField = WalletSendAmountTextField(frame: .zero)
+    let suffix = ComponentView<Empty>()
+    let integralFont = Font.with(
         size: 48.0,
         design: .round,
         weight: .semibold,
         traits: []
     )
-    private let fractionalFont = Font.with(size: 32.0, design: .round, weight: .semibold)
+    let fractionalFont = Font.with(size: 32.0, design: .round, weight: .semibold)
 
     private let gramIconLayoutSize = CGSize(width: 44.0, height: 44.0)
     private let gramAnimationSize = CGSize(width: 48.0, height: 48.0)
     private var fiatIconSize: CGSize = .zero
     private var suffixSize: CGSize = .zero
 
-    private var mode: WalletSendInputMode = .gram
+    private(set) var mode: WalletSendInputMode = .gram
     private var amount: Int64 = 0
     private var rate: Double?
-    private var dateTimeFormat: PresentationDateTimeFormat?
-    private var isApplyingText = false
+    private(set) var dateTimeFormat: PresentationDateTimeFormat?
+    private(set) var isApplyingText = false
+    private(set) var amountTextColor: UIColor = .black
+
+    var usesAnimatedPresentation: Bool { return false }
 
     var amountUpdated: ((Int64) -> Void)?
     var focusUpdated: ((Bool) -> Void)?
@@ -358,8 +306,8 @@ final class WalletSendAmountField: UIView, UITextFieldDelegate {
         self.replaceText(in: range, with: "")
     }
 
-    private func amountTextLayout(_ text: String) -> WalletSendAmountTextLayout {
-        let textColor = self.textField.textColor ?? UIColor.black
+    func amountTextLayout(_ text: String) -> WalletSendAmountTextLayout {
+        let textColor = self.amountTextColor
         let decimalSeparator = self.dateTimeFormat?.decimalSeparator ?? "."
         let groupingSeparator = self.dateTimeFormat?.groupingSeparator ?? ""
         let attributedText = NSMutableAttributedString(attributedString: tonAmountAttributedString(
@@ -409,8 +357,12 @@ final class WalletSendAmountField: UIView, UITextFieldDelegate {
         )
     }
 
+    func willApplyText(_ text: String, selection: NSRange?) {
+    }
+
     private func applyText(_ text: String, selection: NSRange?) {
         self.isApplyingText = true
+        self.willApplyText(text, selection: selection)
         self.textField.update(layout: self.amountTextLayout(text), selection: selection)
         self.isApplyingText = false
         self.setNeedsLayout()
@@ -464,7 +416,7 @@ final class WalletSendAmountField: UIView, UITextFieldDelegate {
         let previousDecimalSeparator = self.dateTimeFormat?.decimalSeparator
         let decimalSeparatorChanged = self.dateTimeFormat?.decimalSeparator != dateTimeFormat.decimalSeparator
         let groupingSeparatorChanged = self.dateTimeFormat?.groupingSeparator != dateTimeFormat.groupingSeparator
-        let textColorChanged = self.textField.textColor?.isEqual(theme.list.itemPrimaryTextColor) != true
+        let textColorChanged = !self.amountTextColor.isEqual(theme.list.itemPrimaryTextColor)
         let previousSelection = self.textField.selectionRange
         self.mode = mode
         self.amount = amount
@@ -472,13 +424,13 @@ final class WalletSendAmountField: UIView, UITextFieldDelegate {
         self.dateTimeFormat = dateTimeFormat
 
         if textColorChanged {
+            self.amountTextColor = theme.list.itemPrimaryTextColor
             self.textField.textColor = theme.list.itemPrimaryTextColor
         }
-        self.textField.tintColor = theme.list.itemAccentColor
-        //TODO:localize
-        let zeroPlaceholder = "0"
+        self.textField.caretColor = theme.list.itemAccentColor
+        
         self.textField.attributedPlaceholder = NSAttributedString(
-            string: zeroPlaceholder,
+            string: "0",
             font: self.integralFont,
             textColor: theme.list.itemSecondaryTextColor
         )
@@ -497,7 +449,7 @@ final class WalletSendAmountField: UIView, UITextFieldDelegate {
             transition: transition,
             component: AnyComponent(LottieComponent(
                 content: LottieComponent.AppBundleContent(name: "GramDiamond"),
-                startingPosition: .begin,
+                startingPosition: self.usesAnimatedPresentation ? .end : .begin,
                 size: self.gramAnimationSize,
                 loop: false,
                 lottieSettings: lottieSettings
@@ -510,7 +462,9 @@ final class WalletSendAmountField: UIView, UITextFieldDelegate {
             if gramIconView.superview == nil {
                 gramIconView.isUserInteractionEnabled = false
                 self.contentView.addSubview(gramIconView)
-                gramIconView.playOnce()
+                if !self.usesAnimatedPresentation {
+                    gramIconView.playOnce()
+                }
             }
             currencyTransition.setAlpha(view: gramIconView, alpha: mode == .gram ? 1.0 : 0.0)
             currencyTransition.setBlur(layer: gramIconView.layer, radius: mode == .gram ? 0.0 : iconBlurRadius)
@@ -669,54 +623,11 @@ final class WalletSendAmountField: UIView, UITextFieldDelegate {
             return
         }
 
-        var replacement = walletSendNormalizedDigits(string)
-        if replacement == "." || replacement == "," {
-            replacement = dateTimeFormat.decimalSeparator
-        }
-        let previousText = (self.textField.text ?? "") as NSString
-        guard range.location != NSNotFound, range.location >= 0, range.location <= previousText.length,
-              range.length >= 0, range.length <= previousText.length - range.location else { return }
-        var updatedText = previousText.replacingCharacters(in: range, with: replacement)
-        var selectionOffset = range.location + replacement.utf16.count
-        let decimalSeparator = dateTimeFormat.decimalSeparator
-
-        let allowedCharacters = CharacterSet(charactersIn: "0123456789" + decimalSeparator)
-        guard updatedText.unicodeScalars.allSatisfy({ allowedCharacters.contains($0) }) else {
-            return
-        }
-        guard updatedText.components(separatedBy: decimalSeparator).count <= 2 else {
-            return
-        }
-        let maximumFractionalDigits = self.mode == .gram ? 9 : 2
-        if let range = updatedText.range(of: decimalSeparator) {
-            let fractionalCount = updatedText[range.upperBound...].count
-            guard fractionalCount <= maximumFractionalDigits else {
-                return
-            }
-        }
-        if updatedText == decimalSeparator {
-            updatedText = "0" + decimalSeparator
-            selectionOffset += 1
-        }
-        if updatedText.count > 1 && updatedText.hasPrefix("0") && !updatedText.hasPrefix("0" + decimalSeparator) {
-            updatedText.removeFirst()
-            selectionOffset = max(0, selectionOffset - 1)
-        }
-        let shouldAppendDecimalSeparator = !replacement.isEmpty && updatedText == "0"
-        if shouldAppendDecimalSeparator {
-            updatedText += decimalSeparator
-            selectionOffset = updatedText.utf16.count
-        }
-        guard walletSendNanograms(
-            text: updatedText,
-            mode: self.mode,
-            rate: self.rate,
-            decimalSeparator: decimalSeparator
-        ) != nil else {
-            return
-        }
-
-        self.applyText(updatedText, selection: NSRange(location: selectionOffset, length: 0))
+        guard let edit = walletSendReplacingAmountText(
+            self.textField.text ?? "", range: range, replacement: string,
+            mode: self.mode, rate: self.rate, decimalSeparator: dateTimeFormat.decimalSeparator
+        ) else { return }
+        self.applyText(edit.text, selection: edit.selection)
         self.textChanged()
     }
 }

@@ -120,7 +120,7 @@ func stageRecoveryPhraseImport(
     let staged = try await runtime.stageTransientReplacement(words: normalizedWords)
     let disposition: WalletContext.PreparedRecoveryPhraseImport.Disposition
     if walletEngineAddressesEqual(staged.address, sourceAddress) {
-        guard staged.publicKey == sourcePublicKey else {
+        guard staged.signingPublicKey == sourcePublicKey else {
             try await runtime.discardReplacement(recordId: staged.recordId)
             throw WalletContext.WalletError.storage(.identityMismatch)
         }
@@ -610,7 +610,7 @@ extension WalletContextImpl {
             let state = selected.state
             let identity = try walletServerIdentity(state)
             guard walletEngineAddressesEqual(staged.address, identity.address),
-                  staged.publicKey == identity.publicKey else {
+                  staged.signingPublicKey == identity.publicKey else {
                 throw WalletError.storage(.identityMismatch)
             }
             let serverStateRevision = selected.revision
@@ -627,16 +627,21 @@ extension WalletContextImpl {
     }
 
     func previousWallets() async throws -> [WalletContext.PreviousWallet] {
-        try await self.runtime.archivedWallets()
+        self.previousWalletsExcludingCurrent(try await self.runtime.archivedWallets())
+    }
+
+    private func previousWalletsExcludingCurrent(_ wallets: [WalletContext.PreviousWallet]) -> [WalletContext.PreviousWallet] {
+        guard case let .wallet(info) = self.currentState.phase else { return wallets }
+        return wallets.filter { !walletEngineAddressesEqual($0.address, info.address) }
     }
 
     func refreshPreviousWalletBalances() async throws -> [WalletContext.PreviousWallet] {
         if let task = self.previousWalletBalancesTask {
-            return try await task.value
+            return self.previousWalletsExcludingCurrent(try await task.value)
         }
         let task = Task {
             defer { self.previousWalletBalancesTask = nil }
-            let wallets = try await self.runtime.archivedWallets()
+            let wallets = try await self.previousWallets()
             guard !wallets.isEmpty, self.canUseNetworkRuntime else { return wallets }
             let now = ProcessInfo.processInfo.systemUptime
             if let lastAttemptAt = self.previousWalletBalancesLastAttemptAt, now - lastAttemptAt < 10 * 60 {
@@ -646,7 +651,7 @@ extension WalletContextImpl {
             return try await self.runtime.refreshArchivedWalletBalances(wallets)
         }
         self.previousWalletBalancesTask = task
-        return try await task.value
+        return self.previousWalletsExcludingCurrent(try await task.value)
     }
 
     func forgetPreviousWallet(id: String) async throws {
@@ -768,7 +773,7 @@ extension WalletContextImpl {
             switch prepared.disposition {
             case .currentWallet:
                 guard walletEngineAddressesEqual(prepared.candidateAddress, currentIdentity.address),
-                      prepared.candidatePublicKey == currentIdentity.publicKey else {
+                      prepared.candidateSigningPublicKey == currentIdentity.publicKey else {
                     if self.preparedRecoveryPhraseImportRecordId == prepared.recordId {
                         self.preparedRecoveryPhraseImportRecordId = nil
                     }
@@ -840,7 +845,7 @@ extension WalletContextImpl {
                 let state = selected.state
                 let replacementIdentity = try walletServerIdentity(state)
                 guard walletEngineAddressesEqual(prepared.candidateAddress, replacementIdentity.address),
-                      prepared.candidatePublicKey == replacementIdentity.publicKey else {
+                      prepared.candidateSigningPublicKey == replacementIdentity.publicKey else {
                     throw WalletError.storage(.identityMismatch)
                 }
                 let replacementRevision = selected.revision
@@ -904,7 +909,7 @@ extension WalletContextImpl {
             if !updateSecretPhrase {
                 guard try await self.runtime.keyRotationRecord() == nil else { throw WalletError.operationInProgress }
                 let words = try await self.runtime.revealRecoveryPhrase()
-                guard try rotationMnemonicPublicKey(phrase: words.joined(separator: " ")).walletHexString == info.publicKey else {
+                guard try walletMnemonicSigningPublicKey(words: words).walletHexString == info.publicKey else {
                     throw WalletError.storage(.identityMismatch)
                 }
                 return PreparedBackupDisable(
@@ -996,7 +1001,7 @@ extension WalletContextImpl {
               walletEngineAddressesEqual(info.address, prepared.walletAddress) else { throw WalletError.unavailable }
         let signingKey = try walletMnemonicSigningPublicKey(words: prepared.words)
         guard let material = prepared.rotation else {
-            guard try rotationMnemonicPublicKey(phrase: prepared.words.joined(separator: " ")).walletHexString == prepared.walletPublicKey,
+            guard signingKey.walletHexString == prepared.walletPublicKey,
                   try await self.runtime.keyRotationRecord() == nil else { throw WalletError.operationInProgress }
             return prepared
         }
@@ -1087,13 +1092,10 @@ extension WalletContextImpl {
                 }
                 proofPublicKey = signingPublicKey
             } else {
-                let anchorPublicKey = try rotationMnemonicPublicKey(phrase: prepared.words.joined(separator: " "))
-                guard anchorPublicKey.walletHexString == prepared.walletPublicKey else {
+                guard signingPublicKey.walletHexString == prepared.walletPublicKey else {
                     throw WalletError.storage(.identityMismatch)
                 }
-                // Without rotation the server wallet identity must keep the
-                // address anchor, even when the phrase has a different signing half.
-                proofPublicKey = anchorPublicKey
+                proofPublicKey = signingPublicKey
             }
             if self.backupDisableIsComplete(initialState, prepared: prepared) {
                 return try await self.finishBackupDisable(prepared)
@@ -1799,7 +1801,9 @@ extension WalletContextImpl {
                     )
                 }, apply: { request, page in
                     try self.checkPaginationOperation(operationId, generation: generation)
-                    let result = self.transactionHistory.applyPage(page, request: request, previous: self.currentState.transactions)
+                    let result = self.transactionHistory.applyPage(
+                        page, request: request, previous: self.currentState.transactions, log: self.logger.log
+                    )
                     let historyReconciliation = self.pendingTransfers(
                         self.currentState.pendingTransfers,
                         reconcilingWith: result.state.items

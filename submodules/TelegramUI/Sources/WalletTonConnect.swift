@@ -12,9 +12,9 @@ func walletTonConnectRequestRoute(message: Message, accountPeerId: PeerId) -> Wa
     }
     for media in message.media {
         if let action = media as? TelegramMediaAction,
-           case let .walletTonConnectRequest(flags, sessionId, expires, topic, traceId) = action.action {
+           case let .walletTonConnectRequest(flags, sessionId, expires, topic, traceId, dappName) = action.action {
             return WalletTonConnectRequestMessage(messageId: message.id, flags: flags, sessionId: sessionId,
-                expires: expires, topic: topic, traceId: traceId)
+                expires: expires, topic: topic, traceId: traceId, dappName: dappName)
         }
     }
     return nil

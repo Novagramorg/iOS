@@ -443,16 +443,18 @@ public extension Api {
 public extension Api {
     enum TonConnectManifest: TypeConstructorDescription {
         public class Cons_tonConnectManifest: TypeConstructorDescription {
+            public var flags: Int32
             public var url: String
             public var name: String
-            public var iconUrl: String
-            public init(url: String, name: String, iconUrl: String) {
+            public var icon: Api.WebDocument?
+            public init(flags: Int32, url: String, name: String, icon: Api.WebDocument?) {
+                self.flags = flags
                 self.url = url
                 self.name = name
-                self.iconUrl = iconUrl
+                self.icon = icon
             }
             public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("tonConnectManifest", [("url", ConstructorParameterDescription(self.url)), ("name", ConstructorParameterDescription(self.name)), ("iconUrl", ConstructorParameterDescription(self.iconUrl))])
+                return ("tonConnectManifest", [("flags", ConstructorParameterDescription(self.flags)), ("url", ConstructorParameterDescription(self.url)), ("name", ConstructorParameterDescription(self.name)), ("icon", ConstructorParameterDescription(self.icon))])
             }
         }
         case tonConnectManifest(Cons_tonConnectManifest)
@@ -461,11 +463,14 @@ public extension Api {
             switch self {
             case .tonConnectManifest(let _data):
                 if boxed {
-                    buffer.appendInt32(-789421124)
+                    buffer.appendInt32(304255588)
                 }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
                 serializeString(_data.url, buffer: buffer, boxed: false)
                 serializeString(_data.name, buffer: buffer, boxed: false)
-                serializeString(_data.iconUrl, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 0) != 0 {
+                    _data.icon!.serialize(buffer, true)
+                }
                 break
             }
         }
@@ -473,22 +478,29 @@ public extension Api {
         public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .tonConnectManifest(let _data):
-                return ("tonConnectManifest", [("url", ConstructorParameterDescription(_data.url)), ("name", ConstructorParameterDescription(_data.name)), ("iconUrl", ConstructorParameterDescription(_data.iconUrl))])
+                return ("tonConnectManifest", [("flags", ConstructorParameterDescription(_data.flags)), ("url", ConstructorParameterDescription(_data.url)), ("name", ConstructorParameterDescription(_data.name)), ("icon", ConstructorParameterDescription(_data.icon))])
             }
         }
 
         public static func parse_tonConnectManifest(_ reader: BufferReader) -> TonConnectManifest? {
-            var _1: String?
-            _1 = parseString(reader)
+            var _1: Int32?
+            _1 = reader.readInt32()
             var _2: String?
             _2 = parseString(reader)
             var _3: String?
             _3 = parseString(reader)
+            var _4: Api.WebDocument?
+            if Int(_1 ?? 0) & Int(1 << 0) != 0 {
+                if let signature = reader.readInt32() {
+                    _4 = Api.parse(reader, signature: signature) as? Api.WebDocument
+                }
+            }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if _c1 && _c2 && _c3 {
-                return Api.TonConnectManifest.tonConnectManifest(Cons_tonConnectManifest(url: _1!, name: _2!, iconUrl: _3!))
+            let _c4 = (Int(_1 ?? 0) & Int(1 << 0) == 0) || _4 != nil
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.TonConnectManifest.tonConnectManifest(Cons_tonConnectManifest(flags: _1!, url: _2!, name: _3!, icon: _4))
             }
             else {
                 return nil
@@ -545,12 +557,12 @@ public extension Api {
         public class Cons_tonConnectRequest: TypeConstructorDescription {
             public var flags: Int32
             public var sessionId: Int64
-            public var msgId: Int64
+            public var msgId: Int32
             public var body: Buffer
             public var expires: Int32
             public var topic: String?
             public var traceId: String?
-            public init(flags: Int32, sessionId: Int64, msgId: Int64, body: Buffer, expires: Int32, topic: String?, traceId: String?) {
+            public init(flags: Int32, sessionId: Int64, msgId: Int32, body: Buffer, expires: Int32, topic: String?, traceId: String?) {
                 self.flags = flags
                 self.sessionId = sessionId
                 self.msgId = msgId
@@ -569,11 +581,11 @@ public extension Api {
             switch self {
             case .tonConnectRequest(let _data):
                 if boxed {
-                    buffer.appendInt32(-1568552143)
+                    buffer.appendInt32(-1587575533)
                 }
                 serializeInt32(_data.flags, buffer: buffer, boxed: false)
                 serializeInt64(_data.sessionId, buffer: buffer, boxed: false)
-                serializeInt64(_data.msgId, buffer: buffer, boxed: false)
+                serializeInt32(_data.msgId, buffer: buffer, boxed: false)
                 serializeBytes(_data.body, buffer: buffer, boxed: false)
                 serializeInt32(_data.expires, buffer: buffer, boxed: false)
                 if Int(_data.flags) & Int(1 << 0) != 0 {
@@ -598,8 +610,8 @@ public extension Api {
             _1 = reader.readInt32()
             var _2: Int64?
             _2 = reader.readInt64()
-            var _3: Int64?
-            _3 = reader.readInt64()
+            var _3: Int32?
+            _3 = reader.readInt32()
             var _4: Buffer?
             _4 = parseBytes(reader)
             var _5: Int32?

@@ -3616,10 +3616,15 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
     ) {
         let initialState = walletContext?.stateValue.transactions
         var initialTransactions = initialState?.items.filter(\.isVisibleInWalletHistory) ?? []
-        if !initialTransactions.contains(where: { $0.presentationId == transaction.presentationId }) {
+        let initialIndex: Int
+        if let index = initialTransactions.firstIndex(where: { $0.presentationId == transaction.presentationId })
+            ?? initialTransactions.firstIndex(where: { $0.matchesHistoryTransaction(transaction) }) {
+            initialIndex = index
+        } else {
             initialTransactions.insert(transaction, at: 0)
+            initialIndex = 0
         }
-        let initialIndex = initialTransactions.firstIndex(where: { $0.presentationId == transaction.presentationId }) ?? 0
+        let initialTransaction = initialTransactions[initialIndex]
 
         let openExplorer = walletTransactionOpenExplorer(context: context)
 
@@ -3630,8 +3635,8 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
         self.checkFirstGramsOnAppear = transaction.direction == .incoming && transaction.currency == .ton && transaction.collectible == nil
         self.transactionsState = initialState
         self.transactions = initialTransactions
-        self.currentTransactionPresentationId = transaction.presentationId
-        self.currentCloseId = walletTransactionModeId(.transaction(transaction))
+        self.currentTransactionPresentationId = initialTransaction.presentationId
+        self.currentCloseId = walletTransactionModeId(.transaction(initialTransaction))
 
         var indexUpdatedImpl: ((Int) -> Void)?
         var draggingBeganImpl: ((Int) -> Void)?
@@ -3823,8 +3828,12 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
         if let currentTransactionPresentationId = self.currentTransactionPresentationId,
            !transactions.contains(where: { $0.presentationId == currentTransactionPresentationId }),
            let currentTransaction = self.transactions.first(where: { $0.presentationId == currentTransactionPresentationId }) {
-            let previousIndex = self.transactions.firstIndex(where: { $0.presentationId == currentTransactionPresentationId }) ?? 0
-            transactions.insert(currentTransaction, at: min(previousIndex, transactions.count))
+            if let replacement = transactions.first(where: { $0.matchesHistoryTransaction(currentTransaction) }) {
+                self.currentTransactionPresentationId = replacement.presentationId
+            } else {
+                let previousIndex = self.transactions.firstIndex(where: { $0.presentationId == currentTransactionPresentationId }) ?? 0
+                transactions.insert(currentTransaction, at: min(previousIndex, transactions.count))
+            }
         }
         if transactions.isEmpty, let currentTransaction = self.transactions.first {
             transactions = [currentTransaction]

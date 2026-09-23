@@ -1455,15 +1455,17 @@ public extension Api {
             public var expires: Int32
             public var topic: String?
             public var traceId: String?
-            public init(flags: Int32, sessionId: Int64, expires: Int32, topic: String?, traceId: String?) {
+            public var dappName: String?
+            public init(flags: Int32, sessionId: Int64, expires: Int32, topic: String?, traceId: String?, dappName: String?) {
                 self.flags = flags
                 self.sessionId = sessionId
                 self.expires = expires
                 self.topic = topic
                 self.traceId = traceId
+                self.dappName = dappName
             }
             public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("messageActionWalletTonConnectRequest", [("flags", ConstructorParameterDescription(self.flags)), ("sessionId", ConstructorParameterDescription(self.sessionId)), ("expires", ConstructorParameterDescription(self.expires)), ("topic", ConstructorParameterDescription(self.topic)), ("traceId", ConstructorParameterDescription(self.traceId))])
+                return ("messageActionWalletTonConnectRequest", [("flags", ConstructorParameterDescription(self.flags)), ("sessionId", ConstructorParameterDescription(self.sessionId)), ("expires", ConstructorParameterDescription(self.expires)), ("topic", ConstructorParameterDescription(self.topic)), ("traceId", ConstructorParameterDescription(self.traceId)), ("dappName", ConstructorParameterDescription(self.dappName))])
             }
         }
         public class Cons_messageActionWebViewDataSent: TypeConstructorDescription {
@@ -2248,7 +2250,7 @@ public extension Api {
                 break
             case .messageActionWalletTonConnectRequest(let _data):
                 if boxed {
-                    buffer.appendInt32(-1346781657)
+                    buffer.appendInt32(1773716671)
                 }
                 serializeInt32(_data.flags, buffer: buffer, boxed: false)
                 serializeInt64(_data.sessionId, buffer: buffer, boxed: false)
@@ -2258,6 +2260,9 @@ public extension Api {
                 }
                 if Int(_data.flags) & Int(1 << 1) != 0 {
                     serializeString(_data.traceId!, buffer: buffer, boxed: false)
+                }
+                if Int(_data.flags) & Int(1 << 4) != 0 {
+                    serializeString(_data.dappName!, buffer: buffer, boxed: false)
                 }
                 break
             case .messageActionWebViewDataSent(let _data):
@@ -2415,7 +2420,7 @@ public extension Api {
             case .messageActionTopicEdit(let _data):
                 return ("messageActionTopicEdit", [("flags", ConstructorParameterDescription(_data.flags)), ("title", ConstructorParameterDescription(_data.title)), ("iconEmojiId", ConstructorParameterDescription(_data.iconEmojiId)), ("closed", ConstructorParameterDescription(_data.closed)), ("hidden", ConstructorParameterDescription(_data.hidden))])
             case .messageActionWalletTonConnectRequest(let _data):
-                return ("messageActionWalletTonConnectRequest", [("flags", ConstructorParameterDescription(_data.flags)), ("sessionId", ConstructorParameterDescription(_data.sessionId)), ("expires", ConstructorParameterDescription(_data.expires)), ("topic", ConstructorParameterDescription(_data.topic)), ("traceId", ConstructorParameterDescription(_data.traceId))])
+                return ("messageActionWalletTonConnectRequest", [("flags", ConstructorParameterDescription(_data.flags)), ("sessionId", ConstructorParameterDescription(_data.sessionId)), ("expires", ConstructorParameterDescription(_data.expires)), ("topic", ConstructorParameterDescription(_data.topic)), ("traceId", ConstructorParameterDescription(_data.traceId)), ("dappName", ConstructorParameterDescription(_data.dappName))])
             case .messageActionWebViewDataSent(let _data):
                 return ("messageActionWebViewDataSent", [("text", ConstructorParameterDescription(_data.text))])
             case .messageActionWebViewDataSentMe(let _data):
@@ -3725,13 +3730,18 @@ public extension Api {
             if Int(_1 ?? 0) & Int(1 << 1) != 0 {
                 _5 = parseString(reader)
             }
+            var _6: String?
+            if Int(_1 ?? 0) & Int(1 << 4) != 0 {
+                _6 = parseString(reader)
+            }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
             let _c4 = (Int(_1 ?? 0) & Int(1 << 0) == 0) || _4 != nil
             let _c5 = (Int(_1 ?? 0) & Int(1 << 1) == 0) || _5 != nil
-            if _c1 && _c2 && _c3 && _c4 && _c5 {
-                return Api.MessageAction.messageActionWalletTonConnectRequest(Cons_messageActionWalletTonConnectRequest(flags: _1!, sessionId: _2!, expires: _3!, topic: _4, traceId: _5))
+            let _c6 = (Int(_1 ?? 0) & Int(1 << 4) == 0) || _6 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 {
+                return Api.MessageAction.messageActionWalletTonConnectRequest(Cons_messageActionWalletTonConnectRequest(flags: _1!, sessionId: _2!, expires: _3!, topic: _4, traceId: _5, dappName: _6))
             }
             else {
                 return nil

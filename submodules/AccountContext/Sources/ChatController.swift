@@ -312,6 +312,7 @@ public enum ChatControllerInteractionLongTapAction {
     case hashtag(String)
     case timecode(Double, String)
     case bankCard(String)
+    case tonAddress(String)
     case date(Int32)
 }
 

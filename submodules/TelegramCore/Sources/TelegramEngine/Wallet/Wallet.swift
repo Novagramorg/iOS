@@ -230,6 +230,7 @@ public enum WalletGetGaslessInfoError: Error {
 public enum WalletSendTransferError: Error, Equatable, Sendable {
     case invalidData
     case sendFailed
+    case keyMismatch
     case network
     case generic
 }
@@ -519,6 +520,8 @@ func _internal_sendWalletTransfer(account: Account, dataNormal: Data, dataGasles
         switch error.errorDescription {
         case "WALLET_TRANSFER_DATA_INVALID":
             return .invalidData
+        case "WALLET_KEY_MISMATCH":
+            return .keyMismatch
         case "WALLET_TRANSFER_SEND_FAILED":
             return .sendFailed
         default:

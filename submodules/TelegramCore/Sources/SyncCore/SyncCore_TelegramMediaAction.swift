@@ -310,7 +310,7 @@ public enum TelegramMediaActionType: PostboxCoding, Equatable {
     case pollOptionDeleted(TelegramMediaPollOption)
     case communityChanged(communityId: PeerId?)
     case joinedViaCommunity(communityId: PeerId)
-    case walletTonConnectRequest(flags: Int32, sessionId: Int64, expires: Int32, topic: String?, traceId: String?)
+    case walletTonConnectRequest(flags: Int32, sessionId: Int64, expires: Int32, topic: String?, traceId: String?, dappName: String?)
     
     public init(decoder: PostboxDecoder) {
         let rawValue: Int32 = decoder.decodeInt32ForKey("_rawValue", orElse: 0)
@@ -499,7 +499,7 @@ public enum TelegramMediaActionType: PostboxCoding, Equatable {
         case 66:
             self = .joinedViaCommunity(communityId: PeerId(decoder.decodeInt64ForKey("communityId", orElse: 0)))
         case 68:
-            self = .walletTonConnectRequest(flags: decoder.decodeInt32ForKey("flags", orElse: 0), sessionId: decoder.decodeInt64ForKey("sessionId", orElse: 0), expires: decoder.decodeInt32ForKey("expires", orElse: 0), topic: decoder.decodeOptionalStringForKey("topic"), traceId: decoder.decodeOptionalStringForKey("traceId"))
+            self = .walletTonConnectRequest(flags: decoder.decodeInt32ForKey("flags", orElse: 0), sessionId: decoder.decodeInt64ForKey("sessionId", orElse: 0), expires: decoder.decodeInt32ForKey("expires", orElse: 0), topic: decoder.decodeOptionalStringForKey("topic"), traceId: decoder.decodeOptionalStringForKey("traceId"), dappName: decoder.decodeOptionalStringForKey("dappName"))
         case 67:
             self = .gramTransfer(
                 amount: decoder.decodeInt64ForKey("amount", orElse: 0),
@@ -1038,7 +1038,12 @@ public enum TelegramMediaActionType: PostboxCoding, Equatable {
         case let .joinedViaCommunity(communityId):
             encoder.encodeInt32(66, forKey: "_rawValue")
             encoder.encodeInt64(communityId.toInt64(), forKey: "communityId")
-        case let .walletTonConnectRequest(flags, sessionId, expires, topic, traceId):
+        case let .walletTonConnectRequest(flags, sessionId, expires, topic, traceId, dappName):
+            if let dappName {
+                encoder.encodeString(dappName, forKey: "dappName")
+            } else {
+                encoder.encodeNil(forKey: "dappName")
+            }
             encoder.encodeInt32(68, forKey: "_rawValue")
             encoder.encodeInt32(flags, forKey: "flags")
             encoder.encodeInt64(sessionId, forKey: "sessionId")

@@ -157,9 +157,31 @@ struct WalletStoredTransaction: Codable, Equatable, Sendable {
 }
 
 @available(macOS 10.15, *)
+struct WalletStoredTonConnectRequest: Codable, Equatable, Sendable {
+    enum Phase: String, Codable, Sendable { case received, claiming, claimed, executing, prepared }
+
+    let accountId: Int64
+    let authorizationId: Int64
+    let wallet: TonConnectWalletIdentity
+    let session: WalletTonConnectSession
+    let envelope: WalletTonConnectRequest
+    let appRequestId: TonConnectRequestId
+    let operationId: String
+    var returnTarget: TonConnectReturnTarget
+    let validUntil: UInt64?
+    var approved: Bool?
+    var phase: Phase
+    var response: Data?
+
+    var expires: Int32 { min(self.envelope.expires, Int32(clamping: self.validUntil ?? UInt64(Int32.max))) }
+    var key: TonConnectMessageKey { TonConnectMessageKey(sessionId: self.envelope.sessionId, msgId: self.envelope.msgId) }
+}
+
+@available(macOS 10.15, *)
 struct WalletStoredState: Codable, Equatable, Sendable {
     private struct Payload: Codable {
         var walletAddress: String?
+        var tonConnectRequests: [WalletStoredTonConnectRequest]?
         var pendingTransfers: [WalletContext.PendingTransfer]
         var balance: Int64?
         var balanceUpdatedAt: Int32?
@@ -179,6 +201,7 @@ struct WalletStoredState: Codable, Equatable, Sendable {
 
     var schemaVersion: Int32 = WalletStoredState.currentSchemaVersion
     var walletAddress: String?
+    var tonConnectRequests: [WalletStoredTonConnectRequest] = []
     var pendingTransfers: [WalletContext.PendingTransfer] = []
     var balance: Int64?
     var balanceUpdatedAt: Int32?
@@ -197,6 +220,7 @@ struct WalletStoredState: Codable, Equatable, Sendable {
         let data = try container.decode(Data.self, forKey: .payload)
         let payload = try JSONDecoder().decode(Payload.self, from: data)
         self.walletAddress = payload.walletAddress
+        self.tonConnectRequests = payload.tonConnectRequests ?? []
         self.pendingTransfers = payload.pendingTransfers
         self.balance = payload.balance
         self.balanceUpdatedAt = payload.balanceUpdatedAt
@@ -212,6 +236,7 @@ struct WalletStoredState: Codable, Equatable, Sendable {
         try container.encode(self.schemaVersion, forKey: .schemaVersion)
         let payload = Payload(
             walletAddress: self.walletAddress,
+            tonConnectRequests: self.tonConnectRequests,
             pendingTransfers: self.pendingTransfers,
             balance: self.balance,
             balanceUpdatedAt: self.balanceUpdatedAt,
@@ -260,7 +285,7 @@ actor WalletStoredStateWriter {
     }
 
     func storeAndWait(_ state: WalletStoredState, revision: UInt64) async -> Bool {
-        guard !self.isShutdown else { return false }
+        guard !self.isShutdown, let entry = EnginePreferencesEntry(state), entry.get(WalletStoredState.self) == state else { return false }
         self.enqueue(state, revision: revision)
         if self.completedRevision >= revision { return true }
         return await withCheckedContinuation { continuation in

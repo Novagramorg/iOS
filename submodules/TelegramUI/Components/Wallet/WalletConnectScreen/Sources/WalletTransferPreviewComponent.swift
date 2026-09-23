@@ -11,19 +11,22 @@ import MultilineTextComponent
 import TelegramPresentationData
 import TelegramStringFormatting
 import WalletContext
+import TelegramCore
 import WalletTransactionItemComponent
 
 final class WalletTransferNavigationAppIconComponent: Component {
+    let context: AccountContext
     let applicationName: String
-    let iconUrl: String?
+    let icon: WalletTonConnectIcon?
 
-    init(applicationName: String, iconUrl: String?) {
+    init(context: AccountContext, applicationName: String, icon: WalletTonConnectIcon?) {
+        self.context = context
         self.applicationName = applicationName
-        self.iconUrl = iconUrl
+        self.icon = icon
     }
 
     static func ==(lhs: WalletTransferNavigationAppIconComponent, rhs: WalletTransferNavigationAppIconComponent) -> Bool {
-        return lhs.applicationName == rhs.applicationName && lhs.iconUrl == rhs.iconUrl
+        return lhs.context === rhs.context && lhs.applicationName == rhs.applicationName && lhs.icon == rhs.icon
     }
 
     final class View: UIView {
@@ -39,8 +42,9 @@ final class WalletTransferNavigationAppIconComponent: Component {
             let _ = self.icon.update(
                 transition: transition,
                 component: AnyComponent(WalletConnectAppIconComponent(
+                    context: component.context,
                     applicationName: component.applicationName,
-                    url: component.iconUrl
+                    icon: component.icon
                 )),
                 environment: {},
                 containerSize: size

@@ -2510,12 +2510,20 @@ public extension Api.functions.auth {
     }
 }
 public extension Api.functions.auth {
-    static func initFirebasePnvLogin(apiId: Int32, apiHash: String) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.auth.FirebasePnvIntent>) {
+    static func initFirebasePnvLogin(flags: Int32, exceptIds: [Int64]?, apiId: Int32, apiHash: String) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.auth.FirebasePnvIntent>) {
         let buffer = Buffer()
-        buffer.appendInt32(2004743034)
+        buffer.appendInt32(1682904512)
+        serializeInt32(flags, buffer: buffer, boxed: false)
+        if Int(flags) & Int(1 << 0) != 0 {
+            buffer.appendInt32(481674261)
+            buffer.appendInt32(Int32(exceptIds!.count))
+            for item in exceptIds! {
+                serializeInt64(item, buffer: buffer, boxed: false)
+            }
+        }
         serializeInt32(apiId, buffer: buffer, boxed: false)
         serializeString(apiHash, buffer: buffer, boxed: false)
-        return (FunctionDescription(name: "auth.initFirebasePnvLogin", parameters: [("apiId", ConstructorParameterDescription(apiId)), ("apiHash", ConstructorParameterDescription(apiHash))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.auth.FirebasePnvIntent? in
+        return (FunctionDescription(name: "auth.initFirebasePnvLogin", parameters: [("flags", ConstructorParameterDescription(flags)), ("exceptIds", ConstructorParameterDescription(exceptIds)), ("apiId", ConstructorParameterDescription(apiId)), ("apiHash", ConstructorParameterDescription(apiHash))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.auth.FirebasePnvIntent? in
             let reader = BufferReader(buffer)
             var result: Api.auth.FirebasePnvIntent?
             if let signature = reader.readInt32() {
@@ -15059,13 +15067,13 @@ public extension Api.functions.wallet {
     }
 }
 public extension Api.functions.wallet {
-    static func tonConnectClaimRequest(flags: Int32, sessionId: Int64, msgId: Int64, appRequestId: Int64, challengeAnswer: Buffer?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Bool>) {
+    static func tonConnectClaimRequest(flags: Int32, sessionId: Int64, msgId: Int32, appRequestId: String, challengeAnswer: Buffer?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Bool>) {
         let buffer = Buffer()
-        buffer.appendInt32(-710310773)
+        buffer.appendInt32(1723169601)
         serializeInt32(flags, buffer: buffer, boxed: false)
         serializeInt64(sessionId, buffer: buffer, boxed: false)
-        serializeInt64(msgId, buffer: buffer, boxed: false)
-        serializeInt64(appRequestId, buffer: buffer, boxed: false)
+        serializeInt32(msgId, buffer: buffer, boxed: false)
+        serializeString(appRequestId, buffer: buffer, boxed: false)
         if Int(flags) & Int(1 << 0) != 0 {
             serializeBytes(challengeAnswer!, buffer: buffer, boxed: false)
         }
@@ -15199,12 +15207,12 @@ public extension Api.functions.wallet {
     }
 }
 public extension Api.functions.wallet {
-    static func tonConnectSubmitResponse(flags: Int32, sessionId: Int64, msgId: Int64, body: Buffer, traceId: String?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Bool>) {
+    static func tonConnectSubmitResponse(flags: Int32, sessionId: Int64, msgId: Int32, body: Buffer, traceId: String?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Bool>) {
         let buffer = Buffer()
-        buffer.appendInt32(1160311613)
+        buffer.appendInt32(-87655108)
         serializeInt32(flags, buffer: buffer, boxed: false)
         serializeInt64(sessionId, buffer: buffer, boxed: false)
-        serializeInt64(msgId, buffer: buffer, boxed: false)
+        serializeInt32(msgId, buffer: buffer, boxed: false)
         serializeBytes(body, buffer: buffer, boxed: false)
         if Int(flags) & Int(1 << 0) != 0 {
             serializeString(traceId!, buffer: buffer, boxed: false)

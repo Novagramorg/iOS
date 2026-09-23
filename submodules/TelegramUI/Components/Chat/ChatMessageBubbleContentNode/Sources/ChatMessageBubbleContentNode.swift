@@ -159,6 +159,7 @@ public struct ChatMessageBubbleContentTapAction {
         case timecode(Double, String)
         case tooltip(String, ASDisplayNode?, CGRect?)
         case bankCard(String)
+        case tonAddress(String)
         case ignore
         case openPollResults(Data)
         case copy(String)

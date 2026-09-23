@@ -800,7 +800,7 @@ struct WalletStreamingPresentationOverlay {
         presentIn authoritativeTransactions: [WalletContext.Transaction],
         resolvedTraceIds: Set<String>
     ) -> Int {
-        let authoritativeKeys = Set(authoritativeTransactions.map(walletTransactionMergeKey))
+        let authoritativeIdentities = WalletTransactionIdentityIndex(authoritativeTransactions)
         let previousCount = self.traces.count
         self.traces = self.traces.filter { traceId, trace in
             guard trace.revision <= revision else {
@@ -809,9 +809,7 @@ struct WalletStreamingPresentationOverlay {
             if resolvedTraceIds.contains(traceId) {
                 return false
             }
-            return !trace.transactions.allSatisfy {
-                authoritativeKeys.contains(walletTransactionMergeKey($0))
-            }
+            return !trace.transactions.allSatisfy(authoritativeIdentities.contains)
         }
         return previousCount - self.traces.count
     }
@@ -935,7 +933,8 @@ struct WalletStreamingPresentationOverlay {
         to state: WalletContext.State,
         peerByAddress: [String: EnginePeer],
         presentationIdByTraceId: [String: String],
-        presentationIdByTransactionHash: [String: String]
+        presentationIdByTransactionHash: [String: String],
+        log: ((String) -> Void)? = nil
     ) -> WalletContext.State {
         let balance: WalletContext.Resource<Int64>
         if let overlayBalance = self.balance {
@@ -960,7 +959,7 @@ struct WalletStreamingPresentationOverlay {
             }
             return walletPendingTransferTransaction(pending)
         }
-        let streamingTransactions = self.traces.flatMap { traceId, trace in
+        let streamingTransactions = self.traces.sorted(by: { $0.key < $1.key }).flatMap { traceId, trace in
             let transactions = self.transactionsWithPendingDetails(
                 trace.transactions,
                 traceId: traceId,
@@ -985,17 +984,19 @@ struct WalletStreamingPresentationOverlay {
                 )
             }
         }
-        let overlayTransactions = localTransactions + streamingTransactions
+        let overlayTransactions = streamingTransactions + localTransactions
+        let presentedTransactions = transactionsWithStreamingOverlay(
+            authoritative: authoritativeTransactions,
+            streaming: overlayTransactions,
+            peerByAddress: peerByAddress,
+            log: log
+        )
         let transactions: WalletContext.TransactionsState
-        if overlayTransactions.isEmpty && authoritativeTransactions == state.transactions.items {
+        if presentedTransactions == state.transactions.items {
             transactions = state.transactions
         } else {
             transactions = WalletContext.TransactionsState(
-                items: transactionsWithStreamingOverlay(
-                    authoritative: authoritativeTransactions,
-                    streaming: overlayTransactions,
-                    peerByAddress: peerByAddress
-                ),
+                items: presentedTransactions,
                 offset: state.transactions.offset,
                 canLoadMore: state.transactions.canLoadMore,
                 isLoadingMore: state.transactions.isLoadingMore,

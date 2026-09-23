@@ -1051,6 +1051,12 @@ func messageTextEntitiesFromApiEntities(_ entities: [Api.MessageEntity]) -> [Mes
         case let .messageEntityBankCard(messageEntityBankCardData):
             let (offset, length) = (messageEntityBankCardData.offset, messageEntityBankCardData.length)
             result.append(MessageTextEntity(range: Int(offset) ..< Int(offset + length), type: .BankCard))
+        case let .messageEntityTonAddress(data):
+            let upperBound = Int(data.offset) + Int(data.length)
+            guard data.offset >= 0, data.length > 0, upperBound <= Int(Int32.max) else {
+                continue
+            }
+            result.append(MessageTextEntity(range: Int(data.offset) ..< upperBound, type: .TonAddress))
         case let .messageEntitySpoiler(messageEntitySpoilerData):
             let (offset, length) = (messageEntitySpoilerData.offset, messageEntitySpoilerData.length)
             result.append(MessageTextEntity(range: Int(offset) ..< Int(offset + length), type: .Spoiler))

@@ -25,26 +25,30 @@ fileprivate enum WalletConnectFinishResult {
 
 public final class WalletConnectAppIconComponent: Component {
     let applicationName: String
-    let url: String?
+    let context: AccountContext
+    let icon: WalletTonConnectIcon?
     let size: CGFloat
     let cornerRadius: CGFloat?
 
-    public init(applicationName: String, url: String?, size: CGFloat = 88.0, cornerRadius: CGFloat? = nil) {
+    public init(context: AccountContext, applicationName: String, icon: WalletTonConnectIcon?, size: CGFloat = 88.0, cornerRadius: CGFloat? = nil) {
         self.applicationName = applicationName
-        self.url = url
+        self.context = context
+        self.icon = icon
         self.size = size
         self.cornerRadius = cornerRadius
     }
 
     public static func ==(lhs: WalletConnectAppIconComponent, rhs: WalletConnectAppIconComponent) -> Bool {
-        return lhs.applicationName == rhs.applicationName && lhs.url == rhs.url && lhs.size == rhs.size && lhs.cornerRadius == rhs.cornerRadius
+        return lhs.applicationName == rhs.applicationName && lhs.context === rhs.context && lhs.icon == rhs.icon && lhs.size == rhs.size && lhs.cornerRadius == rhs.cornerRadius
     }
 
     public final class View: UIView {
         private let imageView = UIImageView()
         private let fallbackLabel = UILabel()
-        private var currentUrl: String?
-        private var task: URLSessionDataTask?
+        private var currentIcon: WalletTonConnectIcon?
+        private weak var accountContext: AccountContext?
+        private let fetchDisposable = MetaDisposable()
+        private let dataDisposable = MetaDisposable()
 
         public override init(frame: CGRect) {
             super.init(frame: frame)
@@ -64,7 +68,8 @@ public final class WalletConnectAppIconComponent: Component {
         }
 
         deinit {
-            self.task?.cancel()
+            self.fetchDisposable.dispose()
+            self.dataDisposable.dispose()
         }
 
         func update(component: WalletConnectAppIconComponent, availableSize: CGSize) -> CGSize {
@@ -75,36 +80,30 @@ public final class WalletConnectAppIconComponent: Component {
             self.fallbackLabel.frame = CGRect(origin: .zero, size: size)
             self.fallbackLabel.text = component.applicationName.first.map { String($0).uppercased() }
 
-            if self.currentUrl != component.url {
-                self.currentUrl = component.url
-                self.task?.cancel()
-                self.task = nil
+            if self.currentIcon != component.icon || self.accountContext !== component.context {
+                self.currentIcon = component.icon
+                self.accountContext = component.context
+                self.fetchDisposable.set(nil)
+                self.dataDisposable.set(nil)
                 self.imageView.image = nil
                 self.fallbackLabel.isHidden = false
 
-                if let urlString = component.url,
-                   let url = URL(string: urlString),
-                   url.scheme?.lowercased() == "https" {
-                    var request = URLRequest(url: url)
-                    request.timeoutInterval = 15.0
-                    let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, _ in
-                        guard let data,
-                              data.count <= 2 * 1024 * 1024,
-                              let response = response as? HTTPURLResponse,
-                              (200 ..< 300).contains(response.statusCode),
-                              let image = UIImage(data: data) else {
-                            return
-                        }
-                        Queue.mainQueue().async {
-                            guard let self, self.currentUrl == urlString else {
-                                return
-                            }
-                            self.imageView.image = image
-                            self.fallbackLabel.isHidden = true
-                        }
+                if let icon = component.icon, icon.size > 0, icon.size <= 2 * 1024 * 1024,
+                   icon.mimeType.lowercased().hasPrefix("image/") {
+                    let mediaBox = component.context.account.postbox.mediaBox
+                    let resource = WebFileReferenceMediaResource(url: icon.url, size: Int64(icon.size), accessHash: icon.accessHash)
+                    self.dataDisposable.set((mediaBox.resourceData(resource)
+                    |> map { data -> UIImage? in
+                        guard data.complete, data.size <= 2 * 1024 * 1024 else { return nil }
+                        return UIImage(contentsOfFile: data.path)
                     }
-                    self.task = task
-                    task.resume()
+                    |> deliverOnMainQueue).start(next: { [weak self, weak context = component.context] image in
+                        guard let self, self.currentIcon == icon, self.accountContext === context, let image else { return }
+                        self.imageView.image = image
+                        self.fallbackLabel.isHidden = true
+                    }))
+                    self.fetchDisposable.set(fetchedMediaResource(mediaBox: mediaBox, userLocation: .other,
+                        userContentType: .image, reference: .standalone(resource: resource), statsCategory: .image).start())
                 }
             }
             return size
@@ -317,8 +316,9 @@ private final class WalletConnectSheetContent: CombinedComponent {
 
             let appIcon = appIcon.update(
                 component: WalletConnectAppIconComponent(
+                    context: component.context,
                     applicationName: component.request.applicationName,
-                    url: component.request.iconUrl
+                    icon: component.request.icon
                 ),
                 availableSize: appIconSize,
                 transition: context.transition

@@ -339,7 +339,7 @@ actor WalletContextImpl {
             self.completeStoredStateRestore()
             return
         }
-        let cachedTransactions: [Transaction]
+        var cachedTransactions: [Transaction]
         do {
             cachedTransactions = try await walletTransactions(
                 from: storedState.transactions,
@@ -361,6 +361,9 @@ actor WalletContextImpl {
             self.completeStoredStateRestore()
             return
         }
+        cachedTransactions = mergeTransactions(
+            existing: cachedTransactions, new: [], source: "cache_restore", log: self.logger.log
+        )
         self.replaceState(
             phase: .restoring,
             balance: storedState.balance.map { .value($0, updatedAt: storedState.balanceUpdatedAt ?? 0) } ?? .idle,
@@ -706,7 +709,7 @@ actor WalletContextImpl {
                 $0.schemaVersion == 2
                     && $0.network == "mainnet"
                     && walletEngineAddressesEqual($0.address, address)
-                    && $0.publicKey == publicKey
+                    && $0.signingPublicKey == publicKey
             } ?? false
             let hasStoredSecret: Bool
             if storedMatchesIdentity, let secretRef = stored?.secretRef {
@@ -1142,7 +1145,8 @@ actor WalletContextImpl {
             to: self.currentState,
             peerByAddress: self.peerByWalletAddress,
             presentationIdByTraceId: presentationIds.byTraceId,
-            presentationIdByTransactionHash: presentationIds.byTransactionHash
+            presentationIdByTransactionHash: presentationIds.byTransactionHash,
+            log: self.logger.log
         ))
     }
 
@@ -1343,6 +1347,7 @@ actor WalletContextImpl {
 
     private func persistStoredState(_ state: State) {
         var storedState = WalletStoredState()
+        storedState.tonConnectRequests = self.storedState.tonConnectRequests
         storedState.walletAddress = {
             if case let .wallet(info) = state.phase { return info.address }
             return self.storedState.walletAddress

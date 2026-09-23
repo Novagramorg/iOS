@@ -173,6 +173,7 @@ private final class WalletImportScreenComponent: Component {
             var editingChanged: ((Int, Bool) -> Void)?
             var shouldBeginEditing: ((Int) -> Bool)?
             var returnPressed: ((Int) -> Void)?
+            var spacePressed: ((Int) -> Void)?
             var pasteWords: ((Int, [String]) -> Bool)?
             var emptyBackspace: ((Int) -> Void)?
             var pastePressed: (() -> Void)?
@@ -404,7 +405,7 @@ private final class WalletImportScreenComponent: Component {
                 replacementString string: String
             ) -> Bool {
                 if string == " " {
-                    self.returnPressed?(self.index)
+                    self.spacePressed?(self.index)
                     return false
                 }
                 let containsWhitespace = string.contains(where: { $0.isWhitespace })
@@ -451,8 +452,9 @@ private final class WalletImportScreenComponent: Component {
         private var isVerificationInProgress = false
         private var words = Array(repeating: "", count: 12)
         private var isImportPhraseValid = false
-        private var invalidWordIndices = Set<Int>()
+        private var mismatchedWordIndices = Set<Int>()
         private var activeWordIndex: Int?
+        private var validationFocusIndex: Int?
         private var wordSuggestions: [String] = []
         private var hasInvalidWordSuggestion = false
         private var invalidWordSuggestionPulseId = 0
@@ -513,7 +515,7 @@ private final class WalletImportScreenComponent: Component {
                 self.words[index] = existingWords[index]
             }
             self.updateImportPhraseValidity()
-            self.invalidWordIndices.removeAll()
+            self.mismatchedWordIndices.removeAll()
             if let preservedActiveWordIndex, preservedActiveWordIndex < count {
                 self.activeWordIndex = preservedActiveWordIndex
             } else {
@@ -547,7 +549,10 @@ private final class WalletImportScreenComponent: Component {
                     return self?.shouldBeginEditingWord(at: index) ?? true
                 }
                 field.returnPressed = { [weak self] index in
-                    self?.handleReturn(from: index)
+                    self?.handleReturn(from: index, submitOnLastField: true)
+                }
+                field.spacePressed = { [weak self] index in
+                    self?.handleReturn(from: index, submitOnLastField: false)
                 }
                 field.pasteWords = { [weak self] index, words in
                     return self?.insertWords(words, from: index) ?? false
@@ -569,11 +574,6 @@ private final class WalletImportScreenComponent: Component {
                 )
                 if field.textField.text != self.words[index] {
                     field.setText(self.words[index])
-                }
-            }
-            if !self.isVerificationMode {
-                for index in self.words.indices where !self.words[index].isEmpty {
-                    self.validateWord(at: index)
                 }
             }
             if self.activeWordIndex != nil {
@@ -697,8 +697,7 @@ private final class WalletImportScreenComponent: Component {
         }
 
         private func updateWordSuggestions() {
-            guard !self.isVerificationMode,
-                  let component = self.component,
+            guard let component = self.component,
                   let activeWordIndex,
                   self.words.indices.contains(activeWordIndex),
                   self.words[activeWordIndex].count >= 2 else {
@@ -714,7 +713,6 @@ private final class WalletImportScreenComponent: Component {
             if suggestions.isEmpty && !component.walletContext.isMnemonicWord(word) {
                 self.wordSuggestions = ["Invalid word"]
                 self.hasInvalidWordSuggestion = true
-                self.invalidWordIndices.insert(activeWordIndex)
             } else if suggestions.count == 1, suggestions[0] == word {
                 self.wordSuggestions = []
                 self.hasInvalidWordSuggestion = false
@@ -725,8 +723,7 @@ private final class WalletImportScreenComponent: Component {
         }
 
         private func isInvalidWord(at index: Int) -> Bool {
-            guard !self.isVerificationMode,
-                  let component = self.component,
+            guard let component = self.component,
                   self.words.indices.contains(index) else {
                 return false
             }
@@ -738,7 +735,6 @@ private final class WalletImportScreenComponent: Component {
             guard self.wordFields.indices.contains(index) else {
                 return
             }
-            self.invalidWordIndices.insert(index)
             self.updateWordSuggestions()
             self.componentState?.updated(transition: .easeInOut(duration: 0.2))
             self.wordFields[index].layer.addShakeAnimation()
@@ -746,7 +742,8 @@ private final class WalletImportScreenComponent: Component {
         }
 
         private func shouldBeginEditingWord(at index: Int) -> Bool {
-            guard let activeWordIndex = self.activeWordIndex,
+            guard self.validationFocusIndex != index,
+                  let activeWordIndex = self.activeWordIndex,
                   activeWordIndex != index,
                   self.isInvalidWord(at: activeWordIndex) else {
                 return true
@@ -755,7 +752,30 @@ private final class WalletImportScreenComponent: Component {
             return false
         }
 
-        private func selectSuggestedWord(_ word: String, at index: Int) {
+        private func focusInvalidWord(at index: Int) {
+            guard self.wordFields.indices.contains(index) else {
+                return
+            }
+            // Validation must be able to focus the first error even if the current word is invalid.
+            self.validationFocusIndex = index
+            let didBecomeFirstResponder = self.wordFields[index].textField.becomeFirstResponder()
+            self.validationFocusIndex = nil
+            if didBecomeFirstResponder {
+                self.activeWordIndex = index
+                self.updateWordSuggestions()
+                DispatchQueue.main.async { [weak self] in
+                    guard let self,
+                          self.wordFields.indices.contains(index),
+                          self.wordFields[index].textField.isFirstResponder else {
+                        return
+                    }
+                    self.wordFields[index].textField.selectAll(nil)
+                }
+            }
+            self.componentState?.updated(transition: .easeInOut(duration: 0.2))
+        }
+
+        private func selectSuggestedWord(_ word: String, at index: Int, advanceFocus: Bool = true) {
             guard self.activeWordIndex == index,
                   self.words.indices.contains(index),
                   self.wordFields.indices.contains(index) else {
@@ -764,27 +784,14 @@ private final class WalletImportScreenComponent: Component {
             let word = self.normalizeWord(word)
             self.words[index] = word
             self.wordFields[index].setText(word)
-            self.invalidWordIndices.remove(index)
+            self.mismatchedWordIndices.remove(index)
             self.wordSuggestions = []
             self.hasInvalidWordSuggestion = false
             self.updateImportPhraseValidity()
             self.componentState?.updated(transition: .immediate)
-            self.advanceFocus(from: index)
-        }
-
-        private func validateWord(at index: Int) {
-            guard !self.isVerificationMode,
-                  let component = self.component,
-                  self.words.indices.contains(index) else {
-                return
+            if advanceFocus {
+                self.advanceFocus(from: index)
             }
-            let word = self.words[index]
-            if word.isEmpty || component.walletContext.isMnemonicWord(word) {
-                self.invalidWordIndices.remove(index)
-            } else {
-                self.invalidWordIndices.insert(index)
-            }
-            self.componentState?.updated(transition: .easeInOut(duration: 0.2))
         }
 
         private func wordTextChanged(index: Int, text: String) {
@@ -795,7 +802,7 @@ private final class WalletImportScreenComponent: Component {
             let word = self.normalizeWord(text)
             self.words[index] = word
             self.updateImportPhraseValidity()
-            self.invalidWordIndices.remove(index)
+            self.mismatchedWordIndices.remove(index)
             self.updateWordSuggestions()
             if word.count > previousWord.count && self.hasInvalidWordSuggestion {
                 self.invalidWordSuggestionPulseId += 1
@@ -811,7 +818,6 @@ private final class WalletImportScreenComponent: Component {
 
             if isEditing {
                 self.activeWordIndex = index
-                self.invalidWordIndices.remove(index)
                 self.updateWordSuggestions()
             } else {
                 if self.activeWordIndex == index {
@@ -822,23 +828,27 @@ private final class WalletImportScreenComponent: Component {
                 self.wordFields[index].setText(normalizedWord)
                 self.updateImportPhraseValidity()
                 self.updateWordSuggestions()
-                self.validateWord(at: index)
             }
             self.componentState?.updated(transition: .easeInOut(duration: 0.2))
         }
 
-        private func handleReturn(from index: Int) {
+        private func handleReturn(from index: Int, submitOnLastField: Bool) {
+            guard self.wordFields.indices.contains(index),
+                  !self.isImporting,
+                  !self.isVerificationInProgress,
+                  !self.didCompleteVerification else {
+                return
+            }
             if self.activeWordIndex == index,
                !self.hasInvalidWordSuggestion,
                let firstSuggestion = self.wordSuggestions.first {
-                self.selectSuggestedWord(firstSuggestion, at: index)
-                return
+                self.selectSuggestedWord(firstSuggestion, at: index, advanceFocus: false)
             }
-            if self.isInvalidWord(at: index) {
-                self.rejectInvalidWord(at: index)
-                return
+            if submitOnLastField && index == self.wordFields.count - 1 && self.isActionEnabled {
+                self.performAction()
+            } else {
+                self.advanceFocus(from: index)
             }
-            self.advanceFocus(from: index)
         }
 
         private func advanceFocus(from index: Int) {
@@ -878,85 +888,57 @@ private final class WalletImportScreenComponent: Component {
                 return false
             }
 
+            let startIndex: Int
+            let insertedWords: [String]
             if self.isVerificationMode {
                 guard self.words.indices.contains(index) else {
                     return false
                 }
-                let insertedWords = Array(normalizedWords.prefix(self.words.count - index))
-                guard !insertedWords.isEmpty else {
-                    return false
-                }
-                for offset in insertedWords.indices {
-                    let targetIndex = index + offset
-                    self.words[targetIndex] = insertedWords[offset]
-                    self.wordFields[targetIndex].setText(insertedWords[offset])
-                    self.invalidWordIndices.remove(targetIndex)
-                }
-                self.componentState?.updated(transition: .easeInOut(duration: 0.2))
-
-                let nextIndex = index + insertedWords.count
-                DispatchQueue.main.async { [weak self] in
-                    guard let self else {
-                        return
+                startIndex = index
+                insertedWords = Array(normalizedWords.prefix(self.words.count - index))
+            } else {
+                if normalizedWords.count > 1 {
+                    guard normalizedWords.count == 12 || normalizedWords.count == 24 else {
+                        self.presentInvalidPhraseLength(count: normalizedWords.count)
+                        return true
                     }
-                    if nextIndex < self.wordFields.count {
-                        let _ = self.wordFields[nextIndex].textField.becomeFirstResponder()
-                    } else {
-                        self.wordFields.last?.textField.resignFirstResponder()
+                    if normalizedWords.count != self.words.count {
+                        self.setupWordInputFields(
+                            displayNumbers: Array(1 ... normalizedWords.count),
+                            preserving: []
+                        )
                     }
                 }
-                return true
+                startIndex = normalizedWords.count > 1 ? 0 : index
+                insertedWords = normalizedWords
             }
-
-            if normalizedWords.count > 1 {
-                guard normalizedWords.count == 12 || normalizedWords.count == 24 else {
-                    self.presentInvalidPhraseLength(count: normalizedWords.count)
-                    return true
-                }
-                if normalizedWords.count != self.words.count {
-                    self.setupWordInputFields(
-                        displayNumbers: Array(1 ... normalizedWords.count),
-                        preserving: []
-                    )
-                }
-            }
-            let startIndex = normalizedWords.count > 1 ? 0 : index
-            guard self.words.indices.contains(startIndex), normalizedWords.count <= self.words.count - startIndex else {
+            guard self.words.indices.contains(startIndex), insertedWords.count <= self.words.count - startIndex else {
                 return false
             }
-            for offset in normalizedWords.indices {
+            for offset in insertedWords.indices {
                 let targetIndex = startIndex + offset
-                let word = normalizedWords[offset]
+                let word = insertedWords[offset]
                 self.words[targetIndex] = word
                 self.wordFields[targetIndex].setText(word)
-                self.invalidWordIndices.remove(targetIndex)
+                self.mismatchedWordIndices.remove(targetIndex)
             }
 
-            self.wordSuggestions = []
-            self.hasInvalidWordSuggestion = false
             self.updateImportPhraseValidity()
+            self.updateWordSuggestions()
+            let insertedIndices = startIndex ..< startIndex + insertedWords.count
             self.componentState?.updated(transition: .easeInOut(duration: 0.2))
-            if normalizedWords.count > 1 {
-                if self.isImportPhraseValid {
-                    self.invalidWordIndices.removeAll()
-                } else {
-                    for index in self.words.indices {
-                        self.validateWord(at: index)
-                    }
-                }
-            } else {
-                self.validateWord(at: startIndex)
-            }
 
-            let nextIndex = startIndex + normalizedWords.count
+            let nextIndex = insertedIndices.upperBound
             DispatchQueue.main.async { [weak self] in
                 guard let self else {
                     return
                 }
-                if nextIndex < self.wordFields.count {
+                if let firstInvalidIndex = insertedIndices.first(where: { self.isInvalidWord(at: $0) }) {
+                    self.focusInvalidWord(at: firstInvalidIndex)
+                } else if nextIndex < self.wordFields.count {
                     let _ = self.wordFields[nextIndex].textField.becomeFirstResponder()
                 } else {
-                    self.wordFields.last?.textField.resignFirstResponder()
+                    self.endEditing(true)
                 }
             }
             return true
@@ -1037,6 +1019,17 @@ private final class WalletImportScreenComponent: Component {
             self.environment?.controller()?.dismiss()
         }
 
+        private func performAction() {
+            guard self.isActionEnabled else {
+                return
+            }
+            if self.isVerificationMode {
+                self.continueVerification()
+            } else {
+                self.importWallet()
+            }
+        }
+
         private func continueVerification() {
             guard let component = self.component,
                   case let .verify(phraseWords, _, allowsRepeatedCompletion) = component.mode,
@@ -1058,6 +1051,7 @@ private final class WalletImportScreenComponent: Component {
                 }
             }
 
+            self.mismatchedWordIndices = Set(mismatchedIndices)
             if mismatchedIndices.isEmpty {
                 self.didCompleteVerification = true
                 component.completion?()
@@ -1068,45 +1062,10 @@ private final class WalletImportScreenComponent: Component {
             }
 
             HapticFeedback().error()
-            guard let controller = self.environment?.controller() else {
-                return
+            if let firstIndex = mismatchedIndices.first {
+                self.focusInvalidWord(at: firstIndex)
+                self.wordFields[firstIndex].layer.addShakeAnimation()
             }
-            //TODO:localize
-            let alertTitle = "Incorrect words!"
-            //TODO:localize
-            let alertText = "The secret words you have entered do not match the ones in the list."
-            //TODO:localize
-            let tryAgainTitle = "Try Again"
-            //TODO:localize
-            let viewWordsTitle = "View Words"
-            controller.present(textAlertController(
-                context: component.context,
-                title: alertTitle,
-                text: alertText,
-                actions: [
-                    TextAlertAction(type: .genericAction, title: viewWordsTitle, action: { [weak self] in
-                        self?.dismiss()
-                    }),
-                    TextAlertAction(type: .defaultAction, title: tryAgainTitle, action: { [weak self] in
-                        guard let self else {
-                            return
-                        }
-                        for index in mismatchedIndices where self.words.indices.contains(index) {
-                            self.words[index] = ""
-                            self.wordFields[index].setText("")
-                        }
-                        self.componentState?.updated(transition: .easeInOut(duration: 0.2))
-                        if let firstIndex = mismatchedIndices.first {
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-                                guard let self, self.wordFields.indices.contains(firstIndex) else {
-                                    return
-                                }
-                                let _ = self.wordFields[firstIndex].textField.becomeFirstResponder()
-                            }
-                        }
-                    })
-                ]
-            ), in: .window(.root))
         }
 
         private func importWallet() {
@@ -1244,7 +1203,7 @@ private final class WalletImportScreenComponent: Component {
             //TODO:localize
             self.presentRecoveryPhraseAlert(AlertScreen(
                 context: component.context,
-                configuration: AlertScreen.Configuration(allowInputInset: false),
+                configuration: AlertScreen.Configuration(allowInputInset: true),
                 content: [
                     AnyComponentWithIdentity(id: "text", component: AnyComponent(AlertTextComponent(
                         content: .plain("Since you disabled backups for your wallet, you have to manually enter your Secret Phrase in every new Telegram session.")
@@ -1287,7 +1246,7 @@ private final class WalletImportScreenComponent: Component {
             //TODO:localize
             self.presentRecoveryPhraseAlert(AlertScreen(
                 context: component.context,
-                configuration: AlertScreen.Configuration(allowInputInset: false),
+                configuration: AlertScreen.Configuration(allowInputInset: true),
                 content: [
                     AnyComponentWithIdentity(id: "title", component: AnyComponent(AlertTitleComponent(title: "Wrong Secret Phrase"))),
                     AnyComponentWithIdentity(id: "text", component: AnyComponent(AlertTextComponent(
@@ -1828,7 +1787,7 @@ private final class WalletImportScreenComponent: Component {
                 transition.setFrame(view: field, frame: fieldFrame)
                 field.update(
                     theme: theme,
-                    isInvalid: false,
+                    isInvalid: self.mismatchedWordIndices.contains(index),
                     displaysPasteButton: index == 0 && displaysPasteButton,
                     size: fieldFrame.size
                 )
@@ -1868,14 +1827,7 @@ private final class WalletImportScreenComponent: Component {
                     isEnabled: isButtonEnabled,
                     displaysProgress: isVerificationMode ? self.isVerificationInProgress : self.isImporting,
                     action: { [weak self] in
-                        guard let self, self.isActionEnabled else {
-                            return
-                        }
-                        if self.isVerificationMode {
-                            self.continueVerification()
-                        } else {
-                            self.importWallet()
-                        }
+                        self?.performAction()
                     }
                 )),
                 environment: {},
@@ -1897,8 +1849,7 @@ private final class WalletImportScreenComponent: Component {
             }
             contentHeight += buttonSize.height + environment.safeInsets.bottom + 24.0
 
-            if !isVerificationMode,
-               !self.wordSuggestions.isEmpty,
+            if !self.wordSuggestions.isEmpty,
                let activeWordIndex = self.activeWordIndex,
                self.wordFields.indices.contains(activeWordIndex) {
                 let wordSuggestionView: ComponentHostView<Empty>
