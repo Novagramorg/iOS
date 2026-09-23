@@ -5640,3 +5640,28 @@ completion(.delay(min(max(1.0 / 30.0, state.maxTakenTime - layerTime), 1.0)))
 ```
 
 Normal delays are well under 1 s, so ordinary playback is unchanged; a larger value only re-polls sooner.
+
+## 📌 China support batch — search clear button, translate target, Chinese strings, header fold (2026-09-23)
+
+A Chinese user wrote to support with four items: Chinese language support, "the bug with the search box at
+the top", "translation doesn't work", and "can we fold the header buttons, too much stuff". Both bugs were
+reproduced on the simulator with the `zh-hans-raw` pack ("Chinese (Simplified)", 99 %) before fixing.
+
+### `submodules/SearchBarNode/Sources/SearchBarNode.swift` (UPSTREAM hook) — clear button on the field's edge
+
+`updateLayout(boundingSize:leftInset:rightInset:transition:)`, the `.glass` branch after `textBackgroundFrame`
+is built. Glass never shows the text Cancel button (the placeholder view keeps a fixed 44 pt close button), but
+the frame was still sized from the measured, localized "Cancel" title. "取消" is 19 pt narrower than "Cancel"
+(measured on the sim: clear button centre x = 349.8 pt in English, 368.8 pt in Chinese), so the clear (x) sat
+half outside the field. The glass width is now the one English always had:
+
+```swift
+if case .glass = self.fieldStyle {
+    // Fenixuz: glass never shows the text Cancel button (...)
+    textBackgroundFrame.size.width = contentFrame.width - padding - 72.0
+} else {
+```
+
+72 = 53 pt English "Cancel" + 11 + 8, so English is pixel-identical; every other language now matches it
+(Uzbek "Bekor qilish" used to make the field ~37 pt narrower). The second `.glass` block further down
+(the animate-in path, sized from `sourceFrame`) is untouched.

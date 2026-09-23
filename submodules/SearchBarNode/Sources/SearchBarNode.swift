@@ -1184,7 +1184,11 @@ public class SearchBarNode: ASDisplayNode, UITextFieldDelegate {
         let padding = self.fieldStyle.padding
         var textBackgroundFrame = CGRect(origin: CGPoint(x: contentFrame.minX + padding, y: verticalOffset + textBackgroundHeight), size: CGSize(width: contentFrame.width - padding - (self.hasCancelButton ? cancelButtonSize.width + 11.0 : 0.0), height: textBackgroundHeight))
         if case .glass = self.fieldStyle {
-            textBackgroundFrame.size.width -= 8.0
+            // Fenixuz: glass never shows the text Cancel button (the field keeps a fixed 44pt close
+            // button instead), yet the localized "Cancel" width still sized this frame. "取消" is 19pt
+            // narrower than "Cancel", which pushed the clear button onto the field's edge. Use the
+            // width the English layout always had, for every language.
+            textBackgroundFrame.size.width = contentFrame.width - padding - 72.0
         } else {
             textBackgroundFrame.size.width -= padding
         }
