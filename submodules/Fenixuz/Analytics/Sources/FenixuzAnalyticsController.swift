@@ -78,9 +78,13 @@ final class FenixuzAnalyticsController: ViewController {
         super.init(navigationBarPresentationData: NavigationBarPresentationData(presentationData: self.presentationData))
 
         self.statusBar.statusBarStyle = self.presentationData.theme.rootController.statusBarStyle.style
-        switch self.presentationData.strings.baseLanguageCode {
+        // Chinese Telegram packs use free-form codes ("zh-hans-raw", "classic-zh-cn", ...), so fold them into "zh".
+        let titleLanguage = self.presentationData.strings.baseLanguageCode.lowercased()
+        let isChineseTitle = titleLanguage.hasPrefix("zh") || titleLanguage.contains("-zh") || titleLanguage.contains("_zh")
+        switch isChineseTitle ? "zh" : self.presentationData.strings.baseLanguageCode {
         case "uz": self.title = "Analitika"
         case "ru": self.title = "Аналитика"
+        case "zh": self.title = "统计"
         default: self.title = "Analytics"
         }
 

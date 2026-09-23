@@ -19,6 +19,7 @@ private enum FenixNewBadgeLabel {
         switch langCode {
         case "uz": return "YANGI"
         case "ru": return "НОВОЕ"
+        case "zh": return "新"
         default:   return "NEW"
         }
     }

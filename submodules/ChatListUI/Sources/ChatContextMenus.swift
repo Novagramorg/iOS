@@ -11,6 +11,7 @@ import AlertUI
 import PresentationDataUtils
 import FenixuzChatLock
 import FenixuzSecretVault
+import FenixuzLocalization
 import UndoUI
 import PremiumUI
 import TelegramPresentationData
@@ -472,9 +473,10 @@ func chatContextMenuItems(context: AccountContext, peerId: EnginePeer.Id, promoI
                                 // MARK: - Maxfiy ko'rish
                                 if !isSavedMessages {
                                     let secretReadTitle: String
-                                    switch presentationData.strings.primaryComponent.languageCode {
+                                    switch FenixuzL10n.languageKey(for: presentationData.strings) {
                                     case "uz": secretReadTitle = "Maxfiy ko'rish"
                                     case "ru": secretReadTitle = "Секретный просмотр"
+                                    case "zh": secretReadTitle = "秘密查看"
                                     default:   secretReadTitle = "Secret read"
                                     }
                                     items.append(.action(ContextMenuActionItem(text: secretReadTitle, icon: { theme in
@@ -538,12 +540,13 @@ func chatContextMenuItems(context: AccountContext, peerId: EnginePeer.Id, promoI
 
                                 // MARK: - Copy Chat ID (Feature #24)
                                 if !isSavedMessages {
-                                    let cidLang = presentationData.strings.primaryComponent.languageCode
+                                    let cidLang = FenixuzL10n.languageKey(for: presentationData.strings)
                                     let cidTitle: String
                                     let cidCopied: String
                                     switch cidLang {
                                     case "uz": cidTitle = "Chat ID'ni nusxalash"; cidCopied = "Chat ID nusxalandi"
                                     case "ru": cidTitle = "Скопировать Chat ID"; cidCopied = "Chat ID скопирован"
+                                    case "zh": cidTitle = "复制聊天 ID"; cidCopied = "已复制聊天 ID"
                                     default: cidTitle = "Copy Chat ID"; cidCopied = "Chat ID copied"
                                     }
                                     items.append(.action(ContextMenuActionItem(text: cidTitle, icon: { theme in
@@ -562,11 +565,12 @@ func chatContextMenuItems(context: AccountContext, peerId: EnginePeer.Id, promoI
                                 if case let .channel(channel) = peer,
                                    channel.adminRights != nil || channel.flags.contains(.isCreator),
                                    UserDefaults(suiteName: "pro_messager")?.bool(forKey: "fenix_channel_history_button") == true {
-                                    let histLang = presentationData.strings.primaryComponent.languageCode
+                                    let histLang = FenixuzL10n.languageKey(for: presentationData.strings)
                                     let recentActionsTitle: String
                                     switch histLang {
                                     case "uz": recentActionsTitle = "So\u{02BC}nggi amallar"
                                     case "ru": recentActionsTitle = "Недавние действия"
+                                    case "zh": recentActionsTitle = "最近操作"
                                     default:   recentActionsTitle = "Recent actions"
                                     }
                                     items.append(.action(ContextMenuActionItem(text: recentActionsTitle, icon: { theme in

@@ -4,6 +4,7 @@ import Postbox
 import TelegramCore
 import AccountContext
 import SwiftSignalKit
+import FenixuzLocalization
 
 // Fenixuz Feature #47: auto-managed folders for the groups/channels the user owns or admins.
 // Enabled by "fenix_admin_folders" in the "pro_messager" UserDefaults suite.
@@ -54,24 +55,28 @@ public final class FenixAdminFoldersManager {
                 switch langCode {
                 case "uz": return "👑 Guruhlar"
                 case "ru": return "👑 Группы"
+                case "zh": return "👑 群组"
                 default: return "👑 Groups"
                 }
             case .ownerChannels:
                 switch langCode {
                 case "uz": return "👑 Kanallar"
                 case "ru": return "👑 Каналы"
+                case "zh": return "👑 频道"
                 default: return "👑 Channels"
                 }
             case .adminGroups:
                 switch langCode {
                 case "uz": return "🔑 Guruhlar"
                 case "ru": return "🔑 Группы"
+                case "zh": return "🔑 群组"
                 default: return "🔑 Groups"
                 }
             case .adminChannels:
                 switch langCode {
                 case "uz": return "🔑 Kanallar"
                 case "ru": return "🔑 Каналы"
+                case "zh": return "🔑 频道"
                 default: return "🔑 Channels"
                 }
             }
@@ -82,7 +87,7 @@ public final class FenixAdminFoldersManager {
         // decide whether a managed folder still carries a default title (→ may re-localize).
         var allKnownTitles: [String] {
             var titles: [String] = []
-            for code in ["en", "uz", "ru"] {
+            for code in ["en", "uz", "ru", "zh"] {
                 let title = self.title(langCode: code)
                 if !titles.contains(title) {
                     titles.append(title)
@@ -169,7 +174,7 @@ public final class FenixAdminFoldersManager {
     // carrying a default title is re-localized immediately, without waiting for a relaunch.
     private static func observeLanguageChanges(context: AccountContext) {
         let signal = context.sharedContext.presentationData
-        |> map { $0.strings.primaryComponent.languageCode }
+        |> map { FenixuzL10n.languageKey(for: $0.strings) }
         |> distinctUntilChanged
         |> deliverOnMainQueue
         languageDisposable.set(signal.start(next: { langCode in
@@ -287,7 +292,7 @@ public final class FenixAdminFoldersManager {
                 byCategory[category, default: []].append(peer.id)
             }
 
-            let langCode = context.sharedContext.currentPresentationData.with { $0 }.strings.primaryComponent.languageCode
+            let langCode = FenixuzL10n.languageKey(for: context.sharedContext.currentPresentationData.with { $0 }.strings)
             applyToFilters(context: context, accountPeerId: accountPeerId, byCategory: byCategory, maxChats: maxChatsPerFolder, langCode: langCode, completion: completion)
         })
     }
@@ -453,6 +458,7 @@ enum FenixAdminFoldersStrings {
         switch langCode {
         case "uz": return "Admin papkalar"
         case "ru": return "Папки админа"
+        case "zh": return "管理员分组"
         default:   return "Admin Folders"
         }
     }
@@ -461,6 +467,7 @@ enum FenixAdminFoldersStrings {
         switch langCode {
         case "uz": return "Siz ega (👑) yoki admin (🔑) bo'lgan guruh va kanallarni 4 ta avtomatik papkaga ajratib beradi. Huquqlaringiz o'zgarsa papkalar o'z-o'zidan yangilanadi; o'chirilganda papkalar olib tashlanadi."
         case "ru": return "Раскладывает группы и каналы, где вы владелец (👑) или админ (🔑), по 4 автоматическим папкам. Папки обновляются сами при изменении ваших прав; при отключении они удаляются."
+        case "zh": return "将你拥有（👑）或管理（🔑）的群组和频道自动归入 4 个分组。你的权限变化时分组会自动更新；关闭后将移除这些分组。"
         default:   return "Sorts the groups and channels you own (👑) or admin (🔑) into 4 automatic folders. They keep updating as your rights change; turning this off removes them."
         }
     }
@@ -469,6 +476,7 @@ enum FenixAdminFoldersStrings {
         switch langCode {
         case "uz": return "\(count) ta papka yaratildi. Admin huquqlaringiz o'zgarganda papkalar avtomatik yangilanib boradi."
         case "ru": return "Создано папок: \(count). Они будут обновляться автоматически при изменении ваших прав."
+        case "zh": return "已创建 \(count) 个分组。管理员权限变化时，分组会自动更新。"
         default:   return count == 1 ? "1 folder created. It will keep updating automatically as your admin rights change." : "\(count) folders created. They will keep updating automatically as your admin rights change."
         }
     }
@@ -477,6 +485,7 @@ enum FenixAdminFoldersStrings {
         switch langCode {
         case "uz": return "Papkalaringiz allaqachon mavjud — ro'yxatlari yangilab chiqildi."
         case "ru": return "Папки уже существуют — их содержимое обновлено."
+        case "zh": return "你的分组已存在，内容已刷新。"
         default:   return "Your folders already exist — their contents have been refreshed."
         }
     }
@@ -485,6 +494,7 @@ enum FenixAdminFoldersStrings {
         switch langCode {
         case "uz": return "Siz hozircha hech bir guruh yoki kanalda ega yoki admin emassiz. Admin bo'lganingizda papkalar avtomatik paydo bo'ladi."
         case "ru": return "Пока вы не владелец и не админ ни в одной группе или канале. Папки появятся автоматически, как только вы ими станете."
+        case "zh": return "你目前还不是任何群组或频道的所有者或管理员。成为所有者或管理员后，分组会自动出现。"
         default:   return "You are not an owner or admin of any group or channel yet. The folders will appear automatically once you become one."
         }
     }

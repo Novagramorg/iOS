@@ -9,6 +9,7 @@ import AccountContext
 import TelegramPresentationData
 import PresentationDataUtils
 import ItemListUI
+import FenixuzLocalization
 
 // MARK: - UserDefaults keys
 private let kSuiteName   = "pro_messager"
@@ -22,6 +23,7 @@ private enum FenixAutoTextStrings {
         switch langCode {
         case "uz": return "Bu funksiya yoqilganda, siz yozgan xabarning oxiriga avtomatik ravishda qo'shimcha matn qo'shiladi.\n\nMasalan: Siz \"Salom\" deb yozsangiz va qo'shimcha matn \"(Pro)\" bo'lsa, xabar \"Salom (Pro)\" sifatida yuboriladi."
         case "ru": return "Когда эта функция включена, к концу каждого отправляемого сообщения автоматически добавляется дополнительный текст.\n\nНапример: если вы напишете «Привет», а дополнительный текст — «(Pro)», сообщение будет отправлено как «Привет (Pro)»."
+        case "zh": return "开启此功能后，你发送的每条消息末尾都会自动附加一段额外文字。\n\n例如：你输入“你好”，额外文字为“(Pro)”，消息将以“你好 (Pro)”的形式发送。"
         default:   return "When this feature is enabled, extra text is automatically appended to the end of every message you send.\n\nFor example: if you type \"Hello\" and the extra text is \"(Pro)\", the message is sent as \"Hello (Pro)\"."
         }
     }
@@ -30,6 +32,7 @@ private enum FenixAutoTextStrings {
         switch langCode {
         case "uz": return "Avtomatik qo'shimcha"
         case "ru": return "Автодобавление"
+        case "zh": return "自动附加"
         default:   return "Auto-append"
         }
     }
@@ -38,6 +41,7 @@ private enum FenixAutoTextStrings {
         switch langCode {
         case "uz": return "Har bir xabar yuborishda qo'shimcha matn qo'shish"
         case "ru": return "Добавлять дополнительный текст при отправке каждого сообщения"
+        case "zh": return "每次发送消息时附加额外文字"
         default:   return "Append extra text on every message send"
         }
     }
@@ -46,6 +50,7 @@ private enum FenixAutoTextStrings {
         switch langCode {
         case "uz": return "QO'SHIMCHA MATN"
         case "ru": return "ДОПОЛНИТЕЛЬНЫЙ ТЕКСТ"
+        case "zh": return "额外文字"
         default:   return "EXTRA TEXT"
         }
     }
@@ -54,6 +59,7 @@ private enum FenixAutoTextStrings {
         switch langCode {
         case "uz": return "Qo'shimcha matnni kiriting..."
         case "ru": return "Введите дополнительный текст..."
+        case "zh": return "输入额外文字…"
         default:   return "Enter the extra text..."
         }
     }
@@ -62,6 +68,7 @@ private enum FenixAutoTextStrings {
         switch langCode {
         case "uz": return "Xabar yuborilganda shu matn avtomatik qo'shiladi. O'zgarishlar darhol saqlanadi."
         case "ru": return "Этот текст автоматически добавляется при отправке сообщения. Изменения сохраняются сразу."
+        case "zh": return "发送消息时会自动附加这段文字。更改会立即保存。"
         default:   return "This text is automatically appended when a message is sent. Changes are saved immediately."
         }
     }
@@ -189,7 +196,7 @@ private final class AutoTextArguments {
 
 private func autoTextEntries(presentationData: PresentationData, state: AutoTextState) -> [AutoTextEntry] {
     var entries: [AutoTextEntry] = []
-    let langCode = presentationData.strings.primaryComponent.languageCode
+    let langCode = FenixuzL10n.languageKey(for: presentationData.strings)
 
     entries.append(.infoText(presentationData.theme, FenixAutoTextStrings.info(langCode: langCode)))
 
@@ -241,7 +248,7 @@ public func fenixAutoTextController(context: AccountContext, onEnabledSelected: 
     |> map { presentationData, state -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let controllerState = ItemListControllerState(
             presentationData: ItemListPresentationData(presentationData),
-            title: .text(FenixAutoTextStrings.toggleTitle(langCode: presentationData.strings.primaryComponent.languageCode)),
+            title: .text(FenixAutoTextStrings.toggleTitle(langCode: FenixuzL10n.languageKey(for: presentationData.strings))),
             leftNavigationButton: nil,
             rightNavigationButton: nil,
             backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back)

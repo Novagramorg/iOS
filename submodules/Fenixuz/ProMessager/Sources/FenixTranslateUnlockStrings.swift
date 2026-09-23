@@ -12,6 +12,7 @@ enum FenixTranslateUnlockStrings {
         switch langCode {
         case "uz": return "Butun chatni tarjima qilish"
         case "ru": return "Переводить чат целиком"
+        case "zh": return "翻译整个聊天"
         default:   return "Translate entire chats"
         }
     }
@@ -20,6 +21,7 @@ enum FenixTranslateUnlockStrings {
         switch langCode {
         case "uz": return "Chatni to'liq tarjima qilish, har bir xabarni alohida emas"
         case "ru": return "Переводить чат целиком, а не каждое сообщение отдельно"
+        case "zh": return "一次性翻译整个聊天，而不是逐条翻译消息"
         default:   return "Translate a whole chat at once instead of message by message"
         }
     }

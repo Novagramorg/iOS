@@ -25,6 +25,7 @@ import ChatEntityKeyboardInputNode
 import ComponentFlow
 import ChatPresentationInterfaceState
 import ComponentDisplayAdapters
+import FenixuzLocalization
 
 private enum FilterSection: Int32, Hashable {
     case include
@@ -413,9 +414,10 @@ private enum ChatListFilterPresetEntry: ItemListNodeEntry {
             )
         case let .icon(emoticon):
             let iconTitle: String
-            switch presentationData.strings.primaryComponent.languageCode {
+            switch FenixuzL10n.languageKey(for: presentationData.strings) {
             case "uz": iconTitle = "Papka ikonkasi"
             case "ru": iconTitle = "Значок папки"
+            case "zh": iconTitle = "分组图标"
             default: iconTitle = "Folder Icon"
             }
             return ItemListDisclosureItem(presentationData: presentationData, title: iconTitle, label: emoticon ?? "", sectionId: self.section, style: .blocks, action: {

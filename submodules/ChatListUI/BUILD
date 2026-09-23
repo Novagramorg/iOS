@@ -15,6 +15,7 @@ swift_library(
         "//submodules/Fenixuz/SecretVault:FenixuzSecretVault",
         "//submodules/Fenixuz/ForeignUserBlock:FenixuzForeignUserBlock",
         "//submodules/Fenixuz/NovagramAds:FenixNovagramAds",
+        "//submodules/Fenixuz/Localization:FenixuzLocalization",
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
         "//submodules/AsyncDisplayKit:AsyncDisplayKit",
         "//submodules/Display:Display",

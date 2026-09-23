@@ -5683,3 +5683,49 @@ if !supportedTranslationLanguages.contains(where: { $0.caseInsensitiveCompare(ba
 Supported codes (including `pt-br` vs `pt-BR`) are left as they were; only unknown ones fall back to the plain
 code, the same normalization upstream's `TranslatonSettingsController` already applies. No import needed
 (`TranslateUI` was imported).
+
+### `submodules/SettingsUI/Sources/Language Selection/LocalizationListControllerNode.swift` (UPSTREAM hook) — Chinese in Settings → Language
+
+`import FenixuzLocalization` after `import FenixuzPremiumUnlock`, and at the top of the list subscription's
+`start(next:)` closure (after `guard let strongSelf = self`):
+
+```swift
+let localizationListState = FenixuzChineseLocalizations.adding(to: localizationListState)
+```
+
+`FenixuzChineseLocalizations` (Fenixuz-owned, `submodules/Fenixuz/Localization/Sources/FenixuzChineseLocalizations.swift`)
+slots "Chinese (Simplified) / 简体中文" (`zh-hans-raw`) and "Chinese (Traditional) / 繁體中文" (`zh-hant-raw`) into
+the official list by English name, unless the server lists them or the user already installed them. Picking a
+row calls the existing `downloadAndApplyLocalization(languageCode:)`, same as `t.me/setlanguage/zh-hans-raw`.
+The search list gets them too, because it is built from `currentListState`. `SettingsUI/BUILD` already had the
+`FenixuzLocalization` dep; `Fenixuz/Localization/BUILD` gained `//submodules/TelegramCore:TelegramCore`.
+
+### Chinese for Fenixuz strings that live in Telegram-owned files (UPSTREAM hooks)
+
+`FenixuzL10n.languageKey(for: strings)` (new, `Fenixuz/Localization`) returns `"zh"` for any Chinese pack —
+primary code, base (`secondaryComponent`) code or plural-rules code starting with `zh` / containing `-zh` —
+because community packs have arbitrary codes (`zhcncc`, `classic-zh-cn`, `taiwan`…). Otherwise it returns the
+primary code unchanged, so uz / ru / en behave exactly as before. Each hook below swapped its
+`strings.primaryComponent.languageCode` (or `baseLanguageCode`) for `languageKey(for:)` and gained a
+`case "zh":` next to `case "ru":`:
+
+| File | Hook | Added |
+|---|---|---|
+| `AuthorizationUI/Sources/AuthorizationSequencePhoneEntryController.swift` | `novagramProxyPressed()` NovagramProxy alert | `import FenixuzLocalization`, zh text + action |
+| `TelegramUI/Sources/ChatInterfaceStateContextMenus.swift` | #38 gift send-confirm | zh title/text/send/cancel |
+| `TelegramUI/Sources/ChatController.swift` | #38 sticker send-confirm | `import FenixuzLocalization`, zh line |
+| `TelegramUI/Sources/Chat/ChatControllerMediaRecording.swift` | #38 voice send-confirm | `import FenixuzLocalization`, zh line |
+| `TelegramUI/Sources/ChatControllerNode.swift` | #37 send-translate confirm | `import FenixuzLocalization`, zh case |
+| `ChatListUI/Sources/ChatContextMenus.swift` | Secret read, Copy Chat ID, Recent actions | `import FenixuzLocalization`, 3 zh cases |
+| `ChatListUI/Sources/ChatListFilterPresetController.swift` | folder icon row title | `import FenixuzLocalization`, zh case |
+| `ChatListUI/Sources/FenixuzFolderIconPicker.swift` (fork file) | picker title | `import FenixuzLocalization`, zh case |
+| `TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoSettingsItems.swift` | `fenixLangCode` for the Novagram rows | `FenixuzL10n.languageKey(for:)` instead of `baseLanguageCode` |
+
+`ChatListUI/BUILD` gained `//submodules/Fenixuz/Localization:FenixuzLocalization` (no cycle: FenixuzLocalization
+depends only on TelegramPresentationData + TelegramCore).
+
+Fenixuz-owned string tables got `zh` everywhere (no merge risk): `FenixuzL10n.swift` (`pick(en:uz:ru:zh:)`, `zh`
+required so a missing one fails to compile), `FenixAboutController.swift` (`L3.zh` required), every ProMessager
+strings switch + the embedded bots JSON (`NovagramBotLocalizedText.zh` optional), ChatLock, SecretVault,
+SpeechToText, AIChatbot, ContactsConsent, EditedHistory, UnreadReminder, Analytics. Device-language helpers
+(`Locale.current.languageCode`) get `"zh"` on a Chinese iPhone without any `zh.lproj`.

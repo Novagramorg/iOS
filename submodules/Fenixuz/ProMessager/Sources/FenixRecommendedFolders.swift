@@ -4,6 +4,7 @@ import TelegramCore
 import AccountContext
 import Display
 import PresentationDataUtils
+import FenixuzLocalization
 
 // Public helper for Feature #19 (add recommended folders) and the first-launch prompt.
 // Folder creation is separate from the Settings UI so ApplicationContext can call it too.
@@ -16,7 +17,7 @@ public enum FenixRecommendedFolders {
         _ = (context.engine.peers.currentChatListFilters()
         |> take(1)
         |> deliverOnMainQueue).start(next: { filters in
-            let langCode = context.sharedContext.currentPresentationData.with { $0 }.strings.primaryComponent.languageCode
+            let langCode = FenixuzL10n.languageKey(for: context.sharedContext.currentPresentationData.with { $0 }.strings)
             let existingTitles = Set(filters.compactMap { filter -> String? in
                 if case let .filter(_, title, _, _) = filter { return title.text } else { return nil }
             })
@@ -84,7 +85,7 @@ public enum FenixRecommendedFolders {
         // Delay 2.5s so the Tips/UpdateCheck screens (at 1.0s) don't compete with this prompt.
         Queue.mainQueue().after(2.5) {
             let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-            let langCode = presentationData.strings.primaryComponent.languageCode
+            let langCode = FenixuzL10n.languageKey(for: presentationData.strings)
             let alert = textAlertController(
                 context: context,
                 title: FenixFeaturesStrings.addFoldersAlertTitle(langCode: langCode),

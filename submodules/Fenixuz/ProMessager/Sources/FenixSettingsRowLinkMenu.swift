@@ -8,6 +8,7 @@ import TelegramPresentationData
 import ItemListUI
 import PresentationDataUtils
 import OverlayStatusController
+import FenixuzLocalization
 
 // Feature #40 (part c): press and hold any settings row to copy or share a link that points
 // straight at that row.
@@ -65,7 +66,7 @@ enum FenixSettingsRowLinkMenu {
 
     private static func present(feature: FenixSettingsFeature, title: String?, context: AccountContext, controller: ViewController) {
         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-        let langCode = presentationData.strings.primaryComponent.languageCode
+        let langCode = FenixuzL10n.languageKey(for: presentationData.strings)
         let link = FenixSettingsDeepLink.link(for: feature)
         let header = title ?? FenixSettingsLinkStrings.menuTitle(langCode: langCode)
 
