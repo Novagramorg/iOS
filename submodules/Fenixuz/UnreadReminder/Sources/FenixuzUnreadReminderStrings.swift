@@ -11,6 +11,7 @@ enum FenixuzUnreadReminderStrings {
         let preferred = Locale.preferredLanguages.first ?? "en"
         if preferred.hasPrefix("uz") { return "uz" }
         if preferred.hasPrefix("ru") { return "ru" }
+        if preferred.hasPrefix("zh") { return "zh" }
         return "en"
     }
 
@@ -18,6 +19,7 @@ enum FenixuzUnreadReminderStrings {
         switch langCode {
         case "uz": return "O'qilmagan xabarlar"
         case "ru": return "Непрочитанные сообщения"
+        case "zh": return "未读消息"
         default:   return "Unread messages"
         }
     }
@@ -28,6 +30,8 @@ enum FenixuzUnreadReminderStrings {
             return "Sizda \(count) ta o'qilmagan xabar bor. Ularni ko'rishni unutmang."
         case "ru":
             return "У вас \(count) непрочитанных сообщений. Не забудьте их просмотреть."
+        case "zh":
+            return "你有 \(count) 条未读消息，别忘了查看。"
         default:
             return "You have \(count) unread messages. Don't forget to check them."
         }

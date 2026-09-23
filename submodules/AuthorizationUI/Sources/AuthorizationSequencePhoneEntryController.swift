@@ -15,6 +15,7 @@ import MessageUI
 import AuthenticationServices
 import FenixuzAppleReview
 import FenixuzAutoProxy
+import FenixuzLocalization
 
 public final class AuthorizationSequencePhoneEntryController: ViewController, MFMailComposeViewControllerDelegate, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
     private var controllerNode: AuthorizationSequencePhoneEntryControllerNode {
@@ -138,7 +139,7 @@ public final class AuthorizationSequencePhoneEntryController: ViewController, MF
     // Fenixuz: nav-bar proxy entry → let a user in a blocked country enable NovagramProxy BEFORE
     // login (they cannot reach the in-app Settings until they are connected). Reflects on/off state.
     @objc private func novagramProxyPressed() {
-        let langCode = self.presentationData.strings.primaryComponent.languageCode
+        let langCode = FenixuzL10n.languageKey(for: self.presentationData.strings)
         let isOn = FenixuzAutoProxyManager.shared.isEnabled
         let text: String
         let actionTitle: String
@@ -149,6 +150,9 @@ public final class AuthorizationSequencePhoneEntryController: ViewController, MF
         case "ru":
             text = isOn ? "NovagramProxy включён. Подключается через прокси там, где Telegram заблокирован." : "Автоподключение через прокси там, где Telegram заблокирован. Включить?"
             actionTitle = isOn ? "Выключить" : "Включить"
+        case "zh":
+            text = isOn ? "NovagramProxy 已开启。在 Telegram 被封锁的地区会通过代理连接。" : "在 Telegram 被封锁的地区自动通过代理连接。要开启吗？"
+            actionTitle = isOn ? "关闭" : "开启"
         default:
             text = isOn ? "NovagramProxy is on. It connects through a proxy where Telegram is blocked." : "Automatically connect through a proxy where Telegram is blocked. Enable?"
             actionTitle = isOn ? "Turn off" : "Enable"

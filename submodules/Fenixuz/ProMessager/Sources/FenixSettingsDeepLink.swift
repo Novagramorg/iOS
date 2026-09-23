@@ -190,6 +190,7 @@ enum FenixSettingsLinkStrings {
         switch langCode {
         case "uz": return "Ushbu sozlamaga havola"
         case "ru": return "Ссылка на эту настройку"
+        case "zh": return "此设置的链接"
         default:   return "Link to this setting"
         }
     }
@@ -198,6 +199,7 @@ enum FenixSettingsLinkStrings {
         switch langCode {
         case "uz": return "Havolani nusxalash"
         case "ru": return "Копировать ссылку"
+        case "zh": return "复制链接"
         default:   return "Copy link"
         }
     }
@@ -206,6 +208,7 @@ enum FenixSettingsLinkStrings {
         switch langCode {
         case "uz": return "Havolani ulashish"
         case "ru": return "Поделиться ссылкой"
+        case "zh": return "分享链接"
         default:   return "Share link"
         }
     }
@@ -214,6 +217,7 @@ enum FenixSettingsLinkStrings {
         switch langCode {
         case "uz": return "Havola nusxalandi"
         case "ru": return "Ссылка скопирована"
+        case "zh": return "链接已复制"
         default:   return "Link copied"
         }
     }
@@ -223,6 +227,7 @@ enum FenixSettingsLinkStrings {
         switch langCode {
         case "uz": return "Istalgan qatorni bosib turing — o'sha sozlamaning shaxsiy havolasini olasiz."
         case "ru": return "Нажмите и удерживайте любую строку — получите ссылку именно на эту настройку."
+        case "zh": return "长按任意一行，即可获取直达该设置的链接。"
         default:   return "Press and hold any row to get a link straight to that setting."
         }
     }

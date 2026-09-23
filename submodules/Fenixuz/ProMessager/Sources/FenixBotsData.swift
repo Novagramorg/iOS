@@ -6,11 +6,14 @@ struct NovagramBotLocalizedText: Codable {
     let en: String
     let uz: String
     let ru: String
+    // Optional so a JSON copy without Chinese still decodes.
+    let zh: String?
 
     func localized(langCode: String) -> String {
         switch langCode {
         case "uz": return uz
         case "ru": return ru
+        case "zh": return zh ?? en
         default:   return en
         }
     }
@@ -43,6 +46,7 @@ enum FenixBotsStrings {
         switch langCode {
         case "uz": return "Novagram Botlar"
         case "ru": return "Боты Novagram"
+        case "zh": return "Novagram 机器人"
         default:   return "Novagram Bots"
         }
     }
@@ -54,13 +58,14 @@ enum FenixBotsStrings {
 
 // MARK: - Localized Settings-section row titles
 // Titles for the three Fenixuz rows at the top of the main Settings screen.
-// Takes the app language (presentationData.strings.baseLanguageCode) as langCode — never Locale.current.
+// Takes the app language (FenixuzL10n.languageKey(for: presentationData.strings)) as langCode — never Locale.current.
 
 public enum FenixSettingsSectionStrings {
     public static func settingsRowTitle(langCode: String) -> String {
         switch langCode {
         case "uz": return "Novagram sozlamalari"
         case "ru": return "Настройки Novagram"
+        case "zh": return "Novagram 设置"
         default:   return "Novagram Settings"
         }
     }
@@ -73,6 +78,7 @@ public enum FenixSettingsSectionStrings {
         switch langCode {
         case "uz": return "Analitika"
         case "ru": return "Аналитика"
+        case "zh": return "统计"
         default:   return "Analytics"
         }
     }
@@ -90,7 +96,7 @@ private let novagramBotsJSONString = """
   "categories": [
     {
       "id": "downloaders",
-      "title": { "en": "Downloaders", "uz": "Yuklovchilar", "ru": "Загрузчики" },
+      "title": { "en": "Downloaders", "uz": "Yuklovchilar", "ru": "Загрузчики", "zh": "下载工具" },
       "bots": [
         {
           "id": "youtube",
@@ -102,7 +108,8 @@ private let novagramBotsJSONString = """
           "help": {
             "en": "Download videos and music from YouTube",
             "uz": "YouTube'dan video va musiqa yuklab oling",
-            "ru": "Скачивайте видео и музыку с YouTube"
+            "ru": "Скачивайте видео и музыку с YouTube",
+            "zh": "从 YouTube 下载视频和音乐"
           }
         },
         {
@@ -115,7 +122,8 @@ private let novagramBotsJSONString = """
           "help": {
             "en": "Recognize any song playing around you",
             "uz": "Atrofda yangrayotgan istalgan qo'shiqni aniqlang",
-            "ru": "Распознавайте любую играющую песню"
+            "ru": "Распознавайте любую играющую песню",
+            "zh": "识别你身边正在播放的任何歌曲"
           }
         },
         {
@@ -128,7 +136,8 @@ private let novagramBotsJSONString = """
           "help": {
             "en": "Download tracks and playlists from Spotify",
             "uz": "Spotify'dan trek va playlistlarni yuklang",
-            "ru": "Скачивайте треки и плейлисты из Spotify"
+            "ru": "Скачивайте треки и плейлисты из Spotify",
+            "zh": "从 Spotify 下载单曲和歌单"
           }
         },
         {
@@ -141,7 +150,8 @@ private let novagramBotsJSONString = """
           "help": {
             "en": "Download videos and music from VK",
             "uz": "VK'dan video va musiqa yuklang",
-            "ru": "Скачивайте видео и музыку из VK"
+            "ru": "Скачивайте видео и музыку из VK",
+            "zh": "从 VK 下载视频和音乐"
           }
         },
         {
@@ -154,7 +164,8 @@ private let novagramBotsJSONString = """
           "help": {
             "en": "Download videos from RuTube",
             "uz": "RuTube'dan videolarni yuklang",
-            "ru": "Скачивайте видео с RuTube"
+            "ru": "Скачивайте видео с RuTube",
+            "zh": "从 RuTube 下载视频"
           }
         },
         {
@@ -167,7 +178,8 @@ private let novagramBotsJSONString = """
           "help": {
             "en": "Download clips and streams from Twitch",
             "uz": "Twitch'dan klip va streamlarni yuklang",
-            "ru": "Скачивайте клипы и стримы с Twitch"
+            "ru": "Скачивайте клипы и стримы с Twitch",
+            "zh": "从 Twitch 下载剪辑和直播"
           }
         },
         {
@@ -180,7 +192,8 @@ private let novagramBotsJSONString = """
           "help": {
             "en": "Download images and videos from Pinterest",
             "uz": "Pinterest'dan rasm va videolarni yuklang",
-            "ru": "Скачивайте изображения и видео из Pinterest"
+            "ru": "Скачивайте изображения и видео из Pinterest",
+            "zh": "从 Pinterest 下载图片和视频"
           }
         },
         {
@@ -193,7 +206,8 @@ private let novagramBotsJSONString = """
           "help": {
             "en": "Download videos and media from Reddit",
             "uz": "Reddit'dan video va mediani yuklang",
-            "ru": "Скачивайте видео и медиа с Reddit"
+            "ru": "Скачивайте видео и медиа с Reddit",
+            "zh": "从 Reddit 下载视频和媒体"
           }
         },
         {
@@ -206,7 +220,8 @@ private let novagramBotsJSONString = """
           "help": {
             "en": "Download videos from Facebook",
             "uz": "Facebook'dan videolarni yuklang",
-            "ru": "Скачивайте видео из Facebook"
+            "ru": "Скачивайте видео из Facebook",
+            "zh": "从 Facebook 下载视频"
           }
         },
         {
@@ -219,7 +234,8 @@ private let novagramBotsJSONString = """
           "help": {
             "en": "Download videos and GIFs from Twitter / X",
             "uz": "Twitter / X'dan video va GIF yuklang",
-            "ru": "Скачивайте видео и GIF из Twitter / X"
+            "ru": "Скачивайте видео и GIF из Twitter / X",
+            "zh": "从 Twitter / X 下载视频和 GIF"
           }
         },
         {
@@ -232,7 +248,8 @@ private let novagramBotsJSONString = """
           "help": {
             "en": "Download TikTok videos without watermark",
             "uz": "TikTok videolarini watermark'siz yuklang",
-            "ru": "Скачивайте видео TikTok без водяного знака"
+            "ru": "Скачивайте видео TikTok без водяного знака",
+            "zh": "下载无水印的 TikTok 视频"
           }
         },
         {
@@ -245,14 +262,15 @@ private let novagramBotsJSONString = """
           "help": {
             "en": "Download photos, Reels and Stories from Instagram",
             "uz": "Instagram'dan rasm, Reels va Storylarni yuklang",
-            "ru": "Скачивайте фото, Reels и Stories из Instagram"
+            "ru": "Скачивайте фото, Reels и Stories из Instagram",
+            "zh": "从 Instagram 下载照片、Reels 和快拍"
           }
         }
       ]
     },
     {
       "id": "media_tools",
-      "title": { "en": "Media Tools", "uz": "Media vositalari", "ru": "Медиаинструменты" },
+      "title": { "en": "Media Tools", "uz": "Media vositalari", "ru": "Медиаинструменты", "zh": "媒体工具" },
       "bots": [
         {
           "id": "compress",
@@ -264,7 +282,8 @@ private let novagramBotsJSONString = """
           "help": {
             "en": "Compress photos and videos to save space",
             "uz": "Rasm va videolarni siqib joyni tejang",
-            "ru": "Сжимайте фото и видео для экономии места"
+            "ru": "Сжимайте фото и видео для экономии места",
+            "zh": "压缩照片和视频，节省存储空间"
           }
         },
         {
@@ -277,7 +296,8 @@ private let novagramBotsJSONString = """
           "help": {
             "en": "Crop and resize photos and videos",
             "uz": "Rasm va videolarni kesing va o'lchamini o'zgartiring",
-            "ru": "Обрезайте и меняйте размер фото и видео"
+            "ru": "Обрезайте и меняйте размер фото и видео",
+            "zh": "裁剪照片和视频并调整尺寸"
           }
         },
         {
@@ -290,7 +310,8 @@ private let novagramBotsJSONString = """
           "help": {
             "en": "Trim and cut video length",
             "uz": "Video uzunligini qirqing va kesing",
-            "ru": "Обрезайте длину видео"
+            "ru": "Обрезайте длину видео",
+            "zh": "修剪视频，截取所需时长"
           }
         },
         {
@@ -303,7 +324,8 @@ private let novagramBotsJSONString = """
           "help": {
             "en": "Blur parts of a photo or video",
             "uz": "Rasm yoki videoning bir qismini xiralashtiring",
-            "ru": "Размывайте части фото или видео"
+            "ru": "Размывайте части фото или видео",
+            "zh": "模糊照片或视频的局部"
           }
         },
         {
@@ -316,7 +338,8 @@ private let novagramBotsJSONString = """
           "help": {
             "en": "Remove the background from any image",
             "uz": "Istalgan rasmning fonini olib tashlang",
-            "ru": "Удаляйте фон с любого изображения"
+            "ru": "Удаляйте фон с любого изображения",
+            "zh": "去除任意图片的背景"
           }
         },
         {
@@ -329,7 +352,8 @@ private let novagramBotsJSONString = """
           "help": {
             "en": "Enhance and upscale image quality with AI",
             "uz": "AI bilan rasm sifatini yaxshilang va kattalashtiring",
-            "ru": "Улучшайте и увеличивайте качество изображений с ИИ"
+            "ru": "Улучшайте и увеличивайте качество изображений с ИИ",
+            "zh": "用 AI 提升图片画质和分辨率"
           }
         },
         {
@@ -342,7 +366,8 @@ private let novagramBotsJSONString = """
           "help": {
             "en": "Turn photos into Telegram stickers",
             "uz": "Rasmlarni Telegram stikerlariga aylantiring",
-            "ru": "Превращайте фото в стикеры Telegram"
+            "ru": "Превращайте фото в стикеры Telegram",
+            "zh": "把照片变成 Telegram 贴纸"
           }
         },
         {
@@ -355,14 +380,15 @@ private let novagramBotsJSONString = """
           "help": {
             "en": "Extract and convert audio from media",
             "uz": "Mediadan audioni ajratib oling va aylantiring",
-            "ru": "Извлекайте и конвертируйте аудио из медиа"
+            "ru": "Извлекайте и конвертируйте аудио из медиа",
+            "zh": "从媒体中提取并转换音频"
           }
         }
       ]
     },
     {
       "id": "utilities",
-      "title": { "en": "Utilities", "uz": "Foydali vositalar", "ru": "Утилиты" },
+      "title": { "en": "Utilities", "uz": "Foydali vositalar", "ru": "Утилиты", "zh": "实用工具" },
       "bots": [
         {
           "id": "qr",
@@ -374,7 +400,8 @@ private let novagramBotsJSONString = """
           "help": {
             "en": "Create and scan QR codes",
             "uz": "QR kodlarni yarating va skanerlang",
-            "ru": "Создавайте и сканируйте QR-коды"
+            "ru": "Создавайте и сканируйте QR-коды",
+            "zh": "生成和扫描二维码"
           }
         },
         {
@@ -387,7 +414,8 @@ private let novagramBotsJSONString = """
           "help": {
             "en": "Generate strong, secure passwords",
             "uz": "Kuchli va xavfsiz parollar yarating",
-            "ru": "Генерируйте надёжные пароли"
+            "ru": "Генерируйте надёжные пароли",
+            "zh": "生成高强度的安全密码"
           }
         },
         {
@@ -400,7 +428,8 @@ private let novagramBotsJSONString = """
           "help": {
             "en": "Get a temporary disposable email address",
             "uz": "Vaqtinchalik bir martalik email oling",
-            "ru": "Получите временную одноразовую почту"
+            "ru": "Получите временную одноразовую почту",
+            "zh": "获取一次性临时邮箱地址"
           }
         },
         {
@@ -413,7 +442,8 @@ private let novagramBotsJSONString = """
           "help": {
             "en": "Convert, merge and edit PDF files",
             "uz": "PDF fayllarni aylantiring, birlashtiring va tahrirlang",
-            "ru": "Конвертируйте, объединяйте и редактируйте PDF"
+            "ru": "Конвертируйте, объединяйте и редактируйте PDF",
+            "zh": "转换、合并和编辑 PDF 文件"
           }
         },
         {
@@ -426,14 +456,15 @@ private let novagramBotsJSONString = """
           "help": {
             "en": "Convert text into natural voice",
             "uz": "Matnni tabiiy ovozga aylantiring",
-            "ru": "Преобразуйте текст в естественную речь"
+            "ru": "Преобразуйте текст в естественную речь",
+            "zh": "将文字转换为自然的语音"
           }
         }
       ]
     },
     {
       "id": "fun_info",
-      "title": { "en": "Fun & Info", "uz": "Qiziqarli", "ru": "Разное" },
+      "title": { "en": "Fun & Info", "uz": "Qiziqarli", "ru": "Разное", "zh": "趣味与资讯" },
       "bots": [
         {
           "id": "meme",
@@ -445,7 +476,8 @@ private let novagramBotsJSONString = """
           "help": {
             "en": "Fresh memes on demand",
             "uz": "Talab bo'yicha yangi memlar",
-            "ru": "Свежие мемы по запросу"
+            "ru": "Свежие мемы по запросу",
+            "zh": "随时获取新鲜梗图"
           }
         },
         {
@@ -458,7 +490,8 @@ private let novagramBotsJSONString = """
           "help": {
             "en": "Convert text between Latin and Cyrillic",
             "uz": "Matnni lotin va kirill o'rtasida o'giring",
-            "ru": "Конвертируйте текст между латиницей и кириллицей"
+            "ru": "Конвертируйте текст между латиницей и кириллицей",
+            "zh": "在拉丁字母和西里尔字母之间转换文字"
           }
         },
         {
@@ -471,7 +504,8 @@ private let novagramBotsJSONString = """
           "help": {
             "en": "Browse and download HD wallpapers",
             "uz": "HD fon rasmlarini ko'ring va yuklang",
-            "ru": "Просматривайте и скачивайте HD-обои"
+            "ru": "Просматривайте и скачивайте HD-обои",
+            "zh": "浏览并下载高清壁纸"
           }
         },
         {
@@ -484,7 +518,8 @@ private let novagramBotsJSONString = """
           "help": {
             "en": "Search movies and series",
             "uz": "Kino va seriallarni qidiring",
-            "ru": "Ищите фильмы и сериалы"
+            "ru": "Ищите фильмы и сериалы",
+            "zh": "搜索电影和剧集"
           }
         },
         {
@@ -497,7 +532,8 @@ private let novagramBotsJSONString = """
           "help": {
             "en": "Check the weather forecast anywhere",
             "uz": "Istalgan joyda ob-havo ma'lumotini oling",
-            "ru": "Узнавайте прогноз погоды где угодно"
+            "ru": "Узнавайте прогноз погоды где угодно",
+            "zh": "查看任意地点的天气预报"
           }
         },
         {
@@ -510,7 +546,8 @@ private let novagramBotsJSONString = """
           "help": {
             "en": "Live currency exchange rates",
             "uz": "Jonli valyuta kurslari",
-            "ru": "Актуальные курсы валют"
+            "ru": "Актуальные курсы валют",
+            "zh": "实时货币汇率"
           }
         },
         {
@@ -523,7 +560,8 @@ private let novagramBotsJSONString = """
           "help": {
             "en": "Discover interesting facts",
             "uz": "Qiziqarli faktlarni kashf eting",
-            "ru": "Открывайте интересные факты"
+            "ru": "Открывайте интересные факты",
+            "zh": "发现有趣的冷知识"
           }
         },
         {
@@ -536,7 +574,8 @@ private let novagramBotsJSONString = """
           "help": {
             "en": "Daily inspirational quotes",
             "uz": "Kunlik ilhomlantiruvchi iqtiboslar",
-            "ru": "Ежедневные вдохновляющие цитаты"
+            "ru": "Ежедневные вдохновляющие цитаты",
+            "zh": "每日励志名言"
           }
         },
         {
@@ -549,7 +588,8 @@ private let novagramBotsJSONString = """
           "help": {
             "en": "Wise proverbs and sayings",
             "uz": "Dono maqol va matallar",
-            "ru": "Мудрые пословицы и поговорки"
+            "ru": "Мудрые пословицы и поговорки",
+            "zh": "智慧谚语与格言"
           }
         }
       ]

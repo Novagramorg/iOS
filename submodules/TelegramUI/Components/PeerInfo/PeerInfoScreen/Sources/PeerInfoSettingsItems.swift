@@ -239,7 +239,7 @@ func settingsItems(data: PeerInfoScreenData?, context: AccountContext, presentat
 
     // Fenixuz Settings Item — gold title + gold flame icon so the brand row stands out in Settings.
     let fenixuzGold: UIColor = presentationData.theme.overallDarkAppearance ? UIColor(rgb: 0xFFCC33) : UIColor(rgb: 0xC8951A)
-    let fenixLangCode = presentationData.strings.baseLanguageCode
+    let fenixLangCode = FenixuzL10n.languageKey(for: presentationData.strings)
     items[.proMessager]!.append(PeerInfoScreenDisclosureItem(id: 0, text: FenixSettingsSectionStrings.settingsRowTitle(langCode: fenixLangCode), titleColor: fenixuzGold, icon: fenixuzSettingsIcon(systemName: "flame.fill", color: .gold), action: {
         interaction.openSettings(.proMessager)
     }))

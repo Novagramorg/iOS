@@ -10,6 +10,7 @@ import TelegramPresentationData
 import PresentationDataUtils
 import ItemListUI
 import TranslateUI
+import FenixuzLocalization
 
 private final class FenixTranslationArguments {
     let context: AccountContext
@@ -63,7 +64,7 @@ private enum FenixTranslationEntry: ItemListNodeEntry {
         let arguments = arguments as! FenixTranslationArguments
         switch self {
             case let .language(_, theme, name, code, isSelected, isDownloaded):
-                let langCode = presentationData.strings.primaryComponent.languageCode
+                let langCode = FenixuzL10n.languageKey(for: presentationData.strings)
                 let label = isDownloaded ? (isSelected ? FenixTranslateStrings.selectedLabel(langCode: langCode) : "✅") : FenixTranslateStrings.downloadLabel(langCode: langCode)
                 return ItemListDisclosureItem(presentationData: presentationData, title: name, label: label, labelStyle: isSelected ? .badge(theme.list.itemAccentColor) : .detailText, sectionId: self.section, style: .blocks, action: {
                     if isDownloaded {
@@ -89,7 +90,7 @@ private struct FenixTranslationState: Equatable {
 
 private func fenixTranslationEntries(presentationData: PresentationData, state: FenixTranslationState) -> [FenixTranslationEntry] {
     var entries: [FenixTranslationEntry] = []
-    let langCode = presentationData.strings.primaryComponent.languageCode
+    let langCode = FenixuzL10n.languageKey(for: presentationData.strings)
 
     let languageCodes = ["en", "ru", "uz", "tr", "de", "fr", "es", "it", "ar", "zh", "ja", "ko"]
 
@@ -129,7 +130,7 @@ public func fenixTranslationController(context: AccountContext) -> ViewControlle
         statePromise.get()
     ) |> deliverOnMainQueue
         |> map { presentationData, state -> (ItemListControllerState, (ItemListNodeState, Any)) in
-            let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text(FenixTranslateStrings.languagesTitle(langCode: presentationData.strings.primaryComponent.languageCode)), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
+            let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text(FenixTranslateStrings.languagesTitle(langCode: FenixuzL10n.languageKey(for: presentationData.strings))), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
             let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: fenixTranslationEntries(presentationData: presentationData, state: state), style: .blocks)
             return (controllerState, (listState, arguments))
         }

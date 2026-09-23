@@ -2,6 +2,7 @@ import Foundation
 import UIKit
 import Display
 import TelegramPresentationData
+import FenixuzLocalization
 
 // FENIX-HOOK #18 — Folder icon picker (LOCAL, grid). Stores nothing itself; reports the
 // chosen emoji (or nil = remove) via onIconSelected. Storage is local UserDefaults, handled
@@ -99,9 +100,10 @@ public final class FenixuzFolderIconPickerController: UIViewController, UICollec
         self.view.backgroundColor = theme.list.plainBackgroundColor
 
         let titleText: String
-        switch self.presentationData.strings.primaryComponent.languageCode {
+        switch FenixuzL10n.languageKey(for: self.presentationData.strings) {
         case "uz": titleText = "Papka belgisi"
         case "ru": titleText = "Значок папки"
+        case "zh": titleText = "分组图标"
         default:   titleText = "Folder Icon"
         }
         self.titleLabel.text = titleText
