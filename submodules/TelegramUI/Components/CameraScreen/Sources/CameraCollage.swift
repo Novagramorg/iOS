@@ -446,6 +446,13 @@ final class CameraCollageView: UIView, UIGestureRecognizerDelegate {
         private let scrollView = UIScrollView()
         private let clippingView = UIView()
         private let contentView = UIView()
+        private var isUpdatingContentLayout = false
+
+        private struct CropState {
+            let zoomScale: CGFloat
+            let normalizedCenter: CGPoint
+        }
+
         private var snapshotView: UIView?
         private var cameraContainerView: UIView?
         private var imageView: UIImageView?
@@ -504,7 +511,8 @@ final class CameraCollageView: UIView, UIGestureRecognizerDelegate {
             self.scrollView.showsHorizontalScrollIndicator = false
             self.scrollView.showsVerticalScrollIndicator = false
             self.scrollView.decelerationRate = .fast
-            //self.scrollView.panGestureRecognizer.minimumNumberOfTouches = 2
+            self.scrollView.minimumZoomScale = 1.0
+            self.scrollView.maximumZoomScale = 3.5
             
             self.clippingView.clipsToBounds = true
             self.clippingView.isUserInteractionEnabled = false
@@ -571,15 +579,13 @@ final class CameraCollageView: UIView, UIGestureRecognizerDelegate {
         
         private var item: CameraCollage.State.Item?
         func update(item: CameraCollage.State.Item, size: CGSize, cameraContainerView: UIView?, transition: ComponentTransition) {
+            let sizeUpdated = self.scrollView.bounds.size != size
+            let previousCropState = sizeUpdated ? self.currentCropState() : nil
             self.item = item
             
             let center = CGPoint(x: size.width / 2.0, y: size.height / 2.0)
             
             let bounds = CGRect(origin: .zero, size: size)
-            var sizeUpdated = false
-            if self.scrollView.frame.size.width > 0.0 && self.scrollView.frame.size != size {
-                sizeUpdated = true
-            }
             transition.setFrame(view: self.scrollView, frame: CGRect(origin: .zero, size: size))
             
             switch item.content {
@@ -722,12 +728,10 @@ final class CameraCollageView: UIView, UIGestureRecognizerDelegate {
                 }
                                 
                 var added = false
-                var imageTransition = transition
                 var imageView: UIImageView
                 if let current = self.imageView {
                     imageView = current
                 } else {
-                    imageTransition = .immediate
                     imageView = UIImageView()
                     imageView.contentMode = .scaleAspectFill
                     self.imageView = imageView
@@ -737,12 +741,10 @@ final class CameraCollageView: UIView, UIGestureRecognizerDelegate {
                 imageView.image = image
                 
                 let dimensions = image.size.aspectFilled(size)
-                imageTransition.setFrame(view: imageView, frame: CGRect(origin: .zero, size: dimensions))
-                
                 if added || sizeUpdated {
-                    self.contentView.bounds = CGRect(origin: .zero, size: dimensions)
-                    self.scrollView.contentSize = dimensions
-                    self.scrollView.resetZooming()
+                    self.updateContentLayout(dimensions: dimensions, cropState: added ? nil : previousCropState)
+                } else {
+                    transition.setFrame(view: imageView, frame: CGRect(origin: .zero, size: dimensions))
                 }
             case let .video(asset, _, _, _):
                 if let cameraContainerView = self.cameraContainerView {
@@ -768,9 +770,7 @@ final class CameraCollageView: UIView, UIGestureRecognizerDelegate {
                 }
                 
                 var added = false
-                var imageTransition = transition
                 if self.videoLayer == nil {
-                    imageTransition = .immediate
                     let playerItem = AVPlayerItem(asset: asset)
                     let player = AVPlayer(playerItem: playerItem)
                     player.isMuted = true
@@ -803,18 +803,12 @@ final class CameraCollageView: UIView, UIGestureRecognizerDelegate {
                 }
                 
                 let dimensions = (asset.videoDimensions ?? CGSize(width: 1.0, height: 1.0)).aspectFilled(size)
-                if let videoLayer = self.videoLayer {
-                    imageTransition.setFrame(layer: videoLayer, frame: CGRect(origin: .zero, size: dimensions))
-                }
-                
                 if added || sizeUpdated {
-                    self.contentView.bounds = CGRect(origin: .zero, size: dimensions)
-                    self.scrollView.contentSize = dimensions
-                    self.scrollView.resetZooming()
+                    self.updateContentLayout(dimensions: dimensions, cropState: added ? nil : previousCropState)
+                } else if let videoLayer = self.videoLayer {
+                    transition.setFrame(layer: videoLayer, frame: CGRect(origin: .zero, size: dimensions))
                 }
             }
-            
-            self.adjustPreviewZoom(updating: true)
             
             transition.setFrame(view: self.extractedContainerView, frame: bounds)
             transition.setFrame(view: self.extractedContainerView.contentView, frame: bounds)
@@ -857,18 +851,61 @@ final class CameraCollageView: UIView, UIGestureRecognizerDelegate {
             })
         }
         
-        private func adjustPreviewZoom(updating: Bool = false) {
-            let minScale: CGFloat = 1.0
-            let maxScale: CGFloat = 3.5
-            
-            if self.scrollView.minimumZoomScale != minScale {
-                self.scrollView.minimumZoomScale = minScale
+        private func currentCropState() -> CropState? {
+            let contentBounds = self.contentView.bounds
+            let scrollBounds = self.scrollView.bounds
+            guard self.isReady, contentBounds.width > 0.0, contentBounds.height > 0.0, scrollBounds.width > 0.0, scrollBounds.height > 0.0 else {
+                return nil
             }
-            if self.scrollView.maximumZoomScale != maxScale {
-                self.scrollView.maximumZoomScale = maxScale
+
+            let center = self.contentView.convert(scrollBounds.center, from: self.scrollView)
+            return CropState(
+                zoomScale: self.scrollView.zoomScale,
+                normalizedCenter: CGPoint(
+                    x: (center.x - contentBounds.minX) / contentBounds.width,
+                    y: (center.y - contentBounds.minY) / contentBounds.height
+                )
+            )
+        }
+
+        private func updateContentLayout(dimensions: CGSize, cropState: CropState?) {
+            let viewportSize = self.scrollView.bounds.size
+            guard dimensions.width > 0.0, dimensions.height > 0.0, viewportSize.width > 0.0, viewportSize.height > 0.0 else {
+                return
             }
-            
-            let boundsSize = self.scrollView.frame.size
+
+            self.isUpdatingContentLayout = true
+            defer {
+                self.isUpdatingContentLayout = false
+            }
+
+            UIView.performWithoutAnimation {
+                self.scrollView.setZoomScale(1.0, animated: false)
+                self.contentView.frame = CGRect(origin: .zero, size: dimensions)
+                if let imageView = self.imageView {
+                    ComponentTransition.immediate.setFrame(view: imageView, frame: CGRect(origin: .zero, size: dimensions))
+                }
+                if let videoLayer = self.videoLayer {
+                    ComponentTransition.immediate.setFrame(layer: videoLayer, frame: CGRect(origin: .zero, size: dimensions))
+                }
+                self.scrollView.contentSize = dimensions
+
+                let zoomScale = min(self.scrollView.maximumZoomScale, max(self.scrollView.minimumZoomScale, cropState?.zoomScale ?? 1.0))
+                self.scrollView.setZoomScale(zoomScale, animated: false)
+                let contentSize = CGSize(width: dimensions.width * zoomScale, height: dimensions.height * zoomScale)
+                self.scrollView.contentSize = contentSize
+                self.adjustPreviewZoom()
+
+                let normalizedCenter = cropState?.normalizedCenter ?? CGPoint(x: 0.5, y: 0.5)
+                self.scrollView.contentOffset = CGPoint(
+                    x: min(max(0.0, contentSize.width - viewportSize.width), max(0.0, normalizedCenter.x * contentSize.width - viewportSize.width / 2.0)),
+                    y: min(max(0.0, contentSize.height - viewportSize.height), max(0.0, normalizedCenter.y * contentSize.height - viewportSize.height / 2.0))
+                )
+            }
+        }
+
+        private func adjustPreviewZoom() {
+            let boundsSize = self.scrollView.bounds.size
             var contentFrame = self.contentView.frame
             if boundsSize.width > contentFrame.size.width {
                 contentFrame.origin.x = (boundsSize.width - contentFrame.size.width) / 2.0
@@ -885,10 +922,16 @@ final class CameraCollageView: UIView, UIGestureRecognizerDelegate {
         }
         
         func scrollViewDidZoom(_ scrollView: UIScrollView) {
+            guard !self.isUpdatingContentLayout else {
+                return
+            }
             self.adjustPreviewZoom()
         }
         
         func scrollViewDidEndZooming(_ scrollView: UIScrollView, with view: UIView?, atScale scale: CGFloat) {
+            guard !self.isUpdatingContentLayout else {
+                return
+            }
             self.adjustPreviewZoom()
             
             if scrollView.zoomScale < 1.0 {
@@ -1568,23 +1611,6 @@ private extension AVAsset {
 }
 
 private extension UIScrollView {
-    func resetZooming() {
-        guard let contentView = self.delegate?.viewForZooming?(in: self) else { return }
-        
-        let scrollViewSize = self.bounds.size
-        let contentSize = contentView.frame.size
-        
-        let offsetX = (scrollViewSize.width - contentSize.width) * 0.5
-        let offsetY = (scrollViewSize.height - contentSize.height) * 0.5
-        
-        contentView.center = CGPoint(
-            x: scrollViewSize.width / 2.0 + self.contentOffset.x,
-            y: scrollViewSize.height / 2.0 + self.contentOffset.y
-        )
-
-        self.contentOffset = CGPoint(x: -offsetX, y: -offsetY)
-    }
-    
     var offsetFromCenter: CGPoint {
         let contentCenterX = (self.contentSize.width - self.bounds.width) / 2.0
         let contentCenterY = (self.contentSize.height - self.bounds.height) / 2.0

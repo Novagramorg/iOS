@@ -561,6 +561,13 @@ public final class ChatListContainerNode: ASDisplayNode, ASGestureRecognizerDele
             if !self.currentItemNode.isNavigationInAFinalState {
                 return []
             }
+            if self.currentItemNode.isDragging || self.currentItemNode.isDeceleratingAfterTracking {
+                if self.availableFilters.count <= 1 {
+                    return []
+                } else if self.availableFilters.first?.id == self.selectedId {
+                    return [.leftCenter]
+                }
+            }
             if self.availableFilters.count > 1 {
                 return [.leftCenter, .rightCenter]
             } else {
@@ -594,7 +601,7 @@ public final class ChatListContainerNode: ASDisplayNode, ASGestureRecognizerDele
         return false
     }
     
-    @objc private func panGesture(_ recognizer: UIPanGestureRecognizer) {
+    @objc private func panGesture(_ recognizer: InteractiveTransitionGestureRecognizer) {
         let filtersLimit = self.filtersLimit.flatMap({ $0 + 1 }) ?? Int32(self.availableFilters.count)
         let maxFilterIndex = min(Int(filtersLimit), self.availableFilters.count) - 1
         
@@ -649,7 +656,7 @@ public final class ChatListContainerNode: ASDisplayNode, ASGestureRecognizerDele
                     hasLiveStream = true
                 }
                      
-                if case .compact = layout.metrics.widthClass, self.controller?.isStoryPostingAvailable == true && !(self.context.sharedContext.callManager?.hasActiveCall ?? false) {
+                if case .compact = layout.metrics.widthClass, selectedIndex <= 0, !recognizer.currentAllowedDirections.intersection(.right).isEmpty, self.controller?.isStoryPostingAvailable == true && !(self.context.sharedContext.callManager?.hasActiveCall ?? false) {
                     if hasLiveStream {
                         if translation.x >= 30.0 {
                             self.panRecognizer?.cancel()

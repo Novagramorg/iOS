@@ -1134,14 +1134,14 @@ public final class MediaEditor {
         case skipRendering
         case forceRendering
     }
-    private func updateValues(mode: UpdateMode = .generic, _ f: (MediaEditorValues) -> MediaEditorValues) {
+    private func updateValues(mode: UpdateMode = .generic, forceUpdate: Bool = false, _ f: (MediaEditorValues) -> MediaEditorValues) {
         if case .skipRendering = mode {
             self.skipRendering = true
         } else if case .forceRendering = mode {
             self.forceRendering = true
         }
         let updatedValues = f(self.values)
-        if self.values != updatedValues {
+        if forceUpdate || self.values != updatedValues {
             self.values = updatedValues
         }
         if case .skipRendering = mode {
@@ -2232,7 +2232,7 @@ public final class MediaEditor {
     }
     
     public func setDrawingAndEntities(data: Data?, image: UIImage?, entities: [CodableDrawingEntity]) {
-        self.updateValues(mode: .skipRendering) { values in
+        self.updateValues(mode: .skipRendering, forceUpdate: true) { values in
             return values.withUpdatedDrawingAndEntities(drawing: image, entities: entities)
         }
     }

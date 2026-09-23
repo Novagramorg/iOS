@@ -277,7 +277,8 @@ private final class AttachButtonComponent: CombinedComponent {
                 imageName = ""
             case .sticker:
                 name = strings.Attachment_Sticker
-                imageName = "Chat/Attach Menu/Sticker"
+                animationName = "TabSticker"
+                imageName = ""
             case .emoji:
                 name = "Emoji"
                 imageName = "Chat/Attach Menu/Emoji"
