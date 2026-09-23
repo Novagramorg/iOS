@@ -8,9 +8,9 @@
 
 ## Summary
 
-- **Total hooks:** 58
+- **Total hooks:** 61
 - **Apple-critical hooks:** 18
-- **Non-critical hooks:** 40
+- **Non-critical hooks:** 43
 
 ---
 
@@ -103,6 +103,9 @@
 | `submodules/TelegramUI/Sources/AppDelegate.swift` | `appdelegate-admin-folders` | ⚪ | admin-folders | `FenixAdminFoldersManager.startGlobalMonitor` | Launch block observing activeAccountContexts to start/stop the Feature #47 owner/admin auto-folder sync for the active account (2026-09-07) |
 | `submodules/SearchBarNode/Sources/SearchBarNode.swift` | `searchbar-glass-clear-button` | ⚪ | china-support | `contentFrame.width - padding - 72.0` | Glass search field width no longer follows the hidden, localized "Cancel" title — the clear (x) sat on the field's edge in Chinese (2026-09-23) |
 | `submodules/TelegramUI/Components/TextProcessingScreen/Sources/TextProcessingTranslateContentComponent.swift` | `translate-target-normalize` | ⚪ | china-support | `normalizeTranslationLanguage(baseLang)` | Default translate target falls back to the plain code ("zh-hans" → "zh") when unsupported — the server echoed the text back untranslated (2026-09-23) |
+| `submodules/SettingsUI/Sources/Language Selection/LocalizationListControllerNode.swift` | `language-list-chinese` | ⚪ | china-support | `FenixuzChineseLocalizations.adding` | Settings → Language lists Simplified/Traditional Chinese packs (zh-hans-raw / zh-hant-raw) (2026-09-23) |
+| `submodules/ChatListUI/BUILD` | `chatlistui-localization-dep` | ⚪ | china-support | `FenixuzLocalization` | Wire FenixuzLocalization into ChatListUI deps for the zh hook strings (2026-09-23) |
+| (8 hook files, see HOOKS.md 2026-09-23 table) | `hook-strings-zh` | ⚪ | china-support | `FenixuzL10n.languageKey(for:` | Inline Fenixuz strings in Telegram-owned files resolve Chinese packs and gained `case "zh"` (2026-09-23) |
 
 ---
 

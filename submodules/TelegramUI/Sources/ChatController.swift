@@ -145,6 +145,7 @@ import ChatSearchNavigationContentNode
 import ChatAgeRestrictionAlertController
 import TextProcessingScreen
 import FenixuzProMessager
+import FenixuzLocalization
 import FenixNovagramAds
 
 public final class ChatControllerOverlayPresentationData {
@@ -2344,9 +2345,10 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             // FENIX-HOOK #38 — sticker confirm (covers every send branch; runs before branching)
             if UserDefaults(suiteName: "pro_messager")?.bool(forKey: "send_confirm_enabled") ?? false, !(UserDefaults(suiteName: "pro_messager")?.bool(forKey: "fenix_sticker_bypass") ?? false) {
                 let fenixSTitle: String; let fenixSText: String; let fenixSSend: String; let fenixSCancel: String
-                switch strongSelf.presentationData.strings.primaryComponent.languageCode {
+                switch FenixuzL10n.languageKey(for: strongSelf.presentationData.strings) {
                 case "uz": fenixSTitle = "Yuborishni tasdiqlang"; fenixSText = "Stikerni yubormoqchimisiz?"; fenixSSend = "Yuborish"; fenixSCancel = "Bekor qilish"
                 case "ru": fenixSTitle = "Подтвердите отправку"; fenixSText = "Отправить стикер?"; fenixSSend = "Отправить"; fenixSCancel = "Отмена"
+                case "zh": fenixSTitle = "确认发送"; fenixSText = "要发送这个贴纸吗？"; fenixSSend = "发送"; fenixSCancel = "取消"
                 default: fenixSTitle = "Confirm sending"; fenixSText = "Send this sticker?"; fenixSSend = "Send"; fenixSCancel = "Cancel"
                 }
                 strongSelf.present(textAlertController(context: strongSelf.context, updatedPresentationData: strongSelf.updatedPresentationData, title: fenixSTitle, text: fenixSText, actions: [
