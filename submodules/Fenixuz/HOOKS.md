@@ -5729,3 +5729,16 @@ required so a missing one fails to compile), `FenixAboutController.swift` (`L3.z
 strings switch + the embedded bots JSON (`NovagramBotLocalizedText.zh` optional), ChatLock, SecretVault,
 SpeechToText, AIChatbot, ContactsConsent, EditedHistory, UnreadReminder, Analytics. Device-language helpers
 (`Locale.current.languageCode`) get `"zh"` on a Chinese iPhone without any `zh.lproj`.
+
+### `submodules/ChatListUI/Sources/ChatListController.swift` (UPSTREAM hook) — header buttons fold
+
+`ChatListLocationContext.rightButtons`: after the compose button, the story / ghost / proxy buttons are collected
+into `foldableButtons`. With two or more of them, they are shown only while `FenixHeaderFold.isExpanded`, followed
+by one `.systemIcon` chevron button (`id: "fenixHeaderFold"`) that flips the flag and calls
+`parentController?.requestLayout(...)` (the header re-reads `rightButtons` in `updateHeaderContent()`). With fewer
+than two, nothing changes (a plain [story][compose] header looks exactly like upstream). Buttons are laid out right
+to left, so the chevron is the leftmost item of the capsule and the hidden buttons slide out to its right.
+
+`FenixHeaderFold` (Fenixuz-owned, `submodules/Fenixuz/ForeignUserBlock/Sources/ChatList_FenixHeaderFold.swift`,
+already a ChatListUI dep and imported by this file): `pro_messager` key `fenix_header_buttons_expanded`,
+default `false` = folded; chevron points left while folded, right while unfolded.
