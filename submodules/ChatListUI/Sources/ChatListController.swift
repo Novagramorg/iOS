@@ -7060,14 +7060,32 @@ private final class ChatListLocationContext {
         if let rightButton = self.rightButton, !isVaultList {
             result.append(rightButton)
         }
+        // Fenixuz: story / ghost / proxy fold behind one chevron (FenixHeaderFold) once there are two
+        // or more of them, so they stop squeezing the title. Buttons are laid out right to left.
+        var foldableButtons: [AnyComponentWithIdentity<NavigationButtonComponentEnvironment>] = []
         if let storyButton = self.storyButton, !isVaultList {
-            result.append(storyButton)
+            foldableButtons.append(storyButton)
         }
         if let ghostModeButton = self.ghostModeButton {
-            result.append(ghostModeButton)
+            foldableButtons.append(ghostModeButton)
         }
         if let proxyButton = self.proxyButton {
-            result.append(proxyButton)
+            foldableButtons.append(proxyButton)
+        }
+        if foldableButtons.count >= 2 {
+            let isExpanded = FenixHeaderFold.isExpanded
+            if isExpanded {
+                result.append(contentsOf: foldableButtons)
+            }
+            result.append(AnyComponentWithIdentity(id: "fenixHeaderFold", component: AnyComponent(NavigationButtonComponent(
+                content: .systemIcon(name: FenixHeaderFold.iconName(isExpanded: isExpanded)),
+                pressed: { [weak self] _ in
+                    FenixHeaderFold.isExpanded = !FenixHeaderFold.isExpanded
+                    self?.parentController?.requestLayout(transition: .animated(duration: 0.3, curve: .spring))
+                }
+            ))))
+        } else {
+            result.append(contentsOf: foldableButtons)
         }
         return result
     }

@@ -8,9 +8,9 @@
 
 ## Summary
 
-- **Total hooks:** 61
+- **Total hooks:** 62
 - **Apple-critical hooks:** 18
-- **Non-critical hooks:** 43
+- **Non-critical hooks:** 44
 
 ---
 
@@ -105,6 +105,7 @@
 | `submodules/TelegramUI/Components/TextProcessingScreen/Sources/TextProcessingTranslateContentComponent.swift` | `translate-target-normalize` | ⚪ | china-support | `normalizeTranslationLanguage(baseLang)` | Default translate target falls back to the plain code ("zh-hans" → "zh") when unsupported — the server echoed the text back untranslated (2026-09-23) |
 | `submodules/SettingsUI/Sources/Language Selection/LocalizationListControllerNode.swift` | `language-list-chinese` | ⚪ | china-support | `FenixuzChineseLocalizations.adding` | Settings → Language lists Simplified/Traditional Chinese packs (zh-hans-raw / zh-hant-raw) (2026-09-23) |
 | `submodules/ChatListUI/BUILD` | `chatlistui-localization-dep` | ⚪ | china-support | `FenixuzLocalization` | Wire FenixuzLocalization into ChatListUI deps for the zh hook strings (2026-09-23) |
+| `submodules/ChatListUI/Sources/ChatListController.swift` | `header-buttons-fold` | ⚪ | header-fold | `FenixHeaderFold.isExpanded, fenixHeaderFold` | Story/ghost/proxy header buttons fold behind one chevron when there are 2+ of them (2026-09-23) |
 | (8 hook files, see HOOKS.md 2026-09-23 table) | `hook-strings-zh` | ⚪ | china-support | `FenixuzL10n.languageKey(for:` | Inline Fenixuz strings in Telegram-owned files resolve Chinese packs and gained `case "zh"` (2026-09-23) |
 
 ---
