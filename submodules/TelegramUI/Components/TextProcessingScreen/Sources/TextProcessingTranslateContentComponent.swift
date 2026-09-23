@@ -362,6 +362,12 @@ final class TextProcessingTranslateContentComponent: Component {
                     if baseLang.hasSuffix(rawSuffix) {
                         baseLang = String(baseLang.dropLast(rawSuffix.count))
                     }
+                    // Fenixuz: a Chinese pack gives "zh-hans", which the translation API does not know,
+                    // so the server sent the text back untranslated. Use the plain code ("zh") when the
+                    // full one is not a supported target, like TranslatonSettingsController already does.
+                    if !supportedTranslationLanguages.contains(where: { $0.caseInsensitiveCompare(baseLang) == .orderedSame }) {
+                        baseLang = normalizeTranslationLanguage(baseLang)
+                    }
                     var toLanguage = baseLang
                     
                     let fromLanguage = component.externalState.sourceLanguage ?? ""

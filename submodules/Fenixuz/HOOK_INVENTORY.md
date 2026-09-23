@@ -8,9 +8,9 @@
 
 ## Summary
 
-- **Total hooks:** 57
+- **Total hooks:** 58
 - **Apple-critical hooks:** 18
-- **Non-critical hooks:** 39
+- **Non-critical hooks:** 40
 
 ---
 
@@ -102,6 +102,7 @@
 | `submodules/TelegramPresentationData/Sources/PresentationData.swift` | `presentationdata-brand-rewrite` | ⚪ | brand | `FenixuzBrandStrings.applyBrand` | Rewrite "Telegram"/"TELEGRAM" → "Novagram"/"NOVAGRAM" in every server-delivered language-pack string via `dictFromLocalization` — fixes the bundled `Localizable.strings` rebrand never reaching a logged-in user (2026-08-27) |
 | `submodules/TelegramUI/Sources/AppDelegate.swift` | `appdelegate-admin-folders` | ⚪ | admin-folders | `FenixAdminFoldersManager.startGlobalMonitor` | Launch block observing activeAccountContexts to start/stop the Feature #47 owner/admin auto-folder sync for the active account (2026-09-07) |
 | `submodules/SearchBarNode/Sources/SearchBarNode.swift` | `searchbar-glass-clear-button` | ⚪ | china-support | `contentFrame.width - padding - 72.0` | Glass search field width no longer follows the hidden, localized "Cancel" title — the clear (x) sat on the field's edge in Chinese (2026-09-23) |
+| `submodules/TelegramUI/Components/TextProcessingScreen/Sources/TextProcessingTranslateContentComponent.swift` | `translate-target-normalize` | ⚪ | china-support | `normalizeTranslationLanguage(baseLang)` | Default translate target falls back to the plain code ("zh-hans" → "zh") when unsupported — the server echoed the text back untranslated (2026-09-23) |
 
 ---
 
