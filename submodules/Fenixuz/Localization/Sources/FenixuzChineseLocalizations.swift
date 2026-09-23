@@ -1,9 +1,10 @@
 import Foundation
 import TelegramCore
 
-/// Telegram ships no official Chinese localization, so Settings → Language never lists Chinese and a
-/// Chinese user has to find a `t.me/setlanguage/...` link first. These are the two Chinese packs on
-/// Telegram's own translation platform (the same ones `t.me/setlanguage/zh-hans-raw` opens).
+/// Telegram ships no official Chinese localization, so the server's language list usually has no
+/// Chinese and a Chinese user has to find a `t.me/setlanguage/...` link first. (It does list Chinese
+/// on a device that has already used a Chinese pack.) These are the two Chinese packs on Telegram's
+/// own translation platform, the same ones `t.me/setlanguage/zh-hans-raw` opens.
 public enum FenixuzChineseLocalizations {
     static let packs: [LocalizationInfo] = [
         LocalizationInfo(
@@ -33,17 +34,20 @@ public enum FenixuzChineseLocalizations {
     /// The list state with the Chinese packs slotted into the alphabetical part of the official list.
     /// The server puts English and the user's regional language (Uzbek for our users) first and
     /// sorts the rest by English name, so a pack goes to the first place where its neighbours are
-    /// in order around it, and to the end if there is none. A pack the server already lists, or
-    /// one the user already installed, is left where it is. `isOfficial` is true only so the row
-    /// can't be swiped away like an installed pack; picking it downloads the pack by its code.
+    /// in order around it, and to the end if there is none. A pack is skipped when the list already
+    /// has it by code or by English name, because the server's own Chinese entries (when it sends
+    /// them) use other codes, and an installed pack is listed too. `isOfficial` is true only so the
+    /// row can't be swiped away like an installed pack; picking it downloads the pack.
     public static func adding(to state: LocalizationListState) -> LocalizationListState {
         // An empty official list means it is still loading and the screen shows placeholders.
         if state.availableOfficialLocalizations.isEmpty {
             return state
         }
-        let knownCodes = Set((state.availableOfficialLocalizations + state.availableSavedLocalizations).map { $0.languageCode })
+        let listed = state.availableOfficialLocalizations + state.availableSavedLocalizations
+        let knownCodes = Set(listed.map { $0.languageCode })
+        let knownTitles = Set(listed.map { $0.title.lowercased() })
         var official = state.availableOfficialLocalizations
-        for pack in packs where !knownCodes.contains(pack.languageCode) {
+        for pack in packs where !knownCodes.contains(pack.languageCode) && !knownTitles.contains(pack.title.lowercased()) {
             let index = official.indices.dropFirst().first(where: { index in
                 official[index - 1].title.localizedCaseInsensitiveCompare(pack.title) == .orderedAscending &&
                 official[index].title.localizedCaseInsensitiveCompare(pack.title) == .orderedDescending

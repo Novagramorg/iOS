@@ -5695,7 +5695,10 @@ let localizationListState = FenixuzChineseLocalizations.adding(to: localizationL
 
 `FenixuzChineseLocalizations` (Fenixuz-owned, `submodules/Fenixuz/Localization/Sources/FenixuzChineseLocalizations.swift`)
 slots "Chinese (Simplified) / 简体中文" (`zh-hans-raw`) and "Chinese (Traditional) / 繁體中文" (`zh-hant-raw`) into
-the official list by English name, unless the server lists them or the user already installed them. Picking a
+the alphabetical part of the official list (the server puts English and the regional language, Uzbek, first),
+unless the list already has them by code **or by English name**: on a device that has used a Chinese pack the
+server sends its own "Chinese (Simplified/Traditional)" entries under other codes, and an installed pack is
+listed too — matching by code alone showed Chinese twice (fixed the same day). Picking a
 row calls the existing `downloadAndApplyLocalization(languageCode:)`, same as `t.me/setlanguage/zh-hans-raw`.
 The search list gets them too, because it is built from `currentListState`. `SettingsUI/BUILD` already had the
 `FenixuzLocalization` dep; `Fenixuz/Localization/BUILD` gained `//submodules/TelegramCore:TelegramCore`.
