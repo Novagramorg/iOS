@@ -3694,7 +3694,7 @@ Merged upstream `release-12.9.2` (254 commits, 994 files, MTProto layer 227→22
 
 ## 📌 2026-07-22 — Force per-message Translate always-on (NovagramPro)
 
-`submodules/TelegramUI/Sources/ChatInterfaceStateContextMenus.swift` (~line 1483). The pre-existing `showProTranslate` hook (reads `pro_messager` suite key `show_translate_messages`, default `true`) forces the `showTranslate:` argument of `canTranslateText(...)` true — BUT `canTranslateText` (upstream `TranslateUI/Sources/Translate.swift`, unchanged by us) still runs Apple `NLLanguageRecognizer` on the first 64 chars and hides Translate for short/undetectable text or the user's own languages. Users reported Translate appearing on some messages but not others ("small words yes, big words no") — that is upstream behavior, not a bug.
+`submodules/TelegramUI/Sources/ChatInterfaceStateContextMenus.swift` (~line 1483). The pre-existing `showProTranslate` hook (reads `pro_messager` suite key `show_translate_messages`; the code's default is `false` (`?? false`), corrected 2026-09-23) forces the `showTranslate:` argument of `canTranslateText(...)` true — BUT `canTranslateText` (upstream `TranslateUI/Sources/Translate.swift`, unchanged by us) still runs Apple `NLLanguageRecognizer` on the first 64 chars and hides Translate for short/undetectable text or the user's own languages. Users reported Translate appearing on some messages but not others ("small words yes, big words no") — that is upstream behavior, not a bug.
 
 Per user request (2026-07-22) Translate must appear on EVERY message. Added right after the `canTranslateText` call:
 
@@ -5665,3 +5665,21 @@ if case .glass = self.fieldStyle {
 72 = 53 pt English "Cancel" + 11 + 8, so English is pixel-identical; every other language now matches it
 (Uzbek "Bekor qilish" used to make the field ~37 pt narrower). The second `.glass` block further down
 (the animate-in path, sized from `sourceFrame`) is untouched.
+
+### `submodules/TelegramUI/Components/TextProcessingScreen/Sources/TextProcessingTranslateContentComponent.swift` (UPSTREAM hook) — translation echoed the original text
+
+In `update(...)`, `case let .translate(ignoredLanguages):`, right after the `-raw` suffix is stripped from
+`strings.baseLanguageCode`. A Chinese pack based on `zh-hans-raw` gave `toLanguage = "zh-hans"`, which is not
+in `supportedTranslationLanguages` (`"zh"` is); `messages.composeMessageWithAI` then returned the text
+unchanged, so "From English → To Chinese" showed English. Picking 中文 by hand in the language menu (code
+`"zh"`) translated correctly — that confirmed the cause. Now:
+
+```swift
+if !supportedTranslationLanguages.contains(where: { $0.caseInsensitiveCompare(baseLang) == .orderedSame }) {
+    baseLang = normalizeTranslationLanguage(baseLang)
+}
+```
+
+Supported codes (including `pt-br` vs `pt-BR`) are left as they were; only unknown ones fall back to the plain
+code, the same normalization upstream's `TranslatonSettingsController` already applies. No import needed
+(`TranslateUI` was imported).
