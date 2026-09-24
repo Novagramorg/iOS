@@ -137,7 +137,7 @@ extension RichText {
             )
         case let .textCustomEmoji(_, alt):
             return NSAttributedString(string: alt)
-        case let .textAutoEmail(value), let .textAutoPhone(value), let .textAutoUrl(value), let .textBankCard(value), let .textBotCommand(value), let .textCashtag(value), let .textHashtag(value), let .textMention(value), let .textMentionName(value, _), let .textSpoiler(value), let .textDate(value, _, _):
+        case let .textAutoEmail(value), let .textAutoPhone(value), let .textAutoUrl(value), let .textBankCard(value), let .textTonAddress(value), let .textBotCommand(value), let .textCashtag(value), let .textHashtag(value), let .textMention(value), let .textMentionName(value, _), let .textSpoiler(value), let .textDate(value, _, _):
             return value.previewAttributedText(strings: strings)
         case let .textButton(button):
             // A preview shows the button's label; a button-only paragraph would otherwise preview

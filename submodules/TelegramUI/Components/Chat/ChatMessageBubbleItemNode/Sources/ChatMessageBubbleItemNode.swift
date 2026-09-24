@@ -1368,7 +1368,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                         break
                     case .ignore:
                         return .fail
-                    case .url, .phone, .peerMention, .textMention, .botCommand, .hashtag, .instantPage, .wallpaper, .theme, .call, .conferenceCall, .openMessage, .timecode, .bankCard, .tooltip, .openPollResults, .copy, .largeEmoji, .customEmoji, .date, .custom, .externalInstantPage:
+                    case .url, .phone, .peerMention, .textMention, .botCommand, .hashtag, .instantPage, .wallpaper, .theme, .call, .conferenceCall, .openMessage, .timecode, .bankCard, .tonAddress, .tooltip, .openPollResults, .copy, .largeEmoji, .customEmoji, .date, .custom, .externalInstantPage:
                         return .waitForSingleTap
                     }
                 }
@@ -6083,6 +6083,11 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                         return .action(InternalBubbleTapAction.Action({
                             action()
                         }, contextMenuOnLongPress: !tapAction.hasLongTapAction))
+                    case let .tonAddress(address):
+                        let message = contentNode.item?.message
+                        return .action(InternalBubbleTapAction.Action({ [weak self] in
+                            self?.openTonAddressContextMenu(address: address, message: message, rects: rects, progress: tapAction.activate?(), gesture: nil)
+                        }, contextMenuOnLongPress: !tapAction.hasLongTapAction))
                     case let .url(url):
                         if case .longTap = gesture, !tapAction.hasLongTapAction, let item = self.item {
                             let tapMessage = item.content.firstMessage
@@ -6321,6 +6326,13 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                         switch tapAction.content {
                         case .none, .ignore:
                             break
+                        case let .tonAddress(address):
+                            if tapAction.hasLongTapAction {
+                                let message = contentNode.item?.message
+                                return .action(InternalBubbleTapAction.Action({}, actionWithLongTapRecognizer: { [weak self] gesture in
+                                    self?.openTonAddressContextMenu(address: address, message: message, rects: rects, progress: tapAction.activate?(), gesture: gesture)
+                                }, contextMenuOnLongPress: false))
+                            }
                         case let .url(url):
                             if tapAction.hasLongTapAction {
                                 return .action(InternalBubbleTapAction.Action({}, actionWithLongTapRecognizer: { [weak self] gesture in
@@ -6509,17 +6521,78 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         return nil
     }
     
+    private func openTonAddressContextMenu(address: String, message: Message?, rects: [CGRect], progress: Promise<Bool>?, gesture: TapLongTapOrDoubleTapGestureRecognizer?) {
+        guard let item = self.item, let contentNode = self.contextContentNodeForTonAddress(address, rects: rects) else {
+            progress?.set(.single(false))
+            return
+        }
+        let params = ChatControllerInteraction.LongTapParams(message: message ?? item.content.firstMessage, contentNode: contentNode, messageNode: self, progress: progress, gesture: gesture)
+        item.controllerInteraction.longTap(.tonAddress(address), params)
+    }
+
+    private func contextContentNodeForTonAddress(_ address: String, rects: [CGRect]) -> ContextExtractedContentContainingNode? {
+        guard let item = self.item, address.count == 48, self.bounds.width > 32.0 else {
+            return nil
+        }
+        let groups = stride(from: 0, to: 48, by: 4).map { offset in
+            String(address.dropFirst(offset).prefix(4))
+        }
+        let text = groups.prefix(6).joined(separator: " ") + "\n" + groups.suffix(6).joined(separator: " ")
+        let incoming = item.content.effectivelyIncoming(item.context.account.peerId, associatedData: item.associatedData)
+        let linkTextColor = incoming ? item.presentationData.theme.theme.chat.message.incoming.linkTextColor : item.presentationData.theme.theme.chat.message.outgoing.linkTextColor
+        let secondaryTextColor = linkTextColor.withMultipliedAlpha(0.7)
+        let textNode = ImmediateTextNode()
+        textNode.maximumNumberOfLines = 2
+        textNode.textAlignment = .left
+        textNode.isAccessibilityElement = true
+        textNode.accessibilityLabel = address
+
+        let availableWidth = self.bounds.width - 32.0
+        var fontSize = item.presentationData.fontSize.baseDisplaySize
+        let measuredWidth = ceil((text as NSString).size(withAttributes: [.font: Font.monospace(fontSize)]).width)
+        if measuredWidth > availableWidth - 2.0 {
+            fontSize *= max(1.0, availableWidth - 2.0) / measuredWidth
+        }
+        while true {
+            let attributedText = NSMutableAttributedString()
+            let font = Font.monospace(fontSize)
+            for (index, group) in groups.enumerated() {
+                let row = index / 6
+                let column = index % 6
+                let separator = index == 0 ? "" : (column == 0 ? "\n" : " ")
+                let color = (row + column).isMultiple(of: 2) ? linkTextColor : secondaryTextColor
+                attributedText.append(NSAttributedString(string: separator + group, font: font, textColor: color))
+            }
+            textNode.attributedText = attributedText
+            let layout = textNode.updateLayoutInfo(CGSize(width: availableWidth, height: 100.0))
+            if !layout.truncated && layout.numberOfLines == 2 {
+                break
+            }
+            guard fontSize > 1.0 else {
+                return nil
+            }
+            fontSize = max(1.0, fontSize - 0.5)
+        }
+        return self.contextContentNodeForLink(textNode: textNode, rects: rects)
+    }
+
     private func contextContentNodeForLink(_ link: String, rects: [CGRect]?) -> ContextExtractedContentContainingNode? {
         guard let item = self.item else {
             return nil
         }
-        let containingNode = ContextExtractedContentContainingNode()
-        
         let incoming = item.content.effectivelyIncoming(item.context.account.peerId, associatedData: item.associatedData)
-        
         let textNode = ImmediateTextNode()
         textNode.maximumNumberOfLines = 2
         textNode.attributedText = NSAttributedString(string: link, font: Font.regular(item.presentationData.fontSize.baseDisplaySize), textColor: incoming ? item.presentationData.theme.theme.chat.message.incoming.linkTextColor : item.presentationData.theme.theme.chat.message.outgoing.linkTextColor)
+        return self.contextContentNodeForLink(textNode: textNode, rects: rects)
+    }
+
+    private func contextContentNodeForLink(textNode: ImmediateTextNode, rects: [CGRect]?) -> ContextExtractedContentContainingNode? {
+        guard let item = self.item else {
+            return nil
+        }
+        let containingNode = ContextExtractedContentContainingNode()
+        let incoming = item.content.effectivelyIncoming(item.context.account.peerId, associatedData: item.associatedData)
         let textSize = textNode.updateLayout(CGSize(width: self.bounds.width - 32.0, height: 100.0))
         
         let backgroundNode = ASDisplayNode()

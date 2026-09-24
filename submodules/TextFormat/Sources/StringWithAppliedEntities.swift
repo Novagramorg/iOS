@@ -418,6 +418,24 @@ public func stringWithAppliedEntities(_ text: String, entities: [MessageTextEnti
                     nsString = string.string as NSString
                 }
                 string.addAttribute(NSAttributedString.Key(rawValue: TelegramTextAttributes.BankCard), value: nsString!.substring(with: range), range: range)
+            case .TonAddress:
+                let sourceText = text as NSString
+                guard range.length > 0, range.length == entity.range.count,
+                      entity.range.lowerBound >= 0, entity.range.upperBound <= sourceText.length else {
+                    continue
+                }
+                let address = sourceText.substring(with: NSRange(location: entity.range.lowerBound, length: entity.range.count))
+                if nsString == nil {
+                    nsString = string.string as NSString
+                }
+                guard nsString!.substring(with: range) == address else {
+                    continue
+                }
+                string.addAttribute(NSAttributedString.Key.foregroundColor, value: linkColor, range: range)
+                if underlineLinks && underlineAllLinks {
+                    string.addAttribute(NSAttributedString.Key.underlineStyle, value: NSUnderlineStyle.single.rawValue as NSNumber, range: range)
+                }
+                string.addAttribute(NSAttributedString.Key(rawValue: TelegramTextAttributes.TonAddress), value: TelegramTonAddress(address: address, range: range), range: range)
             case .Spoiler:
                 if external {
                     string.addAttribute(NSAttributedString.Key.backgroundColor, value: UIColor.gray, range: range)

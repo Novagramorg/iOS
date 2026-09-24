@@ -1150,11 +1150,12 @@ func openResolvedUrlImpl(
             if let transfer {
                 let controller: WalletSendScreen
                 switch transfer.recipient {
-                case let .peer(peer):
+                case let .peer(peer, resolvedAddress):
                     controller = WalletSendScreen(
                         context: context,
                         peer: peer,
                         walletContext: walletContext,
+                        resolvedAddress: resolvedAddress,
                         initialAmountNanograms: transfer.amountNanograms,
                         displaySuccessToast: false,
                         completed: { [weak navigationController] in

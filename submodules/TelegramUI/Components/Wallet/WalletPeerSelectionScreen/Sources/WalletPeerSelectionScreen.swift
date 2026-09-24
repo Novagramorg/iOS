@@ -30,6 +30,33 @@ public enum WalletPeerSelectionScreenMode: Equatable {
     case collectible(WalletContext.Collectible)
 }
 
+private struct WalletPeerSelectionResolvedPeer {
+    let peer: EnginePeer
+    let address: WalletUserAddress
+}
+
+private func walletPeerSelectionResolvePeer(context: AccountContext, address: String) -> Signal<WalletPeerSelectionResolvedPeer?, NoError> {
+    guard let normalizedAddress = WalletContext.transferAddress(from: address) else {
+        return .single(nil)
+    }
+    return context.engine.wallet.getUserAddresses(addresses: [address])
+    |> `catch` { _ -> Signal<[WalletUserAddress], NoError> in
+        return .single([])
+    }
+    |> mapToSignal { addresses -> Signal<WalletPeerSelectionResolvedPeer?, NoError> in
+        guard let userAddress = addresses.first(where: { WalletContext.transferAddress(from: $0.address) == normalizedAddress }) else {
+            return .single(nil)
+        }
+        return context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: userAddress.userId))
+        |> map { peer -> WalletPeerSelectionResolvedPeer? in
+            guard let peer, case .user = peer else {
+                return nil
+            }
+            return WalletPeerSelectionResolvedPeer(peer: peer, address: WalletUserAddress(userId: peer.id, address: address, publicKey: userAddress.publicKey))
+        }
+    }
+}
+
 private func walletPeerSelectionShortAddress(_ address: String) -> String {
     guard address.count > 8 else {
         return address
@@ -388,7 +415,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
         private var query: String = ""
         private var peers: [PeerInfo]?
         private var recipient: WalletContext.ResolvedTransferRecipient?
-        private var recipientPeer: EnginePeer?
+        private var recipientPeer: WalletPeerSelectionResolvedPeer?
         private var noResultsQuery: String?
         private var displaysNoResults = false
         private var resolvingPeerId: EnginePeer.Id?
@@ -531,21 +558,12 @@ private final class WalletPeerSelectionScreenComponent: Component {
                 self.state?.updated(transition: .easeInOut(duration: 0.2))
             }
             self.resolveDisposable.set((component.walletContext.resolveTransferRecipient(query)
-            |> mapToSignal { recipient -> Signal<(recipient: WalletContext.ResolvedTransferRecipient?, peer: EnginePeer?), WalletContext.WalletError> in
+            |> mapToSignal { recipient -> Signal<(recipient: WalletContext.ResolvedTransferRecipient?, peer: WalletPeerSelectionResolvedPeer?), WalletContext.WalletError> in
                 guard let recipient else {
                     return .single((nil, nil))
                 }
-                return component.context.engine.wallet.getUserAddresses(addresses: [recipient.address])
-                |> `catch` { _ -> Signal<[WalletUserAddress], NoError> in
-                    return .single([])
-                }
-                |> mapToSignal { addresses -> Signal<EnginePeer?, NoError> in
-                    guard let userId = addresses.first?.userId else {
-                        return .single(nil)
-                    }
-                    return component.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: userId))
-                }
-                |> map { peer -> (recipient: WalletContext.ResolvedTransferRecipient?, peer: EnginePeer?) in
+                return walletPeerSelectionResolvePeer(context: component.context, address: recipient.address)
+                |> map { peer -> (recipient: WalletContext.ResolvedTransferRecipient?, peer: WalletPeerSelectionResolvedPeer?) in
                     return (recipient, peer)
                 }
                 |> castError(WalletContext.WalletError.self)
@@ -698,7 +716,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
             }
 
             self.contentListNode?.clearHighlightAnimated(true)
-            if self.recipientPeer?.id == peer.id {
+            if self.recipientPeer?.peer.id == peer.id {
                 self.openRecipient()
                 return
             }
@@ -845,22 +863,13 @@ private final class WalletPeerSelectionScreenComponent: Component {
                     guard self.actionGeneration == generation else { return }
                     scanner?.dismiss()
                     if case .transfer = component.mode {
-                        self.peerAddressDisposable.set((component.context.engine.wallet.getUserAddresses(addresses: [recipient.address])
-                        |> `catch` { _ -> Signal<[WalletUserAddress], NoError> in
-                            return .single([])
-                        }
-                        |> mapToSignal { addresses -> Signal<EnginePeer?, NoError> in
-                            guard let userId = addresses.first?.userId else {
-                                return .single(nil)
-                            }
-                            return component.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: userId))
-                        }
+                        self.peerAddressDisposable.set((walletPeerSelectionResolvePeer(context: component.context, address: recipient.address)
                         |> deliverOnMainQueue).start(next: { [weak self, weak controller] peer in
                             guard let self, self.actionGeneration == generation,
                                   let controller, controller.navigationController?.viewControllers.last === controller else {
                                 return
                             }
-                            self.openSendScreen(peer: peer, address: recipient.transferInput)
+                            self.openSendScreen(peer: peer?.peer, address: recipient.transferInput, resolvedAddress: peer?.address)
                         }))
                     } else {
                         self.openRecipient(recipient)
@@ -877,7 +886,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
             self.openRecipient(recipient, peer: self.recipientPeer)
         }
 
-        private func openSendScreen(peer: EnginePeer? = nil, address: String? = nil) {
+        private func openSendScreen(peer: EnginePeer? = nil, address: String? = nil, resolvedAddress: WalletUserAddress? = nil) {
             guard let component = self.component,
                   let controller = self.environment?.controller(),
                   self.resolvingPeerId == nil,
@@ -904,6 +913,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
                     context: component.context,
                     peer: peer,
                     walletContext: component.walletContext,
+                    resolvedAddress: resolvedAddress,
                     initialAddress: address ?? "",
                     refreshBalanceOnOpen: false,
                     displaySuccessToast: address == nil,
@@ -932,7 +942,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
             controller.push(sendScreen)
         }
 
-        private func openRecipient(_ recipient: WalletContext.ResolvedTransferRecipient, peer: EnginePeer? = nil) {
+        private func openRecipient(_ recipient: WalletContext.ResolvedTransferRecipient, peer: WalletPeerSelectionResolvedPeer? = nil) {
             guard let component = self.component,
                   let controller = self.environment?.controller(),
                   self.resolvingPeerId == nil,
@@ -942,7 +952,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
 
             switch component.mode {
             case .transfer:
-                self.openSendScreen(peer: peer, address: recipient.transferInput)
+                self.openSendScreen(peer: peer?.peer, address: recipient.transferInput, resolvedAddress: peer?.address)
             case let .collectible(collectible):
                 self.searchBarNode?.deactivate(clear: false)
                 self.isPreparingTransfer = true
@@ -1473,7 +1483,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
             )
 
             var entries: [ContentEntry] = []
-            if let recipientPeer = self.recipientPeer {
+            if let recipientPeer = self.recipientPeer?.peer {
                 entries.append(.peer(
                     peer: recipientPeer,
                     presence: self.peers?.first(where: { $0.peer.id == recipientPeer.id })?.presence,
@@ -1482,7 +1492,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
             }
             if let peers = self.peers {
                 for peerInfo in peers {
-                    if peerInfo.peer.id == self.recipientPeer?.id {
+                    if peerInfo.peer.id == self.recipientPeer?.peer.id {
                         continue
                     }
                     if !self.peerMatchesQuery(peerInfo.peer, query: self.query) {

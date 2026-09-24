@@ -23,6 +23,15 @@ public final class InstantPageUrlItem: Equatable {
     }
 }
 
+public final class InstantPageTonAddressItem: NSObject {
+    public let address: String
+
+    public init(address: String) {
+        self.address = address
+        super.init()
+    }
+}
+
 /// Payload of `InstantPageButtonActionAttribute`: a link-styled page button whose action is not a
 /// URL, so it cannot ride `TelegramTextAttributes.URL`.
 ///
@@ -546,6 +555,7 @@ public final class InstantPageTextItem: InstantPageItem {
     public func linkSelectionRects(at point: CGPoint) -> [CGRect] {
         if let (index, dict) = self.attributesAtPoint(point) {
             let interactiveKeys = [
+                TelegramTextAttributes.TonAddress,
                 TelegramTextAttributes.URL,
                 TelegramTextAttributes.PeerMention,
                 TelegramTextAttributes.PeerTextMention,
@@ -835,7 +845,7 @@ private func richTextIsOnlyCustomEmoji(_ text: RichText) -> Bool {
              let .textMentionName(inner, _):
             return scan(inner)
         case let .textAutoEmail(inner), let .textAutoPhone(inner), let .textAutoUrl(inner),
-             let .textBankCard(inner), let .textBotCommand(inner), let .textCashtag(inner),
+             let .textBankCard(inner), let .textTonAddress(inner), let .textBotCommand(inner), let .textCashtag(inner),
              let .textHashtag(inner), let .textMention(inner), let .textSpoiler(inner):
             return scan(inner)
         case let .concat(texts):
@@ -1141,6 +1151,17 @@ func attributedStringForRichText(_ text: RichText, styleStack: InstantPageTextSt
             let result = attributedStringForRichText(text, styleStack: styleStack, url: InstantPageUrlItem(url: "tel:\(text.plainText)", webpageId: nil), inlineButtonMaxWidth: inlineButtonMaxWidth, formatDate: formatDate)
             styleStack.pop()
             return result
+        case let .textTonAddress(text):
+            var components = URLComponents(string: "https://t.me/sendgrams")!
+            components.queryItems = [URLQueryItem(name: "to", value: text.plainText)]
+            styleStack.push(.link(false))
+            let result = attributedStringForRichText(text, styleStack: styleStack, url: InstantPageUrlItem(url: components.string!, webpageId: nil), inlineButtonMaxWidth: inlineButtonMaxWidth, formatDate: formatDate)
+            styleStack.pop()
+            let mutable = result.mutableCopy() as! NSMutableAttributedString
+            if mutable.length != 0 {
+                mutable.addAttribute(NSAttributedString.Key(rawValue: TelegramTextAttributes.TonAddress), value: InstantPageTonAddressItem(address: mutable.string), range: NSRange(location: 0, length: mutable.length))
+            }
+            return mutable
         case let .textMention(text):
             styleStack.push(.link(false))
             let result = attributedStringForRichText(text, styleStack: styleStack, url: url, inlineButtonMaxWidth: inlineButtonMaxWidth, formatDate: formatDate)

@@ -129,6 +129,8 @@ private func richTextContainsAnchor(_ text: RichText, name: String) -> Bool {
         return richTextContainsAnchor(inner, name: name)
     case let .textAutoUrl(inner):
         return richTextContainsAnchor(inner, name: name)
+    case let .textTonAddress(inner):
+        return richTextContainsAnchor(inner, name: name)
     case let .textBankCard(inner):
         return richTextContainsAnchor(inner, name: name)
     case let .textBotCommand(inner):

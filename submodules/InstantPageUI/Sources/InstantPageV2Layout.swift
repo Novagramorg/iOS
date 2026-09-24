@@ -4027,7 +4027,7 @@ private func instantPageV2FirstCharacterIsBold(_ text: RichText, inheritingBold 
     // Wrappers that carry emphasis or entity meaning but not weight — recurse keeping what we inherited.
     case let .italic(inner), let .underline(inner), let .strikethrough(inner), let .fixed(inner),
          let .superscript(inner), let .marked(inner), let .textAutoEmail(inner),
-         let .textAutoPhone(inner), let .textAutoUrl(inner), let .textBankCard(inner),
+         let .textAutoPhone(inner), let .textAutoUrl(inner), let .textBankCard(inner), let .textTonAddress(inner),
          let .textBotCommand(inner), let .textCashtag(inner), let .textHashtag(inner),
          let .textMention(inner), let .textSpoiler(inner):
         return instantPageV2FirstCharacterIsBold(inner, inheritingBold: bold)

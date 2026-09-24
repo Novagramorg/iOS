@@ -3891,7 +3891,7 @@ public class CameraScreenImpl: ViewController, CameraScreen {
 
                 if let collageView = self.collageView {
                     collageView.animateOut(transition: transition, completion: { [weak collageView] in
-                        self.previewContainerView.addSubview(self.mainPreviewContainerView)
+                        self.previewContainerView.insertSubview(self.mainPreviewContainerView, at: 0)
                         collageView?.removeFromSuperview()
                         self.collageContainerView.isHidden = true
                     })
@@ -4333,17 +4333,18 @@ public class CameraScreenImpl: ViewController, CameraScreen {
         
         var dismissControllerImpl: ((Bool) -> Void)?
         let dismissArgs = DismissArgs()
+        let forCollage = self.cameraState.isCollageEnabled
         
         let controller: ViewController
-        if let current = self.galleryController {
+        if let current = self.galleryController, !forCollage {
             controller = current
         } else {
             var selectionLimit: Int?
-            if self.cameraState.isCollageEnabled, let collage = self.node.collage {
+            if forCollage, let collage = self.node.collage {
                 selectionLimit = collage.grid.count - collage.results.count
             } else {
-                if self.cameraState.isCollageEnabled {
-                    selectionLimit = 6
+                if forCollage {
+                    selectionLimit = self.cameraState.collageGrid.count
                 } else {
                     if let remainingStoryCount = self.remainingStoryCount {
                         selectionLimit = min(Int(remainingStoryCount), 10)
@@ -4355,7 +4356,7 @@ public class CameraScreenImpl: ViewController, CameraScreen {
             controller = self.context.sharedContext.makeStoryMediaPickerScreen(
                 context: self.context,
                 isDark: true,
-                forCollage: self.cameraState.isCollageEnabled,
+                forCollage: forCollage,
                 selectionLimit: selectionLimit,
                 getSourceRect: { [weak self] in
                     if let self {
@@ -4476,6 +4477,9 @@ public class CameraScreenImpl: ViewController, CameraScreen {
                         resumeCameraCapture()
                     }
                     if let self {
+                        if forCollage {
+                            self.galleryController = nil
+                        }
                         self.node.hasGallery = false
                         self.node.requestUpdateLayout(transition: .immediate)
                     }

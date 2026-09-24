@@ -287,9 +287,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
     
     var hasSelectButton: Bool {
         var hasSelect = false
-        if self.forCollage {
-            hasSelect = true
-        } else if case let .assets(_, mode) = self.subject, case .story = mode {
+        if !self.forCollage, case let .assets(_, mode) = self.subject, case .story = mode {
             if (self.interaction?.selectionState?.selectionLimit ?? 1) == 1 && self.context.isPremium {
             } else {
                 hasSelect = true
@@ -646,7 +644,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
             self.gridNode.scrollView.alwaysBounceVertical = true
             self.gridNode.scrollView.showsVerticalScrollIndicator = false
             
-            self.setupSelectionGesture()
+            self.setupSelectionGesture(force: controller.explicitMultipleSelection)
             
             if let controller = self.controller, case let .assets(collection, _) = controller.subject, collection != nil {
                 self.gridNode.view.interactiveTransitionGestureRecognizerTest = { point -> Bool in
@@ -2100,6 +2098,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
         self.secondaryButtonAction = secondaryButtonAction
         
         let selectionContext = selectionContext ?? TGMediaSelectionContext(groupingAllowed: false, selectionLimit: Int32(enableMultiselection ? (selectionLimit ?? 100) : 1))!
+        self.explicitMultipleSelection = forCollage && selectionContext.selectionLimit > 1
         let editingContext = editingContext ?? (subject.asFile ? TGMediaEditingContext.forCaptionsOnly() : TGMediaEditingContext())!
         
         self.titleView = MediaPickerTitleView(theme: self.presentationData.theme, glass: style == .glass, segments: [self.presentationData.strings.Attachment_AllMedia, self.presentationData.strings.Attachment_SelectedMedia(1)], selectedIndex: 0)
@@ -2640,7 +2639,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
         var moreIsVisible = false
         var isBack = false
         if case let .assets(_, mode) = self.subject, [.story, .createSticker].contains(mode) {
-            if !self.explicitMultipleSelection {
+            if !self.forCollage && !self.explicitMultipleSelection {
                 moreIsVisible = true
             }
         } else if case let .media(media) = self.subject {
@@ -2836,10 +2835,10 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
         
         if case .assets(_, .story) = self.subject {
             if self.selectionCount > 0 {
-                let text = self.presentationData.strings.MediaPicker_CreateStory(self.selectionCount)
+                let text = self.forCollage ? self.presentationData.strings.MediaPicker_AddToCollage : self.presentationData.strings.MediaPicker_CreateStory(self.selectionCount)
                 self.mainButtonStatePromise.set(.single(AttachmentMainButtonState(text: text, badge: nil, font: .bold, background: .color(self.presentationData.theme.actionSheet.controlAccentColor), textColor: self.presentationData.theme.list.itemCheckColors.foregroundColor, isVisible: true, progress: .none, isEnabled: true, hasShimmer: false, position: .top, hidesPanelBackground: true)))
                 
-                if self.selectionCount > 1 && self.selectionCount <= 6 {
+                if !self.forCollage && self.selectionCount > 1 && self.selectionCount <= 6 {
                     self.secondaryButtonStatePromise.set(.single(AttachmentMainButtonState(text: self.presentationData.strings.MediaPicker_CombineIntoCollage, badge: nil, font: .bold, background: .color(self.presentationData.theme.rootController.navigationBar.opaqueBackgroundColor), textColor: .white, isVisible: true, progress: .none, isEnabled: true, hasShimmer: false, iconName: "Media Editor/Collage", smallSpacing: false, position: .bottom)))
                 } else {
                     self.secondaryButtonStatePromise.set(.single(nil))
@@ -3707,7 +3706,7 @@ public func storyMediaPickerController(
                             results.append(asset)
                         }
                     }
-                    multipleCompletion(results, false)
+                    multipleCompletion(results, forCollage)
                 }
             },
             secondaryButtonAction: { [weak selectionContext] in

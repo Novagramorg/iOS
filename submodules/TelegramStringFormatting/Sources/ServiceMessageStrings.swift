@@ -1689,15 +1689,15 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                         attributedString = addAttributesToStringWithRanges(strings.Notification_StarsGift_Sent(authorName, price)._tuple, body: bodyAttributes, argumentAttributes: attributes)
                     }
                 }
-            case let .walletTonConnectRequest(flags, _, _, _, _):
+            case let .walletTonConnectRequest(flags, _, _, _, _, dappName):
                 let text: String
                 //TODO:
                 if flags & (1 << 3) != 0 {
-                    text = "Wallet request declined"
+                    text = dappName.map { "Wallet request from \($0) declined" } ?? "Wallet request declined"
                 } else if flags & (1 << 2) != 0 {
-                    text = "Wallet request accepted"
+                    text = dappName.map { "Wallet request from \($0) accepted" } ?? "Wallet request accepted"
                 } else {
-                    text = "Wallet request"
+                    text = dappName.map { "Wallet request from \($0)" } ?? "Wallet request"
                 }
                 attributedString = NSAttributedString(string: text, font: titleFont, textColor: primaryTextColor)
             case let .gramTransfer(amount, _, _, _, _):

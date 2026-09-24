@@ -14,6 +14,7 @@ final class WalletSendKeyboardComponent: Component {
 
     let theme: PresentationTheme
     let safeInsets: UIEdgeInsets
+    let isLandscape: Bool
     let decimalSeparator: String
     let deleteTitle: String
     let isEnabled: Bool
@@ -22,6 +23,7 @@ final class WalletSendKeyboardComponent: Component {
     init(
         theme: PresentationTheme,
         safeInsets: UIEdgeInsets,
+        isLandscape: Bool,
         decimalSeparator: String,
         deleteTitle: String,
         isEnabled: Bool,
@@ -29,6 +31,7 @@ final class WalletSendKeyboardComponent: Component {
     ) {
         self.theme = theme
         self.safeInsets = safeInsets
+        self.isLandscape = isLandscape
         self.decimalSeparator = decimalSeparator
         self.deleteTitle = deleteTitle
         self.isEnabled = isEnabled
@@ -38,6 +41,7 @@ final class WalletSendKeyboardComponent: Component {
     static func ==(lhs: WalletSendKeyboardComponent, rhs: WalletSendKeyboardComponent) -> Bool {
         return lhs.theme === rhs.theme
             && lhs.safeInsets == rhs.safeInsets
+            && lhs.isLandscape == rhs.isLandscape
             && lhs.decimalSeparator == rhs.decimalSeparator
             && lhs.deleteTitle == rhs.deleteTitle
             && lhs.isEnabled == rhs.isEnabled
@@ -318,18 +322,25 @@ final class WalletSendKeyboardComponent: Component {
             self.backgroundColor = self.isHighlighted ? self.pressedColor : self.normalColor
             self.updateHighlightAlpha(self.isHighlighted)
 
+            let numberTextFrame = CGRect(
+                x: floorToScreenPixels((size.width - self.numberTextSize.width) / 2.0),
+                y: (component.isLandscape
+                    ? floorToScreenPixels((size.height - self.numberTextSize.height) / 2.0)
+                    : 5.0 + floorToScreenPixels((28.0 - self.numberTextSize.height) / 2.0)) + (isDecimal ? 3.0 : 0.0),
+                width: self.numberTextSize.width,
+                height: self.numberTextSize.height
+            )
             if let numberTextView = self.numberText.view {
-                numberTextView.frame = CGRect(
-                    x: floorToScreenPixels((size.width - self.numberTextSize.width) / 2.0),
-                    y: 5.0 + floorToScreenPixels((28.0 - self.numberTextSize.height) / 2.0) + (isDecimal ? 3.0 : 0.0),
-                    width: self.numberTextSize.width,
-                    height: self.numberTextSize.height
-                )
+                numberTextView.frame = numberTextFrame
             }
             if let lettersTextView = self.lettersText.view {
                 lettersTextView.frame = CGRect(
-                    x: floorToScreenPixels((size.width - self.lettersTextSize.width) / 2.0) + 1.0,
-                    y: 33.0 + floorToScreenPixels((12.0 - self.lettersTextSize.height) / 2.0) - UIScreenPixel,
+                    x: component.isLandscape
+                        ? numberTextFrame.maxX + 8.0
+                        : floorToScreenPixels((size.width - self.lettersTextSize.width) / 2.0) + 1.0,
+                    y: component.isLandscape
+                        ? floorToScreenPixels((size.height - self.lettersTextSize.height) / 2.0)
+                        : 33.0 + floorToScreenPixels((12.0 - self.lettersTextSize.height) / 2.0) - UIScreenPixel,
                     width: self.lettersTextSize.width,
                     height: self.lettersTextSize.height
                 )
@@ -434,6 +445,9 @@ final class WalletSendKeyboardComponent: Component {
         }
 
         func update(component: WalletSendKeyboardComponent, availableSize: CGSize, transition: ComponentTransition) -> CGSize {
+            if let previousComponent = self.component, previousComponent.isLandscape != component.isLandscape {
+                self.cancelKeyPresses()
+            }
             self.component = component
             self.keyTrackingGesture.isEnabled = component.isEnabled
             if !component.isEnabled {
@@ -441,14 +455,15 @@ final class WalletSendKeyboardComponent: Component {
             }
             self.backgroundColor = UIColor(rgb: component.theme.overallDarkAppearance ? 0x2c2c2e : 0xe2e3e7)
 
-            let keyHeight: CGFloat = 48.0
+            let keyHeight: CGFloat = component.isLandscape ? 30.0 : 48.0
             let spacing: CGFloat = 6.0
-            let topInset: CGFloat = 16.0
-            let bottomInset: CGFloat = 30.0
+            let topInset: CGFloat = component.isLandscape ? 5.0 : 16.0
+            let bottomInset: CGFloat = component.isLandscape ? 21.0 : 30.0
             let leftInset: CGFloat = 5.0 + component.safeInsets.left
             let rightInset: CGFloat = 5.0 + component.safeInsets.right
             let contentWidth = max(0.0, availableSize.width - leftInset - rightInset)
-            let keyWidth = max(0.0, (contentWidth - spacing * 2.0) / 3.0)
+            let keyWidth: CGFloat = component.isLandscape ? 114.0 : max(0.0, (contentWidth - spacing * 2.0) / 3.0)
+            let keysLeftInset = component.isLandscape ? leftInset + (contentWidth - keyWidth * 3.0 - spacing * 2.0) / 2.0 : leftInset
             let size = CGSize(width: availableSize.width, height: topInset + keyHeight * 4.0 + spacing * 3.0 + bottomInset)
             let letters = ["", "ABC", "DEF", "GHI", "JKL", "MNO", "PQRS", "TUV", "WXYZ", "", "", ""]
 
@@ -465,8 +480,8 @@ final class WalletSendKeyboardComponent: Component {
                     action = .insertText(String(index + 1))
                 }
                 let column = CGFloat(index % 3)
-                let left = floorToScreenPixels(leftInset + column * (keyWidth + spacing))
-                let right = floorToScreenPixels(leftInset + column * (keyWidth + spacing) + keyWidth)
+                let left = floorToScreenPixels(keysLeftInset + column * (keyWidth + spacing))
+                let right = floorToScreenPixels(keysLeftInset + column * (keyWidth + spacing) + keyWidth)
                 button.update(action: action, letters: letters[index], size: CGSize(width: right - left, height: keyHeight), component: component)
                 transition.setFrame(view: button, frame: CGRect(
                     x: left,

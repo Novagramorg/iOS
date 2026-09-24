@@ -623,8 +623,20 @@ extension WalletContextImpl {
                 }
                 return result
             }
-        } catch let error as WalletSendTransferError where error == .invalidData || error == .sendFailed {
+        } catch let error as WalletSendTransferError where error == .invalidData || error == .sendFailed || error == .keyMismatch {
             if self.transferSubmissions.entries[pending.id]?.confirmed != true && self.latestPendingTransfer(pending).status != .confirmed {
+                if error == .keyMismatch, self.activationGeneration == generation {
+                    self.preparedTransfers.removeAll()
+                    self.preparedAuthorizations.removeAll()
+                    self.serverStateNeedsActivation = true
+                    self.serverStateMutationRevision &+= 1
+                    await self.runtime.requireWalletKeyReconciliation(revision: self.serverStateMutationRevision)
+                }
+                defer {
+                    if error == .keyMismatch, self.activationGeneration == generation {
+                        self.requestServerWalletState(forceRefreshAfterCurrent: true)
+                    }
+                }
                 self.transferSubmissions.resolve(pending.id, as: .rejected)
                 try await self.persistWalletTransferResolution(pending.id)
                 if self.transferSubmissions.entries[pending.id]?.confirmed != true && self.latestPendingTransfer(pending).status != .confirmed {
@@ -810,7 +822,7 @@ extension WalletContextImpl {
             guard self.isCurrentWalletTransferResolution(generation) else { return }
             for transaction in transactions {
                 self.rememberWalletFinalTransaction(transaction, msgHash: hash)
-                await self.applyWalletFinalTransaction(transaction, pending: nil, generation: generation)
+                await self.applyWalletFinalTransaction(transaction, pending: nil, generation: generation, source: "message_lookup")
                 guard self.isCurrentWalletTransferResolution(generation) else { return }
             }
             for id in unresolvedIds {
@@ -837,11 +849,11 @@ extension WalletContextImpl {
         guard self.isCurrentWalletTransferResolution(generation),
               let pending = self.pendingWalletTransferResolution(operationId) else { return false }
         if let knownHash = pending.transactionHash, let hash = transaction.transactionHash, knownHash != hash { return false }
-        await self.applyWalletFinalTransaction(transaction, pending: pending, generation: generation)
+        await self.applyWalletFinalTransaction(transaction, pending: pending, generation: generation, source: "transfer_resolution")
         return !self.isShutdown && self.activationGeneration == generation
     }
 
-    func applyWalletFinalTransaction(_ transaction: Transaction, pending: PendingTransfer?, generation: UInt64) async {
+    func applyWalletFinalTransaction(_ transaction: Transaction, pending: PendingTransfer?, generation: UInt64, source: String = "transfer_receipt") async {
         guard !self.isShutdown, self.activationGeneration == generation, !transaction.id.isEmpty else { return }
         if transaction.status == .failed, let pending,
            pending.status == .confirmed || self.transferSubmissions.entries[pending.id]?.confirmed == true {
@@ -869,7 +881,9 @@ extension WalletContextImpl {
         let value = pending.map {
             walletTransactionWithPresentationId(transaction, presentationId: "pending:\($0.id)")
         } ?? transaction
-        let items = mergeTransactions(existing: self.currentState.transactions.items, new: [value])
+        let items = mergeTransactions(
+            existing: self.currentState.transactions.items, new: [value], source: source, log: self.logger.log
+        )
         let reconciliation = self.pendingTransfers(values, reconcilingWith: items)
         resolvedTraceIds.formUnion(reconciliation.resolvedStreamingTraceIds)
         let removed = self.streamingPresentationOverlay.clearTransactions(
@@ -939,7 +953,7 @@ extension WalletContextImpl {
                         $0.sentTransfer?.msgHash == transfer.msgHash
                             && walletTransferResolutionCandidate($0, transactions: [transaction], history: self.currentState.transactions.items) != nil
                     }
-                    await self.applyWalletFinalTransaction(transaction, pending: candidates.count == 1 ? candidates[0] : nil, generation: generation)
+                    await self.applyWalletFinalTransaction(transaction, pending: candidates.count == 1 ? candidates[0] : nil, generation: generation, source: "server_update")
                     guard !self.isShutdown, self.activationGeneration == generation else { return }
                     self.requestSynchronization(scope: [.account], force: true)
                 } else if self.walletTransferHashStates[transfer.msgHash] == nil {

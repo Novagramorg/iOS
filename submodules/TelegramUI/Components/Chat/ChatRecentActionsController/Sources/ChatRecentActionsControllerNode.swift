@@ -740,7 +740,7 @@ final class ChatRecentActionsControllerNode: ViewControllerTracingNode {
                                 })
                             ])])
                         strongSelf.presentController(actionSheet, .window(.root), nil)
-                    case .bankCard:
+                    case .bankCard, .tonAddress:
                         break
                     case .date:
                         break

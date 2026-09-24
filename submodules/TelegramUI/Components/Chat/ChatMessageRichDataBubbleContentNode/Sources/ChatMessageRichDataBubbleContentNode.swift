@@ -18,6 +18,7 @@ import TextLoadingEffect
 import TextSelectionNode
 import StreamingTextReveal
 import ShimmeringLinkNode
+import WalletContext
 
 public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode {
     public final class ContainerNode: ASDisplayNode {
@@ -1791,14 +1792,26 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
             }), rects: rects)
         }
 
-        if case .tap = gesture, !self.displayContentsUnderSpoilers, let entityHit = self.entityForTapLocation(point), entityHit.attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.Spoiler)] != nil {
+        let entityHit = self.entityForTapLocation(point)
+        if case .tap = gesture, !self.displayContentsUnderSpoilers, let entityHit, entityHit.attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.Spoiler)] != nil {
             return ChatMessageBubbleContentTapAction(content: .custom({ [weak self] in
                 self?.revealSpoilers(atContentPoint: point)
             }))
         }
 
+        if let entityHit, entityHit.attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.TonAddress)] != nil {
+            guard let content = self.entityTapContent(entityHit.attributes) else {
+                return ChatMessageBubbleContentTapAction(content: .none)
+            }
+            return ChatMessageBubbleContentTapAction(
+                content: content,
+                rects: self.computeHighlightRects(item: entityHit.item, parentOffset: entityHit.parentOffset, localPoint: entityHit.localPoint),
+                activate: self.makeActivate(item: entityHit.item, parentOffset: entityHit.parentOffset, localPoint: entityHit.localPoint)
+            )
+        }
+
         guard let urlHit = self.urlForTapLocation(point) else {
-            if let entityHit = self.entityForTapLocation(point) {
+            if let entityHit {
                 let rects = self.computeHighlightRects(item: entityHit.item, parentOffset: entityHit.parentOffset, localPoint: entityHit.localPoint)
 
                 // A link-styled page button (richButtonStyle link:flags.3) whose action is not a URL,
@@ -1967,7 +1980,18 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
     }
 
     private func entityTapContent(_ attributes: [NSAttributedString.Key: Any]) -> ChatMessageBubbleContentTapAction.Content? {
-        if let mention = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.PeerMention)] as? TelegramPeerMention {
+        if let tonAddress = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.TonAddress)] as? InstantPageTonAddressItem {
+            if attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.Spoiler)] != nil, !self.displayContentsUnderSpoilers {
+                return nil
+            }
+            if let item = self.item, item.associatedData.isSuspiciousPeer, item.message.effectivelyIncoming(item.context.account.peerId) {
+                return nil
+            }
+            guard tonAddress.address.utf8.count == 48, WalletContext.transferAddress(from: tonAddress.address) != nil else {
+                return nil
+            }
+            return .tonAddress(tonAddress.address)
+        } else if let mention = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.PeerMention)] as? TelegramPeerMention {
             return .peerMention(peerId: mention.peerId, mention: mention.mention, openProfile: false)
         } else if let peerName = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.PeerTextMention)] as? String {
             return .textMention(peerName)
@@ -2089,6 +2113,10 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
         if let point {
             if let showMoreTextNode = self.showMoreTextNode, showMoreTextNode.frame.contains(point) {
                 rects = [showMoreTextNode.frame.offsetBy(dx: -1.0, dy: -1.0)]
+            } else if let entityHit = self.entityForTapLocation(point), entityHit.attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.TonAddress)] != nil {
+                if self.entityIsTappable(entityHit.attributes) {
+                    rects = self.computeHighlightRects(item: entityHit.item, parentOffset: entityHit.parentOffset, localPoint: entityHit.localPoint)
+                }
             } else if let urlHit = self.urlForTapLocation(point) {
                 rects = self.computeHighlightRects(item: urlHit.item, parentOffset: urlHit.parentOffset, localPoint: urlHit.localPoint)
             } else if let entityHit = self.entityForTapLocation(point), self.entityIsTappable(entityHit.attributes) {

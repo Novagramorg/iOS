@@ -54,7 +54,7 @@ private final class WalletAppInfoContentComponent: CombinedComponent {
             var contentHeight: CGFloat = 32.0
 
             let icon = icon.update(
-                component: WalletConnectAppIconComponent(applicationName: component.manifest.name, url: component.manifest.iconUrl),
+                component: WalletConnectAppIconComponent(context: component.context, applicationName: component.manifest.name, icon: component.manifest.icon),
                 availableSize: CGSize(width: 88.0, height: 88.0),
                 transition: context.transition
             )

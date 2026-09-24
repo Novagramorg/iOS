@@ -203,7 +203,7 @@ public final class ChatBotInfoItemNode: ListViewItemNode {
                     break
                 case .ignore:
                     return .fail
-                case .url, .phone, .peerMention, .textMention, .botCommand, .hashtag, .instantPage, .wallpaper, .theme, .call, .conferenceCall, .openMessage, .timecode, .bankCard, .tooltip, .openPollResults, .copy, .largeEmoji, .customEmoji, .date, .custom, .externalInstantPage:
+                case .url, .phone, .peerMention, .textMention, .botCommand, .hashtag, .instantPage, .wallpaper, .theme, .call, .conferenceCall, .openMessage, .timecode, .bankCard, .tonAddress, .tooltip, .openPollResults, .copy, .largeEmoji, .customEmoji, .date, .custom, .externalInstantPage:
                     return .waitForSingleTap
                 }
             }

@@ -28,6 +28,7 @@ import ChatControllerInteraction
 import InteractiveTextComponent
 import ShimmeringMask
 import StreamingTextReveal
+import WalletContext
 
 private final class CachedChatMessageText {
     let text: String
@@ -443,7 +444,7 @@ public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
                 if incoming && item.associatedData.isSuspiciousPeer, let entities = messageEntities {
                     messageEntities = entities.filter { entity in
                         switch entity.type {
-                        case .Url, .TextUrl, .Mention, .TextMention, .Hashtag, .Email, .BankCard:
+                        case .Url, .TextUrl, .Mention, .TextMention, .Hashtag, .Email, .BankCard, .TonAddress:
                             return false
                         default:
                             return true
@@ -1170,6 +1171,7 @@ public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
                 TelegramTextAttributes.Hashtag,
                 TelegramTextAttributes.Timecode,
                 TelegramTextAttributes.BankCard,
+                TelegramTextAttributes.TonAddress,
                 TelegramTextAttributes.Date
             ]
             for name in possibleNames {
@@ -1182,6 +1184,12 @@ public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
             
             if let _ = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.Spoiler)], !self.displayContentsUnderSpoilers.value {
                 return ChatMessageBubbleContentTapAction(content: .none)
+            } else if let tonAddress = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.TonAddress)] as? TelegramTonAddress {
+                guard tonAddress.range.length == 48, tonAddress.address.utf8.count == 48,
+                      WalletContext.transferAddress(from: tonAddress.address) != nil else {
+                    return ChatMessageBubbleContentTapAction(content: .none)
+                }
+                return ChatMessageBubbleContentTapAction(content: .tonAddress(tonAddress.address), rects: self.textNode.textNode.rangeRects(in: tonAddress.range)?.rects, activate: makeActivate(tonAddress.range))
             } else if let url = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)] as? String {
                 var concealed = true
                 var urlRange: NSRange?
@@ -1337,6 +1345,7 @@ public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
                         TelegramTextAttributes.Hashtag,
                         TelegramTextAttributes.Timecode,
                         TelegramTextAttributes.BankCard,
+                        TelegramTextAttributes.TonAddress,
                         TelegramTextAttributes.Date
                     ]
                     for name in possibleNames {
@@ -1344,6 +1353,9 @@ public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
                             rects = self.textNode.textNode.attributeRects(name: name, at: index)
                             break
                         }
+                    }
+                    if let tonAddress = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.TonAddress)] as? TelegramTonAddress {
+                        rects = self.textNode.textNode.rangeRects(in: tonAddress.range)?.rects
                     }
                     if let _ = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.Spoiler)] {
                         spoilerRects = self.textNode.textNode.attributeRects(name: TelegramTextAttributes.Spoiler, at: index)

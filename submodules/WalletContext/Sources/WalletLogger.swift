@@ -75,6 +75,7 @@ private func walletContextErrorKind(_ error: Error) -> String? {
     if let error = error as? WalletClientError {
         return "wallet_engine_\(walletEngineErrorCaseName(error))"
     }
+    if (error as? WalletSendTransferError) == .keyMismatch { return "wallet_key_mismatch" }
     if let error = error as? WalletContext.WalletError {
         switch error {
         case .unavailable: return "unavailable"
@@ -87,6 +88,7 @@ private func walletContextErrorKind(_ error: Error) -> String? {
         case .previewIncomplete: return "preview_incomplete"
         case .preparedTransferExpired: return "prepared_transfer_expired"
         case .preparedTransferNotFound: return "prepared_transfer_not_found"
+        case .walletKeyMismatch: return "wallet_key_mismatch"
         case .network: return "network"
         case .requestPassword: return "request_password"
         case .invalidPassword: return "invalid_password"
@@ -198,6 +200,7 @@ func walletError(_ error: Error) -> WalletContext.WalletError {
         }
     }
     if let value = error as? WalletContext.WalletError { return value }
+    if (error as? WalletSendTransferError) == .keyMismatch { return .walletKeyMismatch }
     if let value = error as? TonConnectFailure { return .engine(value.message) }
     if let value = error as? WalletContext.SynchronizationError {
         switch value {
@@ -307,8 +310,7 @@ func tonConnectErrorKind(_ error: Error) -> String? {
                  "TONCONNECT_SESSION_NOT_FOUND", "TONCONNECT_SESSION_CLOSED", "TONCONNECT_SESSION_NOT_ACTIVE",
                  "TONCONNECT_CLIENT_ID_INVALID", "TONCONNECT_CLIENT_ID_OCCUPIED", "TONCONNECT_CHALLENGE_INVALID",
                  "TONCONNECT_BODY_INVALID", "TONCONNECT_LOOKUP_INVALID", "TONCONNECT_REQUEST_NOT_FOUND",
-                 "TONCONNECT_REQUEST_EXPIRED", "TONCONNECT_REQUEST_ALREADY_CLAIMED", "TONCONNECT_BAD_REQUEST_ID",
-                 "TONCONNECT_PUBLISH_FAILED":
+                 "TONCONNECT_REQUEST_EXPIRED", "TONCONNECT_REQUEST_ALREADY_CLAIMED", "TONCONNECT_BAD_REQUEST_ID":
                 return "ton_connect_rpc_" + description.dropFirst("TONCONNECT_".count).lowercased()
             default: return "ton_connect_rpc"
             }

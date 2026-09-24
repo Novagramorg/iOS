@@ -26,17 +26,20 @@ fileprivate enum WalletTransferFinishResult {
 private final class WalletTransferSheetContent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
 
+    let context: AccountContext
     let request: WalletContext.TonConnectOperationRequest
     let walletState: WalletContext.State?
     let bottomInset: CGFloat
     let infoPressed: () -> Void
 
     init(
+        context: AccountContext,
         request: WalletContext.TonConnectOperationRequest,
         walletState: WalletContext.State?,
         bottomInset: CGFloat,
         infoPressed: @escaping () -> Void
     ) {
+        self.context = context
         self.request = request
         self.walletState = walletState
         self.bottomInset = bottomInset
@@ -93,8 +96,9 @@ private final class WalletTransferSheetContent: Component {
             let _ = self.appIcon.update(
                 transition: transition,
                 component: AnyComponent(WalletConnectAppIconComponent(
+                    context: component.context,
                     applicationName: component.request.applicationName,
-                    url: component.request.iconUrl
+                    icon: component.request.icon
                 )),
                 environment: {},
                 containerSize: appIconSize
@@ -619,6 +623,7 @@ private final class WalletTransferSheetComponent: CombinedComponent {
                 AnyComponentWithIdentity(
                     id: "transfer",
                     component: AnyComponent(WalletTransferSheetContent(
+                        context: component.context,
                         request: component.request,
                         walletState: componentState.walletState,
                         bottomInset: contentBottomInset,
@@ -666,8 +671,9 @@ private final class WalletTransferSheetComponent: CombinedComponent {
                     )
                 ], spacing: 0.0))
                 rightItem = AnyComponent(WalletTransferNavigationAppIconComponent(
+                    context: component.context,
                     applicationName: component.request.applicationName,
-                    iconUrl: component.request.iconUrl
+                    icon: component.request.icon
                 ))
             } else {
                 titleItem = nil

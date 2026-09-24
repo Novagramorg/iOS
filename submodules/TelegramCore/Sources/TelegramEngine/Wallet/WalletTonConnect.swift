@@ -4,19 +4,33 @@ import Postbox
 import SwiftSignalKit
 import TelegramApi
 
-public struct WalletTonConnectManifest: Equatable, Sendable {
+public struct WalletTonConnectIcon: Equatable, Codable, Sendable {
     public let url: String
-    public let name: String
-    public let iconUrl: String
+    public let accessHash: Int64
+    public let size: Int32
+    public let mimeType: String
 
-    public init(url: String, name: String, iconUrl: String) {
+    public init(url: String, accessHash: Int64, size: Int32, mimeType: String) {
         self.url = url
-        self.name = name
-        self.iconUrl = iconUrl
+        self.accessHash = accessHash
+        self.size = size
+        self.mimeType = mimeType
     }
 }
 
-public struct WalletTonConnectSession: Equatable, Sendable {
+public struct WalletTonConnectManifest: Equatable, Codable, Sendable {
+    public let url: String
+    public let name: String
+    public let icon: WalletTonConnectIcon?
+
+    public init(url: String, name: String, icon: WalletTonConnectIcon?) {
+        self.url = url
+        self.name = name
+        self.icon = icon
+    }
+}
+
+public struct WalletTonConnectSession: Equatable, Codable, Sendable {
     public let flags: Int32
     public let id: Int64
     public let dappClientId: String
@@ -54,16 +68,16 @@ public struct WalletTonConnectSession: Equatable, Sendable {
     }
 }
 
-public struct WalletTonConnectRequest: Equatable, Sendable {
+public struct WalletTonConnectRequest: Equatable, Codable, Sendable {
     public let flags: Int32
     public let sessionId: Int64
-    public let msgId: Int64
+    public let msgId: Int32
     public let body: Data
     public let expires: Int32
     public let topic: String?
     public let traceId: String?
 
-    public init(flags: Int32, sessionId: Int64, msgId: Int64, body: Data, expires: Int32, topic: String?, traceId: String?) {
+    public init(flags: Int32, sessionId: Int64, msgId: Int32, body: Data, expires: Int32, topic: String?, traceId: String?) {
         self.flags = flags
         self.sessionId = sessionId
         self.msgId = msgId
@@ -121,10 +135,10 @@ public struct WalletTonConnectRequestMessage: Equatable {
     public let expires: Int32
     public let topic: String?
     public let traceId: String?
+    public let dappName: String?
 
-    /// MTProto identifiers are 64-bit even though cloud MessageId uses Int32.
-    public var msgId: Int64 {
-        return Int64(self.messageId.id)
+    public var msgId: Int32 {
+        return self.messageId.id
     }
 
     public var isAccepted: Bool {
@@ -135,13 +149,14 @@ public struct WalletTonConnectRequestMessage: Equatable {
         return self.flags & (1 << 3) != 0
     }
 
-    public init(messageId: MessageId, flags: Int32, sessionId: Int64, expires: Int32, topic: String?, traceId: String?) {
+    public init(messageId: MessageId, flags: Int32, sessionId: Int64, expires: Int32, topic: String?, traceId: String?, dappName: String? = nil) {
         self.messageId = messageId
         self.flags = flags
         self.sessionId = sessionId
         self.expires = expires
         self.topic = topic
         self.traceId = traceId
+        self.dappName = dappName
     }
 }
 
@@ -155,7 +170,14 @@ extension WalletTonConnectManifest {
     init(apiManifest: Api.TonConnectManifest) {
         switch apiManifest {
         case let .tonConnectManifest(data):
-            self.init(url: data.url, name: data.name, iconUrl: data.iconUrl)
+            let icon: WalletTonConnectIcon?
+            if case let .webDocument(document)? = data.icon, document.size > 0, document.size <= 2 * 1024 * 1024,
+               document.mimeType.lowercased().hasPrefix("image/") {
+                icon = WalletTonConnectIcon(url: document.url, accessHash: document.accessHash, size: document.size, mimeType: document.mimeType)
+            } else {
+                icon = nil
+            }
+            self.init(url: data.url, name: data.name, icon: icon)
         }
     }
 }
@@ -261,7 +283,11 @@ func _internal_walletTonConnectGetPending(account: Account, lookup: WalletTonCon
     |> map(WalletTonConnectPending.init(apiPending:))
 }
 
-func _internal_walletTonConnectClaimRequest(account: Account, sessionId: Int64, msgId: Int64, appRequestId: Int64, challengeAnswer: Data?, declined: Bool) -> Signal<Bool, WalletTonConnectError> {
+func _internal_walletTonConnectClaimRequest(account: Account, sessionId: Int64, msgId: Int32, appRequestId: String, challengeAnswer: Data?, declined: Bool) -> Signal<Bool, WalletTonConnectError> {
+    guard (1 ... 100).contains(appRequestId.utf8.count), appRequestId.utf8.allSatisfy({ (0x20 ... 0x7e).contains($0) }) else {
+        return .fail(.badRequestId)
+    }
+
     var flags: Int32 = 0
     if challengeAnswer != nil {
         flags |= 1 << 0
@@ -284,7 +310,7 @@ func _internal_walletTonConnectClaimRequest(account: Account, sessionId: Int64, 
     }
 }
 
-func _internal_walletTonConnectSubmitResponse(account: Account, sessionId: Int64, msgId: Int64, body: Data, traceId: String?) -> Signal<Bool, WalletTonConnectError> {
+func _internal_walletTonConnectSubmitResponse(account: Account, sessionId: Int64, msgId: Int32, body: Data, traceId: String?) -> Signal<Bool, WalletTonConnectError> {
     guard body.count <= 1_048_576, (traceId?.count ?? 0) <= 100 else {
         return .fail(.invalidPayload)
     }
@@ -321,12 +347,13 @@ func _internal_walletTonConnectNextEventId(account: Account, sessionId: Int64) -
     }
 }
 
-func _internal_walletTonConnectCloseSession(account: Account, sessionId: Int64, body: Data) -> Signal<Bool, WalletTonConnectError> {
-    guard body.count <= 1_048_576 else {
+func _internal_walletTonConnectCloseSession(account: Account, sessionId: Int64, body: Data? = nil) -> Signal<Bool, WalletTonConnectError> {
+    guard (body?.count ?? 0) <= 1_048_576 else {
         return .fail(.invalidPayload)
     }
 
-    return account.network.request(Api.functions.wallet.tonConnectCloseSession(sessionId: sessionId, body: Buffer(data: body)), automaticFloodWait: false)
+    let flags: Int32 = body == nil ? 0 : 1 << 0
+    return account.network.request(Api.functions.wallet.tonConnectCloseSession(flags: flags, sessionId: sessionId, body: body.map { Buffer(data: $0) }), automaticFloodWait: false)
     |> mapError { error in
         return WalletTonConnectError(code: error.errorCode, description: error.errorDescription ?? "")
     }
@@ -379,8 +406,8 @@ func walletTonConnectEvents(operation: AccountStateMutationOperation) -> [Wallet
         }
         for media in message.media {
             if let action = media as? TelegramMediaAction,
-               case let .walletTonConnectRequest(flags, sessionId, expires, topic, traceId) = action.action {
-                events.append(.request(WalletTonConnectRequestMessage(messageId: id, flags: flags, sessionId: sessionId, expires: expires, topic: topic, traceId: traceId)))
+               case let .walletTonConnectRequest(flags, sessionId, expires, topic, traceId, dappName) = action.action {
+                events.append(.request(WalletTonConnectRequestMessage(messageId: id, flags: flags, sessionId: sessionId, expires: expires, topic: topic, traceId: traceId, dappName: dappName)))
                 break
             }
         }

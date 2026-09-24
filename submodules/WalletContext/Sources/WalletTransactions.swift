@@ -183,31 +183,38 @@ func walletTransactions(
 @available(macOS 10.15, *)
 func mergeTransactions(
     existing: [WalletContext.Transaction],
-    new: [WalletContext.Transaction]
+    new: [WalletContext.Transaction],
+    source: String = "history",
+    log: ((String) -> Void)? = nil
 ) -> [WalletContext.Transaction] {
     let transactions = existing + new
-    var hashById: [String: String] = [:]
-    for transaction in transactions {
-        if let hash = transaction.transactionHash { hashById[transaction.id] = hash }
-    }
-    var values: [String: WalletContext.Transaction] = [:]
-    for transaction in transactions {
-        // An inline final transaction can gain its optional tx_hash on a later page.
-        let key = transaction.transactionHash ?? hashById[transaction.id] ?? transaction.id
-        if let current = values[key] {
-            let currentScore = transactionInformationScore(current)
-            let candidateScore = transactionInformationScore(transaction)
-            let preferred = candidateScore >= currentScore ? transaction : current
-            values[key] = walletTransactionWithPresentationId(
-                preferred,
-                presentationId: current.presentationId != current.id ? current.presentationId : transaction.presentationId,
-                fallbackTransactionHash: current.transactionHash ?? transaction.transactionHash
-            )
-        } else {
-            values[key] = transaction
+    let identityIndex = WalletTransactionIdentityIndex(transactions)
+    let values = identityIndex.groups.map { indices -> WalletContext.Transaction in
+        let current = transactions[indices[0]]
+        // A fresh API response owns the transaction data, including zero fees and
+        // absent comments. Within one batch (or an old cache), keep the first row.
+        let preferredIndex = indices.first(where: { $0 >= existing.count }) ?? indices[0]
+        let preferred = transactions[preferredIndex]
+        let preservePresentationId = current.presentationId != current.id
+            || walletIncomingTransactionIdentity(current) != nil
+        // Only carry a missing hash across the same API id, never across an LT
+        // match whose old hash may be precisely the stale data being replaced.
+        let fallbackHash = indices.lazy.map { transactions[$0] }.first {
+            !$0.id.isEmpty && $0.id == preferred.id && $0.transactionHash != nil
+        }?.transactionHash
+        for index in indices where index != preferredIndex {
+            let discarded = transactions[index]
+            if discarded.id != preferred.id || discarded.transactionHash != preferred.transactionHash {
+                log?("event=wallet_transaction_duplicate source=\(source) lt=\(preferred.logicalTime) discarded_id=\(discarded.id) discarded_hash=\(discarded.transactionHash ?? "nil") retained_id=\(preferred.id) retained_hash=\(preferred.transactionHash ?? fallbackHash ?? "nil")")
+            }
         }
+        return walletTransactionWithPresentationId(
+            preferred,
+            presentationId: preservePresentationId ? current.presentationId : preferred.presentationId,
+            fallbackTransactionHash: fallbackHash
+        )
     }
-    return sortedWalletTransactions(Array(values.values))
+    return sortedWalletTransactions(values)
 }
 
 @available(macOS 10.15, *)
@@ -245,20 +252,18 @@ func walletPendingTransferTransaction(
 func transactionsWithStreamingOverlay(
     authoritative: [WalletContext.Transaction],
     streaming: [WalletContext.Transaction],
-    peerByAddress: [String: EnginePeer]
+    peerByAddress: [String: EnginePeer],
+    log: ((String) -> Void)? = nil
 ) -> [WalletContext.Transaction] {
-    var values: [String: WalletContext.Transaction] = [:]
-    for transaction in streaming {
-        let resolved = transactionWithResolvedStreamingPeer(
+    let resolved = streaming.map { transaction in
+        transactionWithResolvedStreamingPeer(
             transaction,
             peerByAddress: peerByAddress
         )
-        values[walletTransactionMergeKey(resolved)] = resolved
     }
-    for transaction in authoritative {
-        values[walletTransactionMergeKey(transaction)] = transaction
-    }
-    return sortedWalletTransactions(Array(values.values))
+    // Put authoritative rows first so the overlay cannot change their data or
+    // presentation identity, even when it arrives after the history response.
+    return mergeTransactions(existing: [], new: authoritative + resolved, source: "presentation", log: log)
 }
 
 @available(macOS 10.15, *)
@@ -334,8 +339,99 @@ func walletTransactionWithPresentationId(
 }
 
 @available(macOS 10.15, *)
-func walletTransactionMergeKey(_ transaction: WalletContext.Transaction) -> String {
-    transaction.transactionHash ?? transaction.id
+private struct WalletIncomingTransactionIdentity: Hashable {
+    let logicalTime: UInt64
+    let timestamp: Int32
+    let amount: Int64
+    let address: String
+}
+
+@available(macOS 10.15, *)
+private func walletIncomingTransactionIdentity(_ transaction: WalletContext.Transaction) -> WalletIncomingTransactionIdentity? {
+    // These identities are scoped to one wallet. An incoming TON transfer has
+    // one inbound message; outgoing transactions may contain multiple transfers.
+    guard transaction.status == .completed, transaction.kind == .transfer,
+          transaction.direction == .incoming, transaction.currency == .ton,
+          transaction.collectible == nil, transaction.amount > 0,
+          transaction.logicalTime.utf8.allSatisfy({ $0 >= 48 && $0 <= 57 }),
+          let logicalTime = UInt64(transaction.logicalTime), logicalTime != 0,
+          let peerAddress = transaction.peer.address,
+          let address = walletAddressMappingKey(peerAddress) else {
+        return nil
+    }
+    return WalletIncomingTransactionIdentity(
+        logicalTime: logicalTime, timestamp: transaction.timestamp,
+        amount: transaction.amount, address: address
+    )
+}
+
+@available(macOS 10.15, *)
+private enum WalletTransactionIdentity: Hashable {
+    case id(String)
+    case hash(String)
+    case incoming(WalletIncomingTransactionIdentity)
+}
+
+@available(macOS 10.15, *)
+private func walletTransactionIdentities(_ transaction: WalletContext.Transaction) -> [WalletTransactionIdentity] {
+    var result: [WalletTransactionIdentity] = []
+    if !transaction.id.isEmpty { result.append(.id(transaction.id)) }
+    if let hash = transaction.transactionHash, !hash.isEmpty { result.append(.hash(hash)) }
+    if let incoming = walletIncomingTransactionIdentity(transaction) { result.append(.incoming(incoming)) }
+    return result
+}
+
+@available(macOS 10.15, *)
+struct WalletTransactionIdentityIndex {
+    private var indicesByIdentity: [WalletTransactionIdentity: Int] = [:]
+    private(set) var groups: [[Int]] = []
+
+    init(_ transactions: [WalletContext.Transaction]) {
+        var roots = Array(transactions.indices)
+        func root(_ index: Int) -> Int {
+            var index = index
+            while roots[index] != index {
+                roots[index] = roots[roots[index]]
+                index = roots[index]
+            }
+            return index
+        }
+        // Join all aliases before choosing winners: a later row can bridge an
+        // id-only cached row and another row already carrying its hash.
+        for (index, transaction) in transactions.enumerated() {
+            for identity in walletTransactionIdentities(transaction) {
+                if let previous = self.indicesByIdentity[identity] {
+                    let currentRoot = root(index)
+                    let previousRoot = root(previous)
+                    roots[max(currentRoot, previousRoot)] = min(currentRoot, previousRoot)
+                } else {
+                    self.indicesByIdentity[identity] = index
+                }
+            }
+        }
+        var groupByRoot: [Int: Int] = [:]
+        for index in transactions.indices {
+            let rootIndex = root(index)
+            if let group = groupByRoot[rootIndex] {
+                self.groups[group].append(index)
+            } else {
+                groupByRoot[rootIndex] = self.groups.count
+                self.groups.append([index])
+            }
+        }
+    }
+
+    func contains(_ transaction: WalletContext.Transaction) -> Bool {
+        walletTransactionIdentities(transaction).contains { self.indicesByIdentity[$0] != nil }
+    }
+}
+
+@available(macOS 10.15, *)
+public extension WalletContext.Transaction {
+    /// Compare records from the same wallet, including corrected incoming hashes.
+    func matchesHistoryTransaction(_ other: WalletContext.Transaction) -> Bool {
+        WalletTransactionIdentityIndex([self]).contains(other)
+    }
 }
 
 @available(macOS 10.15, *)
@@ -348,15 +444,6 @@ private func sortedWalletTransactions(
         }
         return decimalStringIsGreater(lhs.logicalTime, rhs.logicalTime)
     }
-}
-
-@available(macOS 10.15, *)
-private func transactionInformationScore(_ value: WalletContext.Transaction) -> Int {
-    var score = value.status == .completed ? 100 : 0
-    if value.peer.displayName != nil { score += 4 }
-    if value.peer.domain != nil { score += 2 }
-    if value.comment != nil { score += 1 }
-    return score
 }
 
 @available(macOS 10.15, *)
@@ -413,16 +500,17 @@ struct WalletTransactionHistory {
 
     mutating func applyRefresh(
         _ page: Page,
-        previous: WalletContext.TransactionsState
+        previous: WalletContext.TransactionsState,
+        log: ((String) -> Void)? = nil
     ) -> WalletContext.TransactionsState {
-        let existingIds = Set(previous.items.map(\.id))
-        let hasGap = !page.items.isEmpty && !page.items.contains { existingIds.contains($0.id) }
+        let existingIdentities = WalletTransactionIdentityIndex(previous.items)
+        let hasGap = !page.items.isEmpty && !page.items.contains(where: existingIdentities.contains)
         if !self.hasLoadedFirstPage || hasGap {
             self.nextOffset = page.nextOffset
             self.routeRevision &+= 1
         }
         self.hasLoadedFirstPage = true
-        let items = mergeTransactions(existing: previous.items, new: page.items)
+        let items = mergeTransactions(existing: previous.items, new: page.items, source: "refresh", log: log)
         return WalletContext.TransactionsState(
             items: items,
             offset: items.count,
@@ -435,14 +523,17 @@ struct WalletTransactionHistory {
     mutating func applyPage(
         _ page: Page,
         request: PageRequest,
-        previous: WalletContext.TransactionsState
+        previous: WalletContext.TransactionsState,
+        log: ((String) -> Void)? = nil
     ) -> (state: WalletContext.TransactionsState, shouldContinue: Bool) {
         guard request.generation == self.generation else { return (previous, false) }
-        let items = mergeTransactions(existing: previous.items, new: page.items)
+        let identities = WalletTransactionIdentityIndex(previous.items + page.items)
+        let hasNewTransactions = identities.groups.contains { $0[0] >= previous.items.count }
+        let items = mergeTransactions(existing: previous.items, new: page.items, source: "page", log: log)
         if request.routeRevision == self.routeRevision && request.offset == self.nextOffset {
             self.nextOffset = page.nextOffset
         }
-        let shouldContinue = items.count == previous.items.count && self.nextOffset != nil
+        let shouldContinue = !hasNewTransactions && self.nextOffset != nil
         return (
             WalletContext.TransactionsState(
                 items: items,

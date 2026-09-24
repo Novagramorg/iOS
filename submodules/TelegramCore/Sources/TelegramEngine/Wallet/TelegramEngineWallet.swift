@@ -80,11 +80,11 @@ public extension TelegramEngine {
             return _internal_walletTonConnectGetPending(account: self.account, lookup: lookup)
         }
 
-        public func tonConnectClaimRequest(sessionId: Int64, msgId: Int64, appRequestId: Int64, challengeAnswer: Data? = nil, declined: Bool = false) -> Signal<Bool, WalletTonConnectError> {
+        public func tonConnectClaimRequest(sessionId: Int64, msgId: Int32, appRequestId: String, challengeAnswer: Data? = nil, declined: Bool = false) -> Signal<Bool, WalletTonConnectError> {
             return _internal_walletTonConnectClaimRequest(account: self.account, sessionId: sessionId, msgId: msgId, appRequestId: appRequestId, challengeAnswer: challengeAnswer, declined: declined)
         }
 
-        public func tonConnectSubmitResponse(sessionId: Int64, msgId: Int64, body: Data, traceId: String? = nil) -> Signal<Bool, WalletTonConnectError> {
+        public func tonConnectSubmitResponse(sessionId: Int64, msgId: Int32, body: Data, traceId: String? = nil) -> Signal<Bool, WalletTonConnectError> {
             return _internal_walletTonConnectSubmitResponse(account: self.account, sessionId: sessionId, msgId: msgId, body: body, traceId: traceId)
         }
 
@@ -92,7 +92,7 @@ public extension TelegramEngine {
             return _internal_walletTonConnectNextEventId(account: self.account, sessionId: sessionId)
         }
 
-        public func tonConnectCloseSession(sessionId: Int64, body: Data) -> Signal<Bool, WalletTonConnectError> {
+        public func tonConnectCloseSession(sessionId: Int64, body: Data? = nil) -> Signal<Bool, WalletTonConnectError> {
             return _internal_walletTonConnectCloseSession(account: self.account, sessionId: sessionId, body: body)
         }
 

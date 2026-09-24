@@ -197,7 +197,7 @@ public extension WalletContext {
         public let id: String
         public let applicationName: String
         public let domain: String
-        public let iconUrl: String?
+        public let icon: WalletTonConnectIcon?
         public let permissions: [TonConnectPermission]
         public let requestsProof: Bool
 
@@ -205,14 +205,14 @@ public extension WalletContext {
             id: String,
             applicationName: String,
             domain: String,
-            iconUrl: String?,
+            icon: WalletTonConnectIcon?,
             permissions: [TonConnectPermission],
             requestsProof: Bool
         ) {
             self.id = id
             self.applicationName = applicationName
             self.domain = domain
-            self.iconUrl = iconUrl
+            self.icon = icon
             self.permissions = permissions
             self.requestsProof = requestsProof
         }
@@ -272,7 +272,7 @@ public extension WalletContext {
         public let id: String
         public let applicationName: String
         public let domain: String
-        public let iconUrl: String?
+        public let icon: WalletTonConnectIcon?
         public let method: Method
         public let messages: [Message]
         public let feeNanograms: String?
@@ -287,7 +287,7 @@ public extension WalletContext {
             id: String,
             applicationName: String,
             domain: String,
-            iconUrl: String?,
+            icon: WalletTonConnectIcon?,
             method: Method,
             messages: [Message],
             feeNanograms: String?,
@@ -301,7 +301,7 @@ public extension WalletContext {
             self.id = id
             self.applicationName = applicationName
             self.domain = domain
-            self.iconUrl = iconUrl
+            self.icon = icon
             self.method = method
             self.messages = messages
             self.feeNanograms = feeNanograms
@@ -318,7 +318,7 @@ public extension WalletContext {
         public let id: String
         public let applicationName: String
         public let domain: String
-        public let iconUrl: String?
+        public let icon: WalletTonConnectIcon?
         public let payload: TonConnectSignDataPayload.Content
         public let address: String
         public let network: String
@@ -947,6 +947,7 @@ public extension WalletContext {
         case previewIncomplete
         case preparedTransferExpired
         case preparedTransferNotFound
+        case walletKeyMismatch
         case network
         case requestPassword
         case invalidPassword

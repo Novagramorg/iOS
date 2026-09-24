@@ -321,7 +321,7 @@ public enum ResolvedBotStartPeerType {
 
 public struct WalletSendRequest {
     public enum Recipient {
-        case peer(EnginePeer)
+        case peer(EnginePeer, resolvedAddress: WalletUserAddress? = nil)
         case address(String)
     }
 

@@ -968,7 +968,7 @@ private final class WalletSettingsScreenComponent: Component {
             let actionsEnabled = progress.get() |> map { !$0 }
             let alertController = AlertScreen(
                 context: component.context,
-                configuration: AlertScreen.Configuration(dismissOnOutsideTap: false),
+                configuration: AlertScreen.Configuration(dismissOnOutsideTap: false, allowInputInset: true),
                 content: [
                     AnyComponentWithIdentity(
                         id: "title",

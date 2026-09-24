@@ -14334,6 +14334,7 @@ Sorry for the inconvenience.";
 "MediaPicker.CreateStory_1" = "Create %@ Story";
 "MediaPicker.CreateStory_any" = "Create %@ Stories";
 "MediaPicker.CombineIntoCollage" = "Combine into Collage";
+"MediaPicker.AddToCollage" = "Add to Collage";
 
 "Gift.Resale.Unavailable.Title" = "Try Later";
 "Gift.Resale.Unavailable.Text" = "You will be able to resell this gift on %@.";

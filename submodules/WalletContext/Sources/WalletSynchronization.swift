@@ -149,7 +149,8 @@ extension WalletContextImpl {
             transactions = self.transactionHistory.applyRefresh(
                 WalletTransactionHistory.Page(items: walletTransactions(from: response.items),
                 nextOffset: response.nextOffset),
-                previous: transactions
+                previous: transactions,
+                log: self.logger.log
             )
             let reconciliation = self.pendingTransfers(pending, reconcilingWith: transactions.items)
             if pending.contains(where: { value in

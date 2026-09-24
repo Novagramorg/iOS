@@ -1,0 +1,227 @@
+import Foundation
+import UIKit
+import AppBundle
+import Display
+import ComponentFlow
+import AnimatedTextComponent
+import TelegramPresentationData
+
+final class WalletSendAnimatedRateButton: UIControl {
+    private let contentView = UIView()
+    private let canvas = WalletSendAmountCanvas(frame: .zero)
+    private let title = ComponentView<Empty>()
+    private let gramIcon = UIImageView()
+    private var arrows: [UIImageView] = []
+    private let motion = WalletSendAmountMotion()
+    private var displayLink: SharedDisplayLinkDriver.Link?
+    private var arrowTiming: WalletSendAmountMotionTiming?
+    private var arrowFrom: CGFloat = 0.0
+    private var arrowTo: CGFloat = 0.0
+    private var arrowPhase: CGFloat = 0.0
+    private var arrowPaceFrom: CGFloat = 0.0
+    private var arrowPace: CGFloat = 0.0
+    private var geometryTiming: WalletSendAmountMotionTiming?
+    private var previousMode: WalletSendInputMode?
+    private var widthFrom: CGFloat = 22.0
+    private var widthTo: CGFloat = 22.0
+    private var currentWidth: CGFloat = 22.0
+    private var gramFrom: CGFloat = 0.0
+    private var gramTo: CGFloat = 0.0
+    private var currentGram: CGFloat = 0.0
+    private var visible = false
+    private var frameDuration = 1.0 / 60.0
+    var action: (() -> Void)?
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        self.isExclusiveTouch = true
+        self.isAccessibilityElement = true
+        self.accessibilityTraits = .button
+        self.contentView.isUserInteractionEnabled = false
+        self.contentView.clipsToBounds = true
+        self.contentView.layer.cornerRadius = 13.0
+        self.addSubview(self.contentView)
+        self.contentView.addSubview(self.canvas)
+        self.gramIcon.image = UIImage(bundleImageName: "Wallet/SendGram")?.withRenderingMode(.alwaysTemplate)
+        self.gramIcon.contentMode = .scaleAspectFit
+        self.contentView.addSubview(self.gramIcon)
+        for side in 0 ..< 2 {
+            for _ in 0 ..< 5 {
+                let view = UIImageView(image: UIImage(bundleImageName: "Wallet/Swap")?.withRenderingMode(.alwaysTemplate))
+                view.contentMode = .scaleAspectFit
+                let mask = CAShapeLayer()
+                mask.path = CGPath(rect: CGRect(x: CGFloat(side) * 9.0, y: 0.0, width: 9.0, height: 18.0), transform: nil)
+                view.layer.mask = mask
+                self.contentView.addSubview(view)
+                self.arrows.append(view)
+            }
+        }
+        self.addTarget(self, action: #selector(self.pressed), for: .touchUpInside)
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    deinit { self.displayLink?.invalidate() }
+
+    @objc private func pressed() { self.action?() }
+
+    override var isHighlighted: Bool {
+        didSet {
+            let scale: CGFloat = self.isHighlighted && !UIAccessibility.isReduceMotionEnabled ? 0.94 : 1.0
+            UIView.animate(withDuration: UIAccessibility.isReduceMotionEnabled ? 0.15 : 0.28, delay: 0.0, usingSpringWithDamping: 0.7, initialSpringVelocity: 0.0, options: [.beginFromCurrentState, .allowUserInteraction], animations: {
+                self.contentView.transform = CGAffineTransform(scaleX: scale, y: scale)
+            })
+        }
+    }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if self.window == nil { self.finishMotion() }
+    }
+
+    func update(
+        text: String, displaysGramIcon: Bool, mode: WalletSendInputMode,
+        dateTimeFormat: PresentationDateTimeFormat, theme: PresentationTheme,
+        isVisible: Bool, isEnabled: Bool, timing sharedTiming: WalletSendAmountMotionTiming?,
+        maxWidth: CGFloat
+    ) -> CGSize {
+        let wasVisible = self.visible
+        self.visible = isVisible
+        self.isEnabled = isEnabled
+        self.accessibilityLabel = displaysGramIcon ? "GRAM " + text : text
+        self.contentView.backgroundColor = theme.list.itemInputField.backgroundColor
+        self.gramIcon.tintColor = UIColor(rgb: 0x30A1F5)
+        for arrow in self.arrows { arrow.tintColor = theme.list.itemSecondaryTextColor }
+        let font = Font.with(size: 13.0, design: .round, weight: .semibold)
+        let titleSize = self.title.update(
+            transition: .immediate,
+            component: AnyComponent(AnimatedTextComponent(font: font, color: theme.list.itemSecondaryTextColor, items: [.init(id: "rate", content: .text(text))], noDelay: true, blur: true)),
+            environment: {}, containerSize: CGSize(width: max(1.0, maxWidth - 56.0), height: 26.0)
+        )
+        let textWidth = titleSize.width
+        let gramWidth: CGFloat = displaysGramIcon ? 19.0 : 0.0
+        let width = min(maxWidth, max(22.0, 16.0 + gramWidth + textWidth + 3.0 + 18.0))
+        let titleOrigin = CGPoint(x: 8.0 + gramWidth, y: floorToScreenPixels((26.0 - titleSize.height) / 2.0))
+        var glyphs: [WalletSendAmountGlyph] = []
+        if let titleView = self.title.view {
+            if titleView.superview == nil {
+                titleView.isUserInteractionEnabled = false
+                titleView.accessibilityElementsHidden = true
+                self.contentView.addSubview(titleView)
+            }
+            titleView.frame = CGRect(origin: titleOrigin, size: titleSize)
+            glyphs = walletSendAmountComponentGlyphs(titleView, origin: titleOrigin)
+        }
+        var inFraction = false
+        var passedNumber = false
+        for i in glyphs.indices {
+            let value = glyphs[i].text
+            if value == dateTimeFormat.decimalSeparator {
+                inFraction = true
+                glyphs[i].group = .fraction
+            } else if value == dateTimeFormat.groupingSeparator && !value.isEmpty && !passedNumber {
+                glyphs[i].group = .grouping
+            } else if value.first?.wholeNumberValue != nil {
+                glyphs[i].group = inFraction ? .fraction : .integer
+            } else if value == "~" {
+                glyphs[i].group = .prefix
+            } else {
+                passedNumber = true
+                glyphs[i].group = .suffix
+            }
+        }
+        let switched = self.previousMode != nil && self.previousMode != mode
+        if glyphs != self.motion.target || self.widthTo != width || self.gramTo != (displaysGramIcon ? 1.0 : 0.0) {
+            let now = CACurrentMediaTime()
+            let sharedStart = sharedTiming.flatMap { now - $0.start < $0.duration ? $0.start : nil }
+            let timing: WalletSendAmountMotionTiming?
+            if self.previousMode != nil && wasVisible && isVisible {
+                timing = WalletSendAmountMotionTiming(spin: switched, up: !(sharedTiming?.up ?? true), start: sharedStart ?? now)
+            } else {
+                timing = nil
+            }
+            self.widthFrom = self.currentWidth
+            self.widthTo = width
+            self.gramFrom = self.currentGram
+            self.gramTo = displaysGramIcon ? 1.0 : 0.0
+            self.geometryTiming = timing
+            self.motion.update(glyphs, timing: timing)
+            if switched {
+                self.arrowTiming = timing
+                self.arrowFrom = self.arrowPhase
+                self.arrowTo = floor(self.arrowPhase) + 1.0
+                self.arrowPaceFrom = self.arrowPace
+            }
+        }
+        self.previousMode = mode
+        if !isVisible { self.finishMotion() }
+        self.renderFrame()
+        if self.isAnimating && self.displayLink == nil {
+            self.displayLink = SharedDisplayLinkDriver.shared.add(framesPerSecond: .max, { [weak self] duration in
+                guard let self else { return }
+                self.frameDuration += (Double(duration) - self.frameDuration) * 0.3
+                self.renderFrame()
+            })
+        }
+        return CGSize(width: width, height: 26.0)
+    }
+
+    private var isAnimating: Bool {
+        let now = CACurrentMediaTime()
+        return self.visible && (self.motion.isAnimating(at: now) || (self.geometryTiming?.progress(at: now) ?? 1.0) < 1.0 || (self.arrowTiming?.progress(at: now) ?? 1.0) < 1.0)
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        self.renderFrame()
+    }
+
+    private func renderFrame() {
+        let now = CACurrentMediaTime()
+        let p = WalletSendAmountMotionTiming.ease(self.geometryTiming?.progress(at: now) ?? 1.0)
+        self.currentWidth = self.widthFrom + (self.widthTo - self.widthFrom) * p
+        self.currentGram = self.gramFrom + (self.gramTo - self.gramFrom) * p
+        self.contentView.bounds = CGRect(x: 0.0, y: 0.0, width: self.currentWidth, height: 26.0)
+        self.contentView.center = CGPoint(x: self.bounds.midX, y: self.bounds.midY)
+        self.canvas.frame = self.contentView.bounds
+        self.canvas.frameDuration = self.frameDuration
+        self.canvas.sprites = self.motion.frame(at: now, frameDuration: self.frameDuration)
+        let textIsMoving = self.motion.isAnimating(at: now)
+        self.canvas.isHidden = !textIsMoving
+        self.title.view?.isHidden = textIsMoving
+        self.gramIcon.frame = CGRect(x: 8.0, y: 5.0, width: 16.0, height: 16.0)
+        self.gramIcon.alpha = self.currentGram
+        let raw = self.arrowTiming?.progress(at: now) ?? 1.0
+        self.arrowPhase = self.arrowFrom + (self.arrowTo - self.arrowFrom) * WalletSendAmountMotionTiming.ease(raw)
+        let phase = self.arrowPhase.truncatingRemainder(dividingBy: 1.0)
+        let speed = pow(1.0 - raw, 1.2)
+        self.arrowPace = self.arrowPaceFrom + (speed - self.arrowPaceFrom) * WalletSendAmountMotionTiming.ease(min(1.0, raw / 0.15))
+        let pace: CGFloat = self.arrowTiming?.reduced == true ? 0.0 : self.arrowPace
+        let loop = phase < 0.5 ? phase * 2.0 : phase * 2.0 - 2.0
+        let smear = 8.0 * pace
+        let multiple = smear > 1.0
+        let weights: [CGFloat] = [0.45, 0.8625, 1.0, 0.8625, 0.45]
+        for (i, arrow) in self.arrows.enumerated() {
+            let sample = i % 5
+            let direction: CGFloat = i < 5 ? -1.0 : 1.0
+            let k: CGFloat = multiple ? CGFloat(sample) / 4.0 - 0.5 : 0.0
+            arrow.transform = .identity
+            arrow.frame = CGRect(x: self.currentWidth - 26.0, y: 4.0, width: 18.0, height: 18.0)
+            let travel = self.arrowTiming?.reduced == true ? 0.0 : direction * (22.0 * loop + k * smear)
+            arrow.transform = CGAffineTransform(translationX: 0.0, y: travel).scaledBy(x: 1.0, y: 1.0 + 0.55 * pace)
+            arrow.alpha = multiple ? weights[sample] / 3.625 : (sample == 0 ? 1.0 : 0.0)
+        }
+        if !self.isAnimating {
+            self.displayLink?.invalidate()
+            self.displayLink = nil
+        }
+    }
+
+    private func finishMotion() {
+        self.motion.finish()
+        self.geometryTiming = nil
+        self.arrowTiming = nil
+        self.displayLink?.invalidate()
+        self.displayLink = nil
+        self.renderFrame()
+    }
+}

@@ -65,6 +65,8 @@ extension RichText {
             self = .textAutoUrl(text: RichText(apiText: textAutoUrlData.text))
         case let .textBankCard(textBankCardData):
             self = .textBankCard(text: RichText(apiText: textBankCardData.text))
+        case let .textTonAddress(data):
+            self = .textTonAddress(text: RichText(apiText: data.text))
         case let .textBotCommand(textBotCommandData):
             self = .textBotCommand(text: RichText(apiText: textBotCommandData.text))
         case let .textCashtag(textCashtagData):
@@ -138,6 +140,8 @@ extension RichText {
             return .textAutoUrl(Api.RichText.Cons_textAutoUrl(text: text.apiRichText()))
         case let .textBankCard(text):
             return .textBankCard(Api.RichText.Cons_textBankCard(text: text.apiRichText()))
+        case let .textTonAddress(text):
+            return .textTonAddress(Api.RichText.Cons_textTonAddress(text: text.apiRichText()))
         case let .textBotCommand(text):
             return .textBotCommand(Api.RichText.Cons_textBotCommand(text: text.apiRichText()))
         case let .textCashtag(text):

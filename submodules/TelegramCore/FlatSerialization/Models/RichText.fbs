@@ -33,7 +33,8 @@ union RichText_Value {
     RichText_MentionName,
     RichText_Spoiler,
     RichText_Date,
-    RichText_TextButton
+    RichText_TextButton,
+    RichText_TonAddress
 }
 
 table RichText {
@@ -130,6 +131,10 @@ table RichText_AutoUrl {
 }
 
 table RichText_BankCard {
+    text:RichText (id: 0, required);
+}
+
+table RichText_TonAddress {
     text:RichText (id: 0, required);
 }
 

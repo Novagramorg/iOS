@@ -401,8 +401,9 @@ private final class WalletAppsScreenComponent: Component {
                     ], alignment: .left, spacing: 2.0)),
                     contentInsets: UIEdgeInsets(top: 10.0, left: 0.0, bottom: 10.0, right: 0.0),
                     leftIcon: .custom(AnyComponentWithIdentity(id: "icon", component: AnyComponent(WalletConnectAppIconComponent(
+                        context: component.context,
                         applicationName: manifest.name,
-                        url: manifest.iconUrl,
+                        icon: manifest.icon,
                         size: 30.0,
                         cornerRadius: 9.0
                     ))), false),

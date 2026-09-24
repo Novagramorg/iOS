@@ -1101,6 +1101,15 @@ public extension Api {
                 return ("textSuperscript", [("text", ConstructorParameterDescription(self.text))])
             }
         }
+        public class Cons_textTonAddress: TypeConstructorDescription {
+            public var text: Api.RichText
+            public init(text: Api.RichText) {
+                self.text = text
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("textTonAddress", [("text", ConstructorParameterDescription(self.text))])
+            }
+        }
         public class Cons_textUnderline: TypeConstructorDescription {
             public var text: Api.RichText
             public init(text: Api.RichText) {
@@ -1152,6 +1161,7 @@ public extension Api {
         case textStrike(Cons_textStrike)
         case textSubscript(Cons_textSubscript)
         case textSuperscript(Cons_textSuperscript)
+        case textTonAddress(Cons_textTonAddress)
         case textUnderline(Cons_textUnderline)
         case textUrl(Cons_textUrl)
 
@@ -1349,6 +1359,12 @@ public extension Api {
                 }
                 _data.text.serialize(buffer, true)
                 break
+            case .textTonAddress(let _data):
+                if boxed {
+                    buffer.appendInt32(1020437354)
+                }
+                _data.text.serialize(buffer, true)
+                break
             case .textUnderline(let _data):
                 if boxed {
                     buffer.appendInt32(-1054465340)
@@ -1426,6 +1442,8 @@ public extension Api {
                 return ("textSubscript", [("text", ConstructorParameterDescription(_data.text))])
             case .textSuperscript(let _data):
                 return ("textSuperscript", [("text", ConstructorParameterDescription(_data.text))])
+            case .textTonAddress(let _data):
+                return ("textTonAddress", [("text", ConstructorParameterDescription(_data.text))])
             case .textUnderline(let _data):
                 return ("textUnderline", [("text", ConstructorParameterDescription(_data.text))])
             case .textUrl(let _data):
@@ -1834,6 +1852,19 @@ public extension Api {
             let _c1 = _1 != nil
             if _c1 {
                 return Api.RichText.textSuperscript(Cons_textSuperscript(text: _1!))
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_textTonAddress(_ reader: BufferReader) -> RichText? {
+            var _1: Api.RichText?
+            if let signature = reader.readInt32() {
+                _1 = Api.parse(reader, signature: signature) as? Api.RichText
+            }
+            let _c1 = _1 != nil
+            if _c1 {
+                return Api.RichText.textTonAddress(Cons_textTonAddress(text: _1!))
             }
             else {
                 return nil
