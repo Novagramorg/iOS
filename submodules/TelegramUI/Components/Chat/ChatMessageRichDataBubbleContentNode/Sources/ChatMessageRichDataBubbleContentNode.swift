@@ -587,7 +587,18 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                     wantsReactionsOutside = hasReactions && !inline
                 }
             }
-            let contentProperties = ChatMessageBubbleContentProperties(hidesSimpleAuthorHeader: false, headerSpacing: 0.0, hidesBackground: .never, forceFullCorners: false, forceAlignment: .none, wantsReactionsOutside: wantsReactionsOutside)
+            // The bubble's header (author name, "Forwarded from", reply) ends in an overlap that
+            // assumes the content below brings its own top inset, as a text bubble does. A page that
+            // opens with text does (its leading padding); one that opens flush — a photo, a code
+            // band, a file row — brings none and would run into the header. Such a page takes the
+            // media bubble's spacing, so with both inset 2pt a photo here sits exactly where a photo
+            // message's does.
+            let headerSpacingShowMoreExpanded = (showMoreExpandedState?.messageId == item.message.id) ? (showMoreExpandedState?.value ?? false) : false
+            var headerSpacing: CGFloat = 0.0
+            if let resolvedContent = ChatMessageRichDataBubbleContentNode.resolvedRichDataContent(item: item, showMoreExpanded: headerSpacingShowMoreExpanded), instantPageV2ContentStartsFlushAtTop(resolvedContent.instantPage.blocks) {
+                headerSpacing = 7.0
+            }
+            let contentProperties = ChatMessageBubbleContentProperties(hidesSimpleAuthorHeader: false, headerSpacing: headerSpacing, hidesBackground: .never, forceFullCorners: false, forceAlignment: .none, wantsReactionsOutside: wantsReactionsOutside)
 
             return (contentProperties, nil, CGFloat.greatestFiniteMagnitude, { constrainedSize, position in
                 let suggestedBoundingWidth: CGFloat = constrainedSize.width
