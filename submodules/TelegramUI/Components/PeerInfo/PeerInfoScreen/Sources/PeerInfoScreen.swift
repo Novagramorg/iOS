@@ -217,6 +217,9 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
     let switchToMediaTarget: PeerInfoSwitchToMediaTarget?
     let switchToGiftsTarget: PeerInfoSwitchToGiftsTarget?
     let sharedMediaFromForumTopic: (EnginePeer.Id, Int64)?
+    /// The chat the shared-media panes list (see `peerInfoSharedMediaChatLocation`), resolved once
+    /// so the gallery, preview, search and "View in Chat" share one location and context holder.
+    let sharedMediaChatLocation: (peerId: EnginePeer.Id, chatLocation: ChatLocation, chatLocationContextHolder: Atomic<ChatLocationContextHolder?>)
     
     let isSettings: Bool
     let isMyProfile: Bool
@@ -393,6 +396,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
         self.switchToMediaTarget = switchToMediaTarget
         self.switchToGiftsTarget = switchToGiftsTarget
         self.sharedMediaFromForumTopic = sharedMediaFromForumTopic
+        self.sharedMediaChatLocation = peerInfoSharedMediaChatLocation(peerId: peerId, chatLocation: chatLocation, chatLocationContextHolder: chatLocationContextHolder, sharedMediaFromForumTopic: sharedMediaFromForumTopic)
         
         self.scrollNode = ASScrollNode()
         self.scrollNode.view.delaysContentTouches = false
@@ -764,49 +768,14 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                 }
                 
                 var isCopyProtected = false
-                if let cachedUserData = strongSelf.data?.cachedData as? CachedUserData, cachedUserData.flags.contains(.copyProtectionEnabled) || cachedUserData.flags.contains(.myCopyProtectionEnabled) {
-                    isCopyProtected = true
+                if let data = strongSelf.data {
+                    isCopyProtected = peerInfoIsCopyProtected(data: data, sharedMediaFromForumTopic: strongSelf.sharedMediaFromForumTopic)
                 }
                 
                 var items: [ContextMenuItem] = []
                 items.append(.action(ContextMenuActionItem(text: strongSelf.presentationData.strings.SharedMedia_ViewInChat, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/GoToMessage"), color: theme.contextMenu.primaryColor) }, action: { c, _ in
                     c?.dismiss(completion: {
-                        if let strongSelf = self, let currentPeer = strongSelf.data?.peer, let navigationController = strongSelf.controller?.navigationController as? NavigationController {
-                            if case let .channel(channel) = currentPeer, channel.isForumOrMonoForum, let threadId = message.threadId {
-                                let _ = strongSelf.context.sharedContext.navigateToForumThread(context: strongSelf.context, peerId: currentPeer.id, threadId: threadId, messageId: message.id, navigationController: navigationController, activateInput: nil, scrollToEndIfExists: false, keepStack: .default, animated: true).startStandalone()
-                            } else {
-                                let targetLocation: NavigateToChatControllerParams.Location
-                                if case let .replyThread(message) = strongSelf.chatLocation {
-                                    targetLocation = .replyThread(message)
-                                } else {
-                                    targetLocation = .peer(currentPeer)
-                                }
-                                
-                                let currentPeerId = strongSelf.peerId
-                                strongSelf.context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: navigationController, context: strongSelf.context, chatLocation: targetLocation, subject: .message(id: .id(message.id), highlight: ChatControllerSubject.MessageHighlight(quote: nil), timecode: nil, setupReply: false), keepStack: .always, useExisting: false, purposefulAction: {
-                                    var viewControllers = navigationController.viewControllers
-                                    var indexesToRemove = Set<Int>()
-                                    var keptCurrentChatController = false
-                                    var index: Int = viewControllers.count - 1
-                                    for controller in viewControllers.reversed() {
-                                        if let controller = controller as? ChatController, case let .peer(peerId) = controller.chatLocation {
-                                            if peerId == currentPeerId && !keptCurrentChatController {
-                                                keptCurrentChatController = true
-                                            } else {
-                                                indexesToRemove.insert(index)
-                                            }
-                                        } else if controller is PeerInfoScreen {
-                                            indexesToRemove.insert(index)
-                                        }
-                                        index -= 1
-                                    }
-                                    for i in indexesToRemove.sorted().reversed() {
-                                        viewControllers.remove(at: i)
-                                    }
-                                    navigationController.setViewControllers(viewControllers, animated: false)
-                                }))
-                            }
-                        }
+                        self?.openSharedMediaMessageInChat(message: message)
                     })
                 })))
                 
@@ -918,7 +887,10 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                 return
             }
             
-            let _ = (chatMediaListPreviewControllerData(context: strongSelf.context, chatLocation: .peer(id: message.id.peerId), chatFilterTag: nil, chatLocationContextHolder: Atomic<ChatLocationContextHolder?>(value: nil), message: message, standalone: false, reverseMessageGalleryOrder: false, navigationController: strongSelf.controller?.navigationController as? NavigationController)
+            // Preview within the chat the panes list: the message's own peer is a deactivated basic
+            // group for a supergroup's pre-migration history, and the whole channel for a thread of
+            // its direct messages.
+            let _ = (chatMediaListPreviewControllerData(context: strongSelf.context, chatLocation: strongSelf.sharedMediaChatLocation.chatLocation, chatFilterTag: nil, chatLocationContextHolder: strongSelf.sharedMediaChatLocation.chatLocationContextHolder, message: message, standalone: false, reverseMessageGalleryOrder: false, navigationController: strongSelf.controller?.navigationController as? NavigationController)
             |> deliverOnMainQueue).startStandalone(next: { previewData in
                 guard let strongSelf = self else {
                     gesture?.cancel()
@@ -926,8 +898,8 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                 }
                 if let previewData = previewData {
                     var isCopyProtected = false
-                    if let cachedUserData = strongSelf.data?.cachedData as? CachedUserData, cachedUserData.flags.contains(.copyProtectionEnabled) || cachedUserData.flags.contains(.myCopyProtectionEnabled) {
-                        isCopyProtected = true
+                    if let data = strongSelf.data {
+                        isCopyProtected = peerInfoIsCopyProtected(data: data, sharedMediaFromForumTopic: strongSelf.sharedMediaFromForumTopic)
                     }
                     
                     let context = strongSelf.context
@@ -938,42 +910,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                         
                         items.append(.action(ContextMenuActionItem(text: strings.SharedMedia_ViewInChat, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/GoToMessage"), color: theme.contextMenu.primaryColor) }, action: { c, f in
                             c?.dismiss(completion: {
-                                if let strongSelf = self, let currentPeer = strongSelf.data?.peer, let navigationController = strongSelf.controller?.navigationController as? NavigationController {
-                                    if case let .channel(channel) = currentPeer, channel.isForumOrMonoForum, let threadId = message.threadId {
-                                        let _ = strongSelf.context.sharedContext.navigateToForumThread(context: strongSelf.context, peerId: currentPeer.id, threadId: threadId, messageId: message.id, navigationController: navigationController, activateInput: nil, scrollToEndIfExists: false, keepStack: .default, animated: true).startStandalone()
-                                    } else {
-                                        let targetLocation: NavigateToChatControllerParams.Location
-                                        if case let .replyThread(message) = strongSelf.chatLocation {
-                                            targetLocation = .replyThread(message)
-                                        } else {
-                                            targetLocation = .peer(currentPeer)
-                                        }
-                                        
-                                        let currentPeerId = strongSelf.peerId
-                                        strongSelf.context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: navigationController, context: strongSelf.context, chatLocation: targetLocation, subject: .message(id: .id(message.id), highlight: ChatControllerSubject.MessageHighlight(quote: nil), timecode: nil, setupReply: false), keepStack: .always, useExisting: false, purposefulAction: {
-                                            var viewControllers = navigationController.viewControllers
-                                            var indexesToRemove = Set<Int>()
-                                            var keptCurrentChatController = false
-                                            var index: Int = viewControllers.count - 1
-                                            for controller in viewControllers.reversed() {
-                                                if let controller = controller as? ChatController, case let .peer(peerId) = controller.chatLocation {
-                                                    if peerId == currentPeerId && !keptCurrentChatController {
-                                                        keptCurrentChatController = true
-                                                    } else {
-                                                        indexesToRemove.insert(index)
-                                                    }
-                                                } else if controller is PeerInfoScreen {
-                                                    indexesToRemove.insert(index)
-                                                }
-                                                index -= 1
-                                            }
-                                            for i in indexesToRemove.sorted().reversed() {
-                                                viewControllers.remove(at: i)
-                                            }
-                                            navigationController.setViewControllers(viewControllers, animated: false)
-                                        }))
-                                    }
-                                }
+                                self?.openSharedMediaMessageInChat(message: message)
                             })
                         })))
                         
@@ -2872,7 +2809,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             }
         }
         
-        setLayerDisableScreenshots(self.layer, peerInfoIsCopyProtected(data: data))
+        setLayerDisableScreenshots(self.layer, peerInfoIsCopyProtected(data: data, sharedMediaFromForumTopic: self.sharedMediaFromForumTopic))
     }
     
     func scrollToTop() {
@@ -5160,7 +5097,9 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                 }
             }
             
-            self.searchDisplayController = SearchDisplayController(presentationData: self.presentationData, mode: .navigation, placeholder: self.presentationData.strings.Common_Search, hasBackground: false, contentNode: ChatHistorySearchContainerNode(context: self.context, peerId: self.peerId, threadId: self.chatLocation.threadId, tagMask: tagMask, interfaceInteraction: self.chatInterfaceInteraction), cancel: { [weak self] in
+            // Search the chat the panes list, not the profile's own chat.
+            let sharedMediaChatLocation = self.sharedMediaChatLocation
+            self.searchDisplayController = SearchDisplayController(presentationData: self.presentationData, mode: .navigation, placeholder: self.presentationData.strings.Common_Search, hasBackground: false, contentNode: ChatHistorySearchContainerNode(context: self.context, peerId: sharedMediaChatLocation.peerId, threadId: sharedMediaChatLocation.chatLocation.threadId, tagMask: tagMask, interfaceInteraction: self.chatInterfaceInteraction), cancel: { [weak self] in
                 self?.deactivateSearch()
             }, fieldStyle: .glass)
         }
@@ -5234,10 +5173,14 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
     func openMediaCalendar() {
         var initialTimestamp = Int32(Date().timeIntervalSince1970)
 
-        guard let pane = self.paneContainerNode.currentPane?.node as? PeerInfoVisualMediaPaneNode, let timestamp = pane.currentTopTimestamp(), let calendarSource = pane.calendarSource else {
+        guard let pane = self.paneContainerNode.currentPane?.node as? PeerInfoVisualMediaPaneNode, let calendarSource = pane.calendarSource else {
             return
         }
-        initialTimestamp = timestamp
+        // The grid has no top item while it is empty or still loading; the calendar then opens at
+        // the current date.
+        if let timestamp = pane.currentTopTimestamp() {
+            initialTimestamp = timestamp
+        }
 
         var dismissCalendarScreen: (() -> Void)?
 
@@ -5275,33 +5218,28 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                     f(.dismissWithoutContent)
                     dismissCalendarScreen?()
 
-                    guard let strongSelf = self, let peer = strongSelf.data?.peer, let controller = strongSelf.controller, let navigationController = controller.navigationController as? NavigationController else {
+                    guard let strongSelf = self else {
                         return
                     }
 
-                    strongSelf.context.sharedContext.navigateToChatController(NavigateToChatControllerParams(
-                        navigationController: navigationController,
-                        chatController: nil,
-                        context: strongSelf.context,
-                        chatLocation: .peer(peer),
-                        subject: .message(id: .id(index.id), highlight: nil, timecode: nil, setupReply: false),
-                        botStart: nil,
-                        updateTextInputState: nil,
-                        keepStack: .never,
-                        useExisting: true,
-                        purposefulAction: nil,
-                        scrollToEndIfExists: false,
-                        activateMessageSearch: nil,
-                        peekData: nil,
-                        reportReason: nil,
-                        animated: true,
-                        options: [],
-                        parentGroupId: nil,
-                        chatListFilter: nil,
-                        changeColors: false,
-                        completion: { _ in
+                    // The calendar has only the day's message index; the message itself (which the
+                    // calendar stores locally) tells which topic of a forum it is in. Without it, a
+                    // forum opens its topic list and drops the message.
+                    let _ = (strongSelf.context.engine.data.get(TelegramEngine.EngineData.Item.Messages.Message(id: index.id))
+                    |> deliverOnMainQueue).startStandalone(next: { message in
+                        guard let strongSelf = self else {
+                            return
                         }
-                    ))
+                        let destination: PeerInfoMessageChatDestination
+                        if let message, let messageDestination = strongSelf.sharedMediaMessageChatDestination(message: message) {
+                            destination = messageDestination
+                        } else if let peer = strongSelf.data?.chatPeer {
+                            destination = .peer(peer)
+                        } else {
+                            return
+                        }
+                        strongSelf.openSharedMediaChat(destination: destination, messageId: index.id, navigation: .returnToExisting)
+                    })
                 })))
 
                 let chatController = strongSelf.context.sharedContext.makeChatController(context: strongSelf.context, chatLocation: .peer(id: strongSelf.peerId), subject: .message(id: .id(index.id), highlight: nil, timecode: nil, setupReply: false), botStart: nil, mode: .standard(.previewing), params: nil)

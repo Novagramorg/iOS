@@ -450,6 +450,9 @@ final class PeerInfoScreenData {
     let savedMusicState: ProfileSavedMusicContext.State?
     let managedByBot: EnginePeer?
     let businessConnectedBot: EnginePeer?
+    /// The chat the shared media lists when it is not the profile's own chat: the channel whose
+    /// direct messages the profile was opened from.
+    let sharedMediaPeer: EnginePeer?
     
     let _isContact: Bool
     var forceIsContact: Bool = false
@@ -508,7 +511,8 @@ final class PeerInfoScreenData {
         savedMusicContext: ProfileSavedMusicContext?,
         savedMusicState: ProfileSavedMusicContext.State?,
         managedByBot: EnginePeer?,
-        businessConnectedBot: EnginePeer?
+        businessConnectedBot: EnginePeer?,
+        sharedMediaPeer: EnginePeer? = nil
     ) {
         self.peer = peer
         self.chatPeer = chatPeer
@@ -556,6 +560,7 @@ final class PeerInfoScreenData {
         self.savedMusicState = savedMusicState
         self.managedByBot = managedByBot
         self.businessConnectedBot = businessConnectedBot
+        self.sharedMediaPeer = sharedMediaPeer
     }
 }
 
@@ -600,29 +605,7 @@ public func hasAvailablePeerInfoMediaPanes(context: AccountContext, peerId: Peer
 }
 
 private func peerInfoAvailableMediaPanes(context: AccountContext, peerId: PeerId, chatLocation: ChatLocation, isMyProfile: Bool, chatLocationContextHolder: Atomic<ChatLocationContextHolder?>, sharedMediaFromForumTopic: (EnginePeer.Id, Int64)?) -> Signal<[PeerInfoPaneKey]?, NoError> {
-    var peerId = peerId
-    var chatLocation = chatLocation
-    var chatLocationContextHolder = chatLocationContextHolder
-    if let sharedMediaFromForumTopic {
-        peerId = sharedMediaFromForumTopic.0
-        chatLocation = .replyThread(message: ChatReplyThreadMessage(
-            peerId: sharedMediaFromForumTopic.0,
-            threadId: sharedMediaFromForumTopic.1,
-            channelMessageId: nil,
-            isChannelPost: false,
-            isForumPost: true,
-            isMonoforumPost: true,
-            maxMessage: nil,
-            maxReadIncomingMessageId: nil,
-            maxReadOutgoingMessageId: nil,
-            unreadCount: 0,
-            initialFilledHoles: IndexSet(),
-            initialAnchor: .automatic,
-            isNotAvailable: false
-        ))
-        chatLocationContextHolder = Atomic(value: nil)
-    }
-    let _ = peerId
+    let (_, chatLocation, chatLocationContextHolder) = peerInfoSharedMediaChatLocation(peerId: peerId, chatLocation: chatLocation, chatLocationContextHolder: chatLocationContextHolder, sharedMediaFromForumTopic: sharedMediaFromForumTopic)
     
     var tags: [(MessageTags, PeerInfoPaneKey)] = []
     
@@ -636,6 +619,12 @@ private func peerInfoAvailableMediaPanes(context: AccountContext, peerId: PeerId
             (.gif, .gifs),
             (.polls, .polls)
         ]
+        // The Polls pane (PeerInfoChatPaneNode) lists the profile's peer or a Saved Messages
+        // sub-chat. It cannot list a channel's direct-messages thread or a forum topic, so the tab
+        // is not offered for them rather than showing another chat's polls.
+        if case let .replyThread(message) = chatLocation, message.peerId != context.account.peerId {
+            tags.removeAll(where: { $0.1 == .polls })
+        }
     }
     enum PaneState {
         case loading
@@ -1529,6 +1518,13 @@ func peerInfoScreenData(
                 businessConnectedBot = .single(nil)
             }
             
+            let sharedMediaPeer: Signal<EnginePeer?, NoError>
+            if let sharedMediaFromForumTopic {
+                sharedMediaPeer = context.engine.data.subscribe(TelegramEngine.EngineData.Item.Peer.Peer(id: sharedMediaFromForumTopic.0))
+            } else {
+                sharedMediaPeer = .single(nil)
+            }
+            
             let forcedLinkedCommunityId = Atomic<PeerId?>(value: nil)
             
             return combineLatest(
@@ -1684,8 +1680,8 @@ func peerInfoScreenData(
                     linkedCommunityData = .single(nil)
                 }
                 
-                return linkedCommunityData
-                |> map { linkedCommunityData -> PeerInfoScreenData in
+                return combineLatest(linkedCommunityData, sharedMediaPeer)
+                |> map { linkedCommunityData, sharedMediaPeer -> PeerInfoScreenData in
                     var effectiveStatus = status
                     if let linkedPeer = linkedCommunityData?.cachedData?.linkedPeers.first(where: { $0.peerId == userPeerId }), linkedPeer.visible == false, let status = effectiveStatus {
                         effectiveStatus = peerInfoStatusWithHiddenCommunityPrefix(status, strings: strings)
@@ -1737,7 +1733,8 @@ func peerInfoScreenData(
                         savedMusicContext: savedMusicContext,
                         savedMusicState: savedMusicState,
                         managedByBot: managedByBot,
-                        businessConnectedBot: businessConnectedBot
+                        businessConnectedBot: businessConnectedBot,
+                        sharedMediaPeer: sharedMediaPeer
                     )
                 }
             }
@@ -2428,7 +2425,14 @@ func peerInfoScreenData(
     }
 }
 
-func peerInfoIsCopyProtected(data: PeerInfoScreenData) -> Bool {
+/// Whether the chat the profile's shared media lists forbids copying, which also blocks screenshots
+/// of the profile. A profile opened from a channel's direct messages lists that channel's thread,
+/// not the private chat, so it follows the direct-messages channel's own protection (which cannot
+/// be enabled today) and never the private chat's.
+func peerInfoIsCopyProtected(data: PeerInfoScreenData, sharedMediaFromForumTopic: (EnginePeer.Id, Int64)?) -> Bool {
+    if sharedMediaFromForumTopic != nil {
+        return data.sharedMediaPeer?.isCopyProtectionEnabled ?? false
+    }
     var isCopyProtected = false
     if let cachedUserData = data.cachedData as? CachedUserData, cachedUserData.flags.contains(.copyProtectionEnabled) || cachedUserData.flags.contains(.myCopyProtectionEnabled) {
         isCopyProtected = true
