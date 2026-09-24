@@ -4653,9 +4653,11 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             hasBirthday = hasBirthdayToday(cachedData: cachedUserData)
         }
         
+        // The recipient is the peer the profile describes: on a secret chat's profile `peerId` is
+        // the secret chat, which a gift cannot be sent to, and `data.peer` is the user.
         let giftsController = self.context.sharedContext.makeGiftOptionsController(
             context: self.context,
-            peerId: self.peerId,
+            peerId: self.data?.peer?.id ?? self.peerId,
             premiumOptions: premiumOptions,
             hasBirthday: hasBirthday,
             completion: { [weak self] in
@@ -5288,18 +5290,24 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
     }
     
     private func suggestBirthdate() {
+        // The user the profile describes, not `peerId`: on a secret chat's profile that is
+        // the secret chat, which the request cannot address. The suggestion is posted in
+        // the cloud chat with the user, so that is the chat to open afterwards.
+        guard let peerId = self.data?.peer?.id else {
+            return
+        }
         let controller = context.sharedContext.makeBirthdaySuggestionScreen(
             context: self.context,
-            peerId: self.peerId,
+            peerId: peerId,
             completion: { [weak self] value in
                 guard let self else {
                     return
                 }
                 
-                let _ = self.context.engine.peers.suggestBirthday(peerId: self.peerId, birthday: value).startStandalone()
+                let _ = self.context.engine.peers.suggestBirthday(peerId: peerId, birthday: value).startStandalone()
                                 
                 self.headerNode.navigationButtonContainer.performAction?(.cancel, nil, nil)
-                self.openChat(peerId: self.peerId)
+                self.openChat(peerId: peerId)
             }
         )
         self.controller?.push(controller)
@@ -5314,6 +5322,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
     }
     
     private func resetCustomPhoto() {
+        // `peer`, not `peerId`: on a secret chat's profile `peerId` is the secret chat.
         guard let peer = self.data?.peer else {
             return
         }
@@ -5325,7 +5334,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                 guard let strongSelf = self else {
                     return
                 }
-                strongSelf.updateAvatarDisposable.set((strongSelf.context.engine.contacts.updateContactPhoto(peerId: strongSelf.peerId, resource: nil, videoResource: nil, videoStartTimestamp: nil, markup: nil, mode: .custom, mapResourceToAvatarSizes: { resource, representations in
+                strongSelf.updateAvatarDisposable.set((strongSelf.context.engine.contacts.updateContactPhoto(peerId: peer.id, resource: nil, videoResource: nil, videoStartTimestamp: nil, markup: nil, mode: .custom, mapResourceToAvatarSizes: { resource, representations in
                     mapResourceToAvatarSizes(engine: strongSelf.context.engine, resource: resource, representations: representations)
                 })
                 |> deliverOnMainQueue).startStrict(next: { [weak self] _ in
