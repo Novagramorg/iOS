@@ -19,11 +19,12 @@ import UndoUI
 import ContextUI
 
 private func peerTokenTitle(accountPeerId: EnginePeer.Id, peer: EnginePeer, strings: PresentationStrings, nameDisplayOrder: PresentationPersonNameOrder) -> String {
-    if peer.id == accountPeerId {
+    switch EditableTokenListPeerAlias(peer: peer, accountPeerId: accountPeerId) {
+    case .savedMessages:
         return strings.DialogList_SavedMessages
-    } else if peer.id.isReplies {
+    case .replies:
         return strings.DialogList_Replies
-    } else {
+    case nil:
         return peer.displayTitle(strings: strings, displayOrder: nameDisplayOrder)
     }
 }
