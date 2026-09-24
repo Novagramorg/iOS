@@ -13,7 +13,9 @@
 #import <MtProtoKit/MTDatacenterAuthMessageService.h>
 #import <MtProtoKit/MTRequestMessageService.h>
 #import <MtProtoKit/MTBindKeyMessageService.h>
+#import <MtProtoKit/MTRpcError.h>
 #import "MTBuffer.h"
+#import "MTInternalInterfaces.h"
 
 @interface MTDatacenterAuthAction () <MTDatacenterAuthMessageServiceDelegate>
 {
@@ -34,6 +36,10 @@
 @end
 
 @implementation MTDatacenterAuthAction
+
++ (bool)bindErrorMeansPermanentKeyIsUnknown:(MTRpcError *)bindError {
+    return bindError != nil && bindError.errorCode == 400 && [bindError.errorDescription isEqualToString:@"ENCRYPTED_MESSAGE_INVALID"];
+}
 
 - (instancetype)initWithAuthKeyInfoSelector:(MTDatacenterAuthInfoSelector)authKeyInfoSelector isCdn:(bool)isCdn skipBind:(bool)skipBind completion:(void (^)(MTDatacenterAuthAction *, bool))completion {
     self = [super init];
@@ -147,7 +153,7 @@
                         }
                         
                         __weak MTDatacenterAuthAction *weakSelf = self;
-                        [_bindMtProto addMessageService:[[MTBindKeyMessageService alloc] initWithPersistentKey:[[MTDatacenterAuthKey alloc] initWithAuthKey:persistentAuthInfo.authKey authKeyId:persistentAuthInfo.authKeyId validUntilTimestamp:persistentAuthInfo.validUntilTimestamp notBound:false] ephemeralKey:authKey completion:^(bool success) {
+                        [_bindMtProto addMessageService:[[MTBindKeyMessageService alloc] initWithPersistentKey:[[MTDatacenterAuthKey alloc] initWithAuthKey:persistentAuthInfo.authKey authKeyId:persistentAuthInfo.authKeyId validUntilTimestamp:persistentAuthInfo.validUntilTimestamp notBound:false] ephemeralKey:authKey completion:^(bool success, MTRpcError *error) {
                             __strong MTDatacenterAuthAction *strongSelf = weakSelf;
                             if (strongSelf == nil) {
                                 return;
@@ -161,6 +167,7 @@
                                 
                                 [strongSelf complete];
                             } else {
+                                strongSelf.bindError = error;
                                 [strongSelf fail];
                             }
                         }]];

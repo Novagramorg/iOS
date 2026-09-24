@@ -236,6 +236,11 @@ static const NSUInteger MTMaxUnacknowledgedMessageCount = 64;
             
             [self resetTransport];
             [self requestTransportTransaction];
+            
+            // A key or token this connection is still waiting for may have
+            // failed while it was paused; resetTransport asks for neither.
+            [self _requestAwaitedAuthInfo];
+            [self _requestAwaitedAuthToken];
         }
     }];
 }
@@ -2634,6 +2639,58 @@ static bool isBytesEqualConstTime(uint8_t const *bytes1, uint8_t const *bytes2, 
                 [self resetTransport];
             }
         }
+    }];
+}
+
+// MTProto asks for a key (handleMissingKey, getAuthKeyForCurrentScheme) or a
+// token (resetTransport) once and then waits for the context to announce it.
+// When the context reports that producing it failed, an active connection that
+// still waits asks again; a paused one asks when it resumes. The context
+// applies the backoff, and deduplicates against a request already in flight.
+- (void)_requestAwaitedAuthInfo {
+    if (_useUnauthorizedMode || (_mtState & MTProtoStateAwaitingDatacenterAuthorization) == 0 || _awaitingAuthInfoForSelector == nil) {
+        return;
+    }
+    // No shortcut when the context still holds a key for the selector: right
+    // after handleMissingKey that is the rejected key, which the context has
+    // not dropped yet. A key this connection waits for always arrives through
+    // contextDatacenterAuthInfoUpdated.
+    MTDatacenterAuthInfoSelector selector = (MTDatacenterAuthInfoSelector)[_awaitingAuthInfoForSelector intValue];
+    [_context authInfoForDatacenterWithIdRequired:_datacenterId isCdn:_cdn selector:selector allowUnboundEphemeralKeys:_allowUnboundEphemeralKeys];
+}
+
+- (void)_requestAwaitedAuthToken {
+    if (_useUnauthorizedMode || _requiredAuthToken == nil) {
+        return;
+    }
+    // The awaiting flag is one way to lack the token. A 401 is the other:
+    // TelegramCore's Download drops the token and asks for a transfer itself,
+    // the connection keeps its transport and never sets the flag, and the
+    // request stays parked (waitingForTokenExport) until the token arrives.
+    if ((_mtState & MTProtoStateAwaitingDatacenterAuthToken) == 0 && [_requiredAuthToken isEqual:[_context authTokenForDatacenterWithId:_datacenterId]]) {
+        return;
+    }
+    [_context authTokenForDatacenterWithIdRequired:_datacenterId authToken:_requiredAuthToken masterDatacenterId:_authTokenMasterDatacenterId];
+}
+
+- (void)contextDatacenterAuthInfoRequestFailed:(MTContext *)context datacenterId:(NSInteger)datacenterId selector:(MTDatacenterAuthInfoSelector)selector {
+    [[MTProto managerQueue] dispatchOnQueue:^{
+        if (context != _context || datacenterId != _datacenterId || (_mtState & (MTProtoStatePaused | MTProtoStateStopped)) != 0) {
+            return;
+        }
+        if (_awaitingAuthInfoForSelector == nil || [_awaitingAuthInfoForSelector intValue] != selector) {
+            return;
+        }
+        [self _requestAwaitedAuthInfo];
+    }];
+}
+
+- (void)contextDatacenterAuthTokenTransferFailed:(MTContext *)context datacenterId:(NSInteger)datacenterId {
+    [[MTProto managerQueue] dispatchOnQueue:^{
+        if (context != _context || datacenterId != _datacenterId || (_mtState & (MTProtoStatePaused | MTProtoStateStopped)) != 0) {
+            return;
+        }
+        [self _requestAwaitedAuthToken];
     }];
 }
 

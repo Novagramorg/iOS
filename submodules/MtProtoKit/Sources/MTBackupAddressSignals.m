@@ -15,6 +15,7 @@
 #import <MtProtoKit/MTSerialization.h>
 #import <MtProtoKit/MTLogging.h>
 #import <MtProtoKit/MTKeychain.h>
+#import "MTInternalInterfaces.h"
 
 @interface MTTemporaryKeychain : NSObject<MTKeychain> {
     NSMutableDictionary<NSString *, id> *_dict;
@@ -204,6 +205,22 @@ MTAtomic *sharedFetchConfigKeychains() {
     return value;
 }
 
++ (bool)applyAddressList:(NSDictionary<NSNumber *, NSArray *> *)addressList toContext:(MTContext *)context {
+    __block bool updated = false;
+    [addressList enumerateKeysAndObjectsUsingBlock:^(NSNumber *nDatacenterId, NSArray *list, __unused BOOL *stop) {
+        MTDatacenterAddressSet *addressSet = [[MTDatacenterAddressSet alloc] initWithAddressList:list];
+        MTDatacenterAddressSet *currentAddressSet = [context addressSetForDatacenterWithId:[nDatacenterId integerValue]];
+        if (currentAddressSet == nil || ![addressSet isEqual:currentAddressSet]) {
+            if (MTLogEnabled()) {
+                MTLog(@"[Backup address fetch: updating datacenter %d address set to %@]", [nDatacenterId intValue], addressSet);
+            }
+            [context updateAddressSetForDatacenterWithId:[nDatacenterId integerValue] addressSet:addressSet forceUpdateSchemes:true];
+            updated = true;
+        }
+    }];
+    return updated;
+}
+
 + (MTSignal *)fetchConfigFromAddress:(MTBackupDatacenterAddress *)address currentContext:(MTContext *)currentContext mainDatacenterId:(NSInteger)mainDatacenterId {
     MTApiEnvironment *apiEnvironment = [currentContext.apiEnvironment copy];
     
@@ -260,23 +277,14 @@ MTAtomic *sharedFetchConfigKeychains() {
              if (error == nil) {
                  __strong MTContext *strongCurrentContext = weakCurrentContext;
                  if (strongCurrentContext != nil) {
-                     [result.addressList enumerateKeysAndObjectsUsingBlock:^(NSNumber *nDatacenterId, NSArray *list, __unused BOOL *stop) {
-                         MTDatacenterAddressSet *addressSet = [[MTDatacenterAddressSet alloc] initWithAddressList:list];
-                         
-                         MTDatacenterAddressSet *currentAddressSet = [context addressSetForDatacenterWithId:[nDatacenterId integerValue]];
-                         
-                         if (currentAddressSet == nil || ![addressSet isEqual:currentAddressSet])
-                         {
-                             if (MTLogEnabled()) {
-                                 MTLog(@"[Backup address fetch: updating datacenter %d address set to %@]", [nDatacenterId intValue], addressSet);
-                             }
-                             
-                             [strongCurrentContext updateAddressSetForDatacenterWithId:[nDatacenterId integerValue] addressSet:addressSet forceUpdateSchemes:true];
-                             [subscriber putNext:@true];
-                             [subscriber putCompletion];
-                         }
-                     }];
+                     // Compared against the app's context. The fetch context
+                     // built above knows no addresses, so against it every
+                     // datacenter looked changed and every connection was reset.
+                     bool updated = [MTBackupAddressSignals applyAddressList:result.addressList toContext:strongCurrentContext];
+                     // Answered either way, so the fetch ends and a later one can start.
+                     [subscriber putNext:@(updated)];
                  }
+                 [subscriber putCompletion];
              } else {
                  [subscriber putCompletion];
              }
