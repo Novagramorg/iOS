@@ -5352,35 +5352,15 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             let source: Signal<PremiumSource, NoError>
             if let peerStatus {
                 source = context.engine.stickers.resolveInlineStickers(fileIds: [peerStatus])
-                |> mapToSignal { files in
+                |> mapToSignal { files -> Signal<PremiumSource, NoError> in
                     if let file = files[peerStatus] {
-                        var reference: StickerPackReference?
-                        for attribute in file.attributes {
-                            if case let .CustomEmoji(_, _, _, packReference) = attribute, let packReference = packReference {
-                                reference = packReference
-                                break
+                        return context.engine.stickers.customEmojiPack(file: file)
+                        |> map { pack -> PremiumSource in
+                            if let pack, case let .result(_, items, _) = pack {
+                                return .emojiStatus(peerId, peerStatus, items.first?.file._parse(), pack)
+                            } else {
+                                return .emojiStatus(peerId, peerStatus, nil, nil)
                             }
-                        }
-                        
-                        if let reference {
-                            return context.engine.stickers.loadedStickerPack(reference: reference, forceActualized: false)
-                            |> filter { result in
-                                if case .result = result {
-                                    return true
-                                } else {
-                                    return false
-                                }
-                            }
-                            |> take(1)
-                            |> mapToSignal { result -> Signal<PremiumSource, NoError> in
-                                if case let .result(_, items, _) = result {
-                                    return .single(.emojiStatus(peerId, peerStatus, items.first?.file._parse(), result))
-                                } else {
-                                    return .single(.emojiStatus(peerId, peerStatus, nil, nil))
-                                }
-                            }
-                        } else {
-                            return .single(.emojiStatus(peerId, peerStatus, nil, nil))
                         }
                     } else {
                         return .single(.emojiStatus(peerId, peerStatus, nil, nil))

@@ -1017,36 +1017,27 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                             return
                         }
                         
+                        // `.never()` until the pack is known; nil once it is known there is none (the
+                        // emoji names no pack, or its owner deleted it), so a tap still opens the screen.
                         if let emojiFile = emojiFile {
                             strongSelf.emojiStatusFileAndPackTitle.set(.never())
                             
-                            for attribute in emojiFile.attributes {
-                                if case let .CustomEmoji(_, _, _, packReference) = attribute, let packReference = packReference {
-                                    strongSelf.emojiStatusPackDisposable.set((strongSelf.context.engine.stickers.loadedStickerPack(reference: packReference, forceActualized: false)
-                                    |> filter { result in
-                                        if case .result = result {
-                                            return true
-                                        } else {
-                                            return false
-                                        }
-                                    }
-                                    |> mapToSignal { result -> Signal<(TelegramMediaFile, LoadedStickerPack)?, NoError> in
-                                        if case let .result(_, items, _) = result {
-                                            return .single(items.first.flatMap { ($0.file._parse(), result) })
-                                        } else {
-                                            return .complete()
-                                        }
-                                    }).startStrict(next: { fileAndPackTitle in
-                                        guard let strongSelf = self else {
-                                            return
-                                        }
-                                        strongSelf.emojiStatusFileAndPackTitle.set(.single(fileAndPackTitle))
-                                    }))
-                                    break
+                            strongSelf.emojiStatusPackDisposable.set((strongSelf.context.engine.stickers.customEmojiPack(file: emojiFile)
+                            |> map { pack -> (TelegramMediaFile, LoadedStickerPack)? in
+                                if let pack, case let .result(_, items, _) = pack {
+                                    return items.first.flatMap { ($0.file._parse(), pack) }
+                                } else {
+                                    return nil
                                 }
-                            }
+                            }).startStrict(next: { fileAndPackTitle in
+                                guard let strongSelf = self else {
+                                    return
+                                }
+                                strongSelf.emojiStatusFileAndPackTitle.set(.single(fileAndPackTitle))
+                            }))
                         } else {
-                            strongSelf.emojiStatusFileAndPackTitle.set(.never())
+                            strongSelf.emojiStatusPackDisposable.set(nil)
+                            strongSelf.emojiStatusFileAndPackTitle.set(.single(nil))
                         }
                     }
                 )),

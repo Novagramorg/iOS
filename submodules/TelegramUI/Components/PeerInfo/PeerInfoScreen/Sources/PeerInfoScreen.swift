@@ -2202,12 +2202,8 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                 if let peerStatus = peerStatus {
                     source = emojiStatusFileAndPack
                     |> take(1)
-                    |> mapToSignal { emojiStatusFileAndPack -> Signal<PremiumSource, NoError> in
-                        if let (file, pack) = emojiStatusFileAndPack {
-                            return .single(.emojiStatus(peer.id, peerStatus.fileId, file, pack))
-                        } else {
-                            return .complete()
-                        }
+                    |> map { emojiStatusFileAndPack -> PremiumSource in
+                        return .emojiStatus(peer.id, peerStatus.fileId, emojiStatusFileAndPack?.0, emojiStatusFileAndPack?.1)
                     }
                 } else {
                     source = .single(.profile(strongSelf.peerId))
