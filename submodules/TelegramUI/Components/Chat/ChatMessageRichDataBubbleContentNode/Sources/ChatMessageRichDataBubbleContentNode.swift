@@ -724,6 +724,17 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                     checkboxForeground = messageTheme.mediaControlInnerBackgroundColor
                 }
                 
+                // Incoming bubbles are neutral, so a 15% tint with a full-strength label reads fine.
+                // Outgoing bubbles can be saturated (Day Blue), where the tint mixes into the bubble
+                // colour and the label loses contrast, so there the fill is solid with a white label,
+                // as the message's inline keyboard buttons (ChatButtonKeyboardInputNode) draw them.
+                let buttonDangerColor = item.presentationData.theme.theme.contextMenu.destructiveColor
+                let buttonSuccessColor = item.presentationData.theme.theme.list.freeTextSuccessColor
+                let buttonDangerBackgroundColor = isIncoming ? buttonDangerColor.withMultipliedAlpha(0.15) : buttonDangerColor
+                let buttonDangerForegroundColor = isIncoming ? buttonDangerColor : UIColor.white
+                let buttonSuccessBackgroundColor = isIncoming ? buttonSuccessColor.withMultipliedAlpha(0.15) : buttonSuccessColor
+                let buttonSuccessForegroundColor = isIncoming ? buttonSuccessColor : UIColor.white
+                
                 let pageTheme = InstantPageTheme(
                     type: isDark ? .dark : .light,
                     pageBackgroundColor: .clear,
@@ -750,8 +761,10 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                     separatorColor: messageTheme.secondaryTextColor.mixedWith(mainColor.withMultipliedAlpha(0.2), alpha: 0.3),
                     secondaryControlColor: messageTheme.secondaryTextColor.mixedWith(mainColor.withMultipliedAlpha(0.2), alpha: 0.3),
                     quoteAccentColor: mainColor,
-                    buttonDangerColor: item.presentationData.theme.theme.contextMenu.destructiveColor,
-                    buttonSuccessColor: item.presentationData.theme.theme.list.freeTextSuccessColor,
+                    buttonDangerBackgroundColor: buttonDangerBackgroundColor,
+                    buttonDangerForegroundColor: buttonDangerForegroundColor,
+                    buttonSuccessBackgroundColor: buttonSuccessBackgroundColor,
+                    buttonSuccessForegroundColor: buttonSuccessForegroundColor,
                     checkboxFill: checkboxFill,
                     checkboxForeground: checkboxForeground,
                     neutralButtonBackgroundColor: tableHeaderColor,

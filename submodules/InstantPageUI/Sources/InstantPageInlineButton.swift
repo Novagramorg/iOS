@@ -455,11 +455,11 @@ public func instantPageButtonColors(
         fill = theme.checkboxFill
         label = theme.checkboxForeground
     case .some(.danger):
-        fill = theme.buttonDangerColor.withMultipliedAlpha(0.15)
-        label = theme.buttonDangerColor
+        fill = theme.buttonDangerBackgroundColor
+        label = theme.buttonDangerForegroundColor
     case .some(.success):
-        fill = theme.buttonSuccessColor.withMultipliedAlpha(0.15)
-        label = theme.buttonSuccessColor
+        fill = theme.buttonSuccessBackgroundColor
+        label = theme.buttonSuccessForegroundColor
     }
     if isDisabled {
         return (fill, label.withMultipliedAlpha(0.4))

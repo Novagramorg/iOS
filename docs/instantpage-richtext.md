@@ -873,7 +873,7 @@ model layer from the V2 rendering built on top of it.
 | `submodules/TelegramUI/Components/RichTextButtonIcons/` | The action → icon mapping, its sizes/insets, and the `richTextEditorButtonIcon` bridge the editor hosts register. A leaf module because both the renderer and the editor need it — see "The type icon". |
 | `submodules/InstantPageUI/Sources/InstantPageV2DocumentContentNode.swift` | `InstantPageV2DocumentContentNode` (file row) + `InstantPageV2DocumentView` (item view). |
 | `submodules/InstantPageUI/Sources/InstantPageTextStyleStack.swift` | `.semibold` / `.medium` baseline weights (button labels are semibold regardless of the surrounding paragraph) + the `InstantPageInlineButtonAttribute` key. |
-| `submodules/InstantPageUI/Sources/InstantPageTheme.swift` | `buttonDangerColor`, `buttonSuccessColor`, `checkboxFill`, `checkboxForeground` — all defaulted, all threaded through `withUpdatedFontStyles`. |
+| `submodules/InstantPageUI/Sources/InstantPageTheme.swift` | `buttonDanger{Background,Foreground}Color`, `buttonSuccess{Background,Foreground}Color` (split so a host can pass a solid fill: the default 15% tint is unreadable over a saturated outgoing bubble), `checkboxFill`, `checkboxForeground` — all defaulted, all threaded through `withUpdatedFontStyles`. |
 
 ### Geometry (as shipped; tuned by eye, not derived)
 
@@ -1143,7 +1143,7 @@ be a cycle.
   `ChatMessageBubbleItemNode` (~:5060) alongside `requestInlineUpdate`/`requestFullUpdate`.
 - **`InstantPageTheme.withUpdatedFontStyles` (:173) reconstructs the struct field by field.** Any
   field omitted there silently reverts to its `init` default — for
-  `buttonDangerColor`/`buttonSuccessColor` that resets a bubble's theme-derived colours the moment the
+  the button danger/success colours that resets a bubble's theme-derived colours the moment the
   user changes Instant View font size. Nothing warns; it compiles.
 - **Mid-paragraph buttons pop in when their whole paragraph finishes revealing**, not when the cursor
   reaches them, because an inline attachment lands in `additionalItems` *after* the text item it sits
