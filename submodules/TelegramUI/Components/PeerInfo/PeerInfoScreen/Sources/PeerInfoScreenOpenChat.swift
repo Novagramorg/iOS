@@ -165,14 +165,33 @@ extension PeerInfoScreenNode {
             }
             let _ = self.context.sharedContext.navigateToForumThread(context: self.context, peerId: peerId, threadId: threadId, messageId: messageId, navigationController: navigationController, activateInput: nil, scrollToEndIfExists: false, keepStack: keepStack, animated: true).startStandalone()
         case let .replyThread(thread):
-            // The thread the profile was opened from is usually still on the stack: go back to it
-            // rather than stacking a second copy. When it is not, the pushed chat removes the
-            // profile on its first purposeful action. Only the profile: the `.peer` cleanup below
-            // would also drop the channel's own chat further down the stack.
+            // The navigator goes back to an open copy of a forum or direct-messages thread, which
+            // pops the profile as well. It never matches any other thread (a Saved Messages
+            // sub-chat, a comment thread), so there a second copy is pushed, and its first
+            // purposeful action removes this profile and the copy the profile was opened from.
+            // Nothing else: the `.peer` cleanup below would also drop the channel's own chat
+            // further down the stack, and a filter on the controller type would drop unrelated
+            // profiles.
+            let openCopies = navigationController.viewControllers.filter { controller in
+                guard let controller = controller as? ChatController else {
+                    return false
+                }
+                return controller.chatLocation.peerId == thread.peerId && controller.chatLocation.threadId == thread.threadId
+            }
             var purposefulAction: (() -> Void)?
-            if case .push = navigation {
+            if let openCopy = openCopies.last as? ChatController, thread.isForumPost || thread.isMonoforumPost {
+                // The navigator installs the action on the copy it returns to (the topmost one);
+                // keep that copy's own.
+                purposefulAction = openCopy.purposefulAction
+            } else if case .push = navigation {
+                var removedControllers: [Weak<UIViewController>] = openCopies.map { Weak($0) }
+                if let controller = self.controller {
+                    removedControllers.append(Weak(controller))
+                }
                 purposefulAction = {
-                    navigationController.setViewControllers(navigationController.viewControllers.filter { !($0 is PeerInfoScreen) }, animated: false)
+                    navigationController.setViewControllers(navigationController.viewControllers.filter { controller in
+                        return !removedControllers.contains(where: { $0.value === controller })
+                    }, animated: false)
                 }
             }
             self.context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: navigationController, context: self.context, chatLocation: .replyThread(thread), subject: subject, keepStack: navigation == .push ? .always : .never, useExisting: true, purposefulAction: purposefulAction))

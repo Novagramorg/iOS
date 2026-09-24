@@ -619,9 +619,11 @@ private func peerInfoAvailableMediaPanes(context: AccountContext, peerId: PeerId
             (.gif, .gifs),
             (.polls, .polls)
         ]
-        // The Polls pane (PeerInfoChatPaneNode) lists the profile's peer or a Saved Messages
-        // sub-chat. It cannot list a channel's direct-messages thread or a forum topic, so the tab
-        // is not offered for them rather than showing another chat's polls.
+        // The Polls pane (PeerInfoChatPaneNode) always lists the whole chat of the profile's peer
+        // (`.peer(id: peerId)`), never a thread, while this availability check reads the listed
+        // thread. For a channel's direct-messages thread or a forum topic that would be another
+        // chat's polls, so the tab is not offered there. A Saved Messages sub-chat keeps the tab,
+        // as it always has, although its pane lists the polls of all of Saved Messages.
         if case let .replyThread(message) = chatLocation, message.peerId != context.account.peerId {
             tags.removeAll(where: { $0.1 == .polls })
         }
