@@ -461,7 +461,7 @@ private final class StoryStealthModeSheetScreenComponent: Component {
                         }
                     )),
                     style: .glass,
-                    backgroundColor: .color(environment.theme.overallDarkAppearance ? environment.theme.list.itemBlocksBackgroundColor : environment.theme.list.blocksBackgroundColor),
+                    backgroundColor: .color(environment.theme.actionSheet.opaqueItemBackgroundColor),
                     animateOut: self.sheetAnimateOut
                 )),
                 environment: {

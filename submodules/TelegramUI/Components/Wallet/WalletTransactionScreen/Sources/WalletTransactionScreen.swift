@@ -1391,7 +1391,6 @@ private final class WalletTransactionContentComponent: Component {
                     self.commentRevision += 1
                     self.transferDisposable.set(nil)
                     self.discardCurrentPreparedTransfer()
-                    self.displayedFee = nil
                     self.previewOperation = .ready
                 }
             }
@@ -1416,7 +1415,6 @@ private final class WalletTransactionContentComponent: Component {
             self.commentRevision += 1
             self.transferDisposable.set(nil)
             self.discardCurrentPreparedTransfer()
-            self.displayedFee = nil
             self.previewOperation = .ready
             let generation = self.commentSessionGeneration
             self.isAuthorizingComment = true
@@ -1491,13 +1489,11 @@ private final class WalletTransactionContentComponent: Component {
             self.preparingForSend = false
 
             if self.isAuthorizingComment {
-                self.displayedFee = nil
                 self.componentState?.updated(transition: .easeInOut(duration: 0.2))
                 return
             }
             if self.previewCommentEncrypted && self.commentSession?.isValid != true {
                 self.discardCurrentPreparedTransfer()
-                self.displayedFee = nil
                 self.componentState?.updated(transition: .easeInOut(duration: 0.2))
                 return
             }
@@ -1511,7 +1507,6 @@ private final class WalletTransactionContentComponent: Component {
                 self.componentState?.updated(transition: .easeInOut(duration: 0.2))
                 return
             }
-            self.displayedFee = nil
             self.componentState?.updated(transition: .easeInOut(duration: 0.2))
             Queue.mainQueue().after(0.4) { [weak self] in
                 guard let self, self.commentRevision == revision else {
@@ -1535,7 +1530,6 @@ private final class WalletTransactionContentComponent: Component {
             let comment = self.previewComment
             self.previewOperation = .preparing
             self.preparingForSend = authorizeAfterPreparation
-            self.displayedFee = nil
             self.componentState?.updated(transition: .easeInOut(duration: 0.2))
             let preparation: Signal<WalletContext.PreparedTransfer, WalletContext.WalletError>
             if let collectible = self.preparedTransfer?.collectible ?? previewSource.collectible {
@@ -1591,7 +1585,6 @@ private final class WalletTransactionContentComponent: Component {
                 if revision != self.commentRevision {
                     return
                 }
-                self.displayedFee = nil
                 self.previewOperation = .ready
                 self.preparingForSend = false
                 self.componentState?.updated(transition: .easeInOut(duration: 0.2))
@@ -2304,7 +2297,6 @@ private final class WalletTransactionContentComponent: Component {
                         ))
                         transition.setAlpha(view: animationView, alpha: 1.0)
                     }
-                    // TonDiamond includes transparent padding below the diamond.
                     contentHeight += animationSize.height - 16.0
                 }
                 let amountSize = self.amount.update(
@@ -2943,7 +2935,6 @@ private final class WalletTransactionContentComponent: Component {
                         fontSize: 17.0,
                         textColor: theme.actionSheet.inputTextColor,
                         accentColor: theme.actionSheet.controlAccentColor,
-                        // TextFieldComponent adds another 8 pt, giving a total leading inset of 16 pt.
                         insets: UIEdgeInsets(top: 10.0, left: 8.0, bottom: 10.0, right: 16.0),
                         hideKeyboard: false,
                         customInputView: nil,
@@ -3737,7 +3728,7 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
         self.firstGramsSuggestionDisposable.set((self.accountContext.engine.notices.getServerProvidedSuggestions()
         |> take(1)
         |> deliverOnMainQueue).start(next: { [weak self] suggestions in
-            guard let self, suggestions.contains(.firstGrams),
+            guard let self, suggestions.contains(.walletFirstIncomingTransfer),
                   let navigationController = self.navigationController as? NavigationController,
                   navigationController.topViewController === self else {
                 return
@@ -3747,7 +3738,7 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
                 mode: .firstGrams,
                 completion: nil
             ))
-            let _ = self.accountContext.engine.notices.dismissServerProvidedSuggestion(suggestion: ServerProvidedSuggestion.firstGrams.id).startStandalone()
+            let _ = self.accountContext.engine.notices.dismissServerProvidedSuggestion(suggestion: ServerProvidedSuggestion.walletFirstIncomingTransfer.id).startStandalone()
         }))
     }
 

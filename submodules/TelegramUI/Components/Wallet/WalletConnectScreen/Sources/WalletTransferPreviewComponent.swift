@@ -386,6 +386,7 @@ final class WalletTransferPreviewComponent: Component {
         private func trailingContent(
             item: WalletTransferPresentation.PreviewItem,
             theme: PresentationTheme,
+            strings: PresentationStrings,
             dateTimeFormat: PresentationDateTimeFormat
         ) -> AnyComponent<Empty>? {
             guard let amount = item.amount, let direction = item.direction else {
@@ -401,7 +402,7 @@ final class WalletTransferPreviewComponent: Component {
                 prefix = "−"
                 color = theme.list.itemPrimaryTextColor
             }
-            let amountText = prefix + formatTonConnectNanograms(amount, dateTimeFormat: dateTimeFormat)
+            let amountText = prefix + formatTonConnectNanograms(amount, strings: strings, dateTimeFormat: dateTimeFormat)
             return AnyComponent(HStack<Empty>([
                 AnyComponentWithIdentity(
                     id: "amount",
@@ -496,6 +497,7 @@ final class WalletTransferPreviewComponent: Component {
                 trailingContent: self.trailingContent(
                     item: item,
                     theme: theme,
+                    strings: environment.strings,
                     dateTimeFormat: environment.dateTimeFormat
                 ),
                 additionalContent: additionalContent,
@@ -551,7 +553,7 @@ final class WalletTransferPreviewComponent: Component {
             let presentation = WalletTransferPresentation(request: component.request, walletState: component.walletState)
             var contentHeight: CGFloat = 94.0
             let transfers = component.request.messages.map { message in
-                let formattedAmount = formatTonConnectNanograms(message.amountNanograms, dateTimeFormat: environment.dateTimeFormat)
+                let formattedAmount = formatTonConnectNanograms(message.amountNanograms, strings: environment.strings, dateTimeFormat: environment.dateTimeFormat)
                 let amountTitle = message.amountNanograms == "all" ? formattedAmount : "\(formattedAmount) Grams"
                 let transferContent = WalletTransactionItemComponent.Content(
                     avatar: AnyComponent(WalletTransferPreviewIconComponent(kind: .transfer)),
@@ -600,7 +602,8 @@ final class WalletTransferPreviewComponent: Component {
             contentHeight += transferSectionSize.height + 28.0
 
             let displayItems = presentation.previewItems
-            let feeText = presentation.feeText(dateTimeFormat: environment.dateTimeFormat, compact: false)
+            let feeText = [presentation.submissionText, presentation.feeText(strings: environment.strings, dateTimeFormat: environment.dateTimeFormat)]
+                .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: "\n\n")
 
             let previewItems = displayItems.map { item in
                 return AnyComponentWithIdentity<Empty>(

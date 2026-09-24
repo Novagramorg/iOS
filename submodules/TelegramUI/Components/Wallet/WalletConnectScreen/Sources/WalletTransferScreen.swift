@@ -11,6 +11,10 @@ import ViewControllerComponent
 import ResizableSheetComponent
 import NavigationStackComponent
 import BalancedTextComponent
+import MultilineTextComponent
+import ScrollComponent
+import TextSelectionNode
+import Pasteboard
 import BundleIconComponent
 import GlassBarButtonComponent
 import ButtonComponent
@@ -23,6 +27,274 @@ fileprivate enum WalletTransferFinishResult {
     case confirmed
 }
 
+private final class WalletTransferSigningTextComponent: Component {
+    typealias EnvironmentType = (Empty, ScrollChildEnvironment)
+
+    let theme: PresentationTheme
+    let strings: PresentationStrings
+    let text: NSAttributedString
+    let controller: () -> ViewController?
+
+    init(theme: PresentationTheme, strings: PresentationStrings, text: NSAttributedString, controller: @escaping () -> ViewController?) {
+        self.theme = theme
+        self.strings = strings
+        self.text = text
+        self.controller = controller
+    }
+
+    static func ==(lhs: WalletTransferSigningTextComponent, rhs: WalletTransferSigningTextComponent) -> Bool {
+        return lhs.theme === rhs.theme && lhs.strings === rhs.strings && lhs.text == rhs.text
+    }
+
+    final class View: UIView {
+        private let text = ComponentView<Empty>()
+        private var selection: TextSelectionNode?
+        private var component: WalletTransferSigningTextComponent?
+
+        override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+            if let selection = self.selection,
+               let result = selection.view.hitTest(self.convert(point, to: selection.view), with: event) {
+                return result
+            }
+            return super.hitTest(point, with: event)
+        }
+
+        override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+            if self.bounds.contains(point) { return true }
+            if let selection = self.selection {
+                return selection.view.hitTest(self.convert(point, to: selection.view), with: event) != nil
+            }
+            return false
+        }
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            if self.window == nil { self.selection?.cancelSelection() }
+        }
+
+        private func removeSelection() {
+            guard let selection = self.selection else { return }
+            self.selection = nil
+            selection.cancelSelection()
+            selection.highlightAreaNode.view.removeFromSuperview()
+            selection.view.removeFromSuperview()
+        }
+
+        func update(component: WalletTransferSigningTextComponent, availableSize: CGSize, state: EmptyComponentState, transition: ComponentTransition) -> CGSize {
+            if let previous = self.component, previous != component {
+                self.removeSelection()
+            }
+            self.component = component
+            self.text.parentState = state
+            let textSize = self.text.update(
+                transition: transition,
+                component: AnyComponent(MultilineTextComponent(
+                    text: .plain(component.text),
+                    horizontalAlignment: .left,
+                    maximumNumberOfLines: 0,
+                    insets: UIEdgeInsets(top: 2.0, left: 0.0, bottom: 2.0, right: 0.0)
+                )),
+                environment: {},
+                containerSize: availableSize
+            )
+            if let textView = self.text.view as? MultilineTextComponent.View {
+                if textView.superview == nil { self.addSubview(textView) }
+                transition.setFrame(view: textView, frame: CGRect(origin: .zero, size: textSize))
+
+                if self.selection == nil && !component.text.string.isEmpty {
+                    let accentColor = component.theme.actionSheet.controlAccentColor
+                    let selection = TextSelectionNode(
+                        theme: TextSelectionTheme(
+                            selection: accentColor.withMultipliedAlpha(0.5),
+                            knob: accentColor,
+                            isDark: component.theme.overallDarkAppearance
+                        ),
+                        strings: component.strings,
+                        textNodeOrView: .view(textView),
+                        updateIsActive: { _ in },
+                        present: { [weak self] controller, arguments in
+                            self?.component?.controller()?.presentInGlobalOverlay(controller, with: arguments)
+                        },
+                        rootView: { [weak self] in
+                            return self?.component?.controller()?.displayNode.view
+                        },
+                        performAction: { text, action in
+                            if action == .copy {
+                                storeMessageTextInPasteboard(text.string, entities: nil)
+                            }
+                        }
+                    )
+                    selection.enableCopy = true
+                    selection.enableLookup = false
+                    selection.enableTranslate = false
+                    selection.enableShare = false
+                    selection.enableSpeak = false
+                    selection.enableQuote = false
+                    selection.enableAutomaticScrolling = false
+                    selection.cancelSelectionOnOutsideTap = true
+                    self.selection = selection
+                    self.insertSubview(selection.highlightAreaNode.view, belowSubview: textView)
+                    self.addSubview(selection.view)
+                }
+                if let selection = self.selection {
+                    let needsLayout = selection.frame.size != textSize
+                    selection.frame = CGRect(origin: .zero, size: textSize)
+                    selection.highlightAreaNode.frame = selection.frame
+                    if needsLayout { selection.updateLayout() }
+                }
+            }
+            return CGSize(width: availableSize.width, height: max(20.0, textSize.height))
+        }
+    }
+
+    func makeView() -> View {
+        return View(frame: .zero)
+    }
+
+    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<EnvironmentType>, transition: ComponentTransition) -> CGSize {
+        return view.update(component: self, availableSize: availableSize, state: state, transition: transition)
+    }
+}
+
+private final class WalletTransferSigningCardComponent: Component {
+    let theme: PresentationTheme
+    let strings: PresentationStrings
+    let content: WalletTransferPresentation.SigningContent
+    let controller: () -> ViewController?
+    let scrollViewUpdated: (UIScrollView?) -> Void
+
+    init(theme: PresentationTheme, strings: PresentationStrings, content: WalletTransferPresentation.SigningContent, controller: @escaping () -> ViewController?, scrollViewUpdated: @escaping (UIScrollView?) -> Void) {
+        self.theme = theme
+        self.strings = strings
+        self.content = content
+        self.controller = controller
+        self.scrollViewUpdated = scrollViewUpdated
+    }
+
+    static func ==(lhs: WalletTransferSigningCardComponent, rhs: WalletTransferSigningCardComponent) -> Bool {
+        return lhs.theme === rhs.theme && lhs.strings === rhs.strings && lhs.content == rhs.content
+    }
+
+    final class View: UIView {
+        private let scroll = ComponentView<Empty>()
+        private let scrollState = ScrollComponent<Empty>.ExternalState()
+        private let resetScroll = ActionSlot<CGPoint?>()
+        private let warningIcon = ComponentView<Empty>()
+        private let warningTitle = ComponentView<Empty>()
+        private let warningText = ComponentView<Empty>()
+        private let warningImage = UIImage(systemName: "exclamationmark.circle.fill")
+        private var content: WalletTransferPresentation.SigningContent?
+
+        func update(component: WalletTransferSigningCardComponent, availableSize: CGSize, state: EmptyComponentState, transition: ComponentTransition) -> CGSize {
+            transition.setBackgroundColor(view: self, color: component.theme.list.itemModalBlocksBackgroundColor)
+            transition.setCornerRadius(layer: self.layer, cornerRadius: 28.0)
+            self.clipsToBounds = true
+            let contentWidth = max(1.0, availableSize.width - 32.0)
+            let contentChanged = self.content != component.content
+            self.content = component.content
+
+            if case .binary = component.content {
+                self.scroll.view?.removeFromSuperview()
+                component.scrollViewUpdated(nil)
+                self.warningIcon.parentState = state
+                let iconSize = self.warningIcon.update(
+                    transition: transition,
+                    component: AnyComponent(Image(image: self.warningImage, tintColor: component.theme.list.itemDestructiveColor, size: CGSize(width: 16.0, height: 16.0))),
+                    environment: {},
+                    containerSize: CGSize(width: 16.0, height: 16.0)
+                )
+                if let iconView = self.warningIcon.view {
+                    if iconView.superview == nil { self.addSubview(iconView) }
+                    transition.setFrame(view: iconView, frame: CGRect(origin: CGPoint(x: 16.0, y: 18.0), size: iconSize))
+                }
+                self.warningTitle.parentState = state
+                //TODO:localize
+                let titleSize = self.warningTitle.update(
+                    transition: transition,
+                    component: AnyComponent(MultilineTextComponent(
+                        text: .plain(NSAttributedString(string: "Binary content", font: Font.regular(17.0), textColor: component.theme.list.itemPrimaryTextColor)),
+                        maximumNumberOfLines: 0
+                    )),
+                    environment: {},
+                    containerSize: CGSize(width: max(1.0, contentWidth - 22.0), height: .greatestFiniteMagnitude)
+                )
+                if let titleView = self.warningTitle.view {
+                    if titleView.superview == nil { self.addSubview(titleView) }
+                    transition.setFrame(view: titleView, frame: CGRect(origin: CGPoint(x: 38.0, y: 14.0), size: titleSize))
+                }
+                self.warningText.parentState = state
+                //TODO:localize
+                let textSize = self.warningText.update(
+                    transition: transition,
+                    component: AnyComponent(MultilineTextComponent(
+                        text: .plain(NSAttributedString(string: "You are signing blindly. Sign only from trusted sources.", font: Font.regular(17.0), textColor: component.theme.list.itemPrimaryTextColor)),
+                        maximumNumberOfLines: 0
+                    )),
+                    environment: {},
+                    containerSize: CGSize(width: contentWidth, height: .greatestFiniteMagnitude)
+                )
+                if let textView = self.warningText.view {
+                    if textView.superview == nil { self.addSubview(textView) }
+                    transition.setFrame(view: textView, frame: CGRect(origin: CGPoint(x: 16.0, y: 14.0 + titleSize.height + 2.0), size: textSize))
+                }
+                return CGSize(width: availableSize.width, height: 14.0 + titleSize.height + 2.0 + textSize.height + 14.0)
+            }
+            self.warningIcon.view?.removeFromSuperview()
+            self.warningTitle.view?.removeFromSuperview()
+            self.warningText.view?.removeFromSuperview()
+
+            let text = NSMutableAttributedString()
+            switch component.content {
+            case let .text(value):
+                text.append(NSAttributedString(string: value, font: Font.with(size: 17.0, design: .monospace), textColor: component.theme.list.itemPrimaryTextColor))
+            case let .message(groups):
+                let font = Font.with(size: 14.0, design: .monospace)
+                for (groupIndex, fields) in groups.enumerated() {
+                    if groupIndex != 0 { text.append(NSAttributedString(string: "\n\n", font: font, textColor: component.theme.list.itemPrimaryTextColor)) }
+                    for (fieldIndex, field) in fields.enumerated() {
+                        if fieldIndex != 0 { text.append(NSAttributedString(string: "\n", font: font, textColor: component.theme.list.itemPrimaryTextColor)) }
+                        text.append(NSAttributedString(string: field.name + ": ", font: font, textColor: component.theme.list.itemSecondaryTextColor))
+                        text.append(NSAttributedString(string: field.value, font: font, textColor: component.theme.list.itemPrimaryTextColor))
+                    }
+                }
+            case .binary:
+                break
+            }
+            let paragraphStyle = NSMutableParagraphStyle()
+            paragraphStyle.lineBreakMode = .byCharWrapping
+            text.addAttribute(.paragraphStyle, value: paragraphStyle, range: NSRange(location: 0, length: text.length))
+
+            let scrollComponent = AnyComponent(ScrollComponent<Empty>(
+                content: AnyComponent(WalletTransferSigningTextComponent(theme: component.theme, strings: component.strings, text: text, controller: component.controller)),
+                externalState: self.scrollState,
+                contentInsets: .zero,
+                contentOffsetUpdated: { _, _ in },
+                contentOffsetWillCommit: { _ in },
+                resetScroll: self.resetScroll
+            ))
+            self.scroll.parentState = state
+            let _ = self.scroll.update(transition: transition, component: scrollComponent, environment: {}, containerSize: CGSize(width: contentWidth, height: 320.0))
+            let height = min(320.0, self.scrollState.contentHeight)
+            let scrollSize = self.scroll.update(transition: transition, component: scrollComponent, environment: {}, containerSize: CGSize(width: contentWidth, height: height))
+            if contentChanged { self.resetScroll.invoke(nil) }
+            if let scrollView = self.scroll.view {
+                if scrollView.superview == nil { self.addSubview(scrollView) }
+                transition.setFrame(view: scrollView, frame: CGRect(origin: CGPoint(x: 16.0, y: 14.0), size: scrollSize))
+            }
+            component.scrollViewUpdated(height >= 320.0 ? self.scroll.view as? UIScrollView : nil)
+            return CGSize(width: availableSize.width, height: scrollSize.height + 28.0)
+        }
+    }
+
+    func makeView() -> View {
+        return View(frame: .zero)
+    }
+
+    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+        return view.update(component: self, availableSize: availableSize, state: state, transition: transition)
+    }
+}
+
 private final class WalletTransferSheetContent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
 
@@ -31,19 +303,22 @@ private final class WalletTransferSheetContent: Component {
     let walletState: WalletContext.State?
     let bottomInset: CGFloat
     let infoPressed: () -> Void
+    let scrollViewUpdated: (UIScrollView?) -> Void
 
     init(
         context: AccountContext,
         request: WalletContext.TonConnectOperationRequest,
         walletState: WalletContext.State?,
         bottomInset: CGFloat,
-        infoPressed: @escaping () -> Void
+        infoPressed: @escaping () -> Void,
+        scrollViewUpdated: @escaping (UIScrollView?) -> Void
     ) {
         self.context = context
         self.request = request
         self.walletState = walletState
         self.bottomInset = bottomInset
         self.infoPressed = infoPressed
+        self.scrollViewUpdated = scrollViewUpdated
     }
 
     static func ==(lhs: WalletTransferSheetContent, rhs: WalletTransferSheetContent) -> Bool {
@@ -58,7 +333,10 @@ private final class WalletTransferSheetContent: Component {
         private let domain = ComponentView<Empty>()
         private let card = ComponentView<Empty>()
         private let fee = ComponentView<Empty>()
-        private let dataText = UITextView()
+        private let dataTitle = ComponentView<Empty>()
+        private let signingCard = ComponentView<Empty>()
+        private let signingExplanation = ComponentView<Empty>()
+        private let signingSubmission = ComponentView<Empty>()
 
         override init(frame: CGRect) {
             super.init(frame: frame)
@@ -88,6 +366,77 @@ private final class WalletTransferSheetContent: Component {
             let primaryTextColor = theme.actionSheet.primaryTextColor
             let secondaryTextColor = theme.actionSheet.secondaryTextColor
             let accentColor = theme.actionSheet.controlAccentColor
+
+            let presentation = WalletTransferPresentation(request: component.request, walletState: component.walletState)
+            if let signingContent = presentation.signingContent(strings: environment.strings, dateTimeFormat: environment.dateTimeFormat) {
+                self.appIcon.view?.isHidden = true
+                self.title.view?.isHidden = true
+                self.domain.view?.isHidden = true
+                self.card.view?.isHidden = true
+                transition.setBackgroundColor(view: self, color: theme.list.modalBlocksBackgroundColor)
+
+                let cardWidth = min(382.0, max(1.0, safeContentWidth - 42.0))
+                let cardX = floor(contentCenterX - cardWidth * 0.5)
+                var contentHeight: CGFloat = 90.0
+                func addText(_ text: String, view: ComponentView<Empty>, font: UIFont, topInset: CGFloat) {
+                    guard !text.isEmpty else {
+                        view.view?.isHidden = true
+                        return
+                    }
+                    contentHeight += topInset
+                    view.parentState = state
+                    let size = view.update(
+                        transition: transition,
+                        component: AnyComponent(MultilineTextComponent(
+                            text: .plain(NSAttributedString(string: text, font: font, textColor: secondaryTextColor)),
+                            maximumNumberOfLines: 0
+                        )),
+                        environment: {},
+                        containerSize: CGSize(width: max(1.0, cardWidth - 32.0), height: .greatestFiniteMagnitude)
+                    )
+                    if let textView = view.view {
+                        if textView.superview == nil { self.addSubview(textView) }
+                        textView.isHidden = false
+                        transition.setFrame(view: textView, frame: CGRect(origin: CGPoint(x: cardX + 16.0, y: contentHeight), size: size))
+                    }
+                    contentHeight += size.height
+                }
+                //TODO:localize
+                addText("Data", view: self.dataTitle, font: Font.semibold(17.0), topInset: 0.0)
+                contentHeight += 12.0
+                self.signingCard.parentState = state
+                let cardSize = self.signingCard.update(
+                    transition: transition,
+                    component: AnyComponent(WalletTransferSigningCardComponent(
+                        theme: theme,
+                        strings: environment.strings,
+                        content: signingContent,
+                        controller: environment.controller,
+                        scrollViewUpdated: component.scrollViewUpdated
+                    )),
+                    environment: {},
+                    containerSize: CGSize(width: cardWidth, height: availableSize.height)
+                )
+                if let cardView = self.signingCard.view {
+                    if cardView.superview == nil { self.addSubview(cardView) }
+                    transition.setFrame(view: cardView, frame: CGRect(origin: CGPoint(x: cardX, y: contentHeight), size: cardSize))
+                }
+                contentHeight += cardSize.height
+                addText(signingContent.explanation ?? "", view: self.signingExplanation, font: Font.regular(14.0), topInset: 10.0)
+                addText(presentation.submissionText ?? "", view: self.signingSubmission, font: Font.regular(14.0), topInset: 16.0)
+                addText(presentation.feeText(strings: environment.strings, dateTimeFormat: environment.dateTimeFormat), view: self.fee, font: Font.regular(14.0), topInset: 20.0)
+                return CGSize(width: availableSize.width, height: contentHeight + 16.0 + component.bottomInset)
+            }
+            self.dataTitle.view?.isHidden = true
+            self.signingCard.view?.removeFromSuperview()
+            component.scrollViewUpdated(nil)
+            self.signingExplanation.view?.isHidden = true
+            self.signingSubmission.view?.isHidden = true
+            self.appIcon.view?.isHidden = false
+            self.title.view?.isHidden = false
+            self.domain.view?.isHidden = false
+            self.card.view?.isHidden = false
+            self.fee.view?.isHidden = false
 
             var contentHeight: CGFloat = 32.0
 
@@ -121,7 +470,7 @@ private final class WalletTransferSheetContent: Component {
             contentHeight += 18.0
 
             //TODO:localize
-            let titleText = component.request.signData == nil ? "Confirm Action" : "Sign Data"
+            let titleText = "Confirm Action"
             self.title.parentState = state
             let titleSize = self.title.update(
                 transition: .immediate,
@@ -181,36 +530,8 @@ private final class WalletTransferSheetContent: Component {
                 )
             }
             contentHeight += domainSize.height
-            contentHeight += 20.0
+            contentHeight += 25.0
 
-            if let request = component.request.signData {
-                self.card.view?.isHidden = true
-                self.fee.view?.isHidden = true
-                if self.dataText.superview == nil { self.addSubview(self.dataText) }
-                self.dataText.isHidden = false
-                self.dataText.isEditable = false
-                self.dataText.isSelectable = true
-                self.dataText.isScrollEnabled = true
-                self.dataText.backgroundColor = .clear
-                self.dataText.textColor = primaryTextColor
-                self.dataText.font = UIFont.monospacedSystemFont(ofSize: 14.0, weight: .regular)
-                self.dataText.textContainer.lineBreakMode = .byCharWrapping
-                switch request.payload {
-                case let .text(text): self.dataText.text = text
-                case let .binary(bytes):
-                    self.dataText.text = "You are signing unknown binary data.\n\n" + bytes.base64EncodedString()
-                case let .cell(schema, boc):
-                    self.dataText.text = "You are signing unknown cell data.\n\n" + schema + "\n\n" + boc.base64EncodedString()
-                }
-                let height = min(320.0, max(100.0, self.dataText.sizeThatFits(CGSize(width: textWidth, height: .greatestFiniteMagnitude)).height))
-                transition.setFrame(view: self.dataText, frame: CGRect(x: contentCenterX - textWidth / 2.0, y: contentHeight, width: textWidth, height: height))
-                return CGSize(width: availableSize.width, height: contentHeight + height + 20.0 + component.bottomInset)
-            }
-            self.dataText.isHidden = true
-            self.card.view?.isHidden = false
-            self.fee.view?.isHidden = false
-
-            let presentation = WalletTransferPresentation(request: component.request, walletState: component.walletState)
             let fiatCurrency = component.walletState?.fiat.selectedCurrency ?? .usd
             let fiatRate = component.walletState?.fiat.selectedRate
             let amountNanograms = presentation.amountNanograms
@@ -225,7 +546,7 @@ private final class WalletTransferSheetContent: Component {
                     fiatCurrency: fiatCurrency,
                     fiatRate: fiatRate,
                     dateTimeFormat: environment.dateTimeFormat,
-                    amountText: amount == nil ? formatTonConnectNanograms(amountNanograms ?? "", dateTimeFormat: environment.dateTimeFormat) : nil,
+                    amountText: amount == nil ? formatTonConnectNanograms(amountNanograms ?? "", strings: environment.strings, dateTimeFormat: environment.dateTimeFormat) : nil,
                     recipientTitle: presentation.recipientTitle,
                     infoPressed: component.infoPressed
                 )),
@@ -248,14 +569,14 @@ private final class WalletTransferSheetContent: Component {
             contentHeight += cardSize.height
             contentHeight += 18.0
 
-            let feeText = presentation.feeText(dateTimeFormat: environment.dateTimeFormat, compact: true)
+            let feeText = presentation.feeText(strings: environment.strings, dateTimeFormat: environment.dateTimeFormat)
             self.fee.parentState = state
             let feeSize = self.fee.update(
                 transition: .immediate,
                 component: AnyComponent(BalancedTextComponent(
                     text: .plain(NSAttributedString(
                         string: feeText,
-                        font: Font.regular(15.0),
+                        font: Font.regular(14.0),
                         textColor: secondaryTextColor
                     )),
                     horizontalAlignment: .center,
@@ -307,6 +628,7 @@ private final class WalletTransferSheetContent: Component {
 
 private final class WalletTransferActionsComponent: Component {
     let theme: PresentationTheme
+    let confirmTitle: String
     let isBusy: Bool
     let isConfirming: Bool
     let cancel: () -> Void
@@ -314,12 +636,14 @@ private final class WalletTransferActionsComponent: Component {
 
     init(
         theme: PresentationTheme,
+        confirmTitle: String,
         isBusy: Bool,
         isConfirming: Bool,
         cancel: @escaping () -> Void,
         confirm: @escaping () -> Void
     ) {
         self.theme = theme
+        self.confirmTitle = confirmTitle
         self.isBusy = isBusy
         self.isConfirming = isConfirming
         self.cancel = cancel
@@ -328,6 +652,7 @@ private final class WalletTransferActionsComponent: Component {
 
     static func ==(lhs: WalletTransferActionsComponent, rhs: WalletTransferActionsComponent) -> Bool {
         return lhs.theme == rhs.theme
+            && lhs.confirmTitle == rhs.confirmTitle
             && lhs.isBusy == rhs.isBusy
             && lhs.isConfirming == rhs.isConfirming
     }
@@ -393,8 +718,6 @@ private final class WalletTransferActionsComponent: Component {
                 transition.setFrame(view: cancelView, frame: CGRect(origin: .zero, size: cancelSize))
             }
 
-            //TODO:localize
-            let confirmTitle = "Confirm"
             let confirmSize = self.confirmButton.update(
                 transition: transition,
                 component: AnyComponent(ButtonComponent(
@@ -408,7 +731,7 @@ private final class WalletTransferActionsComponent: Component {
                     content: AnyComponentWithIdentity(
                         id: "confirm",
                         component: AnyComponent(Text(
-                            text: confirmTitle,
+                            text: component.confirmTitle,
                             font: Font.semibold(17.0),
                             color: component.theme.list.itemCheckColors.foregroundColor
                         ))
@@ -484,6 +807,7 @@ private final class WalletTransferSheetComponent: CombinedComponent {
         private let disposables = DisposableSet()
         private var isFinished = false
 
+        fileprivate let sheetExternalState = ResizableSheetComponent<EnvironmentType>.ExternalState()
         fileprivate var walletState: WalletContext.State?
         fileprivate var isAuthorizing = false
         fileprivate var isConfirming = false
@@ -594,6 +918,7 @@ private final class WalletTransferSheetComponent: CombinedComponent {
             let environment = context.environment[EnvironmentType.self]
             let controller = environment.controller
             let theme = environment.theme.withModalBlocksBackground()
+            let isSigning = WalletTransferPresentation(request: component.request, walletState: componentState.walletState).isSigning
 
             let dismiss: (Bool) -> Void = { [weak componentState] animated in
                 componentState?.finish(
@@ -628,16 +953,19 @@ private final class WalletTransferSheetComponent: CombinedComponent {
                         walletState: componentState.walletState,
                         bottomInset: contentBottomInset,
                         infoPressed: { [weak componentState] in
-                            guard let componentState, !componentState.isPreviewPresented else {
+                            guard let componentState, !isSigning, !componentState.isPreviewPresented else {
                                 return
                             }
                             componentState.isPreviewPresented = true
                             componentState.updated(transition: .spring(duration: 0.45))
+                        },
+                        scrollViewUpdated: { [weak componentState] scrollView in
+                            componentState?.sheetExternalState.setTrackedScrollView(scrollView)
                         }
                     ))
                 )
             ]
-            if componentState.isPreviewPresented {
+            if componentState.isPreviewPresented && !isSigning {
                 navigationItems.append(AnyComponentWithIdentity(
                     id: "preview",
                     component: AnyComponent(WalletTransferPreviewComponent(
@@ -651,12 +979,13 @@ private final class WalletTransferSheetComponent: CombinedComponent {
 
             let titleItem: AnyComponent<Empty>?
             let rightItem: AnyComponent<Empty>?
-            if componentState.isPreviewPresented {
+            if componentState.isPreviewPresented || isSigning {
                 titleItem = AnyComponent(VStack<Empty>([
                     AnyComponentWithIdentity(
                         id: "title",
                         component: AnyComponent(Text(
-                            text: "Confirm Action",
+                            //TODO:localize
+                            text: isSigning ? "Sign Data" : "Confirm Action",
                             font: Font.semibold(17.0),
                             color: theme.actionSheet.primaryTextColor
                         ))
@@ -715,6 +1044,8 @@ private final class WalletTransferSheetComponent: CombinedComponent {
                     hasTopEdgeEffect: false,
                     bottomItem: AnyComponent(WalletTransferActionsComponent(
                         theme: theme,
+                        //TODO:localize
+                        confirmTitle: isSigning ? "Sign" : "Confirm",
                         isBusy: componentState.isBusy,
                         isConfirming: componentState.isConfirming,
                         cancel: {
@@ -730,6 +1061,7 @@ private final class WalletTransferSheetComponent: CombinedComponent {
                     )),
                     backgroundColor: .color(theme.list.plainBackgroundColor),
                     clipsContent: true,
+                    externalState: componentState.sheetExternalState,
                     animateOut: animateOut
                 ),
                 environment: {

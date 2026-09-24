@@ -352,7 +352,7 @@ private final class WalletConnectSheetContent: CombinedComponent {
                 y: contentHeight + title.size.height / 2.0
             )))
             contentHeight += title.size.height
-            contentHeight += 4.0
+            contentHeight += 5.0
 
             let domainItems: [AnyComponentWithIdentity<Empty>] = [AnyComponentWithIdentity(
                 id: "domain",
@@ -372,27 +372,16 @@ private final class WalletConnectSheetContent: CombinedComponent {
                 y: contentHeight + domain.size.height / 2.0
             )))
             contentHeight += domain.size.height
-            contentHeight += 20.0
+            contentHeight += 19.0
 
-            var permissionTexts = component.request.permissions.compactMap { permission -> String? in
-                if let text = permission.text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty {
-                    return text
+            var permissionTexts: [String] = []
+            //TODO:localize
+            permissionTexts.append("It will be able to view your wallet address, balance and activity.")
+            for permission in component.request.permissions {
+                if case let .proof(domain) = permission {
+                    //TODO:localize
+                    permissionTexts.append("It will ask you to prove ownership of this wallet to \(domain).")
                 }
-                if let title = permission.title?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty {
-                    return title
-                }
-                return nil
-            }
-            if component.request.requestsProof {
-                //TODO:localize
-                let proofText = "It will ask you to prove ownership of this wallet to \(component.request.domain)."
-                if !permissionTexts.contains(proofText) {
-                    permissionTexts.append(proofText)
-                }
-            }
-            if permissionTexts.isEmpty {
-                //TODO:localize
-                permissionTexts.append("It will be able to view your wallet address.")
             }
             let permissionText = permissionTexts.joined(separator: "\n\n")
             let permission = permission.update(
@@ -455,7 +444,7 @@ private final class WalletConnectSheetContent: CombinedComponent {
                 .clipsToBounds(false)
             )
             contentHeight += card.size.height
-            contentHeight += 18.0
+            contentHeight += 20.0
 
             //TODO:localize
             let disclaimerText = "\(component.request.applicationName) won’t be able to move funds without permission."
@@ -478,7 +467,7 @@ private final class WalletConnectSheetContent: CombinedComponent {
                 y: contentHeight + disclaimer.size.height / 2.0
             )))
             contentHeight += disclaimer.size.height
-            contentHeight += 20.0
+            contentHeight += 19.0
 
             let buttonSpacing: CGFloat = 10.0
             let buttonInsets = ContainerViewLayout.concentricInsets(
