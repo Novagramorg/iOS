@@ -5582,6 +5582,14 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
         if self.state.isEditing || (self.data?.availablePanes ?? []).isEmpty {
             transition.updateAlpha(node: self.paneContainerNode, alpha: 0.0)
             ComponentTransition(transition).setAlpha(view: self.paneContainerNode.headerContainer, alpha: 0.0)
+            // No pane follows the last section: restore its spacing and clear the home indicator.
+            if !self.isMediaOnly {
+                contentHeight += 18.0
+            }
+            if !self.isSettings {
+                // Settings already reserves this via scrollNode.contentInset.
+                contentHeight += layout.intrinsicInsets.bottom
+            }
         } else {
             contentHeight += layout.size.height - navigationHeight
             transition.updateAlpha(node: self.paneContainerNode, alpha: 1.0)
