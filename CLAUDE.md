@@ -32,9 +32,19 @@ source ~/.zshrc 2>/dev/null; python3 build-system/Make/Make.py --overrideXcodeVe
 
 The first app-side `ios_unit_test` is `//submodules/TextFormat:TextFormatTests` (the mention/date link codecs). An `ios_unit_test` here needs an `ios_test_runner` pinned to a real device/OS (e.g. `iPhone 17` / `26.5`) — the default runner picks an invalid device and the test process exits 15. **Run new targets via `--target`, not the default suite:** `Tests/AllTests` currently references a dangling `//submodules/TgVoipWebrtc:TgCallsTests`, so the default would fail to build until that suite is repaired.
 
-Pure C++ tgcalls units have host `cc_test`s that bypass Make.py entirely (macOS build, no codesigning):
+Pure C++ units have host `cc_test`s that bypass Make.py entirely (macOS build, no codesigning):
 `./build-input/bazel-9.2.0-darwin-arm64 test //submodules/TgVoipWebrtc:streaming_audio_renderer_test --test_output=all`
-(likewise `:mtproto_ice_transport_test`). They follow a plain `CHECK_TRUE` + `main()` pattern, are listed
+(likewise `:mtproto_ice_transport_test`). `//third-party/libprisma:SyntaxHighlighterTests` (added
+2026-09-25) is the same kind of target outside tgcalls: it compiles only libprisma's pure-C++ core
+(not `Syntaxer.mm`, which needs UIKit) plus header-only `boost_regex`, loads the real shipped
+`grammars.dat` (passed via the target's `args = ["$(location Resources/grammars.dat)"]`), and pins the
+**code-block highlighter recursion bound** — highlighting a `brightscript` block whose grammar has a
+token cycle used to recurse `tokenize()`/`matchGrammar()` without limit and kill the process with a
+stack overflow (a remote DoS: the block is highlighted on receipt). `SyntaxHighlighter::kMaxTokenizeDepth`
+(128; ~1.1 KiB of stack per level, measured) caps it and degrades gracefully to plain text at the cap.
+Upstream `TelegramMessenger/libprisma` does **not** fix this (checked at HEAD 07ff1fcc, 2026-09-21):
+the recursion has no bound there and the regenerated `grammars.dat` still ships the cycle, so pulling
+upstream is not a substitute for the cap. They follow a plain `CHECK_TRUE` + `main()` pattern, are listed
 explicitly in `submodules/TgVoipWebrtc/BUILD` (group sources are not globbed), and must be added to the
 `exclude:` list in `tgcalls/Package.swift` so SwiftPM does not compile their `main()`. The first run compiles
 WebRTC for the host (~2.5 min); later runs take seconds. Note the binary is version-stamped and
