@@ -8,9 +8,9 @@
 
 ## Summary
 
-- **Total hooks:** 56
+- **Total hooks:** 58
 - **Apple-critical hooks:** 18
-- **Non-critical hooks:** 38
+- **Non-critical hooks:** 40
 
 ---
 
@@ -101,6 +101,8 @@
 | `submodules/TelegramPresentationData/BUILD` | `presentationdata-brand-dep` | ⚪ | brand | `FenixuzBrand` | Wire FenixuzBrand into TelegramPresentationData deps (2026-08-27) |
 | `submodules/TelegramPresentationData/Sources/PresentationData.swift` | `presentationdata-brand-rewrite` | ⚪ | brand | `FenixuzBrandStrings.applyBrand` | Rewrite "Telegram"/"TELEGRAM" → "Novagram"/"NOVAGRAM" in every server-delivered language-pack string via `dictFromLocalization` — fixes the bundled `Localizable.strings` rebrand never reaching a logged-in user (2026-08-27) |
 | `submodules/TelegramUI/Sources/AppDelegate.swift` | `appdelegate-admin-folders` | ⚪ | admin-folders | `FenixAdminFoldersManager.startGlobalMonitor` | Launch block observing activeAccountContexts to start/stop the Feature #47 owner/admin auto-folder sync for the active account (2026-09-07) |
+| `submodules/TelegramUI/BUILD` | `telegramui-forward-edit-dep` | ⚪ | forward-edit | `FenixuzForwardEdit` | Wire FenixuzForwardEdit into TelegramUI deps (2026-09-25) |
+| `submodules/TelegramUI/Sources/Chat/ChatMessageActionOptions.swift` | `forward-options-edit-and-send` | ⚪ | forward-edit | `FenixuzForwardEdit.menuItem, FENIX-HOOK #39` | "Edit and Send" item in the forward-options menu: send the forwarded post as a new message with edited text (no forward header, no "edited" label) (2026-09-25) |
 
 ---
 
