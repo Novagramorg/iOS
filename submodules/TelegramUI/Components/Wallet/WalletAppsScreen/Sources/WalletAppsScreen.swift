@@ -377,8 +377,7 @@ private final class WalletAppsScreenComponent: Component {
                         text: .plain(NSAttributedString(string: "Disconnect All Apps", font: Font.regular(17.0), textColor: theme.list.itemDestructiveColor)),
                         maximumNumberOfLines: 0
                     )),
-                    leftIcon: .custom(AnyComponentWithIdentity(id: "icon", component: AnyComponent(BundleIconComponent(name: "Item List/Icons/Hand", tintColor: theme.list.itemDestructiveColor))), false),
-                    accessory: self.isDisconnecting ? .activity : nil,
+                    leftIcon: .custom(AnyComponentWithIdentity(id: "icon", component: AnyComponent(BundleIconComponent(name: "Item List/Block", tintColor: theme.list.itemDestructiveColor))), false),
                     action: { [weak self] _ in self?.presentDisconnectAllAlert() }
                 ))))
             }

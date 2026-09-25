@@ -70,64 +70,44 @@ public func formatTonUsdValue(_ value: Int64, divide: Bool = true, rate: Double 
 }
 
 public func formatTonAmountText(_ value: Int64, dateTimeFormat: PresentationDateTimeFormat, showPlus: Bool = false, maxDecimalPositions: Int? = 2, formatString: ((Int32) -> String)? = nil) -> String {
-    func applyFormatString(_ amountString: String) -> String {
-        guard let formatString else {
-            return amountString
-        }
-        let pluralizationValue: Int32 = (value == 1_000_000_000 || value == -1_000_000_000) ? 1 : 100
-        return formatString(pluralizationValue).replacingOccurrences(of: "\(pluralizationValue)", with: amountString)
+    let magnitude = value.magnitude
+    let integerPart = magnitude / 1_000_000_000
+    let fractionalPart = magnitude % 1_000_000_000
+    let decimalPositions = min(9, max(0, maxDecimalPositions ?? 9))
+
+    let fractionalDigits = String(fractionalPart)
+    let fullFractionalPart = String(repeating: "0", count: 9 - fractionalDigits.count) + fractionalDigits
+    var fractionalPartString = String(fullFractionalPart.prefix(decimalPositions))
+    if integerPart == 0 && magnitude != 0 && fractionalPartString.allSatisfy({ $0 == "0" }) {
+        fractionalPartString = fullFractionalPart
+    }
+    while fractionalPartString.hasSuffix("0") {
+        fractionalPartString.removeLast()
     }
 
-    var balanceText = "\(abs(value))"
-    while balanceText.count < 10 {
-        balanceText.insert("0", at: balanceText.startIndex)
-    }
-    balanceText.insert(contentsOf: dateTimeFormat.decimalSeparator, at: balanceText.index(balanceText.endIndex, offsetBy: -9))
-    while true {
-        if balanceText.hasSuffix("0") {
-            if balanceText.hasSuffix("\(dateTimeFormat.decimalSeparator)0") {
-                balanceText.removeLast()
-                balanceText.removeLast()
-                break
-            } else {
-                balanceText.removeLast()
-            }
-        } else {
-            break
+    var balanceText = String(integerPart)
+    if !dateTimeFormat.groupingSeparator.isEmpty {
+        var groupingOffset = balanceText.count - 3
+        while groupingOffset > 0 {
+            balanceText.insert(contentsOf: dateTimeFormat.groupingSeparator, at: balanceText.index(balanceText.startIndex, offsetBy: groupingOffset))
+            groupingOffset -= 3
         }
     }
-    
-    if let dotIndex = balanceText.range(of: dateTimeFormat.decimalSeparator) {
-        if let maxDecimalPositions {
-            if let endIndex = balanceText.index(dotIndex.upperBound, offsetBy: maxDecimalPositions, limitedBy: balanceText.endIndex) {
-                balanceText = String(balanceText[balanceText.startIndex..<endIndex])
-            } else {
-                balanceText = String(balanceText[balanceText.startIndex..<balanceText.endIndex])
-            }
-        }
-        
-        let integerPartString = balanceText[..<dotIndex.lowerBound]
-        if let integerPart = Int32(integerPartString) {
-            let modifiedIntegerPart = presentationStringsFormattedNumber(integerPart, dateTimeFormat.groupingSeparator)
-            
-            var resultString = "\(modifiedIntegerPart)\(balanceText[dotIndex.lowerBound...])"
-            if value < 0 {
-                resultString.insert("-", at: resultString.startIndex)
-            } else if showPlus {
-                resultString.insert("+", at: resultString.startIndex)
-            }
-            return applyFormatString(resultString)
-        }
-    } else if let integerPart = Int32(balanceText) {
-        balanceText = presentationStringsFormattedNumber(integerPart, dateTimeFormat.groupingSeparator)
+    if !fractionalPartString.isEmpty {
+        balanceText += dateTimeFormat.decimalSeparator + fractionalPartString
     }
+
     if value < 0 {
         balanceText.insert("-", at: balanceText.startIndex)
     } else if showPlus {
         balanceText.insert("+", at: balanceText.startIndex)
     }
-    
-    return applyFormatString(balanceText)
+
+    if let formatString {
+        let pluralizationValue: Int32 = (integerPart == 1 && fractionalPartString.isEmpty) ? 1 : 100
+        return formatString(pluralizationValue).replacingOccurrences(of: "\(pluralizationValue)", with: balanceText)
+    }
+    return balanceText
 }
 
 public func formatStarsAmountText(_ amount: StarsAmount, dateTimeFormat: PresentationDateTimeFormat, showPlus: Bool = false) -> String {

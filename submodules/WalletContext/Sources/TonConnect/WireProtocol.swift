@@ -343,9 +343,9 @@ public enum TonConnectWireCodec {
             }
         }
         let features: [TonConnectJSONValue] = [
-            .object(["name": .string("SendTransaction"), "maxMessages": .integer(255), "extraCurrencySupported": .bool(false)]),
-            .object(["name": .string("SignMessage"), "maxMessages": .integer(255), "extraCurrencySupported": .bool(false)]),
-            .object(["name": .string("SignData"), "types": .array([.string("text"), .string("binary"), .string("cell")])])
+            .object(["name": .string("SendTransaction"), "maxMessages": .integer(255), "extraCurrencySupported": .bool(false)])
+            //.object(["name": .string("SignMessage"), "maxMessages": .integer(255), "extraCurrencySupported": .bool(false)])
+            //.object(["name": .string("SignData"), "types": .array([.string("text"), .string("binary"), .string("cell")])])
         ]
         return try self.event("connect", id: serverEventId, payload: .object(["items": .array(items), "device": .object([
             "platform": .string(platform), "appName": .string(appName), "appVersion": .string(appVersion),

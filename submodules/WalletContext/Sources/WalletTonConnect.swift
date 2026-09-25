@@ -1214,17 +1214,11 @@ extension WalletContextImpl {
         manifest: TonConnectManifestInfo,
         request: TonConnectConnectRequest
     ) throws -> WalletContext.TonConnectRequest {
-        var permissions = [WalletContext.TonConnectPermission(
-            name: "ton_addr",
-            title: "Wallet address",
-            text: "Allow this app to see your wallet address"
-        )]
-        if request.prompt.proofPayload != nil {
-            permissions.append(WalletContext.TonConnectPermission(
-                name: "ton_proof",
-                title: "Ownership proof",
-                text: "Sign a wallet ownership proof for \(try TonConnectWireCodec.proofDomain(manifestUrl: request.prompt.manifestUrl))"
-            ))
+        var permissions: [WalletContext.TonConnectPermission] = [
+            .address
+        ]
+        if let _ = request.prompt.proofPayload {
+            permissions.append(.proof(try TonConnectWireCodec.proofDomain(manifestUrl: request.prompt.manifestUrl)))
         }
         return WalletContext.TonConnectRequest(
             id: id,

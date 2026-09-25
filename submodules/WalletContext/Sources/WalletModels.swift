@@ -181,18 +181,11 @@ public extension WalletContext {
         }
     }
 
-    struct TonConnectPermission: Equatable, Sendable {
-        public let name: String
-        public let title: String?
-        public let text: String?
-
-        public init(name: String, title: String?, text: String?) {
-            self.name = name
-            self.title = title
-            self.text = text
-        }
+    enum TonConnectPermission: Equatable, Sendable {
+        case address
+        case proof(String)
     }
-
+    
     struct TonConnectRequest: Equatable, Sendable {
         public let id: String
         public let applicationName: String

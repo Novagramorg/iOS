@@ -75,7 +75,7 @@ private final class WalletAppInfoContentComponent: CombinedComponent {
                 transition: .immediate
             )
             context.add(title.position(CGPoint(x: centerX, y: contentHeight + title.size.height / 2.0)))
-            contentHeight += title.size.height + 4.0
+            contentHeight += title.size.height - 6.0
 
             let domain = domain.update(
                 component: ButtonComponent(
@@ -106,7 +106,7 @@ private final class WalletAppInfoContentComponent: CombinedComponent {
                 transition: context.transition
             )
             context.add(domain.position(CGPoint(x: centerX, y: contentHeight + domain.size.height / 2.0)))
-            contentHeight += domain.size.height + 12.0
+            contentHeight += domain.size.height + 5.0
 
             //TODO:localize
             let descriptionText = "This app can see your wallet address, balance and activity. It can't move funds without your approval."
@@ -121,9 +121,9 @@ private final class WalletAppInfoContentComponent: CombinedComponent {
                 transition: .immediate
             )
             context.add(description.position(CGPoint(x: centerX, y: contentHeight + description.size.height / 2.0)))
-            contentHeight += description.size.height + 28.0
+            contentHeight += description.size.height + 25.0
 
-            let buttonInsets = ContainerViewLayout.concentricInsets(bottomInset: environment.safeInsets.bottom, innerDiameter: 50.0, sideInset: 30.0)
+            let buttonInsets = ContainerViewLayout.concentricInsets(bottomInset: environment.safeInsets.bottom, innerDiameter: 52.0, sideInset: 30.0)
             //TODO:localize
             let disconnectTitle = "Disconnect"
             let disconnectButton = disconnectButton.update(
@@ -133,7 +133,7 @@ private final class WalletAppInfoContentComponent: CombinedComponent {
                         color: theme.list.itemDestructiveColor,
                         foreground: theme.list.itemCheckColors.foregroundColor,
                         pressedColor: theme.list.itemDestructiveColor.withMultipliedAlpha(0.9),
-                        cornerRadius: 25.0
+                        cornerRadius: 26.0
                     ),
                     content: AnyComponentWithIdentity(id: "disconnect", component: AnyComponent(Text(
                         text: disconnectTitle,
@@ -144,7 +144,7 @@ private final class WalletAppInfoContentComponent: CombinedComponent {
                     displaysProgress: component.isDisconnecting,
                     action: component.disconnect
                 ),
-                availableSize: CGSize(width: max(1.0, contentWidth - buttonInsets.left - buttonInsets.right), height: 50.0),
+                availableSize: CGSize(width: max(1.0, contentWidth - buttonInsets.left - buttonInsets.right), height: 52.0),
                 transition: context.transition
             )
             context.add(disconnectButton.position(CGPoint(x: centerX, y: contentHeight + disconnectButton.size.height / 2.0)))
