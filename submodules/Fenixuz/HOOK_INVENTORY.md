@@ -8,9 +8,9 @@
 
 ## Summary
 
-- **Total hooks:** 62
+- **Total hooks:** 64
 - **Apple-critical hooks:** 18
-- **Non-critical hooks:** 44
+- **Non-critical hooks:** 46
 
 ---
 
@@ -107,6 +107,8 @@
 | `submodules/ChatListUI/BUILD` | `chatlistui-localization-dep` | ⚪ | china-support | `FenixuzLocalization` | Wire FenixuzLocalization into ChatListUI deps for the zh hook strings (2026-09-23) |
 | `submodules/ChatListUI/Sources/ChatListController.swift` | `header-buttons-fold` | ⚪ | header-fold | `FenixHeaderFold.isExpanded, fenixHeaderFold` | Story/ghost/proxy header buttons fold behind one chevron when there are 2+ of them (2026-09-23) |
 | (8 hook files, see HOOKS.md 2026-09-23 table) | `hook-strings-zh` | ⚪ | china-support | `FenixuzL10n.languageKey(for:` | Inline Fenixuz strings in Telegram-owned files resolve Chinese packs and gained `case "zh"` (2026-09-23) |
+| `submodules/TelegramUI/BUILD` | `telegramui-forward-edit-dep` | ⚪ | forward-edit | `FenixuzForwardEdit` | Wire FenixuzForwardEdit into TelegramUI deps (2026-09-25) |
+| `submodules/TelegramUI/Sources/Chat/ChatMessageActionOptions.swift` | `forward-options-edit-and-send` | ⚪ | forward-edit | `FenixuzForwardEdit.menuItem, FENIX-HOOK #39` | "Edit and Send" item in the forward-options menu: send the forwarded post as a new message with edited text (no forward header, no "edited" label) (2026-09-25) |
 
 ---
 

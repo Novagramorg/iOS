@@ -19,6 +19,8 @@ import ChatMessageWebpageBubbleContentNode
 import PremiumUI
 import UndoUI
 import WebsiteType
+// FENIX-HOOK #39 — edit before forwarding
+import FenixuzForwardEdit
 
 private enum OptionsId: Hashable {
     case reply
@@ -300,6 +302,24 @@ private func chatForwardOptions(selfController: ChatControllerImpl, sourceView: 
                 })
             })))
         }
+        
+        // FENIX-HOOK #39 — edit before forwarding START
+        // "Edit and Send": the post goes out as a new message with the edited text, so there is no
+        // "Forwarded from" header and no "edited" label. The logic lives in FenixuzForwardEdit.
+        if let fenixEditItem = FenixuzForwardEdit.menuItem(context: selfController.context, targetPeerId: peerId, threadId: selfController.chatLocation.threadId, messages: messages, present: { [weak selfController] controller in
+            selfController?.push(controller)
+        }, send: { [weak selfController] copies in
+            selfController?.presentPaidMessageAlertIfNeeded(count: Int32(copies.count), completion: { [weak selfController] postpone in
+                guard let selfController else {
+                    return
+                }
+                selfController.updateChatPresentationInterfaceState(interactive: false, { $0.updatedInterfaceState({ $0.withUpdatedForwardMessageIds(nil).withUpdatedForwardOptionsState(nil).withoutSelectionState() }) })
+                selfController.sendMessages(copies, media: true, postpone: postpone)
+            })
+        }) {
+            items.append(fenixEditItem)
+        }
+        // FENIX-HOOK #39 — edit before forwarding END
         
         if !items.isEmpty {
             items.append(.separator)

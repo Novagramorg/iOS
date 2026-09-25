@@ -71,6 +71,7 @@ swift_library(
         "//submodules/Fenixuz/Analytics:FenixuzAnalytics",
         "//submodules/Fenixuz/AutoProxy:FenixuzAutoProxy",
         "//submodules/Fenixuz/NovagramAds:FenixNovagramAds",
+        "//submodules/Fenixuz/ForwardEdit:FenixuzForwardEdit",
         "//third-party/recaptcha:RecaptchaEnterprise",
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
         "//submodules/SSignalKit/SSignalKit:SSignalKit",
