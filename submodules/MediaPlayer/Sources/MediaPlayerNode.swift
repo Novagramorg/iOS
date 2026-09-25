@@ -178,7 +178,8 @@ public final class MediaPlayerNode: ASDisplayNode {
             return
         }
         if !videoLayer.isReadyForMoreMediaData {
-            completion(.delay(max(1.0 / 30.0, state.maxTakenTime - layerTime)))
+            // Fenixuz: capped, DispatchSourceTimer traps when the repeat interval is >= 2^64 ns (~584 years)
+            completion(.delay(min(max(1.0 / 30.0, state.maxTakenTime - layerTime), 1.0)))
             return
         }
         

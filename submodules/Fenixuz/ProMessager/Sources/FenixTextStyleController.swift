@@ -9,6 +9,7 @@ import AccountContext
 import TelegramPresentationData
 import PresentationDataUtils
 import ItemListUI
+import FenixuzLocalization
 
 // MARK: - Available Text Styles
 
@@ -27,36 +28,42 @@ public enum FenixTextStyle: String, CaseIterable {
             switch langCode {
             case "uz": return "Uslubsiz (Oddiy)"
             case "ru": return "Без стиля (обычный)"
+            case "zh": return "无样式（普通）"
             default:   return "No style (Plain)"
             }
         case .bold:
             switch langCode {
             case "uz": return "Qalin (Bold)"
             case "ru": return "Жирный (Bold)"
+            case "zh": return "粗体"
             default:   return "Bold"
             }
         case .italic:
             switch langCode {
             case "uz": return "Kiyshiq (Italic)"
             case "ru": return "Курсив (Italic)"
+            case "zh": return "斜体"
             default:   return "Italic"
             }
         case .monospace:
             switch langCode {
             case "uz": return "Monospace (Kod)"
             case "ru": return "Моноширинный (Код)"
+            case "zh": return "等宽（代码）"
             default:   return "Monospace (Code)"
             }
         case .strikethrough:
             switch langCode {
             case "uz": return "Chizilgan (Strikethrough)"
             case "ru": return "Зачёркнутый (Strikethrough)"
+            case "zh": return "删除线"
             default:   return "Strikethrough"
             }
         case .underline:
             switch langCode {
             case "uz": return "Tagiga chizilgan (Underline)"
             case "ru": return "Подчёркнутый (Underline)"
+            case "zh": return "下划线"
             default:   return "Underline"
             }
         case .spoiler:
@@ -77,6 +84,7 @@ private enum FenixTextStyleStrings {
         switch langCode {
         case "uz": return "✓ Tanlangan"
         case "ru": return "✓ Выбрано"
+        case "zh": return "✓ 已选择"
         default:   return "✓ Selected"
         }
     }
@@ -85,6 +93,7 @@ private enum FenixTextStyleStrings {
         switch langCode {
         case "uz": return "Xabar uslubi"
         case "ru": return "Стиль сообщения"
+        case "zh": return "消息样式"
         default:   return "Message style"
         }
     }
@@ -125,7 +134,7 @@ private enum TextStyleEntry: ItemListNodeEntry {
         let arguments = arguments as! TextStyleArguments
         switch self {
         case let .styleItem(_, theme, name, isSelected, style):
-            let label = isSelected ? FenixTextStyleStrings.selectedBadge(langCode: presentationData.strings.primaryComponent.languageCode) : ""
+            let label = isSelected ? FenixTextStyleStrings.selectedBadge(langCode: FenixuzL10n.languageKey(for: presentationData.strings)) : ""
             let labelStyle: ItemListDisclosureLabelStyle = isSelected
                 ? .badge(theme.list.itemAccentColor)
                 : .text
@@ -171,7 +180,7 @@ private func textStyleEntries(
     state: TextStyleControllerState
 ) -> [TextStyleEntry] {
     var entries: [TextStyleEntry] = []
-    let langCode = presentationData.strings.primaryComponent.languageCode
+    let langCode = FenixuzL10n.languageKey(for: presentationData.strings)
     for (index, style) in FenixTextStyle.allCases.enumerated() {
         let isSelected = state.selectedStyle == style
         entries.append(.styleItem(
@@ -213,7 +222,7 @@ public func fenixTextStyleController(context: AccountContext, onStyleSelected: @
     |> map { presentationData, state -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let controllerState = ItemListControllerState(
             presentationData: ItemListPresentationData(presentationData),
-            title: .text(FenixTextStyleStrings.title(langCode: presentationData.strings.primaryComponent.languageCode)),
+            title: .text(FenixTextStyleStrings.title(langCode: FenixuzL10n.languageKey(for: presentationData.strings))),
             leftNavigationButton: nil,
             rightNavigationButton: nil,
             backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back)

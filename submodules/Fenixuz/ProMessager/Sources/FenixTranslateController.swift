@@ -9,6 +9,7 @@ import AccountContext
 import TelegramPresentationData
 import PresentationDataUtils
 import ItemListUI
+import FenixuzLocalization
 
 // MARK: - UserDefaults keys
 private let kSuiteName    = "pro_messager"
@@ -162,7 +163,7 @@ private enum AutoTranslateEntry: ItemListNodeEntry {
             return ItemListSectionHeaderItem(presentationData: presentationData, text: title, sectionId: self.section)
 
         case let .language(_, theme, name, code, isSelected, isDownloaded):
-            let langCode = presentationData.strings.primaryComponent.languageCode
+            let langCode = FenixuzL10n.languageKey(for: presentationData.strings)
             let label = isDownloaded ? (isSelected ? FenixTranslateStrings.selectedLabel(langCode: langCode) : "✅") : FenixTranslateStrings.downloadLabel(langCode: langCode)
             return ItemListDisclosureItem(presentationData: presentationData, title: name, label: label, labelStyle: isSelected ? .badge(theme.list.itemAccentColor) : .detailText, sectionId: self.section, style: .blocks, action: {
                 if isDownloaded {
@@ -210,7 +211,7 @@ private final class AutoTranslateArguments {
 
 private func autoTranslateEntries(presentationData: PresentationData, state: AutoTranslateState) -> [AutoTranslateEntry] {
     var entries: [AutoTranslateEntry] = []
-    let langCode = presentationData.strings.primaryComponent.languageCode
+    let langCode = FenixuzL10n.languageKey(for: presentationData.strings)
 
     entries.append(.infoText(presentationData.theme, FenixTranslateStrings.autoInfo(langCode: langCode)))
 
@@ -272,7 +273,7 @@ public func fenixTranslateAutoController(context: AccountContext, onEnabledSelec
     |> map { presentationData, state -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let controllerState = ItemListControllerState(
             presentationData: ItemListPresentationData(presentationData),
-            title: .text(FenixTranslateStrings.autoTitle(langCode: presentationData.strings.primaryComponent.languageCode)),
+            title: .text(FenixTranslateStrings.autoTitle(langCode: FenixuzL10n.languageKey(for: presentationData.strings))),
             leftNavigationButton: nil,
             rightNavigationButton: nil,
             backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back)

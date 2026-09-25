@@ -7,6 +7,7 @@ import AccountContext
 import TelegramPresentationData
 import PresentationDataUtils
 import ItemListUI
+import FenixuzLocalization
 
 // MARK: - Hex-color icon helper
 //
@@ -122,7 +123,7 @@ private enum FenixBotsEntry: ItemListNodeEntry {
                 sectionId: self.section
             )
         case let .botRow(_, _, bot, _, peer):
-            let langCode = presentationData.strings.primaryComponent.languageCode
+            let langCode = FenixuzL10n.languageKey(for: presentationData.strings)
             // Real avatar takes over via iconPeer once resolved; until then (or if the
             // bot has no profile photo) the brand-color icon is the visible fallback.
             // Pattern mirrors FenixAccountsController.swift's live/suspended avatar rows.
@@ -172,7 +173,7 @@ private func fenixBotsEntries(
     categories: [NovagramBotCategory],
     avatarPeers: [String: EnginePeer]
 ) -> [FenixBotsEntry] {
-    let langCode = presentationData.strings.primaryComponent.languageCode
+    let langCode = FenixuzL10n.languageKey(for: presentationData.strings)
     var entries: [FenixBotsEntry] = []
     for (catIndex, category) in categories.enumerated() {
         entries.append(.categoryHeader(catIndex, category.title.localized(langCode: langCode)))
@@ -285,7 +286,7 @@ public func fenixBotsController(context: AccountContext) -> ViewController {
     )
     |> deliverOnMainQueue
     |> map { presentationData, avatarPeers -> (ItemListControllerState, (ItemListNodeState, Any)) in
-        let langCode = presentationData.strings.primaryComponent.languageCode
+        let langCode = FenixuzL10n.languageKey(for: presentationData.strings)
         let controllerState = ItemListControllerState(
             presentationData: ItemListPresentationData(presentationData),
             title: .text(FenixBotsStrings.screenTitle(langCode: langCode)),

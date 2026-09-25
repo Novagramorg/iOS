@@ -592,19 +592,19 @@ private enum FenixEntry: ItemListNodeEntry {
                 arguments.updateEditedHistoryEnabled(val)
             }, tag: self.fenixTag)
         case let .roundVideoFromGallery(_, title, text, value, isNew):
-            let langCode = presentationData.strings.primaryComponent.languageCode
+            let langCode = FenixuzL10n.languageKey(for: presentationData.strings)
             let badge: AnyComponent<Empty>? = isNew ? AnyComponent(FenixNewBadgeComponent(langCode: langCode)) : nil
             return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "video.circle.fill", color: .blue), title: title, text: text, titleBadgeComponent: badge, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateRoundVideoFromGallery(val)
             }, tag: self.fenixTag)
         case let .forwardHideNames(_, title, text, value, isNew):
-            let langCode = presentationData.strings.primaryComponent.languageCode
+            let langCode = FenixuzL10n.languageKey(for: presentationData.strings)
             let badge: AnyComponent<Empty>? = isNew ? AnyComponent(FenixNewBadgeComponent(langCode: langCode)) : nil
             return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "arrowshape.turn.up.right.circle.fill", color: .green), title: title, text: text, titleBadgeComponent: badge, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateForwardHideNames(val)
             }, tag: self.fenixTag)
         case let .unlimitedPins(_, title, text, value, isNew):
-            let langCode = presentationData.strings.primaryComponent.languageCode
+            let langCode = FenixuzL10n.languageKey(for: presentationData.strings)
             let badge: AnyComponent<Empty>? = isNew ? AnyComponent(FenixNewBadgeComponent(langCode: langCode)) : nil
             return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "pin.circle.fill", color: .orange), title: title, text: text, titleBadgeComponent: badge, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateUnlimitedPins(val)
@@ -641,7 +641,7 @@ private enum FenixEntry: ItemListNodeEntry {
             }, tag: self.fenixTag)
         case let .sendTranslateConfirm(_, title, text, value, isNew):
             // Feature #37: 2-tap send confirm toggle (isNew badge)
-            let langCode = presentationData.strings.primaryComponent.languageCode
+            let langCode = FenixuzL10n.languageKey(for: presentationData.strings)
             let badge: AnyComponent<Empty>? = isNew ? AnyComponent(FenixNewBadgeComponent(langCode: langCode)) : nil
             return ItemListSwitchItem(
                 presentationData: presentationData,
@@ -685,7 +685,7 @@ private enum FenixEntry: ItemListNodeEntry {
             // "character.bubble.fill" is iOS 13+ safe; "translate" is iOS 14+ only.
             // isNew: always true for now — flip to false in the call site when no longer new.
             // enabled: false when "Ask to translate on send" is on (the two are mutually exclusive).
-            let langCode = presentationData.strings.primaryComponent.languageCode
+            let langCode = FenixuzL10n.languageKey(for: presentationData.strings)
             let badge: AnyComponent<Empty>? = isNew ? AnyComponent(FenixNewBadgeComponent(langCode: langCode)) : nil
             return ItemListSwitchItem(
                 presentationData: presentationData,
@@ -716,20 +716,20 @@ private enum FenixEntry: ItemListNodeEntry {
             }, tag: self.fenixTag)
         case let .chatLockMasterEnabled(_, title, text, value, isNew):
             // Feature #46: Chat Lock master toggle — on turns the feature on and sets the master pincode
-            let langCode = presentationData.strings.primaryComponent.languageCode
+            let langCode = FenixuzL10n.languageKey(for: presentationData.strings)
             let badge: AnyComponent<Empty>? = isNew ? AnyComponent(FenixNewBadgeComponent(langCode: langCode)) : nil
             return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "lock.shield.fill", color: .blue), title: title, text: text, titleBadgeComponent: badge, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateChatLockMaster(val)
             }, tag: self.fenixTag)
         case let .autoDownloadDisabled(_, title, text, value, isNew):
-            let langCode = presentationData.strings.primaryComponent.languageCode
+            let langCode = FenixuzL10n.languageKey(for: presentationData.strings)
             let badge: AnyComponent<Empty>? = isNew ? AnyComponent(FenixNewBadgeComponent(langCode: langCode)) : nil
             return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "arrow.down.circle.fill", color: .orange), title: title, text: text, titleBadgeComponent: badge, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateAutoDownloadDisabled(val)
             }, tag: self.fenixTag)
         case let .sendConfirmEnabled(_, title, text, value, isNew):
             // Feature #38: yuborishdan oldin tasdiq so'rovi (ovoz, stiker, sovg'a)
-            let langCode = presentationData.strings.primaryComponent.languageCode
+            let langCode = FenixuzL10n.languageKey(for: presentationData.strings)
             let badge: AnyComponent<Empty>? = isNew ? AnyComponent(FenixNewBadgeComponent(langCode: langCode)) : nil
             return ItemListSwitchItem(
                 presentationData: presentationData,
@@ -753,7 +753,7 @@ private enum FenixEntry: ItemListNodeEntry {
             return ItemListSectionHeaderItem(presentationData: presentationData, text: text, sectionId: self.section)
         case let .whiteThemeAccent(_, title, text, value, isNew):
             // isNew: always true for now — flip to false in the call site when no longer new.
-            let langCode = presentationData.strings.primaryComponent.languageCode
+            let langCode = FenixuzL10n.languageKey(for: presentationData.strings)
             let badge: AnyComponent<Empty>? = isNew ? AnyComponent(FenixNewBadgeComponent(langCode: langCode)) : nil
             return ItemListSwitchItem(
                 presentationData: presentationData,
@@ -776,7 +776,7 @@ private enum FenixEntry: ItemListNodeEntry {
         case let .chatLockHeader(text, isNew):
             // ItemListSectionHeaderItem has native badge: + badgeStyle: support — use that
             // instead of a text suffix so the badge is a proper green pill.
-            let langCode = presentationData.strings.primaryComponent.languageCode
+            let langCode = FenixuzL10n.languageKey(for: presentationData.strings)
             let badgeText: String? = isNew ? FenixNewBadgeLabel.headerText(langCode: langCode) : nil
             let badgeStyle: ItemListSectionHeaderItem.BadgeStyle? = isNew
                 ? ItemListSectionHeaderItem.BadgeStyle(
@@ -796,7 +796,7 @@ private enum FenixEntry: ItemListNodeEntry {
         case let .chatLockFooter(_, text):
             return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
         case let .secretVaultEnabled(_, title, text, value, isNew):
-            let langCode = presentationData.strings.primaryComponent.languageCode
+            let langCode = FenixuzL10n.languageKey(for: presentationData.strings)
             let badge: AnyComponent<Empty>? = isNew ? AnyComponent(FenixNewBadgeComponent(langCode: langCode)) : nil
             return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "eye.slash.fill", color: .purple), title: title, text: text, titleBadgeComponent: badge, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateSecretVault(val)
@@ -810,7 +810,7 @@ private enum FenixEntry: ItemListNodeEntry {
 
         // ─── UNREAD MESSAGE REMINDER (Xabar eslatmasi) ───
         case let .reminderHeader(text, isNew):
-            let langCode = presentationData.strings.primaryComponent.languageCode
+            let langCode = FenixuzL10n.languageKey(for: presentationData.strings)
             let badgeText: String? = isNew ? FenixNewBadgeLabel.headerText(langCode: langCode) : nil
             let badgeStyle: ItemListSectionHeaderItem.BadgeStyle? = isNew
                 ? ItemListSectionHeaderItem.BadgeStyle(
@@ -842,7 +842,7 @@ private enum FenixEntry: ItemListNodeEntry {
 
         // ─── FEATURES (#19, #21, #32, #40, #45) ───
         case let .featuresHeader(text, isNew):
-            let langCode = presentationData.strings.primaryComponent.languageCode
+            let langCode = FenixuzL10n.languageKey(for: presentationData.strings)
             let badgeText: String? = isNew ? FenixNewBadgeLabel.headerText(langCode: langCode) : nil
             let badgeStyle: ItemListSectionHeaderItem.BadgeStyle? = isNew
                 ? ItemListSectionHeaderItem.BadgeStyle(
@@ -871,7 +871,7 @@ private enum FenixEntry: ItemListNodeEntry {
                 tag: self.fenixTag
             )
         case let .adminFolders(_, title, text, value, isNew):
-            let langCode = presentationData.strings.primaryComponent.languageCode
+            let langCode = FenixuzL10n.languageKey(for: presentationData.strings)
             let badge: AnyComponent<Empty>? = isNew ? AnyComponent(FenixNewBadgeComponent(langCode: langCode)) : nil
             return ItemListSwitchItem(
                 presentationData: presentationData,
@@ -901,7 +901,7 @@ private enum FenixEntry: ItemListNodeEntry {
                 tag: self.fenixTag
             )
         case let .channelHistoryButton(_, title, text, value, isNew):
-            let langCode = presentationData.strings.primaryComponent.languageCode
+            let langCode = FenixuzL10n.languageKey(for: presentationData.strings)
             let badge: AnyComponent<Empty>? = isNew ? AnyComponent(FenixNewBadgeComponent(langCode: langCode)) : nil
             return ItemListSwitchItem(
                 presentationData: presentationData,
@@ -918,7 +918,7 @@ private enum FenixEntry: ItemListNodeEntry {
                 tag: self.fenixTag
             )
         case let .settingsLinks(_, title, text, value, isNew):
-            let langCode = presentationData.strings.primaryComponent.languageCode
+            let langCode = FenixuzL10n.languageKey(for: presentationData.strings)
             let badge: AnyComponent<Empty>? = isNew ? AnyComponent(FenixNewBadgeComponent(langCode: langCode)) : nil
             return ItemListSwitchItem(
                 presentationData: presentationData,
@@ -935,7 +935,7 @@ private enum FenixEntry: ItemListNodeEntry {
                 tag: self.fenixTag
             )
         case let .autoAcceptRequests(_, title, text, value, isNew):
-            let langCode = presentationData.strings.primaryComponent.languageCode
+            let langCode = FenixuzL10n.languageKey(for: presentationData.strings)
             let badge: AnyComponent<Empty>? = isNew ? AnyComponent(FenixNewBadgeComponent(langCode: langCode)) : nil
             return ItemListSwitchItem(
                 presentationData: presentationData,
@@ -970,7 +970,7 @@ private enum FenixEntry: ItemListNodeEntry {
 
         // ─── ADS (hidden Easter-egg section) ───
         case let .adsHeader(text, isNew):
-            let langCode = presentationData.strings.primaryComponent.languageCode
+            let langCode = FenixuzL10n.languageKey(for: presentationData.strings)
             let badgeText: String? = isNew ? FenixNewBadgeLabel.headerText(langCode: langCode) : nil
             let badgeStyle: ItemListSectionHeaderItem.BadgeStyle? = isNew
                 ? ItemListSectionHeaderItem.BadgeStyle(
@@ -986,7 +986,7 @@ private enum FenixEntry: ItemListNodeEntry {
                 sectionId: self.section
             )
         case let .showAds(_, title, text, value, isNew):
-            let langCode = presentationData.strings.primaryComponent.languageCode
+            let langCode = FenixuzL10n.languageKey(for: presentationData.strings)
             let badge: AnyComponent<Empty>? = isNew ? AnyComponent(FenixNewBadgeComponent(langCode: langCode)) : nil
             return ItemListSwitchItem(
                 presentationData: presentationData,
@@ -1003,7 +1003,7 @@ private enum FenixEntry: ItemListNodeEntry {
                 tag: self.fenixTag
             )
         case let .storyUnlockEnabled(_, title, text, value, isNew):
-            let langCode = presentationData.strings.primaryComponent.languageCode
+            let langCode = FenixuzL10n.languageKey(for: presentationData.strings)
             let badge: AnyComponent<Empty>? = isNew ? AnyComponent(FenixNewBadgeComponent(langCode: langCode)) : nil
             return ItemListSwitchItem(
                 presentationData: presentationData,
@@ -1020,7 +1020,7 @@ private enum FenixEntry: ItemListNodeEntry {
                 tag: self.fenixTag
             )
         case let .translateChatsUnlock(_, title, text, value, isNew):
-            let langCode = presentationData.strings.primaryComponent.languageCode
+            let langCode = FenixuzL10n.languageKey(for: presentationData.strings)
             let badge: AnyComponent<Empty>? = isNew ? AnyComponent(FenixNewBadgeComponent(langCode: langCode)) : nil
             return ItemListSwitchItem(
                 presentationData: presentationData,
@@ -1336,7 +1336,7 @@ private func fenixSettingsEntries(presentationData: PresentationData, state: Fen
     var entries: [FenixEntry] = []
     let l10n = FenixuzL10n(presentationData.strings)
     // Resolved once at entry-build time; used by local string namespaces throughout.
-    let langCode = presentationData.strings.primaryComponent.languageCode
+    let langCode = FenixuzL10n.languageKey(for: presentationData.strings)
 
     // ─── ABOUT FENIXPRO ───
     entries.append(.aboutRow(presentationData.theme, l10n.about_rowTitle))
@@ -2067,7 +2067,7 @@ public func fenixSettingsController(context: AccountContext, highlightFeature: F
     }, addRecommendedFolders: {
         // Feature #19: add recommended folders; show a brief confirmation alert on success.
         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-        let langCode = presentationData.strings.primaryComponent.languageCode
+        let langCode = FenixuzL10n.languageKey(for: presentationData.strings)
         FenixRecommendedFolders.addIfNeeded(context: context) { added in
             guard added else { return }
             let alert = textAlertController(
@@ -2081,7 +2081,7 @@ public func fenixSettingsController(context: AccountContext, highlightFeature: F
     }, openFolderStyle: {
         // Feature #21: folder display style picker (icon / text / auto)
         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-        let langCode = presentationData.strings.primaryComponent.languageCode
+        let langCode = FenixuzL10n.languageKey(for: presentationData.strings)
         let actionSheet = ActionSheetController(presentationData: presentationData)
         let styles: [(String, String)] = [
             ("icon", FenixFeaturesStrings.folderStyleLabel("icon", langCode: langCode)),
@@ -2158,7 +2158,7 @@ public func fenixSettingsController(context: AccountContext, highlightFeature: F
         // key so enable/disable stay a single code path (AppDelegate re-enters via
         // startGlobalMonitor on the next launch).
         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-        let langCode = presentationData.strings.primaryComponent.languageCode
+        let langCode = FenixuzL10n.languageKey(for: presentationData.strings)
         if value {
             FenixAdminFoldersManager.enable(context: context, completion: { outcome in
                 let text: String
@@ -2200,7 +2200,7 @@ public func fenixSettingsController(context: AccountContext, highlightFeature: F
         // single source of truth every hook site reads, so it is written only after confirmation —
         // if the user cancels, the switch snaps back because state never changed.
         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-        let langCode = presentationData.strings.primaryComponent.languageCode
+        let langCode = FenixuzL10n.languageKey(for: presentationData.strings)
         if !value {
             FenixuzStoryUnlock.isEnabled = false
             updateState { state in
@@ -2321,7 +2321,7 @@ public func fenixSettingsController(context: AccountContext, highlightFeature: F
         let gr = FenixAdsRevealGestureRecognizer(onReveal: { [weak controller] in
             guard let controller else { return }
             let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-            let langCode = presentationData.strings.primaryComponent.languageCode
+            let langCode = FenixuzL10n.languageKey(for: presentationData.strings)
             let defaults = UserDefaults(suiteName: "pro_messager")
             let wasRevealed = defaults?.object(forKey: "fenix_ads_section_revealed") as? Bool ?? false
             let nowRevealed = !wasRevealed
@@ -2414,6 +2414,7 @@ private enum FenixAutoDownloadStrings {
         switch langCode {
         case "uz": return "Avto-yuklashni o'chirish"
         case "ru": return "Отключить автозагрузку"
+        case "zh": return "关闭自动下载"
         default:   return "Disable auto-download"
         }
     }
@@ -2421,6 +2422,7 @@ private enum FenixAutoDownloadStrings {
         switch langCode {
         case "uz": return "Barcha media uchun avtomatik yuklab olishni o'chiradi (mobil va Wi-Fi)"
         case "ru": return "Отключает автозагрузку всех медиа (моб. сеть и Wi-Fi)"
+        case "zh": return "在所有网络下关闭媒体自动下载"
         default:   return "Turns off media auto-download on all networks"
         }
     }
@@ -2431,6 +2433,7 @@ private enum FenixNovagramProxyStrings {
         switch langCode {
         case "uz": return "NovagramProxy'ni yoqish"
         case "ru": return "Включить NovagramProxy"
+        case "zh": return "开启 NovagramProxy"
         default:   return "Enable NovagramProxy"
         }
     }
@@ -2438,6 +2441,7 @@ private enum FenixNovagramProxyStrings {
         switch langCode {
         case "uz": return "Telegram bloklangan hududlarda avtomatik ulanish"
         case "ru": return "Автоподключение там, где Telegram заблокирован"
+        case "zh": return "在 Telegram 被封锁的地区自动连接"
         default:   return "Automatic connection where Telegram is blocked"
         }
     }
@@ -2448,6 +2452,7 @@ private enum FenixWhiteThemeStrings {
         switch langCode {
         case "uz": return "Ko'rinish"
         case "ru": return "Внешний вид"
+        case "zh": return "外观"
         default:   return "Appearance"
         }
     }
@@ -2456,6 +2461,7 @@ private enum FenixWhiteThemeStrings {
         switch langCode {
         case "uz": return "Yorqin temada brand rangi"
         case "ru": return "Акцент бренда в светлой теме"
+        case "zh": return "浅色主题使用品牌强调色"
         default:   return "Brand accent in light theme"
         }
     }
@@ -2464,6 +2470,7 @@ private enum FenixWhiteThemeStrings {
         switch langCode {
         case "uz": return "Yorqin (oq) temada Novagram ko'k rangini accent sifatida qo'llaydi"
         case "ru": return "Применяет фирменный синий Novagram в качестве акцента в светлой теме"
+        case "zh": return "在浅色主题中使用 Novagram 蓝作为强调色"
         default:   return "Applies Novagram blue as the accent color in the light theme"
         }
     }
@@ -2472,6 +2479,7 @@ private enum FenixWhiteThemeStrings {
         switch langCode {
         case "uz": return "Faqat yorqin (oq) temaga ta'sir qiladi. Qayta ishga tushirmasdan kuchga kiradi."
         case "ru": return "Влияет только на светлую тему. Применяется без перезапуска."
+        case "zh": return "仅影响浅色主题，无需重启即可生效。"
         default:   return "Affects the light theme only. Takes effect without restarting."
         }
     }
@@ -2486,6 +2494,7 @@ private enum FenixChatLockStrings {
         switch langCode {
         case "uz": return "Chat qulfi"
         case "ru": return "Блокировка чата"
+        case "zh": return "聊天锁"
         default:   return "Chat Lock"
         }
     }
@@ -2495,6 +2504,7 @@ private enum FenixChatLockStrings {
         switch langCode {
         case "uz": return "Chat qulfi"
         case "ru": return "Блокировка чата"
+        case "zh": return "聊天锁"
         default:   return "Chat Lock"
         }
     }
@@ -2503,6 +2513,7 @@ private enum FenixChatLockStrings {
         switch langCode {
         case "uz": return "Asosiy pinkod o'rnating, so'ng chatlarni long-press menyusidan qulflang."
         case "ru": return "Установите главный пин-код, затем блокируйте отдельные чаты из меню по долгому нажатию."
+        case "zh": return "先设置主密码，再通过长按菜单锁定单个聊天。"
         default:   return "Set a master pincode, then lock individual chats from their long-press menu."
         }
     }
@@ -2520,6 +2531,11 @@ private enum FenixChatLockStrings {
                    "Можно задать 4-значный PIN или пароль произвольной длины. " +
                    "Если устройство поддерживает Face ID или Touch ID, можно включить биометрическую разблокировку. " +
                    "При открытии заблокированного чата потребуется ввод кода или биометрия."
+        case "zh":
+            return "长按任意聊天 → 在菜单中选择“设置密码”。" +
+                   "你可以设置 4 位数字 PIN 码，或任意长度的字母数字密码。" +
+                   "如果你的设备支持 Face ID 或 Touch ID，还可以开启生物识别解锁。" +
+                   "打开已锁定的聊天时，需要输入密码或进行生物识别验证。"
         default:
             return "Long-press any chat → choose \"Set Lock\" from the context menu. " +
                    "You can set a 4-digit PIN or an alphanumeric password of any length. " +
@@ -2534,6 +2550,8 @@ private enum FenixChatLockStrings {
             return "Qulf har bir chat uchun alohida o'rnatiladi. Parollar xavfsiz iOS Keychain'da saqlanadi."
         case "ru":
             return "Замок устанавливается отдельно для каждого чата. Пароли хранятся в защищённом iOS Keychain."
+        case "zh":
+            return "每个聊天的锁需单独设置。密码保存在 iOS 钥匙串中。"
         default:
             return "Lock is set per-chat. Credentials are stored in the iOS Keychain."
         }
@@ -2549,6 +2567,7 @@ private enum FenixVoiceTranslateStrings {
         switch langCode {
         case "uz": return "Ovozli xabarlarni tarjima qilish"
         case "ru": return "Переводить голосовые сообщения"
+        case "zh": return "翻译语音消息"
         default:   return "Translate voice messages"
         }
     }
@@ -2557,6 +2576,7 @@ private enum FenixVoiceTranslateStrings {
         switch langCode {
         case "uz": return "Nutqni matnga aylantirgandan so'ng avtomatik tarjima qiladi. \"Yuborishda tarjima so'rovi\" o'chiq bo'lsa ishlaydi"
         case "ru": return "Автоматически переводит транскрипцию. Работает, когда «Запрос перевода при отправке» выключен"
+        case "zh": return "自动翻译语音转写的文字。仅在“发送时询问翻译”关闭时生效"
         default:   return "Auto-translates the transcription. Works when \"Ask to translate on send\" is off"
         }
     }
@@ -2571,6 +2591,7 @@ private enum FenixNewBadgeLabel {
         switch langCode {
         case "uz": return "YANGI"
         case "ru": return "НОВОЕ"
+        case "zh": return "新"
         default:   return "NEW"
         }
     }
@@ -2585,6 +2606,7 @@ private enum FenixSendTranslateStrings {
         switch langCode {
         case "uz": return "Yuborishda tarjima so'rovi"
         case "ru": return "Запрос перевода при отправке"
+        case "zh": return "发送时询问翻译"
         default:   return "Ask to translate on send"
         }
     }
@@ -2593,6 +2615,7 @@ private enum FenixSendTranslateStrings {
         switch langCode {
         case "uz": return "Send tugmasida tarjima yoki original so'rovi chiqadi. Yoqilsa ovozli auto-tarjima o'chadi"
         case "ru": return "При отправке диалог: перевести или отправить. Включение отключает голосовой авто-перевод"
+        case "zh": return "发送前弹窗询问是翻译后发送还是发送原文。开启后将关闭语音自动翻译"
         default:   return "Before sending, a dialog asks to translate or send original. Enabling turns off voice auto-translate"
         }
     }
@@ -2606,6 +2629,7 @@ public enum FenixSendConfirmStrings {
         switch langCode {
         case "uz": return "Yuborishdan oldin so'rash"
         case "ru": return "Спрашивать перед отправкой"
+        case "zh": return "发送前确认"
         default:   return "Ask before sending"
         }
     }
@@ -2614,6 +2638,7 @@ public enum FenixSendConfirmStrings {
         switch langCode {
         case "uz": return "Ovozli xabar, stiker yoki sovg'a yuborishdan oldin tasdiq so'raladi"
         case "ru": return "Перед отправкой голосового, стикера или подарка появится подтверждение"
+        case "zh": return "发送语音消息、贴纸或礼物前需要确认"
         default:   return "Confirms before sending a voice message, sticker, or gift"
         }
     }
@@ -2622,6 +2647,7 @@ public enum FenixSendConfirmStrings {
         switch langCode {
         case "uz": return "Yuborishni tasdiqlang"
         case "ru": return "Подтвердите отправку"
+        case "zh": return "确认发送"
         default:   return "Confirm sending"
         }
     }
@@ -2630,6 +2656,7 @@ public enum FenixSendConfirmStrings {
         switch langCode {
         case "uz": return "Xabarni yuborishni xohlaysizmi?"
         case "ru": return "Вы хотите отправить это сообщение?"
+        case "zh": return "要发送这条消息吗？"
         default:   return "Do you want to send this message?"
         }
     }
@@ -2638,6 +2665,7 @@ public enum FenixSendConfirmStrings {
         switch langCode {
         case "uz": return "Yuborish"
         case "ru": return "Отправить"
+        case "zh": return "发送"
         default:   return "Send"
         }
     }
@@ -2646,6 +2674,7 @@ public enum FenixSendConfirmStrings {
         switch langCode {
         case "uz": return "Bekor qilish"
         case "ru": return "Отмена"
+        case "zh": return "取消"
         default:   return "Cancel"
         }
     }
@@ -2659,6 +2688,7 @@ private enum FenixAutoStickerStrings {
         switch langCode {
         case "uz": return "Avtomatik sticker"
         case "ru": return "Авто-стикер"
+        case "zh": return "自动贴纸"
         default:   return "Auto sticker"
         }
     }
@@ -2667,6 +2697,7 @@ private enum FenixAutoStickerStrings {
         switch langCode {
         case "uz": return "Har matnli xabardan keyin oxirgi yuborilgan stickerni qo'shadi"
         case "ru": return "После каждого текстового сообщения добавляет последний отправленный стикер"
+        case "zh": return "每条文字消息后附加最近发送的贴纸"
         default:   return "Appends the last sent sticker after each text message"
         }
     }
@@ -2679,6 +2710,7 @@ private enum FenixHeartEffectStrings {
         switch langCode {
         case "uz": return "Yurakcha effekti"
         case "ru": return "Эффект сердечка"
+        case "zh": return "爱心特效"
         default:   return "Heart effect"
         }
     }
@@ -2687,6 +2719,7 @@ private enum FenixHeartEffectStrings {
         switch langCode {
         case "uz": return "Yuborilgan xabarlarga ❤️ animatsion effektini avtomatik qo'shadi"
         case "ru": return "Автоматически добавляет анимированный эффект ❤️ к отправленным сообщениям"
+        case "zh": return "自动为发送的消息添加 ❤️ 动画特效"
         default:   return "Automatically adds the ❤️ animated effect to sent messages"
         }
     }
@@ -2745,6 +2778,7 @@ private enum FenixAdsStrings {
         switch langCode {
         case "uz": return "Reklama"
         case "ru": return "Реклама"
+        case "zh": return "广告"
         default:   return "Ads"
         }
     }
@@ -2753,6 +2787,7 @@ private enum FenixAdsStrings {
         switch langCode {
         case "uz": return "Reklamani ko'rsatish"
         case "ru": return "Показывать рекламу"
+        case "zh": return "显示广告"
         default:   return "Show ads"
         }
     }
@@ -2761,6 +2796,7 @@ private enum FenixAdsStrings {
         switch langCode {
         case "uz": return "Yoqilsa — Telegram sponsorlik xabarlari ko'rsatiladi; o'chirilsa — yashiriladi"
         case "ru": return "Вкл — спонсорские сообщения Telegram показываются; выкл — скрыты"
+        case "zh": return "开启时显示 Telegram 赞助消息，关闭时隐藏"
         default:   return "On — Telegram sponsored messages shown; Off — suppressed"
         }
     }
@@ -2773,6 +2809,9 @@ private enum FenixAdsStrings {
         case "ru":
             return "Этот параметр управляет спонсорскими сообщениями Telegram в каналах. " +
                    "При выключении реклама не будет показываться."
+        case "zh":
+            return "此设置控制频道中的 Telegram 赞助消息。" +
+                   "关闭后将不再显示任何赞助消息。"
         default:
             return "Controls Telegram sponsored messages in channels. " +
                    "When turned off, no sponsored messages are shown."
@@ -2784,12 +2823,14 @@ private enum FenixAdsStrings {
             switch langCode {
             case "uz": return "Reklama bo'limi ochildi"
             case "ru": return "Раздел рекламы открыт"
+            case "zh": return "广告设置已显示"
             default:   return "Ads section shown"
             }
         } else {
             switch langCode {
             case "uz": return "Reklama bo'limi yashirildi"
             case "ru": return "Раздел рекламы скрыт"
+            case "zh": return "广告设置已隐藏"
             default:   return "Ads section hidden"
             }
         }

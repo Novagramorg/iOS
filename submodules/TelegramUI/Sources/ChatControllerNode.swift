@@ -75,6 +75,7 @@ import RichTextEditorUIKit
 import RichTextEditorMediaView
 import InstantPageUI
 import ChatRichTextEditorComposer
+import FenixuzLocalization
 
 final class VideoNavigationControllerDropContentItem: NavigationControllerDropContentItem {
     let itemNode: OverlayMediaItemNode
@@ -4954,7 +4955,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             let proTranslateConfirmEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "translate_confirm_enabled") ?? false
             if overrideText == nil && !sendAsRichMessage && proTranslateConfirmEnabled && !proTranslateLang.isEmpty && currentInputText.length > 0 && !hasTranslateAttr {
                 if let controller = self.controller {
-                    let langCode = self.chatPresentationInterfaceState.strings.primaryComponent.languageCode
+                    let langCode = FenixuzL10n.languageKey(for: self.chatPresentationInterfaceState.strings)
                     let alertTitle: String
                     let translateAction: String
                     let sendOriginalAction: String
@@ -4967,6 +4968,10 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                         alertTitle = "Отправить сообщение с переводом?"
                         translateAction = "Перевести и отправить"
                         sendOriginalAction = "Отправить оригинал"
+                    case "zh":
+                        alertTitle = "要翻译后再发送吗？"
+                        translateAction = "翻译并发送"
+                        sendOriginalAction = "发送原文"
                     default:
                         alertTitle = "Send with translation?"
                         translateAction = "Translate & Send"
