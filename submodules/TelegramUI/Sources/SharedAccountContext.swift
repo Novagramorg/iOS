@@ -194,6 +194,11 @@ public final class SharedAccountContextImpl: SharedAccountContext {
     private var fenixuzRecencyOrder: [AccountRecordId] = []
     // Pinned account ids — user-controlled, persisted, fires working-set recompute on change.
     private let fenixuzPinnedAccountsPromise = ValuePromise<Set<Int64>>(Set(), ignoreRepeated: true)
+    // Accounts woken for an incoming call (see fenixuzActiveAccountContexts(waking:)): record id -> number
+    // of calls holding it live on top of the working-set. Main queue only.
+    private var fenixuzCallWakeHolds: [Int64: Int] = [:]
+    private let fenixuzCallWakeAccountsPromise = ValuePromise<Set<Int64>>(Set(), ignoreRepeated: true)
+    private let fenixuzCallWakeDisposables = DisposableSet()
     private var fenixuzNameCacheDisposable: Disposable?
     // Caches each live account's rendered avatar to disk (keyed by peerId) so suspended accounts can
     // still show their real photo in the account switchers (tab-bar menu + Accounts screen).
@@ -240,6 +245,91 @@ public final class SharedAccountContextImpl: SharedAccountContext {
 
     public var fenixuzPinnedAccountsSignal: Signal<Set<Int64>, NoError> {
         return fenixuzPinnedAccountsPromise.get()
+    }
+
+    // MARK: - Fenixuz call wake (incoming calls to suspended accounts)
+
+    /// The same value as `activeAccountContexts |> take(1)`, except that when `accountId` is a record the
+    /// working-set keeps suspended, it is woken first and the value is delivered once its context has
+    /// loaded. Upstream keeps every account live, so AppDelegate's PushKit handler dropped a call to a
+    /// suspended account on the spot: CallKit flashed, phone.receivedCall was never sent and the caller
+    /// waited until the server timed the call out. The account stays live until its calls are over.
+    public func fenixuzActiveAccountContexts(waking accountId: AccountRecordId) -> Signal<(primary: AccountContext?, accounts: [(AccountRecordId, AccountContext, Int32)], currentAuth: UnauthorizedAccount?), NoError> {
+        return self.activeAccountContexts
+        |> take(1)
+        |> deliverOnMainQueue
+        |> mapToSignal { [weak self] current -> Signal<(primary: AccountContext?, accounts: [(AccountRecordId, AccountContext, Int32)], currentAuth: UnauthorizedAccount?), NoError> in
+            guard let self, !current.accounts.contains(where: { $0.0 == accountId }) else {
+                return .single(current)
+            }
+            Logger.shared.log("Fenixuz", "waking suspended account \(accountId.int64) for an incoming call")
+            self.fenixuzHoldAccountForCall(accountId)
+            // A suspended account opens in ~1-2 s; on timeout the caller gets the accounts without it and
+            // falls back to upstream's drop.
+            return self.activeAccountContexts
+            |> filter { value in
+                return value.accounts.contains(where: { $0.0 == accountId })
+            }
+            |> take(1)
+            |> timeout(10.0, queue: .mainQueue(), alternate: self.activeAccountContexts |> take(1))
+            |> deliverOnMainQueue
+            |> afterNext { value -> Void in
+                if let context = value.accounts.first(where: { $0.0 == accountId })?.1 {
+                    self.fenixuzReleaseAccountWhenCallsEnd(accountId, context: context)
+                } else {
+                    Logger.shared.log("Fenixuz", "suspended account \(accountId.int64) did not load in time for the call")
+                    self.fenixuzReleaseAccountForCall(accountId)
+                }
+            }
+        }
+    }
+
+    private func fenixuzHoldAccountForCall(_ id: AccountRecordId) {
+        self.fenixuzCallWakeHolds[id.int64, default: 0] += 1
+        self.fenixuzCallWakeAccountsPromise.set(Set(self.fenixuzCallWakeHolds.keys))
+    }
+
+    private func fenixuzReleaseAccountForCall(_ id: AccountRecordId) {
+        guard let count = self.fenixuzCallWakeHolds[id.int64] else {
+            return
+        }
+        if count > 1 {
+            self.fenixuzCallWakeHolds[id.int64] = count - 1
+        } else {
+            self.fenixuzCallWakeHolds.removeValue(forKey: id.int64)
+        }
+        self.fenixuzCallWakeAccountsPromise.set(Set(self.fenixuzCallWakeHolds.keys))
+    }
+
+    // The pushed call update is processed asynchronously, so give its ringing state a moment to appear
+    // before watching for "no call left", and let the account go a little after that so post-call work
+    // (rating, debug log upload) still has its context. Any call in the app counts, which keeps this simple
+    // and only ever errs on the side of staying live longer.
+    private func fenixuzReleaseAccountWhenCallsEnd(_ id: AccountRecordId, context: AccountContext) {
+        var callsActive: Signal<Bool, NoError> = context.account.callSessionManager.ringingStates()
+        |> map { states -> Bool in
+            return !states.isEmpty
+        }
+        if let callManager = self.callManager {
+            callsActive = combineLatest(queue: .mainQueue(), callsActive, callManager.currentCallSignal, callManager.currentGroupCallSignal)
+            |> map { isRinging, call, groupCall -> Bool in
+                return isRinging || call != nil || groupCall != nil
+            }
+        }
+        self.fenixuzCallWakeDisposables.add((Signal<Void, NoError>.single(Void())
+        |> delay(10.0, queue: .mainQueue())
+        |> mapToSignal { _ -> Signal<Bool, NoError> in
+            return callsActive
+        }
+        |> filter { isActive in
+            return !isActive
+        }
+        |> take(1)
+        |> delay(30.0, queue: .mainQueue())
+        |> deliverOnMainQueue).start(next: { [weak self] _ in
+            Logger.shared.log("Fenixuz", "call over, letting account \(id.int64) sleep again")
+            self?.fenixuzReleaseAccountForCall(id)
+        }))
     }
     private let activeAccountsWithInfoPromise = Promise<(primary: AccountRecordId?, accounts: [AccountWithInfo])>()
     public var activeAccountsWithInfo: Signal<(primary: AccountRecordId?, accounts: [AccountWithInfo]), NoError> {
@@ -636,8 +726,8 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         self.fenixuzPinnedAccountsPromise.set(self.fenixuzLoadPinnedAccounts())
 
         let differenceDisposable = MetaDisposable()
-        _ = (combineLatest(queue: .mainQueue(), accountManager.accountRecords(), self.fenixuzPinnedAccountsPromise.get())
-        |> map { view, pinnedIds -> (AccountRecordId?, [AccountRecordId: AccountAttributes], (AccountRecordId, Bool)?, Set<Int64>) in
+        _ = (combineLatest(queue: .mainQueue(), accountManager.accountRecords(), self.fenixuzPinnedAccountsPromise.get(), self.fenixuzCallWakeAccountsPromise.get())
+        |> map { view, pinnedIds, callWakeIds -> (AccountRecordId?, [AccountRecordId: AccountAttributes], (AccountRecordId, Bool)?, Set<Int64>, Set<Int64>) in
             print("SharedAccountContextImpl: records appeared in \(CFAbsoluteTimeGetCurrent() - startTime)")
 
             var result: [AccountRecordId: AccountAttributes] = [:]
@@ -683,7 +773,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
                 })
                 return (authAccount.id, isTestingEnvironment)
             })
-            return (view.currentRecord?.id, result, authRecord, pinnedIds)
+            return (view.currentRecord?.id, result, authRecord, pinnedIds, callWakeIds)
         }
         |> distinctUntilChanged(isEqual: { lhs, rhs in
             if lhs.0 != rhs.0 {
@@ -701,9 +791,12 @@ public final class SharedAccountContextImpl: SharedAccountContext {
             if lhs.3 != rhs.3 {
                 return false
             }
+            if lhs.4 != rhs.4 {
+                return false
+            }
             return true
         })
-        |> deliverOnMainQueue).start(next: { primaryId, records, authRecord, pinnedIds in
+        |> deliverOnMainQueue).start(next: { primaryId, records, authRecord, pinnedIds, callWakeIds in
             // Fenixuz working-set (v2, 2026-06-08):
             // working-set = {primary} ∪ {pinned records that still exist}, capped at fenixuzMaxLiveAccounts.
             // Pinned accounts are user-controlled (persisted in UserDefaults fenixuz_active_accounts).
@@ -748,7 +841,8 @@ public final class SharedAccountContextImpl: SharedAccountContext {
             }
             // Update recency order to include all ordered accounts (for next pass).
             self.fenixuzRecencyOrder = fenixuzOrdered
-            let fenixuzWorkingSet = Set(fenixuzOrdered.prefix(self.fenixuzMaxLiveAccounts))
+            // Accounts woken for an incoming call stay live on top of the cap until their calls are over.
+            let fenixuzWorkingSet = Set(fenixuzOrdered.prefix(self.fenixuzMaxLiveAccounts)).union(records.keys.filter { callWakeIds.contains($0.int64) })
 
             var addedSignals: [Signal<AddedAccountResult, NoError>] = []
             var addedAuthSignal: Signal<UnauthorizedAccount?, NoError> = .single(nil)

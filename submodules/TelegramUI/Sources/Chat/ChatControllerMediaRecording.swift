@@ -119,6 +119,7 @@ import AudioWaveform
 import PeerNameColorScreen
 import ChatEmptyNode
 import ChatMediaInputStickerGridItem
+import FenixuzLocalization
 
 extension ChatControllerImpl {
     func requestAudioRecorder(beginWithTone: Bool, existingDraft: ChatInterfaceMediaDraftState.Audio? = nil) {
@@ -693,9 +694,10 @@ extension ChatControllerImpl {
         // FENIX-HOOK #38 — ovozli xabarni yuborishdan oldin tasdiq (voice ACTUAL send entry; sticker kabi bypass-flag bilan)
         if (UserDefaults(suiteName: "pro_messager")?.bool(forKey: "send_confirm_enabled") ?? false), !(UserDefaults(suiteName: "pro_messager")?.bool(forKey: "fenix_voice_bypass") ?? false) {
             let fenixVTitle: String; let fenixVText: String; let fenixVSend: String; let fenixVCancel: String
-            switch self.presentationInterfaceState.strings.primaryComponent.languageCode {
+            switch FenixuzL10n.languageKey(for: self.presentationInterfaceState.strings) {
             case "uz": fenixVTitle = "Yuborishni tasdiqlang"; fenixVText = "Ovozli xabarni yubormoqchimisiz?"; fenixVSend = "Yuborish"; fenixVCancel = "Bekor qilish"
             case "ru": fenixVTitle = "Подтвердите отправку"; fenixVText = "Отправить голосовое сообщение?"; fenixVSend = "Отправить"; fenixVCancel = "Отмена"
+            case "zh": fenixVTitle = "确认发送"; fenixVText = "要发送这条语音消息吗？"; fenixVSend = "发送"; fenixVCancel = "取消"
             default: fenixVTitle = "Confirm sending"; fenixVText = "Send this voice message?"; fenixVSend = "Send"; fenixVCancel = "Cancel"
             }
             self.present(textAlertController(context: self.context, updatedPresentationData: self.updatedPresentationData, title: fenixVTitle, text: fenixVText, actions: [

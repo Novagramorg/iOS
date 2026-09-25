@@ -5,10 +5,11 @@ import Foundation
 // Locale.current.languageCode (same pattern as the SecretVault module).
 
 enum AIChatbotStrings {
-    private static func localized(en: String, uz: String, ru: String) -> String {
+    private static func localized(en: String, uz: String, ru: String, zh: String) -> String {
         switch Locale.current.languageCode {
         case "uz": return uz
         case "ru": return ru
+        case "zh": return zh
         default:   return en
         }
     }
@@ -17,7 +18,8 @@ enum AIChatbotStrings {
         localized(
             en: "Retry",
             uz: "Qayta urinib ko'rish",
-            ru: "Попробовать снова"
+            ru: "Попробовать снова",
+            zh: "重试"
         )
     }
 
@@ -25,7 +27,8 @@ enum AIChatbotStrings {
         localized(
             en: "AI Assistant",
             uz: "AI Yordamchi",
-            ru: "AI-ассистент"
+            ru: "AI-ассистент",
+            zh: "AI 助手"
         )
     }
 
@@ -33,7 +36,8 @@ enum AIChatbotStrings {
         localized(
             en: "Loading…",
             uz: "Tayyorlanmoqda…",
-            ru: "Загрузка…"
+            ru: "Загрузка…",
+            zh: "加载中…"
         )
     }
 
@@ -41,7 +45,8 @@ enum AIChatbotStrings {
         localized(
             en: "AI is not available yet",
             uz: "AI hozircha mavjud emas",
-            ru: "AI пока недоступен"
+            ru: "AI пока недоступен",
+            zh: "AI 暂不可用"
         )
     }
 
@@ -49,7 +54,8 @@ enum AIChatbotStrings {
         localized(
             en: "AI assistant was not found on the server.\nTry again later.",
             uz: "AI yordamchi serverda topilmadi.\nKeyinroq qayta urinib ko'ring.",
-            ru: "AI-ассистент не найден на сервере.\nПопробуйте позже."
+            ru: "AI-ассистент не найден на сервере.\nПопробуйте позже.",
+            zh: "服务器上未找到 AI 助手。\n请稍后再试。"
         )
     }
 
@@ -57,7 +63,8 @@ enum AIChatbotStrings {
         localized(
             en: "Error",
             uz: "Xatolik",
-            ru: "Ошибка"
+            ru: "Ошибка",
+            zh: "错误"
         )
     }
 }

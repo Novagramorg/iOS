@@ -1450,6 +1450,8 @@ is safe at any account count.
     while an account is suspended would drop its push until it is next made live. VoIP calls to a
     suspended account are not presented (no live session). Both are acceptable for the hold-many-accounts
     use case; revisit by widening `otherAccountUserIds` to all logged-in uids + a PushKit resume path.
+    **2026-09-18:** the PushKit resume path now exists — a call to a suspended account wakes it for the
+    length of the call. See "Incoming calls" at the end of this file.
   - Users with ≤3 accounts see IDENTICAL behaviour (no regression) — the cap only engages at 4+.
   - **2026-06-05 discoverability hook (3 Telegram-owned files):** the built-in Settings accounts section
     only lists the live working-set, which confused the owner ("4-account yo'qoldi"). Added a
@@ -3692,7 +3694,7 @@ Merged upstream `release-12.9.2` (254 commits, 994 files, MTProto layer 227→22
 
 ## 📌 2026-07-22 — Force per-message Translate always-on (NovagramPro)
 
-`submodules/TelegramUI/Sources/ChatInterfaceStateContextMenus.swift` (~line 1483). The pre-existing `showProTranslate` hook (reads `pro_messager` suite key `show_translate_messages`, default `true`) forces the `showTranslate:` argument of `canTranslateText(...)` true — BUT `canTranslateText` (upstream `TranslateUI/Sources/Translate.swift`, unchanged by us) still runs Apple `NLLanguageRecognizer` on the first 64 chars and hides Translate for short/undetectable text or the user's own languages. Users reported Translate appearing on some messages but not others ("small words yes, big words no") — that is upstream behavior, not a bug.
+`submodules/TelegramUI/Sources/ChatInterfaceStateContextMenus.swift` (~line 1483). The pre-existing `showProTranslate` hook (reads `pro_messager` suite key `show_translate_messages`; the code's default is `false` (`?? false`), corrected 2026-09-23) forces the `showTranslate:` argument of `canTranslateText(...)` true — BUT `canTranslateText` (upstream `TranslateUI/Sources/Translate.swift`, unchanged by us) still runs Apple `NLLanguageRecognizer` on the first 64 chars and hides Translate for short/undetectable text or the user's own languages. Users reported Translate appearing on some messages but not others ("small words yes, big words no") — that is upstream behavior, not a bug.
 
 Per user request (2026-07-22) Translate must appear on EVERY message. Added right after the `canTranslateText` call:
 
@@ -5459,3 +5461,287 @@ giving up, leaving the user on the pincode screen:
 Note on behaviour: when biometrics are *available*, iOS insists on them and shows the passcode only
 after failures — that is the system's own policy, not ours. When biometrics are unavailable or
 disabled (the case that started this), `.deviceOwnerAuthentication` goes straight to the passcode.
+
+---
+
+## 📌 Incoming calls — extension fallback, suspended-account wake, call log line (2026-09-18)
+
+**Why:** calls with long delays and frequent failures, reported across the user base. The
+investigation (`CALLS_AUDIT_2026-09-18.md`) found no public Telegram call-engine or MTProto change that
+our 12.9.2 base is missing for the production 1:1 engine (13.0.0). What it did find were two breaks on
+the incoming-call path that only this fork has:
+
+1. **The notification extension cannot hand a call to CallKit.** Upstream turns a PHONE_CALL_REQUEST
+   (or conference-invite) push that reaches the extension into a ringing CallKit call with
+   `CXProvider.reportNewIncomingVoIPPushPayload`. Apple allows that only for an extension that has
+   `com.apple.developer.usernotifications.filtering`; `Telegram/BUILD` grants it to
+   `ph.telegra.Telegraph` alone and our NotificationService profile does not have it, so the call always
+   fails (`CXErrorDomainNotificationServiceExtension` code 2). Upstream then leaves empty content, which
+   our blank-banner rewrite (build 69) makes invisible: the phone neither rang nor showed anything, and
+   the caller waited until the call timed out.
+2. **Calls to a suspended account were dropped.** The working-set keeps only the primary and pinned
+   accounts live. The PushKit handler reported the call to CallKit, found no context for the account,
+   and dropped it at once — `phone.receivedCall` was never sent. Every user with 2+ accounts was hit
+   on every non-selected account.
+
+### `Telegram/NotificationService/Sources/NotificationService.swift` (UPSTREAM hook)
+
+- New file-level `fenixuzIncomingCallFallbackContent(callerTitle:callerPeerId:accountId:incomingCallMessage:payloadJson:)`,
+  right before `getCurrentRenderedTotalUnreadCount`. It builds the banner upstream itself shows when iOS
+  call integration is off (caller name + `incomingCallMessage`), takes the sound from `aps.sound`
+  (falls back to `0.m4a`), and sets `userInfo` `peerId` / `accountId` so a tap opens the caller's chat on
+  the called account — the app then connects and the call rings in-app if it is still ringing.
+- In both the `.call` and the `.groupCall` branch, inside the `reportNewIncomingVoIPPushPayload`
+  completion:
+
+```swift
+// Fenixuz: see fenixuzIncomingCallFallbackContent
+if error != nil {
+    updateCurrentContent(fenixuzIncomingCallFallbackContent(callerTitle: …, callerPeerId: …, accountId: …, incomingCallMessage: incomingCallMessage, payloadJson: payloadJson))
+}
+completed()
+```
+
+When the hand-off succeeds (once Apple grants the entitlement and the profile is regenerated) this
+never runs, so nothing needs to be removed then.
+
+**2026-09-19 — the fallback now rings like a call.** On a real TestFlight device the plain banner played
+the 3-second message sound, so people took the call for an SMS. Apple's documented CallKit substitute
+(`UNNotificationSound.h`, Swift name `defaultRingtone`) plays the user's ringtone and haptics for 30 seconds on
+content updated from an `INStartCallIntent` with `destinationType .normal`.
+
+- `NotificationContent` gained `var fenixuzIncomingCallIsVideo: Bool?` (next to `silent`).
+- `generate()` — before the `INSendMessageIntent` block:
+
+```swift
+// Fenixuz: see fenixuzRingingCallContent
+if #available(iOS 15.2, *), let isVideo = self.fenixuzIncomingCallIsVideo, let ringingContent = fenixuzRingingCallContent(content, caller: self.senderPerson, isVideo: isVideo) {
+    return ringingContent
+}
+```
+
+- New file-level `fenixuzRingingCallContent(_:caller:isVideo:)` (donates the `INStartCallIntent`, sets
+  `defaultRingtone`, returns `content.updating(from: intent)`, nil on failure → plain banner) and
+  `fenixuzIsVideoCall(updates:)`.
+- `fenixuzIncomingCallFallbackContent` now also takes `callerPeer`, `isVideo`, `mediaBox`, `accountPeerId`,
+  adds the caller's avatar via `addSenderInfo` and sets the flag; both call sites pass them.
+
+### `Telegram/BUILD` (UPSTREAM hook)
+
+`NSUserActivityTypes` in the app Info.plist fragment gained `<string>INStartCallIntent</string>` — iOS only
+accepts `INStartCallIntent` communication notifications from apps that declare it.
+
+### `submodules/TelegramUI/Sources/SharedAccountContext.swift` (UPSTREAM hook — multi-account section)
+
+- New state next to `fenixuzPinnedAccountsPromise`: `fenixuzCallWakeHolds` (record id → number of calls
+  holding it), `fenixuzCallWakeAccountsPromise`, `fenixuzCallWakeDisposables`.
+- New `fenixuzActiveAccountContexts(waking:)` after `fenixuzPinnedAccountsSignal`: the same value as
+  `activeAccountContexts |> take(1)`, except that a suspended account is held live first and the value
+  is delivered once its context has loaded (10 s timeout — then the caller gets the accounts without it
+  and falls back to upstream's drop). Private `fenixuzHoldAccountForCall`, `fenixuzReleaseAccountForCall`
+  and `fenixuzReleaseAccountWhenCallsEnd` (from 10 s after the wake, waits until no call is ringing on
+  that account and no call or group call is in progress, then releases 30 s later so rating / debug-log
+  upload still have the context).
+- Working-set pipeline: `combineLatest` gained `self.fenixuzCallWakeAccountsPromise.get()`, the mapped
+  tuple gained `callWakeIds`, `distinctUntilChanged` compares it (`lhs.4`), and `fenixuzWorkingSet` is now
+  the union of the capped set and every woken id — on top of `fenixuzMaxLiveAccounts`, so a ringing call never
+  evicts a pinned account. `fenixuzRecencyOrder` is untouched.
+
+### `submodules/TelegramUI/Sources/AppDelegate.swift` (UPSTREAM hook)
+
+In `pushRegistryImpl`, the conference branch (~line 2344) and the 1:1 branch (~line 2465) both change
+their source signal from
+
+```swift
+_ = (sharedApplicationContext.sharedContext.activeAccountContexts
+|> take(1)
+```
+
+to
+
+```swift
+// Fenixuz: wakes the called account first if the multi-account working-set has it suspended
+_ = (sharedApplicationContext.sharedContext.fenixuzActiveAccountContexts(waking: accountId)
+```
+
+Everything after it is upstream's code, unchanged: a live account behaves exactly as before, a woken
+account is processed by the same loop, and an account that does not load in time is dropped as before.
+
+### `submodules/TelegramCallsUI/Sources/PresentationCall.swift` (UPSTREAM hook)
+
+One log line after `let logName = …` in the `.active` branch of `updateSessionState`:
+
+```swift
+Logger.shared.log("PresentationCall", "Fenixuz call \(logName) active: version \(version), allowsP2P \(allowsP2P), connections \(…), customParameters \(customParameters ?? "nil")")
+```
+
+The app never logged which engine version and server flags (`custom_parameters`, including
+`inline_conference`) a call was given, so a failing call could not be tied to them.
+
+### Deliberately not changed
+
+- tgcalls stays at `e3069322` (upstream 12.9.2's pin). The 19 newer commits on tgcalls `development`
+  change nothing in the 13.0.0 engine at default server settings, the branch describes itself as a
+  testbench, and no matching tgcalls + webrtc + app-glue set has been published.
+- The advertised call versions and the 12.0.0 TCP-reflector injection in
+  `TelegramVoip/Sources/OngoingCallContext.swift` stay as upstream until call logs show which versions
+  the server actually gives us.
+
+### Still needed outside the code
+
+`com.apple.developer.usernotifications.filtering` for the **NotificationService** App ID
+(`uz.fenixuz.app.NotificationService`), requested with the incoming-call use case. After approval:
+regenerate `Fenixuz_AppStore_NotificationService.mobileprovision` and widen the bundle-id gate in
+`Telegram/BUILD`.
+
+---
+
+## 📌 Story video scrubbed past its last frame — Timer.start crash (2026-09-21)
+
+Organizer, build 78: `EXC_BREAKPOINT` in `OS_dispatch_source_timer.scheduleRepeating(deadline:interval:leeway:) + 332`
+← `Timer.start()` ← `MediaPlayerNode.startPolling()` ← `MediaPlayerNode.pollInner` (153 devices in 14 days,
+iOS 16–26). `+332` (disassembled from the iOS 26.6.1 `libswiftDispatch`) is the `UInt64(interval * 1e9)`
+"greater than UInt64.max" trap — the polling timer got a finite interval of at least 1.84e10 s.
+The crashing interval sits in `x23` in the crash logs: `6.0048e14 = 2^63 / 15360` plus a 4–7 s frame time.
+
+Chain: `MediaPlayerStreaming.story.isSeekable == false`, so `FFMpegMediaFrameSourceContext` stores the video
+duration as `CMTimeMake(value: Int64.min, …)` (FFmpeg's `AV_NOPTS_VALUE` gives the same value for streams with
+an unknown duration). A seek whose target is past the last video frame (scrubbing a story to its end) fell
+back to `actualPts = videoStream.duration`, so `MediaPlayer.seekingCompleted` set the control timebase to
+`Int64.min / timescale` ≈ -6e14 s. Seen on a device with temporary logging: `actualPts=-600479950316066.1
+dur=-9223372036854775808/15360`. With sound the audio renderer re-anchors the timebase a moment later; for a
+video without an audio track nothing does, and `pollInner` computed `maxTakenTime - layerTime` ≈ 6e14 s.
+Note: the Novagram app config has no `ios_video_legacyplayer`, so every `NativeVideoContent` (stories included)
+runs on this legacy `MediaPlayer`.
+
+### `submodules/MediaPlayer/Sources/FFMpegMediaFrameSourceContext.swift` (UPSTREAM hook)
+
+In `seek(timestamp:completed:)`, when no frame reaches the target, the stream duration is only used if it
+is known; otherwise the last frame read is used (the upstream `else` branch that was unreachable before):
+
+```swift
+// Fenixuz: duration is Int64.min when unknown (non-seekable story streams, AV_NOPTS_VALUE),
+// so seeking past the last frame put the timebase at about -1e14 s
+if let videoStream = initializedState.videoStream, videoStream.duration.value != Int64.min {
+    actualPts = videoStream.duration
+} else {
+    actualPts = extraVideoFrames.last!.pts
+}
+```
+
+### `submodules/MediaPlayer/Sources/MediaPlayerNode.swift` (UPSTREAM hook)
+
+The poll delay is a repeat interval that only re-checks `isReadyForMoreMediaData`; it is now capped at 1 s,
+so no future bad timebase can reach the Dispatch trap:
+
+```swift
+// Fenixuz: capped, DispatchSourceTimer traps when the repeat interval is >= 2^64 ns (~584 years)
+completion(.delay(min(max(1.0 / 30.0, state.maxTakenTime - layerTime), 1.0)))
+```
+
+Normal delays are well under 1 s, so ordinary playback is unchanged; a larger value only re-polls sooner.
+
+## 📌 China support batch — search clear button, translate target, Chinese strings, header fold (2026-09-23)
+
+A Chinese user wrote to support with four items: Chinese language support, "the bug with the search box at
+the top", "translation doesn't work", and "can we fold the header buttons, too much stuff". Both bugs were
+reproduced on the simulator with the `zh-hans-raw` pack ("Chinese (Simplified)", 99 %) before fixing.
+
+### `submodules/SearchBarNode/Sources/SearchBarNode.swift` (UPSTREAM hook) — clear button on the field's edge
+
+`updateLayout(boundingSize:leftInset:rightInset:transition:)`, the `.glass` branch after `textBackgroundFrame`
+is built. Glass never shows the text Cancel button (the placeholder view keeps a fixed 44 pt close button), but
+the frame was still sized from the measured, localized "Cancel" title. "取消" is 19 pt narrower than "Cancel"
+(measured on the sim: clear button centre x = 349.8 pt in English, 368.8 pt in Chinese), so the clear (x) sat
+half outside the field. The glass width is now the one English always had:
+
+```swift
+if case .glass = self.fieldStyle {
+    // Fenixuz: glass never shows the text Cancel button (...)
+    textBackgroundFrame.size.width = contentFrame.width - padding - 72.0
+} else {
+```
+
+72 = 53 pt English "Cancel" + 11 + 8, so English is pixel-identical; every other language now matches it
+(Uzbek "Bekor qilish" used to make the field ~37 pt narrower). The second `.glass` block further down
+(the animate-in path, sized from `sourceFrame`) is untouched.
+
+### `submodules/TelegramUI/Components/TextProcessingScreen/Sources/TextProcessingTranslateContentComponent.swift` (UPSTREAM hook) — translation echoed the original text
+
+In `update(...)`, `case let .translate(ignoredLanguages):`, right after the `-raw` suffix is stripped from
+`strings.baseLanguageCode`. A Chinese pack based on `zh-hans-raw` gave `toLanguage = "zh-hans"`, which is not
+in `supportedTranslationLanguages` (`"zh"` is); `messages.composeMessageWithAI` then returned the text
+unchanged, so "From English → To Chinese" showed English. Picking 中文 by hand in the language menu (code
+`"zh"`) translated correctly — that confirmed the cause. Now:
+
+```swift
+if !supportedTranslationLanguages.contains(where: { $0.caseInsensitiveCompare(baseLang) == .orderedSame }) {
+    baseLang = normalizeTranslationLanguage(baseLang)
+}
+```
+
+Supported codes (including `pt-br` vs `pt-BR`) are left as they were; only unknown ones fall back to the plain
+code, the same normalization upstream's `TranslatonSettingsController` already applies. No import needed
+(`TranslateUI` was imported).
+
+### `submodules/SettingsUI/Sources/Language Selection/LocalizationListControllerNode.swift` (UPSTREAM hook) — Chinese in Settings → Language
+
+`import FenixuzLocalization` after `import FenixuzPremiumUnlock`, and at the top of the list subscription's
+`start(next:)` closure (after `guard let strongSelf = self`):
+
+```swift
+let localizationListState = FenixuzChineseLocalizations.adding(to: localizationListState)
+```
+
+`FenixuzChineseLocalizations` (Fenixuz-owned, `submodules/Fenixuz/Localization/Sources/FenixuzChineseLocalizations.swift`)
+slots "Chinese (Simplified) / 简体中文" (`zh-hans-raw`) and "Chinese (Traditional) / 繁體中文" (`zh-hant-raw`) into
+the alphabetical part of the official list (the server puts English and the regional language, Uzbek, first),
+unless the list already has them by code **or by English name**: on a device that has used a Chinese pack the
+server sends its own "Chinese (Simplified/Traditional)" entries under other codes, and an installed pack is
+listed too — matching by code alone showed Chinese twice (fixed the same day). Picking a
+row calls the existing `downloadAndApplyLocalization(languageCode:)`, same as `t.me/setlanguage/zh-hans-raw`.
+The search list gets them too, because it is built from `currentListState`. `SettingsUI/BUILD` already had the
+`FenixuzLocalization` dep; `Fenixuz/Localization/BUILD` gained `//submodules/TelegramCore:TelegramCore`.
+
+### Chinese for Fenixuz strings that live in Telegram-owned files (UPSTREAM hooks)
+
+`FenixuzL10n.languageKey(for: strings)` (new, `Fenixuz/Localization`) returns `"zh"` for any Chinese pack —
+primary code, base (`secondaryComponent`) code or plural-rules code starting with `zh` / containing `-zh` —
+because community packs have arbitrary codes (`zhcncc`, `classic-zh-cn`, `taiwan`…). Otherwise it returns the
+primary code unchanged, so uz / ru / en behave exactly as before. Each hook below swapped its
+`strings.primaryComponent.languageCode` (or `baseLanguageCode`) for `languageKey(for:)` and gained a
+`case "zh":` next to `case "ru":`:
+
+| File | Hook | Added |
+|---|---|---|
+| `AuthorizationUI/Sources/AuthorizationSequencePhoneEntryController.swift` | `novagramProxyPressed()` NovagramProxy alert | `import FenixuzLocalization`, zh text + action |
+| `TelegramUI/Sources/ChatInterfaceStateContextMenus.swift` | #38 gift send-confirm | zh title/text/send/cancel |
+| `TelegramUI/Sources/ChatController.swift` | #38 sticker send-confirm | `import FenixuzLocalization`, zh line |
+| `TelegramUI/Sources/Chat/ChatControllerMediaRecording.swift` | #38 voice send-confirm | `import FenixuzLocalization`, zh line |
+| `TelegramUI/Sources/ChatControllerNode.swift` | #37 send-translate confirm | `import FenixuzLocalization`, zh case |
+| `ChatListUI/Sources/ChatContextMenus.swift` | Secret read, Copy Chat ID, Recent actions | `import FenixuzLocalization`, 3 zh cases |
+| `ChatListUI/Sources/ChatListFilterPresetController.swift` | folder icon row title | `import FenixuzLocalization`, zh case |
+| `ChatListUI/Sources/FenixuzFolderIconPicker.swift` (fork file) | picker title | `import FenixuzLocalization`, zh case |
+| `TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoSettingsItems.swift` | `fenixLangCode` for the Novagram rows | `FenixuzL10n.languageKey(for:)` instead of `baseLanguageCode` |
+
+`ChatListUI/BUILD` gained `//submodules/Fenixuz/Localization:FenixuzLocalization` (no cycle: FenixuzLocalization
+depends only on TelegramPresentationData + TelegramCore).
+
+Fenixuz-owned string tables got `zh` everywhere (no merge risk): `FenixuzL10n.swift` (`pick(en:uz:ru:zh:)`, `zh`
+required so a missing one fails to compile), `FenixAboutController.swift` (`L3.zh` required), every ProMessager
+strings switch + the embedded bots JSON (`NovagramBotLocalizedText.zh` optional), ChatLock, SecretVault,
+SpeechToText, AIChatbot, ContactsConsent, EditedHistory, UnreadReminder, Analytics. Device-language helpers
+(`Locale.current.languageCode`) get `"zh"` on a Chinese iPhone without any `zh.lproj`.
+
+### `submodules/ChatListUI/Sources/ChatListController.swift` (UPSTREAM hook) — header buttons fold
+
+`ChatListLocationContext.rightButtons`: after the compose button, the story / ghost / proxy buttons are collected
+into `foldableButtons`. With two or more of them, they are shown only while `FenixHeaderFold.isExpanded`, followed
+by one `.systemIcon` chevron button (`id: "fenixHeaderFold"`) that flips the flag and calls
+`parentController?.requestLayout(...)` (the header re-reads `rightButtons` in `updateHeaderContent()`). With fewer
+than two, nothing changes (a plain [story][compose] header looks exactly like upstream). Buttons are laid out right
+to left, so the chevron is the leftmost item of the capsule and the hidden buttons slide out to its right.
+
+`FenixHeaderFold` (Fenixuz-owned, `submodules/Fenixuz/ForeignUserBlock/Sources/ChatList_FenixHeaderFold.swift`,
+already a ChatListUI dep and imported by this file): `pro_messager` key `fenix_header_buttons_expanded`,
+default `false` = folded; chevron points left while folded, right while unfolded.

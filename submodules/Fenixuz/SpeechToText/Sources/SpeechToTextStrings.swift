@@ -5,10 +5,11 @@ import Foundation
 // from Locale.current.languageCode (same pattern as the SecretVault module).
 
 enum SpeechToTextStrings {
-    private static func localized(en: String, uz: String, ru: String) -> String {
+    private static func localized(en: String, uz: String, ru: String, zh: String) -> String {
         switch Locale.current.languageCode {
         case "uz": return uz
         case "ru": return ru
+        case "zh": return zh
         default:   return en
         }
     }
@@ -17,7 +18,8 @@ enum SpeechToTextStrings {
         localized(
             en: "Speech recognition permission is not granted. Enable it in Settings.",
             uz: "Ovozni aniqlash ruxsati berilmagan. Sozlamalardan yoqing.",
-            ru: "Доступ к распознаванию речи не предоставлен. Включите его в Настройках."
+            ru: "Доступ к распознаванию речи не предоставлен. Включите его в Настройках.",
+            zh: "未获得语音识别权限。请在“设置”中开启。"
         )
     }
 
@@ -25,7 +27,8 @@ enum SpeechToTextStrings {
         localized(
             en: "Speech recognition is restricted on this device.",
             uz: "Bu qurilmada ovozni aniqlash cheklangan.",
-            ru: "Распознавание речи ограничено на этом устройстве."
+            ru: "Распознавание речи ограничено на этом устройстве.",
+            zh: "此设备上的语音识别受到限制。"
         )
     }
 
@@ -33,7 +36,8 @@ enum SpeechToTextStrings {
         localized(
             en: "Speech recognition permission is pending.",
             uz: "Ovozni aniqlash ruxsati kutilmoqda.",
-            ru: "Ожидается разрешение на распознавание речи."
+            ru: "Ожидается разрешение на распознавание речи.",
+            zh: "正在等待语音识别授权。"
         )
     }
 
@@ -41,7 +45,8 @@ enum SpeechToTextStrings {
         localized(
             en: "«\(langName)» does not support speech-to-text. Choose a supported language (for example, Russian) in Settings → Novagram → Voice language.",
             uz: "«\(langName)» tili ovozdan-matnga aylantirishni qo'llab-quvvatlamaydi. Sozlamalar → Novagram → Ovoz tili dan qo'llab-quvvatlanadigan til (masalan, Ruscha) tanlang.",
-            ru: "Язык «\(langName)» не поддерживает преобразование речи в текст. Выберите поддерживаемый язык (например, русский) в Настройки → Novagram → Язык голоса."
+            ru: "Язык «\(langName)» не поддерживает преобразование речи в текст. Выберите поддерживаемый язык (например, русский) в Настройки → Novagram → Язык голоса.",
+            zh: "“\(langName)”不支持语音转文字。请在“设置 → Novagram → 识别语言”中选择受支持的语言（例如俄语）。"
         )
     }
 
@@ -49,7 +54,8 @@ enum SpeechToTextStrings {
         localized(
             en: "The speech-to-text service is currently unavailable. Check your internet connection and try again.",
             uz: "Ovozdan-matnga xizmati hozir mavjud emas. Internet aloqasini tekshirib, qayta urinib ko'ring.",
-            ru: "Служба преобразования речи в текст сейчас недоступна. Проверьте подключение к интернету и повторите попытку."
+            ru: "Служба преобразования речи в текст сейчас недоступна. Проверьте подключение к интернету и повторите попытку.",
+            zh: "语音转文字服务暂时不可用。请检查网络连接后重试。"
         )
     }
 
@@ -57,7 +63,8 @@ enum SpeechToTextStrings {
         localized(
             en: "Could not create the speech recognition request.",
             uz: "Ovozni aniqlash so'rovini yaratib bo'lmadi.",
-            ru: "Не удалось создать запрос на распознавание речи."
+            ru: "Не удалось создать запрос на распознавание речи.",
+            zh: "无法创建语音识别请求。"
         )
     }
 
@@ -65,7 +72,8 @@ enum SpeechToTextStrings {
         localized(
             en: "Invalid audio format: sampleRate=\(sampleRate), channels=\(channels)",
             uz: "Audio format noto'g'ri: sampleRate=\(sampleRate), channels=\(channels)",
-            ru: "Неверный аудиоформат: sampleRate=\(sampleRate), channels=\(channels)"
+            ru: "Неверный аудиоформат: sampleRate=\(sampleRate), channels=\(channels)",
+            zh: "音频格式无效：sampleRate=\(sampleRate), channels=\(channels)"
         )
     }
 
@@ -73,7 +81,8 @@ enum SpeechToTextStrings {
         localized(
             en: "Failed to start the audio engine: \(description)",
             uz: "Audio engine ishga tushmadi: \(description)",
-            ru: "Не удалось запустить аудиодвижок: \(description)"
+            ru: "Не удалось запустить аудиодвижок: \(description)",
+            zh: "无法启动音频引擎：\(description)"
         )
     }
 
@@ -81,7 +90,8 @@ enum SpeechToTextStrings {
         localized(
             en: "Error \(code): \(description)",
             uz: "Xato \(code): \(description)",
-            ru: "Ошибка \(code): \(description)"
+            ru: "Ошибка \(code): \(description)",
+            zh: "错误 \(code)：\(description)"
         )
     }
 
@@ -89,7 +99,8 @@ enum SpeechToTextStrings {
         localized(
             en: "Voice language model not found.",
             uz: "Ovoz tili modeli topilmadi.",
-            ru: "Модель языка голоса не найдена."
+            ru: "Модель языка голоса не найдена.",
+            zh: "未找到语音识别模型。"
         )
     }
 
@@ -97,7 +108,8 @@ enum SpeechToTextStrings {
         localized(
             en: "The «Uzbek» model is still downloading. Connect to the internet, wait a moment and try again.",
             uz: "«O'zbekcha» modeli hali yuklanmoqda. Internetga ulanib, bir oz kutib qayta urinib ko'ring.",
-            ru: "Модель «Узбекский» ещё загружается. Подключитесь к интернету, немного подождите и повторите попытку."
+            ru: "Модель «Узбекский» ещё загружается. Подключитесь к интернету, немного подождите и повторите попытку.",
+            zh: "“乌兹别克语”模型仍在下载中。请连接网络，稍候再试。"
         )
     }
 
@@ -105,7 +117,8 @@ enum SpeechToTextStrings {
         localized(
             en: "Could not start the speech recognizer.",
             uz: "Ovoz aniqlovchini ishga tushirib bo'lmadi.",
-            ru: "Не удалось запустить распознаватель речи."
+            ru: "Не удалось запустить распознаватель речи.",
+            zh: "无法启动语音识别器。"
         )
     }
 
@@ -113,7 +126,8 @@ enum SpeechToTextStrings {
         localized(
             en: "Could not set up audio conversion.",
             uz: "Audio konversiyani sozlab bo'lmadi.",
-            ru: "Не удалось настроить преобразование аудио."
+            ru: "Не удалось настроить преобразование аудио.",
+            zh: "无法设置音频转换。"
         )
     }
 }

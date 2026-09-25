@@ -1212,7 +1212,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                 let fenixText38: String
                 let fenixSend38: String
                 let fenixCancel38: String
-                switch chatPresentationInterfaceState.strings.primaryComponent.languageCode {
+                switch FenixuzL10n.languageKey(for: chatPresentationInterfaceState.strings) {
                 case "uz":
                     fenixTitle38 = "Yuborishni tasdiqlang"
                     fenixText38 = "Sovg'a yubormoqchimisiz?"
@@ -1223,6 +1223,11 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                     fenixText38 = "Отправить подарок?"
                     fenixSend38 = "Отправить"
                     fenixCancel38 = "Отмена"
+                case "zh":
+                    fenixTitle38 = "确认发送"
+                    fenixText38 = "要发送这份礼物吗？"
+                    fenixSend38 = "发送"
+                    fenixCancel38 = "取消"
                 default:
                     fenixTitle38 = "Confirm sending"
                     fenixText38 = "Send this gift?"

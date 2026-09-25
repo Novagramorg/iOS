@@ -23,10 +23,11 @@ import Contacts
 // available here (static UIAlertController path), so the UI language is resolved
 // from Locale.current.languageCode (same pattern as the SecretVault module).
 private enum FenixuzContactsConsentStrings {
-    private static func localized(en: String, uz: String, ru: String) -> String {
+    private static func localized(en: String, uz: String, ru: String, zh: String) -> String {
         switch Locale.current.languageCode {
         case "uz": return uz
         case "ru": return ru
+        case "zh": return zh
         default:   return en
         }
     }
@@ -35,7 +36,8 @@ private enum FenixuzContactsConsentStrings {
         localized(
             en: "Sync Your Contacts?",
             uz: "Kontaktlaringiz sinxronlansinmi?",
-            ru: "Синхронизировать контакты?"
+            ru: "Синхронизировать контакты?",
+            zh: "同步你的联系人？"
         )
     }
 
@@ -43,7 +45,8 @@ private enum FenixuzContactsConsentStrings {
         localized(
             en: "Novagram will upload your phone contacts to Telegram servers so you can find friends who already use the app. Your contacts are transmitted encrypted and you can disable Contact Sync anytime in Settings → Privacy and Security → Data Settings.\n\nBy tapping Continue, you agree to our Privacy Policy:",
             uz: "Novagram ilovadan foydalanayotgan do'stlaringizni topishingiz uchun telefon kontaktlaringizni Telegram serverlariga yuklaydi. Kontaktlaringiz shifrlangan holda uzatiladi va istalgan vaqtda Sozlamalar → Maxfiylik va xavfsizlik → Ma'lumotlar sozlamalari bo'limidan Kontakt sinxronizatsiyasini o'chirib qo'yishingiz mumkin.\n\nDavom etish tugmasini bosish orqali siz Maxfiylik siyosatimizga rozilik bildirasiz:",
-            ru: "Novagram загрузит контакты вашего телефона на серверы Telegram, чтобы вы могли найти друзей, которые уже пользуются приложением. Ваши контакты передаются в зашифрованном виде, и вы можете отключить синхронизацию контактов в любой момент в Настройки → Конфиденциальность и безопасность → Настройки данных.\n\nНажимая «Продолжить», вы соглашаетесь с нашей Политикой конфиденциальности:"
+            ru: "Novagram загрузит контакты вашего телефона на серверы Telegram, чтобы вы могли найти друзей, которые уже пользуются приложением. Ваши контакты передаются в зашифрованном виде, и вы можете отключить синхронизацию контактов в любой момент в Настройки → Конфиденциальность и безопасность → Настройки данных.\n\nНажимая «Продолжить», вы соглашаетесь с нашей Политикой конфиденциальности:",
+            zh: "Novagram 会将你手机中的联系人上传到 Telegram 服务器，以便你找到已在使用本应用的好友。联系人以加密方式传输，你可以随时在“设置 → 隐私与安全 → 数据设置”中关闭联系人同步。\n\n点击“继续”即表示你同意我们的隐私政策："
         )
     }
 
@@ -51,7 +54,8 @@ private enum FenixuzContactsConsentStrings {
         localized(
             en: "Don't Allow",
             uz: "Ruxsat bermayman",
-            ru: "Не разрешать"
+            ru: "Не разрешать",
+            zh: "不允许"
         )
     }
 
@@ -59,7 +63,8 @@ private enum FenixuzContactsConsentStrings {
         localized(
             en: "Privacy Policy",
             uz: "Maxfiylik siyosati",
-            ru: "Политика конфиденциальности"
+            ru: "Политика конфиденциальности",
+            zh: "隐私政策"
         )
     }
 
@@ -67,7 +72,8 @@ private enum FenixuzContactsConsentStrings {
         localized(
             en: "Continue",
             uz: "Davom etish",
-            ru: "Продолжить"
+            ru: "Продолжить",
+            zh: "继续"
         )
     }
 }

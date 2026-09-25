@@ -17,6 +17,7 @@ import TelegramUIPreferences
 import TranslateUI
 import PremiumUI
 import FenixuzPremiumUnlock
+import FenixuzLocalization
 
 private enum LanguageListSection: ItemListSectionId {
     case translate
@@ -477,6 +478,8 @@ final class LocalizationListControllerNode: ViewControllerTracingNode {
             guard let strongSelf = self else {
                 return
             }
+            // Fenixuz: Telegram has no official Chinese, so list the Chinese packs here too.
+            let localizationListState = FenixuzChineseLocalizations.adding(to: localizationListState)
             
             let isPremium = peer?.isPremium ?? false
                         
