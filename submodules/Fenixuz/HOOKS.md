@@ -5745,3 +5745,74 @@ to left, so the chevron is the leftmost item of the capsule and the hidden butto
 `FenixHeaderFold` (Fenixuz-owned, `submodules/Fenixuz/ForeignUserBlock/Sources/ChatList_FenixHeaderFold.swift`,
 already a ChatListUI dep and imported by this file): `pro_messager` key `fenix_header_buttons_expanded`,
 default `false` = folded; chevron points left while folded, right while unfolded.
+
+---
+
+## 📌 Edit and Send — edit a post before forwarding it (2026-09-25)
+
+**Owner request:** forward a post from a joined channel into their own channel without the sender's
+name, but trim the text first (the source post ends with links to other channels). Editing after
+sending leaves an "edited" label, and `messages.forwardMessages` cannot change the text.
+
+**Solution:** a new option in the chat's forward-options menu (tap the forward panel above the
+composer): **"Tahrirlab yuborish" / "Edit and Send"**. It opens a modal editor with the post's text
+(Telegram's `TextFieldComponent`: formatting menu, custom emoji) and a media preview. Send builds new
+`EnqueueMessage.message` items — the same photo/video/file re-sent by its cloud reference (nothing is
+uploaded again, `.message(message:media:)` keeps file-reference revalidation working), the edited text,
+no forward header. Same idea as the Bot API `copyMessage`.
+
+It is a separate feature on purpose (owner: "alohida feature, boshqalarga bog'lamaslik kerak"):
+own module, own strings (en/uz/ru/zh), no dependency on FenixuzL10n or ProMessager. The copies go
+through `ChatControllerImpl.sendMessages`, not the composer's `sendCurrentMessage`, so auto-translate,
+auto-text, text style, heart effect and auto-sticker never touch them. Send-as, silent posting,
+scheduled-messages mode, topics and paid-message confirmation still apply.
+
+Offered only for one post or one album (≤10 grouped messages) made of text, photos, videos, GIFs,
+music, voice and documents. Not offered for polls, locations, contacts, dice, stories, paid media,
+stickers, round videos, rich (InstantPage) messages, copy-protected chats or secret chats.
+Buttons (inline keyboards) cannot be sent by users, so the editor says they are not copied.
+Link preview: kept while the text still links to the previewed page; if the original had links but
+no preview, the copy disables previews too.
+
+### `submodules/Fenixuz/ForwardEdit/` (FENIXUZ module, new)
+
+- `FenixuzForwardEdit.swift` — public `menuItem(context:targetPeerId:threadId:messages:present:send:)`.
+- `FenixuzForwardEditCopy.swift` — eligibility (`FenixuzForwardEditSource`) and the copy builder.
+- `FenixuzForwardEditScreen.swift` — the editor screen.
+- `FenixuzForwardEditStrings.swift` — its own strings.
+
+### `submodules/TelegramUI/BUILD` (UPSTREAM hook)
+
+```
+"//submodules/Fenixuz/ForwardEdit:FenixuzForwardEdit",
+```
+
+added after the `FenixNovagramAds` dep.
+
+### `submodules/TelegramUI/Sources/Chat/ChatMessageActionOptions.swift` (UPSTREAM hook)
+
+1. `import FenixuzForwardEdit` after `import WebsiteType` (with a `// FENIX-HOOK #39` comment).
+2. In `chatForwardOptions(...)`, inside the `items` map, right after the "Show/Hide Caption" item and
+   before `if !items.isEmpty { items.append(.separator) }`:
+
+```swift
+// FENIX-HOOK #39 — edit before forwarding START
+if let fenixEditItem = FenixuzForwardEdit.menuItem(context: selfController.context, targetPeerId: peerId, threadId: selfController.chatLocation.threadId, messages: messages, present: { [weak selfController] controller in
+    selfController?.push(controller)
+}, send: { [weak selfController] copies in
+    selfController?.presentPaidMessageAlertIfNeeded(count: Int32(copies.count), completion: { [weak selfController] postpone in
+        guard let selfController else {
+            return
+        }
+        selfController.updateChatPresentationInterfaceState(interactive: false, { $0.updatedInterfaceState({ $0.withUpdatedForwardMessageIds(nil).withUpdatedForwardOptionsState(nil).withoutSelectionState() }) })
+        selfController.sendMessages(copies, media: true, postpone: postpone)
+    })
+}) {
+    items.append(fenixEditItem)
+}
+// FENIX-HOOK #39 — edit before forwarding END
+```
+
+On an upstream pull: re-apply both pieces; the anchor is the forward-options item list in
+`chatForwardOptions`. If upstream renames `sendMessages` / `presentPaidMessageAlertIfNeeded` /
+`withUpdatedForwardMessageIds`, map to the new names — the module itself does not change.
