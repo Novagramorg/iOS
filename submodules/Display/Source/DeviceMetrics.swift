@@ -96,6 +96,7 @@ public enum DeviceMetrics: CaseIterable, Equatable {
             .iPhone16Pro,
             .iPhone16ProMax,
             .iPhoneAir,
+            .iPhoneDuo,
             .iPad,
             .iPadMini,
             .iPad102Inch,
@@ -324,7 +325,7 @@ public enum DeviceMetrics: CaseIterable, Equatable {
     
     public func onScreenNavigationHeight(inLandscape: Bool, systemOnScreenNavigationHeight: CGFloat?) -> CGFloat? {
         switch self {
-        case .iPhoneX, .iPhoneXSMax, .iPhoneXr, .iPhone12Mini, .iPhone12, .iPhone12ProMax, .iPhone13Mini, .iPhone13, .iPhone13Pro, .iPhone13ProMax, .iPhone14Pro, .iPhone14ProMax, .iPhone16Pro, .iPhone16ProMax, .iPhoneAir:
+        case .iPhoneX, .iPhoneXSMax, .iPhoneXr, .iPhone12Mini, .iPhone12, .iPhone12ProMax, .iPhone13Mini, .iPhone13, .iPhone13Pro, .iPhone13ProMax, .iPhone14Pro, .iPhone14ProMax, .iPhone16Pro, .iPhone16ProMax, .iPhoneAir, .iPhoneDuo:
             if #available(iOS 26.0, *) {
                 return 20.0
             } else {
