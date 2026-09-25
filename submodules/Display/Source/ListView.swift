@@ -295,6 +295,9 @@ open class ListViewImpl: ASDisplayNode, ListView, ASScrollViewDelegate, ASGestur
         }
     }
     public final var verticalScrollIndicatorFollowsOverscroll: Bool = false
+    /// Offsets the vertical scroll indicator from the side edge by the horizontal `scrollIndicatorInsets`
+    /// (which default to the list insets, so a list inset by the safe area keeps its indicator inside it).
+    public final var verticalScrollIndicatorRespectsSideInsets: Bool = false
     
     private var touchesPosition = CGPoint()
     public private(set) var isTracking = false
@@ -4550,7 +4553,10 @@ open class ListViewImpl: ASDisplayNode, ListView, ASScrollViewDelegate, ASGestur
                 
                 let approximateScrollingProgress = approximateOffset / (approximateContentHeight - approximateVisibleHeight)
                 
-                let indicatorSideInset: CGFloat = 3.0
+                var indicatorSideInset: CGFloat = 3.0
+                if self.verticalScrollIndicatorRespectsSideInsets {
+                    indicatorSideInset += self.rotated ? self.scrollIndicatorInsets.left : self.scrollIndicatorInsets.right
+                }
                 var indicatorTopInset: CGFloat = 3.0
                 if self.verticalScrollIndicatorFollowsOverscroll {
                     if scrollingIndicatorState.topItem.index == 0 {
