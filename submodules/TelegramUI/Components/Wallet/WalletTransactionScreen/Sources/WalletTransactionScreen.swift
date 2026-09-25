@@ -3376,7 +3376,8 @@ private final class WalletTransactionSheetComponent: CombinedComponent {
                         statusBarHeight: environment.statusBarHeight,
                         inputHeight: nil,
                         inputHeightIsInteractivellyChanging: false,
-                        inVoiceOver: false
+                        inVoiceOver: false,
+                        presentedInFormSheet: false
                     ),
                     transition: context.transition.containedViewLayoutTransition
                 )
@@ -3515,7 +3516,8 @@ private final class WalletTransactionPreviewSheetComponent: CombinedComponent {
                         statusBarHeight: environment.statusBarHeight,
                         inputHeight: nil,
                         inputHeightIsInteractivellyChanging: false,
-                        inVoiceOver: false
+                        inVoiceOver: false,
+                        presentedInFormSheet: false
                     ),
                     transition: context.transition.containedViewLayoutTransition
                 )

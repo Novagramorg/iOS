@@ -292,7 +292,8 @@ private final class WalletAppInfoSheetComponent: CombinedComponent {
                     statusBarHeight: environment.statusBarHeight,
                     inputHeight: nil,
                     inputHeightIsInteractivellyChanging: false,
-                    inVoiceOver: false
+                    inVoiceOver: false,
+                    presentedInFormSheet: false
                 ), transition: context.transition.containedViewLayoutTransition)
             }
             return context.availableSize

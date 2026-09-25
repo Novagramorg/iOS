@@ -915,7 +915,7 @@ private final class GiftSetupScreenComponent: Component {
             if case .regular = environment.metrics.widthClass {
                 fillingSize = min(availableSize.width, 414.0) - environment.safeInsets.left * 2.0
             } else {
-                fillingSize = min(availableSize.width, environment.deviceMetrics.screenSize.width) - environment.safeInsets.left * 2.0
+                fillingSize = min(availableSize.width, availableSize.height) - environment.safeInsets.left * 2.0
             }
             let rawSideInset: CGFloat = floor((availableSize.width - fillingSize) * 0.5)
             let sideInset: CGFloat = rawSideInset + 24.0
@@ -2098,7 +2098,8 @@ private final class GiftSetupScreenComponent: Component {
                     statusBarHeight: environment.statusBarHeight,
                     inputHeight: nil,
                     inputHeightIsInteractivellyChanging: false,
-                    inVoiceOver: false
+                    inVoiceOver: false,
+                    presentedInFormSheet: false
                 )
                 controller.presentationContext.containerLayoutUpdated(layout, transition: transition.containedViewLayoutTransition)
             }

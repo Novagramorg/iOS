@@ -113,7 +113,7 @@ public enum DeviceMetrics: CaseIterable, Equatable {
         if let modelIdentifier = modelIdentifier {
             for device in DeviceMetrics.profiles(for: modelIdentifier) {
                 let deviceScale: CGFloat = device == .iPhoneXr ? 2.0 : 3.0
-                if scale == deviceScale && (device.screenSize == screenSize || device.screenSize == additionalSize) {
+                if scale == deviceScale && (device.profileScreenSize == screenSize || device.profileScreenSize == additionalSize) {
                     self = device
                     return
                 }
@@ -132,8 +132,8 @@ public enum DeviceMetrics: CaseIterable, Equatable {
                 }
             }
             
-            let width = device.screenSize.width
-            let height = device.screenSize.height
+            let width = device.profileScreenSize.width
+            let height = device.profileScreenSize.height
             if ((screenSize.width.isEqual(to: width) && screenSize.height.isEqual(to: height)) || (additionalSize.width.isEqual(to: width) && additionalSize.height.isEqual(to: height))) {
                 if case .iPhoneX = device, statusBarHeight == 47.0 {
                     self = .iPhone14ProMaxZoomed
@@ -206,7 +206,10 @@ public enum DeviceMetrics: CaseIterable, Equatable {
         }
     }
     
-    public var screenSize: CGSize {
+    /// The portrait screen size a profile was measured on. It exists only to recognize the device in
+    /// `init(screenSize:…)`; layout must never read it, because the space an app gets is dictated by
+    /// the system and can be resized (use the layout's own size, or `LayoutMetrics.windowSize`).
+    private var profileScreenSize: CGSize {
         switch self {
             case .iPhone4:
                 return CGSize(width: 320.0, height: 480.0)
@@ -267,51 +270,6 @@ public enum DeviceMetrics: CaseIterable, Equatable {
         }
     }
     
-    public var cutoutFrame: CGRect? {
-        let size: CGSize
-        let top: CGFloat
-        switch self {
-            case .iPhoneX, .iPhoneXSMax:
-                size = CGSize(width: 223.0, height: 30.0)
-                top = 0.0
-            case .iPhoneXr:
-                size = CGSize(width: 246.0, height: 33.0)
-                top = 0.0
-            case .iPhone12Mini:
-                size = CGSize(width: 242.0, height: 34.0)
-                top = 0.0
-            case .iPhone12, .iPhone12ProMax:
-                size = CGSize(width: 222.0, height: 32.0)
-                top = 0.0
-            case .iPhone13Mini:
-                size = CGSize(width: 189.0, height: 38.0)
-                top = 0.0
-            case .iPhone13, .iPhone13Pro, .iPhone13ProMax:
-                size = CGSize(width: 176.0, height: 34.0)
-                top = 0.0
-            case .iPhone14Pro, .iPhone14ProMax:
-                size = CGSize(width: 126.0, height: 112.0 / 3.0)
-                top = 11.0
-            case .iPhone16Pro, .iPhone16ProMax:
-                size = CGSize(width: 126.0, height: 112.0 / 3.0)
-                top = 41.0 / 3.0
-            case .iPhoneAir:
-                size = CGSize(width: 126.0, height: 112.0 / 3.0)
-                top = 59.0 / 3.0
-            case .iPhone14ProZoomed, .iPhone14ProMaxZoomed:
-                let standardDevice: DeviceMetrics = self == .iPhone14ProZoomed ? .iPhone14Pro : .iPhone14ProMax
-                guard let standardFrame = standardDevice.cutoutFrame else {
-                    return nil
-                }
-                let factor = self.screenSize.width / standardDevice.screenSize.width
-                size = CGSize(width: standardFrame.width * factor, height: standardFrame.height * factor)
-                top = standardFrame.minY * factor
-            default:
-                return nil
-        }
-        return CGRect(x: (self.screenSize.width - size.width) / 2.0, y: top, width: size.width, height: size.height)
-    }
-
     public var screenCornerRadius: CGFloat {
         switch self {
             case .iPhoneX, .iPhoneXSMax:

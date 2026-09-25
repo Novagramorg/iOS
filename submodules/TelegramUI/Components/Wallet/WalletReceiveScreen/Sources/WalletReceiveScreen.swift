@@ -1699,7 +1699,8 @@ private final class WalletReceiveSheetComponent: CombinedComponent {
                     statusBarHeight: environment.statusBarHeight,
                     inputHeight: nil,
                     inputHeightIsInteractivellyChanging: false,
-                    inVoiceOver: false
+                    inVoiceOver: false,
+                    presentedInFormSheet: false
                 )
                 controller.presentationContext.containerLayoutUpdated(
                     layout,

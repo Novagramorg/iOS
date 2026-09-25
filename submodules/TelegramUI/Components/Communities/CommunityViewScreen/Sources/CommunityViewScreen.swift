@@ -2792,7 +2792,8 @@ private final class CommunityViewScreenComponent: Component {
                 statusBarHeight: mode.usesFullscreenPresentation ? environment.statusBarHeight : 0.0,
                 inputHeight: environment.inputHeight > 0.0 ? environment.inputHeight : nil,
                 inputHeightIsInteractivellyChanging: false,
-                inVoiceOver: false
+                inVoiceOver: false,
+                presentedInFormSheet: false
             )
         }
 
@@ -2801,7 +2802,7 @@ private final class CommunityViewScreenComponent: Component {
             if case .regular = environment.metrics.widthClass {
                 fillingSize = min(availableSize.width, 414.0) - environment.safeInsets.left * 2.0
             } else {
-                fillingSize = min(availableSize.width, environment.deviceMetrics.screenSize.width) - environment.safeInsets.left * 2.0
+                fillingSize = min(availableSize.width, availableSize.height) - environment.safeInsets.left * 2.0
             }
 
             return (fillingSize, floor((availableSize.width - fillingSize) * 0.5))
