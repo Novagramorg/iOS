@@ -299,6 +299,27 @@ public final class LottieComponent: Component {
                 }
             }
         }
+
+        public func stop(at position: StartingPosition? = nil) {
+            self.scheduledPlayOnce = false
+            self.playOnceCompletion = nil
+            self.displayLink?.invalidate()
+            self.displayLink = nil
+            self.currentFrameStartTime = nil
+            self.isPlaying = false
+
+            guard let position, let range = self.animationFrameRange else {
+                return
+            }
+            switch position {
+            case .begin:
+                self.setFrameIndex(index: range.lowerBound)
+            case .end:
+                self.setFrameIndex(index: max(range.lowerBound, range.upperBound - 1))
+            case let .fraction(fraction):
+                self.setFrameIndex(index: range.lowerBound + Int(floor(Double(range.count) * fraction)))
+            }
+        }
         
         public func setFrameIndex(index: Int) {
             guard let _ = self.animationInstance, let animationFrameRange = self.animationFrameRange else {

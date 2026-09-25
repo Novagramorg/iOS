@@ -44,11 +44,18 @@ func walletSendInputText(
         guard value.isFinite else {
             return ""
         }
-        return String(
+        var text = String(
             format: "%.2f",
             locale: Locale(identifier: "en_US_POSIX"),
             value
-        ).replacingOccurrences(
+        )
+        while text.hasSuffix("0") {
+            text.removeLast()
+        }
+        if text.hasSuffix(".") {
+            text.removeLast()
+        }
+        return text.replacingOccurrences(
             of: ".",
             with: dateTimeFormat.decimalSeparator
         )
