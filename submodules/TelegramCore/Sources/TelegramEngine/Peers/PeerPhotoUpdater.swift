@@ -602,7 +602,11 @@ func _internal_updatePeerPhotoInternal(postbox: Postbox, network: Network, state
 /// Makes one of the account's existing photos the main one again. `representations` and
 /// `videoRepresentations` are that photo's own sizes, as the caller has them.
 ///
-/// The result's user list is stored like every other profile-photo result here.
+/// The result's user list is stored like every other profile-photo result here, but it does not
+/// carry the new photo for the account itself: measured, the record named the returned photo only
+/// after a later transaction. So, like the upload path above (and tdlib's
+/// `add_set_profile_photo_to_cache`), the account record is set from the returned photo, in the form
+/// the server's own report of it takes, which the later update then leaves as it is.
 func _internal_updatePeerPhotoExisting(account: Account, reference: TelegramMediaImageReference, representations: [TelegramMediaImageRepresentation], videoRepresentations: [TelegramMediaImage.VideoRepresentation]) -> Signal<TelegramMediaImage?, NoError> {
     switch reference {
     case let .cloud(imageId, accessHash, fileReference):
@@ -617,6 +621,11 @@ func _internal_updatePeerPhotoExisting(account: Account, reference: TelegramMedi
                 return account.postbox.transaction { transaction -> TelegramMediaImage? in
                     updatePeers(transaction: transaction, accountPeerId: account.peerId, peers: AccumulatedPeers(users: users))
                     if let image {
+                        if let user = transaction.getPeer(account.peerId) as? TelegramUser, let profilePhoto = userProfilePhoto(photo), !user.photo.contains(where: { ($0.resource as? CloudPeerPhotoSizeMediaResource)?.photoId == image.imageId.id }) {
+                            updatePeersCustom(transaction: transaction, peers: [user.withUpdatedPhoto(parsedTelegramProfilePhoto(profilePhoto))], update: { _, updated in
+                                return updated
+                            })
+                        }
                         let peerPhoto = (transaction.getPeer(account.peerId) as? TelegramUser)?.photo ?? []
                         copyDownloadedPhotoSizes(mediaBox: account.postbox.mediaBox, representations: representations, videoRepresentations: videoRepresentations, to: image, peerPhoto: peerPhoto)
                         transaction.updatePeerCachedData(peerIds: Set([account.peerId]), update: { _, current in
@@ -636,6 +645,31 @@ func _internal_updatePeerPhotoExisting(account: Account, reference: TelegramMedi
     }
 }
 
+/// The `userProfilePhoto` the server reports for a user whose main photo `photo` is.
+private func userProfilePhoto(_ photo: Api.Photo) -> Api.UserProfilePhoto? {
+    guard case let .photo(photoData) = photo else {
+        return nil
+    }
+    var flags: Int32 = 0
+    if let videoSizes = photoData.videoSizes, videoSizes.contains(where: { size in
+        if case .videoSize = size {
+            return true
+        } else {
+            return false
+        }
+    }) {
+        flags |= 1 << 0
+    }
+    var strippedThumb: Buffer?
+    for size in photoData.sizes {
+        if case let .photoStrippedSize(photoStrippedSizeData) = size {
+            strippedThumb = photoStrippedSizeData.bytes
+            flags |= 1 << 1
+        }
+    }
+    return .userProfilePhoto(.init(flags: flags, photoId: photoData.id, strippedThumb: strippedThumb, dcId: photoData.dcId))
+}
+
 /// Stores the downloaded sizes of the photo that was made the main one under the files of the photo
 /// the server returned for it, both its own sizes and the peer-photo resources `peerPhoto` (the
 /// account's new `TelegramUser.photo`) names it by.
@@ -644,11 +678,10 @@ func _internal_updatePeerPhotoExisting(account: Account, reference: TelegramMedi
 /// a new id, whose sizes are the same files byte for byte (measured: one image went through four ids
 /// in as many changes), and it serves a profile photo's `photo_small` and `photo_big` from its "a"
 /// and "c" sizes, also byte for byte. None of those files exist yet, while the chosen photo has
-/// usually just been viewed, so without this the rebuilt gallery downloads the photo that was just on
-/// screen again. It runs in the transaction that stores the result, before it commits. The result's
-/// user list does not carry the new photo for the account itself, though (measured: the record names
-/// it only after a later transaction), so the peer-photo resources are filled only when the record
-/// already names the returned photo.
+/// usually just been viewed, so without this the account's avatars and the rebuilt gallery download
+/// the photo that was just on screen again. It runs in the transaction that stores the result and
+/// sets the account record to the returned photo, so the files are in place before anything sees
+/// the record change.
 ///
 /// Only complete files are copied; a partial one would lose the ranges it has.
 private func copyDownloadedPhotoSizes(mediaBox: MediaBox, representations: [TelegramMediaImageRepresentation], videoRepresentations: [TelegramMediaImage.VideoRepresentation], to image: TelegramMediaImage, peerPhoto: [TelegramMediaImageRepresentation]) {
