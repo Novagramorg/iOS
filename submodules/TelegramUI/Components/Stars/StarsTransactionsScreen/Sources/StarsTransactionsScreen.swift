@@ -25,6 +25,7 @@ import ItemListUI
 import StarsWithdrawalScreen
 import PremiumDiamondComponent
 import StatisticsUI
+import EdgeEffect
 
 private let initialSubscriptionsDisplayedLimit: Int32 = 3
 
@@ -99,6 +100,7 @@ final class StarsTransactionsScreenComponent: Component {
     
     class View: UIView, UIScrollViewDelegate {
         private let scrollView: ScrollViewImpl
+        private let topEdgeEffectView: EdgeEffectView
         
         private var currentSelectedPanelId: AnyHashable?
                 
@@ -155,6 +157,7 @@ final class StarsTransactionsScreenComponent: Component {
         override init(frame: CGRect) {
             self.scrollContainerView = UIView()
             self.scrollView = ScrollViewImpl()
+            self.topEdgeEffectView = EdgeEffectView()
                                     
             super.init(frame: frame)
             
@@ -176,6 +179,10 @@ final class StarsTransactionsScreenComponent: Component {
             self.addSubview(self.scrollView)
             
             self.scrollView.addSubview(self.scrollContainerView)
+
+            self.topEdgeEffectView.alpha = 0.0
+            self.topEdgeEffectView.isUserInteractionEnabled = false
+            self.addSubview(self.topEdgeEffectView)
         }
         
         required init?(coder: NSCoder) {
@@ -263,6 +270,9 @@ final class StarsTransactionsScreenComponent: Component {
                 
         private func updateScrolling(transition: ComponentTransition) {
             let scrollBounds = self.scrollView.bounds
+
+            let edgeEffectAlpha = max(0.0, min(1.0, scrollBounds.minY / 20.0))
+            transition.setAlpha(view: self.topEdgeEffectView, alpha: edgeEffectAlpha)
             
             let isLockedAtPanels = scrollBounds.maxY == self.scrollView.contentSize.height
             var topContentAlpha: CGFloat = 1.0
@@ -282,12 +292,6 @@ final class StarsTransactionsScreenComponent: Component {
                 titleScale = 1.0 - fraction * 0.36
                 
                 let headerTransition: ComponentTransition = .immediate
-                
-                if let starView = self.starView.view {
-                    let starPosition = CGPoint(x: self.scrollView.frame.width / 2.0, y: topInset + starView.bounds.height / 2.0 - 30.0 - titleOffset * titleScale)
-                    headerTransition.setPosition(view: starView, position: starPosition)
-                    headerTransition.setScale(view: starView, scale: titleScale)
-                }
                 
                 if let titleView = self.titleView.view {
                     let titlePosition = CGPoint(x: scrollBounds.width / 2.0, y: max(topInset + 160.0 - titleOffset, navigationMetrics.statusBarHeight + (navigationMetrics.navigationHeight - navigationMetrics.statusBarHeight) / 2.0))
@@ -412,6 +416,20 @@ final class StarsTransactionsScreenComponent: Component {
             self.navigationMetrics = (environment.navigationHeight, environment.statusBarHeight)
             
             self.backgroundColor = environment.theme.list.blocksBackgroundColor
+
+            let topEdgeEffectFrame = CGRect(
+                origin: CGPoint(x: 0.0, y: -20.0),
+                size: CGSize(width: availableSize.width, height: environment.navigationHeight + 44.0)
+            )
+            transition.setFrame(view: self.topEdgeEffectView, frame: topEdgeEffectFrame)
+            self.topEdgeEffectView.update(
+                content: environment.theme.list.blocksBackgroundColor,
+                blur: true,
+                rect: CGRect(origin: .zero, size: topEdgeEffectFrame.size),
+                edge: .top,
+                edgeSize: 64.0,
+                transition: transition
+            )
             
             var contentHeight: CGFloat = 0.0
                         
@@ -493,18 +511,15 @@ final class StarsTransactionsScreenComponent: Component {
                 environment: {},
                 containerSize: CGSize(width: min(414.0, availableSize.width), height: 220.0)
             )
-            let starFrame = CGRect(origin: .zero, size: starSize)
+            let starFrame = CGRect(
+                origin: CGPoint(x: (availableSize.width - starSize.width) / 2.0, y: environment.navigationHeight - 56.0 - 30.0),
+                size: starSize
+            )
             if let starView = self.starView.view {
                 if starView.superview == nil {
-                    if let navigationBar = environment.controller()?.navigationBar {
-                        if let titleView = self.titleView.view, titleView.superview != nil {
-                            navigationBar.view.insertSubview(starView, belowSubview: titleView)
-                        } else {
-                            navigationBar.view.insertSubview(starView, aboveSubview: navigationBar.backgroundView)
-                        }
-                    }
+                    self.scrollView.addSubview(starView)
                 }
-                starTransition.setBounds(view: starView, bounds: starFrame)
+                starTransition.setFrame(view: starView, frame: starFrame)
             }
             
             let titleString: String
@@ -1255,7 +1270,7 @@ public final class StarsTransactionsScreen: ViewControllerComponentContainer {
             gift: {
                 giftImpl?()
             }
-        ), navigationBarAppearance: .default)
+        ), navigationBarAppearance: .transparent)
         
         self.navigationPresentation = .modalInLargeLayout
         

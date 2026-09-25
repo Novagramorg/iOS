@@ -287,8 +287,13 @@ extension ChatControllerImpl {
                 isScheduledMessages = true
             }
 
-            if case .default = subject, !isScheduledMessages, banSendText == nil, let user = self.presentationInterfaceState.renderedPeer?.peer as? TelegramUser, user.id != self.context.account.peerId, !user.isDeleted, !isServicePeer(user), user.botInfo == nil, let fileIndex = availableButtons.firstIndex(of: .file) {
-                availableButtons.insert(.money, at: fileIndex + 1)
+            switch subject {
+            case .default, .gift:
+                if !isScheduledMessages, banSendText == nil, let user = self.presentationInterfaceState.renderedPeer?.peer as? TelegramUser, user.id != self.context.account.peerId, !user.isDeleted, !isServicePeer(user), user.botInfo == nil, !user.flags.contains(.isSupport), let fileIndex = availableButtons.firstIndex(of: .file) {
+                    availableButtons.insert(.money, at: fileIndex + 1)
+                }
+            case .edit, .bot:
+                break
             }
 
             var isPaidMessages = false

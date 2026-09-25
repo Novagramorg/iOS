@@ -609,6 +609,7 @@ private final class WalletSendScreenComponent: Component {
         private var needsAmountFocus = false
         private var isAmountFocusScheduled = false
         private var previousIsInsufficient: Bool?
+        private var previousFeeDisplayState: WalletSendFeeDisplayState?
 
         private var walletContext: WalletContext?
         private let walletDisposable = MetaDisposable()
@@ -621,6 +622,7 @@ private final class WalletSendScreenComponent: Component {
         private var restorationSession: PasscodeSession?
         private var restorationGeneration = 0
         private var cachedFeeEstimate: WalletContext.TransferFeeEstimate?
+        private var lastKnownFee: Int64?
         private var pendingSend: WalletSendTransferRequest?
         private var sendRevision = 0
         private var scheduledSendRevision: Int?
@@ -870,26 +872,30 @@ private final class WalletSendScreenComponent: Component {
         }
 
         private var feeDisplayState: WalletSendFeeDisplayState {
+            guard self.amount > 0 else {
+                if case .value? = self.previousFeeDisplayState, let fee = self.lastKnownFee, fee > 0 {
+                    return .value(fee)
+                }
+                return .hidden
+            }
             if !self.isSelfTransfer {
                 if case .stale = self.gaslessInfo {
                     return .hidden
                 }
-                guard let gaslessInfo = self.gaslessInfo.currentValue else {
-                    return .hidden
-                }
-                if self.amount == 0 && gaslessInfo.available && gaslessInfo.left > 0 {
+                guard self.gaslessInfo.currentValue != nil else {
                     return .hidden
                 }
             }
             if !self.shouldSendAll && self.feesAreCovered(amount: self.amount) {
                 return .hidden
             }
-            if self.feeRequest == self.currentFeeRequest, let estimate = self.cachedFeeEstimate {
-                let effectiveAmount = self.shouldSendAll ? max(0, self.amount - estimate.fee) : self.amount
-                if self.feesAreCovered(amount: effectiveAmount) || estimate.fee == 0 {
+            if self.feeRequest == self.currentFeeRequest,
+               let fee = self.cachedFeeEstimate?.fee ?? (self.isEstimatingFee ? self.lastKnownFee : nil) {
+                let effectiveAmount = self.shouldSendAll ? max(0, self.amount - fee) : self.amount
+                if self.feesAreCovered(amount: effectiveAmount) || fee == 0 {
                     return .hidden
                 }
-                return .value(estimate.fee)
+                return .value(fee)
             }
             if self.feePreparationFailed {
                 return .unavailable
@@ -945,6 +951,7 @@ private final class WalletSendScreenComponent: Component {
                       self.isVisible, self.feeRevision == revision, self.currentFeeRequest == request else { return }
                 self.isEstimatingFee = false
                 self.cachedFeeEstimate = estimate
+                self.lastKnownFee = estimate.fee
                 self.continuePendingSend()
                 self.requestUpdate(transition: .easeInOut(duration: 0.2))
             }, error: { [weak self] error in
@@ -1859,6 +1866,7 @@ private final class WalletSendScreenComponent: Component {
                 self.isSubmittingTransfer = false
                 self.invalidateCommentSession()
                 self.invalidateFeePreparation()
+                self.lastKnownFee = nil
                 self.walletContext = component.walletContext
                 self.signingAccessDisposable.set(nil)
                 self.walletInfo = nil
@@ -1905,6 +1913,7 @@ private final class WalletSendScreenComponent: Component {
                             self.abandonRestoration()
                             self.invalidateCommentSession()
                             if !self.isSubmittingTransfer { self.invalidateFeePreparation() }
+                            self.lastKnownFee = nil
                         }
                     }
                     self.walletBalance = walletState.balance.currentValue
@@ -2140,6 +2149,9 @@ private final class WalletSendScreenComponent: Component {
             let isInsufficient = hasAmount
                 && !self.walletIsLoading
                 && self.walletBalance.map { self.amount > $0 } == true
+            let feeDisplayState = self.feeDisplayState
+            let showFees = feeDisplayState != .hidden
+            let feeVisibilityChanged = self.previousFeeDisplayState.map { ($0 != .hidden) != showFees } ?? false
             var contentPositionTransition = transition
             var contentVisibilityTransition = transition
             var statusVisibilityTransition: ComponentTransition = .easeInOut(duration: 0.2)
@@ -2147,20 +2159,19 @@ private final class WalletSendScreenComponent: Component {
                 contentPositionTransition = .immediate
                 contentVisibilityTransition = .immediate
                 statusVisibilityTransition = .immediate
-            } else if self.previousIsInsufficient != isInsufficient {
+            } else if self.previousIsInsufficient != isInsufficient || feeVisibilityChanged {
                 let reduceMotion = UIAccessibility.isReduceMotionEnabled
                 statusVisibilityTransition = .easeInOut(duration: reduceMotion ? 0.15 : 0.22)
                 contentPositionTransition = reduceMotion ? .immediate : statusVisibilityTransition
                 contentVisibilityTransition = statusVisibilityTransition
             }
             self.previousIsInsufficient = isInsufficient
+            self.previousFeeDisplayState = feeDisplayState
             let hasPositiveBalance = self.walletBalance.map { $0 > 0 } == true
             let hasZeroBalance = self.walletBalance == 0
             let sendButtonY = usableBottom - 68.0
             let showSendButton = hasAmount || component.peer != nil || !component.initialAddress.isEmpty
             let showBalance = (hasAmount || hasPositiveBalance) && !hasZeroBalance
-            let feeDisplayState = self.feeDisplayState
-            let showFees = feeDisplayState != .hidden
             let balanceSlotY = sendButtonY - (showFees ? 58.0 : 36.0)
             
             var centralContentLayouts: [(view: UIView, frame: CGRect, transition: ComponentTransition)] = []
@@ -2564,26 +2575,32 @@ private final class WalletSendScreenComponent: Component {
                     ))
                 )
             }
-            let feeTextSize = self.feeText.update(
-                transition: .immediate,
-                component: AnyComponent(HStack([
-                    AnyComponentWithIdentity(
-                        id: "title",
-                        component: AnyComponent(MultilineTextComponent(
-                            text: .plain(NSAttributedString(
-                                //TODO:localize
-                                string: "Network fee:",
-                                font: Font.regular(14.0),
-                                textColor: theme.list.itemSecondaryTextColor
-                            )),
-                            maximumNumberOfLines: 1
-                        ))
-                    ),
-                    feeValueComponent
-                ], spacing: 3.0)),
-                environment: {},
-                containerSize: CGSize(width: availableSize.width - 32.0, height: 24.0)
-            )
+            let feeTextSize: CGSize
+            if !showFees, let feeTextView = self.feeText.view {
+                // Keep the value and title together while the row fades out.
+                feeTextSize = feeTextView.bounds.size
+            } else {
+                feeTextSize = self.feeText.update(
+                    transition: .immediate,
+                    component: AnyComponent(HStack([
+                        AnyComponentWithIdentity(
+                            id: "title",
+                            component: AnyComponent(MultilineTextComponent(
+                                text: .plain(NSAttributedString(
+                                    //TODO:localize
+                                    string: "Network fee:",
+                                    font: Font.regular(14.0),
+                                    textColor: theme.list.itemSecondaryTextColor
+                                )),
+                                maximumNumberOfLines: 1
+                            ))
+                        ),
+                        feeValueComponent
+                    ], spacing: 3.0)),
+                    environment: {},
+                    containerSize: CGSize(width: availableSize.width - 32.0, height: 24.0)
+                )
+            }
             let feeTextFrame = CGRect(
                 x: floorToScreenPixels((availableSize.width - feeTextSize.width) / 2.0),
                 y: sendButtonY - 24.0 - floorToScreenPixels(feeTextSize.height / 2.0),
