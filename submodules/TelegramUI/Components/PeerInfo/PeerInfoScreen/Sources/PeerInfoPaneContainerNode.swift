@@ -402,6 +402,16 @@ private func interpolateFrame(from fromValue: CGRect, to toValue: CGRect, t: CGF
     return CGRect(x: floorToScreenPixels(toValue.origin.x * t + fromValue.origin.x * (1.0 - t)), y: floorToScreenPixels(toValue.origin.y * t + fromValue.origin.y * (1.0 - t)), width: floorToScreenPixels(toValue.size.width * t + fromValue.size.width * (1.0 - t)), height: floorToScreenPixels(toValue.size.height * t + fromValue.size.height * (1.0 - t)))
 }
 
+/// The chat the shared-media panes list, with the context holder to resolve it through. A user's
+/// profile opened from a channel's direct messages lists that channel's thread with the user, not
+/// the profile's own chat, and that thread gets a holder of its own.
+func peerInfoSharedMediaChatLocation(peerId: EnginePeer.Id, chatLocation: ChatLocation, chatLocationContextHolder: Atomic<ChatLocationContextHolder?>, sharedMediaFromForumTopic: (EnginePeer.Id, Int64)?) -> (peerId: EnginePeer.Id, chatLocation: ChatLocation, chatLocationContextHolder: Atomic<ChatLocationContextHolder?>) {
+    guard let sharedMediaFromForumTopic else {
+        return (peerId, chatLocation, chatLocationContextHolder)
+    }
+    return (sharedMediaFromForumTopic.0, .replyThread(message: peerInfoMonoforumThread(peerId: sharedMediaFromForumTopic.0, threadId: sharedMediaFromForumTopic.1)), Atomic(value: nil))
+}
+
 private final class PeerInfoPendingPane {
     let pane: PeerInfoPaneWrapper
     private var disposable: Disposable?
@@ -433,30 +443,9 @@ private final class PeerInfoPendingPane {
         externalDataUpdated: @escaping (ContainedViewLayoutTransition) -> Void,
         openShareLink: @escaping (String) -> Void
     ) {
-        var chatLocationPeerId = peerId
-        var chatLocation = chatLocation
-        var chatLocationContextHolder = chatLocationContextHolder
-        if let sharedMediaFromForumTopic {
-            chatLocationPeerId = sharedMediaFromForumTopic.0
-            chatLocation = .replyThread(message: ChatReplyThreadMessage(
-                peerId: sharedMediaFromForumTopic.0,
-                threadId: sharedMediaFromForumTopic.1,
-                channelMessageId: nil,
-                isChannelPost: false,
-                isForumPost: true,
-                isMonoforumPost: true,
-                maxMessage: nil,
-                maxReadIncomingMessageId: nil,
-                maxReadOutgoingMessageId: nil,
-                unreadCount: 0,
-                initialFilledHoles: IndexSet(),
-                initialAnchor: .automatic,
-                isNotAvailable: false
-            ))
-            chatLocationContextHolder = Atomic(value: nil)
-        }
+        let (chatLocationPeerId, chatLocation, chatLocationContextHolder) = peerInfoSharedMediaChatLocation(peerId: peerId, chatLocation: chatLocation, chatLocationContextHolder: chatLocationContextHolder, sharedMediaFromForumTopic: sharedMediaFromForumTopic)
         
-        var captureProtected = peerInfoIsCopyProtected(data: data)
+        var captureProtected = peerInfoIsCopyProtected(data: data, sharedMediaFromForumTopic: sharedMediaFromForumTopic)
         let paneNode: PeerInfoPaneNode
         switch key {
         case .gifts:
@@ -472,7 +461,9 @@ private final class PeerInfoPendingPane {
                     }
                 }
             }
-            let giftPaneNode = PeerInfoGiftsPaneNode(context: context, peerId: peerId, chatControllerInteraction: chatControllerInteraction, profileGiftsCollections: data.profileGiftsCollectionsContext!, profileGifts: data.profileGiftsContext!, canManage: canManage, canGift: canGift, initialGiftCollectionId: initialGiftCollectionId)
+            // The gifts' owner, the peer `profileGiftsContext` is keyed by: on a secret chat's
+            // profile that is the user, not the secret chat `peerId` names.
+            let giftPaneNode = PeerInfoGiftsPaneNode(context: context, peerId: data.peer?.id ?? peerId, chatControllerInteraction: chatControllerInteraction, profileGiftsCollections: data.profileGiftsCollectionsContext!, profileGifts: data.profileGiftsContext!, canManage: canManage, canGift: canGift, initialGiftCollectionId: initialGiftCollectionId)
             giftPaneNode.openShareLink = openShareLink
             paneNode = giftPaneNode
         case .stories, .storyArchive, .botPreview:

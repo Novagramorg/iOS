@@ -562,7 +562,8 @@ final class ChatRankInfoSheetComponent: CombinedComponent {
                     statusBarHeight: environment.statusBarHeight,
                     inputHeight: nil,
                     inputHeightIsInteractivellyChanging: false,
-                    inVoiceOver: false
+                    inVoiceOver: false,
+                    presentedInFormSheet: false
                 )
                 controller.presentationContext.containerLayoutUpdated(layout, transition: context.transition.containedViewLayoutTransition)
             }

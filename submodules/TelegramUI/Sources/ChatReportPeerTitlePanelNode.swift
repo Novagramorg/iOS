@@ -329,12 +329,8 @@ final class ChatReportPeerTitlePanelNode: ChatTitleAccessoryPanelNode {
         let fileId = emojiStatus.fileId
         let source: Signal<PremiumSource, NoError> = self.emojiStatusFileAndPackTitle.get()
         |> take(1)
-        |> mapToSignal { emojiStatusFileAndPack -> Signal<PremiumSource, NoError> in
-            if let (file, pack) = emojiStatusFileAndPack {
-                return .single(.emojiStatus(peerId, fileId, file, pack))
-            } else {
-                return .complete()
-            }
+        |> map { emojiStatusFileAndPack -> PremiumSource in
+            return .emojiStatus(peerId, fileId, emojiStatusFileAndPack?.0, emojiStatusFileAndPack?.1)
         }
   
         let _ = (source
@@ -533,30 +529,22 @@ final class ChatReportPeerTitlePanelNode: ChatTitleAccessoryPanelNode {
             if self.emojiStatusFileId != fileId {
                 self.emojiStatusFileId = fileId
                 
-                let emojiFileAndPack = self.context.engine.stickers.resolveInlineStickers(fileIds: [fileId])
-                |> mapToSignal { result in
-                    if let emojiFile = result.first?.value {
-                        for attribute in emojiFile.attributes {
-                            if case let .CustomEmoji(_, _, _, packReference) = attribute, let packReference = packReference {
-                                return self.context.engine.stickers.loadedStickerPack(reference: packReference, forceActualized: false)
-                                |> filter { result in
-                                    if case .result = result {
-                                        return true
-                                    } else {
-                                        return false
-                                    }
-                                }
-                                |> mapToSignal { result -> Signal<(TelegramMediaFile, LoadedStickerPack)?, NoError> in
-                                    if case let .result(_, items, _) = result {
-                                        return .single(items.first.flatMap { ($0.file._parse(), result) })
-                                    } else {
-                                        return .complete()
-                                    }
-                                }
-                            }
+                // Always resolves, to nil when there is no pack (the emoji names none, or its owner
+                // deleted it), so the panel's link still opens the Premium screen.
+                let context = self.context
+                let emojiFileAndPack = context.engine.stickers.resolveInlineStickers(fileIds: [fileId])
+                |> mapToSignal { result -> Signal<(TelegramMediaFile, LoadedStickerPack)?, NoError> in
+                    guard let emojiFile = result.first?.value else {
+                        return .single(nil)
+                    }
+                    return context.engine.stickers.customEmojiPack(file: emojiFile)
+                    |> map { pack -> (TelegramMediaFile, LoadedStickerPack)? in
+                        if let pack, case let .result(_, items, _) = pack {
+                            return items.first.flatMap { ($0.file._parse(), pack) }
+                        } else {
+                            return nil
                         }
                     }
-                    return .complete()
                 }
                 self.emojiStatusPackDisposable.set(emojiFileAndPack.startStrict(next: { [weak self] fileAndPackTitle in
                     guard let self else {

@@ -12,6 +12,7 @@
 #import <MtProtoKit/MTApiEnvironment.h>
 #import <MtProtoKit/MTLogging.h>
 #import <MtProtoKit/MTDatacenterAuthAction.h>
+#import "MTInternalInterfaces.h"
 
 #import <netinet/in.h>
 #import <arpa/inet.h>
@@ -354,8 +355,12 @@
         MTMetaDisposable *disposable = [[MTMetaDisposable alloc] init];
         
         [[MTContext contextQueue] dispatchOnQueue:^{
-            MTDatacenterAuthAction *action = [[MTDatacenterAuthAction alloc] initWithAuthKeyInfoSelector:MTDatacenterAuthInfoSelectorEphemeralMain isCdn:false skipBind:false completion:^(__unused MTDatacenterAuthAction *action, bool success) {
-                [subscriber putNext:@(!success)];
+            MTDatacenterAuthAction *action = [context makeAuthActionWithSelector:MTDatacenterAuthInfoSelectorEphemeralMain isCdn:false skipBind:false completion:^(MTDatacenterAuthAction *action, bool success) {
+                // Only ENCRYPTED_MESSAGE_INVALID means the server no longer knows
+                // the permanent key. Any other failed bind (a 500, a dropped
+                // connection) says nothing about it, and reporting it would log
+                // the user out.
+                [subscriber putNext:@(!success && [MTDatacenterAuthAction bindErrorMeansPermanentKeyIsUnknown:action.bindError])];
                 [subscriber putCompletion];
             }];
             [action execute:context datacenterId:datacenterId];

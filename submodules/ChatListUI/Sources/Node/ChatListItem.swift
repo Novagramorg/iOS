@@ -5367,18 +5367,23 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                     let leftSeparatorInset: CGFloat
                     let rightSeparatorInset: CGFloat
                     let hideCommunitySeparator = item.useCommunityViewLayout && last
+                    // Separators stay out of the side safe areas. The content-aligned ones end 16pt
+                    // before the right inset; the full-width ones run to the edge unless there is a
+                    // right inset, in which case they end where the content-aligned ones do.
+                    let contentRightSeparatorInset: CGFloat = params.rightInset + 16.0
+                    let fullWidthRightSeparatorInset: CGFloat = params.rightInset.isZero ? 0.0 : contentRightSeparatorInset
                     if case let .groupReference(groupReferenceData) = item.content, groupReferenceData.hiddenByDefault {
-                        leftSeparatorInset = 0.0
-                        rightSeparatorInset = 0.0
+                        leftSeparatorInset = params.leftInset
+                        rightSeparatorInset = fullWidthRightSeparatorInset
                     } else if item.useCommunityViewLayout {
                         leftSeparatorInset = editingOffset + leftInset + rawContentRect.origin.x
-                        rightSeparatorInset = 16.0
+                        rightSeparatorInset = contentRightSeparatorInset
                     } else if (!nextIsPinned && isPinned) || last {
-                        leftSeparatorInset = 0.0
-                        rightSeparatorInset = 0.0
+                        leftSeparatorInset = params.leftInset
+                        rightSeparatorInset = fullWidthRightSeparatorInset
                     } else {
                         leftSeparatorInset = editingOffset + leftInset + rawContentRect.origin.x
-                        rightSeparatorInset = 16.0
+                        rightSeparatorInset = contentRightSeparatorInset
                     }
                     
                     transition.updateFrame(node: strongSelf.separatorNode, frame: CGRect(origin: CGPoint(x: leftSeparatorInset, y: layoutOffset + itemHeight - separatorHeight), size: CGSize(width: params.width - leftSeparatorInset - rightSeparatorInset, height: separatorHeight)))
@@ -5433,7 +5438,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                     
                     strongSelf.highlightedBackgroundNode.backgroundColor = highlightedBackgroundColor
                     let topNegativeInset: CGFloat = 0.0
-                    strongSelf.highlightedBackgroundNode.frame = CGRect(origin: CGPoint(x: strongSelf.revealOffset, y: layoutOffset - separatorHeight - topNegativeInset), size: CGSize(width: layout.contentSize.width, height: layout.contentSize.height + separatorHeight + topNegativeInset))
+                    strongSelf.highlightedBackgroundNode.frame = CGRect(origin: CGPoint(x: params.leftInset + strongSelf.revealOffset, y: layoutOffset - separatorHeight - topNegativeInset), size: CGSize(width: layout.contentSize.width - params.leftInset - params.rightInset, height: layout.contentSize.height + separatorHeight + topNegativeInset))
                     transition.updateCornerRadius(node: strongSelf.highlightedBackgroundNode, cornerRadius: strongSelf.isRevealOptionsActive ? 26.0 : 0.0)
                     
                     if let peerPresence = peerPresence {
@@ -5582,7 +5587,8 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
         transition.updateBounds(node: self.contextContainer, bounds: self.contextContainer.frame.offsetBy(dx: -offset, dy: 0.0))
 
         let highlightedBackgroundFrame = self.highlightedBackgroundNode.frame
-        transition.updateFrame(node: self.highlightedBackgroundNode, frame: CGRect(origin: CGPoint(x: offset, y: highlightedBackgroundFrame.minY), size: highlightedBackgroundFrame.size))
+        let highlightedBackgroundLeftInset = self.layoutParams?.6.leftInset ?? 0.0
+        transition.updateFrame(node: self.highlightedBackgroundNode, frame: CGRect(origin: CGPoint(x: highlightedBackgroundLeftInset + offset, y: highlightedBackgroundFrame.minY), size: highlightedBackgroundFrame.size))
     }
 
     override public func revealOptionsActiveStateUpdated(isActive: Bool, transition: ContainedViewLayoutTransition) {

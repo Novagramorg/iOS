@@ -1076,7 +1076,8 @@ private final class WalletCollectibleSheetComponent: CombinedComponent {
                         statusBarHeight: environment.statusBarHeight,
                         inputHeight: nil,
                         inputHeightIsInteractivellyChanging: false,
-                        inVoiceOver: false
+                        inVoiceOver: false,
+                        presentedInFormSheet: false
                     ),
                     transition: context.transition.containedViewLayoutTransition
                 )

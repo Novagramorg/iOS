@@ -19,7 +19,7 @@
 @interface MTBindKeyMessageService () {
     MTDatacenterAuthKey *_persistentKey;
     MTDatacenterAuthKey *_ephemeralKey;
-    void (^_completion)(bool);
+    void (^_completion)(bool, MTRpcError *);
     
     int64_t _currentMessageId;
     id _currentTransactionId;
@@ -29,7 +29,7 @@
 
 @implementation MTBindKeyMessageService
 
-- (instancetype)initWithPersistentKey:(MTDatacenterAuthKey *)persistentKey ephemeralKey:(MTDatacenterAuthKey *)ephemeralKey completion:(void (^)(bool))completion {
+- (instancetype)initWithPersistentKey:(MTDatacenterAuthKey *)persistentKey ephemeralKey:(MTDatacenterAuthKey *)ephemeralKey completion:(void (^)(bool, MTRpcError *))completion {
     self = [super init];
     if (self != nil) {
         _persistentKey = persistentKey;
@@ -145,6 +145,7 @@
         MTRpcResultMessage *rpcResultMessage = message.body;
         if (rpcResultMessage.requestMessageId == _currentMessageId) {
             bool success = false;
+            MTRpcError *error = nil;
             if (rpcResultMessage.data.length >= 4) {
                 uint32_t signature = 0;
                 [rpcResultMessage.data getBytes:&signature range:NSMakeRange(0, 4)];
@@ -152,6 +153,7 @@
                 id parsedMessage = [MTInternalMessageParser parseMessage:rpcResultMessage.data];
                 if ([parsedMessage isKindOfClass:[MTRpcError class]]) {
                     MTRpcError *rpcError = (MTRpcError *)parsedMessage;
+                    error = rpcError;
                     if (MTLogEnabled()) {
                         MTLog(@"[MTRequestMessageService#%p response for %" PRId64 " is error: %d: %@]", self, _currentMessageId, (int)rpcError.errorCode, rpcError.errorDescription);
                     }
@@ -163,13 +165,13 @@
                     success = true;
                 }
             }
-            _completion(success);
+            _completion(success, error);
         }
     }
 }
 
 -(void)complete {
-    _completion(true);
+    _completion(true, nil);
 }
 
 @end

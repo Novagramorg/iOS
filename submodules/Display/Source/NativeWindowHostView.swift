@@ -93,6 +93,7 @@ private final class WindowRootViewController: UIViewController {
     
     var presentController: ((UIViewController, PresentationSurfaceLevel, Bool, (() -> Void)?) -> Void)?
     var transitionToSize: ((CGSize, Double, UIInterfaceOrientation) -> Void)?
+    var safeAreaInsetsChanged: (() -> Void)?
     
     private var _systemUserInterfaceStyle = ValuePromise<WindowUserInterfaceStyle>(ignoreRepeated: true)
     var systemUserInterfaceStyle: Signal<WindowUserInterfaceStyle, NoError> {
@@ -212,6 +213,12 @@ private final class WindowRootViewController: UIViewController {
     
     override var prefersHomeIndicatorAutoHidden: Bool {
         return self.prefersOnScreenNavigationHidden
+    }
+    
+    override func viewSafeAreaInsetsDidChange() {
+        super.viewSafeAreaInsetsDidChange()
+        
+        self.safeAreaInsetsChanged?()
     }
     
     override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
@@ -411,6 +418,10 @@ public func nativeWindowHostView() -> (UIWindow & WindowHost, WindowHostView) {
     
     rootViewController.transitionToSize = { [weak hostView] size, duration, orientation in
         hostView?.updateSize?(size, duration, orientation)
+    }
+    
+    rootViewController.safeAreaInsetsChanged = { [weak hostView] in
+        hostView?.updateSystemInsets?()
     }
     
     window.updateSize = { _ in

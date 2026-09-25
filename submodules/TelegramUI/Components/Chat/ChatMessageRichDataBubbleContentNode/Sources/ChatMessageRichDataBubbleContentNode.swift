@@ -587,7 +587,18 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                     wantsReactionsOutside = hasReactions && !inline
                 }
             }
-            let contentProperties = ChatMessageBubbleContentProperties(hidesSimpleAuthorHeader: false, headerSpacing: 0.0, hidesBackground: .never, forceFullCorners: false, forceAlignment: .none, wantsReactionsOutside: wantsReactionsOutside)
+            // The bubble's header (author name, "Forwarded from", reply) ends in an overlap that
+            // assumes the content below brings its own top inset, as a text bubble does. A page that
+            // opens with text does (its leading padding); one that opens flush — a photo, a code
+            // band, a file row — brings none and would run into the header. Such a page takes the
+            // media bubble's spacing, so with both inset 2pt a photo here sits exactly where a photo
+            // message's does.
+            let headerSpacingShowMoreExpanded = (showMoreExpandedState?.messageId == item.message.id) ? (showMoreExpandedState?.value ?? false) : false
+            var headerSpacing: CGFloat = 0.0
+            if let resolvedContent = ChatMessageRichDataBubbleContentNode.resolvedRichDataContent(item: item, showMoreExpanded: headerSpacingShowMoreExpanded), instantPageV2ContentStartsFlushAtTop(resolvedContent.instantPage.blocks) {
+                headerSpacing = 7.0
+            }
+            let contentProperties = ChatMessageBubbleContentProperties(hidesSimpleAuthorHeader: false, headerSpacing: headerSpacing, hidesBackground: .never, forceFullCorners: false, forceAlignment: .none, wantsReactionsOutside: wantsReactionsOutside)
 
             return (contentProperties, nil, CGFloat.greatestFiniteMagnitude, { constrainedSize, position in
                 let suggestedBoundingWidth: CGFloat = constrainedSize.width
@@ -713,6 +724,17 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                     checkboxForeground = messageTheme.mediaControlInnerBackgroundColor
                 }
                 
+                // Incoming bubbles are neutral, so a 15% tint with a full-strength label reads fine.
+                // Outgoing bubbles can be saturated (Day Blue), where the tint mixes into the bubble
+                // colour and the label loses contrast, so there the fill is solid with a white label,
+                // as the message's inline keyboard buttons (ChatButtonKeyboardInputNode) draw them.
+                let buttonDangerColor = item.presentationData.theme.theme.contextMenu.destructiveColor
+                let buttonSuccessColor = item.presentationData.theme.theme.list.freeTextSuccessColor
+                let buttonDangerBackgroundColor = isIncoming ? buttonDangerColor.withMultipliedAlpha(0.15) : buttonDangerColor
+                let buttonDangerForegroundColor = isIncoming ? buttonDangerColor : UIColor.white
+                let buttonSuccessBackgroundColor = isIncoming ? buttonSuccessColor.withMultipliedAlpha(0.15) : buttonSuccessColor
+                let buttonSuccessForegroundColor = isIncoming ? buttonSuccessColor : UIColor.white
+                
                 let pageTheme = InstantPageTheme(
                     type: isDark ? .dark : .light,
                     pageBackgroundColor: .clear,
@@ -739,8 +761,10 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                     separatorColor: messageTheme.secondaryTextColor.mixedWith(mainColor.withMultipliedAlpha(0.2), alpha: 0.3),
                     secondaryControlColor: messageTheme.secondaryTextColor.mixedWith(mainColor.withMultipliedAlpha(0.2), alpha: 0.3),
                     quoteAccentColor: mainColor,
-                    buttonDangerColor: item.presentationData.theme.theme.contextMenu.destructiveColor,
-                    buttonSuccessColor: item.presentationData.theme.theme.list.freeTextSuccessColor,
+                    buttonDangerBackgroundColor: buttonDangerBackgroundColor,
+                    buttonDangerForegroundColor: buttonDangerForegroundColor,
+                    buttonSuccessBackgroundColor: buttonSuccessBackgroundColor,
+                    buttonSuccessForegroundColor: buttonSuccessForegroundColor,
                     checkboxFill: checkboxFill,
                     checkboxForeground: checkboxForeground,
                     neutralButtonBackgroundColor: tableHeaderColor,

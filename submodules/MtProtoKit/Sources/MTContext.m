@@ -16,6 +16,8 @@
 #import "MTDiscoverDatacenterAddressAction.h"
 #import <MtProtoKit/MTDatacenterAuthAction.h>
 #import <MtProtoKit/MTDatacenterTransferAuthAction.h>
+#import "MTInternalInterfaces.h"
+#import <MtProtoKit/MTRpcError.h>
 
 #import <MtProtoKit/MTTransportScheme.h>
 #import <MtProtoKit/MTTcpTransport.h>
@@ -188,6 +190,14 @@ static MTDatacenterAuthInfoMapKeyStruct parseAuthInfoMapKeyInteger(NSNumber *key
     NSMutableDictionary<NSNumber *, MTDatacenterAuthAction *> *_datacenterAuthActions;
     NSMutableDictionary *_datacenterTransferAuthActions;
     
+    // A failed auth key creation (keyed like _datacenterAuthActions) or token
+    // transfer (keyed by datacenter) is asked for again once its retry delay has
+    // passed; until then requests for it wait. The counts drive the backoff.
+    NSMutableDictionary<NSNumber *, NSNumber *> *_datacenterAuthFailureCounts;
+    NSMutableDictionary<NSNumber *, MTTimer *> *_datacenterAuthRetryTimers;
+    NSMutableDictionary<NSNumber *, NSNumber *> *_datacenterTransferAuthFailureCounts;
+    NSMutableDictionary<NSNumber *, MTTimer *> *_datacenterTransferAuthRetryTimers;
+    
     NSMutableDictionary<NSNumber *, NSNumber *> *_datacenterCheckKeyRemovedActionTimestamps;
     NSMutableDictionary<NSNumber *, id<MTDisposable> > *_datacenterCheckKeyRemovedActions;
     
@@ -210,6 +220,14 @@ static MTDatacenterAuthInfoMapKeyStruct parseAuthInfoMapKeyInteger(NSNumber *key
 @end
 
 static int32_t fixedTimeDifferenceValue = 0;
+
+// 1, 2, 4 ... 32 s, then once a minute.
+static NSTimeInterval MTRetryDelayForFailureCount(NSUInteger failureCount) {
+    if (failureCount == 0) {
+        return 0.0;
+    }
+    return MIN(60.0, pow(2.0, (double)MIN(failureCount - 1, (NSUInteger)6)));
+}
 
 @implementation MTContext
 
@@ -271,6 +289,10 @@ static int32_t fixedTimeDifferenceValue = 0;
         _discoverDatacenterAddressActions = [[NSMutableDictionary alloc] init];
         _datacenterAuthActions = [[NSMutableDictionary alloc] init];
         _datacenterTransferAuthActions = [[NSMutableDictionary alloc] init];
+        _datacenterAuthFailureCounts = [[NSMutableDictionary alloc] init];
+        _datacenterAuthRetryTimers = [[NSMutableDictionary alloc] init];
+        _datacenterTransferAuthFailureCounts = [[NSMutableDictionary alloc] init];
+        _datacenterTransferAuthRetryTimers = [[NSMutableDictionary alloc] init];
         _datacenterCheckKeyRemovedActionTimestamps = [[NSMutableDictionary alloc] init];
         _datacenterCheckKeyRemovedActions = [[NSMutableDictionary alloc] init];
         
@@ -350,6 +372,12 @@ static void copyKeychainDictionaryKey(NSString * _Nonnull group, NSString * _Non
     NSDictionary *fetchPublicKeysActions = _fetchPublicKeysActions;
     _fetchPublicKeysActions = nil;
     
+    NSMutableArray<MTTimer *> *retryTimers = [[NSMutableArray alloc] init];
+    [retryTimers addObjectsFromArray:_datacenterAuthRetryTimers.allValues];
+    [retryTimers addObjectsFromArray:_datacenterTransferAuthRetryTimers.allValues];
+    _datacenterAuthRetryTimers = nil;
+    _datacenterTransferAuthRetryTimers = nil;
+    
     id<MTDisposable> cleanupSessionInfoDisposables = _cleanupSessionInfoDisposables;
     
     NSDictionary *transportSchemeDisposableByDatacenterId = _transportSchemeDisposableByDatacenterId;
@@ -374,6 +402,10 @@ static void copyKeychainDictionaryKey(NSString * _Nonnull group, NSString * _Non
             MTDatacenterTransferAuthAction *action = datacenterTransferAuthActions[nDatacenterId];
             action.delegate = nil;
             [action cancel];
+        }
+        
+        for (MTTimer *timer in retryTimers) {
+            [timer invalidate];
         }
         
         for (NSNumber *nDatacenterId in fetchPublicKeysActions)
@@ -1182,6 +1214,10 @@ static void copyKeychainDictionaryKey(NSString * _Nonnull group, NSString * _Non
             action.delegate = nil;
             [action cancel];
             [_datacenterTransferAuthActions removeObjectForKey:@(datacenterId)];
+            
+            // The connections that were waiting on the cancelled transfer
+            // ask for the token only when told to.
+            [self _notifyAuthTokenTransferFailedForDatacenterId:datacenterId];
         }
     }];
 }
@@ -1453,10 +1489,12 @@ static void copyKeychainDictionaryKey(NSString * _Nonnull group, NSString * _Non
 {
     [[MTContext contextQueue] dispatchOnQueue:^
     {
-        if (authToken != nil)
+        if (authToken != nil) {
             _authTokenById[@(datacenterId)] = authToken;
-        else
+            [_datacenterTransferAuthFailureCounts removeObjectForKey:@(datacenterId)];
+        } else {
             [_authTokenById removeObjectForKey:@(datacenterId)];
+        }
         [_keychain setObject:_authTokenById forKey:@"authTokenById" group:@"persistent"];
         
         NSArray *changeListeners = [[NSArray alloc] initWithArray:_changeListeners];
@@ -1501,28 +1539,29 @@ static void copyKeychainDictionaryKey(NSString * _Nonnull group, NSString * _Non
     }];
 }
 
+- (MTDatacenterAuthAction *)makeAuthActionWithSelector:(MTDatacenterAuthInfoSelector)selector isCdn:(bool)isCdn skipBind:(bool)skipBind completion:(void (^)(MTDatacenterAuthAction *, bool))completion {
+    if (_authActionFactory != nil) {
+        return _authActionFactory(selector, isCdn, skipBind, completion);
+    }
+    return [[MTDatacenterAuthAction alloc] initWithAuthKeyInfoSelector:selector isCdn:isCdn skipBind:skipBind completion:completion];
+}
+
 - (void)authInfoForDatacenterWithIdRequired:(NSInteger)datacenterId isCdn:(bool)isCdn selector:(MTDatacenterAuthInfoSelector)selector allowUnboundEphemeralKeys:(bool)allowUnboundEphemeralKeys
 {
     [[MTContext contextQueue] dispatchOnQueue:^
     {
         NSNumber *infoKey = authInfoMapIntegerKey((int32_t)datacenterId, selector);
         
-        if (_datacenterAuthActions[infoKey] == nil)
+        if (_datacenterAuthActions[infoKey] == nil && _datacenterAuthRetryTimers[infoKey] == nil)
         {
             __weak MTContext *weakSelf = self;
-            MTDatacenterAuthAction *authAction = [[MTDatacenterAuthAction alloc] initWithAuthKeyInfoSelector:selector isCdn:isCdn skipBind:allowUnboundEphemeralKeys completion:^(MTDatacenterAuthAction *action, __unused bool success) {
+            MTDatacenterAuthAction *authAction = [self makeAuthActionWithSelector:selector isCdn:isCdn skipBind:allowUnboundEphemeralKeys completion:^(MTDatacenterAuthAction *action, bool success) {
                 [[MTContext contextQueue] dispatchOnQueue:^{
                     __strong MTContext *strongSelf = weakSelf;
                     if (strongSelf == nil) {
                         return;
                     }
-                    
-                    for (NSNumber *key in _datacenterAuthActions) {
-                        if (_datacenterAuthActions[key] == action) {
-                            [_datacenterAuthActions removeObjectForKey:key];
-                            break;
-                        }
-                    }
+                    [strongSelf _authActionFinished:action success:success];
                 }];
             }];
             _datacenterAuthActions[infoKey] = authAction;
@@ -1553,9 +1592,9 @@ static void copyKeychainDictionaryKey(NSString * _Nonnull group, NSString * _Non
         if (authToken == nil)
             return;
         
-        if (_datacenterTransferAuthActions[@(datacenterId)] == nil && masterDatacenterId != datacenterId)
+        if (_datacenterTransferAuthActions[@(datacenterId)] == nil && _datacenterTransferAuthRetryTimers[@(datacenterId)] == nil && masterDatacenterId != datacenterId)
         {
-            MTDatacenterTransferAuthAction *transferAction = [[MTDatacenterTransferAuthAction alloc] init];
+            MTDatacenterTransferAuthAction *transferAction = _transferAuthActionFactory != nil ? _transferAuthActionFactory() : [[MTDatacenterTransferAuthAction alloc] init];
             transferAction.delegate = self;
             _datacenterTransferAuthActions[@(datacenterId)] = transferAction;
             [transferAction execute:self masterDatacenterId:masterDatacenterId destinationDatacenterId:datacenterId authToken:authToken];
@@ -1563,20 +1602,136 @@ static void copyKeychainDictionaryKey(NSString * _Nonnull group, NSString * _Non
     }];
 }
 
+- (NSNumber *)_removeTransferAuthAction:(MTDatacenterTransferAuthAction *)action {
+    for (NSNumber *nDatacenterId in _datacenterTransferAuthActions) {
+        if (_datacenterTransferAuthActions[nDatacenterId] == action) {
+            [_datacenterTransferAuthActions removeObjectForKey:nDatacenterId];
+            return nDatacenterId;
+        }
+    }
+    return nil;
+}
+
 - (void)datacenterTransferAuthActionCompleted:(MTDatacenterTransferAuthAction *)action
 {
     [[MTContext contextQueue] dispatchOnQueue:^
     {
-        for (NSNumber *nDatacenterId in _datacenterTransferAuthActions)
-        {
-            if (_datacenterTransferAuthActions[nDatacenterId] == action)
-            {
-                [_datacenterTransferAuthActions removeObjectForKey:nDatacenterId];
-                
-                break;
+        NSNumber *nDatacenterId = [self _removeTransferAuthAction:action];
+        if (nDatacenterId != nil) {
+            [_datacenterTransferAuthFailureCounts removeObjectForKey:nDatacenterId];
+        }
+    }];
+}
+
+// A failed transfer is never retried by the context itself, and the
+// connections waiting for the token do not ask again on their own (MTProto
+// requests a token once, then waits for contextDatacenterAuthTokenUpdated:).
+// So after a backoff they are told to ask again; only the ones still active
+// and still waiting do.
+- (void)datacenterTransferAuthActionFailed:(MTDatacenterTransferAuthAction *)action
+{
+    [[MTContext contextQueue] dispatchOnQueue:^
+    {
+        NSNumber *nDatacenterId = [self _removeTransferAuthAction:action];
+        if (nDatacenterId == nil) {
+            return;
+        }
+        NSUInteger failureCount = [_datacenterTransferAuthFailureCounts[nDatacenterId] unsignedIntegerValue] + 1;
+        _datacenterTransferAuthFailureCounts[nDatacenterId] = @(failureCount);
+        NSTimeInterval delay = MTRetryDelayForFailureCount(failureCount);
+        
+        if (MTLogEnabled()) {
+            MTLog(@"[MTContext#%" PRIxPTR ": auth token transfer to %d failed (%d in a row), asking again in %.0f s]", (intptr_t)self, [nDatacenterId intValue], (int)failureCount, delay);
+        }
+        
+        __weak MTContext *weakSelf = self;
+        [_datacenterTransferAuthRetryTimers[nDatacenterId] invalidate];
+        _datacenterTransferAuthRetryTimers[nDatacenterId] = [self _startRetryTimerWithDelay:delay block:^{
+            __strong MTContext *strongSelf = weakSelf;
+            if (strongSelf == nil) {
+                return;
+            }
+            [strongSelf->_datacenterTransferAuthRetryTimers removeObjectForKey:nDatacenterId];
+            [strongSelf _notifyAuthTokenTransferFailedForDatacenterId:[nDatacenterId integerValue]];
+        }];
+    }];
+}
+
+- (void)_notifyAuthTokenTransferFailedForDatacenterId:(NSInteger)datacenterId {
+    NSArray *changeListeners = [[NSArray alloc] initWithArray:_changeListeners];
+    for (MTWeakContextChangeListener *value in changeListeners) {
+        id<MTContextChangeListener> listener = value.target;
+        if ([listener respondsToSelector:@selector(contextDatacenterAuthTokenTransferFailed:datacenterId:)]) {
+            [listener contextDatacenterAuthTokenTransferFailed:self datacenterId:datacenterId];
+        }
+    }
+}
+
+// Same as a failed transfer: the waiters of a key that could not be created
+// are told to ask again after a backoff.
+- (void)_authActionFinished:(MTDatacenterAuthAction *)action success:(bool)success {
+    NSNumber *infoKey = nil;
+    for (NSNumber *key in _datacenterAuthActions) {
+        if (_datacenterAuthActions[key] == action) {
+            infoKey = key;
+            break;
+        }
+    }
+    if (infoKey == nil) {
+        return;
+    }
+    [_datacenterAuthActions removeObjectForKey:infoKey];
+    
+    if (success) {
+        [_datacenterAuthFailureCounts removeObjectForKey:infoKey];
+        return;
+    }
+    
+    MTDatacenterAuthInfoMapKeyStruct parsedKey = parseAuthInfoMapKeyInteger(infoKey);
+    
+    if ([MTDatacenterAuthAction bindErrorMeansPermanentKeyIsUnknown:action.bindError]) {
+        // The server no longer knows the permanent key, so no retry can
+        // succeed, and each one is a full key exchange. Waiting connections
+        // ask again when they resume; they are not woken on a timer.
+        if (MTLogEnabled()) {
+            MTLog(@"[MTContext#%" PRIxPTR ": auth key for %d selector %d: the server rejected the permanent key, not retrying]", (intptr_t)self, (int)parsedKey.datacenterId, (int)parsedKey.selector);
+        }
+        return;
+    }
+    
+    NSUInteger failureCount = [_datacenterAuthFailureCounts[infoKey] unsignedIntegerValue] + 1;
+    _datacenterAuthFailureCounts[infoKey] = @(failureCount);
+    NSTimeInterval delay = MTRetryDelayForFailureCount(failureCount);
+    
+    if (MTLogEnabled()) {
+        MTLog(@"[MTContext#%" PRIxPTR ": auth key for %d selector %d failed (%d in a row, bind error %d %@), asking again in %.0f s]", (intptr_t)self, (int)parsedKey.datacenterId, (int)parsedKey.selector, (int)failureCount, (int)action.bindError.errorCode, action.bindError.errorDescription, delay);
+    }
+    
+    __weak MTContext *weakSelf = self;
+    [_datacenterAuthRetryTimers[infoKey] invalidate];
+    _datacenterAuthRetryTimers[infoKey] = [self _startRetryTimerWithDelay:delay block:^{
+        __strong MTContext *strongSelf = weakSelf;
+        if (strongSelf == nil) {
+            return;
+        }
+        [strongSelf->_datacenterAuthRetryTimers removeObjectForKey:infoKey];
+        
+        NSArray *changeListeners = [[NSArray alloc] initWithArray:strongSelf->_changeListeners];
+        for (MTWeakContextChangeListener *value in changeListeners) {
+            id<MTContextChangeListener> listener = value.target;
+            if ([listener respondsToSelector:@selector(contextDatacenterAuthInfoRequestFailed:datacenterId:selector:)]) {
+                [listener contextDatacenterAuthInfoRequestFailed:strongSelf datacenterId:parsedKey.datacenterId selector:parsedKey.selector];
             }
         }
     }];
+}
+
+- (MTTimer *)_startRetryTimerWithDelay:(NSTimeInterval)delay block:(dispatch_block_t)block {
+    MTTimer *timer = [[MTTimer alloc] initWithTimeout:delay repeat:false completion:^{
+        [[MTContext contextQueue] dispatchOnQueue:block];
+    } queue:[MTContext contextQueue].nativeQueue];
+    [timer start];
+    return timer;
 }
 
 - (void)reportProblemsWithDatacenterAddressForId:(NSInteger)datacenterId address:(MTDatacenterAddress *)address
@@ -1618,7 +1773,7 @@ static void copyKeychainDictionaryKey(NSString * _Nonnull group, NSString * _Non
         int32_t timestamp = (int32_t)CFAbsoluteTimeGetCurrent();
         NSNumber *currentTimestamp = _datacenterCheckKeyRemovedActionTimestamps[@(datacenterId)];
         if (currentTimestamp == nil || [currentTimestamp intValue] + 60 < timestamp) {
-            _datacenterCheckKeyRemovedActionTimestamps[@(datacenterId)] = currentTimestamp;
+            _datacenterCheckKeyRemovedActionTimestamps[@(datacenterId)] = @(timestamp);
             [_datacenterCheckKeyRemovedActions[@(datacenterId)] dispose];
             __weak MTContext *weakSelf = self;
             _datacenterCheckKeyRemovedActions[@(datacenterId)] = [[MTDiscoverConnectionSignals checkIfAuthKeyRemovedWithContext:self datacenterId:datacenterId authKey:[[MTDatacenterAuthKey alloc] initWithAuthKey:authInfo.authKey authKeyId:authInfo.authKeyId validUntilTimestamp:authInfo.validUntilTimestamp notBound:false]] startWithNextStrict:^(NSNumber* isRemoved) {

@@ -519,8 +519,18 @@ private struct NotificationContent: CustomStringConvertible {
     var userInfo: [AnyHashable: Any] = [:]
     var attachments: [UNNotificationAttachment] = []
     var silent = false
+    /// The account this notification was delivered to, set only while more than one is signed
+    /// in (see `notificationRecipientAccountName`).
+    var recipientAccountName: String?
 
-    var senderPerson: INPerson?
+    struct Sender {
+        var peerId: PeerId
+        /// Without the recipient account or the muted marker, which `NotificationNames` adds.
+        var name: String
+        var contactIdentifier: String?
+    }
+
+    var sender: Sender?
     var senderImage: INImage?
     
     var isLockedMessage: String?
@@ -553,28 +563,54 @@ private struct NotificationContent: CustomStringConvertible {
 
             self.senderImage = image
 
-            var displayName: String = peer.debugDisplayTitle
+            var name: String = peer.debugDisplayTitle
             if let topicTitle {
-                displayName = "\(topicTitle) (\(displayName))"
+                name = "\(topicTitle) (\(name))"
             }
-            if self.silent {
-                displayName = "\(displayName) 🔕"
-            }
-            
-            var personNameComponents = PersonNameComponents()
-            personNameComponents.nickname = displayName
-            
-            self.senderPerson = INPerson(
-                personHandle: INPersonHandle(value: "\(peer.id.toInt64())", type: .unknown),
-                nameComponents: personNameComponents,
-                displayName: displayName,
-                image: image,
-                contactIdentifier: contactIdentifier,
-                customIdentifier: "\(peer.id.toInt64())",
-                isMe: false,
-                suggestionType: .none
-            )
+            self.sender = Sender(peerId: peer.id, name: name, contactIdentifier: contactIdentifier)
         }
+    }
+
+    @available(iOS 15.0, *)
+    private func incomingMessageIntent(sender: Sender, senderName: String, groupName: String, body: String) -> INSendMessageIntent {
+        var personNameComponents = PersonNameComponents()
+        personNameComponents.nickname = senderName
+
+        let senderPerson = INPerson(
+            personHandle: INPersonHandle(value: "\(sender.peerId.toInt64())", type: .unknown),
+            nameComponents: personNameComponents,
+            displayName: senderName,
+            image: self.senderImage,
+            contactIdentifier: sender.contactIdentifier,
+            customIdentifier: "\(sender.peerId.toInt64())",
+            isMe: false,
+            suggestionType: .none
+        )
+        let mePerson = INPerson(
+            personHandle: INPersonHandle(value: "0", type: .unknown),
+            nameComponents: nil,
+            displayName: nil,
+            image: nil,
+            contactIdentifier: nil,
+            customIdentifier: nil,
+            isMe: true,
+            suggestionType: .none
+        )
+
+        let intent = INSendMessageIntent(
+            recipients: [mePerson],
+            outgoingMessageType: .outgoingMessageText,
+            content: body,
+            speakableGroupName: INSpeakableString(spokenPhrase: groupName),
+            conversationIdentifier: "\(sender.peerId.toInt64())",
+            serviceName: nil,
+            sender: senderPerson,
+            attachments: nil
+        )
+        if let senderImage = self.senderImage {
+            intent.setImage(senderImage, forParameterNamed: \.sender)
+        }
+        return intent
     }
 
     func generate() -> UNNotificationContent {
@@ -582,12 +618,10 @@ private struct NotificationContent: CustomStringConvertible {
         
         //Logger.shared.log("NotificationService", "Generating final content: \(self.description)")
 
-        if let title = self.title {
-            if self.silent {
-                content.title = "\(title) 🔕"
-            } else {
-                content.title = title
-            }
+        let names = NotificationNames(title: self.title, senderName: self.sender?.name, silent: self.silent, recipientAccountName: self.recipientAccountName)
+
+        if let title = names.title {
+            content.title = title
         }
         
         if let subtitle = self.subtitle {
@@ -664,39 +698,27 @@ private struct NotificationContent: CustomStringConvertible {
         }
 
         if #available(iOS 15.0, *) {
-            if self.isLockedMessage == nil, let senderPerson = self.senderPerson, let customIdentifier = senderPerson.customIdentifier {
-                let mePerson = INPerson(
-                    personHandle: INPersonHandle(value: "0", type: .unknown),
-                    nameComponents: nil,
-                    displayName: nil,
-                    image: nil,
-                    contactIdentifier: nil,
-                    customIdentifier: nil,
-                    isMe: true,
-                    suggestionType: .none
-                )
+            if self.isLockedMessage == nil, let sender = self.sender, let donatedSenderName = names.donatedSenderName, let displayedSenderName = names.displayedSenderName {
+                let donatedIntent = self.incomingMessageIntent(sender: sender, senderName: donatedSenderName, groupName: donatedSenderName, body: content.body)
 
-                let incomingCommunicationIntent = INSendMessageIntent(
-                    recipients: [mePerson],
-                    outgoingMessageType: .outgoingMessageText,
-                    content: content.body,
-                    speakableGroupName: INSpeakableString(spokenPhrase: senderPerson.displayName),
-                    conversationIdentifier: "\(customIdentifier)",
-                    serviceName: nil,
-                    sender: senderPerson,
-                    attachments: nil
-                )
-
-                if let senderImage = self.senderImage {
-                    incomingCommunicationIntent.setImage(senderImage, forParameterNamed: \.sender)
-                }
-
-                let interaction = INInteraction(intent: incomingCommunicationIntent, response: nil)
+                let interaction = INInteraction(intent: donatedIntent, response: nil)
                 interaction.direction = .incoming
                 interaction.donate(completion: nil)
 
+                // The system draws the notification from the intent it is updated from, not the
+                // donated one, so only the drawn copy names the recipient account. The title is
+                // drawn from the sender's name (measured on iOS 18.6 and 27); the group name carries
+                // the account too, as the single intent's names always matched, for any presentation
+                // that reads the group name instead.
+                let displayedIntent: INSendMessageIntent
+                if displayedSenderName == donatedSenderName {
+                    displayedIntent = donatedIntent
+                } else {
+                    displayedIntent = self.incomingMessageIntent(sender: sender, senderName: displayedSenderName, groupName: displayedSenderName, body: content.body)
+                }
+
                 do {
-                    content = try content.updating(from: incomingCommunicationIntent) as! UNMutableNotificationContent
+                    content = try content.updating(from: displayedIntent) as! UNMutableNotificationContent
                 } catch let e {
                     print("Exception: \(e)")
                 }
@@ -956,11 +978,24 @@ private final class NotificationServiceHandler {
                     return LottieRenderingSettings(backend: .tlottie)
                 }
 
+                // Read up front so that the first content handed over, the one shown if the
+                // extension runs out of time, already names the account. Only with several
+                // accounts: every transaction here takes the database write lock the app may hold.
+                let recipientAccountName: Signal<String?, NoError>
+                if notificationsNameRecipientAccount(records: records.records) {
+                    recipientAccountName = stateManager.postbox.transaction { transaction -> String? in
+                        return notificationRecipientAccountName(accountPeer: transaction.getPeer(accountPeerId))
+                    }
+                } else {
+                    recipientAccountName = .single(nil)
+                }
+
                 strongSelf.notificationKeyDisposable.set((combineLatest(queue: strongSelf.queue,
                     existingMasterNotificationsKey(postbox: stateManager.postbox),
                     settings,
-                    lottieSettings
-                ) |> deliverOn(strongSelf.queue)).start(next: { notificationsKey, notificationSoundList, lottieSettings in
+                    lottieSettings,
+                    recipientAccountName
+                ) |> deliverOn(strongSelf.queue)).start(next: { notificationsKey, notificationSoundList, lottieSettings, recipientAccountName in
                     guard let strongSelf = self else {
                         let content = NotificationContent(isLockedMessage: nil)
                         updateCurrentContent(content)
@@ -1187,6 +1222,7 @@ private final class NotificationServiceHandler {
                     } else {
                         if let aps = payloadJson["aps"] as? [String: Any], var peerId = peerId {
                             var content: NotificationContent = NotificationContent(isLockedMessage: isLockedMessage)
+                            content.recipientAccountName = recipientAccountName
                             if let alert = aps["alert"] as? [String: Any] {
                                 if let topicTitleValue = payloadJson["topic_title"] as? String {
                                     topicTitle = topicTitleValue
@@ -1349,6 +1385,7 @@ private final class NotificationServiceHandler {
                             updateCurrentContent(content)
                         } else if let aps = payloadJson["aps"] as? [String: Any], let url = payloadJson["url"] as? String {
                             var content: NotificationContent = NotificationContent(isLockedMessage: nil)
+                            content.recipientAccountName = recipientAccountName
                             content.userInfo["url"] = url
                             content.userInfo["peerId"] = "777000"
                             content.userInfo["accountId"] = "\(recordId.int64)"
@@ -1416,6 +1453,7 @@ private final class NotificationServiceHandler {
                                         })
                                     } else {
                                         var content = NotificationContent(isLockedMessage: nil)
+                                        content.recipientAccountName = recipientAccountName
                                         if let peer = callData.peer {
                                             content.title = peer.debugDisplayTitle
                                             content.body = incomingCallMessage
@@ -1461,6 +1499,7 @@ private final class NotificationServiceHandler {
                                         })
                                     } else {
                                         var content = NotificationContent(isLockedMessage: nil)
+                                        content.recipientAccountName = recipientAccountName
                                         if let peer = fromPeer {
                                             content.title = peer.debugDisplayTitle
                                             content.body = incomingCallMessage

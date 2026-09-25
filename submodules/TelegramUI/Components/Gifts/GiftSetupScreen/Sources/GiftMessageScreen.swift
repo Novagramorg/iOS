@@ -560,7 +560,7 @@ private final class GiftMessageScreenComponent: Component {
             if case .regular = environment.metrics.widthClass {
                 fillingWidth = min(availableSize.width, 414.0)
             } else {
-                fillingWidth = min(availableSize.width, environment.deviceMetrics.screenSize.width)
+                fillingWidth = min(availableSize.width, availableSize.height)
             }
             let containerInset = environment.statusBarHeight + 10.0
             let containerFrame = CGRect(
@@ -813,7 +813,8 @@ private final class GiftMessageScreenComponent: Component {
                     statusBarHeight: environment.statusBarHeight,
                     inputHeight: nil,
                     inputHeightIsInteractivellyChanging: false,
-                    inVoiceOver: false
+                    inVoiceOver: false,
+                    presentedInFormSheet: false
                 )
                 controller.presentationContext.containerLayoutUpdated(layout, transition: transition.containedViewLayoutTransition)
             }

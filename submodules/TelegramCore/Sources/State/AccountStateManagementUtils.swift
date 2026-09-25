@@ -4036,6 +4036,19 @@ private func deleteEphemeralMessages(transaction: Transaction, peerId: PeerId, i
     transaction.deleteMessages(messageIds, forEachMedia: nil)
 }
 
+/// Adds one replayed media update to the web-page events that `AccountStateManager.updatedWebpage`
+/// delivers. A nil media for a web page is a `webPageEmpty` from `updateWebPage` or
+/// `updateChannelWebPage`: the server found no preview for the URL, which a composer showing that
+/// page as pending must hear to stop waiting.
+func recordUpdatedWebpage(_ id: MediaId, media: Media?, into updatedWebpages: inout [MediaId: TelegramMediaWebpage?]) {
+    if let webpage = media as? TelegramMediaWebpage {
+        updatedWebpages[id] = webpage
+    } else if media == nil && id.namespace == Namespaces.Media.CloudWebpage {
+        // Assigning nil through the subscript would delete the key instead of storing the removal.
+        updatedWebpages.updateValue(nil, forKey: id)
+    }
+}
+
 func replayFinalState(
     accountManager: AccountManager<TelegramAccountManagerTypes>,
     postbox: Postbox,
@@ -4063,7 +4076,7 @@ func replayFinalState(
     var updatedIncomingThreadReadStates: [PeerAndBoundThreadId: MessageId.Id] = [:]
     var updatedOutgoingThreadReadStates: [PeerAndBoundThreadId: MessageId.Id] = [:]
     var updatedSecretChatTypingActivities = Set<PeerId>()
-    var updatedWebpages: [MediaId: TelegramMediaWebpage] = [:]
+    var updatedWebpages: [MediaId: TelegramMediaWebpage?] = [:]
     var updatedCalls: [Api.PhoneCall] = []
     var addedCallSignalingData: [(Int64, Data)] = []
     var updatedGroupCallParticipants: [(Int64, GroupCallParticipantsContext.Update)] = []
@@ -4729,9 +4742,7 @@ func replayFinalState(
                     updateMessageMedia(transaction: transaction, id: pollId, media: updatedPoll)
                 }
             case let .UpdateMedia(id, media):
-                if let media = media as? TelegramMediaWebpage {
-                    updatedWebpages[id] = media
-                }
+                recordUpdatedWebpage(id, media: media, into: &updatedWebpages)
                 updateMessageMedia(transaction: transaction, id: id, media: media)
             case let .ReadInbox(messageId):
                 transaction.applyIncomingReadMaxId(messageId)

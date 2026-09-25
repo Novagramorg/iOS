@@ -97,7 +97,7 @@ final class InstantPageMediaPlaylistItem: SharedMediaPlaylistItem {
         if let file = extractFileMedia(self.item) {
             for attribute in file.attributes {
                 switch attribute {
-                    case let .Audio(isVoice, _, title, performer, _):
+                    case let .Audio(isVoice, duration, title, performer, _):
                         if isVoice {
                             return SharedMediaPlaybackDisplayData.voice(author: nil, peer: nil)
                         } else {
@@ -114,7 +114,7 @@ final class InstantPageMediaPlaylistItem: SharedMediaPlaylistItem {
                                 albumArt = SharedMediaPlaybackAlbumArt(thumbnailResource: ExternalMusicAlbumArtResource(file: .standalone(media: file), title: updatedTitle ?? "", performer: updatedPerformer ?? "", isThumbnail: true), fullSizeResource: ExternalMusicAlbumArtResource(file: .standalone(media: file), title: updatedTitle ?? "", performer: updatedPerformer ?? "", isThumbnail: false))
                             }
                             
-                            return SharedMediaPlaybackDisplayData.music(title: updatedTitle, performer: updatedPerformer, albumArt: albumArt, long: false, caption: nil)
+                            return SharedMediaPlaybackDisplayData.music(title: updatedTitle, performer: updatedPerformer, albumArt: albumArt, long: CGFloat(duration) > 10.0 * 60.0, caption: nil)
                         }
                     case let .Video(_, _, flags, _, _, _):
                         if flags.contains(.instantRoundVideo) {

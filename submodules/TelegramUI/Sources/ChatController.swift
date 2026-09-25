@@ -428,6 +428,10 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     }
     var canReadHistoryDisposable: Disposable?
     var computedCanReadHistoryPromise = ValuePromise<Bool>(false, ignoreRepeated: true)
+    // Screen-capture reporting must not follow canReadHistoryValue: that is also cleared while
+    // sheets and context menus (attachment menu, message menus) are shown over a still-visible
+    // chat, which let a secret-chat screenshot go unreported. Visibility is traceVisibility()'s job.
+    private var isApplicationInForegroundValue = true
     
     var chatThemeAndDarkAppearancePreviewPromise = Promise<(ChatTheme?, Bool?)>((nil, nil))
     var didSetPresentationData = false
@@ -5352,35 +5356,15 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             let source: Signal<PremiumSource, NoError>
             if let peerStatus {
                 source = context.engine.stickers.resolveInlineStickers(fileIds: [peerStatus])
-                |> mapToSignal { files in
+                |> mapToSignal { files -> Signal<PremiumSource, NoError> in
                     if let file = files[peerStatus] {
-                        var reference: StickerPackReference?
-                        for attribute in file.attributes {
-                            if case let .CustomEmoji(_, _, _, packReference) = attribute, let packReference = packReference {
-                                reference = packReference
-                                break
+                        return context.engine.stickers.customEmojiPack(file: file)
+                        |> map { pack -> PremiumSource in
+                            if let pack, case let .result(_, items, _) = pack {
+                                return .emojiStatus(peerId, peerStatus, items.first?.file._parse(), pack)
+                            } else {
+                                return .emojiStatus(peerId, peerStatus, nil, nil)
                             }
-                        }
-                        
-                        if let reference {
-                            return context.engine.stickers.loadedStickerPack(reference: reference, forceActualized: false)
-                            |> filter { result in
-                                if case .result = result {
-                                    return true
-                                } else {
-                                    return false
-                                }
-                            }
-                            |> take(1)
-                            |> mapToSignal { result -> Signal<PremiumSource, NoError> in
-                                if case let .result(_, items, _) = result {
-                                    return .single(.emojiStatus(peerId, peerStatus, items.first?.file._parse(), result))
-                                } else {
-                                    return .single(.emojiStatus(peerId, peerStatus, nil, nil))
-                                }
-                            }
-                        } else {
-                            return .single(.emojiStatus(peerId, peerStatus, nil, nil))
                         }
                     } else {
                         return .single(.emojiStatus(peerId, peerStatus, nil, nil))
@@ -6962,6 +6946,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         self.applicationInForegroundDisposable = (context.sharedContext.applicationBindings.applicationInForeground
         |> distinctUntilChanged
         |> deliverOn(Queue.mainQueue())).startStrict(next: { [weak self] value in
+            self?.isApplicationInForegroundValue = value
             if let strongSelf = self, strongSelf.isNodeLoaded {
                 if !value {
                     strongSelf.saveInterfaceState()
@@ -7786,10 +7771,11 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         if case let .peer(peerId) = self.chatLocation, self.screenCaptureManager == nil {
             if peerId.namespace == Namespaces.Peer.SecretChat {
                 self.screenCaptureManager = ScreenCaptureDetectionManager(check: { [weak self] in
-                    if let strongSelf = self, strongSelf.traceVisibility() {
-                        if strongSelf.canReadHistoryValue || strongSelf.isPreviewingMode {
-                            let _ = strongSelf.context.engine.messages.addSecretChatMessageScreenshot(peerId: peerId).startStandalone()
-                        }
+                    // Returning false keeps the screen-recording poll alive until the chat is actually
+                    // visible in the foreground, so a recording started behind a covering screen or while
+                    // backgrounded is still reported once the chat comes into view.
+                    if let strongSelf = self, strongSelf.isApplicationInForegroundValue, strongSelf.traceVisibility() {
+                        let _ = strongSelf.context.engine.messages.addSecretChatMessageScreenshot(peerId: peerId).startStandalone()
                         return true
                     } else {
                         return false

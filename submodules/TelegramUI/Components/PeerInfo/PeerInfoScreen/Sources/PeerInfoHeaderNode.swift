@@ -492,7 +492,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     private var currentStatusIcon: CredibilityIcon?
     
     private var currentPanelStatusData: PeerInfoStatusData?
-    func update(width: CGFloat, containerHeight: CGFloat, containerInset: CGFloat, statusBarHeight: CGFloat, navigationHeight: CGFloat, isModalOverlay: Bool, isMediaOnly: Bool, contentOffset: CGFloat, paneContainerY: CGFloat, presentationData: PresentationData, peer: EnginePeer?, cachedData: EngineCachedPeerData?, threadData: MessageHistoryThreadData?, peerNotificationSettings: TelegramPeerNotificationSettings?, threadNotificationSettings: TelegramPeerNotificationSettings?, globalNotificationSettings: EngineGlobalNotificationSettings?, statusData: PeerInfoStatusData?, panelStatusData: (PeerInfoStatusData?, PeerInfoStatusData?, CGFloat?), isSecretChat: Bool, isContact: Bool, isSettings: Bool, state: PeerInfoState, profileGiftsContext: ProfileGiftsContext?, screenData: PeerInfoScreenData?, isSearching: Bool, metrics: LayoutMetrics, deviceMetrics: DeviceMetrics, transition: ContainedViewLayoutTransition, additive: Bool, animateHeader: Bool) -> CGFloat {
+    func update(width: CGFloat, containerHeight: CGFloat, containerInset: CGFloat, statusBarHeight: CGFloat, navigationHeight: CGFloat, presentedInFormSheet: Bool, isMediaOnly: Bool, contentOffset: CGFloat, paneContainerY: CGFloat, presentationData: PresentationData, peer: EnginePeer?, cachedData: EngineCachedPeerData?, threadData: MessageHistoryThreadData?, peerNotificationSettings: TelegramPeerNotificationSettings?, threadNotificationSettings: TelegramPeerNotificationSettings?, globalNotificationSettings: EngineGlobalNotificationSettings?, statusData: PeerInfoStatusData?, panelStatusData: (PeerInfoStatusData?, PeerInfoStatusData?, CGFloat?), isSecretChat: Bool, isContact: Bool, isSettings: Bool, state: PeerInfoState, profileGiftsContext: ProfileGiftsContext?, screenData: PeerInfoScreenData?, isSearching: Bool, metrics: LayoutMetrics, deviceMetrics: DeviceMetrics, transition: ContainedViewLayoutTransition, additive: Bool, animateHeader: Bool) -> CGFloat {
         if self.appliedCustomNavigationContentNode !== self.customNavigationContentNode {
             if let previous = self.appliedCustomNavigationContentNode {
                 ComponentTransition(transition).setAlpha(view: previous.view, alpha: 0.0, completion: { [weak previous] _ in
@@ -531,13 +531,13 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         let previousPanelStatusData = self.currentPanelStatusData
         self.currentPanelStatusData = panelStatusData.0
         
-        let avatarSize: CGFloat = isModalOverlay ? 200.0 : 100.0
+        let avatarSize: CGFloat = presentedInFormSheet ? 200.0 : 100.0
         self.avatarSize = avatarSize
         
         var contentOffset = contentOffset
         
         if isMediaOnly {
-            if isModalOverlay {
+            if presentedInFormSheet {
                 contentOffset = 312.0
             } else {
                 contentOffset = 212.0
@@ -629,7 +629,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         
         self.editingContentNode.alpha = state.isEditing ? 1.0 : 0.0
         
-        let editingContentHeight = self.editingContentNode.update(width: width, safeInset: containerInset, statusBarHeight: statusBarHeight, navigationHeight: navigationHeight, isModalOverlay: isModalOverlay, peer: state.isEditing ? peer : nil, threadData: threadData, chatLocation: self.chatLocation, cachedData: cachedData, isContact: isContact, isSettings: isSettings || isMyProfile, presentationData: presentationData, transition: transition)
+        let editingContentHeight = self.editingContentNode.update(width: width, safeInset: containerInset, statusBarHeight: statusBarHeight, navigationHeight: navigationHeight, presentedInFormSheet: presentedInFormSheet, peer: state.isEditing ? peer : nil, threadData: threadData, chatLocation: self.chatLocation, cachedData: cachedData, isContact: isContact, isSettings: isSettings || isMyProfile, presentationData: presentationData, transition: transition)
         transition.updateFrame(node: self.editingContentNode, frame: CGRect(origin: CGPoint(x: 0.0, y: -contentOffset), size: CGSize(width: width, height: editingContentHeight)))
         
         let avatarOverlayFarme = self.editingContentNode.convert(self.editingContentNode.avatarNode.frame, to: self)
@@ -1017,36 +1017,27 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                             return
                         }
                         
+                        // `.never()` until the pack is known; nil once it is known there is none (the
+                        // emoji names no pack, or its owner deleted it), so a tap still opens the screen.
                         if let emojiFile = emojiFile {
                             strongSelf.emojiStatusFileAndPackTitle.set(.never())
                             
-                            for attribute in emojiFile.attributes {
-                                if case let .CustomEmoji(_, _, _, packReference) = attribute, let packReference = packReference {
-                                    strongSelf.emojiStatusPackDisposable.set((strongSelf.context.engine.stickers.loadedStickerPack(reference: packReference, forceActualized: false)
-                                    |> filter { result in
-                                        if case .result = result {
-                                            return true
-                                        } else {
-                                            return false
-                                        }
-                                    }
-                                    |> mapToSignal { result -> Signal<(TelegramMediaFile, LoadedStickerPack)?, NoError> in
-                                        if case let .result(_, items, _) = result {
-                                            return .single(items.first.flatMap { ($0.file._parse(), result) })
-                                        } else {
-                                            return .complete()
-                                        }
-                                    }).startStrict(next: { fileAndPackTitle in
-                                        guard let strongSelf = self else {
-                                            return
-                                        }
-                                        strongSelf.emojiStatusFileAndPackTitle.set(.single(fileAndPackTitle))
-                                    }))
-                                    break
+                            strongSelf.emojiStatusPackDisposable.set((strongSelf.context.engine.stickers.customEmojiPack(file: emojiFile)
+                            |> map { pack -> (TelegramMediaFile, LoadedStickerPack)? in
+                                if let pack, case let .result(_, items, _) = pack {
+                                    return items.first.flatMap { ($0.file._parse(), pack) }
+                                } else {
+                                    return nil
                                 }
-                            }
+                            }).startStrict(next: { fileAndPackTitle in
+                                guard let strongSelf = self else {
+                                    return
+                                }
+                                strongSelf.emojiStatusFileAndPackTitle.set(.single(fileAndPackTitle))
+                            }))
                         } else {
-                            strongSelf.emojiStatusFileAndPackTitle.set(.never())
+                            strongSelf.emojiStatusPackDisposable.set(nil)
+                            strongSelf.emojiStatusFileAndPackTitle.set(.single(nil))
                         }
                     }
                 )),

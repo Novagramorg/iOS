@@ -1918,7 +1918,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                     if cameraView.superview == self.cameraWrapperView {
                         transition.updateFrame(view: self.cameraWrapperView, frame: cameraRect)
                         
-                        let screenWidth = min(layout.deviceMetrics.screenSize.width, layout.deviceMetrics.screenSize.height)
+                        let screenWidth = min(layout.size.width, layout.size.height)
                         let cameraFullSize = CGSize(width: screenWidth, height: floorToScreenPixels(layout.size.width * 1.77778))
                         let cameraScale = max(cameraRect.width / cameraFullSize.width, cameraRect.height / cameraFullSize.height)
                         

@@ -57,7 +57,8 @@ public final class ChatListNavigationBar: Component {
     public let theme: PresentationTheme
     public let strings: PresentationStrings
     public let statusBarHeight: CGFloat
-    public let sideInset: CGFloat
+    public let leftInset: CGFloat
+    public let rightInset: CGFloat
     public let search: Search?
     public let activeSearch: ActiveSearch?
     public let primaryContent: ChatListHeaderComponent.Content?
@@ -83,7 +84,8 @@ public final class ChatListNavigationBar: Component {
         theme: PresentationTheme,
         strings: PresentationStrings,
         statusBarHeight: CGFloat,
-        sideInset: CGFloat,
+        leftInset: CGFloat,
+        rightInset: CGFloat,
         search: Search?,
         activeSearch: ActiveSearch?,
         primaryContent: ChatListHeaderComponent.Content?,
@@ -108,7 +110,8 @@ public final class ChatListNavigationBar: Component {
         self.theme = theme
         self.strings = strings
         self.statusBarHeight = statusBarHeight
-        self.sideInset = sideInset
+        self.leftInset = leftInset
+        self.rightInset = rightInset
         self.search = search
         self.activeSearch = activeSearch
         self.primaryContent = primaryContent
@@ -143,7 +146,10 @@ public final class ChatListNavigationBar: Component {
         if lhs.statusBarHeight != rhs.statusBarHeight {
             return false
         }
-        if lhs.sideInset != rhs.sideInset {
+        if lhs.leftInset != rhs.leftInset {
+            return false
+        }
+        if lhs.rightInset != rhs.rightInset {
             return false
         }
         if lhs.search != rhs.search {
@@ -419,7 +425,7 @@ public final class ChatListNavigationBar: Component {
                 searchFrameValue = searchFrame
                 transition.setFrameWithAdditivePosition(view: searchContentNode.view, frame: searchFrame)
                 
-                let _ = searchContentNode.updateLayout(size: searchSize, leftInset: component.sideInset, rightInset: component.sideInset, transition: transition.containedViewLayoutTransition)
+                let _ = searchContentNode.updateLayout(size: searchSize, leftInset: component.leftInset, rightInset: component.rightInset, transition: transition.containedViewLayoutTransition)
                 
                 var searchAlpha: CGFloat = search.isEnabled ? 1.0 : 0.5
                 if let activeSearch = component.activeSearch, activeSearch.isExternal {
@@ -480,7 +486,8 @@ public final class ChatListNavigationBar: Component {
             self.storiesUnlocked = storiesUnlocked
             
             let headerComponent = ChatListHeaderComponent(
-                sideInset: component.sideInset + 16.0,
+                leftInset: component.leftInset + 16.0,
+                rightInset: component.rightInset + 16.0,
                 primaryContent: component.primaryContent,
                 secondaryContent: component.secondaryContent,
                 secondaryTransition: component.secondaryTransition,
@@ -530,11 +537,9 @@ public final class ChatListNavigationBar: Component {
             if component.activeSearch != nil {
                 headerContentY = -headerContentSize.height
             } else {
-                if component.statusBarHeight < 1.0 {
-                    headerContentY = 0.0
-                } else {
-                    headerContentY = component.statusBarHeight + 10.0
-                }
+                // Also without a status bar (iPhone landscape), matching the regular navigation bar's
+                // 10pt button inset there.
+                headerContentY = component.statusBarHeight + 10.0
             }
             let headerContentFrame = CGRect(origin: CGPoint(x: 0.0, y: headerContentY), size: headerContentSize)
             if let headerContentView = self.headerContent.view {
@@ -694,7 +699,8 @@ public final class ChatListNavigationBar: Component {
                     theme: component.theme,
                     strings: component.strings,
                     statusBarHeight: component.statusBarHeight,
-                    sideInset: component.sideInset,
+                    leftInset: component.leftInset,
+                    rightInset: component.rightInset,
                     search: component.search,
                     activeSearch: component.activeSearch,
                     primaryContent: component.primaryContent,
@@ -717,7 +723,8 @@ public final class ChatListNavigationBar: Component {
                 )
                 if let currentLayout = self.currentLayout, let headerComponent = self.currentHeaderComponent {
                     let headerComponent = ChatListHeaderComponent(
-                        sideInset: headerComponent.sideInset,
+                        leftInset: headerComponent.leftInset,
+                        rightInset: headerComponent.rightInset,
                         primaryContent: headerComponent.primaryContent,
                         secondaryContent: headerComponent.secondaryContent,
                         secondaryTransition: headerComponent.secondaryTransition,
@@ -788,10 +795,7 @@ public final class ChatListNavigationBar: Component {
             self.state = state
             
             var contentHeight = component.statusBarHeight
-            
-            if component.statusBarHeight >= 1.0 {
-                contentHeight += 3.0
-            }
+            contentHeight += 3.0
             if let activeSearch = component.activeSearch {
                 if !activeSearch.isExternal {
                     contentHeight += navigationBarSearchContentHeight
@@ -824,9 +828,9 @@ public final class ChatListNavigationBar: Component {
                     transition: headerPanelsTransition,
                     component: headerPanels,
                     environment: {},
-                    containerSize: CGSize(width: availableSize.width - component.sideInset * 2.0, height: 10000.0)
+                    containerSize: CGSize(width: availableSize.width - component.leftInset - component.rightInset, height: 10000.0)
                 )
-                let headerPanelsFrame = CGRect(origin: CGPoint(x: component.sideInset, y: headersContentHeight), size: headerPanelsSize)
+                let headerPanelsFrame = CGRect(origin: CGPoint(x: component.leftInset, y: headersContentHeight), size: headerPanelsSize)
                 if let headerPanelsComponentView = headerPanelsView.view {
                     if headerPanelsComponentView.superview == nil {
                         self.bottomContentsContainer.addSubview(headerPanelsComponentView)

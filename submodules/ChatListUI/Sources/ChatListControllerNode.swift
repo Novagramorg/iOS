@@ -1540,8 +1540,9 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
                     return nil
                 }
 
+                // The folder tabs describe the main list: a forum open inline has no folder of its own.
                 let selectedTab: HorizontalTabsComponent.Tab.Id
-                switch self.effectiveContainerNode.currentItemFilter {
+                switch self.mainContainerNode.currentItemFilter {
                 case .all:
                     selectedTab = AnyHashable(Int32.min)
                 case let .filter(id):
@@ -1682,7 +1683,8 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
                 theme: self.presentationData.theme,
                 strings: self.presentationData.strings,
                 statusBarHeight: layout.statusBarHeight ?? 0.0,
-                sideInset: layout.safeInsets.left,
+                leftInset: layout.safeInsets.left,
+                rightInset: layout.safeInsets.right,
                 search: ChatListNavigationBar.Search(isEnabled: true),
                 activeSearch: self.isSearchDisplayControllerActive,
                 primaryContent: headerContent?.primaryContent,

@@ -3559,26 +3559,32 @@ private final class PremiumIntroScreenComponent: CombinedComponent {
             let secondaryTitleText: String
             var isAnonymous = false
             if var otherPeerName = state.otherPeerName {
-                if case let .emojiStatus(peerId, _, file, maybeEmojiPack) = context.component.source, let emojiPack = maybeEmojiPack, case let .result(info, _, _) = emojiPack {
-                    loadedEmojiPack = maybeEmojiPack
-                    highlightableLinks = true
-                    
+                if case let .emojiStatus(peerId, _, file, maybeEmojiPack) = context.component.source {
                     if peerId.isGroupOrChannel, otherPeerName.count > 20 {
                         otherPeerName = otherPeerName.prefix(20).trimmingCharacters(in: .whitespacesAndNewlines) + "\u{2026}"
                     }
                     
-                    var packReference: StickerPackReference?
-                    if let file = file {
-                        for attribute in file.attributes {
-                            if case let .CustomEmoji(_, _, _, reference) = attribute {
-                                packReference = reference
+                    if let emojiPack = maybeEmojiPack, case let .result(info, _, _) = emojiPack {
+                        loadedEmojiPack = maybeEmojiPack
+                        highlightableLinks = true
+                        
+                        var packReference: StickerPackReference?
+                        if let file = file {
+                            for attribute in file.attributes {
+                                if case let .CustomEmoji(_, _, _, reference) = attribute {
+                                    packReference = reference
+                                }
                             }
                         }
-                    }
-                    if let packReference = packReference, case let .id(id, _) = packReference, id == 773947703670341676 {
-                        secondaryTitleText = environment.strings.Premium_EmojiStatusShortTitle(otherPeerName).string
+                        if let packReference = packReference, case let .id(id, _) = packReference, id == 773947703670341676 {
+                            secondaryTitleText = environment.strings.Premium_EmojiStatusShortTitle(otherPeerName).string
+                        } else {
+                            secondaryTitleText = environment.strings.Premium_EmojiStatusTitle(otherPeerName, info.title).string.replacingOccurrences(of: "#", with: " #  ")
+                        }
                     } else {
-                        secondaryTitleText = environment.strings.Premium_EmojiStatusTitle(otherPeerName, info.title).string.replacingOccurrences(of: "#", with: " #  ")
+                        // No pack to name (the emoji names none, or its owner deleted it); still say
+                        // that this is a status, which is what a fake "verified" badge must not hide.
+                        secondaryTitleText = environment.strings.Premium_EmojiStatusShortTitle(otherPeerName).string
                     }
                 } else if case .profile = context.component.source {
                     secondaryTitleText = environment.strings.Premium_PersonalTitle(otherPeerName).string

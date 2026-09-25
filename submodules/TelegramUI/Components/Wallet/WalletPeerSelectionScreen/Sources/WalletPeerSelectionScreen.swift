@@ -1063,7 +1063,8 @@ private final class WalletPeerSelectionScreenComponent: Component {
                     theme: theme,
                     strings: strings,
                     statusBarHeight: statusBarHeight,
-                    sideInset: insets.left,
+                    leftInset: insets.left,
+                    rightInset: insets.right,
                     search: ChatListNavigationBar.Search(
                         isEnabled: true,
                         placeholder: "Name or wallet address",

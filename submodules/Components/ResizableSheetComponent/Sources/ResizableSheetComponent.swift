@@ -697,7 +697,7 @@ public final class ResizableSheetComponent<ChildEnvironmentType: Sendable & Equa
             if case .regular = sheetEnvironment.metrics.widthClass {
                 fillingSize = min(availableSize.width, 414.0) - sheetEnvironment.safeInsets.left * 2.0
             } else {
-                fillingSize = min(availableSize.width, sheetEnvironment.deviceMetrics.screenSize.width) - sheetEnvironment.safeInsets.left * 2.0
+                fillingSize = min(availableSize.width, availableSize.height) - sheetEnvironment.safeInsets.left * 2.0
             }
             let rawSideInset: CGFloat = floor((availableSize.width - fillingSize) * 0.5)
 

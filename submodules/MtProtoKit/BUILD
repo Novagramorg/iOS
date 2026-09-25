@@ -59,6 +59,7 @@ objc_library(
     testonly = True,
     srcs = glob([
         "Tests/**/*.m",
+        "Tests/**/*.h",
     ]),
     deps = [
         ":MtProtoKit",

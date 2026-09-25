@@ -173,12 +173,16 @@ public final class InstantPageTheme {
     public let secondaryControlColor: UIColor
     public let quoteAccentColor: UIColor
 
-    /// Fills for `richButtonStyle` bg_danger / bg_success on InstantPage buttons. `InstantPageTheme`
-    /// has no destructive/success colour of its own; the chat bubble passes its PresentationTheme
-    /// equivalents (mirroring ChatMessageActionButtonsNode), and the standalone Instant View themes
-    /// fall back to these defaults.
-    public let buttonDangerColor: UIColor
-    public let buttonSuccessColor: UIColor
+    /// Pill fill and label for `richButtonStyle` bg_danger / bg_success on InstantPage buttons.
+    /// `InstantPageTheme` has no destructive/success colour of its own; the chat bubble passes
+    /// PresentationTheme-derived values, and the standalone Instant View themes fall back to these
+    /// defaults (a 15% tint with a full-strength label). The pair is split because a tint only reads
+    /// on a neutral page: over a saturated bubble (e.g. an outgoing Day Blue bubble) a translucent
+    /// red fill mixes into the bubble colour and the red label loses contrast.
+    public let buttonDangerBackgroundColor: UIColor
+    public let buttonDangerForegroundColor: UIColor
+    public let buttonSuccessBackgroundColor: UIColor
+    public let buttonSuccessForegroundColor: UIColor
 
     /// Task-list checkbox colours (`InstantPageListItem` checkboxes): `checkboxFill` is the box fill
     /// when checked, `checkboxForeground` the checkmark drawn on it. Same arrangement as the button
@@ -210,7 +214,7 @@ public final class InstantPageTheme {
         )
     }
 
-    public init(type: InstantPageThemeType, pageBackgroundColor: UIColor, textCategories: InstantPageTextCategories, serif: Bool, codeBlockBackgroundColor: UIColor, linkColor: UIColor, textHighlightColor: UIColor, linkHighlightColor: UIColor, markerColor: UIColor, panelBackgroundColor: UIColor, panelHighlightedBackgroundColor: UIColor, panelPrimaryColor: UIColor, panelSecondaryColor: UIColor, panelAccentColor: UIColor, tableBorderColor: UIColor, tableHeaderColor: UIColor, controlColor: UIColor, imageTintColor: UIColor?, overlayPanelColor: UIColor, separatorColor: UIColor, secondaryControlColor: UIColor, quoteAccentColor: UIColor, buttonDangerColor: UIColor = UIColor(rgb: 0xff3b30), buttonSuccessColor: UIColor = UIColor(rgb: 0x34c759), checkboxFill: UIColor = UIColor(rgb: 0x007aff), checkboxForeground: UIColor = .white, neutralButtonBackgroundColor: UIColor = UIColor(rgb: 0xf3f4f5), neutralButtonForegroundColor: UIColor = .black, unsupportedPillFillColor: UIColor = UIColor(white: 0.0, alpha: 0.1), unsupportedPillPrimaryColor: UIColor = .white, fontSizeMultiplier: CGFloat = 1.0) {
+    public init(type: InstantPageThemeType, pageBackgroundColor: UIColor, textCategories: InstantPageTextCategories, serif: Bool, codeBlockBackgroundColor: UIColor, linkColor: UIColor, textHighlightColor: UIColor, linkHighlightColor: UIColor, markerColor: UIColor, panelBackgroundColor: UIColor, panelHighlightedBackgroundColor: UIColor, panelPrimaryColor: UIColor, panelSecondaryColor: UIColor, panelAccentColor: UIColor, tableBorderColor: UIColor, tableHeaderColor: UIColor, controlColor: UIColor, imageTintColor: UIColor?, overlayPanelColor: UIColor, separatorColor: UIColor, secondaryControlColor: UIColor, quoteAccentColor: UIColor, buttonDangerBackgroundColor: UIColor = UIColor(rgb: 0xff3b30).withMultipliedAlpha(0.15), buttonDangerForegroundColor: UIColor = UIColor(rgb: 0xff3b30), buttonSuccessBackgroundColor: UIColor = UIColor(rgb: 0x34c759).withMultipliedAlpha(0.15), buttonSuccessForegroundColor: UIColor = UIColor(rgb: 0x34c759), checkboxFill: UIColor = UIColor(rgb: 0x007aff), checkboxForeground: UIColor = .white, neutralButtonBackgroundColor: UIColor = UIColor(rgb: 0xf3f4f5), neutralButtonForegroundColor: UIColor = .black, unsupportedPillFillColor: UIColor = UIColor(white: 0.0, alpha: 0.1), unsupportedPillPrimaryColor: UIColor = .white, fontSizeMultiplier: CGFloat = 1.0) {
         self.type = type
         self.pageBackgroundColor = pageBackgroundColor
         self.textCategories = textCategories
@@ -233,8 +237,10 @@ public final class InstantPageTheme {
         self.separatorColor = separatorColor
         self.secondaryControlColor = secondaryControlColor
         self.quoteAccentColor = quoteAccentColor
-        self.buttonDangerColor = buttonDangerColor
-        self.buttonSuccessColor = buttonSuccessColor
+        self.buttonDangerBackgroundColor = buttonDangerBackgroundColor
+        self.buttonDangerForegroundColor = buttonDangerForegroundColor
+        self.buttonSuccessBackgroundColor = buttonSuccessBackgroundColor
+        self.buttonSuccessForegroundColor = buttonSuccessForegroundColor
         self.checkboxFill = checkboxFill
         self.checkboxForeground = checkboxForeground
         self.neutralButtonBackgroundColor = neutralButtonBackgroundColor
@@ -246,10 +252,10 @@ public final class InstantPageTheme {
 
     public func withUpdatedFontStyles(sizeMultiplier: CGFloat, lineSpacingFactor: CGFloat, forceSerif: Bool) -> InstantPageTheme {
         // NOTE: this reconstructs the whole struct field by field. Any field omitted here silently
-        // reverts to its `init` default — for buttonDangerColor/buttonSuccessColor that would reset a
+        // reverts to its `init` default — for the button danger/success colours that would reset a
         // chat bubble's theme-derived button colours the moment the user changes Instant View font
         // size or forces serif. Nothing warns; it compiles. Keep this list exhaustive.
-        return InstantPageTheme(type: type, pageBackgroundColor: pageBackgroundColor, textCategories: self.textCategories.withUpdatedFontStyles(sizeMultiplier: sizeMultiplier, lineSpacingFactor: lineSpacingFactor, forceSerif: forceSerif), serif: forceSerif, codeBlockBackgroundColor: codeBlockBackgroundColor, linkColor: linkColor, textHighlightColor: textHighlightColor, linkHighlightColor: linkHighlightColor, markerColor: markerColor, panelBackgroundColor: panelBackgroundColor, panelHighlightedBackgroundColor: panelHighlightedBackgroundColor, panelPrimaryColor: panelPrimaryColor, panelSecondaryColor: panelSecondaryColor, panelAccentColor: panelAccentColor, tableBorderColor: tableBorderColor, tableHeaderColor: tableHeaderColor, controlColor: controlColor, imageTintColor: imageTintColor, overlayPanelColor: overlayPanelColor, separatorColor: separatorColor, secondaryControlColor: secondaryControlColor, quoteAccentColor: quoteAccentColor, buttonDangerColor: buttonDangerColor, buttonSuccessColor: buttonSuccessColor, checkboxFill: checkboxFill, checkboxForeground: checkboxForeground, neutralButtonBackgroundColor: neutralButtonBackgroundColor, neutralButtonForegroundColor: neutralButtonForegroundColor, unsupportedPillFillColor: unsupportedPillFillColor, unsupportedPillPrimaryColor: unsupportedPillPrimaryColor, fontSizeMultiplier: self.fontSizeMultiplier * sizeMultiplier)
+        return InstantPageTheme(type: type, pageBackgroundColor: pageBackgroundColor, textCategories: self.textCategories.withUpdatedFontStyles(sizeMultiplier: sizeMultiplier, lineSpacingFactor: lineSpacingFactor, forceSerif: forceSerif), serif: forceSerif, codeBlockBackgroundColor: codeBlockBackgroundColor, linkColor: linkColor, textHighlightColor: textHighlightColor, linkHighlightColor: linkHighlightColor, markerColor: markerColor, panelBackgroundColor: panelBackgroundColor, panelHighlightedBackgroundColor: panelHighlightedBackgroundColor, panelPrimaryColor: panelPrimaryColor, panelSecondaryColor: panelSecondaryColor, panelAccentColor: panelAccentColor, tableBorderColor: tableBorderColor, tableHeaderColor: tableHeaderColor, controlColor: controlColor, imageTintColor: imageTintColor, overlayPanelColor: overlayPanelColor, separatorColor: separatorColor, secondaryControlColor: secondaryControlColor, quoteAccentColor: quoteAccentColor, buttonDangerBackgroundColor: buttonDangerBackgroundColor, buttonDangerForegroundColor: buttonDangerForegroundColor, buttonSuccessBackgroundColor: buttonSuccessBackgroundColor, buttonSuccessForegroundColor: buttonSuccessForegroundColor, checkboxFill: checkboxFill, checkboxForeground: checkboxForeground, neutralButtonBackgroundColor: neutralButtonBackgroundColor, neutralButtonForegroundColor: neutralButtonForegroundColor, unsupportedPillFillColor: unsupportedPillFillColor, unsupportedPillPrimaryColor: unsupportedPillPrimaryColor, fontSizeMultiplier: self.fontSizeMultiplier * sizeMultiplier)
     }
 
     /// The H1–H6 ladder: **22 / 20 / 18 / 17 / 16 / 15**, serif medium.

@@ -1373,6 +1373,11 @@ public final class PeerInfoVisualMediaPaneNode: ASDisplayNode, PeerInfoPaneNode,
             guard let strongSelf = self else {
                 return
             }
+            // The tooltip points to the calendar, which a pane without one (a thread) does not
+            // offer; showing it anyway would also spend the one-time notice.
+            if strongSelf.calendarSource == nil {
+                return
+            }
             if processedOnBeginFastScrolling {
                 return
             }

@@ -336,3 +336,27 @@ func spacingBetweenBlocks(upper: InstantPageBlock?, lower: InstantPageBlock?, ki
         return 0.0
     }
 }
+
+/// Whether a V2 page's content meets the page's top edge with no leading gap: its first block is
+/// flush above (a photo, collage, code band or file row) rather than padded like text.
+///
+/// For a host that draws something ABOVE the page. A flush block is designed to butt against the
+/// top of its container, so a header placed directly above the page runs into it, and the host has
+/// to supply the gap the page does not. This is the leading edge `layoutBlockSequence` lays out: an
+/// anchor contributes no height, so the block after it is the one that meets the edge.
+///
+/// Judged from the model, because a host needs it before it has a width to lay out at. A block
+/// whose media is missing from the page lays out empty and hands the edge to its successor, which
+/// this cannot see. `.unscaled` is safe here where it is not in the layout: a flush edge is 0 at
+/// every content scale, and a padded one is never 0.
+public func instantPageV2ContentStartsFlushAtTop(_ blocks: [InstantPageBlock]) -> Bool {
+    guard let first = blocks.first(where: { block in
+        if case .anchor = block {
+            return false
+        }
+        return true
+    }) else {
+        return false
+    }
+    return spacingBetweenBlocks(upper: nil, lower: first, kind: .topLevel, metrics: .unscaled) == 0.0
+}

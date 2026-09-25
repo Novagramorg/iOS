@@ -535,11 +535,14 @@ extension InAppPurchaseManager: SKPaymentTransactionObserver {
                     }
                 }
                 
+                // Captured by value: this subscription is stored on self and only ends once the
+                // products arrive, so reading `self.engine` here would keep the manager alive.
+                let engine = self.engine
                 self.disposableSet.set(
                     (purpose
                     |> castError(AssignAppStoreTransactionError.self)
                     |> mapToSignal { purpose -> Signal<Never, AssignAppStoreTransactionError> in
-                        switch self.engine {
+                        switch engine {
                         case let .authorized(engine):
                             return engine.payments.sendAppStoreReceipt(receipt: receiptData, purpose: purpose)
                         case let .unauthorized(engine):

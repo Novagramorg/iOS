@@ -2956,7 +2956,8 @@ public class DrawingScreen: ViewController, TGPhotoDrawingInterfaceController, U
             statusBarHeight: statusBarHeight,
             inputHeight: inputHeight,
             inputHeightIsInteractivellyChanging: false,
-            inVoiceOver: false
+            inVoiceOver: false,
+            presentedInFormSheet: false
         )
         self.orientation = orientation
         self.containerLayoutUpdated(layout, transition: animated ? .animated(duration: 0.3, curve: .easeInOut) : .immediate)

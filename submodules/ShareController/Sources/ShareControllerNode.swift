@@ -1202,7 +1202,8 @@ final class ShareControllerNode: ViewControllerTracingNode, ASScrollViewDelegate
                 statusBarHeight: nil,
                 inputHeight: nil,
                 inputHeightIsInteractivellyChanging: false,
-                inVoiceOver: false
+                inVoiceOver: false,
+                presentedInFormSheet: false
             )
             controller.presentationContext.containerLayoutUpdated(subLayout, transition: transition)
         }
