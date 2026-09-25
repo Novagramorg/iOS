@@ -2471,7 +2471,8 @@ private final class WalletScreenComponent: Component {
             let headerSize = self.header.update(
                 transition: transition,
                 component: AnyComponent(ChatListHeaderComponent(
-                    sideInset: 16.0 + environment.safeInsets.left,
+                    leftInset: 16.0 + environment.safeInsets.left,
+                    rightInset: 16.0 + environment.safeInsets.right,
                     primaryContent: primaryContent,
                     secondaryContent: nil,
                     secondaryTransition: 0.0,
