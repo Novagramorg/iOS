@@ -503,7 +503,7 @@ final class ContactsControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
             if let requestDeactivateSearch = self?.requestDeactivateSearch {
                 requestDeactivateSearch()
             }
-        }, fieldStyle: placeholderNode?.fieldStyle ?? .modern, searchBarIsExternal: placeholderNode == nil)
+        }, fieldStyle: placeholderNode?.fieldStyle ?? .modern)
         
         self.searchDisplayController?.containerLayoutUpdated(containerLayout, navigationBarHeight: navigationBarHeight, transition: .immediate)
         self.searchDisplayController?.activate(insertSubnode: { [weak self] subnode, isSearchBar in

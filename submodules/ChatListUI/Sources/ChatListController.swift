@@ -771,8 +771,6 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         })
         
         self.updateNavigationMetadata()
-
-        self.updateTabBarSearchState(ViewController.TabBarSearchState(isActive: false), transition: .immediate)
         
         self.globalControlPanelsContextStateDisposable = (self.globalControlPanelsContext.state
         |> deliverOnMainQueue).startStrict(next: { [weak self] state in
@@ -4670,12 +4668,8 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
     public private(set) var isSearchActive: Bool = false
     
     public func activateSearch(filter: ChatListSearchFilter, query: String? = nil) {
-        self.activateSearchInternal(isFromTabBar: false, filter: filter, query: query)
-    }
-    
-    public func activateSearchInternal(isFromTabBar: Bool, filter: ChatListSearchFilter, query: String? = nil) {
         var searchContentNode: NavigationBarSearchContentNode?
-        if !isFromTabBar, let navigationBarView = self.chatListDisplayNode.navigationBarView.view as? ChatListNavigationBar.View {
+        if let navigationBarView = self.chatListDisplayNode.navigationBarView.view as? ChatListNavigationBar.View {
             searchContentNode = navigationBarView.searchContentNode
         }
         
@@ -4720,7 +4714,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 do {
                     let displaySearchFilters = true
                     
-                    if let filterContainerNodeAndActivate = await self.chatListDisplayNode.activateSearch(placeholderNode: searchContentNode?.placeholderNode, displaySearchFilters: displaySearchFilters, hasDownloads: self.hasDownloads, initialFilter: filter, navigationController: self.navigationController as? NavigationController, searchBarIsExternal: searchContentNode == nil) {
+                    if let filterContainerNodeAndActivate = await self.chatListDisplayNode.activateSearch(placeholderNode: searchContentNode?.placeholderNode, displaySearchFilters: displaySearchFilters, hasDownloads: self.hasDownloads, initialFilter: filter, navigationController: self.navigationController as? NavigationController, searchBarIsExternal: false) {
                         let activate = filterContainerNodeAndActivate
                         
                         activate(filter != .downloads)
@@ -4732,16 +4726,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                     
                     let transition: ContainedViewLayoutTransition = .animated(duration: 0.4, curve: .spring)
                     self.setDisplayNavigationBar(false, transition: transition)
-                    if searchContentNode == nil {
-                        self.updateTabBarSearchState(ViewController.TabBarSearchState(isActive: true), transition: transition)
-                        
-                        if let searchBarNode = self.currentTabBarSearchNode?() as? SearchBarNode {
-                            self.chatListDisplayNode.searchDisplayController?.setSearchBar(searchBarNode)
-                            searchBarNode.activate()
-                        }
-                    } else {
-                        (self.parent as? TabBarController)?.updateIsTabBarHidden(true, transition: transition)
-                    }
+                    (self.parent as? TabBarController)?.updateIsTabBarHidden(true, transition: transition)
 
                     self.isSearchActive = true
                     if let navigationController = self.navigationController as? NavigationController {
@@ -4798,7 +4783,6 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         
         completion?()
         
-        self.updateTabBarSearchState(ViewController.TabBarSearchState(isActive: false), transition: transition)
         (self.parent as? TabBarController)?.updateIsTabBarHidden(false, transition: transition)
         
         self.isSearchActive = false
@@ -6424,7 +6408,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
     }
 
     override public func tabBarActivateSearch() {
-        self.activateSearchInternal(isFromTabBar: true, filter: .chats, query: nil)
+        self.activateSearch(filter: .chats, query: nil)
     }
 
     override public func tabBarDeactivateSearch() {
