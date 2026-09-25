@@ -334,8 +334,7 @@ final class StarsTransactionsPanelContainerComponent: Component {
             let tabsSideInset: CGFloat = 16.0 + component.insets.left
             let tabsContainerSize = CGSize(width: availableSize.width - tabsSideInset * 2.0, height: tabsHeight)
 
-            let containerWidth = availableSize.width - component.insets.left - component.insets.right
-            let panelsFrame = CGRect(origin: CGPoint(x: component.insets.left, y: component.insets.top), size: CGSize(width: containerWidth, height: availableSize.height - component.insets.top))
+            let panelsFrame = CGRect(origin: CGPoint(x: 0.0, y: component.insets.top), size: CGSize(width: availableSize.width, height: availableSize.height - component.insets.top))
 
             if let currentIdValue = self.currentId, !component.items.contains(where: { $0.id == currentIdValue }) {
                 self.currentId = nil

@@ -188,6 +188,7 @@ public protocol AttachmentContainable: ViewController, MinimizableController {
     var isContainerExpanded: () -> Bool { get set }
     var isPanGestureEnabled: (() -> Bool)? { get }
     var isInnerPanGestureEnabled: (() -> Bool)? { get }
+    var ignoresInputHeightInRegularLayout: Bool { get }
     var mediaPickerContext: AttachmentMediaPickerContext? { get }
     var getCurrentSendMessageContextMediaPreview: (() -> ChatSendMessageContextScreenMediaPreview?)? { get }
 
@@ -253,6 +254,10 @@ public extension AttachmentContainable {
 
     var isInnerPanGestureEnabled: (() -> Bool)? {
         return nil
+    }
+
+    var ignoresInputHeightInRegularLayout: Bool {
+        return false
     }
 
     var getCurrentSendMessageContextMediaPreview: (() -> ChatSendMessageContextScreenMediaPreview?)? {
@@ -1415,6 +1420,11 @@ public class AttachmentController: ViewController, MinimizableController {
                 return
             }
 
+            var layout = layout
+            if layout.metrics.widthClass == .regular, self.currentControllers.last?.ignoresInputHeightInRegularLayout == true {
+                layout = layout.withUpdatedInputHeight(nil)
+            }
+
             transition.updateFrame(node: self.dim, frame: CGRect(origin: CGPoint(x: 0.0, y: -layout.size.height), size: CGSize(width: layout.size.width, height: layout.size.height * 2.0)))
 
             let fromMenu = controller.fromMenu
@@ -1431,7 +1441,7 @@ public class AttachmentController: ViewController, MinimizableController {
                     let inputHeight = layout.inputHeight ?? 0.0
                     let availableHeight = layout.size.height - inputHeight
 
-                    let size = CGSize(width: 390.0, height: min(660.0, availableHeight))
+                    let size = CGSize(width: 390.0, height: min(670.0, availableHeight))
 
                     let insets = layout.insets(options: [.input])
                     let masterWidth = min(max(320.0, floor(layout.size.width / 3.0)), floor(layout.size.width / 2.0))

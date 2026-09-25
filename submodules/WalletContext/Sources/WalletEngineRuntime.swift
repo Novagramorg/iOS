@@ -223,7 +223,8 @@ actor WalletEngineRuntime {
 
     func signReplacementProof(
         recordId: String,
-        expectedPublicKey: Data,
+        expectedAnchorPublicKey: Data,
+        expectedSigningPublicKey: Data,
         domain: String,
         timestamp: UInt64,
         payload: String
@@ -235,8 +236,8 @@ actor WalletEngineRuntime {
             } else {
                 descriptor = try await self.storage.loadReplacementCandidate()?.descriptor
             }
-            guard expectedPublicKey.count == 32, let descriptor,
-                  descriptor.recordId == recordId, descriptor.publicKey == expectedPublicKey else {
+            guard expectedAnchorPublicKey.count == 32, expectedSigningPublicKey.count == 32, let descriptor,
+                  descriptor.recordId == recordId, descriptor.publicKey == expectedAnchorPublicKey else {
                 throw WalletContext.WalletError.storage(.identityMismatch)
             }
             let proof = try await self.lifecycle.signTonConnectProof(request: TonConnectProofSignRequest(
@@ -245,6 +246,9 @@ actor WalletEngineRuntime {
                 timestamp: timestamp,
                 payload: payload
             ))
+            guard proof.publicKey == expectedSigningPublicKey else {
+                throw WalletContext.WalletError.storage(.identityMismatch)
+            }
             guard proof.signature.count == 64 else {
                 throw WalletContext.WalletError.proofInvalid
             }

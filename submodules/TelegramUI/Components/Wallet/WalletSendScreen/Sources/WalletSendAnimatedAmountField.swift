@@ -38,6 +38,7 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
 
     private let canvas = WalletSendAmountCanvas(frame: .zero)
     private let caretView = UIView()
+    private static let caretBlinkAnimationKey = "walletSendCaretBlink"
     private let motion = WalletSendAmountMotion()
     private var displayLink: SharedDisplayLinkDriver.Link?
     private var previousMode: WalletSendInputMode?
@@ -46,6 +47,7 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
     private var layoutTo: Layout?
     private var currentLayout: Layout?
     private var visible = false
+    private var applicationIsActive = UIApplication.shared.applicationState == .active
     private var updating = false
     private var rendering = false
     private var pendingDiamond = false
@@ -63,22 +65,41 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
         self.contentView.addSubview(self.canvas)
         self.caretView.isUserInteractionEnabled = false
         self.caretView.accessibilityElementsHidden = true
-        self.caretView.layer.cornerRadius = 1.0
+        self.caretView.layer.cornerRadius = 1.5
         self.caretView.isHidden = true
         self.contentView.addSubview(self.caretView)
+        self.textField.usesCustomCaret = true
         self.textField.interactionBegan = { [weak self] in self?.finishMotion() }
+        NotificationCenter.default.addObserver(self, selector: #selector(self.applicationDidBecomeActive), name: UIApplication.didBecomeActiveNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(self.applicationWillResignActive), name: UIApplication.willResignActiveNotification, object: nil)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-    deinit { self.displayLink?.invalidate() }
+    deinit {
+        self.displayLink?.invalidate()
+        NotificationCenter.default.removeObserver(self)
+    }
 
     override func didMoveToWindow() {
         super.didMoveToWindow()
         if self.window == nil {
-            self.pendingDiamond = false
+            self.stopDiamond(at: .end)
             self.finishMotion()
+        } else {
+            self.setNeedsLayout()
         }
+    }
+
+    @objc private func applicationDidBecomeActive() {
+        self.applicationIsActive = true
+        self.updateCaretAppearance()
+    }
+
+    @objc private func applicationWillResignActive() {
+        self.applicationIsActive = false
+        self.stopDiamond(at: .end)
+        self.finishMotion()
     }
 
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
@@ -95,6 +116,12 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
     ) {
         self.updating = true
         defer { self.updating = false }
+        if mode != self.mode {
+            self.stopDiamond(at: mode == .gram ? .begin : nil)
+        }
+        if !isVisible {
+            self.stopDiamond(at: .end)
+        }
         self.visible = isVisible
         super.update(mode: mode, amount: amount, rate: rate, fiatCurrency: fiatCurrency, dateTimeFormat: dateTimeFormat, theme: theme, lottieSettings: lottieSettings, isVisible: isVisible, transition: .immediate)
         self.placeholder = self.textField.attributedPlaceholder
@@ -106,6 +133,9 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
     }
 
     override func willApplyText(_ text: String, selection: NSRange?) {
+        if text != (self.textField.text ?? "") || (selection != nil && selection != self.textField.selectionRange) {
+            self.resetCaretBlink()
+        }
         guard self.previousMode != nil, self.visible, self.window != nil else { return }
         self.textField.displaysNativeCaret = false
     }
@@ -129,8 +159,15 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
         super.textFieldDidChangeSelection(textField)
         if !self.isApplyingText && !self.rendering && !self.updating,
            self.previousText == (textField.text ?? ""), self.previousSelection != self.textField.selectionRange {
+            self.resetCaretBlink()
             self.finishMotion()
         }
+    }
+
+    override func textFieldDidBeginEditing(_ textField: UITextField) {
+        super.textFieldDidBeginEditing(textField)
+        self.resetCaretBlink()
+        self.finishMotion()
     }
 
     override func textFieldDidEndEditing(_ textField: UITextField) {
@@ -172,7 +209,7 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
         if let suffixView = self.suffix.view {
             glyphs += walletSendAmountComponentGlyphs(suffixView, origin: suffixView.frame.origin)
         }
-        let selectedCaret = self.textField.selectedTextRange.map { self.textField.nativeCaretRect(for: $0.end) } ?? caret
+        let selectedCaret = self.textField.amountCaretRect(for: self.textField.selectedTextRange?.end ?? self.textField.beginningOfDocument)
         let targetLayout = Layout(
             width: self.contentView.bounds.width, height: self.contentView.bounds.height,
             gram: self.gramIcon.view?.frame ?? .zero, fiat: self.fiatIcon.view?.frame ?? .zero,
@@ -180,6 +217,9 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
             gramAlpha: self.mode == .gram ? 1.0 : 0.0
         )
         let modeChanged = self.previousMode != nil && self.previousMode != self.mode
+        if modeChanged {
+            self.resetCaretBlink()
+        }
         let sizeChanged = self.availableWidth != self.bounds.width
         self.availableWidth = self.bounds.width
         if glyphs != self.motion.target {
@@ -200,7 +240,6 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
         self.previousSelection = self.textField.selectionRange
         if self.motion.isAnimating(at: now), self.visible, !sizeChanged {
             self.textField.displaysNativeCaret = false
-            (self.gramIcon.view as? LottieComponent.View)?.externalShouldPlay = false
             self.renderFrame(at: now)
             self.setNativeTextVisible(false)
             if self.displayLink == nil {
@@ -230,7 +269,6 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
         }
         self.suffix.view?.alpha = visible ? 1.0 : 0.0
         self.canvas.isHidden = visible
-        self.caretView.isHidden = visible || !self.isInputActive || (self.textField.selectionRange?.length ?? 0) != 0
         if visible {
             self.textField.layoutIfNeeded()
             self.textField.displaysNativeCaret = true
@@ -263,9 +301,43 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
             }
             self.contentView.bringSubviewToFront(self.canvas)
             self.contentView.bringSubviewToFront(self.caretView)
-            self.caretView.frame = layout.caret
-            self.caretView.backgroundColor = self.textField.caretColor
+            self.updateCaretAppearance()
         }
+    }
+
+    private func resetCaretBlink() {
+        self.caretView.layer.removeAnimation(forKey: Self.caretBlinkAnimationKey)
+    }
+
+    private func updateCaretAppearance() {
+        guard self.visible, self.applicationIsActive, self.window != nil, self.isInputActive,
+              self.textField.selectionRange?.length == 0, let layout = self.currentLayout,
+              !layout.caret.isNull, !layout.caret.isInfinite, layout.caret.height > 0.0 else {
+            self.caretView.isHidden = true
+            self.resetCaretBlink()
+            return
+        }
+        self.caretView.frame = layout.caret
+        self.caretView.backgroundColor = self.textField.caretColor
+        self.caretView.isHidden = false
+        self.contentView.bringSubviewToFront(self.caretView)
+        guard self.caretView.layer.animation(forKey: Self.caretBlinkAnimationKey) == nil else { return }
+
+        let hold = 0.45
+        let fade = 0.42
+        let duration = (hold + fade) * 2.0
+        let animation = CAKeyframeAnimation(keyPath: "opacity")
+        animation.values = [1.0, 1.0, 0.0, 0.0, 1.0]
+        animation.keyTimes = [0.0, hold / duration, (hold + fade) / duration, (hold * 2.0 + fade) / duration, 1.0].map { NSNumber(value: $0) }
+        animation.timingFunctions = [
+            CAMediaTimingFunction(name: .linear),
+            CAMediaTimingFunction(name: .easeInEaseOut),
+            CAMediaTimingFunction(name: .linear),
+            CAMediaTimingFunction(name: .easeInEaseOut)
+        ]
+        animation.duration = duration
+        animation.repeatCount = .infinity
+        self.caretView.layer.add(animation, forKey: Self.caretBlinkAnimationKey)
     }
 
     private func apply(layout: Layout, reduced: Bool) {
@@ -284,6 +356,13 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
         }
     }
 
+    private func stopDiamond(at position: LottieComponent.StartingPosition? = nil) {
+        self.pendingDiamond = false
+        let diamond = self.gramIcon.view as? LottieComponent.View
+        diamond?.externalShouldPlay = false
+        diamond?.stop(at: position)
+    }
+
     private func finishMotion() {
         let wasRendering = self.rendering
         self.rendering = true
@@ -299,17 +378,20 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
             }
             self.setNativeTextVisible(true)
             if let selection = self.textField.selectedTextRange, var layout = self.currentLayout {
-                layout.caret = self.textField.nativeCaretRect(for: selection.end).offsetBy(dx: self.textField.frame.minX, dy: self.textField.frame.minY)
+                layout.caret = self.textField.amountCaretRect(for: selection.end).offsetBy(dx: self.textField.frame.minX, dy: self.textField.frame.minY)
                 self.currentLayout = layout
                 self.layoutTo = layout
             }
             self.previousSelection = self.textField.selectionRange
+            self.updateCaretAppearance()
         }
         let diamond = self.gramIcon.view as? LottieComponent.View
-        diamond?.externalShouldPlay = self.visible && self.mode == .gram
+        let canPlayDiamond = self.visible && self.window != nil && self.applicationIsActive
+            && self.mode == .gram && !UIAccessibility.isReduceMotionEnabled
+        diamond?.externalShouldPlay = canPlayDiamond
         if self.pendingDiamond {
             self.pendingDiamond = false
-            if self.visible && self.mode == .gram && !UIAccessibility.isReduceMotionEnabled { diamond?.playOnce() }
+            if canPlayDiamond { diamond?.playOnce() }
         }
     }
 }

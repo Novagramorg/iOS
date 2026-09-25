@@ -549,6 +549,7 @@ public final class WalletWordsScreen: ViewControllerComponentContainer {
             theme: .default
         )
 
+        self.supportedOrientations = ViewControllerSupportedOrientations(regularSize: .all, compactSize: .portrait)
         self.statusBar.statusBarStyle = .Ignore
         self.navigationPresentation = .flatModal
         self.blocksBackgroundWhenInOverlay = true

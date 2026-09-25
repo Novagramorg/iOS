@@ -13,6 +13,21 @@ public extension Api {
                 return ("walletTransactionPeerAddress", [("flags", ConstructorParameterDescription(self.flags)), ("address", ConstructorParameterDescription(self.address)), ("domain", ConstructorParameterDescription(self.domain))])
             }
         }
+        public class Cons_walletTransactionPeerOnramp: TypeConstructorDescription {
+            public var flags: Int32
+            public var address: String
+            public var domain: String?
+            public var providerName: String
+            public init(flags: Int32, address: String, domain: String?, providerName: String) {
+                self.flags = flags
+                self.address = address
+                self.domain = domain
+                self.providerName = providerName
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("walletTransactionPeerOnramp", [("flags", ConstructorParameterDescription(self.flags)), ("address", ConstructorParameterDescription(self.address)), ("domain", ConstructorParameterDescription(self.domain)), ("providerName", ConstructorParameterDescription(self.providerName))])
+            }
+        }
         public class Cons_walletTransactionPeerUser: TypeConstructorDescription {
             public var flags: Int32
             public var userId: Int64
@@ -29,6 +44,7 @@ public extension Api {
             }
         }
         case walletTransactionPeerAddress(Cons_walletTransactionPeerAddress)
+        case walletTransactionPeerOnramp(Cons_walletTransactionPeerOnramp)
         case walletTransactionPeerUnsupported
         case walletTransactionPeerUser(Cons_walletTransactionPeerUser)
 
@@ -43,6 +59,17 @@ public extension Api {
                 if Int(_data.flags) & Int(1 << 0) != 0 {
                     serializeString(_data.domain!, buffer: buffer, boxed: false)
                 }
+                break
+            case .walletTransactionPeerOnramp(let _data):
+                if boxed {
+                    buffer.appendInt32(-443213714)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                serializeString(_data.address, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 0) != 0 {
+                    serializeString(_data.domain!, buffer: buffer, boxed: false)
+                }
+                serializeString(_data.providerName, buffer: buffer, boxed: false)
                 break
             case .walletTransactionPeerUnsupported:
                 if boxed {
@@ -67,6 +94,8 @@ public extension Api {
             switch self {
             case .walletTransactionPeerAddress(let _data):
                 return ("walletTransactionPeerAddress", [("flags", ConstructorParameterDescription(_data.flags)), ("address", ConstructorParameterDescription(_data.address)), ("domain", ConstructorParameterDescription(_data.domain))])
+            case .walletTransactionPeerOnramp(let _data):
+                return ("walletTransactionPeerOnramp", [("flags", ConstructorParameterDescription(_data.flags)), ("address", ConstructorParameterDescription(_data.address)), ("domain", ConstructorParameterDescription(_data.domain)), ("providerName", ConstructorParameterDescription(_data.providerName))])
             case .walletTransactionPeerUnsupported:
                 return ("walletTransactionPeerUnsupported", [])
             case .walletTransactionPeerUser(let _data):
@@ -88,6 +117,28 @@ public extension Api {
             let _c3 = (Int(_1 ?? 0) & Int(1 << 0) == 0) || _3 != nil
             if _c1 && _c2 && _c3 {
                 return Api.WalletTransactionPeer.walletTransactionPeerAddress(Cons_walletTransactionPeerAddress(flags: _1!, address: _2!, domain: _3))
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_walletTransactionPeerOnramp(_ reader: BufferReader) -> WalletTransactionPeer? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: String?
+            _2 = parseString(reader)
+            var _3: String?
+            if Int(_1 ?? 0) & Int(1 << 0) != 0 {
+                _3 = parseString(reader)
+            }
+            var _4: String?
+            _4 = parseString(reader)
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = (Int(_1 ?? 0) & Int(1 << 0) == 0) || _3 != nil
+            let _c4 = _4 != nil
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.WalletTransactionPeer.walletTransactionPeerOnramp(Cons_walletTransactionPeerOnramp(flags: _1!, address: _2!, domain: _3, providerName: _4!))
             }
             else {
                 return nil

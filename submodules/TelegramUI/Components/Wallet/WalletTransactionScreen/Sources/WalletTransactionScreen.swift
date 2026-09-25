@@ -1832,7 +1832,7 @@ private final class WalletTransactionContentComponent: Component {
                     address: address,
                     refreshBalanceOnOpen: refreshBalanceOnOpen
                 )
-            case .unsupported:
+            case .onramp, .unsupported:
                 return
             }
             sendScreen.navigationPresentation = .modal
@@ -2669,7 +2669,7 @@ private final class WalletTransactionContentComponent: Component {
                 canSendToPeer = true
             case .address:
                 canSendToPeer = transaction.peer.address != nil
-            case .unsupported:
+            case .onramp, .unsupported:
                 canSendToPeer = false
             }
             let displaysSendButton: Bool
@@ -2687,7 +2687,7 @@ private final class WalletTransactionContentComponent: Component {
             switch transaction.peer {
             case .address:
                 alignSendButtonToTop = true
-            case .user, .unsupported:
+            case .user, .onramp, .unsupported:
                 alignSendButtonToTop = false
             }
             let counterpartyComponent: AnyComponent<Empty>
@@ -2767,7 +2767,7 @@ private final class WalletTransactionContentComponent: Component {
             )]
             let displaysSeparateAddress: Bool
             switch transaction.peer {
-            case .user:
+            case .user, .onramp:
                 displaysSeparateAddress = true
             case .address:
                 displaysSeparateAddress = transaction.peer.domain != nil

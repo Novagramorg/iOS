@@ -662,7 +662,11 @@ private final class WalletSettingsScreenComponent: Component {
                     currencySymbol: fiat.selectedCurrency.symbol,
                     dateTimeFormat: presentationData.dateTimeFormat
                 )
-                text += " (~\(fiatText))"
+                if fiatText.hasSuffix("0\(presentationData.dateTimeFormat.decimalSeparator)00") {
+                    text += " (<\(fiat.selectedCurrency.symbol)0.01)"
+                } else {
+                    text += " (~\(fiatText))"
+                }
             }
             return text
         }

@@ -85,6 +85,7 @@ public struct WalletUserAddress: Equatable {
 public enum WalletTransactionPeer: Equatable, @unchecked Sendable {
     case user(EnginePeer, address: String, domain: String?)
     case address(String, domain: String?)
+    case onramp(address: String, domain: String?, providerName: String)
     case unsupported
 }
 
@@ -249,7 +250,8 @@ public enum WalletGetTransactionsError: Error {
 
 public enum WalletReplacement: Equatable, Sendable {
     case new
-    case imported(publicKey: Data, proof: WalletOwnershipProof)
+    /// The current signing key and, after rotation, the original key that determines the wallet address.
+    case imported(publicKey: Data, anchorPublicKey: Data? = nil, proof: WalletOwnershipProof)
 }
 
 public enum WalletOperationError: Error, Equatable {
@@ -314,6 +316,8 @@ private extension WalletTransactionPeer {
         switch apiPeer {
         case let .walletTransactionPeerAddress(peer):
             self = .address(peer.address, domain: peer.domain)
+        case let .walletTransactionPeerOnramp(peer):
+            self = .onramp(address: peer.address, domain: peer.domain, providerName: peer.providerName)
         case .walletTransactionPeerUnsupported:
             self = .unsupported
         case let .walletTransactionPeerUser(apiPeer):
@@ -366,9 +370,9 @@ func _internal_getExistingWaltBalance(account: Account) -> Signal<WalletExisting
         return transaction.retrieveItemCacheEntry(id: cacheId)?.get(CachedExistingWaltBalance.self)
     }
     |> mapToSignal { cachedBalance -> Signal<WalletExistingBalance?, NoError> in
-        let cached: Signal<WalletExistingBalance?, NoError> = .single(cachedBalance.map {
-            WalletExistingBalance(hasBalance: $0.hasBalance, url: nil)
-        })
+        let cached: Signal<WalletExistingBalance?, NoError> = .single(
+            WalletExistingBalance(hasBalance: cachedBalance?.hasBalance ?? false, url: nil)
+        )
 
         let updated = account.network.request(Api.functions.wallet.getExistingWaltBalance())
         |> map { result -> WalletExistingBalance in

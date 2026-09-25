@@ -358,7 +358,7 @@ public extension WalletContext {
         }
     }
 
-    func prepareTransfer(address: String, amount: Int64, sendAll: Bool = false, comment: String?, commentEncrypted: Bool = false, recipientPublicKey: Data? = nil, session: PasscodeSession? = nil) -> Signal<PreparedTransfer, WalletError> {
+    func prepareTransfer(address: String, amount: Int64, sendAll: Bool = false, comment: String?, commentEncrypted: Bool = false, recipientPublicKey: Data? = nil, session: PasscodeSession? = nil, pendingRegistration: PendingTransferRegistration? = nil) -> Signal<PreparedTransfer, WalletError> {
         self.signal(
             name: "preparing_transfer",
             discardResult: { [impl = self.impl] prepared in
@@ -373,6 +373,7 @@ public extension WalletContext {
                 commentEncrypted: commentEncrypted,
                 recipientPublicKey: recipientPublicKey,
                 session: session,
+                pendingRegistration: pendingRegistration,
                 operationId: operationId
             )
         }
@@ -451,21 +452,25 @@ extension WalletContextImpl {
 
     private func replaceWalletWithImportedCandidate(
         recordId: String,
-        publicKey: Data,
+        anchorPublicKey: Data,
+        signingPublicKey: Data,
         password: String?
     ) async throws -> TelegramCore.WalletState {
-        guard publicKey.count == 32 else {
+        guard anchorPublicKey.count == 32, signingPublicKey.count == 32 else {
             throw WalletError.publicKeyInvalid
         }
         return try await self.withWalletOwnershipProof(sign: { challenge in
             try await self.runtime.signReplacementProof(
-                recordId: recordId, expectedPublicKey: publicKey,
+                recordId: recordId,
+                expectedAnchorPublicKey: anchorPublicKey,
+                expectedSigningPublicKey: signingPublicKey,
                 domain: challenge.domain, timestamp: UInt64(challenge.timestamp), payload: challenge.payload
             )
         }, request: { proof in
             try await WalletSignalRequestContext<TelegramCore.WalletState>().run(
                 self.engine.wallet.replaceWallet(
-                    replacement: .imported(publicKey: publicKey, proof: proof), password: password
+                    replacement: .imported(publicKey: signingPublicKey, anchorPublicKey: anchorPublicKey, proof: proof),
+                    password: password
                 )
             )
         })
@@ -591,7 +596,8 @@ extension WalletContextImpl {
             do {
                 response = try await self.replaceWalletWithImportedCandidate(
                     recordId: staged.recordId,
-                    publicKey: staged.publicKey,
+                    anchorPublicKey: staged.publicKey,
+                    signingPublicKey: staged.signingPublicKey,
                     password: password
                 )
             } catch let error as TelegramCore.WalletOperationError {
@@ -811,7 +817,8 @@ extension WalletContextImpl {
                 do {
                     response = try await self.replaceWalletWithImportedCandidate(
                         recordId: prepared.recordId,
-                        publicKey: prepared.candidatePublicKey,
+                        anchorPublicKey: prepared.candidatePublicKey,
+                        signingPublicKey: prepared.candidateSigningPublicKey,
                         password: password
                     )
                 } catch let error as TelegramCore.WalletOperationError {
@@ -1258,15 +1265,21 @@ extension WalletContextImpl {
         commentEncrypted: Bool,
         recipientPublicKey: Data? = nil,
         session: PasscodeSession? = nil,
+        pendingRegistration: WalletContext.PendingTransferRegistration? = nil,
         operationId: UUID
     ) async throws -> PreparedTransfer {
-        guard session == nil || commentEncrypted else { throw WalletError.unavailable }
         return try await self.performOperation(.preparingTransfer, operationId: operationId, requiresAuthorization: commentEncrypted, session: session) {
             guard case let .wallet(info) = self.currentState.phase,
                   info.canSign else {
                 throw WalletError.unavailable
             }
             let resolved = try resolveTransferInput(address: address, amount: amount, comment: comment)
+            if let pendingRegistration {
+                try self.validatePendingTransferRegistration(
+                    pendingRegistration, session: session, address: resolved.address, amount: resolved.amount,
+                    sendAll: sendAll && !resolved.hasLinkAmount, comment: resolved.comment, commentEncrypted: commentEncrypted
+                )
+            }
             self.requestGaslessInfo()
             let activationGeneration = self.activationGeneration
             let encryptComment = commentEncrypted && resolved.comment?.isEmpty == false
@@ -1370,7 +1383,7 @@ extension WalletContextImpl {
                 effectiveAmount = resolved.amount
             }
             let transfer = PreparedTransfer(
-                id: UUID().uuidString.lowercased(),
+                id: pendingRegistration?.id ?? UUID().uuidString.lowercased(),
                 recipient: resolved.address,
                 amount: effectiveAmount,
                 requestedAmount: resolved.amount,
@@ -1380,6 +1393,12 @@ extension WalletContextImpl {
                 fee: fee,
                 expiresAt: Int32(clamping: preview.validUntil)
             )
+            if let pendingRegistration {
+                let encryptedComment: String?
+                if encryptComment, case let .rawPayload(boc) = body { encryptedComment = boc }
+                else { encryptedComment = nil }
+                try await self.updateRegisteredPendingTransfer(pendingRegistration, prepared: transfer, encryptedComment: encryptedComment)
+            }
             self.preparedTransfers[transfer.id] = PreparedEngineTransferRecord(
                 walletAddress: info.address,
                 transfer: transfer,
@@ -1512,6 +1531,9 @@ extension WalletContextImpl {
             }
         } catch {
             await self.transferSubmissionCoordinator.release(operationId)
+            if let registration = self.pendingTransferRegistrations[prepared.id]?.registration {
+                self.discardPendingTransferRegistration(registration)
+            }
             throw error
         }
         await self.transferSubmissionCoordinator.release(operationId)
@@ -1564,10 +1586,18 @@ extension WalletContextImpl {
                 pendingComment = prepared.comment
             }
             let activationGenerationBeforeSend = self.activationGeneration
-            let createdAt = currentWalletTimestamp()
-            let randomId = Int64.random(in: Int64.min ... Int64.max)
+            let registration = self.pendingTransferRegistrations[prepared.id]
+            if let registration {
+                guard registration.peerId == recipientPeerId,
+                      registration.registration.sessionId == session?.id,
+                      self.isCurrentPendingTransferRegistration(registration.registration) else { throw WalletError.unavailable }
+            }
+            let createdAt = registration?.pending.createdAt ?? currentWalletTimestamp()
+            let randomId = registration?.randomId ?? Int64.random(in: Int64.min ... Int64.max)
             let pendingMessage: WalletPendingTransferMessageReference?
-            if let recipientPeerId, prepared.collectible == nil, WalletContext.useWalletTransferApi {
+            if let registration {
+                pendingMessage = registration.pending.pendingMessage
+            } else if let recipientPeerId, prepared.collectible == nil, WalletContext.useWalletTransferApi {
                 pendingMessage = try await WalletSignalRequestContext<WalletPendingTransferMessageReference?>().run(
                     self.engine.wallet.createPendingTransferMessage(
                         peerId: recipientPeerId,
@@ -1611,6 +1641,7 @@ extension WalletContextImpl {
                 expectedGasless: expectedGasless,
                 pendingMessage: pendingMessage,
                 fee: prepared.fee,
+                uiExpiresAt: registration == nil ? nil : walletPendingTransferUIExpirationTimestamp(from: currentWalletTimestamp()),
                 createdAt: createdAt,
                 status: .broadcasting
             )
@@ -1623,11 +1654,15 @@ extension WalletContextImpl {
                     walletAddress: record.walletAddress,
                     generation: activationGenerationBeforeSend,
                     control: control,
-                    minimumSeqno: minimumSeqno
+                    minimumSeqno: minimumSeqno,
+                    pendingRegistration: registration?.registration,
+                    registrationSession: registration?.session
                 )
                 if pendingMessage != nil { await pendingMessageCreated?() }
                 return .api(submission)
             }
+            self.stopPendingTransferRegistration(prepared.id)
+            self.refreshRegisteredTransferMessage(pending)
             var values = self.currentState.pendingTransfers.filter { $0.id != pending.id }
             values.append(pending)
             self.replaceState(
@@ -1982,6 +2017,7 @@ extension WalletContextImpl {
         }
         self.clearStreamingPresentationOverlay()
         self.streamingRefreshTracker = WalletStreamingRefreshTracker()
+        self.discardPendingTransferRegistrations()
         self.activationGeneration &+= 1
         let generation = self.activationGeneration
         self.activationTask?.cancel()

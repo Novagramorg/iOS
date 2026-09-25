@@ -901,6 +901,7 @@ private final class WalletScreenComponent: Component {
                 guard let self, self.accountContext === context else {
                     return
                 }
+                let hadValue = self.existingWaltBalance != nil
                 let balanceChanged = self.existingWaltBalance != balance
                 self.existingWaltBalance = balance
 
@@ -914,7 +915,7 @@ private final class WalletScreenComponent: Component {
                 }
 
                 if balanceChanged && !self.isUpdating {
-                    let transition: ComponentTransition = balance != nil || self.availableEarnings != nil ? .immediate : .easeInOut(duration: 0.25)
+                    let transition: ComponentTransition = hadValue ? .easeInOut(duration: 0.25) : .immediate
                     self.componentState?.updated(transition: transition)
                 }
             }, completed: { [weak self] in
@@ -2194,13 +2195,15 @@ private final class WalletScreenComponent: Component {
                 context: context,
                 preferredModalWidth: 480.0,
                 initialAutolockTimeout: nil,
+                useCustomNumericKeyboard: true,
+                allowFourDigitPasscode: false,
                 replaceController: { [weak controller] passcodeController in
                     (controller?.navigationController as? NavigationController)?.replaceTopController(passcodeController, animated: true)
                 },
                 authorizationCompleted: { [weak controller] result in
                     guard case let .success(session) = result else { return }
                     guard let navigation = controller?.navigationController as? NavigationController else { session.invalidate(); return }
-                    navigation.replaceTopController(PasscodeOptionsScreen(context: context, settingsSession: session), animated: true)
+                    navigation.replaceTopController(PasscodeOptionsScreen(context: context, settingsSession: session, allowFourDigitPasscode: false), animated: true)
                 }
             ).start(next: { [weak controller] passcodeController in
                 if let passcodeController {

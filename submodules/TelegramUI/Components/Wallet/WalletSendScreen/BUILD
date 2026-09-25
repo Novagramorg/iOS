@@ -14,6 +14,7 @@ swift_library(
         "//submodules/AppBundle",
         "//submodules/AttachmentUI",
         "//submodules/ComponentFlow",
+        "//submodules/TelegramUI/Components/Wallet/WalletSendKeyboardComponent",
         "//submodules/Components/BundleIconComponent",
         "//submodules/Components/MultilineTextComponent",
         "//submodules/Components/ViewControllerComponent",

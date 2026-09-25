@@ -5184,7 +5184,14 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
                 }
             }
         }
-        return resultMessages
+        return resultMessages?.filter { message -> Bool in
+            for media in message.media {
+                if media is TelegramMediaAction {
+                    return false
+                }
+            }
+            return true
+        }
     }
     
     func isMessageVisible(id: MessageId) -> Bool {
@@ -5278,14 +5285,7 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
                         updatedToggledMessageIds = state.toggledMessageIds
                         let isSelected = (self.controllerInteraction.selectionState?.selectedIds.contains(message.id) ?? false)
                         if state.selecting != isSelected {
-                            let messageIds = messages.filter { message -> Bool in
-                                for media in message.media {
-                                    if media is TelegramMediaAction {
-                                        return false
-                                    }
-                                }
-                                return true
-                            }.map { $0.id }
+                            let messageIds = messages.map { $0.id }
                             updatedToggledMessageIds.append(messageIds)
                             self.controllerInteraction.toggleMessagesSelection(messageIds, state.selecting)
                         }

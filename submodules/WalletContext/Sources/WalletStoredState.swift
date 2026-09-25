@@ -10,18 +10,21 @@ struct WalletStoredTransaction: Codable, Equatable, Sendable {
     enum Peer: Codable, Equatable, @unchecked Sendable {
         case user(id: EnginePeer.Id)
         case address(String)
+        case onramp(address: String, providerName: String)
         case unsupported
 
         private enum Kind: Int32 {
             case user = 0
             case address = 1
             case unsupported = 2
+            case onramp = 3
         }
 
         private enum CodingKeys: String, CodingKey {
             case kind
             case userId
             case address
+            case providerName
         }
 
         init(from decoder: Decoder) throws {
@@ -41,6 +44,11 @@ struct WalletStoredTransaction: Codable, Equatable, Sendable {
                 )
             case .address:
                 self = .address(try container.decode(String.self, forKey: .address))
+            case .onramp:
+                self = .onramp(
+                    address: try container.decode(String.self, forKey: .address),
+                    providerName: try container.decode(String.self, forKey: .providerName)
+                )
             case .unsupported:
                 self = .unsupported
             }
@@ -55,6 +63,10 @@ struct WalletStoredTransaction: Codable, Equatable, Sendable {
             case let .address(address):
                 try container.encode(Kind.address.rawValue, forKey: .kind)
                 try container.encode(address, forKey: .address)
+            case let .onramp(address, providerName):
+                try container.encode(Kind.onramp.rawValue, forKey: .kind)
+                try container.encode(address, forKey: .address)
+                try container.encode(providerName, forKey: .providerName)
             case .unsupported:
                 try container.encode(Kind.unsupported.rawValue, forKey: .kind)
             }
@@ -107,6 +119,10 @@ struct WalletStoredTransaction: Codable, Equatable, Sendable {
             self.peer = .address(address)
             self.peerAddress = nil
             self.peerDomain = domain
+        case let .onramp(address, domain, providerName):
+            self.peer = .onramp(address: address, providerName: providerName)
+            self.peerAddress = nil
+            self.peerDomain = domain
         case .unsupported:
             self.peer = .unsupported
             self.peerAddress = nil
@@ -132,6 +148,8 @@ struct WalletStoredTransaction: Codable, Equatable, Sendable {
             }
         case let .address(address):
             peer = .address(address, domain: self.peerDomain)
+        case let .onramp(address, providerName):
+            peer = .onramp(address: address, domain: self.peerDomain, providerName: providerName)
         case .unsupported:
             peer = .unsupported
         }

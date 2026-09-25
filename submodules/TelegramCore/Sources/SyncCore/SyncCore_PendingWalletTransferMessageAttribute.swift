@@ -88,6 +88,14 @@ public final class PendingWalletTransferMessageAttribute: MessageAttribute, Pend
         )
     }
 
+    func renewingPreparation(expiresAt: Int32) -> PendingWalletTransferMessageAttribute {
+        guard self.msgHash == nil, self.resolvedMessageId == nil, self.serverMessageId == nil else { return self }
+        return PendingWalletTransferMessageAttribute(
+            operationId: self.operationId, expiresAt: max(self.expiresAt, expiresAt),
+            previousMessageId: self.previousMessageId
+        )
+    }
+
     func resolving(transactionId: String) -> PendingWalletTransferMessageAttribute {
         return PendingWalletTransferMessageAttribute(
             operationId: self.operationId,

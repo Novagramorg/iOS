@@ -130,6 +130,8 @@ func walletTransactions(
             peer = .user(enginePeer, address: address, domain: domain)
         case let .address(address, domain):
             peer = .address(address, domain: domain)
+        case let .onramp(address, domain, providerName):
+            peer = .onramp(address: address, domain: domain, providerName: providerName)
         case .unsupported:
             peer = .unsupported
         }

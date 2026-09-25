@@ -120,15 +120,21 @@ func _internal_replaceWallet(
     switch replacement {
     case .new:
         apiReplacement = .inputWalletNew
-    case let .imported(publicKey, ownershipProof):
+    case let .imported(publicKey, anchorPublicKey, ownershipProof):
         guard publicKey.count == 32 else {
+            return .fail(.publicKeyInvalid)
+        }
+        if let anchorPublicKey, anchorPublicKey.count != 32 {
             return .fail(.publicKeyInvalid)
         }
         guard ownershipProof.timestamp > 0, ownershipProof.signature.count == 64 else {
             return .fail(.proofInvalid)
         }
+        let effectiveAnchorPublicKey = anchorPublicKey == publicKey ? nil : anchorPublicKey
         apiReplacement = .inputWalletImported(.init(
+            flags: effectiveAnchorPublicKey == nil ? 0 : (1 << 0),
             publicKey: Buffer(data: publicKey),
+            anchorPublicKey: effectiveAnchorPublicKey.map { Buffer(data: $0) },
             proof: .walletOwnershipProof(.init(
                 timestamp: ownershipProof.timestamp,
                 signature: Buffer(data: ownershipProof.signature)

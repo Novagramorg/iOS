@@ -73,6 +73,7 @@ private final class PasscodeOptionsScreenContextSource: ContextReferenceContentS
 private final class PasscodeOptionsScreenModel {
     let context: AccountContext
     let sessionState: PasscodeSettingsSessionState
+    private let allowFourDigitPasscode: Bool
     weak var controller: PasscodeOptionsScreen?
 
     private(set) var state = PasscodeOptionsScreenState()
@@ -88,9 +89,10 @@ private final class PasscodeOptionsScreenModel {
         return self.statePromise.get()
     }
 
-    init(context: AccountContext, settingsSession: PasscodeSession?) {
+    init(context: AccountContext, settingsSession: PasscodeSession?, allowFourDigitPasscode: Bool) {
         self.context = context
         self.sessionState = PasscodeSettingsSessionState(session: settingsSession)
+        self.allowFourDigitPasscode = allowFourDigitPasscode
 
         self.disposables.add((context.sharedContext.accountManager.transaction { transaction -> PasscodeOptionsScreenData in
             let settings = transaction.getSharedData(ApplicationSpecificSharedDataKeys.presentationPasscodeSettings)?.get(PresentationPasscodeSettings.self) ?? PresentationPasscodeSettings.defaultSettings
@@ -418,7 +420,7 @@ private final class PasscodeOptionsScreenModel {
         }
         let generation = self.sessionState.generation
         weak var setupController: ViewController?
-        let controller = applicationPasscodeSetupController(context: self.context, session: session, change: session != nil, ownsAuthorizationSession: false, preferredModalWidth: 480.0, settingsSessionCompleted: { [weak self] session in
+        let controller = applicationPasscodeSetupController(context: self.context, session: session, change: session != nil, ownsAuthorizationSession: false, preferredModalWidth: 480.0, allowFourDigitPasscode: self.allowFourDigitPasscode, settingsSessionCompleted: { [weak self] session in
             guard let self, self.sessionState.accepts(operation: operation) else {
                 session.invalidate()
                 return
@@ -931,8 +933,8 @@ private final class PasscodeOptionsScreenComponent: Component {
 public final class PasscodeOptionsScreen: ViewControllerComponentContainer {
     private let model: PasscodeOptionsScreenModel
 
-    public init(context: AccountContext, focusOnItemTag: PasscodeOptionsEntryTag? = nil, settingsSession: PasscodeSession? = nil) {
-        let model = PasscodeOptionsScreenModel(context: context, settingsSession: settingsSession)
+    public init(context: AccountContext, focusOnItemTag: PasscodeOptionsEntryTag? = nil, settingsSession: PasscodeSession? = nil, allowFourDigitPasscode: Bool = true) {
+        let model = PasscodeOptionsScreenModel(context: context, settingsSession: settingsSession, allowFourDigitPasscode: allowFourDigitPasscode)
         self.model = model
 
         super.init(

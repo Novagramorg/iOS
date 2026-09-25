@@ -44,11 +44,18 @@ func walletSendInputText(
         guard value.isFinite else {
             return ""
         }
-        return String(
+        var text = String(
             format: "%.2f",
             locale: Locale(identifier: "en_US_POSIX"),
             value
-        ).replacingOccurrences(
+        )
+        while text.hasSuffix("0") {
+            text.removeLast()
+        }
+        if text.hasSuffix(".") {
+            text.removeLast()
+        }
+        return text.replacingOccurrences(
             of: ".",
             with: dateTimeFormat.decimalSeparator
         )
@@ -73,14 +80,25 @@ final class WalletSendAmountTextField: UITextField {
     var interactionBegan: (() -> Void)?
     var caretColor: UIColor = .clear {
         didSet {
-            self.tintColor = self.displaysNativeCaret ? self.caretColor : .clear
+            self.updateSelectionTintColor()
+        }
+    }
+    var usesCustomCaret = false {
+        didSet {
+            self.updateSelectionTintColor()
+            self.setNeedsLayout()
         }
     }
     var displaysNativeCaret = true {
         didSet {
             guard self.displaysNativeCaret != oldValue else { return }
-            self.tintColor = self.displaysNativeCaret ? self.caretColor : .clear
+            self.updateSelectionTintColor()
             self.setNeedsLayout()
+        }
+    }
+    override var selectedTextRange: UITextRange? {
+        didSet {
+            self.updateSelectionTintColor()
         }
     }
     var rendersText = true {
@@ -90,12 +108,58 @@ final class WalletSendAmountTextField: UITextField {
         }
     }
 
+    private var displaysNativeSelection: Bool {
+        return self.displaysNativeCaret && (!self.usesCustomCaret || self.selectedTextRange?.isEmpty == false)
+    }
+
+    private func updateSelectionTintColor() {
+        let color: UIColor = self.displaysNativeSelection ? self.caretColor : .clear
+        if self.tintColor != color {
+            self.tintColor = color
+        }
+    }
+
     override func caretRect(for position: UITextPosition) -> CGRect {
-        return self.displaysNativeCaret ? self.nativeCaretRect(for: position) : .zero
+        return self.displaysNativeSelection ? self.amountCaretRect(for: position) : .zero
     }
 
     func nativeCaretRect(for position: UITextPosition) -> CGRect {
         return super.caretRect(for: position)
+    }
+
+    func amountCaretRect(for position: UITextPosition) -> CGRect {
+        var rect = self.nativeCaretRect(for: position)
+        if !rect.isNull, !rect.isInfinite {
+            let width: CGFloat = 3.0
+            rect.origin.x = floorToScreenPixels(rect.midX - width / 2.0)
+            rect.size.width = width
+        }
+
+        let integralFont: UIFont?
+        if let text = self.textLayout?.attributedText, text.length > 0 {
+            integralFont = text.attribute(.font, at: 0, effectiveRange: nil) as? UIFont ?? self.font
+        } else {
+            integralFont = self.font
+        }
+        let startRect = self.nativeCaretRect(for: self.beginningOfDocument)
+        guard !rect.isNull, !rect.isInfinite, rect.height > 0.0,
+              !startRect.isNull, !startRect.isInfinite, startRect.height > 0.0,
+              let integralFont else { return rect }
+
+        var caretFont = integralFont
+        if let text = self.textLayout?.attributedText, text.length > 0 {
+            let offset = self.offset(from: self.beginningOfDocument, to: position)
+            let index = min(text.length - 1, max(0, offset - 1))
+            caretFont = text.attribute(.font, at: index, effectiveRange: nil) as? UIFont ?? integralFont
+        }
+        let baseline = startRect.midY + (integralFont.ascender + integralFont.descender) / 2.0
+        let height = caretFont.capHeight * 1.24
+        return CGRect(
+            x: rect.minX,
+            y: baseline - caretFont.capHeight / 2.0 - height / 2.0,
+            width: rect.width,
+            height: height
+        )
     }
 
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
@@ -214,10 +278,10 @@ class WalletSendAmountField: UIView, UITextFieldDelegate {
     let integralFont = Font.with(
         size: 48.0,
         design: .round,
-        weight: .semibold,
+        weight: .bold,
         traits: []
     )
-    let fractionalFont = Font.with(size: 32.0, design: .round, weight: .semibold)
+    let fractionalFont = Font.with(size: 32.0, design: .round, weight: .bold)
 
     private let gramIconLayoutSize = CGSize(width: 44.0, height: 44.0)
     private let gramAnimationSize = CGSize(width: 48.0, height: 48.0)
@@ -427,7 +491,7 @@ class WalletSendAmountField: UIView, UITextFieldDelegate {
             self.amountTextColor = theme.list.itemPrimaryTextColor
             self.textField.textColor = theme.list.itemPrimaryTextColor
         }
-        self.textField.caretColor = theme.list.itemAccentColor
+        self.textField.caretColor = mode == .gram ? theme.list.itemAccentColor : UIColor(rgb: 0x219949)
         
         self.textField.attributedPlaceholder = NSAttributedString(
             string: "0",
@@ -458,7 +522,9 @@ class WalletSendAmountField: UIView, UITextFieldDelegate {
             containerSize: self.gramAnimationSize
         )
         if let gramIconView = self.gramIcon.view as? LottieComponent.View {
-            gramIconView.externalShouldPlay = mode == .gram && isVisible
+            if !self.usesAnimatedPresentation {
+                gramIconView.externalShouldPlay = mode == .gram && isVisible
+            }
             if gramIconView.superview == nil {
                 gramIconView.isUserInteractionEnabled = false
                 self.contentView.addSubview(gramIconView)
