@@ -44,6 +44,7 @@ swift_library(
         "//submodules/PhotoResources:PhotoResources",
         "//submodules/AppBundle:AppBundle",
         "//submodules/ContextUI:ContextUI",
+        "//submodules/Markdown:Markdown",
         "//submodules/PhoneNumberFormat:PhoneNumberFormat",
         "//submodules/TelegramIntents:TelegramIntents",
         "//submodules/ItemListPeerActionItem:ItemListPeerActionItem",

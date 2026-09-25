@@ -204,6 +204,24 @@ func _internal_acceptPendingWalletTransferMessage(postbox: Postbox, reference: W
     }
 }
 
+func _internal_updatePendingWalletTransferMessage(postbox: Postbox, reference: WalletPendingTransferMessageReference, amount: Int64, address: String, comment: String?, commentEncrypted: Bool, expiresAt: Int32) -> Signal<Void, NoError> {
+    return postbox.transaction { transaction in
+        guard amount > 0,
+              let pending = transaction.getPendingMessageAction(type: .walletTransfer, id: reference.messageId) as? PendingWalletTransferMessageAttribute,
+              pending.operationId == reference.operationId,
+              pending.msgHash == nil, pending.resolvedMessageId == nil, pending.serverMessageId == nil,
+              let message = transaction.getMessage(reference.messageId),
+              message.attributes.contains(where: { ($0 as? PendingWalletTransferMessageAttribute)?.operationId == reference.operationId }) else { return }
+        let renewed = pending.renewingPreparation(expiresAt: expiresAt)
+        let attributes = message.attributes.filter { !($0 is PendingWalletTransferMessageAttribute) } + [renewed]
+        let media: [Media] = [TelegramMediaAction(action: .gramTransfer(amount: amount, peerAddress: address, transactionId: "", comment: comment, commentEncrypted: commentEncrypted))]
+        transaction.updateMessage(reference.messageId, update: { _ in
+            return .update(walletStoreMessage(message).withUpdatedAttributes(attributes).withUpdatedMedia(media))
+        })
+        transaction.setPendingMessageAction(type: .walletTransfer, id: reference.messageId, action: renewed)
+    }
+}
+
 func acceptPendingWalletTransferMessage(transaction: Transaction, reference: WalletPendingTransferMessageReference, transfer: WalletSentTransfer, receivedAt: Int32) {
     guard let pending = transaction.getPendingMessageAction(type: .walletTransfer, id: reference.messageId) as? PendingWalletTransferMessageAttribute,
           pending.operationId == reference.operationId else {

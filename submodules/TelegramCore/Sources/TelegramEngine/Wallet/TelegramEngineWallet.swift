@@ -36,6 +36,10 @@ public extension TelegramEngine {
             return _internal_acceptPendingWalletTransferMessage(postbox: self.account.postbox, reference: reference, transfer: transfer, receivedAt: receivedAt)
         }
 
+        public func updatePendingTransferMessage(_ reference: WalletPendingTransferMessageReference, amount: Int64, address: String, comment: String?, commentEncrypted: Bool, expiresAt: Int32) -> Signal<Void, NoError> {
+            return _internal_updatePendingWalletTransferMessage(postbox: self.account.postbox, reference: reference, amount: amount, address: address, comment: comment, commentEncrypted: commentEncrypted, expiresAt: expiresAt)
+        }
+
         public func removePendingTransferMessage(_ reference: WalletPendingTransferMessageReference) -> Signal<Void, NoError> {
             return _internal_removePendingWalletTransferMessage(postbox: self.account.postbox, reference: reference)
         }

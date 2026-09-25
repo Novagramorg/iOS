@@ -214,7 +214,7 @@ final class WalletSendRecipientComponent: Component {
                 transition: transition,
                 component: AnyComponent(PlainButtonComponent(
                     content: AnyComponent(BundleIconComponent(
-                        name: "Chat/Context Menu/Help",
+                        name: "Wallet/AddressInfo",
                         tintColor: component.theme.list.itemAccentColor,
                         maxSize: CGSize(width: 24.0, height: 24.0)
                     )),

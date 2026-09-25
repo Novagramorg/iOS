@@ -76,6 +76,7 @@ actor WalletContextImpl {
     var serverStateNeedsActivation = false
     var transactionHistory = WalletTransactionHistory()
     var preparedTransfers: [String: PreparedEngineTransferRecord] = [:]
+    var pendingTransferRegistrations: [String: WalletPendingTransferRegistrationRecord] = [:]
     var preparedAuthorizations: [String: PasscodeSession] = [:]
     var deferredSynchronizationScope: WalletSynchronizationScope = []
     var preparedRecoveryPhraseImportRecordId: String?
@@ -191,6 +192,7 @@ actor WalletContextImpl {
 
     func shutdown() async {
         guard !self.isShutdown else { return }
+        self.discardPendingTransferRegistrations()
         self.isShutdown = true
         self.resetTonConnect()
         self.authorization.invalidate()
@@ -238,6 +240,7 @@ actor WalletContextImpl {
         self.isAccountCurrent = accountIsCurrent
         self.isNetworkAvailable = networkAvailable
         if !accountIsCurrent {
+            self.discardPendingTransferRegistrations()
             self.authorization.invalidate()
             self.preparedAuthorizations.removeAll()
             if let recordId = self.preparedRecoveryPhraseImportRecordId {
@@ -339,6 +342,11 @@ actor WalletContextImpl {
             self.completeStoredStateRestore()
             return
         }
+        for pending in storedState.pendingTransfers where pending.isPreparing {
+            if let message = pending.pendingMessage {
+                let _ = self.engine.wallet.removePendingTransferMessage(message).startStandalone()
+            }
+        }
         var cachedTransactions: [Transaction]
         do {
             cachedTransactions = try await walletTransactions(
@@ -381,7 +389,7 @@ actor WalletContextImpl {
                 isLoadingMore: false,
                 error: nil
             ),
-            pendingTransfers: storedState.pendingTransfers.map(walletPendingTransferAfterRestart),
+            pendingTransfers: storedState.pendingTransfers.filter { !$0.isPreparing }.map(walletPendingTransferAfterRestart),
             activeOperation: nil,
             fiat: FiatState(
                 selectedCurrency: storedState.selectedFiatCurrency,
@@ -610,6 +618,7 @@ actor WalletContextImpl {
         self.outgoingTransactionPresentationIdentities.removeAll()
         self.cancelGaslessInfoRequest()
         self.streamingRefreshTracker = WalletStreamingRefreshTracker()
+        self.discardPendingTransferRegistrations()
         self.activationGeneration &+= 1
         self.stopStreaming()
         self.cancelWalletTransferResolution()
@@ -937,7 +946,8 @@ actor WalletContextImpl {
 
     func reconcilePendingTransfers(_ send: SendSnapshot) -> [PendingTransfer] {
         guard let id = send.operationId,
-              let index = self.currentState.pendingTransfers.firstIndex(where: { $0.id == id }) else {
+              let index = self.currentState.pendingTransfers.firstIndex(where: { $0.id == id }),
+              !self.currentState.pendingTransfers[index].isPreparing else {
             return self.currentState.pendingTransfers
         }
         var values = self.currentState.pendingTransfers

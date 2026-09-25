@@ -2041,6 +2041,8 @@ public final class WalletImportScreen: ViewControllerComponentContainer {
             target: nil,
             action: nil
         )
+        
+        self.supportedOrientations = ViewControllerSupportedOrientations(regularSize: .all, compactSize: .portrait)
 
         self.scrollToTop = { [weak self] in
             guard let self,

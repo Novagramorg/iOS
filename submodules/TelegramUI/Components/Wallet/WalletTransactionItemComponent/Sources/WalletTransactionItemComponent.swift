@@ -42,11 +42,12 @@ private final class WalletTransactionServiceIconComponent: Component {
 
         func update(component: WalletTransactionServiceIconComponent) -> CGSize {
             let size = CGSize(width: 40.0, height: 40.0)
+            let isBlue = component.iconName == "Wallet/TransactionCard" || component.iconName == "Wallet/TransactionWalt"
             self.backgroundView.image = generateGradientFilledCircleImage(
                 diameter: size.width,
                 colors: [
-                    UIColor(rgb: 0x9aa0ac).cgColor,
-                    UIColor(rgb: 0xb8bdc7).cgColor
+                    UIColor(rgb: isBlue ? 0x2a9ef1 : 0x9aa0ac).cgColor,
+                    UIColor(rgb: isBlue ? 0x72d5fd : 0xb8bdc7).cgColor
                 ] as NSArray,
                 direction: .vertical
             )
@@ -55,7 +56,8 @@ private final class WalletTransactionServiceIconComponent: Component {
                 color: .white
             )
             self.backgroundView.frame = CGRect(origin: .zero, size: size)
-            self.iconView.frame = CGRect(origin: .zero, size: size).insetBy(dx: 7.0, dy: 7.0)
+            let iconInset: CGFloat = isBlue ? 5.0 : 7.0
+            self.iconView.frame = CGRect(origin: .zero, size: size).insetBy(dx: iconInset, dy: iconInset)
             return size
         }
     }
@@ -429,7 +431,24 @@ public final class WalletTransactionItemComponent: Component {
 
             let isDeployContract = transaction.kind == .deployContract
             let isKeyChange = transaction.kind == .keyChange
-            let hasServiceIcon = isDeployContract || isKeyChange
+            let isServiceTransaction = isDeployContract || isKeyChange
+            let serviceIconName: String?
+            if isKeyChange {
+                serviceIconName = "Wallet/TransactionKey"
+            } else if isDeployContract {
+                serviceIconName = "Chat List/Tabs/IconSettings"
+            } else if case let .onramp(_, _, provider) = transaction.peer {
+                switch provider {
+                case "MoonPay":
+                    serviceIconName = "Wallet/TransactionCard"
+                case "Walt":
+                    serviceIconName = "Wallet/TransactionWalt"
+                default:
+                    serviceIconName = nil
+                }
+            } else {
+                serviceIconName = nil
+            }
             let isSelfTransfer = transaction.isSelfTransfer(walletAddress: component.walletAddress)
             let displayedDirection: WalletContext.Transaction.Direction = isSelfTransfer ? .incoming : transaction.direction
             let displayedAmount = isSelfTransfer ? abs(transaction.amount) : transaction.amount
@@ -500,8 +519,11 @@ public final class WalletTransactionItemComponent: Component {
                     amountIconColor = nil
                     avatarPeer = nil
                 }
+                if case let .onramp(_, _, providerName) = transaction.peer {
+                    subtitleText = providerName
+                }
             }
-            if !hasServiceIcon, case let .user(peer, _, _) = transaction.peer {
+            if !isServiceTransaction, case let .user(peer, _, _) = transaction.peer {
                 avatarPeer = .transactionPeer(.peer(peer))
             }
             
@@ -514,7 +536,7 @@ public final class WalletTransactionItemComponent: Component {
 
             let isPending = transaction.status == .pending
                 && transaction.collectible == nil
-                && !hasServiceIcon
+                && !isServiceTransaction
             if isPending {
                 amountColor = component.theme.list.itemSecondaryTextColor
                 amountIconColor = component.theme.list.itemSecondaryTextColor
@@ -528,13 +550,14 @@ public final class WalletTransactionItemComponent: Component {
 
             let avatarSize = CGSize(width: 40.0, height: 40.0)
             let avatarFrame = CGRect(origin: CGPoint(x: -4.0, y: 2.0), size: avatarSize)
-            if hasServiceIcon {
-                self.avatarContainer.isHidden = true
+            if let serviceIconName {
+                self.avatarContainer.isHidden = false
+                self.avatar.view?.isHidden = true
                 self.serviceIcon.parentState = state
                 let _ = self.serviceIcon.update(
                     transition: transition,
                     component: AnyComponent(WalletTransactionServiceIconComponent(
-                        iconName: isKeyChange ? "Wallet/TransactionKey" : "Chat List/Tabs/IconSettings"
+                        iconName: serviceIconName
                     )),
                     environment: {},
                     containerSize: avatarSize
@@ -542,10 +565,11 @@ public final class WalletTransactionItemComponent: Component {
                 if let serviceIconView = self.serviceIcon.view {
                     if serviceIconView.superview == nil {
                         serviceIconView.isUserInteractionEnabled = false
-                        self.addSubview(serviceIconView)
+                        self.avatarContainer.addSubview(serviceIconView)
                     }
                     serviceIconView.isHidden = false
-                    transition.setFrame(view: serviceIconView, frame: avatarFrame)
+                    transition.setFrame(view: self.avatarContainer, frame: avatarFrame)
+                    transition.setFrame(view: serviceIconView, frame: CGRect(origin: .zero, size: avatarSize))
                 }
             } else if let avatarPeer {
                 self.serviceIcon.view?.isHidden = true
@@ -567,6 +591,7 @@ public final class WalletTransactionItemComponent: Component {
                     containerSize: avatarSize
                 )
                 if let avatarView = self.avatar.view {
+                    avatarView.isHidden = false
                     if avatarView.superview == nil {
                         self.avatarContainer.addSubview(avatarView)
                     }
@@ -581,7 +606,7 @@ public final class WalletTransactionItemComponent: Component {
                 self.avatarContainer.isHidden = true
             }
 
-            if isPending, avatarPeer != nil {
+            if isPending, avatarPeer != nil || serviceIconName != nil {
                 let backgroundDiameter: CGFloat = 14.0
                 let indicatorDiameter: CGFloat = 9.0
                 let circlePoint = CGPoint(
@@ -783,6 +808,14 @@ public final class WalletTransactionItemComponent: Component {
                     peerTitle = domain
                 } else {
                     peerTitle = walletTransactionCounterparty(address)
+                }
+            case let .onramp(_, _, provider):
+                //TODO:localize
+                switch provider {
+                case "MoonPay":
+                    peerTitle = "Card top-up"
+                default:
+                    peerTitle = "Crypto top-up"
                 }
             case .unsupported:
                 peerTitle = walletTransactionCounterparty(nil)

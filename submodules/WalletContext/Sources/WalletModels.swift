@@ -420,6 +420,7 @@ public extension WalletContext {
         public enum Peer: Equatable, @unchecked Sendable {
             case user(EnginePeer, address: String, domain: String?)
             case address(String, domain: String?)
+            case onramp(address: String, domain: String?, providerName: String)
             case unsupported
 
             public var address: String? {
@@ -427,7 +428,7 @@ public extension WalletContext {
                 switch self {
                 case let .user(_, address, _):
                     value = address
-                case let .address(address, _):
+                case let .address(address, _), let .onramp(address, _, _):
                     value = address
                 case .unsupported:
                     return nil
@@ -441,7 +442,7 @@ public extension WalletContext {
             public var domain: String? {
                 let value: String?
                 switch self {
-                case let .user(_, _, domain), let .address(_, domain):
+                case let .user(_, _, domain), let .address(_, domain), let .onramp(_, domain, _):
                     value = domain
                 case .unsupported:
                     value = nil
@@ -453,10 +454,14 @@ public extension WalletContext {
             }
 
             public var displayName: String? {
-                if case let .user(peer, _, _) = self {
+                switch self {
+                case let .user(peer, _, _):
                     return peer.debugDisplayTitle
+                case let .onramp(_, _, providerName):
+                    return providerName
+                case .address, .unsupported:
+                    return nil
                 }
-                return nil
             }
         }
 
@@ -668,6 +673,14 @@ public extension WalletContext {
         }
     }
 
+    struct PendingTransferRegistration: Equatable, Sendable {
+        public let id: String
+        let walletAddress: String
+        let walletPublicKey: String
+        let sessionId: UUID
+        let generation: UInt64
+    }
+
     struct PendingTransfer: Codable, Equatable, Sendable {
         public struct StreamingData: Codable, Equatable, Sendable {
             public let normalBodyHash: String?
@@ -713,9 +726,10 @@ public extension WalletContext {
         public let fee: Int64?
         public let transactionHash: String?
         public let transactionLt: String?
-        public let uiExpiresAt: Int32?
+        public var uiExpiresAt: Int32?
         public let createdAt: Int32
         public let status: Status
+        public let isPreparing: Bool
 
         public init(
             id: String,
@@ -734,7 +748,8 @@ public extension WalletContext {
             transactionLt: String? = nil,
             uiExpiresAt: Int32? = nil,
             createdAt: Int32,
-            status: Status
+            status: Status,
+            isPreparing: Bool = false
         ) {
             self.id = id
             self.recipient = recipient
@@ -753,6 +768,7 @@ public extension WalletContext {
             self.uiExpiresAt = uiExpiresAt
             self.createdAt = createdAt
             self.status = status
+            self.isPreparing = isPreparing
         }
 
         public init(from decoder: Decoder) throws {
@@ -774,7 +790,8 @@ public extension WalletContext {
                 transactionLt: try container.decodeIfPresent(String.self, forKey: .transactionLt),
                 uiExpiresAt: try container.decodeIfPresent(Int32.self, forKey: .uiExpiresAt),
                 createdAt: try container.decode(Int32.self, forKey: .createdAt),
-                status: try container.decode(Status.self, forKey: .status)
+                status: try container.decode(Status.self, forKey: .status),
+                isPreparing: try container.decodeIfPresent(Bool.self, forKey: .isPreparing) ?? false
             )
         }
     }

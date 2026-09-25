@@ -764,7 +764,7 @@ public func passcodeOptionsController(context: AccountContext, focusOnItemTag: P
     return controller
 }
 
-public func passcodeOptionsAccessController(context: AccountContext, preferredModalWidth: CGFloat? = nil, initialAutolockTimeout: Int32? = 60 * 60, replaceController: @escaping (ViewController) -> Void, authorizationCompleted: @escaping (Result<PasscodeSession, PasscodeError>) -> Void) -> Signal<ViewController?, NoError> {
+public func passcodeOptionsAccessController(context: AccountContext, preferredModalWidth: CGFloat? = nil, initialAutolockTimeout: Int32? = 60 * 60, useCustomNumericKeyboard: Bool = true, allowFourDigitPasscode: Bool = true, replaceController: @escaping (ViewController) -> Void, authorizationCompleted: @escaping (Result<PasscodeSession, PasscodeError>) -> Void) -> Signal<ViewController?, NoError> {
     return context.sharedContext.accountManager.transaction { transaction -> PostboxAccessChallengeData in
         transaction.getAccessChallengeData()
     }
@@ -780,7 +780,7 @@ public func passcodeOptionsAccessController(context: AccountContext, preferredMo
                     return
                 }
                 didProceed = true
-                let setupController = applicationPasscodeSetupController(context: context, session: nil, change: false, preferredModalWidth: preferredModalWidth, initialAutolockTimeout: initialAutolockTimeout, settingsSessionCompleted: { session in
+                let setupController = applicationPasscodeSetupController(context: context, session: nil, change: false, preferredModalWidth: preferredModalWidth, initialAutolockTimeout: initialAutolockTimeout, useCustomNumericKeyboard: useCustomNumericKeyboard, allowFourDigitPasscode: allowFourDigitPasscode, settingsSessionCompleted: { session in
                     authorizationCompleted(.success(session))
                 }, cancelled: { authorizationCompleted(.failure(.cancelled)) }, completion: { _ in
                     deleteAllSendMessageIntents()

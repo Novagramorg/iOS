@@ -6,8 +6,13 @@ import BundleIconComponent
 import MultilineTextComponent
 import TelegramPresentationData
 
-final class WalletSendKeyboardComponent: Component {
-    enum Action: Equatable {
+public final class WalletSendKeyboardComponent: Component {
+    public enum Mode: Equatable {
+        case decimal(separator: String)
+        case numeric
+    }
+
+    public enum Action: Equatable {
         case insertText(String)
         case deleteBackward
     }
@@ -15,16 +20,20 @@ final class WalletSendKeyboardComponent: Component {
     let theme: PresentationTheme
     let safeInsets: UIEdgeInsets
     let isLandscape: Bool
-    let decimalSeparator: String
+    let minimumHeight: CGFloat
+    let topInset: CGFloat?
+    let mode: Mode
     let deleteTitle: String
     let isEnabled: Bool
     let action: (Action) -> Void
 
-    init(
+    public init(
         theme: PresentationTheme,
         safeInsets: UIEdgeInsets,
         isLandscape: Bool,
-        decimalSeparator: String,
+        minimumHeight: CGFloat = 0.0,
+        topInset: CGFloat? = nil,
+        mode: Mode,
         deleteTitle: String,
         isEnabled: Bool,
         action: @escaping (Action) -> Void
@@ -32,17 +41,21 @@ final class WalletSendKeyboardComponent: Component {
         self.theme = theme
         self.safeInsets = safeInsets
         self.isLandscape = isLandscape
-        self.decimalSeparator = decimalSeparator
+        self.minimumHeight = minimumHeight
+        self.topInset = topInset
+        self.mode = mode
         self.deleteTitle = deleteTitle
         self.isEnabled = isEnabled
         self.action = action
     }
 
-    static func ==(lhs: WalletSendKeyboardComponent, rhs: WalletSendKeyboardComponent) -> Bool {
+    public static func ==(lhs: WalletSendKeyboardComponent, rhs: WalletSendKeyboardComponent) -> Bool {
         return lhs.theme === rhs.theme
             && lhs.safeInsets == rhs.safeInsets
             && lhs.isLandscape == rhs.isLandscape
-            && lhs.decimalSeparator == rhs.decimalSeparator
+            && lhs.minimumHeight == rhs.minimumHeight
+            && lhs.topInset == rhs.topInset
+            && lhs.mode == rhs.mode
             && lhs.deleteTitle == rhs.deleteTitle
             && lhs.isEnabled == rhs.isEnabled
     }
@@ -234,7 +247,12 @@ final class WalletSendKeyboardComponent: Component {
 
             let isDark = component.theme.overallDarkAppearance
             let textColor: UIColor = isDark ? .white : .black
-            let isDecimal = action == .insertText(component.decimalSeparator)
+            let isDecimal: Bool
+            if case let .decimal(separator) = component.mode {
+                isDecimal = action == .insertText(separator)
+            } else {
+                isDecimal = false
+            }
             let hasBackground: Bool
             let number: String
             switch action {
@@ -348,13 +366,13 @@ final class WalletSendKeyboardComponent: Component {
         }
     }
 
-    final class View: UIView {
-        private var buttons: [KeyButton] = []
+    public final class View: UIView {
+        private var buttons: [KeyButton?] = Array(repeating: nil, count: 12)
         private var component: WalletSendKeyboardComponent?
         private let keyTrackingGesture = KeyTrackingGestureRecognizer(target: nil, action: nil)
         private var highlightedButton: KeyButton?
 
-        override init(frame: CGRect) {
+        public override init(frame: CGRect) {
             super.init(frame: frame)
 
             self.layer.cornerRadius = 28.0
@@ -370,19 +388,10 @@ final class WalletSendKeyboardComponent: Component {
             self.keyTrackingGesture.addTarget(self, action: #selector(self.trackKey(_:)))
             self.addGestureRecognizer(self.keyTrackingGesture)
 
-            for _ in 0 ..< 12 {
-                let button = KeyButton(frame: .zero)
-                button.action = { [weak self] action in
-                    guard let self, let component = self.component, component.isEnabled else { return }
-                    component.action(action)
-                }
-                self.buttons.append(button)
-                self.addSubview(button)
-            }
             NotificationCenter.default.addObserver(self, selector: #selector(self.cancelKeyPresses), name: UIApplication.willResignActiveNotification, object: nil)
         }
 
-        required init?(coder: NSCoder) {
+        required public init?(coder: NSCoder) {
             fatalError("init(coder:) has not been implemented")
         }
 
@@ -390,13 +399,13 @@ final class WalletSendKeyboardComponent: Component {
             NotificationCenter.default.removeObserver(self)
         }
 
-        override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        public override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
             guard let result = super.hitTest(point, with: event) else { return nil }
             // One touch session owns the whole keyboard, even when it crosses key boundaries.
             return result.isDescendant(of: self) ? self : result
         }
 
-        override func didMoveToWindow() {
+        public override func didMoveToWindow() {
             super.didMoveToWindow()
             if self.window == nil {
                 self.cancelKeyPresses()
@@ -405,7 +414,7 @@ final class WalletSendKeyboardComponent: Component {
 
         private func button(at point: CGPoint) -> KeyButton? {
             guard self.bounds.contains(point) else { return nil }
-            return self.buttons.first(where: {
+            return self.buttons.compactMap { $0 }.first(where: {
                 // Split the 6 pt gaps between adjacent keys without leaving dead zones.
                 $0.isEnabled && $0.frame.insetBy(dx: -3.0, dy: -3.0).contains(point)
             })
@@ -436,16 +445,16 @@ final class WalletSendKeyboardComponent: Component {
             }
         }
 
-        @objc func cancelKeyPresses() {
+        @objc public func cancelKeyPresses() {
             self.keyTrackingGesture.cancel()
             self.highlightedButton = nil
-            for button in self.buttons {
+            for case let button? in self.buttons {
                 button.cancelPress()
             }
         }
 
         func update(component: WalletSendKeyboardComponent, availableSize: CGSize, transition: ComponentTransition) -> CGSize {
-            if let previousComponent = self.component, previousComponent.isLandscape != component.isLandscape {
+            if let previousComponent = self.component, previousComponent.isLandscape != component.isLandscape || previousComponent.minimumHeight != component.minimumHeight || previousComponent.topInset != component.topInset || previousComponent.mode != component.mode {
                 self.cancelKeyPresses()
             }
             self.component = component
@@ -457,27 +466,47 @@ final class WalletSendKeyboardComponent: Component {
 
             let keyHeight: CGFloat = component.isLandscape ? 30.0 : 48.0
             let spacing: CGFloat = 6.0
-            let topInset: CGFloat = component.isLandscape ? 5.0 : 16.0
+            let topInset: CGFloat = component.topInset ?? (component.isLandscape ? 5.0 : 16.0)
             let bottomInset: CGFloat = component.isLandscape ? 21.0 : 30.0
             let leftInset: CGFloat = 5.0 + component.safeInsets.left
             let rightInset: CGFloat = 5.0 + component.safeInsets.right
             let contentWidth = max(0.0, availableSize.width - leftInset - rightInset)
             let keyWidth: CGFloat = component.isLandscape ? 114.0 : max(0.0, (contentWidth - spacing * 2.0) / 3.0)
             let keysLeftInset = component.isLandscape ? leftInset + (contentWidth - keyWidth * 3.0 - spacing * 2.0) / 2.0 : leftInset
-            let size = CGSize(width: availableSize.width, height: topInset + keyHeight * 4.0 + spacing * 3.0 + bottomInset)
+            let size = CGSize(width: availableSize.width, height: max(component.minimumHeight, topInset + keyHeight * 4.0 + spacing * 3.0 + bottomInset))
             let letters = ["", "ABC", "DEF", "GHI", "JKL", "MNO", "PQRS", "TUV", "WXYZ", "", "", ""]
 
-            for (index, button) in self.buttons.enumerated() {
+            for index in 0 ..< self.buttons.count {
                 let action: Action
                 switch index {
                 case 9:
-                    action = .insertText(component.decimalSeparator)
+                    guard case let .decimal(separator) = component.mode else {
+                        if let button = self.buttons[index] {
+                            button.cancelPress()
+                            button.removeFromSuperview()
+                            self.buttons[index] = nil
+                        }
+                        continue
+                    }
+                    action = .insertText(separator)
                 case 10:
                     action = .insertText("0")
                 case 11:
                     action = .deleteBackward
                 default:
                     action = .insertText(String(index + 1))
+                }
+                let button: KeyButton
+                if let current = self.buttons[index] {
+                    button = current
+                } else {
+                    button = KeyButton(frame: .zero)
+                    button.action = { [weak self] action in
+                        guard let self, let component = self.component, component.isEnabled else { return }
+                        component.action(action)
+                    }
+                    self.buttons[index] = button
+                    self.addSubview(button)
                 }
                 let column = CGFloat(index % 3)
                 let left = floorToScreenPixels(keysLeftInset + column * (keyWidth + spacing))
@@ -494,11 +523,11 @@ final class WalletSendKeyboardComponent: Component {
         }
     }
 
-    func makeView() -> View {
+    public func makeView() -> View {
         return View(frame: .zero)
     }
 
-    func update(
+    public func update(
         view: View,
         availableSize: CGSize,
         state: EmptyComponentState,

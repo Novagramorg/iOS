@@ -3,6 +3,7 @@ import CoreFoundation
 import SwiftSignalKit
 import TelegramCore
 import WalletEngineFFI
+import PasscodeCore
 
 private let walletTransferResolutionInterval: Int32 = 15
 private let walletTransferSubmissionTimeout: UInt64 = 45_000_000_000
@@ -450,7 +451,9 @@ extension WalletContextImpl {
         walletAddress: String,
         generation: UInt64,
         control: WalletTransferSubmissionControl,
-        minimumSeqno: UInt32?
+        minimumSeqno: UInt32?,
+        pendingRegistration: WalletContext.PendingTransferRegistration? = nil,
+        registrationSession: PasscodeSession? = nil
     ) async throws -> WalletAPISubmission {
         let startedAt = ProcessInfo.processInfo.systemUptime
         do {
@@ -468,18 +471,28 @@ extension WalletContextImpl {
             guard preparedData.data.validUntil > UInt64(max(0, self.transferSubmissionClock.now())) else {
                 throw WalletError.preparedTransferExpired
             }
+            if let pendingRegistration {
+                guard self.pendingTransferRegistrations[pending.id]?.registration == pendingRegistration,
+                      let registrationSession else { throw WalletError.unavailable }
+                try self.authorization.validate(registrationSession, boundTo: pendingRegistration.sessionId, requireAvailable: false)
+            }
             let data = try WalletTransferData(
                 prepared: preparedData.data,
                 includeInternalBoc: prepared.amount >= self.transferGaslessMinAmount
                     && !WalletContext.isSelfTransfer(recipient: prepared.recipient, walletAddress: walletAddress)
             )
             var persistedPending = pending
+            if pendingRegistration != nil {
+                persistedPending.uiExpiresAt = walletPendingTransferUIExpirationTimestamp(from: self.transferSubmissionClock.now())
+            }
             persistedPending.streamingData = data.streamingData(operationId: pending.id, logger: self.logger)
             let previous = self.transferSubmissions.current(recordId: preparedData.recordId, walletAddress: walletAddress)
             guard preparedData.data.seqno >= (minimumSeqno ?? 0),
                   previous == nil || (previous!.resolution != .pending && UInt64(preparedData.data.seqno) >= previous!.minimumSeqno) else {
                 throw WalletTransferSubmissionError.staleSequenceNumber
             }
+            self.stopPendingTransferRegistration(pending.id)
+            self.refreshRegisteredTransferMessage(persistedPending)
             self.replaceState(phase: self.currentState.phase, balance: self.currentState.balance,
                 transactions: self.currentState.transactions,
                 pendingTransfers: self.currentState.pendingTransfers.filter { $0.id != pending.id } + [persistedPending],
@@ -496,6 +509,10 @@ extension WalletContextImpl {
             do {
                 try Task.checkCancellation()
                 guard !self.isShutdown, self.activationGeneration == generation else { throw WalletError.unavailable }
+                if let pendingRegistration {
+                    guard self.isCurrentPendingTransferRegistration(pendingRegistration), let registrationSession else { throw WalletError.unavailable }
+                    try self.authorization.validate(registrationSession, boundTo: pendingRegistration.sessionId, requireAvailable: false)
+                }
                 try control.commit()
             } catch {
                 self.transferSubmissions.resolve(pending.id, as: .rejected)
@@ -520,6 +537,14 @@ extension WalletContextImpl {
                 generation: generation, startedAt: startedAt, task: task)
         } catch {
             self.logger.error("wallet_transfer_api_failed", error)
+            if case WalletTransferSubmissionError.staleSequenceNumber = error,
+               self.pendingTransferRegistrations[pending.id] != nil {
+                // Reuse the same early receipt while the provider catches up.
+                throw error
+            }
+            if let registration = self.pendingTransferRegistrations[pending.id]?.registration {
+                self.discardPendingTransferRegistration(registration)
+            }
             if self.activationGeneration == generation {
                 if case WalletTransferSubmissionError.staleSequenceNumber = error {
                     // Keep the preview for a retry after provider catch-up.

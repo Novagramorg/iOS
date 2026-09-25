@@ -10,6 +10,27 @@ import PasscodeCore
 import PresentationDataUtils
 import TelegramUIPreferences
 import LocalAuth
+import ContextUI
+
+private final class PasscodeModeContextSource: ContextReferenceContentSource {
+    private let sourceNode: HighlightableButtonNode
+    let forceDisplayBelowKeyboard = true
+
+    init(sourceNode: HighlightableButtonNode) {
+        self.sourceNode = sourceNode
+    }
+
+    func transitionInfo() -> ContextControllerReferenceViewInfo? {
+        let titleFrame = self.sourceNode.titleNode.frame.insetBy(dx: -4.0, dy: -4.0)
+        let bounds = self.sourceNode.bounds
+        return ContextControllerReferenceViewInfo(
+            referenceView: self.sourceNode.view,
+            contentAreaInScreenSpace: UIScreen.main.bounds,
+            insets: UIEdgeInsets(top: titleFrame.minY - bounds.minY, left: titleFrame.minX - bounds.minX, bottom: bounds.maxY - titleFrame.maxY, right: bounds.maxX - titleFrame.maxX),
+            actionsPosition: .top
+        )
+    }
+}
 
 public enum PasscodeSetupControllerMode {
     case setup(change: Bool, PasscodeEntryFieldType)
@@ -24,6 +45,9 @@ public final class PasscodeSetupController: ViewController {
     private let context: AccountContext
     private var mode: PasscodeSetupControllerMode
     private let preferredModalWidth: CGFloat?
+    private let useCustomNumericKeyboard: Bool
+    private let allowFourDigitPasscode: Bool
+    private weak var passcodeModeContextController: ContextController?
     
     public var complete: ((String, Bool) -> Void)?
     var authenticationCompleted: ((Result<PasscodeSession, PasscodeError>) -> Void)?
@@ -42,10 +66,12 @@ public final class PasscodeSetupController: ViewController {
     
     private var nextAction: UIBarButtonItem?
     
-    public init(context: AccountContext, mode: PasscodeSetupControllerMode, authenticationScope: PasscodeSession.Scope = .settings, preferredModalWidth: CGFloat? = nil) {
+    public init(context: AccountContext, mode: PasscodeSetupControllerMode, authenticationScope: PasscodeSession.Scope = .settings, preferredModalWidth: CGFloat? = nil, useCustomNumericKeyboard: Bool = true, allowFourDigitPasscode: Bool = true) {
         self.context = context
         self.mode = mode
         self.preferredModalWidth = preferredModalWidth
+        self.useCustomNumericKeyboard = useCustomNumericKeyboard
+        self.allowFourDigitPasscode = allowFourDigitPasscode
         self.presentationData = context.sharedContext.currentPresentationData.with { $0 }
         if case let .entry(challenge) = mode {
             let reference = passcodeCredentialReference(from: challenge)
@@ -94,62 +120,13 @@ public final class PasscodeSetupController: ViewController {
     }
 
     override public func loadDisplayNode() {
-        self.displayNode = PasscodeSetupControllerNode(presentationData: self.presentationData, mode: self.mode)
+        self.displayNode = PasscodeSetupControllerNode(presentationData: self.presentationData, mode: self.mode, useCustomNumericKeyboard: self.useCustomNumericKeyboard)
         self.displayNodeDidLoad()
         
         self.navigationBar?.updateBackgroundAlpha(0.0, transition: .immediate)
         
-        self.controllerNode.selectPasscodeMode = { [weak self] in
-            guard let strongSelf = self, case let .setup(change, type) = strongSelf.mode else {
-                return
-            }
-            
-            let controller = ActionSheetController(presentationData: strongSelf.presentationData)
-            let dismissAction: () -> Void = { [weak controller] in
-                self?.controllerNode.activateInput()
-                controller?.dismissAnimated()
-            }
-            
-            var items: [ActionSheetButtonItem] = []
-            if case .digits6 = type {
-            } else {
-                items.append(ActionSheetButtonItem(title: strongSelf.presentationData.strings.PasscodeSettings_6DigitCode, action: { [weak self] in
-                    if let strongSelf = self {
-                        strongSelf.mode = .setup(change: change, .digits6)
-                        strongSelf.controllerNode.updateMode(strongSelf.mode)
-                    }
-                    dismissAction()
-                }))
-            }
-            if case .digits4 = type {
-            } else {
-                items.append(ActionSheetButtonItem(title: strongSelf.presentationData.strings.PasscodeSettings_4DigitCode, action: {
-                    if let strongSelf = self {
-                        strongSelf.mode = .setup(change: change, .digits4)
-                        strongSelf.controllerNode.updateMode(strongSelf.mode)
-                    }
-                    dismissAction()
-                }))
-            }
-            if case .alphanumeric = type {
-            } else {
-                items.append(ActionSheetButtonItem(title: strongSelf.presentationData.strings.PasscodeSettings_AlphanumericCode, action: {
-                    if let strongSelf = self {
-                        strongSelf.mode = .setup(change: change, .alphanumeric)
-                        strongSelf.controllerNode.updateMode(strongSelf.mode)
-                    }
-                    dismissAction()
-                }))
-            }
-            controller.setItemGroups([
-                ActionSheetItemGroup(items: items),
-                ActionSheetItemGroup(items: [ActionSheetButtonItem(title: strongSelf.presentationData.strings.Common_Cancel, action: { dismissAction() })])
-            ])
-            controller.dismissed = { _ in
-                self?.controllerNode.activateInput()
-            }
-            strongSelf.view.endEditing(true)
-            strongSelf.present(controller, in: .window(.root))
+        self.controllerNode.selectPasscodeMode = { [weak self] sourceNode in
+            self?.openPasscodeModeMenu(sourceNode: sourceNode)
         }
         self.controllerNode.updateNextAction = { [weak self] visible in
             guard let strongSelf = self else {
@@ -157,9 +134,9 @@ public final class PasscodeSetupController: ViewController {
             }
             
             if visible {
-                strongSelf.navigationItem.rightBarButtonItem = strongSelf.nextAction
+                strongSelf.navigationItem.setRightBarButton(strongSelf.nextAction, animated: true)
             } else {
-                strongSelf.navigationItem.rightBarButtonItem = nil
+                strongSelf.navigationItem.setRightBarButton(nil, animated: true)
             }
         }
         self.controllerNode.complete = { [weak self] passcode, numerical in
@@ -214,6 +191,49 @@ public final class PasscodeSetupController: ViewController {
         }
     }
 
+    private func openPasscodeModeMenu(sourceNode: HighlightableButtonNode) {
+        guard !self.isLeavingNavigation, self.passcodeModeContextController == nil,
+              case let .setup(change, selectedType) = self.mode else { return }
+
+        let strings = self.presentationData.strings
+        var types: [(PasscodeEntryFieldType, String)] = [(.digits6, strings.PasscodeSettings_6DigitCode)]
+        if self.allowFourDigitPasscode {
+            types.append((.digits4, strings.PasscodeSettings_4DigitCode))
+        }
+        types.append((.alphanumeric, strings.PasscodeSettings_AlphanumericCode))
+
+        let items: [ContextMenuItem] = types.map { type, title in
+            return .action(ContextMenuActionItem(text: title, icon: { theme in
+                if type == selectedType {
+                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor)
+                } else {
+                    return UIImage()
+                }
+            }, action: { [weak self] _, completion in
+                if let self, !self.isLeavingNavigation, type != selectedType {
+                    self.mode = .setup(change: change, type)
+                    self.controllerNode.updateMode(self.mode)
+                }
+                completion(.default)
+            }))
+        }
+        let controller = makeContextController(
+            presentationData: self.presentationData,
+            source: .reference(PasscodeModeContextSource(sourceNode: sourceNode)),
+            items: .single(ContextController.Items(content: .list(items))),
+            gesture: nil
+        )
+        self.passcodeModeContextController = controller
+        controller.dismissed = { [weak self] in
+            guard let self else { return }
+            self.passcodeModeContextController = nil
+            if !self.isLeavingNavigation && !self.view.isHidden {
+                self.controllerNode.activateInput()
+            }
+        }
+        self.presentInGlobalOverlay(controller, with: nil)
+    }
+
     private func updateAuthenticationState(_ state: SettingsPasscodeAuthentication.State) {
         // Navigation owns the outgoing view and keyboard until its transition ends.
         // Authentication still finishes immediately, rejecting any pending result.
@@ -254,15 +274,28 @@ public final class PasscodeSetupController: ViewController {
     override public func viewWillLeaveNavigation() {
         super.viewWillLeaveNavigation()
         self.isLeavingNavigation = true
+        self.passcodeModeContextController?.dismiss()
+        if self.isNodeLoaded {
+            self.controllerNode.deactivateCustomInput()
+        }
         self.setupCancelled?()
         self.authentication?.cancel()
     }
 
     override public func dismiss(completion: (() -> Void)? = nil) {
         self.isLeavingNavigation = true
+        self.passcodeModeContextController?.dismiss()
+        if self.isNodeLoaded {
+            self.controllerNode.deactivateCustomInput()
+        }
         self.setupCancelled?()
         self.authentication?.cancel()
         super.dismiss(completion: completion)
+    }
+
+    override public func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        self.controllerNode.deactivateCustomInput()
     }
 
     override public func viewDidDisappear(_ animated: Bool) {
@@ -299,6 +332,11 @@ public final class PasscodeSetupController: ViewController {
     @objc private func nextPressed() {
        self.controllerNode.activateNext()
     }
+
+    fileprivate func updateSetupInputEnabled(_ enabled: Bool) {
+        self.view.isUserInteractionEnabled = enabled
+        self.controllerNode.updateInputEnabled(enabled)
+    }
 }
 
 public func applicationPasscodeSetupController(
@@ -308,11 +346,13 @@ public func applicationPasscodeSetupController(
     ownsAuthorizationSession: Bool = true,
     preferredModalWidth: CGFloat? = nil,
     initialAutolockTimeout: Int32? = 60 * 60,
+    useCustomNumericKeyboard: Bool = true,
+    allowFourDigitPasscode: Bool = true,
     settingsSessionCompleted: ((PasscodeSession) -> Void)? = nil,
     cancelled: (() -> Void)? = nil,
     completion: @escaping (PasscodeCredentialReference) -> Void
 ) -> ViewController {
-    let controller = PasscodeSetupController(context: context, mode: .setup(change: change, .digits6), preferredModalWidth: preferredModalWidth)
+    let controller = PasscodeSetupController(context: context, mode: .setup(change: change, .digits6), preferredModalWidth: preferredModalWidth, useCustomNumericKeyboard: useCustomNumericKeyboard, allowFourDigitPasscode: allowFourDigitPasscode)
     let lifecycle = PasscodeSetupSessionState(authorizationSession: authorizationSession, ownsAuthorizationSession: ownsAuthorizationSession)
     var savingTask: Task<Void, Never>?
     controller.setupCancelled = {
@@ -330,6 +370,7 @@ public func applicationPasscodeSetupController(
             controller?.setupCancelled?()
             let remove: () -> Void = { [weak controller] in
                 guard let controller else { return }
+                controller.updateSetupInputEnabled(false)
                 controller.view.isHidden = true
                 controller.view.endEditing(true)
                 if let navigation = controller.navigationController as? NavigationController,
@@ -344,7 +385,7 @@ public func applicationPasscodeSetupController(
     controller.complete = { [weak controller] code, numerical in
         guard let controller, savingTask == nil, lifecycle.accepts(generation: lifecycle.generation) else { return }
         let generation = lifecycle.generation
-        controller.view.isUserInteractionEnabled = false
+        controller.updateSetupInputEnabled(false)
         savingTask = Task.detached(priority: .userInitiated) { [weak controller] in
             let result = Result { () -> (PasscodeCredentialReference, PasscodeSession?) in
                 guard !Task.isCancelled else { throw PasscodeError.cancelled }
@@ -375,7 +416,7 @@ public func applicationPasscodeSetupController(
                 DispatchQueue.main.async { [weak controller] in
                     guard lifecycle.accepts(generation: generation) else { return }
                     savingTask = nil
-                    controller?.view.isUserInteractionEnabled = true
+                    controller?.updateSetupInputEnabled(true)
                     guard (error as? PasscodeError) != .cancelled else { return }
                     let strings = context.sharedContext.currentPresentationData.with { $0 }.strings
                     //TODO:localize
