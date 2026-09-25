@@ -81,6 +81,16 @@ private struct UpdatingLayout {
     }
 }
 
+private struct ScreenBoundsKey: Hashable {
+    let width: CGFloat
+    let height: CGFloat
+    
+    init(_ size: CGSize) {
+        self.width = size.width
+        self.height = size.height
+    }
+}
+
 private let defaultStatusBarHeight: CGFloat = 20.0
 private let statusBarHiddenInLandscape: Bool = UIDevice.current.userInterfaceIdiom == .phone
 
@@ -113,6 +123,35 @@ private func deviceSafeInsets(deviceMetrics: DeviceMetrics, windowSize: CGSize) 
     return deviceMetrics.safeInsets(inLandscape: windowSize.width > windowSize.height)
 }
 
+/// Resolves the window's sensor-housing safe-area insets. The bottom edge is not part of these; it is
+/// carried separately as the on-screen navigation (home indicator) height.
+///
+/// On a device whose window moves between displays (`DeviceMetrics.hasMultipleDisplays`) the values
+/// come from the system: the window's own `safeAreaInsets` already describe the display it is on,
+/// the side the camera is on and whether the window reaches the screen edge at all, and each side is
+/// taken on its own, because the two sides need not be equal. Every other device keeps the per-model
+/// table, whose values the layout has been tuned against.
+private func windowSafeInsets(hostView: WindowHostView, deviceMetrics: DeviceMetrics, windowSize: CGSize) -> UIEdgeInsets {
+    if DeviceMetrics.hasMultipleDisplays {
+        let systemInsets = hostView.systemSafeAreaInsets
+        return UIEdgeInsets(top: systemInsets.top, left: systemInsets.left, bottom: 0.0, right: systemInsets.right)
+    }
+    return deviceSafeInsets(deviceMetrics: deviceMetrics, windowSize: windowSize)
+}
+
+/// Resolves the height reserved for the home indicator. On a multi-display device its presence comes
+/// from the system, and its size follows the same policy as the table's iOS 26 phones (20pt rather
+/// than the system's 34pt).
+private func windowOnScreenNavigationHeight(hostView: WindowHostView, deviceMetrics: DeviceMetrics, isLandscape: Bool) -> CGFloat? {
+    if DeviceMetrics.hasMultipleDisplays {
+        guard let systemHeight = hostView.onScreenNavigationHeight else {
+            return nil
+        }
+        return min(systemHeight, 20.0)
+    }
+    return deviceMetrics.onScreenNavigationHeight(inLandscape: isLandscape, systemOnScreenNavigationHeight: hostView.onScreenNavigationHeight)
+}
+
 private func containedLayoutForWindowLayout(_ layout: WindowLayout, deviceMetrics: DeviceMetrics) -> ContainerViewLayout {
     let resolvedStatusBarHeight: CGFloat?
     if let statusBarHeight = layout.statusBarHeight {
@@ -131,7 +170,7 @@ private func containedLayoutForWindowLayout(_ layout: WindowLayout, deviceMetric
     }
     
     var resolvedSafeInsets = layout.safeInsets
-    if layout.safeInsets.left.isZero {
+    if !DeviceMetrics.hasMultipleDisplays && layout.safeInsets.left.isZero {
         resolvedSafeInsets = deviceSafeInsets(deviceMetrics: deviceMetrics, windowSize: layout.size)
     }
     
@@ -191,6 +230,7 @@ public final class WindowHostView {
     var motionShake: (() -> Void)?
     var nativeController: (() -> UIViewController?)?
     var updateSize: ((CGSize, Double, UIInterfaceOrientation) -> Void)?
+    var updateSystemInsets: (() -> Void)?
     var layoutSubviews: (() -> Void)?
     var updateToInterfaceOrientation: ((UIInterfaceOrientation) -> Void)?
     var isUpdatingOrientationLayout = false
@@ -217,6 +257,15 @@ public final class WindowHostView {
     
     fileprivate var onScreenNavigationHeight: CGFloat? {
         return self.eventView.safeAreaInsets.bottom.isLessThanOrEqualTo(0.0) ? nil : self.eventView.safeAreaInsets.bottom
+    }
+    
+    fileprivate var systemSafeAreaInsets: UIEdgeInsets {
+        return self.eventView.safeAreaInsets
+    }
+    
+    /// The bounds of the display the window is currently on (they follow the interface orientation).
+    fileprivate var currentScreenSize: CGSize? {
+        return self.eventView.window?.windowScene?.screen.bounds.size
     }
 }
 
@@ -331,6 +380,10 @@ public class Window1 {
     private var shouldInvalidateSupportedOrientations = false
     
     private var statusBarHidden = false
+    /// Multi-display devices only: the last height the system reported for a visible status bar, per
+    /// display and orientation (keyed by the display's current bounds), so the layout keeps the
+    /// status bar's space while the app hides it, as the per-model table does on other devices.
+    private var visibleStatusBarHeights: [ScreenBoundsKey: CGFloat] = [:]
         
     private var shouldNotAnimateLikelyKeyboardAutocorrectionSwitch: Bool = false
     
@@ -417,8 +470,8 @@ public class Window1 {
         }
         
         let isLandscape = boundsSize.width > boundsSize.height
-        let safeInsets = deviceSafeInsets(deviceMetrics: self.deviceMetrics, windowSize: boundsSize)
-        let onScreenNavigationHeight = self.deviceMetrics.onScreenNavigationHeight(inLandscape: isLandscape, systemOnScreenNavigationHeight: self.hostView.onScreenNavigationHeight)
+        let safeInsets = windowSafeInsets(hostView: self.hostView, deviceMetrics: self.deviceMetrics, windowSize: boundsSize)
+        let onScreenNavigationHeight = windowOnScreenNavigationHeight(hostView: self.hostView, deviceMetrics: self.deviceMetrics, isLandscape: isLandscape)
         
         let orientation: UIInterfaceOrientation = self.hostView.currentInterfaceOrientation()
         
@@ -482,6 +535,10 @@ public class Window1 {
         
         self.hostView.updateSize = { [weak self] size, duration, orientation in
             self?.updateSize(size, duration: duration, orientation: orientation)
+        }
+        
+        self.hostView.updateSystemInsets = { [weak self] in
+            self?.updateSystemInsets()
         }
         
         self.hostView.layoutSubviews = { [weak self] in
@@ -948,10 +1005,44 @@ public class Window1 {
         } else {
             transition = .immediate
         }
-        self.updateLayout { $0.update(size: value, metrics: layoutMetricsForWindowSize(size: value, orientation: orientation), safeInsets: deviceSafeInsets(deviceMetrics: self.deviceMetrics, windowSize: value), forceInCallStatusBarText: self.forceInCallStatusBarText, transition: transition, overrideTransition: true) }
+        self.updateLayout { $0.update(size: value, metrics: layoutMetricsForWindowSize(size: value, orientation: orientation), safeInsets: windowSafeInsets(hostView: self.hostView, deviceMetrics: self.deviceMetrics, windowSize: value), forceInCallStatusBarText: self.forceInCallStatusBarText, transition: transition, overrideTransition: true) }
         if let statusBarHost = self.statusBarHost, !statusBarHost.isApplicationInForeground {
             self.layoutSubviews(force: true)
         }
+    }
+    
+    /// Multi-display devices only. Moving between displays, or a change of the system bars, can change
+    /// the window's safe area without changing its size, and inside a size transition the new insets
+    /// are only known once UIKit reports them, after `updateSize`. Folding the update into the pending
+    /// layout keeps the transition an in-flight size change already chose.
+    private func updateSystemInsets() {
+        guard DeviceMetrics.hasMultipleDisplays else {
+            return
+        }
+        self.updateLayout { layout in
+            let size = layout.layout.size
+            layout.update(safeInsets: windowSafeInsets(hostView: self.hostView, deviceMetrics: self.deviceMetrics, windowSize: size), transition: .immediate, overrideTransition: false)
+            layout.update(onScreenNavigationHeight: windowOnScreenNavigationHeight(hostView: self.hostView, deviceMetrics: self.deviceMetrics, isLandscape: size.width > size.height), transition: .immediate, overrideTransition: false)
+        }
+    }
+    
+    /// Multi-display devices only: the status bar height of the display the window is on. See
+    /// `visibleStatusBarHeights`; with no visible measurement yet for this display and orientation,
+    /// falls back to the system's top safe-area inset.
+    private func systemStatusBarHeight() -> CGFloat? {
+        let frameHeight = self.statusBarHost?.statusBarFrame.height ?? 0.0
+        let screenSize = self.hostView.currentScreenSize
+        if frameHeight > 0.0 {
+            if let screenSize {
+                self.visibleStatusBarHeights[ScreenBoundsKey(screenSize)] = frameHeight
+            }
+            return frameHeight
+        }
+        if let screenSize, let height = self.visibleStatusBarHeights[ScreenBoundsKey(screenSize)] {
+            return height
+        }
+        let topInset = self.hostView.systemSafeAreaInsets.top
+        return topInset > 0.0 ? topInset : nil
     }
     
     private var _rootController: ContainableController?
@@ -1257,11 +1348,16 @@ public class Window1 {
                 
                 let boundsSize = updatingLayout.layout.size
                 let isLandscape = boundsSize.width > boundsSize.height
-                var statusBarHeight: CGFloat? = self.deviceMetrics.statusBarHeight(for: boundsSize)
-                if let statusBarHeightValue = statusBarHeight, let statusBarHost = self.statusBarHost {
-                    statusBarHeight = max(statusBarHeightValue, statusBarHost.statusBarFrame.size.height)
+                var statusBarHeight: CGFloat?
+                if DeviceMetrics.hasMultipleDisplays {
+                    statusBarHeight = self.statusBarHost != nil ? self.systemStatusBarHeight() : nil
                 } else {
-                    statusBarHeight = nil
+                    statusBarHeight = self.deviceMetrics.statusBarHeight(for: boundsSize)
+                    if let statusBarHeightValue = statusBarHeight, let statusBarHost = self.statusBarHost {
+                        statusBarHeight = max(statusBarHeightValue, statusBarHost.statusBarFrame.size.height)
+                    } else {
+                        statusBarHeight = nil
+                    }
                 }
                 
                 if self.deviceMetrics.type == .tablet, let onScreenNavigationHeight = self.hostView.onScreenNavigationHeight, onScreenNavigationHeight != self.deviceMetrics.onScreenNavigationHeight(inLandscape: false, systemOnScreenNavigationHeight: self.hostView.onScreenNavigationHeight) {
@@ -1281,7 +1377,7 @@ public class Window1 {
                 }
                 let previousInputOffset = inputHeightOffsetForLayout(self.windowLayout)
                 
-                self.windowLayout = WindowLayout(size: updatingLayout.layout.size, metrics: layoutMetricsForWindowSize(size: updatingLayout.layout.size, orientation: updatingLayout.layout.metrics.orientation), statusBarHeight: statusBarHeight, forceInCallStatusBarText: updatingLayout.layout.forceInCallStatusBarText, inputHeight: updatingLayout.layout.inputHeight, safeInsets: updatingLayout.layout.safeInsets, onScreenNavigationHeight: self.deviceMetrics.onScreenNavigationHeight(inLandscape: isLandscape, systemOnScreenNavigationHeight: self.hostView.onScreenNavigationHeight), upperKeyboardInputPositionBound: updatingLayout.layout.upperKeyboardInputPositionBound, inVoiceOver: updatingLayout.layout.inVoiceOver)
+                self.windowLayout = WindowLayout(size: updatingLayout.layout.size, metrics: layoutMetricsForWindowSize(size: updatingLayout.layout.size, orientation: updatingLayout.layout.metrics.orientation), statusBarHeight: statusBarHeight, forceInCallStatusBarText: updatingLayout.layout.forceInCallStatusBarText, inputHeight: updatingLayout.layout.inputHeight, safeInsets: updatingLayout.layout.safeInsets, onScreenNavigationHeight: windowOnScreenNavigationHeight(hostView: self.hostView, deviceMetrics: self.deviceMetrics, isLandscape: isLandscape), upperKeyboardInputPositionBound: updatingLayout.layout.upperKeyboardInputPositionBound, inVoiceOver: updatingLayout.layout.inVoiceOver)
                 
                 let childLayout = containedLayoutForWindowLayout(self.windowLayout, deviceMetrics: self.deviceMetrics)
                 let childLayoutUpdated = self.updatedContainerLayout != childLayout

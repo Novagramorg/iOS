@@ -65,6 +65,13 @@ public enum DeviceMetrics: CaseIterable, Equatable {
         #endif
     }()
 
+    /// The app's window moves between displays whose sensor housings and system bars differ (iPhone
+    /// Duo: the outer and the inner display), so no per-model table can describe its insets and they
+    /// are taken from the system instead. Keyed on the model identifier rather than on the resolved
+    /// profile, because the profile is matched by screen size and depends on which display was
+    /// active at launch.
+    static let hasMultipleDisplays: Bool = DeviceMetrics.currentModelIdentifier == "iPhone19,4"
+
     public static var allCases: [DeviceMetrics] {
         return [
             .iPhone4,
