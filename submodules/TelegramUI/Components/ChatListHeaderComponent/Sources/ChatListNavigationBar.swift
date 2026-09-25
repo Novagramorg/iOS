@@ -537,11 +537,9 @@ public final class ChatListNavigationBar: Component {
             if component.activeSearch != nil {
                 headerContentY = -headerContentSize.height
             } else {
-                if component.statusBarHeight < 1.0 {
-                    headerContentY = 0.0
-                } else {
-                    headerContentY = component.statusBarHeight + 10.0
-                }
+                // Also without a status bar (iPhone landscape), matching the regular navigation bar's
+                // 10pt button inset there.
+                headerContentY = component.statusBarHeight + 10.0
             }
             let headerContentFrame = CGRect(origin: CGPoint(x: 0.0, y: headerContentY), size: headerContentSize)
             if let headerContentView = self.headerContent.view {
@@ -797,10 +795,7 @@ public final class ChatListNavigationBar: Component {
             self.state = state
             
             var contentHeight = component.statusBarHeight
-            
-            if component.statusBarHeight >= 1.0 {
-                contentHeight += 3.0
-            }
+            contentHeight += 3.0
             if let activeSearch = component.activeSearch {
                 if !activeSearch.isExternal {
                     contentHeight += navigationBarSearchContentHeight
