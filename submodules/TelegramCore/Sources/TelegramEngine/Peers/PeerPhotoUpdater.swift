@@ -599,20 +599,86 @@ func _internal_updatePeerPhotoInternal(postbox: Postbox, network: Network, state
     }
 }
 
-func _internal_updatePeerPhotoExisting(network: Network, reference: TelegramMediaImageReference) -> Signal<TelegramMediaImage?, NoError> {
+/// Makes one of the account's existing photos the main one again. `representations` and
+/// `videoRepresentations` are that photo's own sizes, as the caller has them.
+///
+/// The result's user list is stored like every other profile-photo result here.
+func _internal_updatePeerPhotoExisting(account: Account, reference: TelegramMediaImageReference, representations: [TelegramMediaImageRepresentation], videoRepresentations: [TelegramMediaImage.VideoRepresentation]) -> Signal<TelegramMediaImage?, NoError> {
     switch reference {
     case let .cloud(imageId, accessHash, fileReference):
-        return network.request(Api.functions.photos.updateProfilePhoto(flags: 0, bot: nil, id: .inputPhoto(.init(id: imageId, accessHash: accessHash, fileReference: Buffer(data: fileReference)))))
+        return account.network.request(Api.functions.photos.updateProfilePhoto(flags: 0, bot: nil, id: .inputPhoto(.init(id: imageId, accessHash: accessHash, fileReference: Buffer(data: fileReference)))))
         |> `catch` { _ -> Signal<Api.photos.Photo, NoError> in
             return .complete()
         }
         |> mapToSignal { photo -> Signal<TelegramMediaImage?, NoError> in
             if case let .photo(photoData) = photo {
-                let (photo, _) = (photoData.photo, photoData.users)
-                return .single(telegramMediaImageFromApiPhoto(photo))
+                let (photo, users) = (photoData.photo, photoData.users)
+                let image = telegramMediaImageFromApiPhoto(photo)
+                return account.postbox.transaction { transaction -> TelegramMediaImage? in
+                    updatePeers(transaction: transaction, accountPeerId: account.peerId, peers: AccumulatedPeers(users: users))
+                    if let image {
+                        let peerPhoto = (transaction.getPeer(account.peerId) as? TelegramUser)?.photo ?? []
+                        copyDownloadedPhotoSizes(mediaBox: account.postbox.mediaBox, representations: representations, videoRepresentations: videoRepresentations, to: image, peerPhoto: peerPhoto)
+                        transaction.updatePeerCachedData(peerIds: Set([account.peerId]), update: { _, current in
+                            if let current = current as? CachedUserData {
+                                return current.withUpdatedPhoto(.known(image))
+                            } else {
+                                return current
+                            }
+                        })
+                    }
+                    return image
+                }
             } else {
                 return .complete()
             }
+        }
+    }
+}
+
+/// Stores the downloaded sizes of the photo that was made the main one under the files of the photo
+/// the server returned for it, both its own sizes and the peer-photo resources `peerPhoto` (the
+/// account's new `TelegramUser.photo`) names it by.
+///
+/// The returned photo is not the chosen one: the server replaces the chosen photo with a copy under
+/// a new id, whose sizes are the same files byte for byte (measured: one image went through four ids
+/// in as many changes), and it serves a profile photo's `photo_small` and `photo_big` from its "a"
+/// and "c" sizes, also byte for byte. None of those files exist yet, while the chosen photo has
+/// usually just been viewed, so without this the rebuilt gallery downloads the photo that was just on
+/// screen again. It runs in the transaction that stores the result, before it commits. The result's
+/// user list does not carry the new photo for the account itself, though (measured: the record names
+/// it only after a later transaction), so the peer-photo resources are filled only when the record
+/// already names the returned photo.
+///
+/// Only complete files are copied; a partial one would lose the ranges it has.
+private func copyDownloadedPhotoSizes(mediaBox: MediaBox, representations: [TelegramMediaImageRepresentation], videoRepresentations: [TelegramMediaImage.VideoRepresentation], to image: TelegramMediaImage, peerPhoto: [TelegramMediaImageRepresentation]) {
+    var downloadedPaths: [String: String] = [:]
+    for resource in representations.map({ $0.resource }) + videoRepresentations.map({ $0.resource }) {
+        if let resource = resource as? CloudPhotoSizeMediaResource, let path = mediaBox.completedResourcePath(id: resource.id) {
+            downloadedPaths[resource.sizeSpec] = path
+        }
+    }
+    func store(_ id: MediaResourceId, sizeSpec: String) {
+        guard let path = downloadedPaths[sizeSpec], mediaBox.completedResourcePath(id: id) == nil, let data = try? Data(contentsOf: URL(fileURLWithPath: path)) else {
+            return
+        }
+        mediaBox.storeResourceData(id, data: data, synchronous: true)
+    }
+
+    for resource in image.representations.map({ $0.resource }) + image.videoRepresentations.map({ $0.resource }) {
+        if let resource = resource as? CloudPhotoSizeMediaResource {
+            store(resource.id, sizeSpec: resource.sizeSpec)
+        }
+    }
+    for representation in peerPhoto {
+        guard let resource = representation.resource as? CloudPeerPhotoSizeMediaResource, resource.photoId == image.imageId.id else {
+            continue
+        }
+        switch resource.sizeSpec {
+        case .small:
+            store(resource.id, sizeSpec: "a")
+        case .fullSize:
+            store(resource.id, sizeSpec: "c")
         }
     }
 }
