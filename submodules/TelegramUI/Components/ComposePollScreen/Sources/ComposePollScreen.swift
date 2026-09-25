@@ -1681,11 +1681,11 @@ final class ComposePollScreenComponent: Component {
             
             var pollOptionsSectionReadyItems: [ListSectionContentView.ReadyItem] = []
             
-            let processPollOptionItem: (Int) -> Void = { [weak self] i in
-                guard let self else {
-                    return
-                }
-                
+            // Strong capture on purpose: this closure never escapes update(). Swift 6.4
+            // miscompiles `[weak self]` here (a local closure that also captures a mutable
+            // local): the weak slot is destroyed before the closure is called, so an
+            // NSObject-derived self traps in objc_loadWeak ("not in the weak references table").
+            let processPollOptionItem: (Int) -> Void = { [self] i in
                 let pollOption = self.pollOptions[i]
                 
                 let optionId = pollOption.id
