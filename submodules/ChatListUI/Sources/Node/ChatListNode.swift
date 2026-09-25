@@ -1440,6 +1440,7 @@ public final class ChatListNode: ListViewImpl {
         
         self.verticalScrollIndicatorColor = theme.list.scrollIndicatorColor
         self.verticalScrollIndicatorFollowsOverscroll = true
+        self.verticalScrollIndicatorRespectsSideInsets = true
         
         self.keepMinimalScrollHeightWithTopInset = self.scrollHeightTopInset
         
