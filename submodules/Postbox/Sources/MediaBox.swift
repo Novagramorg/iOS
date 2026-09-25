@@ -1051,7 +1051,10 @@ public final class MediaBox {
                             subscriber.putNext(MediaResourceData(path: paths.partial, offset: 0, size: 0, complete: false))
                         }
                         
-                        disposable.set(ActionDisposable { [weak context] in
+                        disposable.set(ActionDisposable { [weak self, weak context] in
+                            guard let self else {
+                                return
+                            }
                             self.dataQueue.async {
                                 if let currentContext = self.cachedRepresentationContexts[key], currentContext === context {
                                     currentContext.dataSubscribers.remove(index)
@@ -1239,7 +1242,10 @@ public final class MediaBox {
                             subscriber.putNext(MediaResourceData(path: paths.partial, offset: 0, size: 0, complete: false))
                         }
 
-                        disposable.set(ActionDisposable { [weak context] in
+                        disposable.set(ActionDisposable { [weak self, weak context] in
+                            guard let self else {
+                                return
+                            }
                             self.dataQueue.async {
                                 if let currentContext = self.cachedRepresentationContexts[key], currentContext === context {
                                     currentContext.dataSubscribers.remove(index)
