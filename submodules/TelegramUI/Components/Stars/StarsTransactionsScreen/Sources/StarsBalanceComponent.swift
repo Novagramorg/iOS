@@ -368,6 +368,9 @@ final class StarsBalanceComponent: Component {
                 }
                 
                 contentHeight += buttonSize.height
+            } else {
+                self.button.view?.removeFromSuperview()
+                self.secondaryButton.view?.removeFromSuperview()
             }
             
             if let additionalAction = component.additionalAction {

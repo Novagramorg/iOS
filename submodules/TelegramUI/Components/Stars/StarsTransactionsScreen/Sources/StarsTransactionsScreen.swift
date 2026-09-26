@@ -236,14 +236,8 @@ final class StarsTransactionsScreenComponent: Component {
         }
         
         func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
-            guard !"".isEmpty, let navigationMetrics = self.navigationMetrics else {
-                return
-            }
-            if let panelContainerView = self.panelContainer.view as? StarsTransactionsPanelContainerComponent.View {
-                let paneAreaExpansionFinalPoint: CGFloat = panelContainerView.frame.minY - navigationMetrics.navigationHeight
-                if abs(scrollView.contentOffset.y - paneAreaExpansionFinalPoint) < .ulpOfOne {
-                    panelContainerView.transferVelocity(self.previousVelocityM1)
-                }
+            if !"".isEmpty, self.isLockedAtPanels(scrollBounds: scrollView.bounds), let panelContainerView = self.panelContainer.view as? StarsTransactionsPanelContainerComponent.View {
+                panelContainerView.transferVelocity(self.previousVelocityM1)
             }
         }
         
@@ -267,6 +261,14 @@ final class StarsTransactionsScreenComponent: Component {
                 self.scrollView.setContentOffset(.zero, animated: true)
             }
         }
+
+        private func isLockedAtPanels(scrollBounds: CGRect) -> Bool {
+            guard let panelContainerView = self.panelContainer.view, panelContainerView.superview != nil, let navigationMetrics = self.navigationMetrics else {
+                return false
+            }
+            let pinnedOffset = max(0.0, panelContainerView.frame.minY - navigationMetrics.navigationHeight)
+            return abs(scrollBounds.minY - pinnedOffset) <= 1.0
+        }
                 
         private func updateScrolling(transition: ComponentTransition) {
             let scrollBounds = self.scrollView.bounds
@@ -274,7 +276,7 @@ final class StarsTransactionsScreenComponent: Component {
             let edgeEffectAlpha = max(0.0, min(1.0, scrollBounds.minY / 20.0))
             transition.setAlpha(view: self.topEdgeEffectView, alpha: edgeEffectAlpha)
             
-            let isLockedAtPanels = scrollBounds.maxY == self.scrollView.contentSize.height
+            let isLockedAtPanels = self.isLockedAtPanels(scrollBounds: scrollBounds)
             var topContentAlpha: CGFloat = 1.0
             
             if let navigationMetrics = self.navigationMetrics {
@@ -302,7 +304,7 @@ final class StarsTransactionsScreenComponent: Component {
                 
                 let expansionDistance: CGFloat = 32.0
                 var expansionDistanceFactor: CGFloat = abs(scrollBounds.maxY - self.scrollView.contentSize.height) / expansionDistance
-                expansionDistanceFactor = max(0.0, min(1.0, expansionDistanceFactor))
+                expansionDistanceFactor = isLockedAtPanels ? 0.0 : max(0.0, min(1.0, expansionDistanceFactor))
 
                 if self.panelContainer.view?.superview != nil {
                     topContentAlpha = expansionDistanceFactor
@@ -404,12 +406,7 @@ final class StarsTransactionsScreenComponent: Component {
                 }
             }
             
-            var wasLockedAtPanels = false
-            if let panelContainerView = self.panelContainer.view, let navigationMetrics = self.navigationMetrics {
-                if self.scrollView.bounds.minY > 0.0 && abs(self.scrollView.bounds.minY - (panelContainerView.frame.minY - navigationMetrics.navigationHeight)) <= UIScreenPixel {
-                    wasLockedAtPanels = true
-                }
-            }
+            let wasLockedAtPanels = self.isLockedAtPanels(scrollBounds: self.scrollView.bounds)
             
             self.controller = environment.controller
             
@@ -676,6 +673,7 @@ final class StarsTransactionsScreenComponent: Component {
             contentHeight += 29.0
             
             let withdrawAvailable = (self.revenueState?.balances.overallRevenue.amount.value ?? 0) > 0
+            let tonWithdrawAvailable = (self.revenueState?.balances.availableBalance.amount ?? StarsAmount.zero) > StarsAmount.zero
              
             if component.starsContext.ton {
                 let proceedsSize = self.proceedsView.update(
@@ -773,7 +771,7 @@ final class StarsTransactionsScreenComponent: Component {
                             currency: component.starsContext.ton ? .ton : .stars,
                             rate: nil,
                             actionTitle: component.starsContext.ton ? environment.strings.Ton_WithdrawViaFragment : (withdrawAvailable ? environment.strings.Stars_Intro_BuyShort : environment.strings.Stars_Intro_Buy),
-                            actionAvailable: (!premiumConfiguration.areStarsDisabled && !premiumConfiguration.isPremiumDisabled),
+                            actionAvailable: (!premiumConfiguration.areStarsDisabled && !premiumConfiguration.isPremiumDisabled) && (!component.starsContext.ton || tonWithdrawAvailable),
                             actionIsEnabled: true,
                             actionIcon: component.starsContext.ton ? nil : PresentationResourcesItemList.itemListRoundTopupIcon(environment.theme),
                             action: { [weak self] in

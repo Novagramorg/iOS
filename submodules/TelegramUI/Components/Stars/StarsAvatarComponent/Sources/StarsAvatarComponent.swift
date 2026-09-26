@@ -86,6 +86,7 @@ public final class StarsAvatarComponent: Component {
             let context: AccountContext
             let theme: PresentationTheme
             let peerId: EnginePeer.Id
+            let isDeleted: Bool
             let photo: TelegramMediaImageRepresentation?
             let nameColor: PeerColor?
             let displayLetters: [String]
@@ -98,6 +99,9 @@ public final class StarsAvatarComponent: Component {
                     return false
                 }
                 if lhs.peerId != rhs.peerId {
+                    return false
+                }
+                if lhs.isDeleted != rhs.isDeleted {
                     return false
                 }
                 if lhs.photo != rhs.photo {
@@ -310,8 +314,9 @@ public final class StarsAvatarComponent: Component {
                 switch peer {
                 case let .peer(peer):
                     if !didSetup {
+                        let isDeleted = peer.isDeleted
                         let photo: TelegramMediaImageRepresentation?
-                        if peer.restrictionText(platform: "ios", contentSettings: component.context.currentContentSettings.with { $0 }) == nil {
+                        if !isDeleted && peer.restrictionText(platform: "ios", contentSettings: component.context.currentContentSettings.with { $0 }) == nil {
                             photo = peer.smallProfileImage
                         } else {
                             photo = nil
@@ -320,6 +325,7 @@ public final class StarsAvatarComponent: Component {
                             context: component.context,
                             theme: component.theme,
                             peerId: peer.id,
+                            isDeleted: isDeleted,
                             photo: photo,
                             nameColor: peer.nameColor,
                             displayLetters: peer.displayLetters
@@ -329,6 +335,7 @@ public final class StarsAvatarComponent: Component {
                                 context: component.context,
                                 theme: component.theme,
                                 peer: peer,
+                                overrideImage: isDeleted ? .deletedIcon : nil,
                                 synchronousLoad: true
                             )
                             self.avatarState = avatarState

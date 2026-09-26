@@ -365,6 +365,7 @@ public enum RequestStarsRevenueWithdrawalError : Equatable {
     case limitExceeded
     case requestPassword
     case invalidPassword
+    case amountTooSmall
     case serverProvided(text: String)
 }
 
@@ -448,6 +449,8 @@ func _internal_requestStarsRevenueWithdrawalUrl(account: Account, ton: Bool, pee
                     if let value = Int32(timeout) {
                         return .authSessionTooFresh(value)
                     }
+                } else if error.errorDescription == "AMOUNT_TOO_SMALL" {
+                    return .amountTooSmall
                 }
                 return .generic
             }
