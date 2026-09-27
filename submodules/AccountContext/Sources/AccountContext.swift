@@ -1391,6 +1391,7 @@ public enum WalletInfoScreenMode: Equatable, CaseIterable {
 public enum WalletImportScreenMode: Equatable {
     case importWallet
     case enterRecoveryPhrase
+    case enableBackup(expectedAddress: String)
     case verify(words: [String], keyRotation: Bool = false, allowsRepeatedCompletion: Bool = false)
 }
 
@@ -1603,6 +1604,7 @@ public protocol SharedAccountContext: AnyObject {
     func makeWalletWordsScreen(context: AccountContext, words: [String], verify: Bool, dismissOnBackgroundOrLock: Bool, completion: (() -> Void)?) -> ViewController
     func makeWalletWordsScreen(context: AccountContext, words: [String], mode: WalletWordsScreenMode, completion: (() -> Void)?) -> ViewController
     func makeWalletInfoScreen(context: AccountContext, mode: WalletInfoScreenMode, completion: (() -> Void)?) -> ViewController
+    func makeWalletInfoScreen(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>), mode: WalletInfoScreenMode, completion: (() -> Void)?) -> ViewController
     func makeWalletConnectScreen(context: AccountContext, walletContext: WalletContext, request: WalletContext.TonConnectRequest, cancelled: @escaping () -> Void, connect: @escaping (@escaping (Result<Void, WalletContext.WalletError>) -> Void) -> Void) -> ViewController
     func makeWalletTransferScreen(context: AccountContext, walletContext: WalletContext, request: WalletContext.TonConnectOperationRequest, cancelled: @escaping () -> Void, confirm: @escaping (@escaping (Result<Void, WalletContext.WalletError>) -> Void) -> Void) -> ViewController
     func makeWalletTransactionScreen(context: AccountContext, transaction: WalletContext.Transaction, fromChat: Bool) -> ViewController

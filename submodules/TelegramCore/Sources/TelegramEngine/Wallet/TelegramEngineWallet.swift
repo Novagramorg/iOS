@@ -116,13 +116,15 @@ public extension TelegramEngine {
         public func getUserAddresses(
             userIds: [EnginePeer.Id] = [],
             addresses: [String] = [],
-            force: Bool = false
+            force: Bool = false,
+            ageLimit: Int32 = 60
         ) -> Signal<[WalletUserAddress], WalletGetUserAddressesError> {
             return _internal_getWalletUserAddresses(
                 account: self.account,
                 userIds: userIds,
                 addresses: addresses,
-                force: force
+                force: force,
+                ageLimit: ageLimit
             )
         }
 
@@ -145,8 +147,8 @@ public extension TelegramEngine {
             return _internal_getWalletBackupHolders(account: self.account)
         }
 
-        public func enableBackup(encryptedParts: [Data], password: String? = nil) -> Signal<WalletState, WalletOperationError> {
-            return _internal_enableWalletBackup(account: self.account, encryptedParts: encryptedParts, password: password)
+        public func enableBackup(encryptedParts: [Data], newPublicKey: Data, proof: WalletOwnershipProof) -> Signal<WalletState, WalletOperationError> {
+            return _internal_enableWalletBackup(account: self.account, encryptedParts: encryptedParts, newPublicKey: newPublicKey, proof: proof)
         }
 
         public func requestSecretPhraseExport(password: String? = nil) -> Signal<WalletSecretPhraseExport, WalletOperationError> {

@@ -4,6 +4,12 @@ import MetalEngine
 import Display
 
 struct DiamondStyle: Equatable {
+    enum Appearance: UInt32, CaseIterable, Sendable {
+        case blue = 0
+        case white = 1
+        case cool = 2
+    }
+    var appearance: Appearance = .blue
     enum AnimationMode: String, CaseIterable, Sendable {
         case continuous
         case reference
@@ -165,7 +171,7 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
 
     @objc private func reduceMotionChanged() {
         self.reduceMotion = UIAccessibility.isReduceMotionEnabled
-        self.motion.step(dt: 0, speed: self.animationStyle.rotationSpeed, reduceMotion: self.reduceMotion, mode: self.animationStyle.animationMode, time: self.elapsed)
+        self.motion.step(dt: 0, speed: self.animationStyle.rotationSpeed, reduceMotion: self.reduceMotion, mode: self.animationStyle.animationMode, time: self.elapsed, appearance: self.animationStyle.appearance)
         self.updateAnimationState()
     }
 
@@ -186,7 +192,7 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
             self.lastTime = nil
             if !isVisible && self.motion.isDragging {
                 self.motion.end(at: CACurrentMediaTime(), cancelled: true)
-                self.motion.step(dt: 0, speed: self.animationStyle.rotationSpeed, reduceMotion: self.reduceMotion, mode: self.animationStyle.animationMode, time: self.elapsed)
+                self.motion.step(dt: 0, speed: self.animationStyle.rotationSpeed, reduceMotion: self.reduceMotion, mode: self.animationStyle.animationMode, time: self.elapsed, appearance: self.animationStyle.appearance)
             }
         }
         if isVisible {
@@ -201,7 +207,7 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
             self.elapsed += dt
         }
         self.starBursts.removeAll(where: { self.elapsed - $0.startTime >= DiamondStarBurst.lifetime })
-        self.motion.step(dt: dt, speed: self.animationStyle.isRotating ? self.animationStyle.rotationSpeed : 0, reduceMotion: self.reduceMotion, mode: self.animationStyle.animationMode, time: self.elapsed)
+        self.motion.step(dt: dt, speed: self.animationStyle.isRotating ? self.animationStyle.rotationSpeed : 0, reduceMotion: self.reduceMotion, mode: self.animationStyle.animationMode, time: self.elapsed, appearance: self.animationStyle.appearance)
     }
 
     @objc func handleTap(_ gesture: UITapGestureRecognizer) {
@@ -217,7 +223,8 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
             direction: horizontalOffset < 0 ? -1 : 1,
             speed: self.animationStyle.isRotating ? self.animationStyle.rotationSpeed : 0,
             mode: self.animationStyle.animationMode,
-            time: self.elapsed
+            time: self.elapsed,
+            appearance: self.animationStyle.appearance
         ) else { return }
         if triggersBurst {
             self.addStarBurst()
@@ -251,7 +258,7 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
                 gesture.setTranslation(.zero, in: gesture.view)
             }
             if gesture.state == .ended {
-                self.motion.step(dt: 0, speed: self.animationStyle.rotationSpeed, reduceMotion: self.reduceMotion, mode: self.animationStyle.animationMode, time: self.elapsed)
+                self.motion.step(dt: 0, speed: self.animationStyle.rotationSpeed, reduceMotion: self.reduceMotion, mode: self.animationStyle.animationMode, time: self.elapsed, appearance: self.animationStyle.appearance)
                 self.motion.end(at: now)
                 let velocity = gesture.velocity(in: gesture.view)
                 if abs(velocity.x) > 600.0 && !self.reduceMotion && !UIAccessibility.isReduceMotionEnabled {
@@ -265,7 +272,7 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
         default:
             break
         }
-        self.motion.step(dt: 0, speed: self.animationStyle.rotationSpeed, reduceMotion: self.reduceMotion, mode: self.animationStyle.animationMode, time: self.elapsed)
+        self.motion.step(dt: 0, speed: self.animationStyle.rotationSpeed, reduceMotion: self.reduceMotion, mode: self.animationStyle.animationMode, time: self.elapsed, appearance: self.animationStyle.appearance)
         self.setNeedsUpdate()
     }
 

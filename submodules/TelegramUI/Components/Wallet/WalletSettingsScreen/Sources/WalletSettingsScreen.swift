@@ -24,15 +24,20 @@ private final class WalletSettingsScreenComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
 
     let context: AccountContext
+    let updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)
     let walletContext: WalletContext
 
-    init(context: AccountContext, walletContext: WalletContext) {
+    init(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>), walletContext: WalletContext) {
         self.context = context
+        self.updatedPresentationData = updatedPresentationData
         self.walletContext = walletContext
     }
 
     static func ==(lhs: WalletSettingsScreenComponent, rhs: WalletSettingsScreenComponent) -> Bool {
-        return lhs.context === rhs.context && lhs.walletContext === rhs.walletContext
+        return lhs.context === rhs.context
+            && lhs.updatedPresentationData.initial === rhs.updatedPresentationData.initial
+            && lhs.updatedPresentationData.signal === rhs.updatedPresentationData.signal
+            && lhs.walletContext === rhs.walletContext
     }
 
     final class View: UIView {
@@ -118,6 +123,14 @@ private final class WalletSettingsScreenComponent: Component {
         private weak var replacementOptionsController: AlertScreen?
         private var replacementCreationProgress: ValuePromise<Bool>?
         private var isCreatingReplacementWallet = false
+
+        private func currentPresentationData(for component: WalletSettingsScreenComponent) -> (initial: PresentationData, signal: Signal<PresentationData, NoError>) {
+            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+            return (
+                initial: presentationData.withUpdated(theme: self.environment?.theme ?? component.updatedPresentationData.initial.theme),
+                signal: component.updatedPresentationData.signal
+            )
+        }
 
         override init(frame: CGRect) {
             self.scrollView = UIScrollView()
@@ -307,6 +320,10 @@ private final class WalletSettingsScreenComponent: Component {
                 return
             }
             self.abandonWalletFlow()
+            if case .enable = action {
+                self.enableBackup()
+                return
+            }
             if info.canSign {
                 self.performBackupAction(action)
                 return
@@ -368,6 +385,7 @@ private final class WalletSettingsScreenComponent: Component {
             if info.canExportPhrase {
                 self.backupAccessDisposable.set(performWalletAuthorizedOperation(
                     context: component.context,
+                    updatedPresentationData: self.currentPresentationData(for: component),
                     present: { [weak controller] alert in
                         controller?.present(alert, in: .window(.root))
                     },
@@ -422,6 +440,7 @@ private final class WalletSettingsScreenComponent: Component {
             let message = walletAuthorizationErrorMessage(error)
             controller.present(textAlertController(
                 context: component.context,
+                updatedPresentationData: self.currentPresentationData(for: component),
                 title: message?.title ?? "Couldn’t Restore Wallet",
                 text: message?.text ?? "Check the network connection and try again.",
                 actions: [
@@ -445,6 +464,7 @@ private final class WalletSettingsScreenComponent: Component {
             }
             controller.push(component.context.sharedContext.makeWalletInfoScreen(
                 context: component.context,
+                updatedPresentationData: self.currentPresentationData(for: component),
                 mode: .recovery,
                 completion: { [weak self] in
                     guard let self, let component = self.component, let controller = self.environment?.controller() else {
@@ -452,6 +472,7 @@ private final class WalletSettingsScreenComponent: Component {
                     }
                     self.operationDisposable.set(performWalletAuthorizedOperation(
                         context: component.context,
+                        updatedPresentationData: self.currentPresentationData(for: component),
                         present: { [weak controller] alert in
                             controller?.present(alert, in: .window(.root))
                         },
@@ -483,6 +504,7 @@ private final class WalletSettingsScreenComponent: Component {
             let message = walletAuthorizationErrorMessage(error)
             controller.present(textAlertController(
                 context: component.context,
+                updatedPresentationData: self.currentPresentationData(for: component),
                 title: message?.title ?? "Couldn’t Show Secret Phrase",
                 text: message?.text ?? "Check the network connection and try again.",
                 actions: [TextAlertAction(type: .defaultAction, title: "OK", action: {
@@ -524,7 +546,7 @@ private final class WalletSettingsScreenComponent: Component {
                 navigationController.setViewControllers(viewControllers, animated: true)
                 return
             }
-            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+            let presentationData = self.currentPresentationData(for: component).initial
             navigationController.setViewControllers(viewControllers, animated: true)
             Queue.mainQueue().after(0.4) { [weak settingsController] in
                 settingsController?.present(UndoOverlayController(
@@ -578,10 +600,7 @@ private final class WalletSettingsScreenComponent: Component {
                 configuration: AlertScreen.Configuration(dismissOnOutsideTap: false),
                 contentSignal: content.get(),
                 actionsSignal: actions.get(),
-                updatedPresentationData: (
-                    component.context.sharedContext.currentPresentationData.with { $0 },
-                    component.context.sharedContext.presentationData
-                )
+                updatedPresentationData: self.currentPresentationData(for: component)
             )
             self.disableBackupPreparationController = alertController
             alertController.dismissed = { [weak self, weak alertController] _ in
@@ -971,7 +990,6 @@ private final class WalletSettingsScreenComponent: Component {
             let progress = ValuePromise<Bool>(false, ignoreRepeated: true)
             let actionsEnabled = progress.get() |> map { !$0 }
             let alertController = AlertScreen(
-                context: component.context,
                 configuration: AlertScreen.Configuration(dismissOnOutsideTap: false, allowInputInset: true),
                 content: [
                     AnyComponentWithIdentity(
@@ -997,7 +1015,8 @@ private final class WalletSettingsScreenComponent: Component {
                         isEnabled: actionsEnabled,
                         progress: progress.get()
                     )
-                ]
+                ],
+                updatedPresentationData: self.currentPresentationData(for: component)
             )
             self.disableBackupConfirmationController = alertController
             self.disableBackupProgress = progress
@@ -1024,6 +1043,7 @@ private final class WalletSettingsScreenComponent: Component {
             self.disableBackupProgress?.set(true)
             self.backupOperationDisposable.set(performWalletAuthorizedOperation(
                 context: component.context,
+                updatedPresentationData: self.currentPresentationData(for: component),
                 present: { [weak self] alert in
                     self?.environment?.controller()?.present(alert, in: .window(.root))
                 },
@@ -1139,6 +1159,7 @@ private final class WalletSettingsScreenComponent: Component {
             let message = self.disableBackupErrorMessage(error)
             controller.present(textAlertController(
                 context: component.context,
+                updatedPresentationData: self.currentPresentationData(for: component),
                 title: message.title,
                 text: message.text,
                 actions: [TextAlertAction(type: .defaultAction, title: "OK", action: {})]
@@ -1188,6 +1209,7 @@ private final class WalletSettingsScreenComponent: Component {
             }
             controller.present(textAlertController(
                 context: component.context,
+                updatedPresentationData: self.currentPresentationData(for: component),
                 title: "Wallet Changed",
                 text: "The wallet's secret phrase changed while you were updating backup settings. Restore access using the current secret phrase and try again.",
                 actions: [TextAlertAction(type: .defaultAction, title: "OK", action: {})]
@@ -1198,7 +1220,7 @@ private final class WalletSettingsScreenComponent: Component {
             guard let component = self.component, let controller = self.environment?.controller() else {
                 return
             }
-            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+            let presentationData = self.currentPresentationData(for: component).initial
             controller.present(UndoOverlayController(
                 presentationData: presentationData,
                 content: .actionSucceeded(
@@ -1213,36 +1235,79 @@ private final class WalletSettingsScreenComponent: Component {
         }
 
         private func enableBackup() {
-            guard let component = self.component, let controller = self.environment?.controller() else {
+            guard let component = self.component,
+                  case let .wallet(info) = component.walletContext.stateValue.phase,
+                  info.canEnableBackup, component.walletContext.stateValue.activeOperation == nil else {
                 return
             }
-            self.backupOperationDisposable.set(performWalletAuthorizedOperation(
-                context: component.context,
-                present: { [weak controller] alert in
-                    controller?.present(alert, in: .window(.root))
-                },
-                operation: { [weak self] password -> Signal<WalletContext.WalletInfo, WalletContext.WalletError> in
-                    guard let self else { return .fail(.authorizationCancelled) }
-                    return self.walletFlowAuthorization(for: .enableBackup) |> mapToSignal { session in
-                        component.walletContext.enableBackup(password: password, session: session)
-                    }
-                },
-                next: { [weak self] _ in
-                    self?.endWalletFlow()
-                    self?.presentBackupEnabledToast()
-                },
-                failed: { [weak self] error in
-                    if error == .authorizationCancelled { self?.endWalletFlow() }
-                    self?.presentBackupOperationError(error)
+            guard info.canSign else {
+                self.openBackupPhraseInput(expectedAddress: info.address)
+                return
+            }
+            self.backupOperationDisposable.set((self.walletFlowAuthorization(for: .enableBackup)
+            |> mapToSignal { session in
+                component.walletContext.enableBackup(expectedAddress: info.address, session: session)
+            }
+            |> deliverOnMainQueue).start(next: { [weak self] _ in
+                self?.endWalletFlow()
+                self?.presentBackupEnabledToast()
+            }, error: { [weak self] error in
+                self?.endWalletFlow()
+                self?.presentEnableBackupError(error, expectedAddress: info.address)
+            }))
+        }
+
+        private func openBackupPhraseInput(expectedAddress: String) {
+            guard let component = self.component, let controller = self.environment?.controller(),
+                  case let .wallet(info) = component.walletContext.stateValue.phase,
+                  info.address == expectedAddress, info.canEnableBackup else { return }
+            self.abandonWalletFlow()
+            controller.push(component.context.sharedContext.makeWalletImportScreen(
+                context: component.context, mode: .enableBackup(expectedAddress: expectedAddress),
+                completion: { [weak self, weak controller] in
+                    guard let self, let controller,
+                          let navigationController = controller.navigationController as? NavigationController,
+                          let index = navigationController.viewControllers.firstIndex(where: { $0 === controller }) else { return }
+                    navigationController.setViewControllers(Array(navigationController.viewControllers.prefix(through: index)), animated: true)
+                    self.presentBackupEnabledToast()
                 }
             ))
+        }
+
+        private func presentEnableBackupError(_ error: WalletContext.WalletError, expectedAddress: String) {
+            guard error != .authorizationCancelled,
+                  let component = self.component, let controller = self.environment?.controller() else { return }
+            let message = walletBackupEnableErrorMessage(error)
+            var actions = [TextAlertAction(type: .genericAction, title: "Cancel", action: {})]
+            switch error {
+            case .rotationNotFound, .proofExpired, .network:
+                actions.append(TextAlertAction(type: .defaultAction, title: "Retry", action: { [weak self] in
+                    guard case let .wallet(info)? = self?.component?.walletContext.stateValue.phase,
+                          info.address == expectedAddress else { return }
+                    self?.enableBackup()
+                }))
+            default:
+                break
+            }
+            switch error {
+            case .walletKeyMismatch, .storage(.identityMismatch), .proofInvalid, .invalidMnemonic, .rotationNotFound:
+                actions.append(TextAlertAction(type: .defaultAction, title: "Enter Current Secret Phrase", action: { [weak self] in
+                    self?.openBackupPhraseInput(expectedAddress: expectedAddress)
+                }))
+            default:
+                break
+            }
+            controller.present(textAlertController(
+                context: component.context, updatedPresentationData: self.currentPresentationData(for: component),
+                title: message.title, text: message.text, actions: actions
+            ), in: .window(.root))
         }
 
         private func presentBackupEnabledToast() {
             guard let component = self.component, let controller = self.environment?.controller() else {
                 return
             }
-            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+            let presentationData = self.currentPresentationData(for: component).initial
             controller.present(UndoOverlayController(
                 presentationData: presentationData,
                 content: .actionSucceeded(
@@ -1264,6 +1329,7 @@ private final class WalletSettingsScreenComponent: Component {
             let message = walletAuthorizationErrorMessage(error)
             controller.present(textAlertController(
                 context: component.context,
+                updatedPresentationData: self.currentPresentationData(for: component),
                 title: message?.title ?? "Couldn’t Update Backup",
                 text: message?.text ?? "Check the network connection and try again.",
                 actions: [TextAlertAction(type: .defaultAction, title: "OK", action: {})]
@@ -1277,6 +1343,7 @@ private final class WalletSettingsScreenComponent: Component {
             }
             controller.present(textAlertController(
                 context: component.context,
+                updatedPresentationData: self.currentPresentationData(for: component),
                 title: "Delete Wallet?",
                 text: "You'll lose access to your funds unless you've saved your secret phrase.",
                 actions: [
@@ -1299,7 +1366,6 @@ private final class WalletSettingsScreenComponent: Component {
             let actionsEnabled = creationProgress.get()
             |> map { !$0 }
             let alertController = AlertScreen(
-                context: component.context,
                 configuration: AlertScreen.Configuration(
                     actionAlignment: .vertical,
                     dismissOnOutsideTap: true
@@ -1330,7 +1396,8 @@ private final class WalletSettingsScreenComponent: Component {
                         autoDismiss: false,
                         isEnabled: actionsEnabled
                     )
-                ]
+                ],
+                updatedPresentationData: self.currentPresentationData(for: component)
             )
             self.replacementOptionsController = alertController
             self.replacementCreationProgress = creationProgress
@@ -1388,7 +1455,7 @@ private final class WalletSettingsScreenComponent: Component {
                 guard let walletController = remainingViewControllers.last as? ViewController else {
                     return
                 }
-                let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+                let presentationData = self.currentPresentationData(for: component).initial
                 
                 navigationController.setViewControllers(remainingViewControllers, animated: true)
                 Queue.mainQueue().after(0.4) { [weak walletController] in
@@ -1427,6 +1494,7 @@ private final class WalletSettingsScreenComponent: Component {
             let createdWallet = Atomic<WalletContext.WalletInfo?>(value: nil)
             self.operationDisposable.set(performWalletAuthorizedOperation(
                 context: component.context,
+                updatedPresentationData: self.currentPresentationData(for: component),
                 present: { [weak controller] alert in
                     controller?.present(alert, in: .window(.root))
                 },
@@ -1481,6 +1549,7 @@ private final class WalletSettingsScreenComponent: Component {
             let message = walletAuthorizationErrorMessage(error)
             controller.present(textAlertController(
                 context: component.context,
+                updatedPresentationData: self.currentPresentationData(for: component),
                 title: message?.title ?? "Couldn’t Replace Wallet",
                 text: message?.text ?? "Check the network connection and try again.",
                 actions: [TextAlertAction(type: .defaultAction, title: "OK", action: {})]
@@ -1501,7 +1570,7 @@ private final class WalletSettingsScreenComponent: Component {
                 guard let controller else {
                     return
                 }
-                let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+                let presentationData = self.currentPresentationData(for: component).initial
                 controller.present(UndoOverlayController(
                     presentationData: presentationData,
                     content: .actionSucceeded(
@@ -1523,6 +1592,7 @@ private final class WalletSettingsScreenComponent: Component {
                 }
                 controller.present(textAlertController(
                     context: component.context,
+                    updatedPresentationData: self.currentPresentationData(for: component),
                     title: "Couldn’t Delete Mnemonic",
                     text: "The mnemonic could not be deleted from Keychain. Please try again.",
                     actions: [TextAlertAction(type: .defaultAction, title: "OK", action: {})]
@@ -1708,7 +1778,7 @@ private final class WalletSettingsScreenComponent: Component {
                         )),
                         maximumNumberOfLines: 0
                     )),
-                    accessory: nil,
+                    accessory: self.walletState?.activeOperation == .enablingBackup ? .activity : nil,
                     action: { [weak self] _ in
                         self?.beginBackupAction(.enable)
                     }
@@ -2048,11 +2118,16 @@ public final class WalletSettingsScreen: ViewControllerComponentContainer {
         //TODO:localize
         let title = "Keys & Backup"
 
+        let updatedPresentationData = presentationDataWithDefaultAccent((
+            initial: context.sharedContext.currentPresentationData.with { $0 },
+            signal: context.sharedContext.presentationData
+        ))
         super.init(
             context: context,
-            component: WalletSettingsScreenComponent(context: context, walletContext: walletContext),
+            component: WalletSettingsScreenComponent(context: context, updatedPresentationData: updatedPresentationData, walletContext: walletContext),
             navigationBarAppearance: .default,
-            theme: .default
+            theme: .default,
+            updatedPresentationData: updatedPresentationData
         )
 
         self.title = title

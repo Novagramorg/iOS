@@ -8,6 +8,18 @@ import WalletEngineFFI
 private let walletOwnershipProofDomain = "telegram.org"
 
 @available(macOS 10.15, *)
+private func walletCommentEncryptionError(_ error: Error) -> WalletContext.WalletError {
+    if let error = error as? WalletClientError {
+        switch error {
+        case .EncryptedCommentUnavailable: return .commentEncryptionRecipientUnavailable
+        case .EncryptedCommentLookupFailed: return .network
+        default: break
+        }
+    }
+    return .commentEncryptionFailed
+}
+
+@available(macOS 10.15, *)
 func walletPreviewNeedsSeqnoRetry(_ error: Error) -> Bool {
     guard let error = error as? WalletClientError else {
         return false
@@ -298,9 +310,9 @@ public extension WalletContext {
         }
     }
 
-    func enableBackup(password: String? = nil, session: PasscodeSession? = nil) -> Signal<WalletInfo, WalletError> {
+    func enableBackup(expectedAddress: String, words: [String]? = nil, session: PasscodeSession? = nil) -> Signal<WalletInfo, WalletError> {
         self.signal(name: "enabling_backup", cancelOnDispose: false, deliverWhenAvailable: session?.lifetime == .ownerManaged) { impl, operationId in
-            try await impl.enableBackup(password: password, session: session, operationId: operationId)
+            try await impl.enableBackup(expectedAddress: expectedAddress, words: words, session: session, operationId: operationId)
         }
     }
 
@@ -477,11 +489,13 @@ extension WalletContextImpl {
     }
 
     private func withWalletOwnershipProof<Value: Sendable>(
+        validate: () throws -> Void = {},
         sign: (TelegramCore.WalletProofChallenge) async throws -> Data,
         request: (TelegramCore.WalletOwnershipProof) async throws -> Value
     ) async throws -> Value {
         for attempt in 0 ..< 2 {
             do {
+                try validate()
                 let startedAt = ProcessInfo.processInfo.systemUptime
                 let challenge = try await WalletSignalRequestContext<TelegramCore.WalletProofChallenge>().run(
                     self.engine.wallet.getProofChallenge()
@@ -496,6 +510,7 @@ extension WalletContextImpl {
                 guard Double(challenge.timestamp) + elapsed < Double(challenge.expires) else {
                     throw WalletError.proofExpired
                 }
+                try validate()
                 return try await request(TelegramCore.WalletOwnershipProof(
                     timestamp: challenge.timestamp, signature: signature
                 ))
@@ -882,26 +897,163 @@ extension WalletContextImpl {
         try await self.runtime.discardReplacement(recordId: prepared.recordId)
     }
 
-    func enableBackup(password: String?, session: PasscodeSession? = nil, operationId: UUID) async throws -> WalletInfo {
+    func enableBackup(expectedAddress: String, words suppliedWords: [String]?, session: PasscodeSession? = nil, operationId: UUID) async throws -> WalletInfo {
         return try await self.performOperation(.enablingBackup, operationId: operationId, session: session) {
             guard case let .wallet(info) = self.currentState.phase,
-                  info.canSign,
+                  walletEngineAddressesEqual(info.address, expectedAddress),
                   info.canEnableBackup else {
                 throw WalletError.unavailable
             }
-            let words = try await self.runtime.revealRecoveryPhrase()
-            let state = try await enableWalletBackup(engine: self.engine, words: words, password: password)
-            let identity = try walletServerIdentity(state)
-            guard walletEngineAddressesEqual(identity.address, info.address),
-                  identity.publicKey.map({ String(format: "%02x", $0) }).joined() == info.publicKey else {
-                throw WalletError.storage(.identityMismatch)
+            let generation = self.activationGeneration
+            let authorizationSession = WalletAuthorizationScope.session
+            let authorizationGeneration = try self.authorization.operationGeneration()
+            func validateAuthorization() throws {
+                try Task.checkCancellation()
+                guard !self.isShutdown, self.activationGeneration == generation,
+                      self.activeOperationId == operationId else { throw WalletError.unavailable }
+                try self.authorization.validateGeneration(authorizationGeneration)
+                if let authorizationSession { try self.authorization.validate(authorizationSession) }
             }
-            self.applyServerWalletState(state)
-            guard case let .wallet(updated) = self.currentState.phase else {
-                throw WalletError.unavailable
+
+            // Read a single snapshot before a fresh server state can invalidate
+            // the local runtime. This exact phrase supplies both parts and proof.
+            var words: [String]
+            if let suppliedWords {
+                words = normalizedEngineMnemonic(suppliedWords)
+            } else {
+                guard info.canSign else { throw WalletError.walletKeyMismatch }
+                guard try await self.runtime.keyRotationRecord() == nil else { throw WalletError.operationInProgress }
+                words = normalizedEngineMnemonic(try await self.runtime.revealRecoveryPhrase())
             }
-            return updated
+            defer { words.removeAll(keepingCapacity: false) }
+            guard words.count == 24 else { throw WalletError.invalidMnemonic }
+            let signingPublicKey = try walletMnemonicSigningPublicKey(words: words)
+            let anchorPublicKey = try rotationMnemonicPublicKey(phrase: words.joined(separator: " "))
+            try validateAuthorization()
+
+            let refreshRevision = self.serverStateMutationRevision
+            let freshState: TelegramCore.WalletState
+            do {
+                freshState = try await WalletSignalRequestContext<TelegramCore.WalletState>().run(self.engine.wallet.getState())
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch { throw WalletError.network }
+            try validateAuthorization()
+            if self.serverStateMutationRevision == refreshRevision { self.applyServerWalletState(freshState) }
+            guard case let .ready(backupEnabled, _, canEnableBackup, address, serverPublicKey, _)? =
+                    self.deferredServerWalletState?.state ?? self.serverWalletState,
+                  walletEngineAddressesEqual(address, expectedAddress) else { throw WalletError.unavailable }
+            guard canEnableBackup || (backupEnabled && serverPublicKey == signingPublicKey) else {
+                throw WalletError.backupNotAvailable
+            }
+            if suppliedWords == nil, signingPublicKey != serverPublicKey { throw WalletError.walletKeyMismatch }
+
+            func currentState() throws -> TelegramCore.WalletState {
+                try validateAuthorization()
+                let serverState = self.serverWalletState
+                guard let state = self.deferredServerWalletState?.state ?? serverState,
+                      case let .ready(_, _, _, address, publicKey, _) = state,
+                      walletEngineAddressesEqual(address, expectedAddress) else { throw WalletError.unavailable }
+                guard publicKey == serverPublicKey || publicKey == signingPublicKey else { throw WalletError.walletKeyMismatch }
+                return state
+            }
+            func isComplete(_ state: TelegramCore.WalletState) -> Bool {
+                if case let .ready(backupEnabled, _, _, address, publicKey, _) = state {
+                    return backupEnabled && walletEngineAddressesEqual(address, expectedAddress) && publicKey == signingPublicKey
+                }
+                return false
+            }
+
+            var candidate: WalletEngineStagedWallet?
+            var preserveCandidate = false
+            do {
+                if suppliedWords != nil {
+                    guard try await self.runtime.keyRotationRecord() == nil else { throw WalletError.operationInProgress }
+                    let staged = try await self.runtime.stageTransientReplacement(words: words)
+                    candidate = staged
+                    guard walletEngineAddressesEqual(staged.address, expectedAddress),
+                          staged.publicKey == anchorPublicKey, staged.signingPublicKey == signingPublicKey else {
+                        throw WalletError.walletKeyMismatch
+                    }
+                    _ = try currentState()
+                    // Persist only the candidate, while protected access is still
+                    // available. An upload may finish after that access is revoked.
+                    try await self.runtime.persistReplacementCandidate(recordId: staged.recordId)
+                }
+                if !isComplete(try currentState()) {
+                    let parts = try await encryptedWalletBackupParts(engine: self.engine, words: words)
+                    _ = try await withWalletBackupRotationRetry { checkDeadline in
+                        try await self.withWalletOwnershipProof(validate: {
+                            _ = try currentState()
+                            try checkDeadline()
+                        }, sign: { challenge in
+                            _ = try currentState()
+                            return try walletOwnershipProofSignature(
+                                words: words, expectedAnchorPublicKey: anchorPublicKey,
+                                expectedSigningPublicKey: signingPublicKey, address: expectedAddress,
+                                domain: challenge.domain, timestamp: UInt64(challenge.timestamp), payload: challenge.payload
+                            )
+                        }, request: { proof in
+                            let latest = try currentState()
+                            if isComplete(latest) { return latest }
+                            guard case let .ready(_, _, canEnableBackup, _, _, _) = latest, canEnableBackup else {
+                                throw WalletError.backupNotAvailable
+                            }
+                            let revision = self.serverStateMutationRevision
+                            let response: TelegramCore.WalletState
+                            do {
+                                response = try await WalletSignalRequestContext<TelegramCore.WalletState>().run(
+                                    self.engine.wallet.enableBackup(encryptedParts: parts, newPublicKey: signingPublicKey, proof: proof)
+                                )
+                            } catch let error as TelegramCore.WalletOperationError {
+                                if error == .network { preserveCandidate = candidate != nil }
+                                throw error
+                            } catch {
+                                // Cancellation or an unexpected transport failure
+                                // does not prove that the server rejected the upload.
+                                preserveCandidate = candidate != nil
+                                throw error
+                            }
+                            preserveCandidate = candidate != nil
+                            if self.serverStateMutationRevision == revision { self.applyServerWalletState(response) }
+                            return try currentState()
+                        })
+                    }
+                }
+                let state = try currentState()
+                guard isComplete(state) else { throw WalletError.walletKeyMismatch }
+                let revision = self.serverStateMutationRevision
+                if let candidate {
+                    preserveCandidate = true
+                    let activationGeneration = await self.prepareForRuntimeIdentityChange(preserveCurrentWalletState: true)
+                    let activation = try await self.runtime.commitReplacement(
+                        recordId: candidate.recordId, serverAddress: expectedAddress,
+                        serverPublicKey: signingPublicKey, serverStateRevision: revision
+                    )
+                    guard self.serverStateMutationRevision == revision, activation.canSign else { throw CancellationError() }
+                    self.deferredServerWalletState = nil
+                    return self.installRuntimeActivation(state: state, activation: activation, generation: activationGeneration, preserveCurrentWalletState: true)
+                } else {
+                    return self.installBackupEnabledState(state)
+                }
+            } catch {
+                if let candidate, !preserveCandidate {
+                    await self.discardReplacementForCleanup(recordId: candidate.recordId)
+                }
+                throw error
+            }
         }
+    }
+
+    private func installBackupEnabledState(_ state: TelegramCore.WalletState) -> WalletInfo {
+        // The local phrase path keeps the runtime and signing identity unchanged.
+        // performOperation applies this deferred state after clearing the operation.
+        self.deferredServerWalletState = (state, false)
+        guard case let .ready(backupEnabled, canExportPhrase, canEnableBackup, address, publicKey, _) = state else {
+            preconditionFailure("Expected a verified wallet backup state")
+        }
+        return WalletInfo(address: address, publicKey: publicKey.walletHexString, backupEnabled: backupEnabled,
+            canExportPhrase: canExportPhrase, canEnableBackup: canEnableBackup, canSign: true)
     }
 
     func prepareDisableBackup(updateSecretPhrase: Bool, session: PasscodeSession? = nil, operationId: UUID) async throws -> PreparedBackupDisable {
@@ -1268,12 +1420,50 @@ extension WalletContextImpl {
         pendingRegistration: WalletContext.PendingTransferRegistration? = nil,
         operationId: UUID
     ) async throws -> PreparedTransfer {
-        return try await self.performOperation(.preparingTransfer, operationId: operationId, requiresAuthorization: commentEncrypted, session: session) {
-            guard case let .wallet(info) = self.currentState.phase,
+        let resolved = try resolveTransferInput(address: address, amount: amount, comment: comment)
+        let encryptComment = commentEncrypted && resolved.comment?.isEmpty == false
+        let activationGeneration = self.activationGeneration
+        var encryptionPublicKey = recipientPublicKey
+        if encryptComment, let comment = resolved.comment {
+            guard comment.utf8.count <= 960 else { throw WalletError.commentTooLong }
+            guard !self.isShutdown, case let .wallet(info) = self.currentState.phase, info.canSign else {
+                throw WalletError.unavailable
+            }
+            if encryptionPublicKey == nil {
+                do {
+                    encryptionPublicKey = try await WalletSignalRequestContext<Data?>().run(
+                        self.engine.wallet.getUserAddresses(addresses: [resolved.address], force: false)
+                        |> map { addresses -> Data? in
+                            addresses.first(where: { walletEngineAddressesEqual($0.address, resolved.address) })?.publicKey
+                        }
+                    )
+                } catch let error as CancellationError {
+                    throw error
+                } catch {
+                    try Task.checkCancellation()
+                    self.logger.error("wallet_comment_recipient_key_lookup_failed", error)
+                }
+            }
+            try Task.checkCancellation()
+            guard !self.isShutdown, self.activationGeneration == activationGeneration else { throw WalletError.unavailable }
+            do {
+                // Keep the original key source: an on-chain key need not derive the recipient's address.
+                _ = try await self.runtime.resolveEncryptedCommentRecipient(recipient: resolved.address, recipientPublicKey: encryptionPublicKey)
+            } catch {
+                try Task.checkCancellation()
+                self.logger.error("wallet_comment_recipient_resolution_failed", error)
+                throw walletCommentEncryptionError(error)
+            }
+        }
+        try Task.checkCancellation()
+        guard !self.isShutdown, self.activationGeneration == activationGeneration else { throw WalletError.unavailable }
+        let resolvedRecipientPublicKey = encryptionPublicKey
+        return try await self.performOperation(.preparingTransfer, operationId: operationId, requiresAuthorization: encryptComment, session: session) {
+            guard !self.isShutdown, self.activationGeneration == activationGeneration,
+                  case let .wallet(info) = self.currentState.phase,
                   info.canSign else {
                 throw WalletError.unavailable
             }
-            let resolved = try resolveTransferInput(address: address, amount: amount, comment: comment)
             if let pendingRegistration {
                 try self.validatePendingTransferRegistration(
                     pendingRegistration, session: session, address: resolved.address, amount: resolved.amount,
@@ -1281,48 +1471,19 @@ extension WalletContextImpl {
                 )
             }
             self.requestGaslessInfo()
-            let activationGeneration = self.activationGeneration
-            let encryptComment = commentEncrypted && resolved.comment?.isEmpty == false
             let body: SendMessageBody
             if encryptComment, let comment = resolved.comment {
-                guard comment.utf8.count <= 960 else {
-                    throw WalletError.commentTooLong
-                }
-                var encryptionPublicKey = recipientPublicKey
-                if encryptionPublicKey == nil {
-                    do {
-                        encryptionPublicKey = try await WalletSignalRequestContext<Data?>().run(
-                            self.engine.wallet.getUserAddresses(addresses: [resolved.address], force: false)
-                            |> map { addresses -> Data? in
-                                addresses.first(where: { walletEngineAddressesEqual($0.address, resolved.address) })?.publicKey
-                            }
-                        )
-                    } catch let error as CancellationError {
-                        throw error
-                    } catch {
-                        try Task.checkCancellation()
-                        self.logger.error("wallet_comment_recipient_key_lookup_failed", error)
-                    }
-                }
-                try Task.checkCancellation()
-                guard !self.isShutdown, self.activationGeneration == activationGeneration,
-                      self.activeOperationId == operationId else {
-                    throw WalletError.unavailable
-                }
                 let boc: String
                 do {
                     boc = try await self.runtime.createEncryptedComment(
                         recipient: resolved.address,
                         comment: comment,
-                        recipientPublicKey: encryptionPublicKey
+                        recipientPublicKey: resolvedRecipientPublicKey
                     )
                 } catch {
                     try Task.checkCancellation()
                     self.logger.error("wallet_comment_encryption_failed", error)
-                    if let error = error as? WalletClientError, case .EncryptedCommentUnavailable = error {
-                        throw WalletError.commentEncryptionRecipientUnavailable
-                    }
-                    throw WalletError.commentEncryptionFailed
+                    throw walletCommentEncryptionError(error)
                 }
                 try Task.checkCancellation()
                 guard let data = Data(base64Encoded: boc) else {
@@ -2121,6 +2282,7 @@ extension WalletContextImpl {
         let changesWalletLocally = activeOperation == .creating
             || activeOperation == .importing
             || activeOperation == .completingRecoveryPhraseImport
+            || activeOperation == .enablingBackup
         if changesWalletLocally {
             self.isChangingWalletLocally = true
         }

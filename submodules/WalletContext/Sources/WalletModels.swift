@@ -1051,9 +1051,9 @@ extension WalletContext.Resource: Sendable where Value: Sendable {
 extension WalletContext.ActiveOperation {
     var defersServerWalletState: Bool {
         switch self {
-        case .creating, .importing, .preparingRecoveryPhraseImport, .completingRecoveryPhraseImport, .disablingBackup:
+        case .creating, .importing, .preparingRecoveryPhraseImport, .completingRecoveryPhraseImport, .enablingBackup, .disablingBackup:
             return true
-        case .recoveringPhrase, .enablingBackup, .preparingBackupDisable,
+        case .recoveringPhrase, .preparingBackupDisable,
              .preparingTransfer, .submittingTransfer, .tonConnect, .decryptingComment, .loadingMoreTransactions, .loadingMoreCollectibles:
             return false
         }

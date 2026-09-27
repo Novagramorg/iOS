@@ -26,6 +26,7 @@ final class DiamondRenderer: ComputeState {
         var projection: simd_float4x4
         var animation: SIMD4<Float>
         var layout: SIMD4<Float>
+        var appearance: SIMD4<Float>
     }
     struct Uniforms {
         var model: simd_float4x4
@@ -45,6 +46,9 @@ final class DiamondRenderer: ComputeState {
         var pavilionSweep: SIMD4<Float>
         var rightPavilionSweep: SIMD4<Float>
         var leftPavilionSweep: SIMD4<Float>
+        var appearance: SIMD4<Float>
+        var referenceCrownFlash: SIMD4<Float>
+        var referencePavilionFlash: SIMD4<Float>
     }
 
     enum Failure: LocalizedError {
@@ -83,6 +87,7 @@ final class DiamondRenderer: ComputeState {
     // These optional modes reuse the shared geometry without adding their
     // mesh sampling work to the default entrance animation's initialization.
     private lazy var referenceHighlights = DiamondSparkleGeometry.Reference(geometry: self.geometry)
+    private lazy var whiteReferenceHighlights = DiamondSparkleGeometry.Reference(geometry: self.geometry, appearance: .white)
     private lazy var silhouette = DiamondSilhouette(geometry: self.geometry)
 
     required convenience init?(device: MTLDevice) {
@@ -185,15 +190,17 @@ final class DiamondRenderer: ComputeState {
         projection.columns.0.x *= horizontalScale
         let animationTime = reduceMotion ? 0 : DiamondEntrance.highlightTime(
             at: time, entrance: style.animationMode == .entrance)
-        let sparkle = DiamondSparkleAnimation.state(time: animationTime)
+        let sparkle = DiamondSparkleAnimation.state(time: animationTime, appearance: style.appearance)
         let lookAhead: Float = 1 / 120
         var nextMotion = motion
         nextMotion.step(dt: lookAhead, speed: style.isRotating ? style.rotationSpeed : 0,
-                        reduceMotion: reduceMotion, mode: style.animationMode, time: time + lookAhead)
+                        reduceMotion: reduceMotion, mode: style.animationMode, time: time + lookAhead, appearance: style.appearance)
         let yawDelta = atan2(sin(nextMotion.yaw - motion.yaw), cos(nextMotion.yaw - motion.yaw))
         let angularSpeed = simd_length(SIMD2(yawDelta, nextMotion.pitch - motion.pitch)) / lookAhead
         let mainSparkle = DiamondSparkleAnimation.mainPlacement(model: model, angularSpeed: angularSpeed)
         let light = DiamondLightAnimation.state(time: animationTime)
+        let flashes = style.appearance == .white && style.animationMode == .reference && style.sparkles && !reduceMotion
+            ? DiamondReferenceHighlights.facetFlashes(at: animationTime) : (.zero, .zero)
         return Uniforms(model: model,
                         projection: projection,
                         inverseModel: model.transpose,
@@ -207,7 +214,9 @@ final class DiamondRenderer: ComputeState {
                         facetProjection: facetProjection,
                         crownSweep: light.crownSweep, rightCrownSweep: light.rightCrownSweep,
                         leftCrownSweep: light.leftCrownSweep, pavilionSweep: light.pavilionSweep,
-                        rightPavilionSweep: light.rightPavilionSweep, leftPavilionSweep: light.leftPavilionSweep)
+                        rightPavilionSweep: light.rightPavilionSweep, leftPavilionSweep: light.leftPavilionSweep,
+                        appearance: SIMD4(Float(style.appearance.rawValue), 0, 0, 0),
+                        referenceCrownFlash: flashes.0, referencePavilionFlash: flashes.1)
     }
 
     func encode(encoder: MTLRenderCommandEncoder, size: CGSize, time: Float, starBursts: [DiamondStarBurst], motion: DiamondMotion, style: DiamondStyle, reduceMotion: Bool, lightBackground: Bool) {
@@ -218,7 +227,8 @@ final class DiamondRenderer: ComputeState {
                 projection: DiamondMath.projection(aspect: Float(size.width/max(size.height,1)), zoom: 1, perspective: false),
                 animation: SIMD4(0, DiamondEntrance.particleTime(at:time,entrance:entrance),
                                  0, lightBackground ? 1 : 0),
-                layout: SIMD4(Float(size.width),Float(size.height),Float(DiamondEntrance.steadyStarCount),0))
+                layout: SIMD4(Float(size.width),Float(size.height),Float(DiamondEntrance.steadyStarCount),0),
+                appearance: u.appearance)
             encoder.setCullMode(.none)
             encoder.setDepthStencilState(sparkleDepthState)
             encoder.setRenderPipelineState(starPipeline)
@@ -262,8 +272,9 @@ final class DiamondRenderer: ComputeState {
                     encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: vertexCount,
                                            instanceCount: instances.count)
                 }
-                draw(referenceHighlights.smallInstances(at: time), buffer: smallSparkleBuffer, vertexCount: smallSparkleVertexCount)
-                draw(referenceHighlights.streakInstances(at: time), buffer: streakBuffer, vertexCount: streakVertexCount)
+                let highlights = style.appearance == .white ? whiteReferenceHighlights : referenceHighlights
+                draw(highlights.smallInstances(at: time), buffer: smallSparkleBuffer, vertexCount: smallSparkleVertexCount)
+                draw(highlights.streakInstances(at: time), buffer: streakBuffer, vertexCount: streakVertexCount)
             } else {
                 encoder.setVertexBuffer(smallSparkleBuffer, offset: 0, index: 0)
                 encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: smallSparkleVertexCount,

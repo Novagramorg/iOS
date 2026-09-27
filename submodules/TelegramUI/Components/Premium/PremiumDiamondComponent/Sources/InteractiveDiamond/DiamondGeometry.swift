@@ -413,11 +413,16 @@ struct DiamondSparkleGeometry {
     /// use the 17 optical planes, rather than scanning the tessellated mesh per frame.
     struct Reference {
         let anchors: [Anchor]
+        private let appearance: DiamondStyle.Appearance
+        private let events: [DiamondReferenceHighlights.Event]
         private let planes: [SIMD4<Float>]
         private let sourceScale: Float
         private let top: Float
 
-        init(geometry: DiamondGeometry) {
+        init(geometry: DiamondGeometry, appearance: DiamondStyle.Appearance = .blue) {
+            self.appearance = appearance
+            let events = DiamondReferenceHighlights.events(for: appearance)
+            self.events = events
             let model = DiamondMath.rotation(x: DiamondMotion.referencePitch, y: 0)
             let projected = geometry.vertices.map { DiamondMath.cameraPoint(model * $0.position) }
             let scale = projected.reduce(Float(0)) { max($0, abs($1.x)) } / (447.9 * 0.75 / 2)
@@ -425,9 +430,9 @@ struct DiamondSparkleGeometry {
             self.sourceScale = scale
             self.top = top
             planes = geometry.planes
-            anchors = DiamondReferenceHighlights.events.map { event in
+            anchors = events.map { event in
                 let inverse = DiamondMath.rotation(x: DiamondMotion.referencePitch,
-                    y: DiamondMotion.referenceYaw(time: (event.frame + 2)/60)).transpose
+                    y: DiamondMotion.referenceYaw(time: (event.frame + 2) * (appearance == .white ? 3/121 : 1/60), appearance: appearance)).transpose
                 let x = (event.position.x - 256) * scale
                 let y = top + (141.85 - event.position.y) * scale
                 let ray = DiamondMath.cameraRay(at: SIMD2(x, y))
@@ -447,8 +452,8 @@ struct DiamondSparkleGeometry {
         func smallInstances(at time: Float) -> [HighlightInstance] {
             var result: [HighlightInstance] = []
             result.reserveCapacity(3)
-            for (i, event) in DiamondReferenceHighlights.events.enumerated() {
-                let scale = event.scale(at: time)
+            for (i, event) in events.enumerated() {
+                let scale = event.scale(at: time, appearance: appearance)
                 guard scale > 0 else { continue }
                 let anchor = anchors[i]
                 result.append(HighlightInstance(position: anchor.position,
@@ -460,9 +465,9 @@ struct DiamondSparkleGeometry {
 
         func streakInstances(at time: Float) -> [HighlightInstance] {
             let inverse = DiamondMath.rotation(x: DiamondMotion.referencePitch,
-                                               y: DiamondMotion.referenceYaw(time: time)).transpose
+                                               y: DiamondMotion.referenceYaw(time: time, appearance: appearance)).transpose
             let view = inverse * SIMD4<Float>(0, 0, 1, 0)
-            return DiamondReferenceHighlights.streaks(at: time).map { streak in
+            return DiamondReferenceHighlights.streaks(at: time, appearance: appearance).map { streak in
                 let cameraPoint = SIMD2((streak.center.x-256)*sourceScale, top+(141.85-streak.center.y)*sourceScale)
                 let ray = DiamondMath.cameraRay(at: cameraPoint)
                 let origin = inverse * ray.origin

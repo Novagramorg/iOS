@@ -29,6 +29,7 @@ struct StarUniforms {
     float4x4 projection;
     float4 animation; // burst age, transport time, burst enabled, light background
     float4 layout; // viewport pixels, steady instance count, burst seed
+    float4 appearance; // palette identifier, reserved
 };
 struct BackgroundStarRaster {
     float4 position [[position]];
@@ -131,6 +132,12 @@ vertex BackgroundStarRaster backgroundStarVertex(uint vertexIndex [[vertex_id]],
     float iridescence = smoothstep(0.12,1.0,shine);
     darkColor = mix(darkColor,float3(0.247,0.894,1),iridescence*0.30);
     float3 lightColor = darkColor * 0.78;
+    if (uint(u.appearance.x) == 1) {
+        darkColor = lightColor = float3(1);
+    } else if (uint(u.appearance.x) == 2) {
+        darkColor = mix(float3(0.52,0.84,1),float3(1),choice*0.8+iridescence*0.2);
+        lightColor = mix(float3(0.20,0.51,0.91),float3(0.58,0.80,1),choice);
+    }
     BackgroundStarRaster out;
     out.position = u.projection*float4(center+point,-1.6-depth,1);
     out.uv = uv;
@@ -169,6 +176,9 @@ struct Uniforms {
     float4 pavilionSweep;
     float4 rightPavilionSweep;
     float4 leftPavilionSweep;
+    float4 appearance; // palette identifier, reserved
+    float4 referenceCrownFlash;
+    float4 referencePavilionFlash;
 };
 struct Raster {
     float4 position [[position]];
@@ -521,8 +531,14 @@ float3 pavilionReflections(float3 color, float3 origin, float3 ray, constant Uni
         float3 tangent = float3(current.y,0,-current.x);
         // Broad, low-contrast echoes of the crown stretch through the volume
         // towards the same lower junction. Adjacent planes meet without dark gaps.
-        float3 upperLeft = radial*0.64 - tangent*0.265097 + float3(0,-0.12,0);
-        float3 upperRight = radial*0.64 + tangent*0.265097 + float3(0,-0.12,0);
+        // Continue the same planes above the girdle so their top fade stays
+        // hidden behind the crown, including the deeper, opposite reflections.
+        const float upperY = 0.20;
+        const float extension = (upperY+0.12)/0.65;
+        const float upperRadius = 0.64+(0.64-0.19)*extension;
+        const float upperWidth = 0.265097+(0.265097-0.078701)*extension;
+        float3 upperLeft = radial*upperRadius - tangent*upperWidth + float3(0,upperY,0);
+        float3 upperRight = radial*upperRadius + tangent*upperWidth + float3(0,upperY,0);
         float3 lowerLeft = radial*0.19 - tangent*0.078701 + float3(0,-0.77,0);
         float3 lowerRight = radial*0.19 + tangent*0.078701 + float3(0,-0.77,0);
         float3 ribbonCoordinates;
@@ -532,12 +548,12 @@ float3 pavilionReflections(float3 color, float3 origin, float3 ray, constant Uni
         }
         if (ribbon < 100) {
             float3 hit = origin+ray*ribbon;
-            float depth = saturate((-0.12-hit.y)/0.65);
+            float depth = (-0.12-hit.y)/0.65;
             float across = dot(hit,tangent);
             float right = mix(0.265097,0.078701,depth), left = -right;
             float3 worldRadial = normalize((u.model*float4(radial,0)).xyz);
             float facing = saturate(-dot(worldRadial,worldRay));
-            float fade = smoothstep(0.0,0.10,depth)*(1-smoothstep(0.70,1.0,depth));
+            float fade = smoothstep(0.0,0.065,upperY-hit.y)*(1-smoothstep(0.70,1.0,depth));
             float opacity = fade*(0.16+0.84*facing);
             float light = saturate(0.5+0.5*dot(worldRadial,illumination));
             // Broad reflected facets fill the middle with restrained diagonal
@@ -622,6 +638,57 @@ float3 interior(float3 p, float3 direction, float pavilion, constant Uniforms &u
         origin = hit + direction * 0.004;
     }
     return accumulated;
+}
+
+float3 materialPalette(float3 color, float3 facetWeights, uint appearance) {
+    switch (appearance) {
+        case 1: {
+            // Keep the authored icy blue in the middle values: interpolating
+            // directly to white desaturates the crown into a cold grey.
+            float tone = smoothstep(0.0,0.92,saturate(dot(color.rg,float2(0.22,0.78))));
+            float3 shadow = mix(float3(0.63,0.77,0.95),float3(0.733,0.859,1),facetWeights.y*0.25);
+            const float3 ice = float3(207,241,253) / 255.0; // #cff1fd
+            float3 upper = mix(shadow,ice,smoothstep(0.0,0.62,tone));
+            upper = mix(upper,float3(1),smoothstep(0.58,1.0,tone)*0.92);
+            // Lift the pavilion while retaining a distinct shadow range below
+            // the white crown, with a little more blue in its lighter facets.
+            float3 lower = mix(float3(0.59,0.71,0.865),float3(0.96,0.985,1),pow(tone,1.10));
+            return mix(upper,lower,facetWeights.z);
+        }
+        case 2: {
+            float tone = smoothstep(0.035,0.90,saturate(dot(color.rg,float2(0.20,0.80))));
+            float3 cool = mix(float3(0.025,0.29,0.83),float3(0.38,0.78,1),smoothstep(0.0,0.65,tone));
+            float3 upper = mix(cool,float3(0.94,0.99,1),smoothstep(0.45,1.0,tone));
+            float3 lower = mix(float3(0.025,0.34,0.92),float3(0.90,0.99,1),pow(tone,2.35));
+            return mix(upper,lower,facetWeights.z);
+        }
+        default: return color;
+    }
+}
+
+float3 coolInnerGlow(float3 color, float3 position, float3 ray, float3 normal, float3 localNormal, float3 view,
+                     constant Uniforms &u, const device float4 *planes) {
+    // Thin parts transmit a white light band into the stone. The optical chord
+    // follows the 3D cut under every rotation, without expanding the silhouette.
+    float thickness = 1e5;
+    float planeAlignment = 0;
+    for (uint i = 0; i < uint(u.viewport.z); ++i) {
+        planeAlignment = max(planeAlignment,dot(planes[i].xyz,localNormal));
+        float denominator = dot(planes[i].xyz,ray);
+        if (denominator > 0.0001) {
+            float exit = -(dot(planes[i].xyz,position)+planes[i].w) / denominator;
+            thickness = min(thickness,max(0.0,exit));
+        }
+    }
+    // Scale the penetration with the taper: the tip gets a narrow rim,
+    // rather than filling with a solid white pool as its whole depth shrinks.
+    float crossSection = clamp((position.y+1.09)/0.98,0.07,1.0);
+    float inner = 1-smoothstep(0.01,0.80*crossSection,thickness);
+    float grazing = 1-saturate(dot(normal,view));
+    float roundedEdge = smoothstep(0.0015,0.028,1-planeAlignment);
+    float bevel = pow(grazing,3.0);
+    float glow = saturate(inner*0.85 + bevel*0.85 + roundedEdge*smoothstep(0.18,0.80,grazing));
+    return mix(color,float3(0.96,1,1),glow);
 }
 
 fragment float4 diamondFragment(Raster in [[stage_in]], constant Uniforms &u [[buffer(1)]],
@@ -720,6 +787,22 @@ fragment float4 diamondFragment(Raster in [[stage_in]], constant Uniforms &u [[b
     float sweepCore = smoothstep(0.35,1.0,sweep);
     color = mix(color,float3(0.592,0.953,1),sweep*0.20+sweepCore*sweepCore*0.62);
     color = surfaceFinish(color,polishedNormal(in,localNormal,u),view,u);
+    color = materialPalette(color,in.facetWeights,uint(u.appearance.x));
+    if (uint(u.appearance.x) == 2) {
+        color = coolInnerGlow(color,in.localPosition,localView,n,localNormal,view,u,planes);
+    }
+    if (uint(u.appearance.x) == 1) {
+        // Source facet flashes stay on the physical front/side planes, including
+        // their rounded transitions. They never become screen-space overlays.
+        float2 direction = normalize(localNormal.xz + float2(0,0.00001));
+        float side = smoothstep(0.18,0.65,abs(direction.x));
+        float front = smoothstep(0.02,0.32,direction.y);
+        float3 regions = float3(1-side, side*step(0.0,direction.x), side*(1-step(0.0,direction.x))) * front;
+        float alpha = dot(regions,u.referenceCrownFlash.xyz)*in.facetWeights.y
+                    + dot(regions,u.referencePavilionFlash.xyz)*in.facetWeights.z;
+        float referenceFacing = smoothstep(0.0,0.2,(u.model * float4(0,0,1,0)).z);
+        color = mix(color,float3(1),alpha*referenceFacing);
+    }
     return float4(saturate(color * u.parameters.z), 1);
 }
 
@@ -817,7 +900,7 @@ float radialOpacity(float radius, float first, float middle) {
     return 0.5 * saturate((1-radius)/(1-middle));
 }
 
-fragment float4 sparkleFragment(SparkleRaster in [[stage_in]]) {
+fragment float4 sparkleFragment(SparkleRaster in [[stage_in]], constant Uniforms &u [[buffer(1)]]) {
     float alpha = 1;
     float3 color = 1;
     if (in.layer == 0) {
@@ -835,6 +918,14 @@ fragment float4 sparkleFragment(SparkleRaster in [[stage_in]]) {
         color = mix(float3(0.694, 0.969, 1), float3(0.663, 0.957, 1), r);
     } else if (in.layer == 5) {
         alpha = radialOpacity(length(in.sourcePoint) / length(float2(228.9, 3.9)), 0.237, 0.623);
+    }
+    if (uint(u.appearance.x) == 1) {
+        color = in.layer == 0 ? float3(0.635,0.749,1) : float3(1);
+        // The white source retains only the circular halo, without the extra
+        // star-shaped glow used by the blue material.
+        if (in.layer == 1) { alpha = 0; }
+    } else if (uint(u.appearance.x) == 2) {
+        color = in.layer == 1 ? float3(0.82,0.96,1) : float3(1);
     }
     alpha *= in.strength;
     return float4(color * alpha, alpha);

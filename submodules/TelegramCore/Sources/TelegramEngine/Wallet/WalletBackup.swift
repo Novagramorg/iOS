@@ -251,26 +251,29 @@ func _internal_getWalletBackupHolders(account: Account) -> Signal<[WalletBackupH
 func _internal_enableWalletBackup(
     account: Account,
     encryptedParts: [Data],
-    password: String?
+    newPublicKey: Data,
+    proof: WalletOwnershipProof
 ) -> Signal<WalletState, WalletOperationError> {
     guard encryptedParts.count == 3, encryptedParts.allSatisfy({ !$0.isEmpty }) else {
         return .fail(.invalidBackupData)
     }
-    return walletRequestWithOptionalPassword(password: password, makePasswordProof: { password in
-        walletPasswordProof(account: account, password: password)
-    }, request: { proof in
-        let flags: Int32 = proof == nil ? 0 : (1 << 0)
-        return account.network.request(
-            Api.functions.wallet.enableBackup(
-                flags: flags,
-                parts: encryptedParts.map { Buffer(data: $0) },
-                password: proof
-            ),
-            automaticFloodWait: false
-        )
-        |> mapError { walletOperationError($0, passwordProvided: proof != nil) }
-        |> map(WalletState.init(apiState:))
-    })
+    guard newPublicKey.count == 32 else {
+        return .fail(.publicKeyInvalid)
+    }
+    guard proof.timestamp > 0, proof.signature.count == 64 else {
+        return .fail(.proofInvalid)
+    }
+    return account.network.request(
+        Api.functions.wallet.enableBackup(
+            flags: (1 << 1) | (1 << 2),
+            parts: encryptedParts.map { Buffer(data: $0) },
+            newPublicKey: Buffer(data: newPublicKey),
+            proof: .walletOwnershipProof(.init(timestamp: proof.timestamp, signature: Buffer(data: proof.signature)))
+        ),
+        automaticFloodWait: false
+    )
+    |> mapError { walletOperationError($0, passwordProvided: false) }
+    |> map(WalletState.init(apiState:))
 }
 
 func _internal_requestWalletSecretPhraseExport(

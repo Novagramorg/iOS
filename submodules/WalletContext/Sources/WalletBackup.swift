@@ -4,6 +4,35 @@ import TelegramCore
 import WalletBackupCrypto
 import WalletEngineFFI
 
+// Each retry invokes the whole challenge/sign/upload operation. Never reuse a
+// challenge after a server rejection, including a pending on-chain rotation.
+@available(macOS 10.15, *)
+func withWalletBackupRotationRetry<Value>(
+    now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
+    wait: (UInt64) async throws -> Void = { try await Task.sleep(nanoseconds: $0) },
+    operation: (_ checkDeadline: @escaping () throws -> Void) async throws -> Value
+) async throws -> Value {
+    var deadline: TimeInterval?
+    while true {
+        do {
+            try Task.checkCancellation()
+            return try await operation {
+                if let deadline, now() >= deadline {
+                    throw WalletContext.WalletError.rotationNotFound
+                }
+            }
+        } catch {
+            guard error as? WalletContext.WalletError == .rotationNotFound
+                || error as? TelegramCore.WalletOperationError == .rotationNotFound else { throw error }
+            let currentTime = now()
+            let retryDeadline = deadline ?? (currentTime + 30)
+            deadline = retryDeadline
+            guard currentTime + 3 < retryDeadline else { throw error }
+            try await wait(3_000_000_000)
+        }
+    }
+}
+
 @available(macOS 10.15, *)
 private enum WalletPhraseCodec {
     private static let encodedLength = 215
@@ -39,11 +68,10 @@ private enum WalletPhraseCodec {
 }
 
 @available(macOS 10.15, *)
-func enableWalletBackup(
+func encryptedWalletBackupParts(
     engine: TelegramEngine,
-    words: [String],
-    password: String?
-) async throws -> TelegramCore.WalletState {
+    words: [String]
+) async throws -> [Data] {
     guard let secret = WalletPhraseCodec.encode(words: words) else {
         throw WalletContext.WalletError.invalidBackupData
     }
@@ -56,9 +84,7 @@ func enableWalletBackup(
     ) else {
         throw WalletContext.WalletError.invalidBackupData
     }
-    return try await WalletSignalRequestContext<TelegramCore.WalletState>().run(
-        engine.wallet.enableBackup(encryptedParts: parts, password: password)
-    )
+    return parts
 }
 
 @available(macOS 10.15, *)

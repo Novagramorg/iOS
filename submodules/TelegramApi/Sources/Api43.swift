@@ -14821,19 +14821,22 @@ public extension Api.functions.wallet {
     }
 }
 public extension Api.functions.wallet {
-    static func enableBackup(flags: Int32, parts: [Buffer], password: Api.InputCheckPasswordSRP?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.WalletState>) {
+    static func enableBackup(flags: Int32, parts: [Buffer], newPublicKey: Buffer?, proof: Api.WalletOwnershipProof?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.WalletState>) {
         let buffer = Buffer()
-        buffer.appendInt32(-2120044301)
+        buffer.appendInt32(1157678373)
         serializeInt32(flags, buffer: buffer, boxed: false)
         buffer.appendInt32(481674261)
         buffer.appendInt32(Int32(parts.count))
         for item in parts {
             serializeBytes(item, buffer: buffer, boxed: false)
         }
-        if Int(flags) & Int(1 << 0) != 0 {
-            password!.serialize(buffer, true)
+        if Int(flags) & Int(1 << 1) != 0 {
+            serializeBytes(newPublicKey!, buffer: buffer, boxed: false)
         }
-        return (FunctionDescription(name: "wallet.enableBackup", parameters: [("flags", ConstructorParameterDescription(flags)), ("parts", ConstructorParameterDescription(parts)), ("password", ConstructorParameterDescription(password))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.WalletState? in
+        if Int(flags) & Int(1 << 2) != 0 {
+            proof!.serialize(buffer, true)
+        }
+        return (FunctionDescription(name: "wallet.enableBackup", parameters: [("flags", ConstructorParameterDescription(flags)), ("parts", ConstructorParameterDescription(parts)), ("newPublicKey", ConstructorParameterDescription(newPublicKey)), ("proof", ConstructorParameterDescription(proof))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.WalletState? in
             let reader = BufferReader(buffer)
             var result: Api.WalletState?
             if let signature = reader.readInt32() {
@@ -14914,6 +14917,22 @@ public extension Api.functions.wallet {
             var result: Api.Updates?
             if let signature = reader.readInt32() {
                 result = Api.parse(reader, signature: signature) as? Api.Updates
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.wallet {
+    static func getNfts(offset: String, limit: Int32) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.wallet.NftItems>) {
+        let buffer = Buffer()
+        buffer.appendInt32(-1944915036)
+        serializeString(offset, buffer: buffer, boxed: false)
+        serializeInt32(limit, buffer: buffer, boxed: false)
+        return (FunctionDescription(name: "wallet.getNfts", parameters: [("offset", ConstructorParameterDescription(offset)), ("limit", ConstructorParameterDescription(limit))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.wallet.NftItems? in
+            let reader = BufferReader(buffer)
+            var result: Api.wallet.NftItems?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.wallet.NftItems
             }
             return result
         })

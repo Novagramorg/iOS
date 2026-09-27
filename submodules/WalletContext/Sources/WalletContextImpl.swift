@@ -1564,8 +1564,3 @@ func walletEngineBalance(_ nanograms: String) -> Int64? {
 func walletEngineAcceptsSubmission(_ phase: SendPhase) -> Bool {
     phase == .submitted || phase == .submissionUnknown || phase == .confirmed
 }
-
-@available(macOS 10.15, *)
-func walletEngineAcceptsSignHandoff(_ phase: SendPhase) -> Bool {
-    phase == .handedOff
-}

@@ -290,13 +290,16 @@ func tonConnectErrorKind(_ error: Error) -> String? {
         switch error {
         case .invalidMnemonic: return "ton_connect_crypto_invalid_mnemonic"
         case .identityMismatch: return "ton_connect_crypto_identity_mismatch"
-        case .invalidKey: return "ton_connect_crypto_invalid_key"
-        case .invalidNonce: return "ton_connect_crypto_invalid_nonce"
-        case .malformedCiphertext: return "ton_connect_crypto_malformed_ciphertext"
-        case .authenticationFailed: return "ton_connect_crypto_authentication_failed"
-        case .messageTooLarge: return "ton_connect_crypto_message_too_large"
         case .invalidDerivation: return "ton_connect_crypto_invalid_derivation"
-        case .randomGenerationFailed: return "ton_connect_crypto_random_generation_failed"
+        }
+    }
+    if error is TonConnectSessionError { return "ton_connect_session_failed" }
+    if let error = error as? WalletLifecycleError {
+        switch error {
+        case .InvalidTonConnectSessionInput: return "ton_connect_invalid_session_input"
+        case .SecretWalletMismatch: return "ton_connect_key_mismatch"
+        case .TonConnectSigningFailed: return "ton_connect_signing_failed"
+        default: break
         }
     }
     if let error = error as? WalletTonConnectError {

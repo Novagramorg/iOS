@@ -189,7 +189,7 @@ final class PasscodeSetupControllerNode: ASDisplayNode {
                 isEnabled: isEnabled,
                 action: { [weak self] action in
                     guard let self, self.displaysCustomKeyboard, self.authenticationInputEnabled, self.isCustomInputActive, self.view.isUserInteractionEnabled else { return }
-                    self.hapticFeedback.tap()
+                    self.hapticFeedback.impact(.light)
                     switch action {
                     case let .insertText(text):
                         self.inputFieldNode.append(text)

@@ -47,7 +47,7 @@ final class WalletSendAnimatedRateButton: UIControl {
             self.canvas.isHidden = false
             self.title.view?.isHidden = true
         }
-        self.gramIcon.image = UIImage(bundleImageName: "Wallet/SendGram")?.withRenderingMode(.alwaysTemplate)
+        self.gramIcon.image = UIImage(bundleImageName: "Wallet/TopGram")
         self.gramIcon.contentMode = .scaleAspectFit
         self.contentView.addSubview(self.gramIcon)
         for side in 0 ..< 2 {
@@ -103,7 +103,6 @@ final class WalletSendAnimatedRateButton: UIControl {
         self.isEnabled = isEnabled
         self.accessibilityLabel = displaysGramIcon ? "GRAM " + text : text
         self.contentView.backgroundColor = theme.list.itemInputField.backgroundColor
-        self.gramIcon.tintColor = UIColor(rgb: 0x30A1F5)
         for arrow in self.arrows { arrow.tintColor = theme.list.itemSecondaryTextColor }
         self.canvas.prepareGlyphs(separators: dateTimeFormat.decimalSeparator + dateTimeFormat.groupingSeparator, currencyCode: currencyCode)
         let font = WalletSendAmountFonts.rate

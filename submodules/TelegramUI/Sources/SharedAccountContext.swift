@@ -4215,6 +4215,10 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         return WalletInfoScreen(context: context, mode: mode, completion: completion)
     }
 
+    public func makeWalletInfoScreen(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>), mode: WalletInfoScreenMode, completion: (() -> Void)?) -> ViewController {
+        return WalletInfoScreen(context: context, updatedPresentationData: updatedPresentationData, mode: mode, completion: completion)
+    }
+
     public func makeWalletConnectScreen(context: AccountContext, walletContext: WalletContext, request: WalletContext.TonConnectRequest, cancelled: @escaping () -> Void, connect: @escaping (@escaping (Result<Void, WalletContext.WalletError>) -> Void) -> Void) -> ViewController {
         return WalletConnectScreen(context: context, walletContext: walletContext, request: request, cancelled: cancelled, connect: connect)
     }

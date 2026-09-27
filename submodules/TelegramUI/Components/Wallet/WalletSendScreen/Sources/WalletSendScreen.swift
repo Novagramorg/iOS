@@ -83,10 +83,9 @@ private func walletSendShortAddress(_ address: String) -> String {
 }
 
 @MainActor
-private func walletPresentTransferSuccess(on controller: ViewController, context: AccountContext, peer: EnginePeer) {
+private func walletPresentTransferSuccess(on controller: ViewController, context: AccountContext, presentationData: PresentationData, peer: EnginePeer) {
     //TODO:localize
     let text = "Grams have been sent to **\(peer.compactDisplayTitle)**."
-    let presentationData = context.sharedContext.currentPresentationData.with { $0 }
     controller.present(
         UndoOverlayController(
             presentationData: presentationData,
@@ -435,7 +434,7 @@ fileprivate final class WalletPeerTransferSubmission {
                 self.detachFromForm()
                 self.dismissSubmissionUnknown()
                 if self.displaySuccessToast, let presenter = self.resultPresenter {
-                    walletPresentTransferSuccess(on: presenter, context: self.context, peer: self.peer)
+                    walletPresentTransferSuccess(on: presenter, context: self.context, presentationData: self.updatedPresentationData.initial, peer: self.peer)
                 }
             }
             return
@@ -524,7 +523,7 @@ private final class WalletSendScreenComponent: Component {
 
     init(
         context: AccountContext,
-        updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?,
+        updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>),
         peer: EnginePeer?,
         resolvedAddress: WalletUserAddress?,
         allowOpenRecipientChat: Bool,
@@ -535,10 +534,7 @@ private final class WalletSendScreenComponent: Component {
         completed: (() -> Void)?
     ) {
         self.context = context
-        self.updatedPresentationData = updatedPresentationData ?? (
-            initial: context.sharedContext.currentPresentationData.with { $0 },
-            signal: context.sharedContext.presentationData
-        )
+        self.updatedPresentationData = updatedPresentationData
         self.peer = peer
         self.resolvedAddress = resolvedAddress
         self.allowOpenRecipientChat = allowOpenRecipientChat
@@ -660,6 +656,14 @@ private final class WalletSendScreenComponent: Component {
         private var recipientAddress = ""
         private var recipientPublicKey: Data?
         private var initialAddress: String?
+
+        private func currentPresentationData(for component: WalletSendScreenComponent) -> (initial: PresentationData, signal: Signal<PresentationData, NoError>) {
+            let presentationData = component.updatedPresentationData.initial
+            return (
+                initial: presentationData.withUpdated(theme: self.environment?.theme ?? component.updatedPresentationData.initial.theme),
+                signal: component.updatedPresentationData.signal
+            )
+        }
 
         override init(frame: CGRect) {
             super.init(frame: frame)
@@ -1124,7 +1128,7 @@ private final class WalletSendScreenComponent: Component {
             HapticFeedback().tap()
             self.copyAddressToast?.dismiss()
             let toast = UndoOverlayController(
-                presentationData: component.updatedPresentationData.initial,
+                presentationData: self.currentPresentationData(for: component).initial,
                 //TODO:localize
                 content: .copy(text: "TON address copied to clipboard"),
                 position: .bottom,
@@ -1143,7 +1147,7 @@ private final class WalletSendScreenComponent: Component {
                 return
             }
 
-            let presentationData = component.updatedPresentationData.initial
+            let presentationData = self.currentPresentationData(for: component).initial
             let title: String
             let recipientName: String?
             if let peer = component.peer {
@@ -1198,7 +1202,7 @@ private final class WalletSendScreenComponent: Component {
                 actions: [
                     AlertScreen.Action(title: presentationData.strings.Common_OK, type: .default)
                 ],
-                updatedPresentationData: component.updatedPresentationData
+                updatedPresentationData: self.currentPresentationData(for: component)
             )
             self.recipientInfoAlert = alertController
             alertController.dismissed = { [weak self, weak controller, weak alertController] _ in
@@ -1289,7 +1293,7 @@ private final class WalletSendScreenComponent: Component {
                         self.requestUpdate(transition: .spring(duration: 0.35))
                     })
                 ],
-                updatedPresentationData: component.updatedPresentationData
+                updatedPresentationData: self.currentPresentationData(for: component)
             )
             controller.present(alertController, in: .window(.root))
         }
@@ -1334,7 +1338,7 @@ private final class WalletSendScreenComponent: Component {
                 )))
             }
             let contextController = makeContextController(
-                presentationData: component.context.sharedContext.currentPresentationData.with { $0 },
+                presentationData: self.currentPresentationData(for: component).initial,
                 source: .reference(WalletSendContextReferenceContentSource(sourceView: sourceView)),
                 items: .single(ContextController.Items(content: .list(items))),
                 gesture: nil
@@ -1415,7 +1419,7 @@ private final class WalletSendScreenComponent: Component {
                 self.requestUpdate(transition: .easeInOut(duration: 0.2))
                 self.signingAccessDisposable.set(performWalletAuthorizedOperation(
                     context: component.context,
-                    updatedPresentationData: component.updatedPresentationData,
+                    updatedPresentationData: self.currentPresentationData(for: component),
                     present: { [weak controller] alert in
                         controller?.present(alert, in: .window(.root))
                     },
@@ -1514,7 +1518,7 @@ private final class WalletSendScreenComponent: Component {
             let generation = self.restorationGeneration
             controller.present(textAlertController(
                 context: component.context,
-                updatedPresentationData: component.updatedPresentationData,
+                updatedPresentationData: self.currentPresentationData(for: component),
                 title: message?.title ?? "Couldn’t Restore Wallet",
                 text: message?.text ?? "Check the network connection and try again.",
                 actions: [
@@ -1563,7 +1567,7 @@ private final class WalletSendScreenComponent: Component {
             }
             self.recoveryPhraseImportController = nil
             importController.dismiss(animated: true)
-            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+            let presentationData = self.currentPresentationData(for: component).initial
             Queue.mainQueue().after(0.4) { [weak controller] in
                 controller?.present(UndoOverlayController(
                     presentationData: presentationData,
@@ -1715,7 +1719,7 @@ private final class WalletSendScreenComponent: Component {
             self.pendingSend = nil
             let submission = WalletPeerTransferSubmission(
                 context: component.context,
-                updatedPresentationData: component.updatedPresentationData,
+                updatedPresentationData: self.currentPresentationData(for: component),
                 peer: peer,
                 displaySuccessToast: component.displaySuccessToast,
                 controller: controller,
@@ -1807,7 +1811,7 @@ private final class WalletSendScreenComponent: Component {
             guard let component = self.component, let controller = self.environment?.controller() else {
                 return
             }
-            walletPresentTransferError(error, on: controller, context: component.context, updatedPresentationData: component.updatedPresentationData)
+            walletPresentTransferError(error, on: controller, context: component.context, updatedPresentationData: self.currentPresentationData(for: component))
         }
 
         func update(
@@ -2110,7 +2114,7 @@ private final class WalletSendScreenComponent: Component {
                     deleteTitle: environment.strings.Common_Delete,
                     isEnabled: isAmountInputEnabled && environment.isVisible && isKeyboardVisible,
                     action: { [weak self] action in
-                        HapticFeedback().tap()
+                        HapticFeedback().impact(.light)
                         guard let self, self.isVisible,
                               !self.isPreparingTransfer, !self.isResolvingSigningAccess, !self.isSubmittingTransfer else {
                             return
@@ -2821,6 +2825,7 @@ public final class WalletSendScreen: ViewControllerComponentContainer, Attachmen
     public init(
         context: AccountContext,
         updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? = nil,
+        useDefaultAccent: Bool = true,
         peer: EnginePeer,
         walletContext: WalletContext,
         resolvedAddress: WalletUserAddress? = nil,
@@ -2833,6 +2838,13 @@ public final class WalletSendScreen: ViewControllerComponentContainer, Attachmen
     ) {
         self.walletContext = walletContext
         self.refreshBalanceOnOpen = refreshBalanceOnOpen
+        var updatedPresentationData = updatedPresentationData ?? (
+            initial: context.sharedContext.currentPresentationData.with { $0 },
+            signal: context.sharedContext.presentationData
+        )
+        if useDefaultAccent {
+            updatedPresentationData = presentationDataWithDefaultAccent(updatedPresentationData)
+        }
         super.init(
             context: context,
             component: WalletSendScreenComponent(
@@ -2859,6 +2871,7 @@ public final class WalletSendScreen: ViewControllerComponentContainer, Attachmen
     public init(
         context: AccountContext,
         updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? = nil,
+        useDefaultAccent: Bool = true,
         walletContext: WalletContext,
         address: String,
         initialAmountNanograms: Int64? = nil,
@@ -2867,6 +2880,13 @@ public final class WalletSendScreen: ViewControllerComponentContainer, Attachmen
     ) {
         self.walletContext = walletContext
         self.refreshBalanceOnOpen = refreshBalanceOnOpen
+        var updatedPresentationData = updatedPresentationData ?? (
+            initial: context.sharedContext.currentPresentationData.with { $0 },
+            signal: context.sharedContext.presentationData
+        )
+        if useDefaultAccent {
+            updatedPresentationData = presentationDataWithDefaultAccent(updatedPresentationData)
+        }
         super.init(
             context: context,
             component: WalletSendScreenComponent(

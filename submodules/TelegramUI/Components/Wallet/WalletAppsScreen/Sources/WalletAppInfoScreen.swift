@@ -12,6 +12,7 @@ import ButtonComponent
 import WalletContext
 import WalletConnectScreen
 import TelegramPresentationData
+import SwiftSignalKit
 
 private final class WalletAppInfoContentComponent: CombinedComponent {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
@@ -307,7 +308,7 @@ final class WalletAppInfoScreen: ViewControllerComponentContainer {
     fileprivate var isDisconnecting = false
     fileprivate var isFinishing = false
 
-    init(context: AccountContext, sessionId: Int64, manifest: TonConnectManifestInfo, disconnect: @escaping (@escaping (Bool) -> Void) -> Void, closed: @escaping () -> Void) {
+    init(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>), sessionId: Int64, manifest: TonConnectManifestInfo, disconnect: @escaping (@escaping (Bool) -> Void) -> Void, closed: @escaping () -> Void) {
         self.sessionId = sessionId
         self.closed = closed
         super.init(
@@ -315,7 +316,8 @@ final class WalletAppInfoScreen: ViewControllerComponentContainer {
             component: WalletAppInfoSheetComponent(context: context, manifest: manifest, disconnect: disconnect),
             navigationBarAppearance: .none,
             statusBarStyle: .ignore,
-            theme: .default
+            theme: .default,
+            updatedPresentationData: updatedPresentationData
         )
         self.navigationPresentation = .flatModal
         self.automaticallyControlPresentationContextLayout = false

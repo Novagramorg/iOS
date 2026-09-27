@@ -408,17 +408,55 @@ func _internal_getWalletState(account: Account) -> Signal<WalletState, WalletGet
     }
 }
 
+private struct CachedWalletUserAddresses: Codable {
+    struct Address: Codable {
+        let userId: Int64
+        let address: String
+        let publicKey: Data
+    }
+
+    let addresses: [Address]
+    let timestamp: Int32
+
+    init(addresses: [WalletUserAddress], timestamp: Int32) {
+        self.addresses = addresses.map { Address(userId: $0.userId.toInt64(), address: $0.address, publicKey: $0.publicKey) }
+        self.timestamp = timestamp
+    }
+
+    var userAddresses: [WalletUserAddress] {
+        return self.addresses.map { WalletUserAddress(userId: PeerId($0.userId), address: $0.address, publicKey: $0.publicKey) }
+    }
+}
+
 func _internal_getWalletUserAddresses(
     account: Account,
     userIds: [EnginePeer.Id],
     addresses: [String],
-    force: Bool
+    force: Bool,
+    ageLimit: Int32 = 60
 ) -> Signal<[WalletUserAddress], WalletGetUserAddressesError> {
     guard !userIds.isEmpty || !addresses.isEmpty else {
         return .single([])
     }
 
-    return account.postbox.transaction { transaction -> [Api.InputUser]? in
+    let cacheKey: ValueBoxKey?
+    if addresses.count == 1 && userIds.isEmpty {
+        cacheKey = ValueBoxKey("address:\(addresses[0])")
+    } else if userIds.count == 1 && addresses.isEmpty {
+        cacheKey = ValueBoxKey("userId:\(userIds[0].toInt64())")
+    } else {
+        cacheKey = nil
+    }
+    let cacheId = cacheKey.map { ItemCacheEntryId(collectionId: Namespaces.CachedItemCollection.cachedWalletUserAddresses, key: $0) }
+
+    return account.postbox.transaction { transaction -> (inputUsers: [Api.InputUser]?, cachedAddresses: [WalletUserAddress]?) in
+        if let cacheId, let cachedEntry = transaction.retrieveItemCacheEntry(id: cacheId)?.get(CachedWalletUserAddresses.self) {
+            let timestamp = Int32(CFAbsoluteTimeGetCurrent() + NSTimeIntervalSince1970)
+            if cachedEntry.timestamp <= timestamp && cachedEntry.timestamp >= timestamp - ageLimit {
+                return (nil, cachedEntry.userAddresses)
+            }
+        }
+
         var inputUsers: [Api.InputUser] = []
         inputUsers.reserveCapacity(userIds.count)
         for userId in userIds {
@@ -429,14 +467,17 @@ func _internal_getWalletUserAddresses(
                       let inputUser = apiInputUser(peer) {
                 inputUsers.append(inputUser)
             } else {
-                return nil
+                return (nil, nil)
             }
         }
-        return inputUsers
+        return (inputUsers, nil)
     }
     |> castError(WalletGetUserAddressesError.self)
-    |> mapToSignal { inputUsers -> Signal<[WalletUserAddress], WalletGetUserAddressesError> in
-        guard let inputUsers else {
+    |> mapToSignal { result -> Signal<[WalletUserAddress], WalletGetUserAddressesError> in
+        if let cachedAddresses = result.cachedAddresses {
+            return .single(cachedAddresses)
+        }
+        guard let inputUsers = result.inputUsers else {
             return .fail(.generic)
         }
         var flags: Int32 = 0
@@ -453,7 +494,14 @@ func _internal_getWalletUserAddresses(
                 case let .userAddresses(data):
                     let parsedPeers = AccumulatedPeers(transaction: transaction, chats: [], users: data.users)
                     updatePeers(transaction: transaction, accountPeerId: account.peerId, peers: parsedPeers)
-                    return data.addresses.map { WalletUserAddress(apiAddress: $0) }
+                    let addresses = data.addresses.map { WalletUserAddress(apiAddress: $0) }
+                    if let cacheId {
+                        let timestamp = Int32(CFAbsoluteTimeGetCurrent() + NSTimeIntervalSince1970)
+                        if let entry = CodableEntry(CachedWalletUserAddresses(addresses: addresses, timestamp: timestamp)) {
+                            transaction.putItemCacheEntry(id: cacheId, entry: entry)
+                        }
+                    }
+                    return addresses
                 }
             }
             |> castError(WalletGetUserAddressesError.self)

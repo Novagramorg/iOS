@@ -205,17 +205,20 @@ private final class WalletPeerSelectionScreenComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
 
     let context: AccountContext
+    let updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)
     let walletContext: WalletContext
     let mode: WalletPeerSelectionScreenMode
     let dismissSourceScreen: () -> Void
 
     init(
         context: AccountContext,
+        updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>),
         walletContext: WalletContext,
         mode: WalletPeerSelectionScreenMode,
         dismissSourceScreen: @escaping () -> Void
     ) {
         self.context = context
+        self.updatedPresentationData = updatedPresentationData
         self.walletContext = walletContext
         self.mode = mode
         self.dismissSourceScreen = dismissSourceScreen
@@ -223,6 +226,8 @@ private final class WalletPeerSelectionScreenComponent: Component {
 
     static func ==(lhs: WalletPeerSelectionScreenComponent, rhs: WalletPeerSelectionScreenComponent) -> Bool {
         return lhs.context === rhs.context
+            && lhs.updatedPresentationData.initial === rhs.updatedPresentationData.initial
+            && lhs.updatedPresentationData.signal === rhs.updatedPresentationData.signal
             && lhs.walletContext === rhs.walletContext
             && lhs.mode == rhs.mode
     }
@@ -305,10 +310,10 @@ private final class WalletPeerSelectionScreenComponent: Component {
         var presentationData: PresentationData
         private var currentEntries: [ContentEntry] = []
 
-        init(parentView: View, context: AccountContext) {
+        init(parentView: View, context: AccountContext, presentationData: PresentationData) {
             self.parentView = parentView
             self.context = context
-            self.presentationData = context.sharedContext.currentPresentationData.with { $0 }
+            self.presentationData = presentationData
 
             super.init()
         }
@@ -333,10 +338,11 @@ private final class WalletPeerSelectionScreenComponent: Component {
             )
         }
 
-        func setEntries(_ entries: [ContentEntry], animated: Bool) {
+        func setEntries(_ entries: [ContentEntry], animated: Bool, allUpdated: Bool) {
             let (deleteIndices, indicesAndItems, updateIndices) = mergeListsStableWithUpdates(
                 leftList: self.currentEntries,
-                rightList: entries
+                rightList: entries,
+                allUpdated: allUpdated
             )
             self.currentEntries = entries
 
@@ -426,6 +432,14 @@ private final class WalletPeerSelectionScreenComponent: Component {
         private var navigationButtonsVisible = true
         private var navigationButtonsFieldAlpha: CGFloat = 1.0
         private let searchQueryComponentSeparationCharacterSet: CharacterSet
+
+        private func currentPresentationData(for component: WalletPeerSelectionScreenComponent) -> (initial: PresentationData, signal: Signal<PresentationData, NoError>) {
+            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+            return (
+                initial: presentationData.withUpdated(theme: self.environment?.theme ?? component.updatedPresentationData.initial.theme),
+                signal: component.updatedPresentationData.signal
+            )
+        }
 
         override init(frame: CGRect) {
             self.searchQueryComponentSeparationCharacterSet = CharacterSet(charactersIn: " _.:/")
@@ -778,6 +792,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
             let text = "An unknown error occurred. Please try again later."
             controller.present(textAlertController(
                 context: component.context,
+                updatedPresentationData: self.currentPresentationData(for: component),
                 title: nil,
                 text: text,
                 actions: [TextAlertAction(type: .defaultAction, title: environment.strings.Common_OK, action: {
@@ -790,7 +805,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
                   let controller = self.environment?.controller() else {
                 return
             }
-            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+            let presentationData = self.currentPresentationData(for: component).initial
             //TODO:localize
             controller.present(
                 UndoOverlayController(
@@ -1014,6 +1029,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
             let ok = "OK"
             controller.present(textAlertController(
                 context: component.context,
+                updatedPresentationData: self.currentPresentationData(for: component),
                 title: title,
                 text: text,
                 actions: [TextAlertAction(type: .defaultAction, title: ok, action: {
@@ -1413,7 +1429,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
                 removedSearchBar = searchBarNode
             }
 
-            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+            let presentationData = self.currentPresentationData(for: component).initial
             self.recipientSectionTitle.font = Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize)
             self.recipientSectionTitle.textColor = environment.theme.list.freeTextColor
             let contentSideInset = environment.safeInsets.left + 16.0
@@ -1464,7 +1480,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
             if let current = self.contentListNode {
                 contentListNode = current
             } else {
-                contentListNode = ContentListNode(parentView: self, context: component.context)
+                contentListNode = ContentListNode(parentView: self, context: component.context, presentationData: presentationData)
                 self.contentListNode = contentListNode
                 contentListNode.visibleContentOffsetChanged = { [weak self] _, _ in
                     guard let self, let navigationHeight = self.navigationHeight else {
@@ -1534,7 +1550,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
                 ),
                 transition: transition
             )
-            contentListNode.setEntries(entries, animated: !transition.animation.isImmediate)
+            contentListNode.setEntries(entries, animated: !transition.animation.isImmediate, allUpdated: themeUpdated)
 
             let displayNoResultsQuery: String?
             if self.peers != nil, entries.isEmpty, self.recipient == nil {
@@ -1794,16 +1810,22 @@ public final class WalletPeerSelectionScreen: ViewControllerComponentContainer {
         mode: WalletPeerSelectionScreenMode = .transfer,
         dismissSourceScreen: @escaping () -> Void = {}
     ) {
+        let updatedPresentationData = presentationDataWithDefaultAccent((
+            initial: context.sharedContext.currentPresentationData.with { $0 },
+            signal: context.sharedContext.presentationData
+        ))
         super.init(
             context: context,
             component: WalletPeerSelectionScreenComponent(
                 context: context,
+                updatedPresentationData: updatedPresentationData,
                 walletContext: walletContext,
                 mode: mode,
                 dismissSourceScreen: dismissSourceScreen
             ),
             navigationBarAppearance: .none,
-            theme: .default
+            theme: .default,
+            updatedPresentationData: updatedPresentationData
         )
         self.navigationItem.leftBarButtonItem = UIBarButtonItem(customView: UIView())
     }

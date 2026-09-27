@@ -99,6 +99,290 @@ public extension Api.wallet {
     }
 }
 public extension Api.wallet {
+    enum NftAttribute: TypeConstructorDescription {
+        public class Cons_nftAttribute: TypeConstructorDescription {
+            public var traitType: String
+            public var value: String
+            public init(traitType: String, value: String) {
+                self.traitType = traitType
+                self.value = value
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("nftAttribute", [("traitType", ConstructorParameterDescription(self.traitType)), ("value", ConstructorParameterDescription(self.value))])
+            }
+        }
+        case nftAttribute(Cons_nftAttribute)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .nftAttribute(let _data):
+                if boxed {
+                    buffer.appendInt32(1277096206)
+                }
+                serializeString(_data.traitType, buffer: buffer, boxed: false)
+                serializeString(_data.value, buffer: buffer, boxed: false)
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .nftAttribute(let _data):
+                return ("nftAttribute", [("traitType", ConstructorParameterDescription(_data.traitType)), ("value", ConstructorParameterDescription(_data.value))])
+            }
+        }
+
+        public static func parse_nftAttribute(_ reader: BufferReader) -> NftAttribute? {
+            var _1: String?
+            _1 = parseString(reader)
+            var _2: String?
+            _2 = parseString(reader)
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.wallet.NftAttribute.nftAttribute(Cons_nftAttribute(traitType: _1!, value: _2!))
+            }
+            else {
+                return nil
+            }
+        }
+    }
+}
+public extension Api.wallet {
+    enum NftItem: TypeConstructorDescription {
+        public class Cons_nftItem: TypeConstructorDescription {
+            public var flags: Int32
+            public var collectionAddress: String?
+            public var address: String
+            public var ownerAddress: String
+            public var index: String
+            public var name: String?
+            public var description: String?
+            public var image: Api.WebDocument?
+            public var imageSmall: Api.WebDocument?
+            public var contentUrl: Api.WebDocument?
+            public var lottie: Api.WebDocument?
+            public var attributes: [Api.wallet.NftAttribute]?
+            public var extra: Api.DataJSON?
+            public init(flags: Int32, collectionAddress: String?, address: String, ownerAddress: String, index: String, name: String?, description: String?, image: Api.WebDocument?, imageSmall: Api.WebDocument?, contentUrl: Api.WebDocument?, lottie: Api.WebDocument?, attributes: [Api.wallet.NftAttribute]?, extra: Api.DataJSON?) {
+                self.flags = flags
+                self.collectionAddress = collectionAddress
+                self.address = address
+                self.ownerAddress = ownerAddress
+                self.index = index
+                self.name = name
+                self.description = description
+                self.image = image
+                self.imageSmall = imageSmall
+                self.contentUrl = contentUrl
+                self.lottie = lottie
+                self.attributes = attributes
+                self.extra = extra
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("nftItem", [("flags", ConstructorParameterDescription(self.flags)), ("collectionAddress", ConstructorParameterDescription(self.collectionAddress)), ("address", ConstructorParameterDescription(self.address)), ("ownerAddress", ConstructorParameterDescription(self.ownerAddress)), ("index", ConstructorParameterDescription(self.index)), ("name", ConstructorParameterDescription(self.name)), ("description", ConstructorParameterDescription(self.description)), ("image", ConstructorParameterDescription(self.image)), ("imageSmall", ConstructorParameterDescription(self.imageSmall)), ("contentUrl", ConstructorParameterDescription(self.contentUrl)), ("lottie", ConstructorParameterDescription(self.lottie)), ("attributes", ConstructorParameterDescription(self.attributes)), ("extra", ConstructorParameterDescription(self.extra))])
+            }
+        }
+        case nftItem(Cons_nftItem)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .nftItem(let _data):
+                if boxed {
+                    buffer.appendInt32(876739868)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 0) != 0 {
+                    serializeString(_data.collectionAddress!, buffer: buffer, boxed: false)
+                }
+                serializeString(_data.address, buffer: buffer, boxed: false)
+                serializeString(_data.ownerAddress, buffer: buffer, boxed: false)
+                serializeString(_data.index, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 1) != 0 {
+                    serializeString(_data.name!, buffer: buffer, boxed: false)
+                }
+                if Int(_data.flags) & Int(1 << 2) != 0 {
+                    serializeString(_data.description!, buffer: buffer, boxed: false)
+                }
+                if Int(_data.flags) & Int(1 << 3) != 0 {
+                    _data.image!.serialize(buffer, true)
+                }
+                if Int(_data.flags) & Int(1 << 4) != 0 {
+                    _data.imageSmall!.serialize(buffer, true)
+                }
+                if Int(_data.flags) & Int(1 << 5) != 0 {
+                    _data.contentUrl!.serialize(buffer, true)
+                }
+                if Int(_data.flags) & Int(1 << 6) != 0 {
+                    _data.lottie!.serialize(buffer, true)
+                }
+                if Int(_data.flags) & Int(1 << 7) != 0 {
+                    buffer.appendInt32(481674261)
+                    buffer.appendInt32(Int32(_data.attributes!.count))
+                    for item in _data.attributes! {
+                        item.serialize(buffer, true)
+                    }
+                }
+                if Int(_data.flags) & Int(1 << 8) != 0 {
+                    _data.extra!.serialize(buffer, true)
+                }
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .nftItem(let _data):
+                return ("nftItem", [("flags", ConstructorParameterDescription(_data.flags)), ("collectionAddress", ConstructorParameterDescription(_data.collectionAddress)), ("address", ConstructorParameterDescription(_data.address)), ("ownerAddress", ConstructorParameterDescription(_data.ownerAddress)), ("index", ConstructorParameterDescription(_data.index)), ("name", ConstructorParameterDescription(_data.name)), ("description", ConstructorParameterDescription(_data.description)), ("image", ConstructorParameterDescription(_data.image)), ("imageSmall", ConstructorParameterDescription(_data.imageSmall)), ("contentUrl", ConstructorParameterDescription(_data.contentUrl)), ("lottie", ConstructorParameterDescription(_data.lottie)), ("attributes", ConstructorParameterDescription(_data.attributes)), ("extra", ConstructorParameterDescription(_data.extra))])
+            }
+        }
+
+        public static func parse_nftItem(_ reader: BufferReader) -> NftItem? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: String?
+            if Int(_1 ?? 0) & Int(1 << 0) != 0 {
+                _2 = parseString(reader)
+            }
+            var _3: String?
+            _3 = parseString(reader)
+            var _4: String?
+            _4 = parseString(reader)
+            var _5: String?
+            _5 = parseString(reader)
+            var _6: String?
+            if Int(_1 ?? 0) & Int(1 << 1) != 0 {
+                _6 = parseString(reader)
+            }
+            var _7: String?
+            if Int(_1 ?? 0) & Int(1 << 2) != 0 {
+                _7 = parseString(reader)
+            }
+            var _8: Api.WebDocument?
+            if Int(_1 ?? 0) & Int(1 << 3) != 0 {
+                if let signature = reader.readInt32() {
+                    _8 = Api.parse(reader, signature: signature) as? Api.WebDocument
+                }
+            }
+            var _9: Api.WebDocument?
+            if Int(_1 ?? 0) & Int(1 << 4) != 0 {
+                if let signature = reader.readInt32() {
+                    _9 = Api.parse(reader, signature: signature) as? Api.WebDocument
+                }
+            }
+            var _10: Api.WebDocument?
+            if Int(_1 ?? 0) & Int(1 << 5) != 0 {
+                if let signature = reader.readInt32() {
+                    _10 = Api.parse(reader, signature: signature) as? Api.WebDocument
+                }
+            }
+            var _11: Api.WebDocument?
+            if Int(_1 ?? 0) & Int(1 << 6) != 0 {
+                if let signature = reader.readInt32() {
+                    _11 = Api.parse(reader, signature: signature) as? Api.WebDocument
+                }
+            }
+            var _12: [Api.wallet.NftAttribute]?
+            if Int(_1 ?? 0) & Int(1 << 7) != 0 {
+                if let _ = reader.readInt32() {
+                    _12 = Api.parseVector(reader, elementSignature: 0, elementType: Api.wallet.NftAttribute.self)
+                }
+            }
+            var _13: Api.DataJSON?
+            if Int(_1 ?? 0) & Int(1 << 8) != 0 {
+                if let signature = reader.readInt32() {
+                    _13 = Api.parse(reader, signature: signature) as? Api.DataJSON
+                }
+            }
+            let _c1 = _1 != nil
+            let _c2 = (Int(_1 ?? 0) & Int(1 << 0) == 0) || _2 != nil
+            let _c3 = _3 != nil
+            let _c4 = _4 != nil
+            let _c5 = _5 != nil
+            let _c6 = (Int(_1 ?? 0) & Int(1 << 1) == 0) || _6 != nil
+            let _c7 = (Int(_1 ?? 0) & Int(1 << 2) == 0) || _7 != nil
+            let _c8 = (Int(_1 ?? 0) & Int(1 << 3) == 0) || _8 != nil
+            let _c9 = (Int(_1 ?? 0) & Int(1 << 4) == 0) || _9 != nil
+            let _c10 = (Int(_1 ?? 0) & Int(1 << 5) == 0) || _10 != nil
+            let _c11 = (Int(_1 ?? 0) & Int(1 << 6) == 0) || _11 != nil
+            let _c12 = (Int(_1 ?? 0) & Int(1 << 7) == 0) || _12 != nil
+            let _c13 = (Int(_1 ?? 0) & Int(1 << 8) == 0) || _13 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 && _c10 && _c11 && _c12 && _c13 {
+                return Api.wallet.NftItem.nftItem(Cons_nftItem(flags: _1!, collectionAddress: _2, address: _3!, ownerAddress: _4!, index: _5!, name: _6, description: _7, image: _8, imageSmall: _9, contentUrl: _10, lottie: _11, attributes: _12, extra: _13))
+            }
+            else {
+                return nil
+            }
+        }
+    }
+}
+public extension Api.wallet {
+    enum NftItems: TypeConstructorDescription {
+        public class Cons_nftItems: TypeConstructorDescription {
+            public var flags: Int32
+            public var items: [Api.wallet.NftItem]
+            public var nextOffset: String?
+            public init(flags: Int32, items: [Api.wallet.NftItem], nextOffset: String?) {
+                self.flags = flags
+                self.items = items
+                self.nextOffset = nextOffset
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("nftItems", [("flags", ConstructorParameterDescription(self.flags)), ("items", ConstructorParameterDescription(self.items)), ("nextOffset", ConstructorParameterDescription(self.nextOffset))])
+            }
+        }
+        case nftItems(Cons_nftItems)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .nftItems(let _data):
+                if boxed {
+                    buffer.appendInt32(2035107951)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                buffer.appendInt32(481674261)
+                buffer.appendInt32(Int32(_data.items.count))
+                for item in _data.items {
+                    item.serialize(buffer, true)
+                }
+                if Int(_data.flags) & Int(1 << 0) != 0 {
+                    serializeString(_data.nextOffset!, buffer: buffer, boxed: false)
+                }
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .nftItems(let _data):
+                return ("nftItems", [("flags", ConstructorParameterDescription(_data.flags)), ("items", ConstructorParameterDescription(_data.items)), ("nextOffset", ConstructorParameterDescription(_data.nextOffset))])
+            }
+        }
+
+        public static func parse_nftItems(_ reader: BufferReader) -> NftItems? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: [Api.wallet.NftItem]?
+            if let _ = reader.readInt32() {
+                _2 = Api.parseVector(reader, elementSignature: 0, elementType: Api.wallet.NftItem.self)
+            }
+            var _3: String?
+            if Int(_1 ?? 0) & Int(1 << 0) != 0 {
+                _3 = parseString(reader)
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = (Int(_1 ?? 0) & Int(1 << 0) == 0) || _3 != nil
+            if _c1 && _c2 && _c3 {
+                return Api.wallet.NftItems.nftItems(Cons_nftItems(flags: _1!, items: _2!, nextOffset: _3))
+            }
+            else {
+                return nil
+            }
+        }
+    }
+}
+public extension Api.wallet {
     enum ProofChallenge: TypeConstructorDescription {
         public class Cons_proofChallenge: TypeConstructorDescription {
             public var payload: String

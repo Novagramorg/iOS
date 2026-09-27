@@ -1754,6 +1754,9 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[417867063] = { return Api.wallet.EncryptedSecretPhrasePart.parse_encryptedSecretPhrasePart($0) }
     dict[-1108800883] = { return Api.wallet.ExistingBalance.parse_existingBalance($0) }
     dict[-103410961] = { return Api.wallet.HolderDc.parse_holderDc($0) }
+    dict[1277096206] = { return Api.wallet.NftAttribute.parse_nftAttribute($0) }
+    dict[876739868] = { return Api.wallet.NftItem.parse_nftItem($0) }
+    dict[2035107951] = { return Api.wallet.NftItems.parse_nftItems($0) }
     dict[-1713105145] = { return Api.wallet.ProofChallenge.parse_proofChallenge($0) }
     dict[-422514943] = { return Api.wallet.SecretPhraseParts.parse_secretPhraseParts($0) }
     dict[1271436947] = { return Api.wallet.TonConnectChallenge.parse_tonConnectChallenge($0) }
@@ -3088,6 +3091,12 @@ public extension Api {
         case let _1 as Api.wallet.ExistingBalance:
             _1.serialize(buffer, boxed)
         case let _1 as Api.wallet.HolderDc:
+            _1.serialize(buffer, boxed)
+        case let _1 as Api.wallet.NftAttribute:
+            _1.serialize(buffer, boxed)
+        case let _1 as Api.wallet.NftItem:
+            _1.serialize(buffer, boxed)
+        case let _1 as Api.wallet.NftItems:
             _1.serialize(buffer, boxed)
         case let _1 as Api.wallet.ProofChallenge:
             _1.serialize(buffer, boxed)

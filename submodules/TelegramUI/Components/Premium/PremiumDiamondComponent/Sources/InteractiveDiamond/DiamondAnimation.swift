@@ -46,7 +46,7 @@ struct DiamondMotion {
     private var tapRotation: TapRotation?
     private var entranceInterrupted = false
 
-    mutating func tap(direction: Float, speed: Float, mode: DiamondStyle.AnimationMode, time: Float) -> Bool? {
+    mutating func tap(direction: Float, speed: Float, mode: DiamondStyle.AnimationMode, time: Float, appearance: DiamondStyle.Appearance = .blue) -> Bool? {
         guard !isDragging else { return nil }
         let tapUnlockSpeed = abs(speed) * Self.tapUnlockSpeedMultiplier
         let triggersBurst: Bool
@@ -69,7 +69,7 @@ struct DiamondMotion {
         }
         let interval: Float = 1 / 120
         let currentVelocity = tapRotation?.velocity
-            ?? automaticTravel(from: time, to: time + interval, speed: speed, mode: mode) / interval * min(timeSinceRelease / 0.75, 1)
+            ?? automaticTravel(from: time, to: time + interval, speed: speed, mode: mode, appearance: appearance) / interval * min(timeSinceRelease / 0.75, 1)
         startRotation(direction: direction, velocity: currentVelocity + yawVelocity, isFast: triggersBurst)
         return triggersBurst
     }
@@ -135,7 +135,7 @@ struct DiamondMotion {
     }
 
     mutating func step(dt: Float, speed: Float, reduceMotion: Bool,
-                       mode: DiamondStyle.AnimationMode = .continuous, time: Float = 0) {
+                       mode: DiamondStyle.AnimationMode = .continuous, time: Float = 0, appearance: DiamondStyle.Appearance = .blue) {
         let dt = min(max(dt, 0), 0.05)
         if reduceMotion {
             tapRotation = nil
@@ -168,7 +168,7 @@ struct DiamondMotion {
                     automaticTravel = tapRotation.step(dt: step, speed: speed)
                     self.tapRotation = tapRotation
                 } else {
-                    automaticTravel = self.automaticTravel(from: max(0, stepTime - step), to: stepTime, speed: speed, mode: mode)
+                    automaticTravel = self.automaticTravel(from: max(0, stepTime - step), to: stepTime, speed: speed, mode: mode, appearance: appearance)
                 }
                 let travel = automaticTravel * min(timeSinceRelease / 0.75, 1)
                 targetYaw += travel
@@ -193,19 +193,31 @@ struct DiamondMotion {
         }
     }
 
-    private func automaticTravel(from start: Float, to end: Float, speed: Float, mode: DiamondStyle.AnimationMode) -> Float {
+    private func automaticTravel(from start: Float, to end: Float, speed: Float, mode: DiamondStyle.AnimationMode, appearance: DiamondStyle.Appearance) -> Float {
         switch mode {
         case .entrance:
             return entranceInterrupted ? speed * (end - start) : DiamondEntrance.angularTravel(from: start, to: end, speed: speed)
         case .continuous:
             return speed * (end - start)
         case .reference:
-            return speed == 0 ? 0 : Self.referenceYaw(time: end) - Self.referenceYaw(time: start)
+            return speed == 0 ? 0 : Self.referenceYaw(time: end, appearance: appearance) - Self.referenceYaw(time: start, appearance: appearance)
         }
     }
 
-    static func referenceYaw(time: Float) -> Float {
-        let frame = max(0, time * 60).truncatingRemainder(dividingBy: 180)
+    mutating func changeReferenceAppearance(from old: DiamondStyle.Appearance, to new: DiamondStyle.Appearance, time: Float) {
+        // Rebase the automatic curve through the existing spring, retaining a
+        // user's manual yaw offset and the current pose on the switching frame.
+        targetYaw += Self.referenceYaw(time: time, appearance: new) - Self.referenceYaw(time: time, appearance: old)
+    }
+
+    static func referenceYaw(time: Float, appearance: DiamondStyle.Appearance = .blue) -> Float {
+        let frame = DiamondReferenceHighlights.frame(at: time, appearance: appearance)
+        if appearance == .white {
+            // The white composition turns left at 0/59/120, without the blue
+            // version's second swing. Fit the larger authored horizontal travel.
+            let progress = frame < 59 ? frame/59 : (120-frame)/61
+            return -0.42 * DiamondSparkleAnimation.easing(progress, out: SIMD2(0.5,0), in: SIMD2(0.5,1))
+        }
         let times: [Float] = [0, 39, 69, 99, 179]
         let angles: [Float] = [0, -0.34, 0, 0.33, 0]
         let index = frame < 39 ? 0 : (frame < 69 ? 1 : (frame < 99 ? 2 : 3))
@@ -330,15 +342,18 @@ enum DiamondReferenceHighlights {
     struct Event {
         let frame: Float
         let position: SIMD2<Float> // Composition pixels (512 × 512), not parent-scaled coordinates.
+        var peakScale: Float = 0.632
+        var riseY: Float = 0.167
+        var decayY: Float = 0.72
 
-        func scale(at time: Float) -> Float {
-            let age = DiamondReferenceHighlights.frame(at: time) - frame
+        func scale(at time: Float, appearance: DiamondStyle.Appearance = .blue) -> Float {
+            let age = DiamondReferenceHighlights.frame(at: time, appearance: appearance) - frame
             guard age > 0, age < 14 else { return 0 }
             let envelope = age < 2
-                ? DiamondSparkleAnimation.easing(age / 2, out: SIMD2(0.167, 0.167), in: SIMD2(0.5, 1))
-                : 1 - DiamondSparkleAnimation.easing((age - 2) / 12, out: SIMD2(0.347, 0), in: SIMD2(0.823, 0.72))
+                ? DiamondSparkleAnimation.easing(age / 2, out: SIMD2(0.167, riseY), in: SIMD2(0.5, 1))
+                : 1 - DiamondSparkleAnimation.easing((age - 2) / 12, out: SIMD2(0.347, 0), in: SIMD2(0.823, decayY))
             // These layers live outside the diamond's 75%-scale parent.
-            return (0.632 / 0.75) * envelope
+            return (peakScale / 0.75) * envelope
         }
     }
 
@@ -349,14 +364,196 @@ enum DiamondReferenceHighlights {
         var opacity: Float
     }
 
-    static func frame(at time: Float) -> Float {
-        max(0, time * 60).truncatingRemainder(dividingBy: 180)
+    // Both reference compositions share the stand's three-second timeline.
+    static func frame(at time: Float, appearance: DiamondStyle.Appearance = .blue) -> Float {
+        let frame = max(0, time * 60).truncatingRemainder(dividingBy: 180)
+        return appearance == .white ? frame * 121 / 180 : frame
     }
+
+    static func events(for appearance: DiamondStyle.Appearance) -> [Event] {
+        appearance == .white ? whiteEvents : events
+    }
+
+    struct Key {
+        let frame: Float
+        let value: Float
+        var out: SIMD2<Float> = SIMD2(0.333, 0)
+        var into: SIMD2<Float> = SIMD2(0.667, 1)
+    }
+
+    static func sample(_ keys: [Key], frame: Float) -> Float {
+        guard frame > keys[0].frame else { return keys[0].value }
+        for i in 1..<keys.count where frame < keys[i].frame {
+            let a = keys[i-1], b = keys[i]
+            let t = DiamondSparkleAnimation.easing((frame-a.frame)/(b.frame-a.frame), out: a.out, in: a.into)
+            return a.value + (b.value-a.value)*t
+        }
+        return keys.last!.value
+    }
+
+    struct FacetFlash {
+        let region: Int // front pavilion, right pavilion, left pavilion, crown, right crown, left crown
+        let opacity: [Key]
+    }
+
+    static func facetFlashes(at time: Float) -> (crown: SIMD4<Float>, pavilion: SIMD4<Float>) {
+        let frame = frame(at: time, appearance: .white)
+        var crown = SIMD4<Float>.zero, pavilion = SIMD4<Float>.zero
+        for flash in whiteFacetFlashes {
+            let alpha = sample(flash.opacity, frame: frame) * 0.55
+            let component = flash.region % 3
+            if flash.region < 3 { pavilion[component] = 1-(1-pavilion[component])*(1-alpha) }
+            else { crown[component] = 1-(1-crown[component])*(1-alpha) }
+        }
+        return (crown, pavilion)
+    }
+
+    // BEGIN GENERATED WHITE HIGHLIGHTS
+    // Generated from GramDiamondLight.json by Tools/extract_sparkle.py.
+    static let whiteMainScale: [Key] = [
+        Key(frame: 0, value: 1, out: SIMD2(0.333, 0), into: SIMD2(0.833, 0.833)),
+        Key(frame: 22.123, value: 0, out: SIMD2(0.167, 0), into: SIMD2(0.833, 1)),
+        Key(frame: 83, value: 0, out: SIMD2(0.41, 0), into: SIMD2(0.12, 1)),
+        Key(frame: 120, value: 1)
+    ]
+    static let whiteMorph: [Key] = [
+        Key(frame: 0, value: 0, out: SIMD2(0.167, 0.167), into: SIMD2(0.833, 0.833)),
+        Key(frame: 12, value: 1, out: SIMD2(0.167, 0.167), into: SIMD2(0.833, 0.833)),
+        Key(frame: 102, value: 1, out: SIMD2(0.167, 0.167), into: SIMD2(0.4, 1)),
+        Key(frame: 120, value: 0)
+    ]
+    static let whiteCoreScale: [Key] = [
+        Key(frame: 0, value: 1, out: SIMD2(0.333, 0), into: SIMD2(0.667, 1)),
+        Key(frame: 12.066, value: 1, out: SIMD2(0.333, 0), into: SIMD2(0.667, 1)),
+        Key(frame: 23.463, value: 0.8, out: SIMD2(0.333, 0), into: SIMD2(0.667, 1)),
+        Key(frame: 33.52, value: 1, out: SIMD2(0.333, 0), into: SIMD2(0.667, 1)),
+        Key(frame: 43.576, value: 0.8, out: SIMD2(0.333, 0), into: SIMD2(0.667, 1)),
+        Key(frame: 60.336, value: 1, out: SIMD2(0.333, 0), into: SIMD2(0.667, 1)),
+        Key(frame: 70.391, value: 0.8, out: SIMD2(0.333, 0), into: SIMD2(0.667, 1)),
+        Key(frame: 80.447, value: 1, out: SIMD2(0.333, 0), into: SIMD2(0.667, 1)),
+        Key(frame: 90.502, value: 0.8, out: SIMD2(0.333, 0), into: SIMD2(0.667, 1)),
+        Key(frame: 114.637, value: 1)
+    ]
+    static let whiteHaloScale: [Key] = [
+        Key(frame: 5.363, value: 1, out: SIMD2(0.333, 0), into: SIMD2(0.667, 1)),
+        Key(frame: 17.43, value: 1, out: SIMD2(0.333, 0), into: SIMD2(0.667, 1)),
+        Key(frame: 28.826, value: 0.8, out: SIMD2(0.333, 0), into: SIMD2(0.667, 1)),
+        Key(frame: 38.883, value: 1, out: SIMD2(0.333, 0), into: SIMD2(0.667, 1)),
+        Key(frame: 48.939, value: 0.8, out: SIMD2(0.333, 0), into: SIMD2(0.667, 1)),
+        Key(frame: 65.699, value: 1, out: SIMD2(0.333, 0), into: SIMD2(0.667, 1)),
+        Key(frame: 75.754, value: 0.8, out: SIMD2(0.333, 0), into: SIMD2(0.667, 1)),
+        Key(frame: 85.811, value: 1, out: SIMD2(0.333, 0), into: SIMD2(0.667, 1)),
+        Key(frame: 95.865, value: 0.8, out: SIMD2(0.333, 0), into: SIMD2(0.667, 1)),
+        Key(frame: 120, value: 1)
+    ]
+    static let whiteStreakOpacity: [Key] = [
+        Key(frame: 12.066, value: 0, out: SIMD2(0.167, 0.167), into: SIMD2(0.833, 0.833)),
+        Key(frame: 20.781, value: 1, out: SIMD2(0.167, 0.167), into: SIMD2(0.833, 0.833)),
+        Key(frame: 70.391, value: 1, out: SIMD2(0.167, 0.167), into: SIMD2(0.833, 0.833)),
+        Key(frame: 86, value: 0)
+    ]
+    static let whiteStreakScale: [Key] = [
+        Key(frame: 12, value: 0, out: SIMD2(0.167, 0.167), into: SIMD2(0.833, 0.833)),
+        Key(frame: 26, value: 0.75, out: SIMD2(0.167, 0.167), into: SIMD2(0.833, 0.833)),
+        Key(frame: 65, value: 0.75, out: SIMD2(0.167, 0.167), into: SIMD2(0.833, 0.833)),
+        Key(frame: 85.5645, value: 0)
+    ]
+    static let whiteEvents: [Event] = [
+        Event(frame: 33, position: SIMD2(219.694, 280.654), peakScale: 0.63197, riseY: 0.167, decayY: 0.72),
+        Event(frame: 52, position: SIMD2(332.694, 196.654), peakScale: 0.75, riseY: 0.141, decayY: 0.764),
+        Event(frame: 70, position: SIMD2(358.694, 279.654), peakScale: 0.55, riseY: 0.192, decayY: 0.678)
+    ]
+    static let whiteFacetFlashes: [FacetFlash] = [
+        FacetFlash(region: 0, opacity: [
+        Key(frame: 38, value: 0, out: SIMD2(1, 0), into: SIMD2(0, 1)),
+        Key(frame: 44, value: 0.77, out: SIMD2(1, 0), into: SIMD2(0, 1)),
+        Key(frame: 51, value: 0)
+    ]),
+        FacetFlash(region: 1, opacity: [
+        Key(frame: 20, value: 0, out: SIMD2(1, 0), into: SIMD2(0, 1)),
+        Key(frame: 26, value: 0.77, out: SIMD2(1, 0), into: SIMD2(0, 1)),
+        Key(frame: 33, value: 0)
+    ]),
+        FacetFlash(region: 2, opacity: [
+        Key(frame: 39, value: 0, out: SIMD2(1, 0), into: SIMD2(0, 1)),
+        Key(frame: 45, value: 0.77, out: SIMD2(1, 0), into: SIMD2(0, 1)),
+        Key(frame: 52, value: 0)
+    ]),
+        FacetFlash(region: 4, opacity: [
+        Key(frame: 55, value: 0, out: SIMD2(1, 0), into: SIMD2(0, 1)),
+        Key(frame: 61, value: 0.77, out: SIMD2(1, 0), into: SIMD2(0, 1)),
+        Key(frame: 68, value: 0)
+    ]),
+        FacetFlash(region: 5, opacity: [
+        Key(frame: 33, value: 0, out: SIMD2(1, 0), into: SIMD2(0, 1)),
+        Key(frame: 39, value: 0.77, out: SIMD2(1, 0), into: SIMD2(0, 1)),
+        Key(frame: 46, value: 0)
+    ]),
+        FacetFlash(region: 0, opacity: [
+        Key(frame: 31, value: 0, out: SIMD2(1, 0), into: SIMD2(0, 1)),
+        Key(frame: 37, value: 0.77, out: SIMD2(1, 0), into: SIMD2(0, 1)),
+        Key(frame: 44, value: 0)
+    ]),
+        FacetFlash(region: 1, opacity: [
+        Key(frame: 47, value: 0, out: SIMD2(1, 0), into: SIMD2(0, 1)),
+        Key(frame: 53, value: 0.77, out: SIMD2(1, 0), into: SIMD2(0, 1)),
+        Key(frame: 60, value: 0)
+    ]),
+        FacetFlash(region: 2, opacity: [
+        Key(frame: 18, value: 0, out: SIMD2(1, 0), into: SIMD2(0, 1)),
+        Key(frame: 24, value: 0.77, out: SIMD2(1, 0), into: SIMD2(0, 1)),
+        Key(frame: 31, value: 0)
+    ]),
+        FacetFlash(region: 4, opacity: [
+        Key(frame: 82, value: 0, out: SIMD2(1, 0), into: SIMD2(0, 1)),
+        Key(frame: 88, value: 0.77, out: SIMD2(1, 0), into: SIMD2(0, 1)),
+        Key(frame: 95, value: 0)
+    ]),
+        FacetFlash(region: 5, opacity: [
+        Key(frame: 60, value: 0, out: SIMD2(1, 0), into: SIMD2(0, 1)),
+        Key(frame: 66, value: 0.77, out: SIMD2(1, 0), into: SIMD2(0, 1)),
+        Key(frame: 73, value: 0)
+    ])
+    ]
+    // END GENERATED WHITE HIGHLIGHTS
 
     /// The three nested transforms in `blicks` / `blicks 2`, including their
     /// radial gradient centers. Keep the original Bezier timing and layer opacity.
-    static func streaks(at time: Float) -> [Streak] {
-        let frame = frame(at: time)
+    static func streaks(at time: Float, appearance: DiamondStyle.Appearance = .blue) -> [Streak] {
+        let frame = frame(at: time, appearance: appearance)
+
+        func make(innerPosition: SIMD2<Float>, innerScale: SIMD2<Float>, innerAngle: Float,
+                  outerPosition: SIMD2<Float>, outerAngle: Float, layerPosition: SIMD2<Float>,
+                  layerAnchor: SIMD2<Float>, opacity: Float = 0.4, layerScale: Float = 0.75) -> Streak {
+            func rotate(_ p: SIMD2<Float>, _ degrees: Float) -> SIMD2<Float> {
+                let r = degrees * .pi / 180
+                return SIMD2(cos(r)*p.x - sin(r)*p.y, sin(r)*p.x + cos(r)*p.y)
+            }
+            let gradientCenter = SIMD2<Float>(-3.2, -84.1)
+            let center = rotate(innerPosition + rotate(gradientCenter * innerScale, innerAngle), outerAngle)
+            return Streak(center: layerPosition + layerScale * (outerPosition + center - layerAnchor),
+                          axisX: rotate(SIMD2(innerScale.x, 0), innerAngle + outerAngle) * layerScale,
+                          axisY: rotate(SIMD2(0, innerScale.y), innerAngle + outerAngle) * layerScale,
+                          opacity: opacity)
+        }
+        if appearance == .white {
+            let sway = DiamondSparkleAnimation.easing(frame < 59 ? frame/59 : (120-frame)/61,
+                out: SIMD2(0.5, 0), in: SIMD2(0.5, 1))
+            let top = make(innerPosition: SIMD2(-30.026, 1.203), innerScale: SIMD2(0.07139, 0.418), innerAngle: 90,
+                outerPosition: SIMD2(287.292, 106.248), outerAngle: 0,
+                layerPosition: SIMD2(238.031, 256.411), layerAnchor: SIMD2(238.031, 256.411))
+            let left = make(innerPosition: SIMD2(-30.026, 1.203) + SIMD2(14.441, 34.194)*sway,
+                innerScale: SIMD2(0.07139, 0.768), innerAngle: 90-8.804*sway,
+                outerPosition: SIMD2(158.649, 298.438), outerAngle: 60.525,
+                layerPosition: SIMD2(238.031, 256.411), layerAnchor: SIMD2(238.031, 256.411))
+            let sweep = make(innerPosition: SIMD2(-30.026, 1.203), innerScale: SIMD2(0.07139, 0.418), innerAngle: 90,
+                outerPosition: SIMD2(297.292, 106.248), outerAngle: 0,
+                layerPosition: SIMD2(311.829-166*min(1,max(0,(frame-12.066)/73.934)), 244.564),
+                layerAnchor: SIMD2(303.096, 107.282),
+                opacity: 0.4*sample(whiteStreakOpacity, frame: frame),
+                layerScale: sample(whiteStreakScale, frame: frame))
+            return [top, left, sweep]
+        }
         let times: [Float] = [0, 39, 69, 99, 179]
         let positions: [SIMD2<Float>] = [SIMD2(-30, 1.2), SIMD2(-31.3, 24.4),
             SIMD2(-30, 1.2), SIMD2(4, -39.6), SIMD2(-30, 1.2)]
@@ -371,20 +568,6 @@ enum DiamondReferenceHighlights {
             in: segment == 1 ? SIMD2(0.833, 1) : into)
         let angle = angles[segment] + (angles[segment+1] - angles[segment]) * rotationT
 
-        func make(innerPosition: SIMD2<Float>, innerScale: SIMD2<Float>, innerAngle: Float,
-                  outerPosition: SIMD2<Float>, outerAngle: Float, layerPosition: SIMD2<Float>,
-                  layerAnchor: SIMD2<Float>, opacity: Float = 0.4) -> Streak {
-            func rotate(_ p: SIMD2<Float>, _ degrees: Float) -> SIMD2<Float> {
-                let r = degrees * .pi / 180
-                return SIMD2(cos(r)*p.x - sin(r)*p.y, sin(r)*p.x + cos(r)*p.y)
-            }
-            let gradientCenter = SIMD2<Float>(-3.2, -84.1)
-            let center = rotate(innerPosition + rotate(gradientCenter * innerScale, innerAngle), outerAngle)
-            return Streak(center: layerPosition + 0.75 * (outerPosition + center - layerAnchor),
-                          axisX: rotate(SIMD2(innerScale.x, 0), innerAngle + outerAngle) * 0.75,
-                          axisY: rotate(SIMD2(0, innerScale.y), innerAngle + outerAngle) * 0.75,
-                          opacity: opacity)
-        }
         let top = make(innerPosition: SIMD2(-30, 1.2), innerScale: SIMD2(0.071, 0.418), innerAngle: 90,
                        outerPosition: SIMD2(297.3, 106.2), outerAngle: 0,
                        layerPosition: SIMD2(238, 256.4), layerAnchor: SIMD2(238, 256.4))
@@ -433,8 +616,15 @@ enum DiamondSparkleAnimation {
         var haloScale: Float
     }
 
-    static func state(time: Float) -> State {
-        let frame = max(0, time * 60).truncatingRemainder(dividingBy: 180)
+    static func state(time: Float, appearance: DiamondStyle.Appearance = .blue) -> State {
+        let frame = DiamondReferenceHighlights.frame(at: time, appearance: appearance)
+        if appearance == .white {
+            return State(shape: SIMD4(
+                DiamondReferenceHighlights.sample(DiamondReferenceHighlights.whiteMainScale, frame: frame),
+                DiamondReferenceHighlights.sample(DiamondReferenceHighlights.whiteMorph, frame: frame),
+                DiamondReferenceHighlights.sample(DiamondReferenceHighlights.whiteCoreScale, frame: frame), 1),
+                haloScale: DiamondReferenceHighlights.sample(DiamondReferenceHighlights.whiteHaloScale, frame: frame))
+        }
         let scale: Float
         if frame < 33 {
             scale = 1 - easing(frame / 33, out: SIMD2(0.333, 0), in: SIMD2(0.833, 0.833))

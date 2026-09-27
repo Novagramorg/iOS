@@ -622,6 +622,14 @@ actor WalletEngineRuntime {
         }
     }
 
+    func resolveEncryptedCommentRecipient(recipient: String, recipientPublicKey: Data?) async throws -> Data {
+        try await self.withFfi(priority: .userInitiated) {
+            try await self.requireClient().resolveEncryptedCommentRecipient(request: EncryptedCommentRecipientRequest(
+                recipient: recipient, recipientPublicKey: recipientPublicKey
+            ))
+        }
+    }
+
     func decryptComment(sender: String, body: String) async throws -> String {
         try await self.withFfi(priority: .userInitiated) {
             try await self.ensureKeyRotationAllowsSigning()
@@ -1124,17 +1132,22 @@ actor WalletEngineRuntime {
 
     func tonConnectIdentity() async throws -> TonConnectWalletIdentity {
         try await self.withFfi {
-            guard let descriptor = self.descriptor else { throw WalletContext.WalletError.unavailable }
-            let account = try self.lifecycle.tonConnectAccount(descriptor: descriptor)
-            return TonConnectWalletIdentity(recordId: descriptor.recordId, address: account.address, network: account.network, publicKey: account.publicKey)
+            try self.currentTonConnectIdentity()
         }
     }
 
-    private func validateTonConnectWallet(_ wallet: TonConnectWalletIdentity) throws {
-        guard let descriptor = self.descriptor, descriptor.recordId == wallet.recordId else { throw WalletContext.WalletError.unavailable }
+    private func currentTonConnectIdentity() throws -> TonConnectWalletIdentity {
+        guard let descriptor = self.descriptor, let serverIdentity = self.serverWalletIdentity,
+              serverIdentity.publicKey.count == 32,
+              walletEngineAddressesEqual(descriptor.address, serverIdentity.address) else {
+            throw TonConnectFailure.keyMismatch
+        }
         let account = try self.lifecycle.tonConnectAccount(descriptor: descriptor)
-        guard walletEngineAddressesEqual(account.address, wallet.address), account.network == wallet.network,
-              wallet.publicKey == account.publicKey else { throw TonConnectFailure.keyMismatch }
+        return TonConnectWalletIdentity(recordId: descriptor.recordId, address: account.address, network: account.network, publicKey: serverIdentity.publicKey)
+    }
+
+    private func validateTonConnectWallet(_ wallet: TonConnectWalletIdentity) throws {
+        guard try self.currentTonConnectIdentity() == wallet else { throw TonConnectFailure.keyMismatch }
     }
 
     func tonConnectAccount(wallet: TonConnectWalletIdentity) async throws -> TonConnectAccountInfo {
@@ -1143,7 +1156,13 @@ actor WalletEngineRuntime {
             guard let descriptor = self.descriptor else {
                 throw WalletContext.WalletError.unavailable
             }
-            return try self.lifecycle.tonConnectAccount(descriptor: descriptor)
+            let account = try self.lifecycle.tonConnectAccount(descriptor: descriptor)
+            return TonConnectAccountInfo(
+                address: account.address,
+                network: account.network,
+                walletStateInit: account.walletStateInit,
+                publicKey: wallet.publicKey
+            )
         }
     }
 
@@ -1153,7 +1172,7 @@ actor WalletEngineRuntime {
         timestamp: UInt64,
         payload: String,
         beforeSigning: @escaping @Sendable () throws -> Void = {}
-    ) async throws -> TonConnectProofSignature {
+    ) async throws -> TonConnectProofReply {
         let domain = try TonConnectWireCodec.proofDomain(manifestUrl: manifestUrl)
         return try await self.withFfi(beforeSigning: beforeSigning) {
             try self.validateTonConnectWallet(wallet)
@@ -1162,12 +1181,15 @@ actor WalletEngineRuntime {
                 throw WalletContext.WalletError.unavailable
             }
             try beforeSigning()
-            return try await self.lifecycle.signTonConnectProof(request: TonConnectProofSignRequest(
+            let proof = try await self.lifecycle.signTonConnectProof(request: TonConnectProofSignRequest(
                 descriptor: descriptor,
                 domain: domain,
                 timestamp: timestamp,
                 payload: payload
             ))
+            try self.validateTonConnectWallet(wallet)
+            guard proof.publicKey == wallet.publicKey else { throw TonConnectFailure.keyMismatch }
+            return TonConnectProofReply(timestamp: timestamp, domain: domain, payload: payload, signature: proof.signature)
         }
     }
 
@@ -1175,13 +1197,6 @@ actor WalletEngineRuntime {
         try await self.withFfi(priority: .userInitiated, cancellation: .sendPreview) {
             try self.validateTonConnectWallet(wallet)
             return try await self.requireClient().previewTonConnect(request: request)
-        }
-    }
-
-    func previewSignMessage(_ request: SignMessageRequest, wallet: TonConnectWalletIdentity) async throws -> SignMessagePreview {
-        try await self.withFfi(priority: .userInitiated, cancellation: .sendPreview) {
-            try self.validateTonConnectWallet(wallet)
-            return try await self.requireClient().previewSignMessage(request: SendPreviewRequest(intent: request.intent))
         }
     }
 
@@ -1193,17 +1208,6 @@ actor WalletEngineRuntime {
             let client = try self.requireClient()
             try beforeSigning()
             return try await client.send(request: request)
-        }
-    }
-
-    func signMessage(_ request: SignMessageRequest, wallet: TonConnectWalletIdentity, beforeSigning: @escaping @Sendable () throws -> Void = {}) async throws -> SignMessageResult {
-        try await self.withFfi(priority: .userInitiated, cancellation: .send, beforeSigning: beforeSigning) {
-            try await self.ensureApiTransferAllowsSigning()
-            try self.validateTonConnectWallet(wallet)
-            try await self.ensureKeyRotationAllowsSigning()
-            let client = try self.requireClient()
-            try beforeSigning()
-            return try await client.signMessage(request: request)
         }
     }
 
@@ -1511,82 +1515,154 @@ func walletEngineAddressesEqual(_ lhs: String, _ rhs: String) -> Bool {
 @available(macOS 10.15, *)
 extension WalletEngineRuntime {
     func validateTonConnectAccess(wallet: TonConnectWalletIdentity) async throws {
-        try await self.withTonConnectAnchor(wallet: wallet) { _ in () }
+        try await self.withFfi {
+            try await self.ensureKeyRotationAllowsSigning()
+            try self.validateTonConnectWallet(wallet)
+        }
     }
 
     func tonConnectSessionPublicKey(wallet: TonConnectWalletIdentity, session: TelegramCore.WalletTonConnectSession) async throws -> String {
         try await self.withTonConnectSession(wallet: wallet, session: session, allowPendingRegistration: true) {
-            $0.publicKey.map { String(format: "%02x", $0) }.joined()
+            $0.publicKeyHex()
         }
     }
 
     func openTonConnectChallenge(_ data: Data, wallet: TonConnectWalletIdentity, session: TelegramCore.WalletTonConnectSession) async throws -> Data {
         try await self.withTonConnectSession(wallet: wallet, session: session, allowPendingRegistration: true) {
-            try $0.openChallenge(data)
+            try $0.openChallenge(challenge: data)
         }
     }
 
-    func openTonConnectPacket(_ data: Data, wallet: TonConnectWalletIdentity, session: TelegramCore.WalletTonConnectSession) async throws -> Data {
-        try await self.withTonConnectSession(wallet: wallet, session: session, allowPendingRegistration: false) {
-            try $0.open(data)
+    func decodeTonConnectRequest(_ data: Data, wallet: TonConnectWalletIdentity, session: TelegramCore.WalletTonConnectSession, now: UInt64, operationId: String) async throws -> TonConnectWireRequest {
+        guard !data.isEmpty, data.count <= TonConnectWireCodec.maximumPacketBytes, !operationId.isEmpty else {
+            throw TonConnectWireFailure(code: .badRequest)
         }
-    }
-
-    func sealTonConnectPacket(_ data: Data, wallet: TonConnectWalletIdentity, session: TelegramCore.WalletTonConnectSession) async throws -> Data {
-        try await self.withTonConnectSession(wallet: wallet, session: session, allowPendingRegistration: true) {
-            try $0.seal(data)
-        }
-    }
-
-    func signTonConnectData(_ digest: Data, wallet: TonConnectWalletIdentity, beforeSigning: @escaping @Sendable () throws -> Void = {}) async throws -> Data {
-        try await self.withTonConnectAnchor(wallet: wallet, beforeSigning: beforeSigning) { anchor in
-            try beforeSigning()
-            return try anchor.sign(digest)
-        }
-    }
-
-    private func withTonConnectAnchor<Value>(wallet: TonConnectWalletIdentity, beforeSigning: (@Sendable () throws -> Void)? = nil, _ operation: @escaping (TonConnectAnchorKey) throws -> Value) async throws -> Value {
-        try await self.withFfi(beforeSigning: beforeSigning) {
-            try self.validateTonConnectWallet(wallet)
-            _ = try self.requireClient()
-            try await self.ensureKeyRotationAllowsSigning()
-            guard let descriptor = self.descriptor else { throw WalletContext.WalletError.unavailable }
-            let account = try self.lifecycle.tonConnectAccount(descriptor: descriptor)
-            guard account.publicKey.count == 32, account.publicKey == descriptor.publicKey else {
-                throw TonConnectFailure.keyMismatch
+        return try await self.withTonConnectSession(wallet: wallet, session: session, allowPendingRegistration: false) { derived in
+            switch try derived.decryptRequest(body: data, now: now).request {
+            case let .sendTransaction(id, _, request):
+                return .sendTransaction(id: try TonConnectRequestId(id), request: SendRequest(
+                    operationId: operationId, force: false, intent: request.intent
+                ))
+            case let .signData(rawId, _, request):
+                let id = try TonConnectRequestId(rawId)
+                do {
+                    return .signData(id: id, payload: try TonConnectSignDataPayload(request))
+                } catch let failure as TonConnectWireFailure {
+                    throw TonConnectWireFailure(requestId: id, code: failure.code, message: failure.message)
+                }
+            case let .disconnect(id, _):
+                return .disconnect(id: try TonConnectRequestId(id))
+            case let .unsupported(id, _, code, message):
+                throw TonConnectWireFailure(requestId: try TonConnectRequestId(id), code: TonConnectWireErrorCode(code), message: message)
+            case let .signMessage(id, _, _):
+                throw TonConnectWireFailure(requestId: try TonConnectRequestId(id), code: .methodNotSupported)
             }
-            let phrase = try await self.lifecycle.revealRecoveryPhrase(descriptor: descriptor)
-            var words = normalizedEngineMnemonic(phrase.phrase.split(whereSeparator: { $0.isWhitespace }).map(String.init))
-            defer { words.removeAll(keepingCapacity: false) }
-            let validatedPublicKey = try rotationMnemonicPublicKey(phrase: words.joined(separator: " "))
-            guard validatedPublicKey == account.publicKey else { throw TonConnectFailure.keyMismatch }
+        }
+    }
+
+    func encryptTonConnectEvent(eventId: Int64, account: TonConnectAccountInfo, proof: TonConnectProofReply?, device: TonConnectDevice,
+                                wallet: TonConnectWalletIdentity, session: TelegramCore.WalletTonConnectSession) async throws -> Data {
+        let eventId = try Self.tonConnectEventId(eventId)
+        return try await self.encryptTonConnectPacket(wallet: wallet, session: session) {
+            try $0.encryptConnectEvent(eventId: eventId, account: account, proof: proof, device: device)
+        }
+    }
+
+    func encryptTonConnectConnectError(eventId: Int64, code: TonConnectConnectErrorCode, message: String,
+                                       wallet: TonConnectWalletIdentity, session: TelegramCore.WalletTonConnectSession) async throws -> Data {
+        let eventId = try Self.tonConnectEventId(eventId)
+        return try await self.encryptTonConnectPacket(wallet: wallet, session: session) {
+            try $0.encryptConnectError(eventId: eventId, code: code, message: message)
+        }
+    }
+
+    func encryptTonConnectSendSuccess(id: TonConnectRequestId, signedBoc: String, wallet: TonConnectWalletIdentity,
+                                      session: TelegramCore.WalletTonConnectSession) async throws -> Data {
+        try await self.encryptTonConnectPacket(wallet: wallet, session: session) {
+            try $0.encryptSendSuccess(requestId: id.rawValue, signedBoc: signedBoc)
+        }
+    }
+
+    func encryptTonConnectSignDataSuccess(id: TonConnectRequestId, signedData: TonConnectSignedData, wallet: TonConnectWalletIdentity,
+                                          session: TelegramCore.WalletTonConnectSession) async throws -> Data {
+        try await self.encryptTonConnectPacket(wallet: wallet, session: session) {
+            try $0.encryptSignDataSuccess(requestId: id.rawValue, signedData: signedData)
+        }
+    }
+
+    func encryptTonConnectError(id: TonConnectRequestId, code: TonConnectWireErrorCode, message: String? = nil,
+                                wallet: TonConnectWalletIdentity, session: TelegramCore.WalletTonConnectSession) async throws -> Data {
+        try await self.encryptTonConnectPacket(wallet: wallet, session: session) {
+            try $0.encryptError(requestId: id.rawValue, code: code.engineCode, message: message ?? code.message)
+        }
+    }
+
+    func encryptTonConnectDisconnectSuccess(id: TonConnectRequestId, wallet: TonConnectWalletIdentity,
+                                            session: TelegramCore.WalletTonConnectSession) async throws -> Data {
+        try await self.encryptTonConnectPacket(wallet: wallet, session: session) {
+            try $0.encryptDisconnectSuccess(requestId: id.rawValue)
+        }
+    }
+
+    func encryptTonConnectDisconnectEvent(eventId: Int64, wallet: TonConnectWalletIdentity, session: TelegramCore.WalletTonConnectSession) async throws -> Data {
+        let eventId = try Self.tonConnectEventId(eventId)
+        return try await self.encryptTonConnectPacket(wallet: wallet, session: session) {
+            try $0.encryptDisconnectEvent(eventId: eventId)
+        }
+    }
+
+    private func encryptTonConnectPacket(wallet: TonConnectWalletIdentity, session: TelegramCore.WalletTonConnectSession,
+                                         _ encrypt: @escaping (TonConnectDerivedSession) throws -> Data) async throws -> Data {
+        try await self.withTonConnectSession(wallet: wallet, session: session, allowPendingRegistration: true) { derived in
+            let body = try encrypt(derived)
+            guard body.count <= TonConnectWireCodec.maximumPacketBytes else { throw TonConnectWireFailure(code: .badRequest) }
+            return body
+        }
+    }
+
+    private static func tonConnectEventId(_ value: Int64) throws -> UInt64 {
+        guard let value = UInt64(exactly: value) else { throw TonConnectWireFailure(code: .badRequest) }
+        return value
+    }
+
+    func signTonConnectData(_ payload: TonConnectSignDataPayload, domain: String, timestamp: UInt64, wallet: TonConnectWalletIdentity, beforeSigning: @escaping @Sendable () throws -> Void = {}) async throws -> TonConnectSignedData {
+        try await self.withFfi(beforeSigning: beforeSigning) {
+            try await self.ensureKeyRotationAllowsSigning()
+            try self.validateTonConnectWallet(wallet)
+            guard let descriptor = self.descriptor else { throw WalletContext.WalletError.unavailable }
+            try beforeSigning()
+            let signed = try await self.lifecycle.signTonConnectData(request: TonConnectSignDataSignRequest(
+                descriptor: descriptor, request: payload.engineRequest, domain: domain, timestamp: timestamp
+            ))
+            try self.validateTonConnectWallet(wallet)
+            guard signed.publicKey == wallet.publicKey else { throw TonConnectFailure.keyMismatch }
+            return signed
+        }
+    }
+
+    private func withTonConnectSession<Value>(wallet: TonConnectWalletIdentity, session: TelegramCore.WalletTonConnectSession, allowPendingRegistration: Bool, _ operation: @escaping (TonConnectDerivedSession) throws -> Value) async throws -> Value {
+        _ = try Self.tonConnectPublicKey(session.dappClientId)
+        let registeredPublicKey = try session.clientId.map(Self.tonConnectPublicKey)
+        guard !session.nonce.isEmpty, session.nonce.count <= TonConnectWireCodec.maximumPacketBytes,
+              registeredPublicKey != nil || (allowPendingRegistration && session.isPending && !session.isClosing && !session.isClosed) else {
+            throw TonConnectFailure.keyMismatch
+        }
+        return try await self.withFfi {
             try await self.ensureKeyRotationAllowsSigning()
             try self.validateTonConnectWallet(wallet)
             _ = try self.requireClient()
-            guard self.descriptor?.publicKey == descriptor.publicKey,
-                  self.descriptor?.secretRef.value == descriptor.secretRef.value else {
+            guard let descriptor = self.descriptor else { throw WalletContext.WalletError.unavailable }
+            let derived = try await self.lifecycle.deriveTonConnectSession(request: TonConnectDerivedSessionRequest(
+                descriptor: descriptor, dappClientId: session.dappClientId.lowercased(), nonce: session.nonce
+            ))
+            try self.validateTonConnectWallet(wallet)
+            guard self.descriptor?.secretRef == descriptor.secretRef,
+                  derived.signingPublicKey() == wallet.publicKey else { throw TonConnectFailure.keyMismatch }
+            if let registeredPublicKey, try Self.tonConnectPublicKey(derived.publicKeyHex()) != registeredPublicKey {
                 throw TonConnectFailure.keyMismatch
             }
             try Task.checkCancellation()
-            let anchor = try TonConnectAnchorKey.derive(validatedRotationMnemonic: words, expectedPublicKey: account.publicKey)
-            return try operation(anchor)
-        }
-    }
-
-    private func withTonConnectSession<Value>(wallet: TonConnectWalletIdentity, session: TelegramCore.WalletTonConnectSession, allowPendingRegistration: Bool, _ operation: @escaping (TonConnectSessionCrypto) throws -> Value) async throws -> Value {
-        let appPublicKey = try Self.tonConnectPublicKey(session.dappClientId)
-        let registeredPublicKey = try session.clientId.map(Self.tonConnectPublicKey)
-        guard registeredPublicKey != nil || (allowPendingRegistration && session.isPending && !session.isClosing && !session.isClosed) else {
-            throw TonConnectFailure.keyMismatch
-        }
-        return try await self.withTonConnectAnchor(wallet: wallet) { anchor in
-            try anchor.withSeed { seed in
-                let crypto = try TonConnectSessionCrypto(anchorSeed: seed, appPublicKey: appPublicKey, serverNonce: session.nonce)
-                if let registeredPublicKey, crypto.publicKey != registeredPublicKey {
-                    throw TonConnectFailure.keyMismatch
-                }
-                return try operation(crypto)
-            }
+            return try operation(derived)
         }
     }
 

@@ -657,7 +657,7 @@ extension PeerInfoScreenNode {
                             guard let self, let controller = self.controller, let peer = self.data?.peer, let walletContext = self.context.walletContext else {
                                 return
                             }
-                            let sendController = WalletSendScreen(context: self.context, updatedPresentationData: controller.updatedPresentationData, peer: peer, walletContext: walletContext, displaySuccessToast: false, allowOpenRecipientChat: false, completed: { [weak self] in
+                            let sendController = WalletSendScreen(context: self.context, updatedPresentationData: controller.updatedPresentationData, useDefaultAccent: false, peer: peer, walletContext: walletContext, displaySuccessToast: false, allowOpenRecipientChat: false, completed: { [weak self] in
                                 guard let self, let navigationController = self.controller?.navigationController as? NavigationController else {
                                     return
                                 }

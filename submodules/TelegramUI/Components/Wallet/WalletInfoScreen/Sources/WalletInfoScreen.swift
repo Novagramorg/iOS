@@ -740,6 +740,7 @@ public final class WalletInfoScreen: ViewControllerComponentContainer {
 
     public init(
         context: AccountContext,
+        updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? = nil,
         mode: WalletInfoScreenMode,
         completion: (() -> Void)?
     ) {
@@ -754,7 +755,8 @@ public final class WalletInfoScreen: ViewControllerComponentContainer {
             ),
             navigationBarAppearance: .none,
             statusBarStyle: .ignore,
-            theme: .default
+            theme: .default,
+            updatedPresentationData: updatedPresentationData
         )
 
         self.navigationPresentation = .flatModal
