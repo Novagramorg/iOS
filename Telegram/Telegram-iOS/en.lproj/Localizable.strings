@@ -16705,3 +16705,5 @@ Error: %8$@";
 "CHAT_REACT_POLL_APPEND" = "%2$@|%1$@ reacted %3$@ to your poll update";
 "CHAT_REACT_TODO_APPEND" = "%2$@|%1$@ reacted %3$@ to your todo update";
 "CHAT_REACT_TODO_DONE" = "%2$@|%1$@ reacted %3$@ to your todo update";
+
+"Wallet.Unavailable" = "Wallet is currently unavailable.";

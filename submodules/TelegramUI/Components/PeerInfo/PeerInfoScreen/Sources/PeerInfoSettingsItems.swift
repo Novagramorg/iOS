@@ -12,6 +12,7 @@ import ItemListPeerItem
 import DeviceAccess
 import TelegramStringFormatting
 import PeerNameColorItem
+import WalletContext
 
 enum SettingsSection: Int, CaseIterable {
     case edit
@@ -152,10 +153,12 @@ func settingsItems(data: PeerInfoScreenData?, context: AccountContext, presentat
             interaction.openSettings(.profile)
         }))
         
-        //TODO:localize
-        items[.wallet]!.append(PeerInfoScreenDisclosureItem(id: 0, label: .titleBadge(presentationData.strings.Settings_New, presentationData.theme.list.itemAccentColor), text: "Wallet", icon: PresentationResourcesSettings.ton, action: {
-            interaction.openSettings(.wallet)
-        }))
+        if WalletConfiguration.with(appConfiguration: context.currentAppConfiguration.with { $0 }).isAvailable {
+            //TODO:localize
+            items[.wallet]!.append(PeerInfoScreenDisclosureItem(id: 0, label: .titleBadge(presentationData.strings.Settings_New, presentationData.theme.list.itemAccentColor), text: "Wallet", icon: PresentationResourcesSettings.ton, action: {
+                interaction.openSettings(.wallet)
+            }))
+        }
         
         if !settings.proxySettings.servers.isEmpty {
             let proxyType: String

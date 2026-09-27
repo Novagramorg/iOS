@@ -657,7 +657,19 @@ public final class AccountContextImpl: AccountContext {
                 self?.updateWalletTonConnectPresentation(state)
             }))
             walletContext.setAuthorizationPresenter { [weak self] request in
-                guard let self else { throw PasscodeError.cancelled }
+                guard let self else {
+                    throw PasscodeError.cancelled
+                }
+                if request.reason == "TON Connect" {
+                    let canPresent = await MainActor.run {
+                        WalletConfiguration.with(appConfiguration: self.currentAppConfiguration.with { $0 }).isAvailable
+                            || self.walletTonConnectPresentationId != nil
+                            || self.walletTonConnectState?.active?.status == .processing
+                    }
+                    guard canPresent else {
+                        throw PasscodeError.cancelled
+                    }
+                }
                 let settings = try walletProtectionSettings()
                 let authenticateBiometrics: ((LAContext) throws -> PasscodeSession)?
                 if settings.enabled && settings.biometricsEnabled {
@@ -1191,6 +1203,7 @@ private extension AccountContextImpl {
     }
 
     func updateWalletTonConnectPresentation(_ state: WalletContext.TonConnectState) {
+        let isWalletAvailable = WalletConfiguration.with(appConfiguration: self.currentAppConfiguration.with { $0 }).isAvailable
         self.walletTonConnectState = state
         guard state.presentationEnabled else {
             self.dismissWalletTonConnectController()
@@ -1204,7 +1217,7 @@ private extension AccountContextImpl {
             self.walletTonConnectDiagnosticController = nil
             self.walletTonConnectDiagnosticId = nil
         }
-        if let diagnostic = state.diagnostic, self.walletTonConnectDiagnosticId != diagnostic.id {
+        if isWalletAvailable, let diagnostic = state.diagnostic, self.walletTonConnectDiagnosticId != diagnostic.id {
             self.walletTonConnectDiagnosticId = diagnostic.id
             let strings = self.sharedContext.currentPresentationData.with { $0 }.strings
             let actions: [TextAlertAction]
@@ -1231,6 +1244,9 @@ private extension AccountContextImpl {
         }
         if self.walletTonConnectPresentationId != nil && self.walletTonConnectPresentationId != active.id {
             self.dismissWalletTonConnectController()
+        }
+        guard isWalletAvailable || self.walletTonConnectPresentationId == active.id else {
+            return
         }
         switch active.status {
         case .invalidated:

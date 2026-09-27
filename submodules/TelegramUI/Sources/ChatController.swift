@@ -874,6 +874,10 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             }
             
             if let request = walletTonConnectRequestRoute(message: message, accountPeerId: self.context.account.peerId) {
+                guard WalletConfiguration.with(appConfiguration: self.context.currentAppConfiguration.with { $0 }).isAvailable else {
+                    self.present(UndoOverlayController(presentationData: self.presentationData, content: .info(title: nil, text: self.presentationData.strings.Wallet_Unavailable, timeout: nil, customUndoText: nil), action: { _ in return false }), in: .window(.root))
+                    return true
+                }
                 self.context.walletContext?.openTonConnectRequest(sessionId: request.sessionId, messageId: request.messageId)
                 return true
             }
@@ -1152,6 +1156,10 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                             }
                             return true
                         case let .gramTransfer(amount, peerAddress, transactionId, messageComment, commentEncrypted):
+                            guard WalletConfiguration.with(appConfiguration: self.context.currentAppConfiguration.with { $0 }).isAvailable else {
+                                self.present(UndoOverlayController(presentationData: self.presentationData, content: .info(title: nil, text: self.presentationData.strings.Wallet_Unavailable, timeout: nil, customUndoText: nil), action: { _ in return false }), in: .window(.root))
+                                return true
+                            }
                             let pendingTransfer = message.attributes.compactMap { $0 as? PendingWalletTransferMessageAttribute }.first
                             let direction: WalletContext.Transaction.Direction
                             if message.effectivelyIncoming(self.context.account.peerId) {

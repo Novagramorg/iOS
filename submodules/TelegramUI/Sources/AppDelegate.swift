@@ -2574,6 +2574,11 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         self.openUrl(url: url)
     }
 
+    private func presentWalletUnavailable(in context: AuthorizedApplicationContext) {
+        let presentationData = context.context.sharedContext.currentPresentationData.with { $0 }
+        context.context.sharedContext.presentGlobalController(UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: presentationData.strings.Wallet_Unavailable, timeout: nil, customUndoText: nil), action: { _ in return false }), nil)
+    }
+
     private func openUrl(url: URL) {
         let _ = (self.sharedContextPromise.get()
         |> take(1)
@@ -2589,7 +2594,9 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             if let authContext = authContext, let confirmationCode = parseConfirmationCodeUrl(sharedContext: sharedContext, url: url) {
                 authContext.rootController.applyConfirmationCode(confirmationCode)
             } else if let context = context {
-                if WalletContext.isTonConnectUrl(url.absoluteString) {
+                if (WalletContext.isTonConnectUrl(url.absoluteString) || url.scheme?.lowercased() == "ton"), !WalletConfiguration.with(appConfiguration: context.context.currentAppConfiguration.with { $0 }).isAvailable {
+                    self.presentWalletUnavailable(in: context)
+                } else if WalletContext.isTonConnectUrl(url.absoluteString) {
                     context.context.walletContext?.processTonConnectUrl(url.absoluteString)
                 } else if url.scheme?.lowercased() == "ton" {
                     if isTonTransferUrl(url), let walletContext = context.context.walletContext {
@@ -2923,11 +2930,15 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         |> deliverOnMainQueue
         self.walletTonConnectNotificationDisposable.set(signal.start(next: { [weak self] context, message in
             guard let self else { return }
-            if let message, let request = walletTonConnectRequestRoute(message: message._asMessage(), accountPeerId: context.context.account.peerId) {
+            let isWalletAvailable = WalletConfiguration.with(appConfiguration: context.context.currentAppConfiguration.with { $0 }).isAvailable
+            if isWalletAvailable, let message, let request = walletTonConnectRequestRoute(message: message._asMessage(), accountPeerId: context.context.account.peerId) {
                 context.context.walletContext?.openTonConnectRequest(sessionId: request.sessionId, messageId: request.messageId)
             } else {
                 context.openChatWithPeerId(peerId: route.messageId.peerId, threadId: nil, messageId: route.messageId,
                     activateInput: false, storyId: nil, openAppIfAny: false, alwaysKeepMessageId: route.alwaysKeepMessageId)
+                if !isWalletAvailable {
+                    self.presentWalletUnavailable(in: context)
+                }
             }
             self.walletTonConnectNotifications.complete()
             Queue.mainQueue().async { [weak self] in self?.openNextWalletTonConnectNotification() }
@@ -2956,7 +2967,9 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         }
         self.openUrlWhenReadyDisposable.set((signal
         |> deliverOnMainQueue).start(next: { [weak self] context in
-            if WalletContext.isTonConnectUrl(url.absoluteString) {
+            if (WalletContext.isTonConnectUrl(url.absoluteString) || url.scheme?.lowercased() == "ton"), !WalletConfiguration.with(appConfiguration: context.context.currentAppConfiguration.with { $0 }).isAvailable {
+                self?.presentWalletUnavailable(in: context)
+            } else if WalletContext.isTonConnectUrl(url.absoluteString) {
                 context.context.walletContext?.processTonConnectUrl(url.absoluteString)
             } else if url.scheme?.lowercased() == "ton" {
                 if isTonTransferUrl(url), let walletContext = context.context.walletContext {

@@ -853,54 +853,58 @@ private final class PasscodeOptionsScreenComponent: Component {
                     //TODO:localize
                     updateSection(self.telegramSection, header: "Lock Telegram".uppercased(), footer: nil, items: telegramItems)
 
-                    let protectionEnabled = screenState.protection?.enabled == true
-                    let controlsEnabled = !screenState.protectionUnavailable && !screenState.isUpdating
-                    let walletTextColor = controlsEnabled ? theme.list.itemPrimaryTextColor : theme.list.itemDisabledTextColor
-                    var walletItems: [AnyComponentWithIdentity<Empty>] = []
-                    //TODO:localize
-                    walletItems.append(AnyComponentWithIdentity(id: "walletPasscode", component: AnyComponent(ListActionItemComponent(
-                        theme: theme,
-                        style: .glass,
-                        title: AnyComponent(MultilineTextComponent(
-                            text: .plain(NSAttributedString(
-                                string: "Confirm with Passcode",
-                                font: actionFont,
-                                textColor: walletTextColor
-                            )),
-                            maximumNumberOfLines: 0
-                        )),
-                        accessory: .toggle(ListActionItemComponent.Toggle(style: .regular, isOn: protectionEnabled, isInteractive: false, isEnabled: controlsEnabled)),
-                        action: controlsEnabled ? { [weak self] _ in
-                            guard let model = self?.component?.model else {
-                                return
-                            }
-                            model.changeWalletProtection(biometrics: false, enabled: model.state.protection?.enabled != true)
-                        } : nil
-                    ))))
-                    if protectionEnabled && (screenState.canUseBiometrics || screenState.protection?.biometricsEnabled == true) {
+                    if WalletConfiguration.with(appConfiguration: component.model.context.currentAppConfiguration.with { $0 }).isAvailable {
+                        let protectionEnabled = screenState.protection?.enabled == true
+                        let controlsEnabled = !screenState.protectionUnavailable && !screenState.isUpdating
+                        let walletTextColor = controlsEnabled ? theme.list.itemPrimaryTextColor : theme.list.itemDisabledTextColor
+                        var walletItems: [AnyComponentWithIdentity<Empty>] = []
                         //TODO:localize
-                        walletItems.append(AnyComponentWithIdentity(id: "walletBiometrics", component: AnyComponent(ListActionItemComponent(
+                        walletItems.append(AnyComponentWithIdentity(id: "walletPasscode", component: AnyComponent(ListActionItemComponent(
                             theme: theme,
                             style: .glass,
                             title: AnyComponent(MultilineTextComponent(
                                 text: .plain(NSAttributedString(
-                                    string: screenState.faceID ? "Confirm with Face ID" : "Confirm with Touch ID",
+                                    string: "Confirm with Passcode",
                                     font: actionFont,
                                     textColor: walletTextColor
                                 )),
                                 maximumNumberOfLines: 0
                             )),
-                            accessory: .toggle(ListActionItemComponent.Toggle(style: .regular, isOn: screenState.protection?.biometricsEnabled == true, isInteractive: false, isEnabled: controlsEnabled)),
+                            accessory: .toggle(ListActionItemComponent.Toggle(style: .regular, isOn: protectionEnabled, isInteractive: false, isEnabled: controlsEnabled)),
                             action: controlsEnabled ? { [weak self] _ in
                                 guard let model = self?.component?.model else {
                                     return
                                 }
-                                model.changeWalletProtection(biometrics: true, enabled: model.state.protection?.biometricsEnabled != true)
+                                model.changeWalletProtection(biometrics: false, enabled: model.state.protection?.enabled != true)
                             } : nil
                         ))))
+                        if protectionEnabled && (screenState.canUseBiometrics || screenState.protection?.biometricsEnabled == true) {
+                            //TODO:localize
+                            walletItems.append(AnyComponentWithIdentity(id: "walletBiometrics", component: AnyComponent(ListActionItemComponent(
+                                theme: theme,
+                                style: .glass,
+                                title: AnyComponent(MultilineTextComponent(
+                                    text: .plain(NSAttributedString(
+                                        string: screenState.faceID ? "Confirm with Face ID" : "Confirm with Touch ID",
+                                        font: actionFont,
+                                        textColor: walletTextColor
+                                    )),
+                                    maximumNumberOfLines: 0
+                                )),
+                                accessory: .toggle(ListActionItemComponent.Toggle(style: .regular, isOn: screenState.protection?.biometricsEnabled == true, isInteractive: false, isEnabled: controlsEnabled)),
+                                action: controlsEnabled ? { [weak self] _ in
+                                    guard let model = self?.component?.model else {
+                                        return
+                                    }
+                                    model.changeWalletProtection(biometrics: true, enabled: model.state.protection?.biometricsEnabled != true)
+                                } : nil
+                            ))))
+                        }
+                        //TODO:localize
+                        updateSection(self.walletSection, header: "Lock Wallet".uppercased(), footer: "Required when sending funds or confirming other sensitive Wallet actions.", items: walletItems)
+                    } else {
+                        self.walletSection.view?.removeFromSuperview()
                     }
-                    //TODO:localize
-                    updateSection(self.walletSection, header: "Lock Wallet".uppercased(), footer: "Required when sending funds or confirming other sensitive Wallet actions.", items: walletItems)
                 } else {
                     self.telegramSection.view?.removeFromSuperview()
                     self.walletSection.view?.removeFromSuperview()

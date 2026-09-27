@@ -60,12 +60,14 @@ extension ChatControllerImpl {
 
             // TODO: localize
             var items: [ContextMenuItem] = []
-            items.append(.action(ContextMenuActionItem(text: "Send Money", icon: { theme in
-                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Ton"), color: theme.contextMenu.primaryColor)
-            }, action: { [weak self] _, dismiss in
-                dismiss(.default)
-                self?.openResolved(result: .sendGrams(transfer: WalletSendRequest(recipient: recipient, amountNanograms: nil)), sourceMessageId: message.id)
-            })))
+            if WalletConfiguration.with(appConfiguration: self.context.currentAppConfiguration.with { $0 }).isAvailable {
+                items.append(.action(ContextMenuActionItem(text: "Send Money", icon: { theme in
+                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Ton"), color: theme.contextMenu.primaryColor)
+                }, action: { [weak self] _, dismiss in
+                    dismiss(.default)
+                    self?.openResolved(result: .sendGrams(transfer: WalletSendRequest(recipient: recipient, amountNanograms: nil)), sourceMessageId: message.id)
+                })))
+            }
             items.append(.action(ContextMenuActionItem(text: "Copy Address", icon: { theme in
                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Copy"), color: theme.contextMenu.primaryColor)
             }, action: { [weak self] _, dismiss in
