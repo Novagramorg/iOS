@@ -57,13 +57,8 @@ struct WalletTransferPresentation {
             switch signData.payload {
             case let .text(text):
                 return .text(text)
-            case .binary:
+            case .binary, .cell:
                 return .binary
-            case .cell:
-                guard let fields = signData.decodedFields else { return .binary }
-                return .message([fields.map {
-                    SigningField(name: String(repeating: "  ", count: $0.depth) + $0.name, value: $0.value)
-                }])
             }
         case .signMessage:
             var groups: [[SigningField]] = []
