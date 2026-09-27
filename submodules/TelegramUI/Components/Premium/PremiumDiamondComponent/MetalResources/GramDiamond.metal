@@ -158,10 +158,11 @@ struct Uniforms {
     float4 parameters; // time, refraction, brightness, sparkles
     float4 viewport;   // width, height, optical plane count, unused
     float4 sparkleShape; // main layer scale, contour morph, core scale, star glow scale
-    float4 sparkleHalo;  // circular glow scale, main anchor angle/height, visibility
+    float4 sparkleHalo;  // circular glow scale, main face rotation, horizontal correction, visibility
     float4 crownGradient;
     float4 pavilionGradient;
     float4 lightSweep; // diagonal position, environment phase, transmission, reserved
+    float4 facetProjection; // reference pitch cosine/sine, source units, projected top
     float4 crownSweep;
     float4 rightCrownSweep;
     float4 leftCrownSweep;
@@ -190,14 +191,6 @@ float3 referenceCrown(float2 p, float4 gradient) {
     return colors[6];
 }
 
-float3 referencePavilion(float2 p, float4 gradient) {
-    const float greens[9] = {0.502,0.557,0.612,0.545,0.478,0.633,0.788,0.600,0.412};
-    float2 direction = gradient.zw - gradient.xy;
-    float t = saturate(dot(p-gradient.xy,direction)/dot(direction,direction)) * 8;
-    uint i = min(uint(t), 7u);
-    return float3(0, mix(greens[i],greens[i+1],t-float(i)), 1);
-}
-
 float3 lateralDepth(float3 color, float3 normal, float y, float3 facetWeights,
                     float opticalLuminance) {
     float horizontalNormal = length(normal.xz);
@@ -205,12 +198,14 @@ float3 lateralDepth(float3 color, float3 normal, float y, float3 facetWeights,
     float shoulder = smoothstep(0.06, 0.57, y);
     float lower = smoothstep(0.12, 0.90, -y);
     float reflectedLight = smoothstep(0.28, 0.78, color.g);
-    float3 deepBlue = float3(0.008, 0.125, 1.0)
-                    * float3(1.0, mix(0.30, 1.0, reflectedLight), mix(0.88, 1.0, reflectedLight));
-    float3 sideColor = mix(deepBlue, float3(0.247, 0.894, 1.0), shoulder * 0.80);
-    sideColor = mix(sideColor, float3(0.02, 0.42, 1.0), lower * 0.65);
-    float reflectionDetail = 0.12 + opticalLuminance * 0.16
-                           + smoothstep(0.70, 0.95, color.g) * 0.25;
+    // A restrained blue-violet shadow keeps the sides distinct without
+    // swallowing their cyan gradients and moving reflections.
+    float3 deepBlue = mix(float3(0.017, 0.035, 0.90),
+                          float3(0.006, 0.11, 1), reflectedLight);
+    float3 sideColor = mix(deepBlue, float3(0.22, 0.86, 1), shoulder * 0.69);
+    sideColor = mix(sideColor, float3(0.018, 0.39, 1), lower * 0.52);
+    float reflectionDetail = 0.105 + opticalLuminance * 0.14
+                           + smoothstep(0.70, 0.95, color.g) * 0.26;
     sideColor = mix(sideColor, color, reflectionDetail);
     float weight = side * 0.96 * (1.0 - facetWeights.x);
     return mix(color, sideColor, weight);
@@ -226,46 +221,75 @@ float3 facetBarycentric(float2 p, float2 a, float2 b, float2 c) {
 
 float facetCoverage(float3 barycentric) {
     float edge = min(barycentric.x, min(barycentric.y, barycentric.z));
-    float aa = max(fwidth(edge), 0.0001);
+    float aa = max(fwidth(edge), 0.004);
     return smoothstep(-aa, aa, edge);
+}
+
+float2 sourceFacetPoint(float3 localPosition, float2 outward, constant Uniforms &u) {
+    float across = dot(localPosition.xz, float2(outward.y,-outward.x));
+    float depth = dot(localPosition.xz,outward);
+    float c = u.facetProjection.x, s = u.facetProjection.y;
+    float y = c*localPosition.y-s*depth;
+    float z = s*localPosition.y+c*depth;
+    float w = u.projection[2].w*z+u.projection[3].w;
+    return float2(257.6+across/w*u.facetProjection.z,
+                  103.8+(u.facetProjection.w-y/w)*u.facetProjection.z);
 }
 
 float3 illustratedFacets(float3 color, Raster in, constant Uniforms &u) {
     float3 localNormal = normalize((u.inverseModel * float4(normalize(in.normal), 0)).xyz);
-    float3 tangent = float3(localNormal.z, 0, -localNormal.x);
-    tangent /= max(length(tangent), 0.0001);
-    float x = dot(in.localPosition, tangent) * 225.8 + 257.8;
+    // Fixed material coordinates on each broad face. The same reference camera
+    // maps the authored facets and the sparkle anchors onto the current cut.
+    float2 outward = abs(localNormal.x) > abs(localNormal.z)
+        ? float2(sign(localNormal.x),0) : float2(0,sign(localNormal.z));
+    float3 tangent = float3(outward.y,0,-outward.x);
+    float2 p = sourceFacetPoint(in.localPosition,outward,u);
+    // Fade the drawing before the diagonal facets, where the next face's
+    // coordinate system takes over. No duplicated motifs along rounded edges.
+    float2 normalXZ = abs(localNormal.xz);
+    float broad = 1-smoothstep(0.20,0.65,min(normalXZ.x,normalXZ.y)/max(max(normalXZ.x,normalXZ.y),0.0001));
     float3 worldTangent = (u.model * float4(tangent, 0)).xyz;
     float3 n = normalize(in.normal);
     float3 light = normalize(float3(0.6*sin(u.lightSweep.y), 0.5, 1));
     float leftLight = pow(saturate(dot(normalize(n - worldTangent*0.38), light)), 5.0);
     float rightLight = pow(saturate(dot(normalize(n + worldTangent*0.38), light)), 5.0);
     if (in.facetWeights.y > 0) {
-        float2 p = float2(x, 240.8 + (0.025-in.localPosition.y)*239);
-        float3 left = facetBarycentric(p, float2(142.1,106.3), float2(253.8,168.9), float2(108.8,240.7));
+        // Both crown triangles meet at the same upper junction.
+        const float2 crownJunction = float2(258.8,128.9);
+        // Authored lower corners now share the same projection as the mesh.
+        const float2 crownBaseLeft = float2(108.8,240.8);
+        const float2 crownBaseRight = float2(406.8,240.8);
+        float3 left = facetBarycentric(p, float2(142.1,106.3), crownJunction, crownBaseLeft);
         float leftStrength = facetCoverage(left) * (0.18 + 0.40*leftLight) * saturate(1-left.y);
-        color = mix(color, float3(0.79,0.988,1), leftStrength * in.facetWeights.y);
-        float3 right = facetBarycentric(p, float2(406.8,240.8), float2(258.8,128.9), float2(378.5,108.2));
-        float3 tint = mix(float3(0.008,0.30,1), float3(0.72,0.988,1),
-                          saturate(right.z*0.75 + rightLight*0.35));
-        color = mix(color, tint, facetCoverage(right) * 0.64 * in.facetWeights.y);
+        color = mix(color, float3(0.79,0.988,1), leftStrength * in.facetWeights.y * broad);
+        float3 right = facetBarycentric(p, crownBaseRight, crownJunction, float2(378.5,108.2));
+        // The source is light at the left junction and dark at the right edge.
+        // Use horizontal facet coordinates so the gradient turns with the gem.
+        float gradient = smoothstep(crownJunction.x,crownBaseRight.x,p.x);
+        float3 tint = mix(float3(0.28,0.83,1),float3(0.025,0.43,1),gradient);
+        tint = mix(tint,float3(0.57,0.95,1),rightLight*0.24);
+        color = mix(color, tint, facetCoverage(right) * 0.90 * in.facetWeights.y * broad);
     }
     if (in.facetWeights.z > 0) {
-        float2 p = float2(x, 240.7 + (-0.045-in.localPosition.y)*235);
-        float left = max(facetCoverage(facetBarycentric(p, float2(131.8,224),float2(212.8,224),float2(253.8,327))),
-                         facetCoverage(facetBarycentric(p, float2(131.8,224),float2(253.8,327),float2(171.8,326))));
-        float right = max(facetCoverage(facetBarycentric(p, float2(316.8,224),float2(391.8,224),float2(338.8,336))),
-                          facetCoverage(facetBarycentric(p, float2(316.8,224),float2(338.8,336),float2(273.8,360))));
-        float fade = 1-smoothstep(275.0,365.0,p.y);
-        color = mix(color, float3(0.39,0.92,1), left*fade*(0.16+0.36*leftLight)*in.facetWeights.z);
-        color = mix(color, float3(0.24,0.84,1), right*fade*(0.16+0.38*rightLight)*in.facetWeights.z);
-        float3 tipLeft = facetBarycentric(p, float2(258.8,375),float2(204.8,396),float2(258.8,479));
-        float3 tipRight = facetBarycentric(p, float2(258.8,375),float2(258.8,479),float2(312.8,396));
-        color = mix(color, float3(0.71,0.988,1), facetCoverage(tipLeft)*(0.18+0.42*leftLight)*in.facetWeights.z);
-        color = mix(color, float3(0.12,0.63,1), facetCoverage(tipRight)*0.48*in.facetWeights.z);
-        float3 inner = facetBarycentric(p, float2(258.8,407),float2(220.8,427),float2(258.8,479));
-        color = mix(color, float3(0.02,0.40,1), facetCoverage(inner)*0.36*in.facetWeights.z);
+        // A translucent kite belongs to each broad pavilion face. Material-space
+        // edges stay attached to the surface throughout a complete rotation.
+        float2 kite = float2(dot(in.localPosition,tangent),in.localPosition.y);
+        const float halfWidth = 0.245, top = -0.61, shoulder = -0.70, bottom = -1.075;
+        const float upperHeight = top-shoulder, lowerHeight = shoulder-bottom;
+        float upperEdge = ((top-kite.y)*halfWidth-abs(kite.x)*upperHeight)
+            / length(float2(halfWidth,upperHeight));
+        float lowerEdge = ((kite.y-bottom)*halfWidth-abs(kite.x)*lowerHeight)
+            / length(float2(halfWidth,lowerHeight));
+        float edge = min(upperEdge,lowerEdge);
+        float aa = max(fwidth(edge),0.0015);
+        float coverage = smoothstep(-aa,aa,edge);
+        float illumination = saturate(dot(n,normalize(float3(-0.65,0.5,1))));
+        float3 tint = mix(float3(0.48,0.96,1),float3(0.70,1,1),illumination);
+        float across = saturate(0.5+kite.x/(2*halfWidth));
+        tint *= mix(float3(1),float3(0.88,0.97,1),across);
+        color = mix(color,tint,coverage*0.28*in.facetWeights.z*broad);
     }
+
     return color;
 }
 
@@ -298,15 +322,81 @@ float3 studio(float3 d, float phase) {
     return c;
 }
 
+float2 facetEdgeRoll(float2 p, float2 a, float2 b) {
+    float2 segment = b-a;
+    float edgeLength = length(segment);
+    float2 along = segment/edgeLength;
+    float2 across = float2(-along.y,along.x);
+    float distance = dot(p-a,across);
+    float progress = dot(p-a,along);
+    float width = max(1.6,fwidth(distance));
+    float q = distance/width;
+    float ends = smoothstep(0.0,5.0,progress)*(1-smoothstep(edgeLength-5.0,edgeLength,progress));
+    return across*(q*exp(-q*q)*0.22*ends);
+}
+
+float3 polishedNormal(Raster in, float3 localNormal, constant Uniforms &u) {
+    // Only the two surface crown diagonals get this tiny optical fillet.
+    // The actual outline and the internal optical hull stay unchanged.
+    if (in.facetWeights.y <= 0) { return normalize(in.normal); }
+    float2 outward = abs(localNormal.x) > abs(localNormal.z)
+        ? float2(sign(localNormal.x),0) : float2(0,sign(localNormal.z));
+    float2 normalXZ = abs(localNormal.xz);
+    float broad = 1-smoothstep(0.20,0.65,min(normalXZ.x,normalXZ.y)/max(max(normalXZ.x,normalXZ.y),0.0001));
+    float2 p = sourceFacetPoint(in.localPosition,outward,u);
+    float2 roll = facetEdgeRoll(p,float2(258.8,128.9),float2(108.8,240.8))
+                + facetEdgeRoll(p,float2(258.8,128.9),float2(406.8,240.8));
+    float3 across = float3(outward.y,0,-outward.x);
+    float3 up = normalize(cross(localNormal,across));
+    float3 normal = normalize(localNormal-(across*roll.x-up*roll.y)*broad*in.facetWeights.y);
+    return normalize((u.model*float4(normal,0)).xyz);
+}
+
+float studioPanel(float3 reflected, float3 direction, float2 size) {
+    float alignment = dot(reflected,direction);
+    float3 horizontal = normalize(cross(float3(0,1,0),direction));
+    float3 vertical = cross(direction,horizontal);
+    float2 point = float2(dot(reflected,horizontal),dot(reflected,vertical))/max(alignment,0.15);
+    // Filter the narrow reflection at small sizes and grazing angles.
+    float2 dx = dfdx(point), dy = dfdy(point);
+    float2 variance = size*size+dx*dx+dy*dy;
+    float energy = size.x*size.y/sqrt(variance.x*variance.y);
+    return exp(-dot(point*point,1/variance))*energy*smoothstep(0.15,0.40,alignment);
+}
+
+float3 surfaceFinish(float3 color, float3 normal, float3 view, constant Uniforms &u) {
+    float3 reflected = reflect(-view,normal);
+    float phase = u.lightSweep.y;
+    float key = studioPanel(reflected,normalize(float3(-0.36+0.14*sin(phase),0.90,0.72)),float2(0.16,0.48));
+    float rim = studioPanel(reflected,normalize(float3(0.72,-0.52+0.10*cos(phase),0.18)),float2(0.10,0.60));
+    float fresnel = pow(1-saturate(dot(normal,view)),4.0);
+    float strength = key*(0.35+0.35*fresnel)+rim*(0.16+0.30*fresnel);
+    return mix(color,float3(0.87,0.99,1),strength);
+}
+
 float nearestExit(float3 origin, float3 ray, const device float4 *planes, uint count,
                   thread float3 &normal) {
     float nearest = 1e5;
+    float second = 1e5;
+    float3 secondNormal = normal;
     for (uint i = 0; i < count; ++i) {
         float denominator = dot(planes[i].xyz, ray);
         if (denominator > 0.0001) {
             float t = -(dot(planes[i].xyz, origin) + planes[i].w) / denominator;
-            if (t > 0.001 && t < nearest) { nearest = t; normal = planes[i].xyz; }
+            if (t > 0.001 && t < nearest) {
+                second = nearest; secondNormal = normal;
+                nearest = t; normal = planes[i].xyz;
+            } else if (t > 0.001 && t < second) {
+                second = t; secondNormal = planes[i].xyz;
+            }
         }
+    }
+    if (second < 1e5) {
+        // The optical hull inherits a tiny edge fillet. This also filters its
+        // reflected boundaries when they become thinner than a screen pixel.
+        float width = max(0.008,min(0.035,fwidth(second-nearest)));
+        float blend = 0.5*(1-smoothstep(0.0,width,second-nearest));
+        normal = normalize(mix(normal,secondNormal,blend));
     }
     return nearest;
 }
@@ -322,10 +412,22 @@ float4 oppositeFacets(float3 p, float3 ray, constant Uniforms &u,
     float3 tangent = normalize(float3(normal.z+0.00001,0,-normal.x));
     float across = dot(hit,tangent);
     float2 authored = float2(across*225.8, (normal.y > 0 ? 0.3065-hit.y : -0.54-hit.y)*239);
-    float3 color = normal.y > 0 ? referenceCrown(authored,u.crownGradient)
-                               : referencePavilion(authored,u.pavilionGradient);
-    float response = pow(saturate(dot(worldNormal, normalize(float3(0.7*sin(u.lightSweep.y),0.55,-1)))),4.0);
-    color = mix(color*float3(0.45,0.70,0.98), float3(0.60,0.94,1), response*0.55);
+    float3 color;
+    if (normal.y > 0) {
+        color = referenceCrown(authored,u.crownGradient);
+        float response = pow(saturate(dot(worldNormal, normalize(float3(0.7*sin(u.lightSweep.y),0.55,-1)))),4.0);
+        color = mix(color*float3(0.45,0.70,0.98), float3(0.60,0.94,1), response*0.55);
+    } else {
+        // The pavilion is one connected eight-facet hull. Looking through its
+        // front reveals the actual opposite facet, without view-switched motifs.
+        float3 reflected = normalize((u.model*float4(reflect(ray,normal),0)).xyz);
+        float3 environment = studio(reflected,u.lightSweep.y);
+        float response = pow(saturate(dot(worldNormal,normalize(float3(-0.4,-0.55,-1)))),2.0);
+        color = mix(float3(0.012,0.38,1),float3(0.27,0.94,1),response*0.65+environment.g*0.35);
+        color = mix(color,environment,0.28);
+        float panel = studioPanel(reflected,normalize(float3(-0.36,0.90,0.72)),float2(0.20,0.52));
+        color = mix(color,float3(0.72,0.98,1),panel*0.48);
+    }
     float coverage = smoothstep(0.03,0.35,distance) * exp(-distance*0.16);
     return float4(color,coverage);
 }
@@ -347,7 +449,150 @@ float facetSweep(Raster in, float3 localNormal, constant Uniforms &u) {
          + sourceBand(float2(across,(-0.54-in.localPosition.y)*235),pavilion)*in.facetWeights.z;
 }
 
-float3 interior(float3 p, float3 direction, constant Uniforms &u,
+float3 internalEnvironment(float3 position, float3 direction, float pavilion, constant Uniforms &u) {
+    float3 worldPosition = (u.model*float4(position,1)).xyz;
+    float3 worldDirection = normalize((u.model*float4(direction,0)).xyz);
+    // A finite studio gives each reflected facet a spatial gradient, rather
+    // than a flat swatch. The lights and the optical hull share one 3D space.
+    float along = dot(worldPosition,worldDirection);
+    float distance = -along+sqrt(max(0.0,along*along+3.2*3.2-dot(worldPosition,worldPosition)));
+    float3 sample = normalize(worldPosition+worldDirection*distance);
+    if (pavilion <= 0) { return studio(sample,u.lightSweep.y); }
+    // Keep a uniform blue surround below the crown. A bright upper hemisphere
+    // reflected in the pavilion reads as a filled tip with a horizontal meniscus.
+    // Narrow studio panels retain moving reflections without filling whole facets.
+    float phase = u.lightSweep.y;
+    float key = studioPanel(sample,normalize(float3(-0.12+0.035*sin(phase),-0.60,0.79)),float2(0.055,0.52));
+    float rim = studioPanel(sample,normalize(float3(0.12,0.75+0.035*cos(phase),-0.65)),float2(0.055,0.50));
+    float3 lower = mix(float3(0.015,0.41,1),float3(0.58,0.94,1),key*0.95);
+    lower = mix(lower,float3(0.24,0.78,1),rim*0.82);
+    return pavilion < 1 ? mix(studio(sample,u.lightSweep.y),lower,pavilion) : lower;
+}
+
+float reflectionTriangle(float3 origin, float3 ray, float3 a, float3 b, float3 c,
+                         thread float3 &coordinates) {
+    float3 ab = b-a, ac = c-a, crossRay = cross(ray,ac);
+    float determinant = dot(ab,crossRay);
+    if (abs(determinant) < 0.00001) { return 1e5; }
+    float3 offset = origin-a;
+    float u = dot(offset,crossRay)/determinant;
+    float3 q = cross(offset,ab);
+    float v = dot(ray,q)/determinant;
+    float t = dot(ac,q)/determinant;
+    coordinates = float3(1-u-v,u,v);
+    return min(min(coordinates.x,coordinates.y),coordinates.z) >= 0 && t > 0.001 ? t : 1e5;
+}
+
+float3 pavilionReflections(float3 color, float3 origin, float3 ray, constant Uniforms &u) {
+    if (u.parameters.y <= 0) { return color; }
+    const float2 ring[8] = {float2(0,1),float2(0.70710678,0.70710678),
+        float2(1,0),float2(0.70710678,-0.70710678),float2(0,-1),
+        float2(-0.70710678,-0.70710678),float2(-1,0),float2(-0.70710678,0.70710678)};
+    // One convex fan of reflected facets, shared by every camera orientation.
+    // Clip the whole volume so adjoining facets never acquire dark seams.
+    const float3 top = float3(0,-0.28,0), tip = float3(0,-1.06,0);
+    float entry = 0, exit = 1e5;
+    float3 entryNormal = float3(0,1,0);
+    float3 worldRay = normalize((u.model*float4(ray,0)).xyz);
+    float3 illumination = normalize(float3(-0.55,0.65,1));
+    float3 sideColor = 0;
+    float sideWeight = 0;
+    float3 veilColor = 0;
+    float veilWeight = 0;
+    for (uint i = 0; i < 8; ++i) {
+        float2 current = ring[i], next = ring[(i+1)%8];
+        float3 a = float3(current.x*0.28,-0.68,current.y*0.28);
+        float3 b = float3(next.x*0.28,-0.68,next.y*0.28);
+        for (uint part = 0; part < 2; ++part) {
+            float3 peak = part == 0 ? top : tip;
+            float3 n = normalize(cross(a-peak,b-peak));
+            if (dot(n,(a+b+peak)/3-float3(0,-0.68,0)) < 0) { n = -n; }
+            float denominator = dot(n,ray);
+            float side = dot(n,origin-peak);
+            if (abs(denominator) < 0.00001) {
+                if (side > 0) { exit = -1; }
+            } else {
+                float t = -side/denominator;
+                if (denominator < 0 && t > entry) { entry = t; entryNormal = n; }
+                if (denominator > 0) { exit = min(exit,t); }
+            }
+        }
+        float3 radial = float3(current.x,0,current.y);
+        float3 tangent = float3(current.y,0,-current.x);
+        // Broad, low-contrast echoes of the crown stretch through the volume
+        // towards the same lower junction. Adjacent planes meet without dark gaps.
+        float3 upperLeft = radial*0.64 - tangent*0.265097 + float3(0,-0.12,0);
+        float3 upperRight = radial*0.64 + tangent*0.265097 + float3(0,-0.12,0);
+        float3 lowerLeft = radial*0.19 - tangent*0.078701 + float3(0,-0.77,0);
+        float3 lowerRight = radial*0.19 + tangent*0.078701 + float3(0,-0.77,0);
+        float3 ribbonCoordinates;
+        float ribbon = reflectionTriangle(origin,ray,upperLeft,upperRight,lowerLeft,ribbonCoordinates);
+        if (ribbon > 100) {
+            ribbon = reflectionTriangle(origin,ray,upperRight,lowerRight,lowerLeft,ribbonCoordinates);
+        }
+        if (ribbon < 100) {
+            float3 hit = origin+ray*ribbon;
+            float depth = saturate((-0.12-hit.y)/0.65);
+            float across = dot(hit,tangent);
+            float right = mix(0.265097,0.078701,depth), left = -right;
+            float3 worldRadial = normalize((u.model*float4(radial,0)).xyz);
+            float facing = saturate(-dot(worldRadial,worldRay));
+            float fade = smoothstep(0.0,0.10,depth)*(1-smoothstep(0.70,1.0,depth));
+            float opacity = fade*(0.16+0.84*facing);
+            float light = saturate(0.5+0.5*dot(worldRadial,illumination));
+            // Broad reflected facets fill the middle with restrained diagonal
+            // changes in tone, expressed in the fixed plane's own coordinates.
+            float acrossPlane = saturate((across-left)/(right-left));
+            float diagonal = smoothstep(-0.045,0.045,acrossPlane-0.35-depth*0.55);
+            float middle = smoothstep(0.12,0.24,depth)*(1-smoothstep(0.50,0.64,depth));
+            float3 tint = mix(float3(0.015,0.56,1),float3(0.33,0.97,1),light);
+            tint = mix(tint,float3(0.42,0.97,1),middle*(0.32-0.20*diagonal));
+            tint = mix(tint,float3(0.015,0.46,1),diagonal*0.24);
+            veilColor += tint*opacity;
+            veilWeight += opacity;
+        }
+        float3 aSide = radial*0.72 + tangent*0.055 + float3(0,-0.30,0);
+        float3 bSide = radial*0.49 - tangent*0.105 + float3(0,-0.60,0);
+        float3 cSide = radial*0.15 + tangent*0.020 + float3(0,-0.93,0);
+        float3 coordinates;
+        float t = reflectionTriangle(origin,ray,aSide,bSide,cSide,coordinates);
+        if (t < 100) {
+            float3 worldRadial = normalize((u.model*float4(radial,0)).xyz);
+            // Long glints read at the sides; a front-facing sector must not
+            // become an opaque needle in the middle of the stone.
+            float sideFacing = 1-abs(dot(worldRadial,worldRay));
+            float edge = min(coordinates.y,coordinates.z);
+            float opacity = smoothstep(0.20,0.75,sideFacing)
+                * smoothstep(0.0,0.085,edge) * smoothstep(0.0,0.035,coordinates.x);
+            float light = 0.5+0.5*dot(worldRadial,illumination);
+            float3 tint = mix(float3(0.16,0.80,1),float3(0.85,1,1),light);
+            sideColor += tint*opacity;
+            sideWeight += opacity;
+        }
+    }
+    float strength = saturate(u.parameters.y/0.72);
+    if (veilWeight > 0) {
+        color = mix(color,veilColor/veilWeight,(1-exp(-veilWeight*0.46))*strength);
+    }
+    if (sideWeight > 0) {
+        color = mix(color,sideColor/sideWeight,(1-exp(-sideWeight*1.4))*strength);
+    }
+    if (entry < exit) {
+        float3 hit = origin+ray*entry;
+        float3 worldNormal = normalize((u.model*float4(entryNormal,0)).xyz);
+        float light = saturate(dot(worldNormal,normalize(float3(-0.65,0.15,1))));
+        float gleam = studioPanel(reflect(worldRay,worldNormal),
+            normalize(float3(-0.35+0.15*sin(u.lightSweep.y),0.60,0.75)),float2(0.25,0.65));
+        float3 tint = mix(float3(0.025,0.54,1),float3(0.40,0.92,1),light);
+        tint = mix(tint,float3(0.72,0.99,1),gleam*0.16);
+        float thickness = smoothstep(0.0,0.18,exit-entry);
+        float fade = smoothstep(-1.07,-0.93,hit.y);
+        color = mix(color,tint,0.28*thickness*fade*strength);
+    }
+    return color;
+}
+
+float3 interior(float3 p, float3 direction, float pavilion, constant Uniforms &u,
                 const device float4 *planes) {
     float3 accumulated = 0;
     float weight = 0.60;
@@ -359,10 +604,17 @@ float3 interior(float3 p, float3 direction, constant Uniforms &u,
         float3 hit = origin + direction * distance;
         float3 outgoing = refract(direction, -n, 1.62);
         float3 reflection = reflect(direction, n);
-        bool totalReflection = dot(outgoing, outgoing) < 0.01;
-        float3 sampleDirection = totalReflection ? reflection : outgoing;
-        sampleDirection = normalize((u.model * float4(sampleDirection, 0)).xyz);
-        float3 color = studio(sampleDirection, u.lightSweep.y);
+        float3 color = internalEnvironment(hit,reflection,pavilion,u);
+        if (dot(outgoing,outgoing) > 0.01) {
+            // Fresnel approaches total internal reflection continuously; a hard
+            // switch between the two rays made whole patches change abruptly.
+            float incident = saturate(dot(direction,n));
+            float transmitted = saturate(dot(outgoing,n));
+            float rs = (1.62*incident-transmitted)/(1.62*incident+transmitted);
+            float rp = (incident-1.62*transmitted)/(incident+1.62*transmitted);
+            float reflectance = 0.5*(rs*rs+rp*rp);
+            color = mix(internalEnvironment(hit,outgoing,pavilion,u),color,reflectance);
+        }
         color *= exp(-float3(0.30, 0.07, 0.006) * distance);
         accumulated += weight * color;
         weight *= 0.52;
@@ -375,11 +627,12 @@ float3 interior(float3 p, float3 direction, constant Uniforms &u,
 fragment float4 diamondFragment(Raster in [[stage_in]], constant Uniforms &u [[buffer(1)]],
                                 const device float4 *planes [[buffer(2)]]) {
     float3 n = normalize(in.normal);
-    float3 view = float3(0, 0, 1);
+    float cameraDistance = -u.projection[3].w / u.projection[2].w;
+    float3 view = normalize(float3(0, 0, cameraDistance) - in.worldPosition);
     float3 localView = (u.inverseModel * float4(-view, 0)).xyz;
     float3 localNormal = normalize((u.inverseModel * float4(n, 0)).xyz);
     float3 transmitted = refract(localView, localNormal, 1.0 / 1.62);
-    float3 optical = interior(in.localPosition, transmitted, u, planes);
+    float3 optical = interior(in.localPosition, transmitted, in.facetWeights.z, u, planes);
     float3 reflection = studio(reflect(-view, n), u.lightSweep.y);
     float fresnel = 0.08 + 0.46 * pow(1.0 - saturate(dot(n, view)), 4.0);
 
@@ -389,24 +642,28 @@ fragment float4 diamondFragment(Raster in [[stage_in]], constant Uniforms &u [[b
     float3 blue = float3(0.008, 0.22, 1.0);
     float3 cyan = float3(0.29, 0.87, 1.0);
     float3 body = mix(blue, cyan, saturate(key * 0.60 + left * 0.38));
-    float verticalBand = 0.5 + 0.5 * sin(height * 18.0 + n.x * 3.0);
+    float verticalBand = mix(0.5 + 0.5 * sin(height * 18.0 + n.x * 3.0),1.0,in.facetWeights.z);
     body *= mix(float3(0.24, 0.48, 0.96), float3(1), verticalBand * 0.5 + 0.5);
     float opticalLuminance = smoothstep(0.25, 0.85, optical.g);
-    optical = mix(float3(0.005, 0.13, 1.0), float3(0.58, 0.97, 1.0), opticalLuminance);
-    float opticalWeight = u.parameters.y * mix(1.0, 0.58, in.facetWeights.y);
+    // Give the pavilion a cyan body tone without changing reflection contrast
+    // or the subdued lower motif. Crown and table keep their existing palette.
+    float3 opticalShadow = mix(float3(0.005,0.13,1),float3(0.015,0.36,1),in.facetWeights.z);
+    float3 opticalLight = mix(float3(0.58,0.97,1),float3(0.45,0.99,1),in.facetWeights.z);
+    optical = mix(opticalShadow,opticalLight,opticalLuminance);
+    float opticalWeight = u.parameters.y * mix(0.90, 0.08, in.facetWeights.y);
     float3 color = mix(body, optical, opticalWeight);
     color = mix(color, reflection, fresnel);
 
     float crownGlow = smoothstep(0.10, 0.60, in.localPosition.y) * left;
-    color = mix(color, float3(0.70, 0.99, 1.0), crownGlow * 0.86);
+    color = mix(color, float3(0.70, 0.99, 1.0), crownGlow * 0.58);
     float crownLight = pow(saturate(dot(n, normalize(float3(-0.38, 0.55, 1.0)))), 9.0);
     crownLight *= smoothstep(-0.03, 0.28, in.localPosition.y);
-    color = mix(color, float3(0.65, 0.98, 1.0), crownLight * 0.66);
+    color = mix(color, float3(0.65, 0.98, 1.0), crownLight * 0.35);
     float3 facetBase = color;
     if (in.facetWeights.y > 0) {
         float softbox = exp(-pow((in.worldPosition.x + 0.42) * 1.6, 2.0)
                            -pow((in.worldPosition.y - 0.32) * 2.2, 2.0));
-        color = mix(color, float3(0.71, 0.99, 1.0), softbox * crownLight * 0.63);
+        color = mix(color, float3(0.71, 0.99, 1.0), softbox * crownLight * 0.36);
         float shadow = pow(saturate(1.0 - key), 1.4);
         color = mix(color, float3(0.015, 0.08, 1.0), shadow * 0.7);
         float3 tangent = normalize(float3(localNormal.z, 0, -localNormal.x));
@@ -416,44 +673,53 @@ fragment float4 diamondFragment(Raster in [[stage_in]], constant Uniforms &u [[b
         color = mix(facetBase, color, in.facetWeights.y);
     }
     if (in.facetWeights.z > 0) {
-        float3 tangent = float3(localNormal.z, 0, -localNormal.x);
-        tangent /= max(length(tangent), 0.0001);
-        float2 authoredPosition = float2(dot(in.localPosition, tangent) * 225.8 + n.x * 45,
-                                         (-0.54 - in.localPosition.y) * 230);
-        color += (mix(referencePavilion(authoredPosition, u.pavilionGradient), facetBase, 0.55) - facetBase) * in.facetWeights.z;
+        color = mix(color,mix(float3(0.008,0.32,1),optical,0.86),in.facetWeights.z*u.parameters.y);
     }
     float facetFlash = smoothstep(0.20, 0.78, opticalLuminance);
-    color *= mix(float3(0.76, 0.82, 0.99), float3(1), facetFlash);
-    color = mix(color, float3(0.66, 0.98, 1), pow(facetFlash, 2.0) * 0.24);
+    float flashWeight = mix(0.24,0.08,in.facetWeights.y);
+    color *= mix(float3(1),mix(float3(0.76, 0.82, 0.99), float3(1), facetFlash),flashWeight);
+    color = mix(color, float3(0.66, 0.98, 1), pow(facetFlash, 2.0) * 0.24 * flashWeight);
     color = lateralDepth(color, n, in.localPosition.y, in.facetWeights, opticalLuminance);
-    float3 rearRay = normalize(mix(localView,transmitted,0.18));
+    color = mix(color,optical,in.facetWeights.z*u.parameters.y*0.48);
+    color = mix(color,body,in.facetWeights.z*pow(saturate(n.z),2.0)*0.32);
+    float3 rearRay = normalize(mix(localView,transmitted,mix(0.68,0.18,in.facetWeights.y)));
     float4 rear = oppositeFacets(in.localPosition,rearRay,u,planes);
-    float transmission = (0.12+u.lightSweep.z*0.65) * u.parameters.y;
+    float transmission = mix(0.34,0.12+u.lightSweep.z*0.65,in.facetWeights.y) * u.parameters.y;
     float facing = smoothstep(0.12,0.65,n.z);
-    color = mix(color,rear.rgb,rear.a*transmission*facing);
-    float tipGlow = pow(saturate((-in.localPosition.y - 0.55) / 0.50), 2.0);
-    color = mix(color, float3(0.57, 0.96, 1.0), tipGlow * 0.65);
-    color = illustratedFacets(color, in, u);
+    color = mix(color,rear.rgb,rear.a*transmission*facing*mix(1.0,0.12,in.facetWeights.y));
     if (in.facetWeights.z > 0) {
-        float angle = atan2(in.localPosition.x, in.localPosition.z);
-        float across = fract((angle - M_PI_F / 8.0) / (M_PI_F / 4.0));
-        float along = saturate((-in.localPosition.y - 0.06) / 0.96);
-        float width = 0.018 + 0.095 * sin(along * M_PI_F);
-        float sliver = exp(-pow((across - 0.20 - along * 0.22) / width, 2.0));
-        sliver *= pow(sin(along * M_PI_F), 3.0);
-        float lighting = pow(saturate(dot(n, normalize(float3(-0.35, -0.25, 1.0)))), 3.0);
-        color = mix(color, float3(0.83, 0.99, 1.0), sliver * lighting * 0.90 * in.facetWeights.z);
+        float3 detailRay = normalize(mix(localView,transmitted,0.16));
+        color = mix(color,pavilionReflections(color,in.localPosition,detailRay,u),in.facetWeights.z);
     }
+    float tipGlow = pow(saturate((-in.localPosition.y - 0.55) / 0.50), 2.0);
+    color = mix(color, float3(0.57, 0.96, 1.0), tipGlow * 0.20);
+    // A shallow, translucent image of the table, like Layer 36 in Lottie.
+    // Its optical footprint is smaller than the rounded outer shoulder.
+    float3 tableRay = localView;
+    tableRay.y *= 0.72;
+    if (tableRay.y > 0.001) {
+        float tableHeight = -planes[0].w / planes[0].y;
+        float distance = (tableHeight-in.localPosition.y)/tableRay.y;
+        float2 hit = (in.localPosition + tableRay*distance).xz;
+        const float extent = 0.632;
+        const float corner = 0.285;
+        float2 q = abs(hit);
+        float edge = max(max(q.x,q.y)-extent, (q.x+q.y-extent-corner)*0.70710678);
+        float aa = max(fwidth(edge),0.001);
+        float coverage = 1-smoothstep(-aa,aa,edge);
+        float2 direction = tableRay.xz / max(length(tableRay.xz),0.0001);
+        float depth = saturate(0.5+dot(hit,direction)/(2*extent));
+        // Source opacity: 80% group opacity times a 49...65% fill gradient.
+        float opacity = mix(0.39,0.52,depth);
+        color = mix(color,float3(0.765,0.988,1),coverage*opacity
+                    *saturate(u.parameters.y/0.72)*in.facetWeights.y);
+    }
+    color = illustratedFacets(color, in, u);
     color = mix(color, float3(0.63, 0.96, 1), 0.58 * in.facetWeights.x);
-    float3 tableNormal = float3(0,1,0);
-    float tableDistance = nearestExit(in.localPosition+localView*0.004,localView,
-                                     planes,uint(u.viewport.z),tableNormal);
-    float table = smoothstep(0.94,0.99,tableNormal.y) * float(tableDistance < 100);
-    color = mix(color,float3(0.765,0.988,1),table*(0.57+u.lightSweep.z*0.35)
-                *saturate(u.parameters.y/0.72)*in.facetWeights.y);
-    color = mix(color,float3(0.592,0.953,1),facetSweep(in,localNormal,u)*0.94);
-    float specular = pow(saturate(dot(reflect(-normalize(float3(-0.5, 0.9, 1.4)), n), view)), 75.0);
-    color += float3(0.7, 0.91, 1) * specular * 0.48;
+    float sweep = facetSweep(in,localNormal,u);
+    float sweepCore = smoothstep(0.35,1.0,sweep);
+    color = mix(color,float3(0.592,0.953,1),sweep*0.20+sweepCore*sweepCore*0.62);
+    color = surfaceFinish(color,polishedNormal(in,localNormal,u),view,u);
     return float4(saturate(color * u.parameters.z), 1);
 }
 
@@ -465,24 +731,23 @@ struct SparkleRaster {
     uint layer [[flat]];
 };
 
+struct SparkleAnchor { float4 position; float4 normal; };
+
 vertex SparkleRaster sparkleVertex(uint id [[vertex_id]], uint instance [[instance_id]],
                                    const device SparkleVertex *vertices [[buffer(0)]],
                                    constant Uniforms &u [[buffer(1)]],
-                                   const device float4 *planes [[buffer(2)]]) {
+                                   const device SparkleAnchor *anchors [[buffer(3)]]) {
     SparkleVertex v = vertices[id];
     uint layer = uint(v.material.x);
-    float angle = float(instance) * M_PI_F / 4.0 + M_PI_F / 8.0;
-    float y = instance % 3 == 0 ? 0.56 : (instance % 3 == 1 ? -0.02 : -0.54);
     const float authoringToWorld = 2.0 / 447.9;
+    float3 local = anchors[instance].position.xyz;
+    float3 normal = anchors[instance].normal.xyz;
     if (instance == 0) {
-        angle = u.sparkleHalo.y;
-        y = u.sparkleHalo.z;
+        float c = cos(u.sparkleHalo.y), s = sin(u.sparkleHalo.y);
+        local.xz = float2(c*local.x + s*local.z, -s*local.x + c*local.z);
+        normal.xz = float2(c*normal.x + s*normal.z, -s*normal.x + c*normal.z);
     }
-    float3 normal = float3(0, 0, 1);
-    float3 origin = float3(0, y, 0);
-    float3 ray = float3(sin(angle), 0, cos(angle));
-    float distance = nearestExit(origin, ray, planes, uint(u.viewport.z), normal);
-    float3 local = origin + ray * distance + normal * 0.008;
+    if (instance != 0) { local += normal * 0.008; }
     float3 worldNormal = (u.model * float4(normal, 0)).xyz;
     float pulse = pow(max(0.0, sin(u.parameters.x * 2.1 + float(instance) * 2.37 + 1.5)), 16.0);
     float front = instance == 0 ? u.sparkleHalo.w : smoothstep(0.15, 0.55, worldNormal.z);
@@ -504,10 +769,45 @@ vertex SparkleRaster sparkleVertex(uint id [[vertex_id]], uint instance [[instan
     float scale = instance == 0 ? u.sparkleShape.x * mainEnvelope : (0.632 / 0.75) * pulse;
     float2 point = (sourcePoint * groupScale + offset) * authoringToWorld * scale;
     SparkleRaster out;
-    out.position = center + float4(point.x * u.projection[0][0], -point.y * u.projection[1][1], 0, 0);
+    // Correct the anchor with the gem, but keep the authored flare proportions.
+    out.position = center + center.w * float4(point.x * u.projection[0][0] / u.sparkleHalo.z,
+                                  -point.y * u.projection[1][1], 0, 0);
     out.sourcePoint = sourcePoint;
     out.strength = strength;
     out.layer = layer;
+    return out;
+}
+
+struct ReferenceHighlight {
+    float4 position;
+    float4 facing;
+    float4 axisX;
+    float4 axisY;
+};
+
+vertex SparkleRaster referenceHighlightVertex(uint id [[vertex_id]], uint instance [[instance_id]],
+                                              const device SparkleVertex *vertices [[buffer(0)]],
+                                              constant Uniforms &u [[buffer(1)]],
+                                              constant ReferenceHighlight *highlights [[buffer(3)]]) {
+    SparkleVertex v = vertices[id];
+    ReferenceHighlight h = highlights[instance];
+    uint layer = uint(v.material.x);
+    float3 facing = (u.model * float4(h.facing.xyz, 0)).xyz;
+    SparkleRaster out;
+    out.layer = layer;
+    out.sourcePoint = v.contours.xy;
+    out.strength = h.facing.w * u.parameters.w * smoothstep(0.05, 0.35, facing.z);
+    if (layer == 5) {
+        float4 point = h.position + h.axisX * v.contours.x + h.axisY * v.contours.y;
+        out.position = u.projection * u.model * point;
+    } else {
+        float2 point = v.contours.xy;
+        if (layer == 3) { point = point * 0.309 + float2(0.6, -0.4); }
+        point *= (2.0 / 447.9) * h.axisX.x;
+        float4 center = u.projection * u.model * h.position;
+        out.position = center + center.w * float4(point.x * u.projection[0][0] / u.sparkleHalo.z,
+                                      -point.y * u.projection[1][1], 0, 0);
+    }
     return out;
 }
 
@@ -533,6 +833,8 @@ fragment float4 sparkleFragment(SparkleRaster in [[stage_in]]) {
         float r = saturate(length(in.sourcePoint) / length(float2(176, -170)));
         alpha = 1 - r;
         color = mix(float3(0.694, 0.969, 1), float3(0.663, 0.957, 1), r);
+    } else if (in.layer == 5) {
+        alpha = radialOpacity(length(in.sourcePoint) / length(float2(228.9, 3.9)), 0.237, 0.623);
     }
     alpha *= in.strength;
     return float4(color * alpha, alpha);

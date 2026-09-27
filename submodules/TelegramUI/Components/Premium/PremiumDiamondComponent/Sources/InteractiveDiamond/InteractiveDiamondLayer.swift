@@ -14,6 +14,7 @@ struct DiamondStyle: Equatable {
     var isRotating: Bool = true
     var sparkles: Bool = true
     var backgroundStars: Bool = true
+    var widthCompensation: Bool = true
     var refraction: Float = 0.72
     var brightness: Float = 1
     var zoom: Float = 0.72

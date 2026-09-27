@@ -24,7 +24,7 @@ struct DiamondMotion {
         }
     }
 
-    static let referencePitch: Float = -0.09
+    static let referencePitch: Float = -0.104458
     private static let pitchLimit: Float = 1.1
     private static let springFrequency: Float = 3 * 2 * .pi
     private static let springDamping: Float = 0.8
@@ -204,7 +204,7 @@ struct DiamondMotion {
         }
     }
 
-    private static func referenceYaw(time: Float) -> Float {
+    static func referenceYaw(time: Float) -> Float {
         let frame = max(0, time * 60).truncatingRemainder(dividingBy: 180)
         let times: [Float] = [0, 39, 69, 99, 179]
         let angles: [Float] = [0, -0.34, 0, 0.33, 0]
@@ -324,6 +324,107 @@ enum DiamondLightAnimation {
     }
 }
 
+// MARK: - Authored Lottie highlights
+
+enum DiamondReferenceHighlights {
+    struct Event {
+        let frame: Float
+        let position: SIMD2<Float> // Composition pixels (512 × 512), not parent-scaled coordinates.
+
+        func scale(at time: Float) -> Float {
+            let age = DiamondReferenceHighlights.frame(at: time) - frame
+            guard age > 0, age < 14 else { return 0 }
+            let envelope = age < 2
+                ? DiamondSparkleAnimation.easing(age / 2, out: SIMD2(0.167, 0.167), in: SIMD2(0.5, 1))
+                : 1 - DiamondSparkleAnimation.easing((age - 2) / 12, out: SIMD2(0.347, 0), in: SIMD2(0.823, 0.72))
+            // These layers live outside the diamond's 75%-scale parent.
+            return (0.632 / 0.75) * envelope
+        }
+    }
+
+    struct Streak {
+        var center: SIMD2<Float>
+        var axisX: SIMD2<Float>
+        var axisY: SIMD2<Float>
+        var opacity: Float
+    }
+
+    static func frame(at time: Float) -> Float {
+        max(0, time * 60).truncatingRemainder(dividingBy: 180)
+    }
+
+    /// The three nested transforms in `blicks` / `blicks 2`, including their
+    /// radial gradient centers. Keep the original Bezier timing and layer opacity.
+    static func streaks(at time: Float) -> [Streak] {
+        let frame = frame(at: time)
+        let times: [Float] = [0, 39, 69, 99, 179]
+        let positions: [SIMD2<Float>] = [SIMD2(-30, 1.2), SIMD2(-31.3, 24.4),
+            SIMD2(-30, 1.2), SIMD2(4, -39.6), SIMD2(-30, 1.2)]
+        let angles: [Float] = [90, 82.9, 82.9, 100.6, 90]
+        let segment = frame < 39 ? 0 : (frame < 69 ? 1 : (frame < 99 ? 2 : 3))
+        let progress = (frame - times[segment]) / (times[segment+1] - times[segment])
+        let out = segment == 2 ? SIMD2<Float>(0.167, 0.167) : SIMD2<Float>(0.5, 0)
+        let into = segment == 1 ? SIMD2<Float>(0.833, 0.833) : SIMD2<Float>(0.5, 1)
+        let t = DiamondSparkleAnimation.easing(progress, out: out, in: into)
+        let position = simd_mix(positions[segment], positions[segment+1], SIMD2(repeating: t))
+        let rotationT = DiamondSparkleAnimation.easing(progress, out: out,
+            in: segment == 1 ? SIMD2(0.833, 1) : into)
+        let angle = angles[segment] + (angles[segment+1] - angles[segment]) * rotationT
+
+        func make(innerPosition: SIMD2<Float>, innerScale: SIMD2<Float>, innerAngle: Float,
+                  outerPosition: SIMD2<Float>, outerAngle: Float, layerPosition: SIMD2<Float>,
+                  layerAnchor: SIMD2<Float>, opacity: Float = 0.4) -> Streak {
+            func rotate(_ p: SIMD2<Float>, _ degrees: Float) -> SIMD2<Float> {
+                let r = degrees * .pi / 180
+                return SIMD2(cos(r)*p.x - sin(r)*p.y, sin(r)*p.x + cos(r)*p.y)
+            }
+            let gradientCenter = SIMD2<Float>(-3.2, -84.1)
+            let center = rotate(innerPosition + rotate(gradientCenter * innerScale, innerAngle), outerAngle)
+            return Streak(center: layerPosition + 0.75 * (outerPosition + center - layerAnchor),
+                          axisX: rotate(SIMD2(innerScale.x, 0), innerAngle + outerAngle) * 0.75,
+                          axisY: rotate(SIMD2(0, innerScale.y), innerAngle + outerAngle) * 0.75,
+                          opacity: opacity)
+        }
+        let top = make(innerPosition: SIMD2(-30, 1.2), innerScale: SIMD2(0.071, 0.418), innerAngle: 90,
+                       outerPosition: SIMD2(297.3, 106.2), outerAngle: 0,
+                       layerPosition: SIMD2(238, 256.4), layerAnchor: SIMD2(238, 256.4))
+        let left = make(innerPosition: position, innerScale: SIMD2(0.071, 0.768), innerAngle: angle,
+                        outerPosition: SIMD2(158.6, 298.4), outerAngle: 60.5,
+                        layerPosition: SIMD2(238, 256.4), layerAnchor: SIMD2(238, 256.4))
+        let opacity = min(1, max(0, (frame-18)/12)) * min(1, max(0, (117-frame)/13))
+        let sweep = make(innerPosition: SIMD2(-30, 1.2), innerScale: SIMD2(0.071, 0.418), innerAngle: 90,
+                         outerPosition: SIMD2(297.3, 106.2), outerAngle: 0,
+                         layerPosition: SIMD2(181.8 + 160 * min(1, max(0, (frame-18)/99)), 244.6),
+                         layerAnchor: SIMD2(303.1, 107.3), opacity: opacity * 0.4)
+        return [top, left, sweep]
+    }
+
+    // BEGIN GENERATED REFERENCE SPARKLES
+    // Generated from the nineteen Shape Layer copies in GramDiamond.json.
+    static let events: [Event] = [
+        Event(frame: 7, position: SIMD2(242.7, 357.7)),
+        Event(frame: 15, position: SIMD2(166.7, 233.7)),
+        Event(frame: 21, position: SIMD2(322.7, 173.7)),
+        Event(frame: 27, position: SIMD2(392.7, 228.7)),
+        Event(frame: 33, position: SIMD2(144.7, 238.7)),
+        Event(frame: 41, position: SIMD2(209.7, 364.7)),
+        Event(frame: 47, position: SIMD2(365.7, 249.7)),
+        Event(frame: 52, position: SIMD2(338.7, 152.7)),
+        Event(frame: 58, position: SIMD2(198.7, 246.7)),
+        Event(frame: 64, position: SIMD2(123.7, 210.7)),
+        Event(frame: 70, position: SIMD2(303.7, 336.7)),
+        Event(frame: 77, position: SIMD2(385.7, 211.7)),
+        Event(frame: 83, position: SIMD2(153.7, 253.7)),
+        Event(frame: 91, position: SIMD2(139.7, 305.7)),
+        Event(frame: 97, position: SIMD2(309.7, 313.7)),
+        Event(frame: 105, position: SIMD2(379.7, 211.7)),
+        Event(frame: 111, position: SIMD2(224.7, 204.7)),
+        Event(frame: 119, position: SIMD2(158.7, 277.7)),
+        Event(frame: 126, position: SIMD2(323.7, 302.7))
+    ]
+    // END GENERATED REFERENCE SPARKLES
+}
+
 // MARK: - Surface sparkles
 
 enum DiamondSparkleAnimation {
@@ -355,8 +456,7 @@ enum DiamondSparkleAnimation {
     }
 
     struct MainPlacement {
-        var angle: Float
-        var height: Float
+        var faceRotation: Float
         var visibility: Float
     }
 
@@ -376,9 +476,7 @@ enum DiamondSparkleAnimation {
         let facing = smoothstep(1 - angle / limit)
         let crossingDuration = 2 * limit / max(abs(angularSpeed), 0.001)
         let duration = smoothstep((crossingDuration - 0.06) / 0.34)
-        let authoringToWorld: Float = 2 / 447.9
-        return MainPlacement(angle: faceAngle + atan2(56.5 * authoringToWorld, 1),
-                             height: 0.018, visibility: facing * duration)
+        return MainPlacement(faceRotation: faceAngle, visibility: facing * duration)
     }
 
     private static func smoothstep(_ value: Float) -> Float {
