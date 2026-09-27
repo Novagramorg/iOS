@@ -315,7 +315,7 @@ public final class WalletSendKeyboardComponent: Component {
                 transition: .immediate,
                 component: AnyComponent(MultilineTextComponent(
                     text: .plain(NSAttributedString(string: letters, attributes: [
-                        .font: Font.semibold(9.0),
+                        .font: Font.medium(12.0),
                         .foregroundColor: textColor,
                         .kern: 2.0
                     ])),
@@ -323,7 +323,7 @@ public final class WalletSendKeyboardComponent: Component {
                     maximumNumberOfLines: 1
                 )),
                 environment: {},
-                containerSize: CGSize(width: size.width, height: 12.0)
+                containerSize: CGSize(width: size.width, height: 16.0)
             )
             if let lettersTextView = self.lettersText.view {
                 if lettersTextView.superview == nil {
@@ -340,11 +340,12 @@ public final class WalletSendKeyboardComponent: Component {
             self.backgroundColor = self.isHighlighted ? self.pressedColor : self.normalColor
             self.updateHighlightAlpha(self.isHighlighted)
 
+            let contentOffset: CGFloat = isDecimal || number == "0" ? 0.0 : -1.0
             let numberTextFrame = CGRect(
                 x: floorToScreenPixels((size.width - self.numberTextSize.width) / 2.0),
-                y: (component.isLandscape
+                y: (component.isLandscape || number == "0"
                     ? floorToScreenPixels((size.height - self.numberTextSize.height) / 2.0)
-                    : 5.0 + floorToScreenPixels((28.0 - self.numberTextSize.height) / 2.0)) + (isDecimal ? 3.0 : 0.0),
+                    : 5.0 + floorToScreenPixels((28.0 - self.numberTextSize.height) / 2.0)) + contentOffset,
                 width: self.numberTextSize.width,
                 height: self.numberTextSize.height
             )
@@ -356,9 +357,9 @@ public final class WalletSendKeyboardComponent: Component {
                     x: component.isLandscape
                         ? numberTextFrame.maxX + 8.0
                         : floorToScreenPixels((size.width - self.lettersTextSize.width) / 2.0) + 1.0,
-                    y: component.isLandscape
+                    y: (component.isLandscape
                         ? floorToScreenPixels((size.height - self.lettersTextSize.height) / 2.0)
-                        : 33.0 + floorToScreenPixels((12.0 - self.lettersTextSize.height) / 2.0) - UIScreenPixel,
+                        : 30.0 + floorToScreenPixels((16.0 - self.lettersTextSize.height) / 2.0) - UIScreenPixel) + contentOffset,
                     width: self.lettersTextSize.width,
                     height: self.lettersTextSize.height
                 )

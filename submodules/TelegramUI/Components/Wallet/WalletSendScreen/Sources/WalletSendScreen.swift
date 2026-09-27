@@ -14,7 +14,6 @@ import WalletSendKeyboardComponent
 import ViewControllerComponent
 import BundleIconComponent
 import MultilineTextComponent
-import AnimatedTextComponent
 import ButtonComponent
 import GlassControls
 import PlainButtonComponent
@@ -2264,6 +2263,7 @@ private final class WalletSendScreenComponent: Component {
                 text: self.lastRateText,
                 displaysGramIcon: self.lastRateDisplaysGramIcon,
                 mode: self.inputMode,
+                currencyCode: self.currentFiatCurrency.code,
                 dateTimeFormat: environment.dateTimeFormat,
                 theme: theme,
                 isVisible: environment.isVisible && showRate,

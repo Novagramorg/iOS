@@ -127,11 +127,35 @@ final class WalletSendAmountTextField: UITextField {
         return super.caretRect(for: position)
     }
 
+    func amountTextBaseline(font: UIFont) -> CGFloat {
+        let centerY: CGFloat
+        if (self.text ?? "").isEmpty {
+            centerY = self.placeholderRect(forBounds: self.bounds).midY
+        } else {
+            let caret = self.nativeCaretRect(for: self.beginningOfDocument)
+            if !caret.isNull, !caret.isInfinite, caret.height > 0.0 {
+                centerY = caret.midY
+            } else {
+                let textRect = self.isEditing ? self.editingRect(forBounds: self.bounds) : self.textRect(forBounds: self.bounds)
+                centerY = textRect.midY
+            }
+        }
+        return centerY + (font.ascender + font.descender) / 2.0
+    }
+
     func amountCaretRect(for position: UITextPosition) -> CGRect {
         var rect = self.nativeCaretRect(for: position)
         if !rect.isNull, !rect.isInfinite {
             let width: CGFloat = 3.0
-            rect.origin.x = floorToScreenPixels(rect.midX - width / 2.0)
+            var offset: CGFloat = self.offset(from: self.beginningOfDocument, to: position) == 0 ? 0.0 : 5.0
+            if (self.text ?? "").isEmpty, let placeholder = self.attributedPlaceholder, placeholder.length > 0 {
+                let line = CTLineCreateWithAttributedString(placeholder)
+                rect.origin.x += CGFloat(CTLineGetOffsetForStringIndex(line, placeholder.length, nil))
+                offset = 3.0
+            } else if self.text == "0", offset > 0.0 {
+                offset = 4.0
+            }
+            rect.origin.x = floorToScreenPixels(rect.midX - width / 2.0) + offset
             rect.size.width = width
         }
 
@@ -141,9 +165,7 @@ final class WalletSendAmountTextField: UITextField {
         } else {
             integralFont = self.font
         }
-        let startRect = self.nativeCaretRect(for: self.beginningOfDocument)
         guard !rect.isNull, !rect.isInfinite, rect.height > 0.0,
-              !startRect.isNull, !startRect.isInfinite, startRect.height > 0.0,
               let integralFont else { return rect }
 
         var caretFont = integralFont
@@ -152,7 +174,7 @@ final class WalletSendAmountTextField: UITextField {
             let index = min(text.length - 1, max(0, offset - 1))
             caretFont = text.attribute(.font, at: index, effectiveRange: nil) as? UIFont ?? integralFont
         }
-        let baseline = startRect.midY + (integralFont.ascender + integralFont.descender) / 2.0
+        let baseline = self.amountTextBaseline(font: integralFont)
         let height = caretFont.capHeight * 1.24
         return CGRect(
             x: rect.minX,
@@ -275,13 +297,8 @@ class WalletSendAmountField: UIView, UITextFieldDelegate {
     let fiatIcon = ComponentView<Empty>()
     let textField = WalletSendAmountTextField(frame: .zero)
     let suffix = ComponentView<Empty>()
-    let integralFont = Font.with(
-        size: 48.0,
-        design: .round,
-        weight: .bold,
-        traits: []
-    )
-    let fractionalFont = Font.with(size: 32.0, design: .round, weight: .bold)
+    let integralFont = WalletSendAmountFonts.integral
+    let fractionalFont = WalletSendAmountFonts.fractional
 
     private let gramIconLayoutSize = CGSize(width: 44.0, height: 44.0)
     private let gramAnimationSize = CGSize(width: 48.0, height: 48.0)
@@ -496,7 +513,7 @@ class WalletSendAmountField: UIView, UITextFieldDelegate {
         self.textField.attributedPlaceholder = NSAttributedString(
             string: "0",
             font: self.integralFont,
-            textColor: theme.list.itemSecondaryTextColor
+            textColor: theme.list.itemPrimaryTextColor
         )
 
         let suffixText: String
@@ -608,7 +625,7 @@ class WalletSendAmountField: UIView, UITextFieldDelegate {
 
         let iconLayoutSize = CGSize(width: 40.0, height: 40.0)
         let iconSpacing: CGFloat = self.mode == .fiat ? 0.0 : 2.0
-        let suffixSpacing: CGFloat = -1.0
+        let suffixSpacing: CGFloat = 3.0
         let displayText = (self.textField.text ?? "").isEmpty ? "0" : (self.textField.text ?? "")
         let displayTextBounds = self.amountTextLayout(displayText).attributedText.boundingRect(
             with: CGSize(width: CGFloat.greatestFiniteMagnitude, height: self.bounds.height),

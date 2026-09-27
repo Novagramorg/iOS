@@ -29,7 +29,7 @@ final class WalletSendAnimatedRateButton: UIControl {
     private var gramTo: CGFloat = 0.0
     private var currentGram: CGFloat = 0.0
     private var visible = false
-    private var frameDuration = 1.0 / 60.0
+    private var frameDuration = 1.0 / 120.0
     var action: (() -> Void)?
 
     override init(frame: CGRect) {
@@ -42,6 +42,11 @@ final class WalletSendAnimatedRateButton: UIControl {
         self.contentView.layer.cornerRadius = 13.0
         self.addSubview(self.contentView)
         self.contentView.addSubview(self.canvas)
+        self.canvas.onFrameReady = { [weak self] in
+            guard let self, self.visible, self.window != nil else { return }
+            self.canvas.isHidden = false
+            self.title.view?.isHidden = true
+        }
         self.gramIcon.image = UIImage(bundleImageName: "Wallet/SendGram")?.withRenderingMode(.alwaysTemplate)
         self.gramIcon.contentMode = .scaleAspectFit
         self.contentView.addSubview(self.gramIcon)
@@ -57,10 +62,19 @@ final class WalletSendAnimatedRateButton: UIControl {
             }
         }
         self.addTarget(self, action: #selector(self.pressed), for: .touchUpInside)
+        NotificationCenter.default.addObserver(self, selector: #selector(self.stopAnimations), name: UIApplication.willResignActiveNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(self.stopAnimations), name: UIAccessibility.reduceMotionStatusDidChangeNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(self.resumePresentation), name: UIApplication.didBecomeActiveNotification, object: nil)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-    deinit { self.displayLink?.invalidate() }
+    deinit {
+        self.displayLink?.invalidate()
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    @objc private func stopAnimations() { self.finishMotion() }
+    @objc private func resumePresentation() { self.setNeedsLayout() }
 
     @objc private func pressed() { self.action?() }
 
@@ -79,7 +93,7 @@ final class WalletSendAnimatedRateButton: UIControl {
     }
 
     func update(
-        text: String, displaysGramIcon: Bool, mode: WalletSendInputMode,
+        text: String, displaysGramIcon: Bool, mode: WalletSendInputMode, currencyCode: String,
         dateTimeFormat: PresentationDateTimeFormat, theme: PresentationTheme,
         isVisible: Bool, isEnabled: Bool, timing sharedTiming: WalletSendAmountMotionTiming?,
         maxWidth: CGFloat
@@ -91,7 +105,8 @@ final class WalletSendAnimatedRateButton: UIControl {
         self.contentView.backgroundColor = theme.list.itemInputField.backgroundColor
         self.gramIcon.tintColor = UIColor(rgb: 0x30A1F5)
         for arrow in self.arrows { arrow.tintColor = theme.list.itemSecondaryTextColor }
-        let font = Font.with(size: 13.0, design: .round, weight: .semibold)
+        self.canvas.prepareGlyphs(separators: dateTimeFormat.decimalSeparator + dateTimeFormat.groupingSeparator, currencyCode: currencyCode)
+        let font = WalletSendAmountFonts.rate
         let titleSize = self.title.update(
             transition: .immediate,
             component: AnyComponent(AnimatedTextComponent(font: font, color: theme.list.itemSecondaryTextColor, items: [.init(id: "rate", content: .text(text))], noDelay: true, blur: true)),
@@ -134,17 +149,18 @@ final class WalletSendAnimatedRateButton: UIControl {
             let now = CACurrentMediaTime()
             let sharedStart = sharedTiming.flatMap { now - $0.start < $0.duration ? $0.start : nil }
             let timing: WalletSendAmountMotionTiming?
-            if self.previousMode != nil && wasVisible && isVisible {
+            if self.previousMode != nil && wasVisible && isVisible && self.window != nil && self.canvas.isAvailable {
                 timing = WalletSendAmountMotionTiming(spin: switched, up: !(sharedTiming?.up ?? true), start: sharedStart ?? now)
             } else {
                 timing = nil
             }
-            self.widthFrom = self.currentWidth
+            let previousProgress = self.geometryTiming?.layoutProgress(at: now) ?? 1.0
+            self.widthFrom = self.widthFrom + (self.widthTo - self.widthFrom) * previousProgress + self.motion.widthAdjustment(at: now)
             self.widthTo = width
-            self.gramFrom = self.currentGram
+            self.gramFrom = self.gramFrom + (self.gramTo - self.gramFrom) * previousProgress
             self.gramTo = displaysGramIcon ? 1.0 : 0.0
             self.geometryTiming = timing
-            self.motion.update(glyphs, timing: timing)
+            self.motion.update(glyphs, width: width, timing: timing, at: now, frameDuration: self.frameDuration)
             if switched {
                 self.arrowTiming = timing
                 self.arrowFrom = self.arrowPhase
@@ -177,17 +193,23 @@ final class WalletSendAnimatedRateButton: UIControl {
 
     private func renderFrame() {
         let now = CACurrentMediaTime()
-        let p = WalletSendAmountMotionTiming.ease(self.geometryTiming?.progress(at: now) ?? 1.0)
-        self.currentWidth = self.widthFrom + (self.widthTo - self.widthFrom) * p
+        if !self.isAnimating {
+            self.motion.finish()
+            self.geometryTiming = nil
+            self.arrowTiming = nil
+        }
+        let p = self.geometryTiming?.layoutProgress(at: now) ?? 1.0
+        self.currentWidth = self.widthFrom + (self.widthTo - self.widthFrom) * p + self.motion.widthAdjustment(at: now)
         self.currentGram = self.gramFrom + (self.gramTo - self.gramFrom) * p
         self.contentView.bounds = CGRect(x: 0.0, y: 0.0, width: self.currentWidth, height: 26.0)
         self.contentView.center = CGPoint(x: self.bounds.midX, y: self.bounds.midY)
-        self.canvas.frame = self.contentView.bounds
+        self.canvas.isRenderingEnabled = self.visible && UIApplication.shared.applicationState == .active
+        self.canvas.frame = CGRect(x: 0, y: 0, width: ceil(max(self.widthFrom, self.widthTo, self.currentWidth) / 64.0) * 64.0, height: 26.0)
         self.canvas.frameDuration = self.frameDuration
-        self.canvas.sprites = self.motion.frame(at: now, frameDuration: self.frameDuration)
-        let textIsMoving = self.motion.isAnimating(at: now)
-        self.canvas.isHidden = !textIsMoving
-        self.title.view?.isHidden = textIsMoving
+        self.canvas.update(sprites: self.motion.frame(at: now, frameDuration: self.frameDuration), isAnimating: self.motion.isAnimating(at: now))
+        let usesMetal = self.canvas.isAvailable && self.canvas.hasFrame
+        self.canvas.isHidden = !usesMetal
+        self.title.view?.isHidden = usesMetal
         self.gramIcon.frame = CGRect(x: 8.0, y: 5.0, width: 16.0, height: 16.0)
         self.gramIcon.alpha = self.currentGram
         let raw = self.arrowTiming?.progress(at: now) ?? 1.0
