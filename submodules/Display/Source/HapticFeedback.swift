@@ -59,7 +59,7 @@ private final class HapticFeedbackImpl {
         }
     }
     
-    func impact(_ style: ImpactHapticFeedbackStyle) {
+    func impact(_ style: ImpactHapticFeedbackStyle, intensity: CGFloat? = nil) {
         if let impactGenerator = self.impactGenerator[style] {
             if #available(iOSApplicationExtension 13.0, iOS 13.0, *) {
                 switch style {
@@ -69,6 +69,12 @@ private final class HapticFeedbackImpl {
                         impactGenerator.impactOccurred(intensity: 0.4)
                     case .veryLight:
                         impactGenerator.impactOccurred(intensity: 0.3)
+                    case .rigid:
+                        if let intensity {
+                            impactGenerator.impactOccurred(intensity: intensity)
+                        } else {
+                            impactGenerator.impactOccurred()
+                        }
                     default:
                         impactGenerator.impactOccurred()
                 }
@@ -162,10 +168,10 @@ public final class HapticFeedback {
         }
     }
     
-    public func impact(_ style: ImpactHapticFeedbackStyle = .medium) {
+    public func impact(_ style: ImpactHapticFeedbackStyle = .medium, intensity: CGFloat? = nil) {
         if #available(iOSApplicationExtension 10.0, iOS 10.0, *) {
             self.withImpl { impl in
-                impl.impact(style)
+                impl.impact(style, intensity: intensity)
             }
         }
     }

@@ -2114,16 +2114,19 @@ private final class WalletSendScreenComponent: Component {
                     deleteTitle: environment.strings.Common_Delete,
                     isEnabled: isAmountInputEnabled && environment.isVisible && isKeyboardVisible,
                     action: { [weak self] action in
-                        HapticFeedback().impact(.light)
                         guard let self, self.isVisible,
                               !self.isPreparingTransfer, !self.isResolvingSigningAccess, !self.isSubmittingTransfer else {
                             return
                         }
+                        let accepted: Bool
                         switch action {
                         case let .insertText(text):
-                            self.amountField.insertText(text)
+                            accepted = self.amountField.insertText(text)
                         case .deleteBackward:
-                            self.amountField.deleteBackward()
+                            accepted = self.amountField.deleteBackward()
+                        }
+                        if accepted {
+                            HapticFeedback().impact(.light)
                         }
                     }
                 )),

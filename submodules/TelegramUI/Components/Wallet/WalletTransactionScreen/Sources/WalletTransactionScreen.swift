@@ -2716,9 +2716,9 @@ private final class WalletTransactionContentComponent: Component {
                 if displayedFee > 0 {
                     var feeItems: [AnyComponentWithIdentity<Empty>] = [
                         AnyComponentWithIdentity(id: "icon", component: AnyComponent(BundleIconComponent(
-                            name: "Ads/TonAbout",
-                            tintColor: UIColor(rgb: 0x30a1f5),
-                            maxSize: CGSize(width: 14.0, height: 14.0)
+                            name: "Wallet/TransactionGram",
+                            tintColor: nil,
+                            maxSize: CGSize(width: 20.0, height: 20.0)
                         ))),
                         AnyComponentWithIdentity(id: "amount", component: AnyComponent(MultilineTextComponent(
                             text: .plain(NSAttributedString(
@@ -2798,9 +2798,9 @@ private final class WalletTransactionContentComponent: Component {
                             id: "gaslessFee",
                             component: AnyComponent(HStack([
                                 AnyComponentWithIdentity(id: "icon", component: AnyComponent(BundleIconComponent(
-                                    name: "Ads/TonAbout",
-                                    tintColor: UIColor(rgb: 0x30a1f5),
-                                    maxSize: CGSize(width: 14.0, height: 14.0)
+                                    name: "Wallet/TransactionGram",
+                                    tintColor: nil,
+                                    maxSize: CGSize(width: 20.0, height: 20.0)
                                 ))),
                                 AnyComponentWithIdentity(id: "text", component: AnyComponent(MultilineTextComponent(
                                     text: .plain(NSAttributedString(

@@ -39,6 +39,8 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
     private let canvas = WalletSendAmountCanvas(frame: .zero)
     private let caretView = UIView()
     private static let caretBlinkAnimationKey = "walletSendCaretBlink"
+    private static let inputRefusalAnimationKey = "walletSendInputRefusal"
+    private let hapticFeedback = HapticFeedback()
     private let motion = WalletSendAmountMotion(liquid: true)
     private var displayLink: SharedDisplayLinkDriver.Link?
     private var previousMode: WalletSendInputMode?
@@ -59,6 +61,14 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
     private(set) var motionTiming: WalletSendAmountMotionTiming?
 
     override var usesAnimatedPresentation: Bool { return true }
+
+    override var isUserInteractionEnabled: Bool {
+        didSet {
+            if !self.isUserInteractionEnabled {
+                self.stopInputRefusal()
+            }
+        }
+    }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -94,6 +104,7 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
     override func didMoveToWindow() {
         super.didMoveToWindow()
         if self.window == nil {
+            self.stopInputRefusal()
             self.stopDiamond(at: .end)
             self.finishMotion()
         } else {
@@ -109,12 +120,16 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
 
     @objc private func applicationWillResignActive() {
         self.applicationIsActive = false
+        self.stopInputRefusal()
         self.canvas.isRenderingEnabled = false
         self.stopDiamond(at: .end)
         self.finishMotion()
     }
 
     @objc private func reduceMotionChanged() {
+        if UIAccessibility.isReduceMotionEnabled {
+            self.layer.removeAnimation(forKey: Self.inputRefusalAnimationKey)
+        }
         self.finishMotion()
     }
 
@@ -139,6 +154,7 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
             self.stopDiamond(at: mode == .gram ? .begin : nil)
         }
         if !isVisible {
+            self.stopInputRefusal()
             self.stopDiamond(at: .end)
         }
         self.visible = isVisible
@@ -175,14 +191,59 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
         if !self.updating { self.layoutIfNeeded() }
     }
 
-    override func insertText(_ text: String) {
-        super.insertText(text)
-        self.layoutIfNeeded()
+    @discardableResult
+    override func insertText(_ text: String) -> Bool {
+        let accepted = super.insertText(text)
+        if accepted { self.layoutIfNeeded() }
+        return accepted
     }
 
-    override func deleteBackward() {
-        super.deleteBackward()
-        self.layoutIfNeeded()
+    @discardableResult
+    override func deleteBackward() -> Bool {
+        let accepted = super.deleteBackward()
+        if accepted { self.layoutIfNeeded() }
+        return accepted
+    }
+
+    override func inputRejected() {
+        guard self.visible, self.applicationIsActive, self.window != nil,
+              self.isUserInteractionEnabled, self.isInputActive else { return }
+        
+        self.hapticFeedback.impact(.rigid, intensity: 0.8)
+        self.hapticFeedback.prepareImpact(.rigid)
+        let secondImpact = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            guard self.visible, self.applicationIsActive, self.window != nil,
+                  self.isUserInteractionEnabled, self.isInputActive else { return }
+            self.hapticFeedback.impact(.rigid, intensity: 0.55)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.09, execute: secondImpact)
+
+        guard !UIAccessibility.isReduceMotionEnabled else {
+            return
+        }
+        let initialOffset: CGFloat
+        if self.layer.animation(forKey: Self.inputRefusalAnimationKey) != nil {
+            initialOffset = (self.layer.presentation()?.transform.m41 ?? self.layer.transform.m41) - self.layer.transform.m41
+        } else {
+            initialOffset = 0.0
+        }
+        let animation = CAKeyframeAnimation(keyPath: "transform.translation.x")
+        animation.values = (0 ... 60).map { step -> NSNumber in
+            let t = CGFloat(step) / 60.0
+            let carry = max(0.0, 1.0 - 6.0 * t)
+            let x = 9.0 * sin(6.0 * .pi * t) * (1.0 - t) + initialOffset * carry * carry
+            return NSNumber(value: Double(x))
+        }
+        animation.duration = 0.42
+        animation.calculationMode = .linear
+        animation.timingFunction = CAMediaTimingFunction(name: .linear)
+        animation.isAdditive = true
+        self.layer.add(animation, forKey: Self.inputRefusalAnimationKey)
+    }
+
+    private func stopInputRefusal() {
+        self.layer.removeAnimation(forKey: Self.inputRefusalAnimationKey)
     }
 
     override func textFieldDidChangeSelection(_ textField: UITextField) {
@@ -202,6 +263,7 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
     }
 
     override func textFieldDidEndEditing(_ textField: UITextField) {
+        self.stopInputRefusal()
         self.finishMotion()
         super.textFieldDidEndEditing(textField)
     }

@@ -78,6 +78,7 @@ final class WalletSendAmountTextField: UITextField {
     private var groupingLabels: [UILabel] = []
     private var textLayout: WalletSendAmountTextLayout?
     var interactionBegan: (() -> Void)?
+    var emptyDeletion: (() -> Void)?
     var caretColor: UIColor = .clear {
         didSet {
             self.updateSelectionTintColor()
@@ -209,6 +210,14 @@ final class WalletSendAmountTextField: UITextField {
         fatalError("init(coder:) has not been implemented")
     }
 
+    override func deleteBackward() {
+        if (self.text ?? "").isEmpty {
+            self.emptyDeletion?()
+        } else {
+            super.deleteBackward()
+        }
+    }
+
     override func buildMenu(with builder: UIMenuBuilder) {
         super.buildMenu(with: builder)
 
@@ -325,6 +334,17 @@ class WalletSendAmountField: UIView, UITextFieldDelegate {
         return !(self.textField.text ?? "").isEmpty
     }
 
+    private var canEditAmount: Bool {
+        guard self.isUserInteractionEnabled,
+              let dateTimeFormat = self.dateTimeFormat, !dateTimeFormat.decimalSeparator.isEmpty else {
+            return false
+        }
+        if self.mode == .fiat {
+            guard let rate = self.rate, rate.isFinite, rate > 0.0 else { return false }
+        }
+        return true
+    }
+
     override init(frame: CGRect) {
         super.init(frame: frame)
 
@@ -351,6 +371,9 @@ class WalletSendAmountField: UIView, UITextFieldDelegate {
         }
         self.textField.textAlignment = .left
         self.textField.addTarget(self, action: #selector(self.textChanged), for: .editingChanged)
+        self.textField.emptyDeletion = { [weak self] in
+            let _ = self?.deleteBackward()
+        }
         self.contentView.addSubview(self.textField)
 
         let tapGesture = UITapGestureRecognizer(target: self, action: #selector(self.activateInput))
@@ -366,25 +389,35 @@ class WalletSendAmountField: UIView, UITextFieldDelegate {
         self.textField.becomeFirstResponder()
     }
 
-    func insertText(_ text: String) {
-        guard self.isUserInteractionEnabled else { return }
+    @discardableResult
+    func insertText(_ text: String) -> Bool {
+        guard self.canEditAmount else { return false }
         self.activateInput()
         let range = self.textField.selectionRange ?? NSRange(location: (self.textField.text ?? "").utf16.count, length: 0)
-        self.replaceText(in: range, with: text)
+        return self.replaceText(in: range, with: text)
     }
 
-    func deleteBackward() {
-        guard self.isUserInteractionEnabled else { return }
+    @discardableResult
+    func deleteBackward() -> Bool {
+        guard self.canEditAmount else { return false }
         self.activateInput()
         let text = (self.textField.text ?? "") as NSString
         var range = self.textField.selectionRange ?? NSRange(location: text.length, length: 0)
         guard range.location != NSNotFound, range.location >= 0, range.location <= text.length,
-              range.length >= 0, range.length <= text.length - range.location else { return }
+              range.length >= 0, range.length <= text.length - range.location else { return false }
         if range.length == 0 {
-            guard range.location > 0 else { return }
+            guard range.location > 0 else {
+                if text.length == 0 {
+                    self.inputRejected()
+                }
+                return false
+            }
             range = text.rangeOfComposedCharacterSequence(at: range.location - 1)
         }
-        self.replaceText(in: range, with: "")
+        return self.replaceText(in: range, with: "")
+    }
+
+    func inputRejected() {
     }
 
     func amountTextLayout(_ text: String) -> WalletSendAmountTextLayout {
@@ -700,17 +733,24 @@ class WalletSendAmountField: UIView, UITextFieldDelegate {
         return false
     }
 
-    private func replaceText(in range: NSRange, with string: String) {
-        guard self.isUserInteractionEnabled,
-              let dateTimeFormat = self.dateTimeFormat, !dateTimeFormat.decimalSeparator.isEmpty else {
-            return
-        }
+    @discardableResult
+    private func replaceText(in range: NSRange, with string: String) -> Bool {
+        guard self.canEditAmount, let dateTimeFormat = self.dateTimeFormat else { return false }
+        let text = self.textField.text ?? ""
+        let length = (text as NSString).length
+        guard range.location != NSNotFound, range.location >= 0, range.location <= length,
+              range.length >= 0, range.length <= length - range.location,
+              !string.isEmpty || range.length > 0 else { return false }
 
         guard let edit = walletSendReplacingAmountText(
-            self.textField.text ?? "", range: range, replacement: string,
+            text, range: range, replacement: string,
             mode: self.mode, rate: self.rate, decimalSeparator: dateTimeFormat.decimalSeparator
-        ) else { return }
+        ) else {
+            self.inputRejected()
+            return false
+        }
         self.applyText(edit.text, selection: edit.selection)
         self.textChanged()
+        return true
     }
 }

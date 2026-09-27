@@ -35,7 +35,7 @@ public func formatFiatValue(_ value: Double, currencySymbol: String, maxDecimalP
     formattedValue = formattedValue.replacingOccurrences(of: ".", with: decimalSeparator)
     if let dotIndex = formattedValue.firstIndex(of: decimalSeparator.first!) {
         let integerPartString = formattedValue[..<dotIndex]
-        if let integerPart = Int32(integerPartString) {
+        if let integerPart = Int64(integerPartString) {
             let modifiedIntegerPart = presentationStringsFormattedNumber(integerPart, dateTimeFormat.groupingSeparator)
             
             let resultString = "\(currencySymbol)\(modifiedIntegerPart)\(formattedValue[dotIndex...])"
