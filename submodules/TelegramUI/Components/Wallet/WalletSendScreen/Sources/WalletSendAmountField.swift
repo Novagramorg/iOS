@@ -727,7 +727,7 @@ class WalletSendAmountField: UIView, UITextFieldDelegate {
             let amountBaseline = self.textField.frame.minY + self.textField.amountTextBaseline(font: self.integralFont)
             // Reference: symbolShift (-0.8) + gemNudge (1.75) + optical shift (2.5).
             let symbolBaseline = amountBaseline - self.integralFont.capHeight / 2.0 + self.fiatSymbolFont.capHeight / 2.0 + 3.45
-            fiatIconView.frame.origin.y = floorToScreenPixels(symbolBaseline - line.minY)
+            fiatIconView.frame.origin.y = floorToScreenPixels(symbolBaseline - line.minY) + 2.0
             if usesFiatInkLayout {
                 fiatIconView.frame.origin.x -= line.minX
             }

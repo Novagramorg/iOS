@@ -19,7 +19,7 @@ struct DiamondStyle: Equatable {
     var rotationSpeed: Float = 2 * .pi / 18 * 1.70775
     var isRotating: Bool = true
     var sparkles: Bool = true
-    var mainSparklePerHalfTurn: Bool = false
+    var mainSparkleOnRotation: Bool = false
     var backgroundStars: Bool = true
     var widthCompensation: Bool = true
     var refraction: Float = 0.72
@@ -128,6 +128,8 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
     var onPoseUpdated: ((DiamondPose) -> Void)?
     var lightBackground = false
     var interactionScale: Float = 1
+    var refractionSource: InteractiveDiamondComponent.RefractionSource?
+    var refractionStrength: Float = 0
     var usesHighFrameRate = false {
         didSet {
             guard self.usesHighFrameRate != oldValue else { return }
@@ -200,6 +202,8 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
             self.grow = layer.grow
             self.growVelocity = layer.growVelocity
             self.interactionScale = layer.interactionScale
+            self.refractionSource = layer.refractionSource
+            self.refractionStrength = layer.refractionStrength
             self.usesHighFrameRate = layer.usesHighFrameRate
             self.renderSize = layer.renderSize
             self.isRenderingEnabled = layer.isRenderingEnabled
@@ -240,7 +244,7 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
     }
 
     private func updateMotionStyle() {
-        self.motion.mainSparklePerHalfTurn = self.diamondStyle.mainSparklePerHalfTurn
+        self.motion.mainSparkleOnRotation = self.diamondStyle.mainSparkleOnRotation
         self.motion.swayScale = self.diamondStyle.swayScale
         self.motion.tilt = self.diamondStyle.tilt
         self.motion.releaseDecay = self.diamondStyle.releaseDecay
@@ -468,6 +472,8 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
         let lightBackground = self.lightBackground
         let style = self.diamondStyle
         let grow = self.grow * self.interactionScale
+        let refractionSource = self.refractionSource
+        let refractionStrength = self.refractionStrength
 
         let frame = context.compute(state: DiamondRenderer.self, commands: { [weak self] commandBuffer, renderer -> RenderedFrame? in
             guard let self else { return nil }
@@ -491,7 +497,7 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
             pass.depthAttachment.clearDepth = 1
             pass.depthAttachment.storeAction = .dontCare
             guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: pass) else { return nil }
-            renderer.encode(encoder: encoder, size: CGSize(width: CGFloat(size.width), height: CGFloat(size.height)), time: time, starBursts: starBursts, motion: motion, style: style, grow: grow, pixelsPerPoint: Float(pixelsPerPoint), reduceMotion: reduceMotion, lightBackground: lightBackground)
+            renderer.encode(encoder: encoder, size: CGSize(width: CGFloat(size.width), height: CGFloat(size.height)), time: time, starBursts: starBursts, motion: motion, style: style, grow: grow, pixelsPerPoint: Float(pixelsPerPoint), reduceMotion: reduceMotion, lightBackground: lightBackground, refractionSource: refractionSource, refractionStrength: refractionStrength)
             encoder.endEncoding()
             return RenderedFrame(texture: targets.color, commandBuffer: commandBuffer)
         })

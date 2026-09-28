@@ -34,9 +34,9 @@ struct DiamondMotion {
     private(set) var pitch: Float = Self.referencePitch
     private(set) var isDragging = false
     var zoom: Float = 1
-    var mainSparklePerHalfTurn = false {
+    var mainSparkleOnRotation = false {
         didSet {
-            if self.mainSparklePerHalfTurn != oldValue {
+            if self.mainSparkleOnRotation != oldValue {
                 self.rotationSparkle = DiamondSparkleAnimation.RotationPulse()
             }
         }
@@ -234,7 +234,7 @@ struct DiamondMotion {
             pitchSpringVelocity += ((targetPitch - pitch) * stiffness - damping * pitchSpringVelocity) * step
             yaw += yawSpringVelocity * step
             pitch += pitchSpringVelocity * step
-            if mainSparklePerHalfTurn {
+            if mainSparkleOnRotation {
                 rotationSparkle.advance(rotation: yaw - previousYaw, dt: step)
             }
             remaining = max(0, remaining - step)
@@ -658,6 +658,8 @@ enum DiamondSparkleAnimation {
     }
 
     struct RotationPulse {
+        private static let rotationInterval: Float = .pi / 2
+        private static let probability: Float = 0.4
         private static let rise: Float = 0.08
         private static let duration: Float = rise + 33.0 / 60.0
         private var rotation: Float = 0
@@ -678,11 +680,12 @@ enum DiamondSparkleAnimation {
         mutating func advance(rotation: Float, dt: Float) {
             self.age = min(Self.duration, self.age + dt)
             self.rotation += abs(rotation)
-            guard self.rotation >= .pi else { return }
-            self.rotation.formTruncatingRemainder(dividingBy: .pi)
-            if self.age >= Self.rise {
-                self.from = self.state
-                self.age = 0
+            while self.rotation >= Self.rotationInterval {
+                self.rotation -= Self.rotationInterval
+                if Float.random(in: 0 ..< 1) < Self.probability, self.age >= Self.rise {
+                    self.from = self.state
+                    self.age = 0
+                }
             }
         }
     }

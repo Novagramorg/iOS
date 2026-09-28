@@ -1,11 +1,28 @@
 import UIKit
 import Display
 import ComponentFlow
+import Metal
 import MetalEngine
 import SwiftSignalKit
 import TelegramPresentationData
 
 public final class InteractiveDiamondComponent: Component {
+    public struct RefractionSource: Equatable {
+        let texture: MTLTexture
+        let uv: SIMD4<Float>
+        let rect: CGRect
+
+        public init(texture: MTLTexture, uv: SIMD4<Float>, rect: CGRect) {
+            self.texture = texture
+            self.uv = uv
+            self.rect = rect
+        }
+
+        public static func ==(lhs: RefractionSource, rhs: RefractionSource) -> Bool {
+            return lhs.texture === rhs.texture && lhs.uv == rhs.uv && lhs.rect == rhs.rect
+        }
+    }
+
     private let size: CGSize
     private let diamondWidth: CGFloat
     private let isVisible: Bool
@@ -65,7 +82,7 @@ public final class InteractiveDiamondComponent: Component {
             style.rotationSpeed = 2 * .pi / 26
             style.swayScale = 1
             style.backgroundStars = false
-            style.mainSparklePerHalfTurn = true
+            style.mainSparkleOnRotation = true
             style.releaseTilt = 2.6
             self.diamondLayer.update(style: style)
             self.layer.addSublayer(self.diamondLayer)
@@ -184,6 +201,7 @@ public final class InteractiveDiamondComponent: Component {
             let expanded = self.isHolding || self.expansion != nil
             self.diamondLayer.usesHighFrameRate = expanded
             self.diamondLayer.interactionScale = Float(1.0 + 2.75 * self.grip)
+            self.diamondLayer.refractionStrength = Float(min(1.0, max(0.0, self.grip)))
             self.diamondLayer.renderSize = expanded ? CGSize(width: 220.0, height: 220.0) : self.restingSize
             self.diamondLayer.setNeedsUpdate()
             if self.isExpanded != expanded {
@@ -208,6 +226,12 @@ public final class InteractiveDiamondComponent: Component {
 
         public func spin(_ velocity: Float, decay: Float) {
             self.diamondLayer.spin(velocity, decay: decay)
+        }
+
+        public func updateRefractionSource(_ source: RefractionSource?) {
+            guard self.diamondLayer.refractionSource != source else { return }
+            self.diamondLayer.refractionSource = source
+            self.diamondLayer.setNeedsUpdate()
         }
 
         fileprivate func update(component: InteractiveDiamondComponent) -> CGSize {

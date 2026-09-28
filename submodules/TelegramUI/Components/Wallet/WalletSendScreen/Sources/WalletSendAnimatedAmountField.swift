@@ -522,6 +522,20 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
             return sprite
         }
         self.canvas.update(sprites: sprites, isAnimating: self.motion.isAnimating(at: now))
+        self.updateDiamondRefraction()
+    }
+
+    private func updateDiamondRefraction() {
+        guard let diamond = self.gramIcon.view as? InteractiveDiamondComponent.View else { return }
+        guard self.mode == .gram,
+              let glyph = self.motion.target.first(where: { $0.group == .integer && $0.text.first?.wholeNumberValue != nil }),
+              let mask = self.canvas.glyphMask(for: glyph) else {
+            diamond.updateRefractionSource(nil)
+            return
+        }
+        let rect = self.contentView.convert(mask.rect.offsetBy(dx: glyph.position.x, dy: glyph.position.y), to: diamond)
+            .offsetBy(dx: -diamond.bounds.midX, dy: -diamond.bounds.midY)
+        diamond.updateRefractionSource(InteractiveDiamondComponent.RefractionSource(texture: mask.texture, uv: mask.uv, rect: rect))
     }
 
     private func resetCaretBlink() {
