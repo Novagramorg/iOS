@@ -305,8 +305,6 @@ func walletTransferResolutionCandidate(_ pending: WalletContext.PendingTransfer,
     }
     guard matches.count == 1, let transaction = matches.first, !transaction.id.isEmpty,
           transaction.status == .failed || transaction.status == .completed else { return nil }
-    // A relayer message can cover several operations, including the same recipient.
-    // Never reuse a transaction already attributed to a different local operation.
     guard !history.contains(where: {
         ($0.id == transaction.id || (transaction.transactionHash != nil && $0.transactionHash == transaction.transactionHash))
             && $0.presentationId.hasPrefix("pending:") && $0.presentationId != "pending:\(pending.id)"
@@ -529,7 +527,6 @@ extension WalletContextImpl {
             self.logger.error("wallet_transfer_api_failed", error)
             if case WalletTransferSubmissionError.staleSequenceNumber = error,
                self.pendingTransferRegistrations[pending.id] != nil {
-                // Reuse the same early receipt while the provider catches up.
                 throw error
             }
             if let registration = self.pendingTransferRegistrations[pending.id]?.registration {
@@ -643,11 +640,7 @@ extension WalletContextImpl {
         ) else {
             throw WalletContext.WalletError.unavailable
         }
-        // Finish on the submission task, even if the screen awaiting its result
-        // has gone away. PendingTransfer owns the accepted RPC metadata in Postbox.
         self.preparedTransfers[pending.id] = nil
-        // A history/streaming result may have completed the operation while its
-        // RPC was in flight. Prefer it over an older transaction in that response.
         let candidate = walletHistoryTransactionForPending(accepted, transactions: self.currentState.transactions.items)
             ?? response?.transaction.flatMap { walletTransactions(from: [$0]).first }
             ?? accepted.sentTransfer.flatMap { self.cachedWalletTransferTransaction(accepted, msgHash: $0.msgHash) }
@@ -714,7 +707,6 @@ extension WalletContextImpl {
             return
         }
         guard let deadline = (self.walletTransferResolutions.values.map(\.nextAttemptAt) + remoteDeadlines).min() else {
-            // A running request may still be applying the rest of a transaction batch.
             if self.walletTransferResolutionScheduledAt != nil {
                 self.cancelWalletTransferResolution()
             }
@@ -785,20 +777,6 @@ extension WalletContextImpl {
                         self.walletTransferResolutions[id] = nil
                         continue
                     }
-                } else if pending.transactionHash != nil {
-                    let unresolved: Bool
-                    if let reference = pending.pendingMessage {
-                        unresolved = try await WalletSignalRequestContext<Bool>().run(
-                            self.engine.wallet.hasUnresolvedPendingTransferMessage(reference) |> castError(WalletError.self)
-                        )
-                    } else {
-                        unresolved = false
-                    }
-                    guard self.isCurrentWalletTransferResolution(generation) else { return }
-                    if !unresolved {
-                        self.walletTransferResolutions[id] = nil
-                        continue
-                    }
                 }
                 unresolvedIds.append(id)
             }
@@ -844,7 +822,10 @@ extension WalletContextImpl {
     private func applyWalletTransferResolution(operationId: String, transaction: Transaction, generation: UInt64) async throws -> Bool {
         guard self.isCurrentWalletTransferResolution(generation),
               let pending = self.pendingWalletTransferResolution(operationId) else { return false }
-        if let knownHash = pending.transactionHash, let hash = transaction.transactionHash, knownHash != hash { return false }
+        if transaction.status == .failed,
+           pending.status == .confirmed || self.transferSubmissions.entries[pending.id]?.confirmed == true {
+            return false
+        }
         await self.applyWalletFinalTransaction(transaction, pending: pending, generation: generation, source: "transfer_resolution")
         return !self.isShutdown && self.activationGeneration == generation
     }
@@ -902,7 +883,6 @@ extension WalletContextImpl {
         self.logPendingTransferHistoryReconciliation(reconciliation, removedStreamingTraceCount: removed)
         if let reference = pending?.pendingMessage,
            case let .user(peer, _, _) = transaction.peer, peer.id.toInt64() == reference.peerId {
-            // Message reconciliation is local and must not turn a final transfer into a network failure.
             do {
                 try await WalletSignalRequestContext<Void>().run(
                     self.engine.wallet.resolvePendingTransferMessage(reference, transactionId: transaction.id, failed: transaction.status == .failed)

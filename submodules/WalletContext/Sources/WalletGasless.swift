@@ -126,7 +126,7 @@ extension WalletContextImpl {
         }
         guard !Task.isCancelled, !self.isShutdown, self.activationGeneration == generation else { return }
         for transfer in self.currentState.pendingTransfers {
-            self.trackWalletTransferResolution(transfer)
+            self.trackWalletTransferResolution(transfer, receivedAt: transfer.status == .confirmed ? currentWalletTimestamp() : nil)
         }
     }
 }

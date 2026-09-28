@@ -362,6 +362,7 @@ private func walletIncomingTransactionIdentity(_ transaction: WalletContext.Tran
 private enum WalletTransactionIdentity: Hashable {
     case id(String)
     case hash(String)
+    case outgoingOperation(id: String, recipient: String)
     case incoming(WalletIncomingTransactionIdentity)
 }
 
@@ -370,6 +371,13 @@ private func walletTransactionIdentities(_ transaction: WalletContext.Transactio
     var result: [WalletTransactionIdentity] = []
     if !transaction.id.isEmpty { result.append(.id(transaction.id)) }
     if let hash = transaction.transactionHash, !hash.isEmpty { result.append(.hash(hash)) }
+    if transaction.direction == .outgoing, transaction.kind == .transfer,
+       transaction.currency == .ton, transaction.collectible == nil,
+       transaction.presentationId.hasPrefix("pending:"),
+       transaction.presentationId.count > "pending:".count,
+       let address = transaction.peer.address, let recipient = walletAddressMappingKey(address) {
+        result.append(.outgoingOperation(id: transaction.presentationId, recipient: recipient))
+    }
     if let incoming = walletIncomingTransactionIdentity(transaction) { result.append(.incoming(incoming)) }
     return result
 }
@@ -428,12 +436,15 @@ public extension WalletContext.Transaction {
 private func sortedWalletTransactions(
     _ transactions: [WalletContext.Transaction]
 ) -> [WalletContext.Transaction] {
-    transactions.sorted { lhs, rhs in
-        if lhs.timestamp != rhs.timestamp {
-            return lhs.timestamp > rhs.timestamp
-        }
-        return decimalStringIsGreater(lhs.logicalTime, rhs.logicalTime)
+    transactions.sorted(by: walletTransactionIsNewer)
+}
+
+@available(macOS 10.15, *)
+private func walletTransactionIsNewer(_ lhs: WalletContext.Transaction, _ rhs: WalletContext.Transaction) -> Bool {
+    if lhs.timestamp != rhs.timestamp {
+        return lhs.timestamp > rhs.timestamp
     }
+    return decimalStringIsGreater(lhs.logicalTime, rhs.logicalTime)
 }
 
 @available(macOS 10.15, *)
@@ -491,6 +502,7 @@ struct WalletTransactionHistory {
     mutating func applyRefresh(
         _ page: Page,
         previous: WalletContext.TransactionsState,
+        retaining: [WalletContext.Transaction] = [],
         log: ((String) -> Void)? = nil
     ) -> WalletContext.TransactionsState {
         let existingIdentities = WalletTransactionIdentityIndex(previous.items)
@@ -500,7 +512,24 @@ struct WalletTransactionHistory {
             self.routeRevision &+= 1
         }
         self.hasLoadedFirstPage = true
-        let items = mergeTransactions(existing: previous.items, new: page.items, source: "refresh", log: log)
+        var existing = previous.items
+        let orderedPage = sortedWalletTransactions(page.items)
+        if let newest = orderedPage.first, let oldest = orderedPage.last {
+            let pageIdentities = WalletTransactionIdentityIndex(page.items)
+            let retainedIdentities = WalletTransactionIdentityIndex(retaining)
+            existing.removeAll { transaction in
+                let keep = pageIdentities.contains(transaction)
+                    || retainedIdentities.contains(transaction)
+                    || transaction.status == .pending
+                    || walletTransactionIsNewer(transaction, newest)
+                    || (page.nextOffset != nil && walletTransactionIsNewer(oldest, transaction))
+                if !keep {
+                    log?("event=wallet_history_cache_replaced id=\(transaction.id) hash=\(transaction.transactionHash ?? "nil")")
+                }
+                return !keep
+            }
+        }
+        let items = mergeTransactions(existing: existing, new: page.items, source: "refresh", log: log)
         return WalletContext.TransactionsState(
             items: items,
             offset: items.count,
