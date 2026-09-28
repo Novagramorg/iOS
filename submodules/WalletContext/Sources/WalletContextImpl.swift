@@ -825,7 +825,7 @@ actor WalletContextImpl {
             let submissions = try await self.storage.loadTransferSubmissions()
             guard !Task.isCancelled, self.activationGeneration == generation else { return }
             self.transferSubmissions.restore(submissions)
-            await self.restoreTransferReceipts(recordId: activation.snapshot.recordId, walletAddress: address, generation: generation)
+            await self.restorePendingTransfers(generation: generation)
             guard !Task.isCancelled, self.activationGeneration == generation else { return }
             self.replaceState(
                 phase: .wallet(info),

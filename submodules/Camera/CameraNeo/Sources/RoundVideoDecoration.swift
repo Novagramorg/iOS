@@ -33,6 +33,7 @@ struct RoundVideoDecorationResources {
 
 final class RoundVideoDecorationProvider {
     static let shared = RoundVideoDecorationProvider()
+    private static let isEnabled = false
 
     private typealias Completion = (RoundVideoDecorationResources?) -> Void
 
@@ -54,6 +55,10 @@ final class RoundVideoDecorationProvider {
 
     func prepare(completion: @escaping (RoundVideoDecorationResources?) -> Void) {
         self.queue.async {
+            guard Self.isEnabled else {
+                completion(nil)
+                return
+            }
             switch self.state {
             case .idle:
                 self.state = .preparing([completion])

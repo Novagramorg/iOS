@@ -120,7 +120,9 @@ kernel void convertNV12(
     }
 
     constexpr sampler textureSampler(coord::normalized, address::clamp_to_edge, filter::linear);
-    float2 outputCoordinate = (float2(gid) + 0.5) / float2(output.get_width(), output.get_height());
+    float2 outputSize = float2(output.get_width(), output.get_height());
+    float2 pixelCoordinate = float2(gid) + 0.5;
+    float2 outputCoordinate = pixelCoordinate / outputSize;
 
     float2 primaryCoordinate = sourceCoordinate(outputCoordinate, uniforms.primarySource);
     float3 primaryRgb = readRgb(
@@ -149,6 +151,10 @@ kernel void convertNV12(
         );
         result = mix(primaryRgb, secondaryRgb, saturate(uniforms.blend.x));
     }
+
+    float radius = min(outputSize.x, outputSize.y) * 0.5 + 2.0;
+    float circleMask = 1.0 - smoothstep(radius - 0.5, radius + 0.5, distance(pixelCoordinate, outputSize * 0.5));
+    result = mix(float3(1.0), result, circleMask);
 
     output.write(float4(result, 1.0), gid);
 }

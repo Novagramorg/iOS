@@ -30,6 +30,7 @@ struct StarUniforms {
     float4 animation; // burst age, transport time, burst enabled, light background
     float4 layout; // viewport pixels, steady instance count, burst seed
     float4 appearance; // palette identifier, reserved
+    float4 tint; // y: star opacity, z: emission radius
 };
 struct BackgroundStarRaster {
     float4 position [[position]];
@@ -68,7 +69,7 @@ vertex BackgroundStarRaster backgroundStarVertex(uint vertexIndex [[vertex_id]],
     float progress = saturate(age/lifetime);
     float alive = float(age >= 0 && age < lifetime) * (burst ? u.animation.z : 1);
     float fadeIn = burst ? smoothstep(0.0,0.25,age) : smoothstep(0,0.10,progress);
-    float fade = fadeIn * (1-smoothstep(0.62,1.0,progress)) * alive;
+    float fade = fadeIn * (1-smoothstep(0.62,1.0,progress)) * alive * u.tint.y;
     float depth = mix(0.60,1.0,starRandom(seed+3));
     float sector = starRandom(seed+4);
     float spread = starRandom(seed+14);
@@ -120,7 +121,7 @@ vertex BackgroundStarRaster backgroundStarVertex(uint vertexIndex [[vertex_id]],
     float shine = smoothstep(0.0,1.0,fade) * mix(0.12,1.0,breathWave);
     const float starSizeScale = 1.53;
     float radius = starSizeScale * mix(0.0228,0.084,pow(starRandom(seed+7),1.7))*depth * mix(0.87,1.0,shine);
-    fade *= smoothstep(0.72, 1.02, length(center));
+    fade *= smoothstep(0.72 * u.tint.z, 1.02 * u.tint.z, length(center));
     float rotation = starRandom(seed+8)*1.57 + age*mix(-0.20,0.20,starRandom(seed+9));
     float2 uv = corners[vertexIndex]*1.45;
     float2 point = float2(cos(rotation)*uv.x-sin(rotation)*uv.y,
@@ -802,6 +803,21 @@ fragment float4 diamondFragment(Raster in [[stage_in]], constant Uniforms &u [[b
                     + dot(regions,u.referencePavilionFlash.xyz)*in.facetWeights.z;
         float referenceFacing = smoothstep(0.0,0.2,(u.model * float4(0,0,1,0)).z);
         color = mix(color,float3(1),alpha*referenceFacing);
+    }
+    float whiten = u.appearance.y;
+    if (whiten > 0) {
+        float w = pow(whiten, 0.7);
+        float luma = dot(color, float3(0.2126, 0.7152, 0.0722));
+        float lift = smoothstep(0.32, 0.62, luma);
+        float3 glass = mix(float3(0.07, 0.33, 0.95), float3(1.0), lift);
+        float rim = pow(1.0 - saturate(abs(n.z)), 2.2);
+        glass = mix(glass, float3(1.0), rim * 0.8);
+        float seam = saturate(length(fwidth(n)) * 5.5);
+        glass = mix(glass, float3(1.0), seam * 0.85);
+        glass = max(glass, float3(smoothstep(0.62, 0.95, luma)));
+        color = mix(color, glass, w);
+        float alpha = mix(1.0, mix(0.34, 0.94, max(lift, max(rim, seam))), w);
+        return float4(saturate(color * u.parameters.z) * alpha, alpha);
     }
     return float4(saturate(color * u.parameters.z), 1);
 }

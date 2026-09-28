@@ -8,6 +8,17 @@ enum WalletSendAmountGlyphMetrics {
         let font: UIFont
     }
     private static var widths: [Key: CGFloat] = [:]
+    private static var inkBoundsCache: [Key: CGRect] = [:]
+
+    static func inkBounds(_ text: String, font: UIFont) -> CGRect {
+        let key = Key(text: text, font: font)
+        if let bounds = self.inkBoundsCache[key] { return bounds }
+        let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: [.font: font]))
+        let bounds = CTLineGetBoundsWithOptions(line, [.useGlyphPathBounds])
+        if self.inkBoundsCache.count >= 1024 { self.inkBoundsCache.removeAll(keepingCapacity: true) }
+        self.inkBoundsCache[key] = bounds
+        return bounds
+    }
 
     static func width(_ text: String, font: UIFont) -> CGFloat {
         let key = Key(text: text, font: font)
@@ -452,7 +463,7 @@ enum WalletSendRolling {
         static let stagger: Double = 0.05
         static let typing: Double = 0.22
         static let melt: Double = 0.12
-        static let placeholderMelt: Double = 0.2
+        static let placeholderMelt: Double = 0.12
         static let steps = 2
 
         private static let sharpness: Double = 2.2

@@ -291,6 +291,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
     var dataDisposable: Disposable?
     
     let activeActionDisposable = MetaDisposable()
+    let logoutConfirmationDisposable = MetaDisposable()
     let resolveUrlDisposable = MetaDisposable()
     let toggleShouldChannelMessagesSignaturesDisposable = MetaDisposable()
     let toggleMessageCopyProtectionDisposable = MetaDisposable()
@@ -2590,6 +2591,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
         self.dataDisposable?.dispose()
         self.hiddenMediaDisposable?.dispose()
         self.activeActionDisposable.dispose()
+        self.logoutConfirmationDisposable.dispose()
         self.resolveUrlDisposable.dispose()
         self.hiddenAvatarRepresentationDisposable.dispose()
         self.toggleShouldChannelMessagesSignaturesDisposable.dispose()
@@ -6906,6 +6908,8 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen, KeyShortc
     
     override public func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+
+        self.controllerNode.logoutConfirmationDisposable.set(nil)
         
         self.dismissAllTooltips()
         

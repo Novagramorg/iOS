@@ -135,6 +135,7 @@ extension WalletContextImpl {
         guard scope.contains(.transactions), self.isCurrentSynchronization(taskId,
         generation: generation) else { return }
         let watermark = self.streamingPresentationOverlay.revision
+        let transactionsAtRequest = self.currentState.transactions.items
         let result = await captureAsync {
             try await WalletSignalRequestContext<TelegramCore.WalletTransactions>().run(
                 self.engine.wallet.getTransactions(inbound: true,
@@ -153,6 +154,7 @@ extension WalletContextImpl {
                 WalletTransactionHistory.Page(items: walletTransactions(from: response.items),
                 nextOffset: response.nextOffset),
                 previous: transactions,
+                retaining: transactions.items.filter { !transactionsAtRequest.contains($0) },
                 log: self.logger.log
             )
             let reconciliation = self.pendingTransfers(pending, reconcilingWith: transactions.items)

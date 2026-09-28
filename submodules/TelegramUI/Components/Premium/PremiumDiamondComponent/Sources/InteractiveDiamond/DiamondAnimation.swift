@@ -34,6 +34,14 @@ struct DiamondMotion {
     private(set) var pitch: Float = Self.referencePitch
     private(set) var isDragging = false
     var zoom: Float = 1
+    var mainSparklePerHalfTurn = false {
+        didSet {
+            if self.mainSparklePerHalfTurn != oldValue {
+                self.rotationSparkle = DiamondSparkleAnimation.RotationPulse()
+            }
+        }
+    }
+    private(set) var rotationSparkle = DiamondSparkleAnimation.RotationPulse()
 
     private var targetYaw: Float = 0
     private var targetPitch: Float = Self.referencePitch
@@ -41,6 +49,19 @@ struct DiamondMotion {
     private var yawSpringVelocity: Float = 0
     private var pitchSpringVelocity: Float = 0
     private var yawVelocity: Float = 0
+    var swayScale: Float = 0 {
+        didSet {
+            if swayScale != 0 && swayPhase == nil {
+                swayPhase = SIMD2(Float.random(in: 0 ..< 2 * .pi), Float.random(in: 0 ..< 2 * .pi))
+            }
+        }
+    }
+    var tilt: Float = 0
+    var releaseDecay: Float = 0
+    var releaseTilt: Float = 0
+    private var swayPhase: SIMD2<Float>?
+    private var spinVelocity: Float = 0
+    private var spinDecay: Float = 0.7
     private var lastDragTime: Double = 0
     private var timeSinceRelease: Float = 10
     private var tapRotation: TapRotation?
@@ -52,7 +73,6 @@ struct DiamondMotion {
         let triggersBurst: Bool
         if let tapRotation {
             let remainingBoost = max(abs(tapRotation.boost), abs(tapRotation.velocity - speed))
-            // Check the target too, so taps stay locked while the fast spin is accelerating.
             let fastSpinSpeed = max(abs(tapRotation.velocity), abs(speed + tapRotation.boost))
             if tapRotation.isFast && fastSpinSpeed > tapUnlockSpeed {
                 return nil
@@ -72,6 +92,17 @@ struct DiamondMotion {
             ?? automaticTravel(from: time, to: time + interval, speed: speed, mode: mode, appearance: appearance) / interval * min(timeSinceRelease / 0.75, 1)
         startRotation(direction: direction, velocity: currentVelocity + yawVelocity, isFast: triggersBurst)
         return triggersBurst
+    }
+
+    mutating func spin(_ velocity: Float, decay: Float) {
+        spinVelocity += velocity
+        spinDecay = max(decay, 0.05)
+    }
+
+    private func sway(at time: Float) -> Float {
+        guard swayScale != 0, let phase = swayPhase else { return 0 }
+        let frequencies = 2 * Float.pi / SIMD2<Float>(5.3, 8.9)
+        return swayScale * (0.17 * sin(frequencies.x * time + phase.x) + 0.10 * sin(frequencies.y * time + phase.y))
     }
 
     mutating func fling(direction: Float) {
@@ -105,6 +136,7 @@ struct DiamondMotion {
         yawSpringVelocity = 0
         pitchSpringVelocity = 0
         yawVelocity = 0
+        spinVelocity = 0
         lastDragTime = time
     }
 
@@ -124,6 +156,14 @@ struct DiamondMotion {
         isDragging = false
         timeSinceRelease = 0
         targetPitch = Self.referencePitch
+        if !cancelled {
+            pitchSpringVelocity -= releaseTilt
+            if releaseDecay > 0 && time - lastDragTime <= 0.12 {
+                spinVelocity += yawVelocity
+                spinDecay = max(releaseDecay, 0.05)
+                yawVelocity = 0
+            }
+        }
         if cancelled || time - lastDragTime > 0.12 {
             yawVelocity = 0
         }
@@ -138,6 +178,7 @@ struct DiamondMotion {
                        mode: DiamondStyle.AnimationMode = .continuous, time: Float = 0, appearance: DiamondStyle.Appearance = .blue) {
         let dt = min(max(dt, 0), 0.05)
         if reduceMotion {
+            self.rotationSparkle = DiamondSparkleAnimation.RotationPulse()
             tapRotation = nil
             if isDragging {
                 yaw = targetYaw
@@ -150,18 +191,29 @@ struct DiamondMotion {
             yawSpringVelocity = 0
             pitchSpringVelocity = 0
             yawVelocity = 0
+            spinVelocity = 0
             return
         }
 
         var remaining = dt
         while remaining > 0 {
             let step = min(remaining, 1 / Float(120))
+            let previousYaw = yaw
             let stepTime = max(0, time - remaining + step)
             if !isDragging {
                 timeSinceRelease += step
                 let decay = exp(-4.2 * step)
                 targetYaw += yawVelocity * (1 - decay) / 4.2
                 yawVelocity *= decay
+
+                if spinVelocity != 0 {
+                    let fade = exp(-step / spinDecay)
+                    let travel = spinVelocity * spinDecay * (1 - fade)
+                    spinVelocity *= fade
+                    if abs(spinVelocity) < 0.002 { spinVelocity = 0 }
+                    targetYaw += travel
+                    yaw += travel
+                }
 
                 let automaticTravel: Float
                 if var tapRotation = self.tapRotation {
@@ -173,6 +225,7 @@ struct DiamondMotion {
                 let travel = automaticTravel * min(timeSinceRelease / 0.75, 1)
                 targetYaw += travel
                 yaw += travel
+                targetPitch = Self.referencePitch + sway(at: stepTime) + tilt
             }
 
             let stiffness = Self.springFrequency * Self.springFrequency
@@ -181,13 +234,16 @@ struct DiamondMotion {
             pitchSpringVelocity += ((targetPitch - pitch) * stiffness - damping * pitchSpringVelocity) * step
             yaw += yawSpringVelocity * step
             pitch += pitchSpringVelocity * step
+            if mainSparklePerHalfTurn {
+                rotationSparkle.advance(rotation: yaw - previousYaw, dt: step)
+            }
             remaining = max(0, remaining - step)
         }
 
         let fullTurns = (yaw / (2 * .pi)).rounded(.towardZero)
         yaw -= fullTurns * 2 * .pi
         targetYaw -= fullTurns * 2 * .pi
-        if !isDragging && abs(pitch - Self.referencePitch) < 0.0001 && abs(pitchSpringVelocity) < 0.0001 {
+        if !isDragging && swayScale == 0 && tilt == 0 && abs(pitch - Self.referencePitch) < 0.0001 && abs(pitchSpringVelocity) < 0.0001 {
             pitch = Self.referencePitch
             pitchSpringVelocity = 0
         }
@@ -205,16 +261,12 @@ struct DiamondMotion {
     }
 
     mutating func changeReferenceAppearance(from old: DiamondStyle.Appearance, to new: DiamondStyle.Appearance, time: Float) {
-        // Rebase the automatic curve through the existing spring, retaining a
-        // user's manual yaw offset and the current pose on the switching frame.
         targetYaw += Self.referenceYaw(time: time, appearance: new) - Self.referenceYaw(time: time, appearance: old)
     }
 
     static func referenceYaw(time: Float, appearance: DiamondStyle.Appearance = .blue) -> Float {
         let frame = DiamondReferenceHighlights.frame(at: time, appearance: appearance)
         if appearance == .white {
-            // The white composition turns left at 0/59/120, without the blue
-            // version's second swing. Fit the larger authored horizontal travel.
             let progress = frame < 59 ? frame/59 : (120-frame)/61
             return -0.42 * DiamondSparkleAnimation.easing(progress, out: SIMD2(0.5,0), in: SIMD2(0.5,1))
         }
@@ -232,7 +284,6 @@ struct DiamondMotion {
 // MARK: - Entrance timing
 
 struct DiamondStarBurst {
-    // Matches the maximum lifetime in backgroundStarVertex, including its duration scale.
     static let lifetime: Float = 6.4
     let startTime: Float
     let seed: UInt32
@@ -341,7 +392,7 @@ enum DiamondLightAnimation {
 enum DiamondReferenceHighlights {
     struct Event {
         let frame: Float
-        let position: SIMD2<Float> // Composition pixels (512 × 512), not parent-scaled coordinates.
+        let position: SIMD2<Float>
         var peakScale: Float = 0.632
         var riseY: Float = 0.167
         var decayY: Float = 0.72
@@ -352,7 +403,6 @@ enum DiamondReferenceHighlights {
             let envelope = age < 2
                 ? DiamondSparkleAnimation.easing(age / 2, out: SIMD2(0.167, riseY), in: SIMD2(0.5, 1))
                 : 1 - DiamondSparkleAnimation.easing((age - 2) / 12, out: SIMD2(0.347, 0), in: SIMD2(0.823, decayY))
-            // These layers live outside the diamond's 75%-scale parent.
             return (peakScale / 0.75) * envelope
         }
     }
@@ -364,7 +414,6 @@ enum DiamondReferenceHighlights {
         var opacity: Float
     }
 
-    // Both reference compositions share the stand's three-second timeline.
     static func frame(at time: Float, appearance: DiamondStyle.Appearance = .blue) -> Float {
         let frame = max(0, time * 60).truncatingRemainder(dividingBy: 180)
         return appearance == .white ? frame * 121 / 180 : frame
@@ -408,8 +457,6 @@ enum DiamondReferenceHighlights {
         return (crown, pavilion)
     }
 
-    // BEGIN GENERATED WHITE HIGHLIGHTS
-    // Generated from GramDiamondLight.json by Tools/extract_sparkle.py.
     static let whiteMainScale: [Key] = [
         Key(frame: 0, value: 1, out: SIMD2(0.333, 0), into: SIMD2(0.833, 0.833)),
         Key(frame: 22.123, value: 0, out: SIMD2(0.167, 0), into: SIMD2(0.833, 1)),
@@ -515,10 +562,7 @@ enum DiamondReferenceHighlights {
         Key(frame: 73, value: 0)
     ])
     ]
-    // END GENERATED WHITE HIGHLIGHTS
-
-    /// The three nested transforms in `blicks` / `blicks 2`, including their
-    /// radial gradient centers. Keep the original Bezier timing and layer opacity.
+    
     static func streaks(at time: Float, appearance: DiamondStyle.Appearance = .blue) -> [Streak] {
         let frame = frame(at: time, appearance: appearance)
 
@@ -582,8 +626,6 @@ enum DiamondReferenceHighlights {
         return [top, left, sweep]
     }
 
-    // BEGIN GENERATED REFERENCE SPARKLES
-    // Generated from the nineteen Shape Layer copies in GramDiamond.json.
     static let events: [Event] = [
         Event(frame: 7, position: SIMD2(242.7, 357.7)),
         Event(frame: 15, position: SIMD2(166.7, 233.7)),
@@ -605,7 +647,6 @@ enum DiamondReferenceHighlights {
         Event(frame: 119, position: SIMD2(158.7, 277.7)),
         Event(frame: 126, position: SIMD2(323.7, 302.7))
     ]
-    // END GENERATED REFERENCE SPARKLES
 }
 
 // MARK: - Surface sparkles
@@ -614,6 +655,36 @@ enum DiamondSparkleAnimation {
     struct State {
         var shape: SIMD4<Float>
         var haloScale: Float
+    }
+
+    struct RotationPulse {
+        private static let rise: Float = 0.08
+        private static let duration: Float = rise + 33.0 / 60.0
+        private var rotation: Float = 0
+        private var age: Float = 0
+        private var from = State(shape: .zero, haloScale: 1)
+
+        var state: State {
+            guard self.age < Self.duration else { return State(shape: .zero, haloScale: 1) }
+            if self.age < Self.rise {
+                let t = DiamondSparkleAnimation.smoothstep(self.age / Self.rise)
+                let peak = DiamondSparkleAnimation.state(time: 0)
+                return State(shape: simd_mix(self.from.shape, peak.shape, SIMD4(repeating: t)),
+                    haloScale: self.from.haloScale + (peak.haloScale - self.from.haloScale) * t)
+            }
+            return DiamondSparkleAnimation.state(time: min(33.0 / 60.0, self.age - Self.rise))
+        }
+
+        mutating func advance(rotation: Float, dt: Float) {
+            self.age = min(Self.duration, self.age + dt)
+            self.rotation += abs(rotation)
+            guard self.rotation >= .pi else { return }
+            self.rotation.formTruncatingRemainder(dividingBy: .pi)
+            if self.age >= Self.rise {
+                self.from = self.state
+                self.age = 0
+            }
+        }
     }
 
     static func state(time: Float, appearance: DiamondStyle.Appearance = .blue) -> State {
@@ -650,7 +721,7 @@ enum DiamondSparkleAnimation {
         var visibility: Float
     }
 
-    static func mainPlacement(model: simd_float4x4, angularSpeed: Float = 0) -> MainPlacement {
+    static func mainPlacement(model: simd_float4x4, angularSpeed: Float = 0, rotationTriggered: Bool = false) -> MainPlacement {
         let pitch = DiamondMotion.referencePitch
         let referenceFront = SIMD4<Float>(0, -sin(pitch), cos(pitch), 0)
         var bestFacing: Float = -1
@@ -660,6 +731,9 @@ enum DiamondSparkleAnimation {
             let forward = model * SIMD4<Float>(sin(angle), 0, cos(angle), 0)
             let facing = simd_dot(forward, referenceFront)
             if facing > bestFacing { bestFacing = facing; faceAngle = angle }
+        }
+        if rotationTriggered {
+            return MainPlacement(faceRotation: faceAngle, visibility: 1)
         }
         let limit = Float.pi * 12 / 180
         let angle = acos(min(1, max(-1, bestFacing)))

@@ -27,6 +27,7 @@ final class DiamondRenderer: ComputeState {
         var animation: SIMD4<Float>
         var layout: SIMD4<Float>
         var appearance: SIMD4<Float>
+        var tint: SIMD4<Float>
     }
     struct Uniforms {
         var model: simd_float4x4
@@ -84,11 +85,15 @@ final class DiamondRenderer: ComputeState {
     private let planeCount: Int
     private let geometry: DiamondGeometry
     private let facetProjection: SIMD4<Float>
-    // These optional modes reuse the shared geometry without adding their
-    // mesh sampling work to the default entrance animation's initialization.
     private lazy var referenceHighlights = DiamondSparkleGeometry.Reference(geometry: self.geometry)
     private lazy var whiteReferenceHighlights = DiamondSparkleGeometry.Reference(geometry: self.geometry, appearance: .white)
     private lazy var silhouette = DiamondSilhouette(geometry: self.geometry)
+
+    private lazy var glassPipeline: MTLRenderPipelineState? = {
+        guard let library = metalLibrary(device: self.device) else { return nil }
+        return try? Self.makePipeline(device: self.device, library: library, sampleCount: self.sampleCount,
+            vertex: "diamondVertex", fragment: "diamondFragment", blending: true)
+    }()
 
     required convenience init?(device: MTLDevice) {
         do {
@@ -145,26 +150,8 @@ final class DiamondRenderer: ComputeState {
         }
 
         func makePipeline(vertex: String, fragment: String, blending: Bool) throws -> MTLRenderPipelineState {
-            let descriptor = MTLRenderPipelineDescriptor()
-            descriptor.label = "GramDiamond • \(fragment)"
-            guard let vertexFunction = library.makeFunction(name: vertex),
-                  let fragmentFunction = library.makeFunction(name: fragment) else {
-                throw Failure.resource("\(vertex) / \(fragment)")
-            }
-            descriptor.vertexFunction = vertexFunction
-            descriptor.fragmentFunction = fragmentFunction
-            descriptor.rasterSampleCount = sampleCount
-            descriptor.colorAttachments[0].pixelFormat = .bgra8Unorm
-            descriptor.depthAttachmentPixelFormat = .depth32Float
-            if blending {
-                let attachment = descriptor.colorAttachments[0]!
-                attachment.isBlendingEnabled = true
-                attachment.sourceRGBBlendFactor = .one
-                attachment.destinationRGBBlendFactor = .oneMinusSourceAlpha
-                attachment.sourceAlphaBlendFactor = .one
-                attachment.destinationAlphaBlendFactor = .oneMinusSourceAlpha
-            }
-            return try device.makeRenderPipelineState(descriptor: descriptor)
+            return try Self.makePipeline(device: device, library: library, sampleCount: sampleCount,
+                vertex: vertex, fragment: fragment, blending: blending)
         }
         pipeline = try makePipeline(vertex: "diamondVertex", fragment: "diamondFragment", blending: false)
         sparklePipeline = try makePipeline(vertex: "sparkleVertex", fragment: "sparkleFragment", blending: true)
@@ -181,23 +168,73 @@ final class DiamondRenderer: ComputeState {
         sparkleDepthState = ss
     }
 
-    private func uniforms(size: CGSize, time: Float, motion: DiamondMotion, style: DiamondStyle, reduceMotion: Bool) -> Uniforms {
+    private static func makePipeline(device: MTLDevice, library: MTLLibrary, sampleCount: Int,
+                                     vertex: String, fragment: String, blending: Bool) throws -> MTLRenderPipelineState {
+        let descriptor = MTLRenderPipelineDescriptor()
+        descriptor.label = "GramDiamond • \(fragment)"
+        guard let vertexFunction = library.makeFunction(name: vertex),
+              let fragmentFunction = library.makeFunction(name: fragment) else {
+            throw Failure.resource("\(vertex) / \(fragment)")
+        }
+        descriptor.vertexFunction = vertexFunction
+        descriptor.fragmentFunction = fragmentFunction
+        descriptor.rasterSampleCount = sampleCount
+        descriptor.colorAttachments[0].pixelFormat = .bgra8Unorm
+        descriptor.depthAttachmentPixelFormat = .depth32Float
+        if blending {
+            let attachment = descriptor.colorAttachments[0]!
+            attachment.isBlendingEnabled = true
+            attachment.sourceRGBBlendFactor = .one
+            attachment.destinationRGBBlendFactor = .oneMinusSourceAlpha
+            attachment.sourceAlphaBlendFactor = .one
+            attachment.destinationAlphaBlendFactor = .oneMinusSourceAlpha
+        }
+        return try device.makeRenderPipelineState(descriptor: descriptor)
+    }
+
+    private func uniforms(size: CGSize, time: Float, motion: DiamondMotion, style: DiamondStyle,
+                          grow: Float, pixelsPerPoint: Float, reduceMotion: Bool) -> Uniforms {
         let model = DiamondMath.rotation(x: motion.pitch, y: motion.yaw)
         let horizontalScale: Float = style.widthCompensation
             ? silhouette.horizontalScale(yaw: motion.yaw, pitch: motion.pitch) : 1
+        let zoom: Float
+        if style.widthPoints > 0 && size.width > 0 && size.height > 0 {
+            let aspect = Float(size.width / size.height)
+            let base = style.widthPoints * pixelsPerPoint * 1.52 * max(aspect, 1) / Float(size.width)
+            zoom = min(2.4, max(0.05, motion.zoom * base * grow))
+        } else if style.dragGrow != 1 || grow != 1 {
+            zoom = min(2.4, max(0.05, motion.zoom * style.zoom * grow))
+        } else {
+            zoom = min(1.6, max(0.6, motion.zoom * style.zoom))
+        }
         var projection = DiamondMath.projection(aspect: Float(size.width / max(size.height, 1)),
-                                               zoom: min(1.6, max(0.6, motion.zoom * style.zoom)))
+                                               zoom: zoom)
         projection.columns.0.x *= horizontalScale
+        let shift = style.growShift * (grow - 1)
+        if shift != 0 && size.height > 0 {
+            let dy = -2 * shift * pixelsPerPoint / Float(size.height)
+            projection.columns.0.y += dy * projection.columns.0.w
+            projection.columns.1.y += dy * projection.columns.1.w
+            projection.columns.2.y += dy * projection.columns.2.w
+            projection.columns.3.y += dy * projection.columns.3.w
+        }
         let animationTime = reduceMotion ? 0 : DiamondEntrance.highlightTime(
             at: time, entrance: style.animationMode == .entrance)
-        let sparkle = DiamondSparkleAnimation.state(time: animationTime, appearance: style.appearance)
-        let lookAhead: Float = 1 / 120
-        var nextMotion = motion
-        nextMotion.step(dt: lookAhead, speed: style.isRotating ? style.rotationSpeed : 0,
-                        reduceMotion: reduceMotion, mode: style.animationMode, time: time + lookAhead, appearance: style.appearance)
-        let yawDelta = atan2(sin(nextMotion.yaw - motion.yaw), cos(nextMotion.yaw - motion.yaw))
-        let angularSpeed = simd_length(SIMD2(yawDelta, nextMotion.pitch - motion.pitch)) / lookAhead
-        let mainSparkle = DiamondSparkleAnimation.mainPlacement(model: model, angularSpeed: angularSpeed)
+        let sparkle: DiamondSparkleAnimation.State
+        let mainSparkle: DiamondSparkleAnimation.MainPlacement
+        if style.mainSparklePerHalfTurn {
+            sparkle = motion.rotationSparkle.state
+            mainSparkle = DiamondSparkleAnimation.mainPlacement(model: model, rotationTriggered: true)
+        } else {
+            sparkle = DiamondSparkleAnimation.state(time: animationTime, appearance: style.appearance)
+            let lookAhead: Float = 1 / 120
+            var nextMotion = motion
+            nextMotion.step(dt: lookAhead, speed: style.isRotating ? style.rotationSpeed : 0,
+                            reduceMotion: reduceMotion, mode: style.animationMode, time: time + lookAhead, appearance: style.appearance)
+            let yawDelta = atan2(sin(nextMotion.yaw - motion.yaw), cos(nextMotion.yaw - motion.yaw))
+            let angularSpeed = simd_length(SIMD2(yawDelta, nextMotion.pitch - motion.pitch)) / lookAhead
+            mainSparkle = DiamondSparkleAnimation.mainPlacement(model: model, angularSpeed: angularSpeed)
+        }
         let light = DiamondLightAnimation.state(time: animationTime)
         let flashes = style.appearance == .white && style.animationMode == .reference && style.sparkles && !reduceMotion
             ? DiamondReferenceHighlights.facetFlashes(at: animationTime) : (.zero, .zero)
@@ -215,38 +252,49 @@ final class DiamondRenderer: ComputeState {
                         crownSweep: light.crownSweep, rightCrownSweep: light.rightCrownSweep,
                         leftCrownSweep: light.leftCrownSweep, pavilionSweep: light.pavilionSweep,
                         rightPavilionSweep: light.rightPavilionSweep, leftPavilionSweep: light.leftPavilionSweep,
-                        appearance: SIMD4(Float(style.appearance.rawValue), 0, 0, 0),
+                        appearance: SIMD4(Float(style.appearance.rawValue), min(1, max(0, style.whiten)), 0, 0),
                         referenceCrownFlash: flashes.0, referencePavilionFlash: flashes.1)
     }
 
-    func encode(encoder: MTLRenderCommandEncoder, size: CGSize, time: Float, starBursts: [DiamondStarBurst], motion: DiamondMotion, style: DiamondStyle, reduceMotion: Bool, lightBackground: Bool) {
-        var u = uniforms(size: size, time: time, motion: motion, style: style, reduceMotion: reduceMotion)
-        if style.backgroundStars && !reduceMotion {
+    func encode(encoder: MTLRenderCommandEncoder, size: CGSize, time: Float, starBursts: [DiamondStarBurst], motion: DiamondMotion, style: DiamondStyle, grow: Float, pixelsPerPoint: Float, reduceMotion: Bool, lightBackground: Bool) {
+        var u = uniforms(size: size, time: time, motion: motion, style: style, grow: grow, pixelsPerPoint: pixelsPerPoint, reduceMotion: reduceMotion)
+        let stonePipeline: MTLRenderPipelineState
+        if style.whiten > 0, let glassPipeline {
+            stonePipeline = glassPipeline
+        } else {
+            stonePipeline = pipeline
+            u.appearance.y = 0
+        }
+        if style.backgroundStars && style.starOpacity > 0.001 && !reduceMotion {
             let entrance = style.animationMode == .entrance
             var stars = StarUniforms(
-                projection: DiamondMath.projection(aspect: Float(size.width/max(size.height,1)), zoom: 1, perspective: false),
+                projection: DiamondMath.projection(aspect: Float(size.width/max(size.height,1)), zoom: max(0.2, style.starZoom), perspective: false),
                 animation: SIMD4(0, DiamondEntrance.particleTime(at:time,entrance:entrance),
                                  0, lightBackground ? 1 : 0),
                 layout: SIMD4(Float(size.width),Float(size.height),Float(DiamondEntrance.steadyStarCount),0),
-                appearance: u.appearance)
+                appearance: u.appearance,
+                tint: SIMD4(0, min(1, max(0, style.starOpacity)), max(0.05, style.starEmission), 0))
             encoder.setCullMode(.none)
             encoder.setDepthStencilState(sparkleDepthState)
             encoder.setRenderPipelineState(starPipeline)
-            encoder.setVertexBytes(&stars,length:MemoryLayout<StarUniforms>.stride,index:0)
-            encoder.drawPrimitives(type:.triangle,vertexStart:0,vertexCount:6,
-                instanceCount:DiamondEntrance.steadyStarCount)
+            if style.steadyStars {
+                encoder.setVertexBytes(&stars,length:MemoryLayout<StarUniforms>.stride,index:0)
+                encoder.drawPrimitives(type:.triangle,vertexStart:0,vertexCount:6,
+                    instanceCount:DiamondEntrance.steadyStarCount)
+            }
             for burst in starBursts where time >= burst.startTime && time - burst.startTime < DiamondStarBurst.lifetime {
                 stars.animation.x = time - burst.startTime
                 stars.animation.z = 1
                 stars.layout.w = Float(burst.seed)
                 encoder.setVertexBytes(&stars,length:MemoryLayout<StarUniforms>.stride,index:0)
+                let count = Int(Float(DiamondEntrance.burstStarCount) * min(1, max(0, style.burstSize)))
                 encoder.drawPrimitives(type:.triangle,vertexStart:0,vertexCount:6,
-                    instanceCount:DiamondEntrance.burstStarCount,baseInstance:DiamondEntrance.steadyStarCount)
+                    instanceCount:max(count, 1),baseInstance:DiamondEntrance.steadyStarCount)
             }
         }
         encoder.setFrontFacing(.counterClockwise)
         encoder.setCullMode(.back)
-        encoder.setRenderPipelineState(pipeline)
+        encoder.setRenderPipelineState(stonePipeline)
         encoder.setDepthStencilState(depthState)
         encoder.setVertexBuffer(vertexBuffer, offset: 0, index: 0)
         encoder.setVertexBytes(&u, length: MemoryLayout<Uniforms>.stride, index: 1)

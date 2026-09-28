@@ -122,15 +122,6 @@ actor WalletEngineStorage {
         try self.writeCodable(descriptor, service: self.descriptorService, account: "wallet")
     }
 
-    func loadTransferReceipts() throws -> [WalletEngineTransferReceipt] {
-        do {
-            return try self.readCodable(service: self.descriptorService, account: "transfer-receipts") ?? []
-        } catch WalletEngineStorageError.corrupted {
-            try? self.remove(service: self.descriptorService, account: "transfer-receipts")
-            return []
-        }
-    }
-
     func loadTransferSubmissions() throws -> [WalletTransferSubmissionRecord] {
         try self.readCodable(service: self.descriptorService, account: "transfer-submissions") ?? []
     }
@@ -150,15 +141,6 @@ actor WalletEngineStorage {
               records[index].resolution == .pending || resolution == .consumed else { return }
         records[index].resolution = resolution
         try self.writeCodable(records, service: self.descriptorService, account: "transfer-submissions")
-    }
-
-    func saveTransferReceipt(_ receipt: WalletEngineTransferReceipt) throws {
-        var receipts = try self.loadTransferReceipts().filter {
-            $0.pendingTransfer.id != receipt.pendingTransfer.id
-                && Int64($0.receivedAt) + Int64(walletPendingTransferUILifetime) > Int64(receipt.receivedAt)
-        }
-        receipts.append(receipt)
-        try self.writeCodable(receipts, service: self.descriptorService, account: "transfer-receipts")
     }
 
     func loadArchivedWallets() throws -> [WalletEngineArchivedWalletRecord] {
