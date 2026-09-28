@@ -594,6 +594,10 @@ private final class WalletSendScreenComponent: Component {
         private let commentBackgroundView = UIImageView()
         private let commentText = ComponentView<Empty>()
 
+        var isAmountInputActive: Bool {
+            return self.amountField.isInputActive
+        }
+
         private var component: WalletSendScreenComponent?
         private var environment: EnvironmentType?
         private weak var componentState: EmptyComponentState?
@@ -2773,6 +2777,12 @@ public final class WalletSendScreen: ViewControllerComponentContainer, Attachmen
     }
     public var isContainerExpanded: () -> Bool = {
         return false
+    }
+    public var allowsCollapsing: Bool {
+        guard self.isNodeLoaded else {
+            return true
+        }
+        return (self.node.hostView.componentView as? WalletSendScreenComponent.View)?.isAmountInputActive != true
     }
     public var ignoresInputHeightInRegularLayout: Bool {
         return true

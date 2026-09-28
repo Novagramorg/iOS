@@ -502,7 +502,9 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
             return RenderedFrame(texture: targets.color, commandBuffer: commandBuffer)
         })
 
-        context.renderToLayer(spec: RenderLayerSpec(size: size), state: CompositeState.self, layer: self, inputs: frame, commands: { [weak self] encoder, placement, frame in
+        // Transparent atlas padding keeps ancestor scaling from sampling neighboring allocations.
+        let edgeInset = 2
+        context.renderToLayer(spec: RenderLayerSpec(size: size, edgeInset: edgeInset), state: CompositeState.self, layer: self, inputs: frame, commands: { [weak self] encoder, placement, frame in
             guard let frame else { return }
             if let self, self.renderSize != nil, self.bounds.size != canvasSize {
                 CATransaction.begin()
@@ -511,7 +513,12 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
                 CATransaction.commit()
             }
             let effectiveRect = placement.effectiveRect
-            var rect = SIMD4<Float>(Float(effectiveRect.minX), Float(effectiveRect.minY), Float(effectiveRect.width), Float(effectiveRect.height))
+            // MetalEngine clears the full allocation and exposes only this inner rect to the layer.
+            let contentRect = effectiveRect.insetBy(
+                dx: effectiveRect.width * CGFloat(edgeInset) / CGFloat(size.width + edgeInset * 2),
+                dy: effectiveRect.height * CGFloat(edgeInset) / CGFloat(size.height + edgeInset * 2)
+            )
+            var rect = SIMD4<Float>(Float(contentRect.minX), Float(contentRect.minY), Float(contentRect.width), Float(contentRect.height))
             encoder.setVertexBytes(&rect, length: MemoryLayout<SIMD4<Float>>.stride, index: 0)
             encoder.setFragmentTexture(frame.texture, index: 0)
             encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
