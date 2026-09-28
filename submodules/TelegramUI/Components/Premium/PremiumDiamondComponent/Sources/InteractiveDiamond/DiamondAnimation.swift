@@ -34,9 +34,9 @@ struct DiamondMotion {
     private(set) var pitch: Float = Self.referencePitch
     private(set) var isDragging = false
     var zoom: Float = 1
-    var mainSparklePerHalfTurn = false {
+    var mainSparkleOnRotation = false {
         didSet {
-            if self.mainSparklePerHalfTurn != oldValue {
+            if self.mainSparkleOnRotation != oldValue {
                 self.rotationSparkle = DiamondSparkleAnimation.RotationPulse()
             }
         }
@@ -105,12 +105,19 @@ struct DiamondMotion {
         return swayScale * (0.17 * sin(frequencies.x * time + phase.x) + 0.10 * sin(frequencies.y * time + phase.y))
     }
 
-    mutating func fling(direction: Float) {
+    mutating func fling(direction: Float, impulse: Float? = nil) {
         guard !isDragging else { return }
         let currentVelocity = yawSpringVelocity
         targetYaw = yaw
         yawSpringVelocity = 0
-        startRotation(direction: direction, velocity: currentVelocity, isFast: true)
+        if let impulse {
+            tapRotation = nil
+            yawVelocity = 0
+            spinVelocity = 0
+            spin(direction * impulse, decay: 0.7)
+        } else {
+            startRotation(direction: direction, velocity: currentVelocity, isFast: true)
+        }
     }
 
     private mutating func startRotation(direction: Float, velocity: Float, isFast: Bool) {
@@ -234,7 +241,7 @@ struct DiamondMotion {
             pitchSpringVelocity += ((targetPitch - pitch) * stiffness - damping * pitchSpringVelocity) * step
             yaw += yawSpringVelocity * step
             pitch += pitchSpringVelocity * step
-            if mainSparklePerHalfTurn {
+            if mainSparkleOnRotation {
                 rotationSparkle.advance(rotation: yaw - previousYaw, dt: step)
             }
             remaining = max(0, remaining - step)
@@ -658,6 +665,10 @@ enum DiamondSparkleAnimation {
     }
 
     struct RotationPulse {
+        private static let rotationInterval: Float = .pi
+        private static let probability: Float = 0.6
+        private static let highSpeedThreshold: Float = 2 * .pi
+        private static let highSpeedProbability: Float = 0.05
         private static let rise: Float = 0.08
         private static let duration: Float = rise + 33.0 / 60.0
         private var rotation: Float = 0
@@ -678,11 +689,14 @@ enum DiamondSparkleAnimation {
         mutating func advance(rotation: Float, dt: Float) {
             self.age = min(Self.duration, self.age + dt)
             self.rotation += abs(rotation)
-            guard self.rotation >= .pi else { return }
-            self.rotation.formTruncatingRemainder(dividingBy: .pi)
-            if self.age >= Self.rise {
-                self.from = self.state
-                self.age = 0
+            let speed = dt > 0 ? abs(rotation) / dt : 0
+            let probability = speed >= Self.highSpeedThreshold ? Self.highSpeedProbability : Self.probability
+            while self.rotation >= Self.rotationInterval {
+                self.rotation -= Self.rotationInterval
+                if Float.random(in: 0 ..< 1) < probability, self.age >= Self.rise {
+                    self.from = self.state
+                    self.age = 0
+                }
             }
         }
     }

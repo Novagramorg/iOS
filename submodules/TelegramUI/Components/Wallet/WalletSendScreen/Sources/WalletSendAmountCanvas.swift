@@ -352,6 +352,10 @@ final class WalletSendAmountCanvas: UIView {
         updateAtlas(scale: window?.screen.scale ?? UIScreen.main.scale)
     }
 
+    func glyphMask(for glyph: WalletSendAmountGlyph) -> WalletSendAmountGlyphAtlas.Mask? {
+        return self.metalLayer.glyphAtlas?.mask(for: glyph)
+    }
+
     private func updateAtlas(scale: CGFloat) {
         if atlasKey?.scale == scale, metalLayer.glyphAtlas != nil { return }
         guard let currencyCode else { return }

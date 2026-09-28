@@ -155,7 +155,7 @@ func settingsItems(data: PeerInfoScreenData?, context: AccountContext, presentat
         
         if WalletConfiguration.with(appConfiguration: context.currentAppConfiguration.with { $0 }).isAvailable {
             //TODO:localize
-            items[.wallet]!.append(PeerInfoScreenDisclosureItem(id: 0, label: .titleBadge(presentationData.strings.Settings_New, presentationData.theme.list.itemAccentColor), text: "Wallet", icon: PresentationResourcesSettings.ton, action: {
+            items[.wallet]!.append(PeerInfoScreenDisclosureItem(id: 0, label: .titleBadge(presentationData.strings.Settings_New, presentationData.theme.list.itemAccentColor), text: "Money", icon: PresentationResourcesSettings.money, action: {
                 interaction.openSettings(.wallet)
             }))
         }

@@ -4,10 +4,13 @@ import AppBundle
 import Display
 import ComponentFlow
 import AnimatedTextComponent
+import GlassBackgroundComponent
 import TelegramPresentationData
 
 final class WalletSendAnimatedRateButton: UIControl {
     private let contentView = UIView()
+    private let glassBackgroundView: GlassBackgroundView?
+    private let glassButton: UIButton?
     private let canvas = WalletSendAmountCanvas(frame: .zero)
     private let title = ComponentView<Empty>()
     private let gramIcon = UIImageView()
@@ -29,10 +32,18 @@ final class WalletSendAnimatedRateButton: UIControl {
     private var gramTo: CGFloat = 0.0
     private var currentGram: CGFloat = 0.0
     private var visible = false
+    private var isDark = false
     private var frameDuration = 1.0 / 120.0
     var action: (() -> Void)?
 
     override init(frame: CGRect) {
+        if #available(iOS 27.0, *) {
+            self.glassBackgroundView = GlassBackgroundView()
+            self.glassButton = UIButton(type: .custom)
+        } else {
+            self.glassBackgroundView = nil
+            self.glassButton = nil
+        }
         super.init(frame: frame)
         self.isExclusiveTouch = true
         self.isAccessibilityElement = true
@@ -40,7 +51,16 @@ final class WalletSendAnimatedRateButton: UIControl {
         self.contentView.isUserInteractionEnabled = false
         self.contentView.clipsToBounds = true
         self.contentView.layer.cornerRadius = 13.0
-        self.addSubview(self.contentView)
+        if let glassBackgroundView = self.glassBackgroundView, let glassButton = self.glassButton {
+            self.addSubview(glassBackgroundView)
+            glassBackgroundView.contentView.addSubview(self.contentView)
+            glassBackgroundView.contentView.addSubview(glassButton)
+            glassButton.isExclusiveTouch = true
+            glassButton.isAccessibilityElement = false
+            glassButton.addTarget(self, action: #selector(self.pressed), for: .touchUpInside)
+        } else {
+            self.addSubview(self.contentView)
+        }
         self.contentView.addSubview(self.canvas)
         self.canvas.onFrameReady = { [weak self] in
             guard let self, self.visible, self.window != nil else { return }
@@ -80,6 +100,7 @@ final class WalletSendAnimatedRateButton: UIControl {
 
     override var isHighlighted: Bool {
         didSet {
+            guard self.glassBackgroundView == nil else { return }
             let scale: CGFloat = self.isHighlighted && !UIAccessibility.isReduceMotionEnabled ? 0.94 : 1.0
             UIView.animate(withDuration: UIAccessibility.isReduceMotionEnabled ? 0.15 : 0.28, delay: 0.0, usingSpringWithDamping: 0.7, initialSpringVelocity: 0.0, options: [.beginFromCurrentState, .allowUserInteraction], animations: {
                 self.contentView.transform = CGAffineTransform(scaleX: scale, y: scale)
@@ -101,8 +122,10 @@ final class WalletSendAnimatedRateButton: UIControl {
         let wasVisible = self.visible
         self.visible = isVisible
         self.isEnabled = isEnabled
+        self.glassButton?.isEnabled = isEnabled
+        self.isDark = theme.overallDarkAppearance
         self.accessibilityLabel = displaysGramIcon ? "GRAM " + text : text
-        self.contentView.backgroundColor = theme.list.itemInputField.backgroundColor
+        self.contentView.backgroundColor = self.glassBackgroundView == nil ? theme.list.itemInputField.backgroundColor : .clear
         for arrow in self.arrows { arrow.tintColor = theme.list.itemSecondaryTextColor }
         self.canvas.prepareGlyphs(separators: dateTimeFormat.decimalSeparator + dateTimeFormat.groupingSeparator, currencyCode: currencyCode)
         let font = WalletSendAmountFonts.rate
@@ -201,7 +224,22 @@ final class WalletSendAnimatedRateButton: UIControl {
         self.currentWidth = self.widthFrom + (self.widthTo - self.widthFrom) * p + self.motion.widthAdjustment(at: now)
         self.currentGram = self.gramFrom + (self.gramTo - self.gramFrom) * p
         self.contentView.bounds = CGRect(x: 0.0, y: 0.0, width: self.currentWidth, height: 26.0)
-        self.contentView.center = CGPoint(x: self.bounds.midX, y: self.bounds.midY)
+        if let glassBackgroundView = self.glassBackgroundView {
+            glassBackgroundView.bounds = self.contentView.bounds
+            glassBackgroundView.center = CGPoint(x: self.bounds.midX, y: self.bounds.midY)
+            glassBackgroundView.update(
+                size: self.contentView.bounds.size,
+                cornerRadius: 13.0,
+                isDark: self.isDark,
+                tintColor: .init(kind: .panel),
+                isInteractive: self.isEnabled,
+                transition: .immediate
+            )
+            self.contentView.center = CGPoint(x: self.currentWidth * 0.5, y: 13.0)
+            self.glassButton?.frame = self.contentView.bounds
+        } else {
+            self.contentView.center = CGPoint(x: self.bounds.midX, y: self.bounds.midY)
+        }
         self.canvas.isRenderingEnabled = self.visible && UIApplication.shared.applicationState == .active
         self.canvas.frame = CGRect(x: 0, y: 0, width: ceil(max(self.widthFrom, self.widthTo, self.currentWidth) / 64.0) * 64.0, height: 26.0)
         self.canvas.frameDuration = self.frameDuration

@@ -1,11 +1,28 @@
 import UIKit
 import Display
 import ComponentFlow
+import Metal
 import MetalEngine
 import SwiftSignalKit
 import TelegramPresentationData
 
 public final class InteractiveDiamondComponent: Component {
+    public struct RefractionSource: Equatable {
+        let texture: MTLTexture
+        let uv: SIMD4<Float>
+        let rect: CGRect
+
+        public init(texture: MTLTexture, uv: SIMD4<Float>, rect: CGRect) {
+            self.texture = texture
+            self.uv = uv
+            self.rect = rect
+        }
+
+        public static func ==(lhs: RefractionSource, rhs: RefractionSource) -> Bool {
+            return lhs.texture === rhs.texture && lhs.uv == rhs.uv && lhs.rect == rhs.rect
+        }
+    }
+
     private let size: CGSize
     private let diamondWidth: CGFloat
     private let isVisible: Bool
@@ -39,8 +56,7 @@ public final class InteractiveDiamondComponent: Component {
         private var expansion: Expansion?
         private var grip: CGFloat = 0.0
         private var dragPosition: CGPoint?
-        private var dragTime: CFTimeInterval = 0.0
-        private var dragVelocity = CGPoint.zero
+        private var dragSamples: [(x: CGFloat, time: CFTimeInterval)] = []
 
         public override var isUserInteractionEnabled: Bool {
             didSet {
@@ -65,7 +81,7 @@ public final class InteractiveDiamondComponent: Component {
             style.rotationSpeed = 2 * .pi / 26
             style.swayScale = 1
             style.backgroundStars = false
-            style.mainSparklePerHalfTurn = true
+            style.mainSparkleOnRotation = true
             style.releaseTilt = 2.6
             self.diamondLayer.update(style: style)
             self.layer.addSublayer(self.diamondLayer)
@@ -120,24 +136,25 @@ public final class InteractiveDiamondComponent: Component {
             switch gesture.state {
             case .began:
                 self.dragPosition = position
-                self.dragTime = now
-                self.dragVelocity = .zero
+                self.dragSamples = [(position.x, now)]
                 self.diamondLayer.updateDrag(state: .began)
             case .changed, .ended:
                 guard let previous = self.dragPosition else { return }
                 let translation = CGPoint(x: position.x - previous.x, y: position.y - previous.y)
-                let dt = now - self.dragTime
-                if translation != .zero {
-                    let interval = CGFloat(max(dt, 1.0 / 240.0))
-                    self.dragVelocity = CGPoint(x: translation.x / interval, y: translation.y / interval)
-                    self.dragTime = now
-                } else if dt > 0.12 {
-                    self.dragVelocity = .zero
+                // Average recent movement so a tiny final touch sample does not erase the fling.
+                self.dragSamples.append((position.x, now))
+                while self.dragSamples.count > 2 && self.dragSamples[0].time < now - 0.08 {
+                    self.dragSamples.removeFirst()
                 }
+                let sample = self.dragSamples[0]
+                let interval = CGFloat(max(now - sample.time, 1.0 / 240.0))
+                let velocity = CGPoint(x: (position.x - sample.x) / interval, y: 0.0)
                 self.dragPosition = gesture.state == .ended ? nil : position
-                self.diamondLayer.updateDrag(state: gesture.state, translation: translation, velocity: self.dragVelocity, scale: 220.0)
+                if gesture.state == .ended { self.dragSamples.removeAll(keepingCapacity: true) }
+                self.diamondLayer.updateDrag(state: gesture.state, translation: translation, velocity: velocity, scale: 220.0, releaseImpulse: 3.0 * 6.5)
             case .cancelled, .failed:
                 self.dragPosition = nil
+                self.dragSamples.removeAll(keepingCapacity: true)
                 self.diamondLayer.updateDrag(state: .cancelled)
             default:
                 break
@@ -184,6 +201,7 @@ public final class InteractiveDiamondComponent: Component {
             let expanded = self.isHolding || self.expansion != nil
             self.diamondLayer.usesHighFrameRate = expanded
             self.diamondLayer.interactionScale = Float(1.0 + 2.75 * self.grip)
+            self.diamondLayer.refractionStrength = Float(min(1.0, max(0.0, self.grip)))
             self.diamondLayer.renderSize = expanded ? CGSize(width: 220.0, height: 220.0) : self.restingSize
             self.diamondLayer.setNeedsUpdate()
             if self.isExpanded != expanded {
@@ -200,6 +218,7 @@ public final class InteractiveDiamondComponent: Component {
             }
             if self.isHolding { self.diamondLayer.updateDrag(state: .cancelled) }
             self.dragPosition = nil
+            self.dragSamples.removeAll(keepingCapacity: true)
             self.isHolding = false
             self.expansion = nil
             self.grip = 0.0
@@ -208,6 +227,12 @@ public final class InteractiveDiamondComponent: Component {
 
         public func spin(_ velocity: Float, decay: Float) {
             self.diamondLayer.spin(velocity, decay: decay)
+        }
+
+        public func updateRefractionSource(_ source: RefractionSource?) {
+            guard self.diamondLayer.refractionSource != source else { return }
+            self.diamondLayer.refractionSource = source
+            self.diamondLayer.setNeedsUpdate()
         }
 
         fileprivate func update(component: InteractiveDiamondComponent) -> CGSize {

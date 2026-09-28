@@ -217,6 +217,8 @@ public struct PresentationResourcesSettings {
     })
     
     public static let ton = renderSettingsIcon(name: "Item List/Icons/Gram", backgroundColors: [colorBlue])
+    
+    public static let money = UIImage(bundleImageName: "Settings/Gram")
  
     public static let stars = generateImage(CGSize(width: 30.0, height: 30.0), contextGenerator: { size, context in
         let bounds = CGRect(origin: CGPoint(), size: size)

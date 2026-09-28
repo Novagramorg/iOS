@@ -692,8 +692,7 @@ float3 coolInnerGlow(float3 color, float3 position, float3 ray, float3 normal, f
     return mix(color,float3(0.96,1,1),glow);
 }
 
-fragment float4 diamondFragment(Raster in [[stage_in]], constant Uniforms &u [[buffer(1)]],
-                                const device float4 *planes [[buffer(2)]]) {
+float4 diamondSurface(Raster in, constant Uniforms &u, const device float4 *planes) {
     float3 n = normalize(in.normal);
     float cameraDistance = -u.projection[3].w / u.projection[2].w;
     float3 view = normalize(float3(0, 0, cameraDistance) - in.worldPosition);
@@ -820,6 +819,57 @@ fragment float4 diamondFragment(Raster in [[stage_in]], constant Uniforms &u [[b
         return float4(saturate(color * u.parameters.z) * alpha, alpha);
     }
     return float4(saturate(color * u.parameters.z), 1);
+}
+
+fragment float4 diamondFragment(Raster in [[stage_in]], constant Uniforms &u [[buffer(1)]],
+                                const device float4 *planes [[buffer(2)]]) {
+    return diamondSurface(in, u, planes);
+}
+
+struct DiamondLensUniforms {
+    float4 rect;
+    float4 uv;
+    float4 viewport; // pixel center, pixels per point, edge count
+    float4 parameters; // strength, yaw, radius in points, light background
+};
+
+fragment float4 diamondLensFragment(Raster in [[stage_in]], constant Uniforms &u [[buffer(1)]],
+                                    const device float4 *planes [[buffer(2)]],
+                                    constant DiamondLensUniforms &lens [[buffer(3)]],
+                                    constant float4 *edges [[buffer(4)]],
+                                    texture2d<float> glyph [[texture(0)]]) {
+    float4 stone = diamondSurface(in, u, planes);
+    float2 position = (in.position.xy - lens.viewport.xy) / lens.viewport.z;
+    float distanceToEdge = 1e9;
+    for (uint i = 0; i < uint(lens.viewport.w); ++i) {
+        distanceToEdge = min(distanceToEdge, dot(edges[i].xy, position) + edges[i].z);
+    }
+    if (distanceToEdge <= 0.0) return stone;
+
+    // The reference's faceted lens, in screen points and on the gem's own frame.
+    float strength = lens.parameters.x;
+    float edge = smoothstep(0.0, 5.0, distanceToEdge) * strength;
+    float radius = max(lens.parameters.z, 1.0);
+    float2 q = position / radius;
+    float facet = (asin(clamp(q.x, -0.999, 0.999)) - lens.parameters.y) / (M_PI_F / 4.0);
+    float wave = sin(M_PI_F * facet);
+    float prism = sign(wave) * pow(abs(wave), 0.6);
+    float crown = 1.0 - smoothstep(-0.25, 0.05, q.y);
+    float2 bend = float2(prism * 0.12, mix(-0.08 * q.y, 0.09, crown)) * radius;
+    float zoom = mix(0.84, 0.72, crown * (1.0 - smoothstep(0.2, 0.6, abs(q.x))));
+    float2 samplePosition = position * mix(1.0, zoom, edge) + bend * edge;
+    float2 glyphPosition = (samplePosition - lens.rect.xy) / lens.rect.zw;
+    if (any(glyphPosition < 0.0) || any(glyphPosition > 1.0)) return stone;
+
+    // The atlas is an alpha mask. Keep sampling inside this glyph's tile.
+    constexpr sampler glyphSampler(mag_filter::linear, min_filter::linear, address::clamp_to_edge);
+    float2 halfTexel = 0.5 / float2(glyph.get_width(), glyph.get_height());
+    float2 uv = clamp(lens.uv.xy + glyphPosition * lens.uv.zw,
+                      lens.uv.xy + halfTexel, lens.uv.xy + lens.uv.zw - halfTexel);
+    float opacity = glyph.sample(glyphSampler, uv).r * 0.55 * strength * smoothstep(0.0, 1.5, distanceToEdge);
+    float3 tint = lens.parameters.w > 0.5 ? float3(0.02, 0.13, 0.48) : float3(1.0);
+    stone.rgb = mix(stone.rgb, tint * stone.a, opacity);
+    return stone;
 }
 
 struct SparkleVertex { float4 contours; float4 material; };

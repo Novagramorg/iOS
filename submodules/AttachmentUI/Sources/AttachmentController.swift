@@ -186,6 +186,7 @@ public protocol AttachmentContainable: ViewController, MinimizableController {
     var cancelPanGesture: () -> Void { get set }
     var isContainerPanning: () -> Bool { get set }
     var isContainerExpanded: () -> Bool { get set }
+    var allowsCollapsing: Bool { get }
     var isPanGestureEnabled: (() -> Bool)? { get }
     var isInnerPanGestureEnabled: (() -> Bool)? { get }
     var ignoresInputHeightInRegularLayout: Bool { get }
@@ -246,6 +247,10 @@ public extension AttachmentContainable {
 
     var minimizedProgress: Float? {
         return nil
+    }
+
+    var allowsCollapsing: Bool {
+        return true
     }
 
     var isPanGestureEnabled: (() -> Bool)? {

@@ -19,7 +19,7 @@ struct DiamondStyle: Equatable {
     var rotationSpeed: Float = 2 * .pi / 18 * 1.70775
     var isRotating: Bool = true
     var sparkles: Bool = true
-    var mainSparklePerHalfTurn: Bool = false
+    var mainSparkleOnRotation: Bool = false
     var backgroundStars: Bool = true
     var widthCompensation: Bool = true
     var refraction: Float = 0.72
@@ -128,6 +128,8 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
     var onPoseUpdated: ((DiamondPose) -> Void)?
     var lightBackground = false
     var interactionScale: Float = 1
+    var refractionSource: InteractiveDiamondComponent.RefractionSource?
+    var refractionStrength: Float = 0
     var usesHighFrameRate = false {
         didSet {
             guard self.usesHighFrameRate != oldValue else { return }
@@ -200,6 +202,8 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
             self.grow = layer.grow
             self.growVelocity = layer.growVelocity
             self.interactionScale = layer.interactionScale
+            self.refractionSource = layer.refractionSource
+            self.refractionStrength = layer.refractionStrength
             self.usesHighFrameRate = layer.usesHighFrameRate
             self.renderSize = layer.renderSize
             self.isRenderingEnabled = layer.isRenderingEnabled
@@ -240,7 +244,7 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
     }
 
     private func updateMotionStyle() {
-        self.motion.mainSparklePerHalfTurn = self.diamondStyle.mainSparklePerHalfTurn
+        self.motion.mainSparkleOnRotation = self.diamondStyle.mainSparkleOnRotation
         self.motion.swayScale = self.diamondStyle.swayScale
         self.motion.tilt = self.diamondStyle.tilt
         self.motion.releaseDecay = self.diamondStyle.releaseDecay
@@ -402,7 +406,7 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
         }
     }
 
-    func updateDrag(state: UIGestureRecognizer.State, translation: CGPoint = .zero, velocity: CGPoint = .zero, scale: CGFloat = 100.0) {
+    func updateDrag(state: UIGestureRecognizer.State, translation: CGPoint = .zero, velocity: CGPoint = .zero, scale: CGFloat = 100.0, releaseImpulse: Float? = nil) {
         if state != .cancelled && state != .failed {
             guard self.isInHierarchy && self.isApplicationActive && self.isRenderingEnabled else { return }
         }
@@ -421,7 +425,7 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
                 self.motion.step(dt: 0, speed: self.diamondStyle.rotationSpeed, reduceMotion: self.reduceMotion, mode: self.diamondStyle.animationMode, time: self.elapsed, appearance: self.diamondStyle.appearance)
                 self.motion.end(at: now)
                 if abs(velocity.x) > 600.0 && !self.reduceMotion && !UIAccessibility.isReduceMotionEnabled {
-                    self.motion.fling(direction: velocity.x < 0 ? -1 : 1)
+                    self.motion.fling(direction: velocity.x < 0 ? -1 : 1, impulse: releaseImpulse)
                     self.addStarBurst()
                     self.hapticFeedback.impact(.medium)
                 }
@@ -468,6 +472,8 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
         let lightBackground = self.lightBackground
         let style = self.diamondStyle
         let grow = self.grow * self.interactionScale
+        let refractionSource = self.refractionSource
+        let refractionStrength = self.refractionStrength
 
         let frame = context.compute(state: DiamondRenderer.self, commands: { [weak self] commandBuffer, renderer -> RenderedFrame? in
             guard let self else { return nil }
@@ -491,12 +497,14 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
             pass.depthAttachment.clearDepth = 1
             pass.depthAttachment.storeAction = .dontCare
             guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: pass) else { return nil }
-            renderer.encode(encoder: encoder, size: CGSize(width: CGFloat(size.width), height: CGFloat(size.height)), time: time, starBursts: starBursts, motion: motion, style: style, grow: grow, pixelsPerPoint: Float(pixelsPerPoint), reduceMotion: reduceMotion, lightBackground: lightBackground)
+            renderer.encode(encoder: encoder, size: CGSize(width: CGFloat(size.width), height: CGFloat(size.height)), time: time, starBursts: starBursts, motion: motion, style: style, grow: grow, pixelsPerPoint: Float(pixelsPerPoint), reduceMotion: reduceMotion, lightBackground: lightBackground, refractionSource: refractionSource, refractionStrength: refractionStrength)
             encoder.endEncoding()
             return RenderedFrame(texture: targets.color, commandBuffer: commandBuffer)
         })
 
-        context.renderToLayer(spec: RenderLayerSpec(size: size), state: CompositeState.self, layer: self, inputs: frame, commands: { [weak self] encoder, placement, frame in
+        // Transparent atlas padding keeps ancestor scaling from sampling neighboring allocations.
+        let edgeInset = 2
+        context.renderToLayer(spec: RenderLayerSpec(size: size, edgeInset: edgeInset), state: CompositeState.self, layer: self, inputs: frame, commands: { [weak self] encoder, placement, frame in
             guard let frame else { return }
             if let self, self.renderSize != nil, self.bounds.size != canvasSize {
                 CATransaction.begin()
@@ -505,7 +513,12 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
                 CATransaction.commit()
             }
             let effectiveRect = placement.effectiveRect
-            var rect = SIMD4<Float>(Float(effectiveRect.minX), Float(effectiveRect.minY), Float(effectiveRect.width), Float(effectiveRect.height))
+            // MetalEngine clears the full allocation and exposes only this inner rect to the layer.
+            let contentRect = effectiveRect.insetBy(
+                dx: effectiveRect.width * CGFloat(edgeInset) / CGFloat(size.width + edgeInset * 2),
+                dy: effectiveRect.height * CGFloat(edgeInset) / CGFloat(size.height + edgeInset * 2)
+            )
+            var rect = SIMD4<Float>(Float(contentRect.minX), Float(contentRect.minY), Float(contentRect.width), Float(contentRect.height))
             encoder.setVertexBytes(&rect, length: MemoryLayout<SIMD4<Float>>.stride, index: 0)
             encoder.setFragmentTexture(frame.texture, index: 0)
             encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
