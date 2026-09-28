@@ -2264,7 +2264,8 @@ private final class WalletScreenComponent: Component {
                 updatedPresentationData: self.currentPresentationData(for: component),
                 walletContext: component.walletContext,
                 transaction: transaction,
-                fromChat: false
+                fromChat: false,
+                decryptCommentOnOpen: false
             ))
         }
 
