@@ -554,18 +554,27 @@ final class AccountManagerImpl<Types: AccountManagerTypes> {
     
     private func sharedDataInternal(transaction: AccountManagerModifier<Types>, keys: Set<ValueBoxKey>) -> Signal<AccountSharedDataView<Types>, NoError> {
         let mutableView = MutableAccountSharedDataView<Types>(accountManagerImpl: self, keys: keys)
-        let pipe = ValuePipe<AccountSharedDataView<Types>>()
-        let index = self.sharedDataViews.add((mutableView, pipe))
-        
+
         let queue = self.queue
-        return (.single(AccountSharedDataView<Types>(mutableView))
-        |> then(pipe.signal()))
-        |> `catch` { _ -> Signal<AccountSharedDataView<Types>, NoError> in
-        }
-        |> afterDisposed { [weak self] in
-            queue.async {
-                if let strongSelf = self {
-                    strongSelf.sharedDataViews.remove(index)
+        return Signal { [weak self] subscriber in
+            guard let strongSelf = self else {
+                subscriber.putCompletion()
+                return EmptyDisposable
+            }
+            let pipe = ValuePipe<AccountSharedDataView<Types>>()
+            let index = strongSelf.sharedDataViews.add((mutableView, pipe))
+
+            subscriber.putNext(AccountSharedDataView<Types>(mutableView))
+            let pipeDisposable = pipe.signal().start(next: { next in
+                subscriber.putNext(next)
+            })
+
+            return ActionDisposable {
+                pipeDisposable.dispose()
+                queue.async {
+                    if let strongSelf = self {
+                        strongSelf.sharedDataViews.remove(index)
+                    }
                 }
             }
         }
