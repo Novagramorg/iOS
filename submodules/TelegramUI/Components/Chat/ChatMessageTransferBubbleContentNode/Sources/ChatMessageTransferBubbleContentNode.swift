@@ -34,29 +34,32 @@ private struct TransferCardWalletState: Equatable {
 }
 
 private enum TransferCardRibbonGeometry {
-    static let size = CGSize(width: 68.0, height: 68.0)
+    private static let imageSize = CGSize(width: 54.800781, height: 54.800766)
+    static let size = imageSize
+    static let center = CGPoint(x: 33.057275 * size.width / imageSize.width, y: 21.743515 * size.height / imageSize.height)
 
     static let path: CGPath = {
         let path = CGMutablePath()
-        path.move(to: CGPoint(x: 62.376457, y: 34.376457))
-        path.addLine(to: CGPoint(x: 33.623550, y: 5.623550))
-        path.addCurve(to: CGPoint(x: 29.299419, y: 1.768318), control1: CGPoint(x: 31.548130, y: 3.548130), control2: CGPoint(x: 30.510420, y: 2.510418))
-        path.addCurve(to: CGPoint(x: 25.830782, y: 0.331558), control1: CGPoint(x: 28.225752, y: 1.110374), control2: CGPoint(x: 27.055216, y: 0.625519))
-        path.addCurve(to: CGPoint(x: 20.047100, y: 0.0), control1: CGPoint(x: 24.449732, y: 0.0), control2: CGPoint(x: 22.982187, y: 0.0))
-        path.addLine(to: CGPoint(x: 7.725484, y: 0.0))
-        path.addCurve(to: CGPoint(x: 3.529531, y: 0.479187), control1: CGPoint(x: 5.302220, y: 0.0), control2: CGPoint(x: 4.090588, y: 0.0))
-        path.addCurve(to: CGPoint(x: 2.834592, y: 2.156917), control1: CGPoint(x: 3.042711, y: 0.894974), control2: CGPoint(x: 2.784362, y: 1.518680))
-        path.addCurve(to: CGPoint(x: 5.462745, y: 5.462745), control1: CGPoint(x: 2.892483, y: 2.892483), control2: CGPoint(x: 3.749237, y: 3.749237))
-        path.addLine(to: CGPoint(x: 62.537258, y: 62.537258))
-        path.addCurve(to: CGPoint(x: 65.843079, y: 65.165405), control1: CGPoint(x: 64.250763, y: 64.250763), control2: CGPoint(x: 65.107521, y: 65.107521))
-        path.addCurve(to: CGPoint(x: 67.520813, y: 64.470466), control1: CGPoint(x: 66.481316, y: 65.215637), control2: CGPoint(x: 67.105026, y: 64.957290))
-        path.addCurve(to: CGPoint(x: 68.0, y: 60.274517), control1: CGPoint(x: 68.0, y: 63.909412), control2: CGPoint(x: 68.0, y: 62.697780))
-        path.addLine(to: CGPoint(x: 68.0, y: 47.952900))
-        path.addCurve(to: CGPoint(x: 67.668442, y: 42.169220), control1: CGPoint(x: 68.0, y: 45.017814), control2: CGPoint(x: 68.0, y: 43.550270))
-        path.addCurve(to: CGPoint(x: 66.231682, y: 38.700580), control1: CGPoint(x: 67.374481, y: 40.944782), control2: CGPoint(x: 66.889626, y: 39.774246))
-        path.addCurve(to: CGPoint(x: 62.376457, y: 34.376457), control1: CGPoint(x: 65.489578, y: 37.489582), control2: CGPoint(x: 64.451874, y: 36.451874))
+        path.move(to: CGPoint(x: 50.114521, y: 24.658621))
+        path.addLine(to: CGPoint(x: 30.142169, y: 4.686269))
+        path.addCurve(to: CGPoint(x: 26.538727, y: 1.473573), control1: CGPoint(x: 28.412651, y: 2.956751), control2: CGPoint(x: 27.547891, y: 2.091991))
+        path.addCurve(to: CGPoint(x: 23.648195, y: 0.276273), control1: CGPoint(x: 25.643999, y: 0.925288), control2: CGPoint(x: 24.668556, y: 0.521241))
+        path.addCurve(to: CGPoint(x: 18.828456, y: 0.0), control1: CGPoint(x: 22.497317, y: 0.0), control2: CGPoint(x: 21.274368, y: 0.0))
+        path.addLine(to: CGPoint(x: 4.897057, y: 0.0))
+        path.addCurve(to: CGPoint(x: 0.701126, y: 0.479164), control1: CGPoint(x: 2.473808, y: 0.0), control2: CGPoint(x: 1.262181, y: 0.0))
+        path.addCurve(to: CGPoint(x: 0.006188, y: 2.156895), control1: CGPoint(x: 0.214309, y: 0.894945), control2: CGPoint(x: -0.044041, y: 1.518656))
+        path.addCurve(to: CGPoint(x: 2.634339, y: 5.462719), control1: CGPoint(x: 0.064078, y: 2.892458), control2: CGPoint(x: 0.920832, y: 3.749212))
+        path.addLine(to: CGPoint(x: 49.338070, y: 52.166450))
+        path.addCurve(to: CGPoint(x: 52.643895, y: 54.794601), control1: CGPoint(x: 51.051577, y: 53.879956), control2: CGPoint(x: 51.908330, y: 54.736710))
+        path.addCurve(to: CGPoint(x: 54.321625, y: 54.099662), control1: CGPoint(x: 53.282136, y: 54.844833), control2: CGPoint(x: 53.905845, y: 54.586481))
+        path.addCurve(to: CGPoint(x: 54.800818, y: 49.903712), control1: CGPoint(x: 54.800810, y: 53.538617), control2: CGPoint(x: 54.800810, y: 52.326999))
+        path.addLine(to: CGPoint(x: 54.800816, y: 35.972328))
+        path.addCurve(to: CGPoint(x: 54.524518, y: 31.152596), control1: CGPoint(x: 54.800816, y: 33.526424), control2: CGPoint(x: 54.800813, y: 32.303474))
+        path.addCurve(to: CGPoint(x: 53.327218, y: 28.262064), control1: CGPoint(x: 54.279548, y: 30.132233), control2: CGPoint(x: 53.875502, y: 29.156791))
+        path.addCurve(to: CGPoint(x: 50.114521, y: 24.658621), control1: CGPoint(x: 52.708799, y: 27.252899), control2: CGPoint(x: 51.844040, y: 26.388140))
         path.closeSubpath()
-        return path
+        var transform = CGAffineTransform(scaleX: size.width / imageSize.width, y: size.height / imageSize.height)
+        return path.copy(using: &transform) ?? path
     }()
 
     static func compactPath(center: CGPoint) -> CGPath {
@@ -327,7 +330,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
         self.ribbonBackgroundNode.displaysAsynchronously = false
         self.ribbonBackgroundNode.displayWithoutProcessing = true
         self.ribbonBackgroundNode.image = generateTintedImage(
-            image: UIImage(bundleImageName: "Chat/Message/GiftRibbon"),
+            image: UIImage(bundleImageName: "Wallet/MessageRibbon"),
             color: .white
         )
 
@@ -340,7 +343,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
         self.ribbonTextMaskNode = ASImageNode()
         self.ribbonTextMaskNode.displaysAsynchronously = false
         self.ribbonTextMaskNode.displayWithoutProcessing = true
-        self.ribbonTextMaskNode.image = UIImage(bundleImageName: "Chat/Message/GiftRibbon")
+        self.ribbonTextMaskNode.image = UIImage(bundleImageName: "Wallet/MessageRibbon")
 
         super.init(lottieSettings: lottieSettings)
 
@@ -577,7 +580,9 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
             y: self.cardNode.frame.minY + self.sendingClockNode.position.y - ribbonFrame.minY
         )
         let finalPath = TransferCardRibbonGeometry.path
-        var overshootTransform = CGAffineTransform(a: 1.02, b: 0.02, c: 0.02, d: 1.02, tx: -1.36, ty: -1.36)
+        let ribbonCenter = TransferCardRibbonGeometry.center
+        let overshootOffset = -0.02 * (ribbonCenter.x + ribbonCenter.y)
+        var overshootTransform = CGAffineTransform(a: 1.02, b: 0.02, c: 0.02, d: 1.02, tx: overshootOffset, ty: overshootOffset)
         let paths = [
             TransferCardRibbonGeometry.compactPath(center: clockCenter),
             finalPath,
@@ -1058,7 +1063,8 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                         self.cardBackgroundNode.frame = CGRect(origin: .zero, size: cardSize)
 
                         let clockSize = CGSize(width: 14.0, height: 14.0)
-                        self.sendingClockNode.frame = CGRect(origin: CGPoint(x: cardSize.width - clockSize.width - 12.0, y: 12.0), size: clockSize)
+                        let clockInset = 12.0 + (1.0 - UIScreenPixel)
+                        self.sendingClockNode.frame = CGRect(origin: CGPoint(x: cardSize.width - clockSize.width - clockInset, y: clockInset), size: clockSize)
                         for node in [self.clockFrameNode, self.clockMinNode] {
                             node.bounds = CGRect(origin: .zero, size: clockSize)
                             node.position = CGPoint(x: clockSize.width * 0.5, y: clockSize.height * 0.5)
@@ -1137,7 +1143,8 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                         } else {
                             self.ribbonTextContainerNode.view.mask = self.ribbonTextMaskNode.view
                         }
-                        let ribbonTextPosition = CGPoint(x: ribbonSize.width * 0.5 + 7.0, y: ribbonSize.height * 0.5 - 6.0)
+                        let ribbonCenter = TransferCardRibbonGeometry.center
+                        let ribbonTextPosition = CGPoint(x: ribbonCenter.x, y: ribbonCenter.y + 1.0)
                         self.ribbonTextNode.transform = CATransform3DMakeRotation(.pi / 4.0, 0.0, 0.0, 1.0)
                         self.ribbonTextNode.bounds = CGRect(origin: .zero, size: ribbonTextLayout.size)
                         self.ribbonTextNode.position = ribbonTextPosition
