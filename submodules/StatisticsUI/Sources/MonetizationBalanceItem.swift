@@ -299,11 +299,7 @@ final class MonetizationBalanceItemNode: ListViewItemNode, ItemListItemNode {
                     }
                     
                     if themeUpdated {
-                        if isStars {
-                            strongSelf.iconNode.image = UIImage(bundleImageName: "Premium/Stars/BalanceStar")
-                        } else {
-                            strongSelf.iconNode.image = generateTintedImage(image: UIImage(bundleImageName: "Ads/TonBig"), color: UIColor(rgb: 0x30A1F5))
-                        }
+                        strongSelf.iconNode.image = isStars ? UIImage(bundleImageName: "Premium/Stars/BalanceStar") : UIImage(bundleImageName: "Ads/GramBig")
                     }
 
                     var emojiItemSize = CGSize()

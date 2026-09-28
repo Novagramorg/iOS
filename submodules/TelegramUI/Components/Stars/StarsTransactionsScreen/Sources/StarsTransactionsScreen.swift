@@ -587,8 +587,8 @@ final class StarsTransactionsScreenComponent: Component {
             let topBalanceIconSize = self.topBalanceIconView.update(
                 transition: .immediate,
                 component: AnyComponent(BundleIconComponent(
-                    name: component.starsContext.ton ? "Ads/TonBig" : "Premium/Stars/StarSmall",
-                    tintColor: component.starsContext.ton ? environment.theme.list.itemAccentColor : nil,
+                    name: component.starsContext.ton ? "Ads/GramBig" : "Premium/Stars/StarSmall",
+                    tintColor:  nil,
                     maxSize: component.starsContext.ton ? CGSize(width: 12.0, height: 12.0) : nil
                 )),
                 environment: {},

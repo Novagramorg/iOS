@@ -807,6 +807,17 @@ private final class WalletTransactionContentComponent: Component {
             image: UIImage
         )?
 
+        private func currentPresentationData(for component: WalletTransactionContentComponent) -> (initial: PresentationData, signal: Signal<PresentationData, NoError>) {
+            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+            if let updatedPresentationData = (self.environment?.controller() as? WalletTransactionScreen)?.walletPresentationData {
+                return (
+                    initial: presentationData.withUpdated(theme: self.environment?.theme ?? updatedPresentationData.initial.theme),
+                    signal: updatedPresentationData.signal
+                )
+            }
+            return (initial: presentationData, signal: component.context.sharedContext.presentationData)
+        }
+
         override init(frame: CGRect) {
             super.init(frame: frame)
 
@@ -1132,6 +1143,7 @@ private final class WalletTransactionContentComponent: Component {
             let actionTitle = "Got it"
             let alertController = textAlertController(
                 context: component.context,
+                updatedPresentationData: self.currentPresentationData(for: component),
                 title: title,
                 text: text,
                 actions: [
@@ -1216,6 +1228,7 @@ private final class WalletTransactionContentComponent: Component {
                 self.isRestoringCommentKey = true
                 self.commentAuthorizationDisposable.set(performWalletAuthorizedOperation(
                     context: component.context,
+                    updatedPresentationData: self.currentPresentationData(for: component),
                     present: { [weak controller] alert in
                         controller?.present(alert, in: .window(.root))
                     },
@@ -1272,6 +1285,7 @@ private final class WalletTransactionContentComponent: Component {
             let message = walletAuthorizationErrorMessage(error)
             controller.present(textAlertController(
                 context: component.context,
+                updatedPresentationData: self.currentPresentationData(for: component),
                 title: message?.title ?? "Couldn’t Restore Wallet",
                 text: message?.text ?? "Check the network connection and try again.",
                 actions: [
@@ -1357,6 +1371,7 @@ private final class WalletTransactionContentComponent: Component {
             //TODO:localize
             controller.present(textAlertController(
                 context: component.context,
+                updatedPresentationData: self.currentPresentationData(for: component),
                 title: authorizationMessage?.title ?? "Couldn't Decrypt Comment",
                 text: authorizationMessage?.text ?? "The comment could not be decrypted.",
                 actions: [TextAlertAction(type: .defaultAction, title: "OK", action: {})]
@@ -1712,7 +1727,7 @@ private final class WalletTransactionContentComponent: Component {
             //TODO:localize
             let successPrefix = isCollectible ? "Collectible has been sent to" : "Grams have been sent to"
             let text = "\(successPrefix) **\(walletTransactionShortAddress(address))**."
-            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+            let presentationData = self.currentPresentationData(for: component).initial
             controller.present(
                 UndoOverlayController(
                     presentationData: presentationData,
@@ -1738,6 +1753,7 @@ private final class WalletTransactionContentComponent: Component {
             let ok = "OK"
             controller.present(textAlertController(
                 context: component.context,
+                updatedPresentationData: self.currentPresentationData(for: component),
                 title: title,
                 text: text,
                 actions: [TextAlertAction(type: .defaultAction, title: ok, action: {
@@ -1771,6 +1787,7 @@ private final class WalletTransactionContentComponent: Component {
             let ok = "OK"
             controller.present(textAlertController(
                 context: component.context,
+                updatedPresentationData: self.currentPresentationData(for: component),
                 title: title,
                 text: text,
                 actions: [TextAlertAction(type: .defaultAction, title: ok, action: {
@@ -1789,7 +1806,7 @@ private final class WalletTransactionContentComponent: Component {
             (controller as? WalletTransactionContentController)?.dismissAllTooltips()
             
             //TODO:localize
-            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+            let presentationData = self.currentPresentationData(for: component).initial
             controller.present(
                 UndoOverlayController(
                     presentationData: presentationData,
@@ -1862,7 +1879,7 @@ private final class WalletTransactionContentComponent: Component {
             case .copy:
                 storeAttributedTextInPasteboard(text)
 
-                let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+                let presentationData = self.currentPresentationData(for: component).initial
                 controller.present(
                     UndoOverlayController(
                         presentationData: presentationData,
@@ -1937,7 +1954,7 @@ private final class WalletTransactionContentComponent: Component {
                               let controller = self.environment?.controller() else {
                             return
                         }
-                        let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+                        let presentationData = self.currentPresentationData(for: component).initial
                         let translationController = await component.context.sharedContext.makeTextProcessingScreen(
                             context: component.context,
                             theme: nil,
@@ -2063,10 +2080,14 @@ private final class WalletTransactionContentComponent: Component {
                             color: theme.contextMenu.primaryColor
                         )
                     },
-                    action: { [weak controller] _, dismiss in
+                    action: { [weak self, weak controller] _, dismiss in
                         dismiss(.default)
+                        guard let self else {
+                            return
+                        }
                         controller?.push(component.context.sharedContext.makeWalletInfoScreen(
                             context: component.context,
+                            updatedPresentationData: self.currentPresentationData(for: component),
                             mode: .gram,
                             completion: nil
                         ))
@@ -2074,7 +2095,7 @@ private final class WalletTransactionContentComponent: Component {
                 )))
             }
             let contextController = makeContextController(
-                presentationData: component.context.sharedContext.currentPresentationData.with { $0 },
+                presentationData: self.currentPresentationData(for: component).initial,
                 source: .reference(WalletTransactionContextReferenceContentSource(sourceView: sourceView)),
                 items: .single(ContextController.Items(content: .list(items))),
                 gesture: nil
@@ -2445,7 +2466,7 @@ private final class WalletTransactionContentComponent: Component {
             }
             if displaysCommentBubble, isCommentConcealed || displayedComment != nil {
                 contentHeight += 22.0
-                let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+                let presentationData = self.currentPresentationData(for: component).initial
                 let bubbleImage = self.commentBubbleImage(
                     presentationData: presentationData,
                     incoming: displayedDirection == .incoming,
@@ -2883,6 +2904,7 @@ private final class WalletTransactionContentComponent: Component {
                             }
                             self.environment?.controller()?.push(component.context.sharedContext.makeWalletInfoScreen(
                                 context: component.context,
+                                updatedPresentationData: self.currentPresentationData(for: component),
                                 mode: .gram,
                                 completion: nil
                             ))
@@ -3578,6 +3600,7 @@ private func walletTransactionOpenExplorer(context: AccountContext) -> (String) 
 
 public final class WalletTransactionScreen: ViewControllerComponentContainer, WalletTransactionContentController {
     private let accountContext: AccountContext
+    fileprivate let walletPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?
     private let navigationWalletContext: WalletContext?
     private let fromChat: Bool
     private let openExplorer: (String) -> Void
@@ -3603,6 +3626,7 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
 
     public init(
         context: AccountContext,
+        updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? = nil,
         walletContext: WalletContext? = nil,
         transaction: WalletContext.Transaction,
         fromChat: Bool
@@ -3622,6 +3646,7 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
         let openExplorer = walletTransactionOpenExplorer(context: context)
 
         self.accountContext = context
+        self.walletPresentationData = updatedPresentationData
         self.navigationWalletContext = walletContext
         self.fromChat = fromChat
         self.openExplorer = openExplorer
@@ -3666,7 +3691,8 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
             component: WalletTransactionRootComponent(content: initialComponent),
             navigationBarAppearance: .none,
             statusBarStyle: .ignore,
-            theme: .default
+            theme: .default,
+            updatedPresentationData: updatedPresentationData
         )
         indexUpdatedImpl = { [weak self] index in
             self?.currentIndexUpdated(index)
@@ -3737,6 +3763,10 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
             }
             navigationController.pushViewController(self.accountContext.sharedContext.makeWalletInfoScreen(
                 context: self.accountContext,
+                updatedPresentationData: self.walletPresentationData ?? (
+                    initial: self.accountContext.sharedContext.currentPresentationData.with { $0 },
+                    signal: self.accountContext.sharedContext.presentationData
+                ),
                 mode: .firstGrams,
                 completion: nil
             ))

@@ -1609,6 +1609,7 @@ public protocol SharedAccountContext: AnyObject {
     func makeWalletTransferScreen(context: AccountContext, walletContext: WalletContext, request: WalletContext.TonConnectOperationRequest, cancelled: @escaping () -> Void, confirm: @escaping (@escaping (Result<Void, WalletContext.WalletError>) -> Void) -> Void) -> ViewController
     func makeWalletTransactionScreen(context: AccountContext, transaction: WalletContext.Transaction, fromChat: Bool) -> ViewController
     func makeWalletTransactionScreen(context: AccountContext, walletContext: WalletContext, transaction: WalletContext.Transaction, fromChat: Bool) -> ViewController
+    func makeWalletTransactionScreen(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>), walletContext: WalletContext, transaction: WalletContext.Transaction, fromChat: Bool) -> ViewController
     func makeWalletTransactionPreviewScreen(context: AccountContext, walletContext: WalletContext, preparedTransfer: WalletContext.PreparedTransfer, dismissSendScreen: @escaping () -> Void) -> ViewController
     func makeWalletTransactionPreviewScreen(context: AccountContext, walletContext: WalletContext, address: String, amount: Int64, sendAll: Bool, comment: String?, dismissSendScreen: @escaping () -> Void) -> ViewController
     func makeWalletCollectibleScreen(context: AccountContext, walletContext: WalletContext, collectible: WalletContext.Collectible, collectibleSent: @escaping (String) -> Void) -> ViewController

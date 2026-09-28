@@ -696,7 +696,7 @@ private final class WalletScreenComponent: Component {
         private let cardBalanceMaskLayer = CAShapeLayer()
         private let navigationBalanceMaskLayer = CAShapeLayer()
         private let additionalBalancesSection = ComponentView<Empty>()
-        private let earningsIcon = UIImage(bundleImageName: "Wallet/TransactionGram")
+        private let earningsIcon = UIImage(bundleImageName: "Wallet/TransactionGram")?.withRenderingMode(.alwaysOriginal)
         private let card = ComponentView<Empty>()
         private let addFundsButton = ComponentView<Empty>()
         private let sendButton = ComponentView<Empty>()
@@ -1174,7 +1174,15 @@ private final class WalletScreenComponent: Component {
                 })
             }
             guard !items.isEmpty else {
-                self.additionalBalancesSection.view?.removeFromSuperview()
+                if let sectionView = self.additionalBalancesSection.view {
+                    if transition.animation.isImmediate {
+                        sectionView.removeFromSuperview()
+                    } else {
+                        transition.setAlpha(view: sectionView, alpha: 0.0, completion: { _ in
+                            sectionView.removeFromSuperview()
+                        })
+                    }
+                }
                 return 0.0
             }
 
@@ -1196,6 +1204,7 @@ private final class WalletScreenComponent: Component {
             )
             if let sectionView = self.additionalBalancesSection.view {
                 if sectionView.superview == nil {
+                    sectionView.alpha = 1.0
                     self.topContentContainerView.addSubview(sectionView)
                 }
                 sectionTransition.setFrame(view: sectionView, frame: CGRect(origin: origin, size: sectionSize))
@@ -2175,6 +2184,7 @@ private final class WalletScreenComponent: Component {
             }
             controller.push(component.context.sharedContext.makeWalletInfoScreen(
                 context: component.context,
+                updatedPresentationData: self.currentPresentationData(for: component),
                 mode: .wallet,
                 completion: nil
             ))
@@ -2207,6 +2217,7 @@ private final class WalletScreenComponent: Component {
                 return
             }
             let context = component.context
+            let updatedPresentationData = self.currentPresentationData(for: component)
             let _ = passcodeOptionsAccessController(
                 context: context,
                 preferredModalWidth: 480.0,
@@ -2219,7 +2230,7 @@ private final class WalletScreenComponent: Component {
                 authorizationCompleted: { [weak controller] result in
                     guard case let .success(session) = result else { return }
                     guard let navigation = controller?.navigationController as? NavigationController else { session.invalidate(); return }
-                    navigation.replaceTopController(PasscodeOptionsScreen(context: context, settingsSession: session, allowFourDigitPasscode: false), animated: true)
+                    navigation.replaceTopController(PasscodeOptionsScreen(context: context, updatedPresentationData: updatedPresentationData, settingsSession: session, allowFourDigitPasscode: false), animated: true)
                 }
             ).start(next: { [weak controller] passcodeController in
                 if let passcodeController {
@@ -2250,6 +2261,7 @@ private final class WalletScreenComponent: Component {
             }
             controller.push(component.context.sharedContext.makeWalletTransactionScreen(
                 context: component.context,
+                updatedPresentationData: self.currentPresentationData(for: component),
                 walletContext: component.walletContext,
                 transaction: transaction,
                 fromChat: false

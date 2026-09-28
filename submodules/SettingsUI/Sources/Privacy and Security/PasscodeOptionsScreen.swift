@@ -72,6 +72,8 @@ private final class PasscodeOptionsScreenContextSource: ContextReferenceContentS
 
 private final class PasscodeOptionsScreenModel {
     let context: AccountContext
+    private(set) var presentationData: PresentationData
+    private let presentationDataSignal: Signal<PresentationData, NoError>
     let sessionState: PasscodeSettingsSessionState
     private let allowFourDigitPasscode: Bool
     weak var controller: PasscodeOptionsScreen?
@@ -89,10 +91,24 @@ private final class PasscodeOptionsScreenModel {
         return self.statePromise.get()
     }
 
-    init(context: AccountContext, settingsSession: PasscodeSession?, allowFourDigitPasscode: Bool) {
+    var updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>) {
+        return (initial: self.presentationData, signal: self.presentationDataSignal)
+    }
+
+    init(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>), settingsSession: PasscodeSession?, allowFourDigitPasscode: Bool) {
         self.context = context
+        self.presentationData = updatedPresentationData.initial
+        self.presentationDataSignal = updatedPresentationData.signal
         self.sessionState = PasscodeSettingsSessionState(session: settingsSession)
         self.allowFourDigitPasscode = allowFourDigitPasscode
+
+        self.disposables.add((updatedPresentationData.signal
+        |> deliverOnMainQueue).start(next: { [weak self] presentationData in
+            guard let self, !self.isClosed else {
+                return
+            }
+            self.presentationData = presentationData
+        }))
 
         self.disposables.add((context.sharedContext.accountManager.transaction { transaction -> PasscodeOptionsScreenData in
             let settings = transaction.getSharedData(ApplicationSpecificSharedDataKeys.presentationPasscodeSettings)?.get(PresentationPasscodeSettings.self) ?? PresentationPasscodeSettings.defaultSettings
@@ -183,9 +199,9 @@ private final class PasscodeOptionsScreenModel {
         guard self.isControllerAvailable else {
             return
         }
-        let strings = self.context.sharedContext.currentPresentationData.with { $0 }.strings
+        let strings = self.presentationData.strings
         //TODO:localize
-        self.controller?.present(textAlertController(context: self.context, title: nil, text: "Couldn't update wallet protection. Please try again.", actions: [TextAlertAction(type: .defaultAction, title: strings.Common_OK, action: {})]), in: .window(.root), with: ViewControllerPresentationArguments(presentationAnimation: .modalSheet))
+        self.controller?.present(textAlertController(context: self.context, updatedPresentationData: self.updatedPresentationData, title: nil, text: "Couldn't update wallet protection. Please try again.", actions: [TextAlertAction(type: .defaultAction, title: strings.Common_OK, action: {})]), in: .window(.root), with: ViewControllerPresentationArguments(presentationAnimation: .modalSheet))
     }
 
     private func reportInitialErrorIfNeeded() {
@@ -345,12 +361,12 @@ private final class PasscodeOptionsScreenModel {
 
     private func confirmDisablePasscode(protectionEnabled: Bool) {
         let generation = self.sessionState.generation
-        let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
+        let presentationData = self.presentationData
         //TODO:localize
         let warning = protectionEnabled
             ? "This will also turn off passcode and biometric protection for every wallet on this device."
             : presentationData.strings.PasscodeSettings_TurnPasscodeOff
-        let alert = textAlertController(context: self.context, title: presentationData.strings.PasscodeSettings_TurnPasscodeOff, text: warning, actions: [
+        let alert = textAlertController(context: self.context, updatedPresentationData: self.updatedPresentationData, title: presentationData.strings.PasscodeSettings_TurnPasscodeOff, text: warning, actions: [
             TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {}),
             TextAlertAction(type: .destructiveAction, title: presentationData.strings.PasscodeSettings_TurnPasscodeOff, action: { [weak self] in
                 guard let self, self.isControllerOnTop, self.sessionState.accepts(generation: generation), let operation = self.sessionState.beginOperation() else {
@@ -583,7 +599,7 @@ private final class PasscodeOptionsScreenComponent: Component {
             guard let component = self.component, let controller = self.environment?.controller(), self.autolockContextController == nil else {
                 return
             }
-            let presentationData = component.model.context.sharedContext.currentPresentationData.with { $0 }
+            let presentationData = component.model.presentationData
             let currentTimeout = component.model.state.data?.presentationSettings.autolockTimeout
             var values: [Int32] = [0, 60, 5 * 60, 60 * 60, 5 * 60 * 60]
             #if DEBUG
@@ -697,7 +713,7 @@ private final class PasscodeOptionsScreenComponent: Component {
                     controller.navigationItem.backBarButtonItem = UIBarButtonItem(title: strings.Common_Back, style: .plain, target: nil, action: nil)
                 }
             }
-            let presentationData = component.model.context.sharedContext.currentPresentationData.with { $0 }
+            let presentationData = component.model.presentationData
             let actionFont = Font.regular(presentationData.listsFontSize.baseDisplaySize)
             let footerFont = Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize)
             let sideInset = 16.0 + max(environment.safeInsets.left, environment.safeInsets.right)
@@ -937,19 +953,24 @@ private final class PasscodeOptionsScreenComponent: Component {
 public final class PasscodeOptionsScreen: ViewControllerComponentContainer {
     private let model: PasscodeOptionsScreenModel
 
-    public init(context: AccountContext, focusOnItemTag: PasscodeOptionsEntryTag? = nil, settingsSession: PasscodeSession? = nil, allowFourDigitPasscode: Bool = true) {
-        let model = PasscodeOptionsScreenModel(context: context, settingsSession: settingsSession, allowFourDigitPasscode: allowFourDigitPasscode)
+    public init(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? = nil, focusOnItemTag: PasscodeOptionsEntryTag? = nil, settingsSession: PasscodeSession? = nil, allowFourDigitPasscode: Bool = true) {
+        let updatedPresentationData = updatedPresentationData ?? (
+            initial: context.sharedContext.currentPresentationData.with { $0 },
+            signal: context.sharedContext.presentationData
+        )
+        let model = PasscodeOptionsScreenModel(context: context, updatedPresentationData: updatedPresentationData, settingsSession: settingsSession, allowFourDigitPasscode: allowFourDigitPasscode)
         self.model = model
 
         super.init(
             context: context,
             component: PasscodeOptionsScreenComponent(model: model, focusOnItemTag: focusOnItemTag),
             navigationBarAppearance: .default,
-            theme: .default
+            theme: .default,
+            updatedPresentationData: updatedPresentationData
         )
 
         model.controller = self
-        let strings = context.sharedContext.currentPresentationData.with { $0 }.strings
+        let strings = model.presentationData.strings
         self.title = strings.PasscodeSettings_Title
         self.navigationItem.backBarButtonItem = UIBarButtonItem(title: strings.Common_Back, style: .plain, target: nil, action: nil)
         self.ready.set(model.stateSignal |> map { $0.isReady } |> filter { $0 } |> take(1))

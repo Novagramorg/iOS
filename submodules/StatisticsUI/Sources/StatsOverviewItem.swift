@@ -212,12 +212,10 @@ private final class ValueItemNode: ASDisplayNode {
             
             var valueOffset: CGFloat = 0.0
             let iconName: String?
-            var iconTinted = false
             switch mode {
             case .ton:
-                iconName = "Ads/TonMedium"
-                iconTinted = true
-                valueOffset = 17.0
+                iconName = "Wallet/TopGram"
+                valueOffset = 24.0
             case .stars:
                 iconName = "Premium/Stars/StarMedium"
                 valueOffset = 21.0
@@ -259,11 +257,7 @@ private final class ValueItemNode: ASDisplayNode {
                     }
                     
                     if themeUpdated || iconNameUpdated {
-                        if iconTinted {
-                            iconNode.image = generateTintedImage(image: UIImage(bundleImageName: iconName), color: UIColor(rgb: 0x30A1F5))
-                        } else {
-                            iconNode.image = UIImage(bundleImageName: iconName)
-                        }
+                        iconNode.image = UIImage(bundleImageName: iconName)
                     }
                     
                     if let icon = iconNode.image {
