@@ -4248,7 +4248,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         )
     }
 
-    public func makeWalletTransactionPreviewScreen(context: AccountContext, walletContext: WalletContext, address: String, amount: Int64, sendAll: Bool, comment: String?, dismissSendScreen: @escaping () -> Void) -> ViewController {
+    public func makeWalletTransactionPreviewScreen(context: AccountContext, walletContext: WalletContext, address: String, amount: Int64, sendAll: Bool, comment: String?, initialFee: Int64?, dismissSendScreen: @escaping () -> Void) -> ViewController {
         return WalletTransactionPreviewScreen(
             context: context,
             walletContext: walletContext,
@@ -4256,6 +4256,34 @@ public final class SharedAccountContextImpl: SharedAccountContext {
             amount: amount,
             sendAll: sendAll,
             comment: comment,
+            initialFee: initialFee,
+            dismissSendScreen: dismissSendScreen
+        )
+    }
+
+    public func makeWalletTransactionPreviewScreen(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>), walletContext: WalletContext, address: String, amount: Int64, sendAll: Bool, comment: String?, initialFee: Int64?, dismissSendScreen: @escaping () -> Void) -> ViewController {
+        return WalletTransactionPreviewScreen(
+            context: context,
+            updatedPresentationData: updatedPresentationData,
+            walletContext: walletContext,
+            address: address,
+            amount: amount,
+            sendAll: sendAll,
+            comment: comment,
+            initialFee: initialFee,
+            dismissSendScreen: dismissSendScreen
+        )
+    }
+
+    public func makeWalletTransactionPreviewScreen(context: AccountContext, walletContext: WalletContext, address: String, collectible: WalletContext.Collectible, comment: String?, dismissSendScreen: @escaping () -> Void) -> ViewController {
+        return WalletTransactionPreviewScreen(
+            context: context,
+            walletContext: walletContext,
+            address: address,
+            amount: 0,
+            sendAll: false,
+            comment: comment,
+            collectible: collectible,
             dismissSendScreen: dismissSendScreen
         )
     }

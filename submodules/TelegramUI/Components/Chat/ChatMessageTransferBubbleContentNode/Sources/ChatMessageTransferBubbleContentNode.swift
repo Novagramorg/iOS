@@ -33,6 +33,63 @@ private struct TransferCardWalletState: Equatable {
     let transactionHash: Data?
 }
 
+private enum TransferCardRibbonGeometry {
+    static let size = CGSize(width: 68.0, height: 68.0)
+
+    static let path: CGPath = {
+        let path = CGMutablePath()
+        path.move(to: CGPoint(x: 62.376457, y: 34.376457))
+        path.addLine(to: CGPoint(x: 33.623550, y: 5.623550))
+        path.addCurve(to: CGPoint(x: 29.299419, y: 1.768318), control1: CGPoint(x: 31.548130, y: 3.548130), control2: CGPoint(x: 30.510420, y: 2.510418))
+        path.addCurve(to: CGPoint(x: 25.830782, y: 0.331558), control1: CGPoint(x: 28.225752, y: 1.110374), control2: CGPoint(x: 27.055216, y: 0.625519))
+        path.addCurve(to: CGPoint(x: 20.047100, y: 0.0), control1: CGPoint(x: 24.449732, y: 0.0), control2: CGPoint(x: 22.982187, y: 0.0))
+        path.addLine(to: CGPoint(x: 7.725484, y: 0.0))
+        path.addCurve(to: CGPoint(x: 3.529531, y: 0.479187), control1: CGPoint(x: 5.302220, y: 0.0), control2: CGPoint(x: 4.090588, y: 0.0))
+        path.addCurve(to: CGPoint(x: 2.834592, y: 2.156917), control1: CGPoint(x: 3.042711, y: 0.894974), control2: CGPoint(x: 2.784362, y: 1.518680))
+        path.addCurve(to: CGPoint(x: 5.462745, y: 5.462745), control1: CGPoint(x: 2.892483, y: 2.892483), control2: CGPoint(x: 3.749237, y: 3.749237))
+        path.addLine(to: CGPoint(x: 62.537258, y: 62.537258))
+        path.addCurve(to: CGPoint(x: 65.843079, y: 65.165405), control1: CGPoint(x: 64.250763, y: 64.250763), control2: CGPoint(x: 65.107521, y: 65.107521))
+        path.addCurve(to: CGPoint(x: 67.520813, y: 64.470466), control1: CGPoint(x: 66.481316, y: 65.215637), control2: CGPoint(x: 67.105026, y: 64.957290))
+        path.addCurve(to: CGPoint(x: 68.0, y: 60.274517), control1: CGPoint(x: 68.0, y: 63.909412), control2: CGPoint(x: 68.0, y: 62.697780))
+        path.addLine(to: CGPoint(x: 68.0, y: 47.952900))
+        path.addCurve(to: CGPoint(x: 67.668442, y: 42.169220), control1: CGPoint(x: 68.0, y: 45.017814), control2: CGPoint(x: 68.0, y: 43.550270))
+        path.addCurve(to: CGPoint(x: 66.231682, y: 38.700580), control1: CGPoint(x: 67.374481, y: 40.944782), control2: CGPoint(x: 66.889626, y: 39.774246))
+        path.addCurve(to: CGPoint(x: 62.376457, y: 34.376457), control1: CGPoint(x: 65.489578, y: 37.489582), control2: CGPoint(x: 64.451874, y: 36.451874))
+        path.closeSubpath()
+        return path
+    }()
+
+    static func compactPath(center: CGPoint) -> CGPath {
+        let path = CGMutablePath()
+        let radius: CGFloat = 7.0
+        func point(_ angle: CGFloat) -> CGPoint {
+            return CGPoint(x: center.x + cos(angle) * radius, y: center.y + sin(angle) * radius)
+        }
+
+        let angles: [CGFloat] = [-.pi / 4.0, -.pi / 2.0, -.pi * 5.0 / 4.0, -.pi * 2.0, -.pi * 9.0 / 4.0]
+        path.move(to: point(angles[0]))
+        for corner in 0 ..< 4 {
+            let startAngle = angles[corner]
+            let step = (angles[corner + 1] - startAngle) / 3.0
+            let controlLength = 4.0 / 3.0 * tan(step / 4.0) * radius
+            path.addLine(to: point(startAngle))
+            for segment in 0 ..< 3 {
+                let angle = startAngle + CGFloat(segment) * step
+                let nextAngle = angle + step
+                let start = point(angle)
+                let end = point(nextAngle)
+                path.addCurve(
+                    to: end,
+                    control1: CGPoint(x: start.x - sin(angle) * controlLength, y: start.y + cos(angle) * controlLength),
+                    control2: CGPoint(x: end.x + sin(nextAngle) * controlLength, y: end.y - cos(nextAngle) * controlLength)
+                )
+            }
+        }
+        path.closeSubpath()
+        return path
+    }
+}
+
 private func transferCardTransactionHash(_ value: String?) -> Data? {
     guard let value else {
         return nil
@@ -141,6 +198,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
     private let labelBackgroundMaskNode: ASImageNode
     private var linkHighlightingNode: LinkHighlightingNode?
 
+    private let mediaContainerNode: ASDisplayNode
     private var mediaBackgroundContent: WallpaperBubbleBackgroundNode?
     private let cardNode: ASDisplayNode
     private let cardBackgroundNode: ASImageNode
@@ -151,14 +209,19 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
     private let addressNode: TextNode
     private let addressShimmerMaskNode: TextNode
     private var shimmerView: TransferCardShimmerView?
+    private let sendingClockNode: ASDisplayNode
+    private let clockFrameNode: ASImageNode
+    private let clockMinNode: ASImageNode
     private let captionNode: TextNode
     private var captionTextSelectionNode: TextSelectionNode?
     private var captionDustNode: InvisibleInkDustNode?
     private let ribbonBackgroundNode: ASImageNode
     private let ribbonTextNode: TextNode
-    private let ribbonSendingTextNode: TextNode
     private let ribbonTextContainerNode: ASDisplayNode
     private let ribbonTextMaskNode: ASImageNode
+    private var ribbonAnimationLayer: SimpleShapeLayer?
+    private var ribbonAnimationMaskLayer: SimpleShapeLayer?
+    private var completionAnimationId = 0
 
     private weak var walletContext: WalletContext?
     private var walletStateDisposable: MetaDisposable?
@@ -167,6 +230,23 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
     private var transferTransactionHash: Data?
     private var transferStatus: TransferCardStatus?
     private var isIncomingTransfer = false
+
+    #if DEBUG
+    private var debugTransferStatus: TransferCardStatus?
+    #endif
+
+    private var displayedTransferStatus: TransferCardStatus? {
+        #if DEBUG
+        if let debugTransferStatus = self.debugTransferStatus {
+            return debugTransferStatus
+        }
+        #endif
+        return self.transferStatus
+    }
+
+    private var isSendingTransfer: Bool {
+        return !self.isIncomingTransfer && self.displayedTransferStatus != nil && self.displayedTransferStatus != .completed
+    }
 
     private var cachedLabelBackgroundImage: (CGPoint, UIImage, [CGRect])?
     private var absoluteRect: (CGRect, CGSize)?
@@ -181,6 +261,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                 if self.visibility == .none {
                     self.finishCompletionAnimation()
                 }
+                self.updateSendingClockAnimation()
                 self.updateShimmer(animated: false)
             }
         }
@@ -193,6 +274,9 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
 
         self.labelBackgroundMaskNode = ASImageNode()
         self.labelBackgroundMaskNode.displaysAsynchronously = false
+
+        self.mediaContainerNode = ASDisplayNode()
+        self.mediaContainerNode.clipsToBounds = false
 
         self.cardNode = ASDisplayNode()
         self.cardNode.isUserInteractionEnabled = false
@@ -221,6 +305,20 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
         self.addressShimmerMaskNode.isUserInteractionEnabled = false
         self.addressShimmerMaskNode.displaysAsynchronously = false
 
+        self.sendingClockNode = ASDisplayNode()
+        self.sendingClockNode.isUserInteractionEnabled = false
+        self.sendingClockNode.alpha = 0.0
+
+        self.clockFrameNode = ASImageNode()
+        self.clockFrameNode.isLayerBacked = true
+        self.clockFrameNode.displaysAsynchronously = false
+        self.clockFrameNode.displayWithoutProcessing = true
+
+        self.clockMinNode = ASImageNode()
+        self.clockMinNode.isLayerBacked = true
+        self.clockMinNode.displaysAsynchronously = false
+        self.clockMinNode.displayWithoutProcessing = true
+
         self.captionNode = TextNode()
         self.captionNode.isUserInteractionEnabled = false
         self.captionNode.displaysAsynchronously = false
@@ -237,11 +335,6 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
         self.ribbonTextNode.isUserInteractionEnabled = false
         self.ribbonTextNode.displaysAsynchronously = false
 
-        self.ribbonSendingTextNode = TextNode()
-        self.ribbonSendingTextNode.isUserInteractionEnabled = false
-        self.ribbonSendingTextNode.displaysAsynchronously = false
-        self.ribbonSendingTextNode.alpha = 0.0
-
         self.ribbonTextContainerNode = ASDisplayNode()
         self.ribbonTextContainerNode.isUserInteractionEnabled = false
         self.ribbonTextMaskNode = ASImageNode()
@@ -255,13 +348,16 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
         self.cardNode.addSubnode(self.amountNode)
         self.cardNode.addSubnode(self.nameNode)
         self.cardNode.addSubnode(self.addressNode)
+        self.cardNode.addSubnode(self.sendingClockNode)
+        self.sendingClockNode.addSubnode(self.clockFrameNode)
+        self.sendingClockNode.addSubnode(self.clockMinNode)
 
-        self.addSubnode(self.cardNode)
-        self.addSubnode(self.ribbonBackgroundNode)
-        self.addSubnode(self.ribbonTextContainerNode)
+        self.addSubnode(self.mediaContainerNode)
+        self.mediaContainerNode.addSubnode(self.cardNode)
+        self.mediaContainerNode.addSubnode(self.ribbonBackgroundNode)
+        self.mediaContainerNode.addSubnode(self.ribbonTextContainerNode)
         self.ribbonTextContainerNode.addSubnode(self.ribbonTextNode)
-        self.ribbonTextContainerNode.addSubnode(self.ribbonSendingTextNode)
-        self.addSubnode(self.captionNode)
+        self.mediaContainerNode.addSubnode(self.captionNode)
         self.addSubnode(self.labelNode)
     }
 
@@ -280,6 +376,9 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
             self.transferOperationId = nil
             self.transferTransactionHash = nil
             self.transferStatus = nil
+            #if DEBUG
+            self.debugTransferStatus = nil
+            #endif
             self.finishCompletionAnimation()
             self.shimmerView?.removeFromSuperview()
             self.shimmerView = nil
@@ -358,13 +457,13 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
         guard self.transferStatus != .completed else {
             return
         }
-        let previousStatus = self.transferStatus
+        let previousStatus = self.displayedTransferStatus
         self.transferStatus = status
         self.updateTransferAppearance(previousStatus: previousStatus, animated: animated)
     }
 
     private func updateTransferAppearance(previousStatus: TransferCardStatus?, animated: Bool) {
-        let status = self.transferStatus
+        let status = self.displayedTransferStatus
         if previousStatus == status {
             if status == .pending {
                 self.updateShimmer(animated: false)
@@ -373,26 +472,37 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
         }
         self.finishCompletionAnimation()
         self.updateShimmer(animated: animated && previousStatus != nil)
-        let animateCompletion = status == .completed && previousStatus != nil && animated && self.visibility != .none
-        let ribbonColor: UIColor
-        if self.isIncomingTransfer {
-            ribbonColor = UIColor(rgb: 0x0075f6)
-        } else if status == .completed {
-            ribbonColor = UIColor(rgb: 0x00cf00)
-        } else {
-            ribbonColor = UIColor(rgb: 0x5ec2ff)
-        }
-        let ribbonTransition: ContainedViewLayoutTransition = animateCompletion
-            ? .animated(duration: 0.28, curve: .easeInOut)
-            : .immediate
-        ribbonTransition.updateTintColor(layer: self.ribbonBackgroundNode.layer, color: ribbonColor)
+        let animateCompletion = !self.isIncomingTransfer && status == .completed && previousStatus != nil && animated && self.visibility != .none
         if animateCompletion {
             self.animateCompletion()
         }
     }
 
+    private func updateSendingClockAnimation() {
+        let shouldAnimate = self.isSendingTransfer && self.visibility != .none
+        for (node, duration) in [(self.clockFrameNode, 6.0), (self.clockMinNode, 1.0)] {
+            let key = "transferClockRotation"
+            if shouldAnimate {
+                if node.layer.animation(forKey: key) == nil {
+                    node.layer.transform = CATransform3DIdentity
+                    let animation = CABasicAnimation(keyPath: "transform.rotation.z")
+                    animation.fromValue = 0.0 as NSNumber
+                    animation.toValue = (Double.pi * 2.0) as NSNumber
+                    animation.duration = duration
+                    animation.repeatCount = .infinity
+                    animation.timingFunction = CAMediaTimingFunction(name: .linear)
+                    node.layer.add(animation, forKey: key)
+                }
+            } else if node.layer.animation(forKey: key) != nil {
+                let transform = node.layer.presentation()?.transform ?? CATransform3DIdentity
+                node.layer.removeAnimation(forKey: key)
+                node.layer.transform = transform
+            }
+        }
+    }
+
     private func updateShimmer(animated: Bool) {
-        let displayShimmer = self.transferStatus == .pending && self.visibility != .none
+        let displayShimmer = self.displayedTransferStatus == .pending && self.visibility != .none
         if displayShimmer {
             let shimmerView: TransferCardShimmerView
             if let current = self.shimmerView {
@@ -426,40 +536,115 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
         }
     }
 
+    private func removeRibbonAnimation() {
+        self.ribbonAnimationLayer?.removeAllAnimations()
+        self.ribbonAnimationLayer?.removeFromSuperlayer()
+        self.ribbonAnimationLayer = nil
+        if let ribbonAnimationMaskLayer = self.ribbonAnimationMaskLayer {
+            ribbonAnimationMaskLayer.removeAllAnimations()
+            self.ribbonAnimationMaskLayer = nil
+            self.ribbonTextContainerNode.layer.mask = nil
+        }
+        self.ribbonTextContainerNode.view.mask = self.ribbonTextMaskNode.view
+    }
+
     private func finishCompletionAnimation() {
-        // The model tint already holds the final color; removing the animation settles it immediately.
-        self.ribbonBackgroundNode.layer.removeAnimation(forKey: "contentsMultiplyColor")
-        self.ribbonTextNode.layer.removeAnimation(forKey: "position")
+        self.completionAnimationId &+= 1
+        self.removeRibbonAnimation()
+        self.ribbonBackgroundNode.layer.removeAnimation(forKey: "opacity")
         self.ribbonTextNode.layer.removeAnimation(forKey: "opacity")
-        self.ribbonSendingTextNode.layer.removeAnimation(forKey: "position")
-        self.ribbonSendingTextNode.layer.removeAnimation(forKey: "opacity")
-        self.cardNode.layer.removeAnimation(forKey: "transform.scale")
-        let sending = self.transferStatus != nil && self.transferStatus != .completed
-        self.ribbonTextNode.alpha = sending ? 0.0 : 1.0
-        self.ribbonSendingTextNode.alpha = sending ? 1.0 : 0.0
+        self.ribbonTextNode.layer.removeAnimation(forKey: "transform.scale")
+        self.sendingClockNode.layer.removeAnimation(forKey: "opacity")
+        self.sendingClockNode.layer.removeAnimation(forKey: "transform.scale")
+        self.mediaContainerNode.layer.removeAnimation(forKey: "transform.scale")
+        let sending = self.isSendingTransfer
+        self.sendingClockNode.alpha = sending ? 1.0 : 0.0
+        self.ribbonBackgroundNode.alpha = sending ? 0.0 : 1.0
+        self.ribbonTextContainerNode.alpha = sending ? 0.0 : 1.0
+        self.ribbonTextNode.alpha = 1.0
+        ContainedViewLayoutTransition.immediate.updateTintColor(
+            layer: self.ribbonBackgroundNode.layer,
+            color: UIColor(rgb: self.isIncomingTransfer ? 0x0075f6 : 0x00cf00)
+        )
+        self.updateSendingClockAnimation()
     }
 
     private func animateCompletion() {
-        let offset = self.ribbonTextContainerNode.bounds.width
-        self.ribbonSendingTextNode.layer.animateAlpha(from: 1.0, to: 1.0, duration: 0.28)
-        self.ribbonSendingTextNode.layer.animate(from: NSValue(cgPoint: .zero), to: NSValue(cgPoint: CGPoint(x: offset, y: offset)), keyPath: "position", timingFunction: CAMediaTimingFunctionName.easeInEaseOut.rawValue, duration: 0.28, additive: true, key: "position")
-        let overshoot = CGFloat(3.0 / sqrt(2.0))
-        self.ribbonTextNode.layer.animateKeyframes(
-            values: [CGPoint(x: -offset, y: -offset), .zero, CGPoint(x: overshoot, y: overshoot), .zero].map { NSValue(cgPoint: $0) },
-            keyTimes: [0.0, 0.28 / 0.42, 0.34 / 0.42, 1.0].map { NSNumber(value: $0) },
-            duration: 0.42,
-            keyPath: "position",
-            timingFunction: CAMediaTimingFunctionName.easeInEaseOut.rawValue,
-            additive: true
+        let animationId = self.completionAnimationId
+        let ribbonFrame = self.ribbonBackgroundNode.frame
+        let clockCenter = CGPoint(
+            x: self.cardNode.frame.minX + self.sendingClockNode.position.x - ribbonFrame.minX,
+            y: self.cardNode.frame.minY + self.sendingClockNode.position.y - ribbonFrame.minY
         )
-        self.cardNode.layer.animateKeyframes(
-            values: [1.0 as NSNumber, 1.0 as NSNumber, 1.03 as NSNumber, 1.0 as NSNumber],
-            keyTimes: [0.0, 0.28 / 0.58, 0.38 / 0.58, 1.0].map { NSNumber(value: $0) },
+        let finalPath = TransferCardRibbonGeometry.path
+        var overshootTransform = CGAffineTransform(a: 1.02, b: 0.02, c: 0.02, d: 1.02, tx: -1.36, ty: -1.36)
+        let paths = [
+            TransferCardRibbonGeometry.compactPath(center: clockCenter),
+            finalPath,
+            finalPath.copy(using: &overshootTransform) ?? finalPath,
+            finalPath
+        ]
+        let keyTimes = [0.0, 0.28 / 0.42, 0.34 / 0.42, 1.0].map { NSNumber(value: $0) }
+
+        let ribbonLayer = SimpleShapeLayer()
+        ribbonLayer.frame = ribbonFrame
+        ribbonLayer.contentsScale = UIScreenScale
+        ribbonLayer.fillColor = UIColor(rgb: 0x00cf00).cgColor
+        ribbonLayer.path = finalPath
+        self.ribbonAnimationLayer = ribbonLayer
+        self.mediaContainerNode.layer.insertSublayer(ribbonLayer, below: self.ribbonBackgroundNode.layer)
+        self.ribbonBackgroundNode.alpha = 0.0
+
+        let maskLayer = SimpleShapeLayer()
+        maskLayer.frame = CGRect(origin: .zero, size: ribbonFrame.size)
+        maskLayer.contentsScale = UIScreenScale
+        maskLayer.fillColor = UIColor.white.cgColor
+        maskLayer.path = finalPath
+        self.ribbonAnimationMaskLayer = maskLayer
+        self.ribbonTextContainerNode.view.mask = nil
+        self.ribbonTextContainerNode.layer.mask = maskLayer
+
+        for layer in [ribbonLayer, maskLayer] {
+            layer.animateKeyframes(values: paths, keyTimes: keyTimes, duration: 0.42, keyPath: "path", timingFunction: CAMediaTimingFunctionName.easeInEaseOut.rawValue)
+        }
+        ribbonLayer.animateAlpha(from: 0.0, to: 1.0, duration: 0.12)
+        self.sendingClockNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.12)
+        self.sendingClockNode.layer.animateScale(from: 1.0, to: 0.4, duration: 0.12)
+        self.ribbonTextNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.22, delay: 0.06)
+        self.ribbonTextNode.layer.animateScale(from: 0.65, to: 1.0, duration: 0.28)
+
+        self.ribbonBackgroundNode.alpha = 1.0
+        self.ribbonBackgroundNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.06, delay: 0.42, completion: { [weak self] finished in
+            guard finished, let self, self.completionAnimationId == animationId else {
+                return
+            }
+            self.removeRibbonAnimation()
+        })
+        self.mediaContainerNode.layer.animateKeyframes(
+            values: [1.0 as NSNumber, 1.03 as NSNumber, 1.0 as NSNumber],
+            keyTimes: [0.0, 0.28 / 0.58, 1.0].map { NSNumber(value: $0) },
             duration: 0.58,
             keyPath: "transform.scale",
-            timingFunction: CAMediaTimingFunctionName.easeInEaseOut.rawValue
+            timingFunction: CAMediaTimingFunctionName.easeInEaseOut.rawValue,
+            completion: { [weak self] finished in
+                guard finished, let self, self.completionAnimationId == animationId else {
+                    return
+                }
+                self.finishCompletionAnimation()
+            }
         )
     }
+
+    #if DEBUG
+    private func toggleDebugTransferStatus() {
+        guard !self.isIncomingTransfer else {
+            return
+        }
+        let previousStatus = self.displayedTransferStatus
+        self.debugTransferStatus = previousStatus == .completed ? .pending : .completed
+        self.updateTransferAppearance(previousStatus: previousStatus, animated: true)
+    }
+    #endif
 
     private func removeCaptionTextSelection(animated: Bool) {
         guard let textSelectionNode = self.captionTextSelectionNode else {
@@ -533,8 +718,8 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
             textSelectionNode.enableShare = true
 
             self.captionTextSelectionNode = textSelectionNode
-            self.addSubnode(textSelectionNode)
-            self.insertSubnode(textSelectionNode.highlightAreaNode, belowSubnode: self.captionNode)
+            self.mediaContainerNode.addSubnode(textSelectionNode)
+            self.mediaContainerNode.insertSubnode(textSelectionNode.highlightAreaNode, belowSubnode: self.captionNode)
             textSelectionNode.frame = self.captionNode.frame
             textSelectionNode.highlightAreaNode.frame = textSelectionNode.frame
         } else {
@@ -550,7 +735,6 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
         let makeAddressShimmerMaskLayout = TextNode.asyncLayout(self.addressShimmerMaskNode)
         let makeCaptionLayout = TextNode.asyncLayout(self.captionNode)
         let makeRibbonTextLayout = TextNode.asyncLayout(self.ribbonTextNode)
-        let makeRibbonSendingTextLayout = TextNode.asyncLayout(self.ribbonSendingTextNode)
         let cachedLabelBackgroundImage = self.cachedLabelBackgroundImage
 
         return { [weak self] item, _, _, _, _, _ in
@@ -780,12 +964,6 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                     insets: UIEdgeInsets()
                 )
                 let (ribbonTextLayout, ribbonTextApply) = makeRibbonTextLayout(ribbonTextLayoutArguments)
-                let (ribbonSendingTextLayout, ribbonSendingTextApply) = makeRibbonSendingTextLayout(ribbonTextLayoutArguments.withAttributedString(NSAttributedString(
-                    string: "sending",
-                    font: Font.semibold(11.0),
-                    textColor: .white,
-                    paragraphAlignment: .center
-                )))
 
                 var labelRects = labelLayout.linesRects()
                 if labelRects.count > 1 {
@@ -857,7 +1035,6 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                         let _ = addressShimmerMaskApply()
                         let _ = captionApply()
                         let _ = ribbonTextApply()
-                        let _ = ribbonSendingTextApply()
 
                         let labelFrame = CGRect(
                             origin: CGPoint(x: floorToScreenPixels((boundingWidth - labelLayout.size.width) * 0.5), y: 2.0),
@@ -870,11 +1047,32 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                             size: mediaSize
                         )
                         let cardFrame = CGRect(
-                            origin: CGPoint(x: mediaFrame.minX + outerInset, y: mediaFrame.minY + outerInset),
+                            origin: CGPoint(x: outerInset, y: outerInset),
                             size: cardSize
                         )
-                        animation.animator.updateFrame(layer: self.cardNode.layer, frame: cardFrame, completion: nil)
+                        if self.mediaContainerNode.frame != mediaFrame {
+                            self.finishCompletionAnimation()
+                        }
+                        animation.animator.updateFrame(layer: self.mediaContainerNode.layer, frame: mediaFrame, completion: nil)
+                        self.cardNode.frame = cardFrame
                         self.cardBackgroundNode.frame = CGRect(origin: .zero, size: cardSize)
+
+                        let clockSize = CGSize(width: 14.0, height: 14.0)
+                        self.sendingClockNode.frame = CGRect(origin: CGPoint(x: cardSize.width - clockSize.width - 12.0, y: 12.0), size: clockSize)
+                        for node in [self.clockFrameNode, self.clockMinNode] {
+                            node.bounds = CGRect(origin: .zero, size: clockSize)
+                            node.position = CGPoint(x: clockSize.width * 0.5, y: clockSize.height * 0.5)
+                        }
+                        if self.clockFrameNode.image == nil {
+                            let graphics = PresentationResourcesChat.principalGraphics(
+                                theme: item.presentationData.theme.theme,
+                                wallpaper: item.presentationData.theme.wallpaper,
+                                bubbleCorners: item.presentationData.chatBubbleCorners
+                            )
+                            let clockColor = UIColor(rgb: 0x5ec2ff)
+                            self.clockFrameNode.image = generateTintedImage(image: graphics.clockMediaFrameImage, color: clockColor)
+                            self.clockMinNode.image = generateTintedImage(image: graphics.clockMediaMinImage, color: clockColor)
+                        }
 
                         let iconSize = CGSize(width: 40.0, height: 40.0)
                         let iconFrame = CGRect(
@@ -926,7 +1124,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                         )
                         self.addressShimmerMaskNode.frame = CGRect(origin: .zero, size: addressLayout.size)
 
-                        let ribbonSize = CGSize(width: 68.0, height: 68.0)
+                        let ribbonSize = TransferCardRibbonGeometry.size
                         let ribbonFrame = CGRect(
                             origin: CGPoint(x: cardFrame.maxX - ribbonSize.width + 2.0, y: cardFrame.minY - 2.0),
                             size: ribbonSize
@@ -934,14 +1132,15 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                         self.ribbonBackgroundNode.frame = ribbonFrame
                         self.ribbonTextContainerNode.frame = ribbonFrame
                         self.ribbonTextMaskNode.frame = CGRect(origin: .zero, size: ribbonSize)
-                        self.ribbonTextContainerNode.view.mask = self.ribbonTextMaskNode.view
+                        if let ribbonAnimationMaskLayer = self.ribbonAnimationMaskLayer {
+                            ribbonAnimationMaskLayer.frame = CGRect(origin: .zero, size: ribbonSize)
+                        } else {
+                            self.ribbonTextContainerNode.view.mask = self.ribbonTextMaskNode.view
+                        }
                         let ribbonTextPosition = CGPoint(x: ribbonSize.width * 0.5 + 7.0, y: ribbonSize.height * 0.5 - 6.0)
                         self.ribbonTextNode.transform = CATransform3DMakeRotation(.pi / 4.0, 0.0, 0.0, 1.0)
                         self.ribbonTextNode.bounds = CGRect(origin: .zero, size: ribbonTextLayout.size)
                         self.ribbonTextNode.position = ribbonTextPosition
-                        self.ribbonSendingTextNode.transform = self.ribbonTextNode.transform
-                        self.ribbonSendingTextNode.bounds = CGRect(origin: .zero, size: ribbonSendingTextLayout.size)
-                        self.ribbonSendingTextNode.position = ribbonTextPosition
 
                         self.captionNode.isHidden = !hasCaption || hasEncryptedCaption
                         if hasEncryptedCaption {
@@ -953,7 +1152,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                         if hasCaption {
                             let captionFrame = CGRect(
                                 origin: CGPoint(
-                                    x: mediaFrame.minX + floorToScreenPixels((mediaFrame.width - captionSize.width) * 0.5),
+                                    x: floorToScreenPixels((mediaSize.width - captionSize.width) * 0.5),
                                     y: cardFrame.maxY + captionSpacing
                                 ),
                                 size: captionSize
@@ -970,7 +1169,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                                     //TODO:localize
                                     dustNode.accessibilityLabel = "Encrypted comment"
                                     self.captionDustNode = dustNode
-                                    self.addSubnode(dustNode)
+                                    self.mediaContainerNode.addSubnode(dustNode)
                                 }
                                 dustNode.frame = captionFrame.insetBy(dx: -3.0, dy: -3.0)
                                 let rect = CGRect(origin: CGPoint(x: 3.0, y: 3.0), size: captionSize).insetBy(dx: 0.0, dy: 2.0)
@@ -993,10 +1192,10 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                             backgroundContent.clipsToBounds = true
                             backgroundContent.cornerRadius = 24.0
                             self.mediaBackgroundContent = backgroundContent
-                            self.insertSubnode(backgroundContent, at: 0)
+                            self.mediaContainerNode.insertSubnode(backgroundContent, at: 0)
                         }
                         if let mediaBackgroundContent = self.mediaBackgroundContent {
-                            animation.animator.updateFrame(layer: mediaBackgroundContent.layer, frame: mediaFrame, completion: nil)
+                            animation.animator.updateFrame(layer: mediaBackgroundContent.layer, frame: CGRect(origin: .zero, size: mediaSize), completion: nil)
                             mediaBackgroundContent.cornerRadius = 24.0
                         }
 
@@ -1117,6 +1316,13 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                     }
                 }))
             } else if let peerMention = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.PeerMention)] as? TelegramPeerMention {
+                #if DEBUG
+                if !self.isIncomingTransfer {
+                    return ChatMessageBubbleContentTapAction(content: .custom({ [weak self] in
+                        self?.toggleDebugTransferStatus()
+                    }))
+                }
+                #endif
                 return ChatMessageBubbleContentTapAction(content: .peerMention(
                     peerId: peerMention.peerId,
                     mention: peerMention.mention,
@@ -1125,7 +1331,8 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
             }
         }
 
-        if self.cardNode.frame.contains(point) || self.captionNode.frame.contains(point) || self.mediaBackgroundContent?.frame.contains(point) == true {
+        let mediaPoint = self.mediaContainerNode.view.convert(point, from: self.view)
+        if self.cardNode.frame.contains(mediaPoint) || self.captionNode.frame.contains(mediaPoint) || self.mediaBackgroundContent?.frame.contains(mediaPoint) == true {
             return ChatMessageBubbleContentTapAction(content: .openMessage)
         }
         return ChatMessageBubbleContentTapAction(content: .none)

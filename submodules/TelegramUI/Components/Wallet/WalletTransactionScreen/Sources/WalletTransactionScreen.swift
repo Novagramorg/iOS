@@ -49,6 +49,7 @@ private struct WalletTransactionPreviewSource: Equatable {
     let comment: String?
     let commentEncrypted: Bool
     let collectible: WalletContext.Collectible?
+    let initialFee: Int64?
     let preparedTransfer: WalletContext.PreparedTransfer?
 
     init(preparedTransfer: WalletContext.PreparedTransfer) {
@@ -60,10 +61,11 @@ private struct WalletTransactionPreviewSource: Equatable {
         self.comment = preparedTransfer.comment
         self.commentEncrypted = preparedTransfer.commentEncrypted
         self.collectible = preparedTransfer.collectible
+        self.initialFee = preparedTransfer.fee
         self.preparedTransfer = preparedTransfer
     }
 
-    init(address: String, amount: Int64, sendAll: Bool, comment: String?) {
+    init(address: String, amount: Int64, sendAll: Bool, comment: String?, collectible: WalletContext.Collectible?, initialFee: Int64?) {
         self.id = UUID().uuidString
         self.address = address
         self.amount = amount
@@ -71,7 +73,8 @@ private struct WalletTransactionPreviewSource: Equatable {
         self.isSendAll = sendAll
         self.comment = comment
         self.commentEncrypted = false
-        self.collectible = nil
+        self.collectible = collectible
+        self.initialFee = initialFee
         self.preparedTransfer = nil
     }
 }
@@ -286,6 +289,7 @@ private final class TransactionCommentComponent: Component {
 }
 
 private protocol WalletTransactionContentController: AnyObject {
+    var walletPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? { get }
     func setCloseAction(id: String, action: @escaping (Bool) -> Void)
     func requestClose(animated: Bool)
     func dismissAllTooltips()
@@ -348,9 +352,9 @@ private final class WalletTransactionFeePlaceholderComponent: Component {
                 if shapeView.superview !== self.shimmerView.contentView {
                     self.shimmerView.contentView.addSubview(shapeView)
                 }
-                transition.setFrame(view: shapeView, frame: CGRect(origin: CGPoint(x: 0.0, y: UIScreenPixel), size: shapeSize))
+                transition.setFrame(view: shapeView, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: shapeSize))
             }
-            transition.setFrame(view: self.shimmerView, frame: CGRect(origin: CGPoint(x: 0.0, y: UIScreenPixel), size: size))
+            transition.setFrame(view: self.shimmerView, frame: CGRect(origin: CGPoint(x: 0.0, y: 1.0), size: size))
             self.shimmerView.update(
                 size: size,
                 containerWidth: size.width,
@@ -358,7 +362,7 @@ private final class WalletTransactionFeePlaceholderComponent: Component {
                 gradientWidth: 60.0,
                 transition: transition
             )
-            return size
+            return CGSize(width: size.width, height: size.height + 4.0)
         }
     }
 
@@ -794,6 +798,7 @@ private final class WalletTransactionContentComponent: Component {
         private var isApplyingInput = false
 
         private let walletDisposable = MetaDisposable()
+        private let gaslessInfoDisposable = MetaDisposable()
         private let transferDisposable = MetaDisposable()
         private let discardTransferDisposables = DisposableSet()
         private let hapticFeedback = HapticFeedback()
@@ -810,7 +815,7 @@ private final class WalletTransactionContentComponent: Component {
 
         private func currentPresentationData(for component: WalletTransactionContentComponent) -> (initial: PresentationData, signal: Signal<PresentationData, NoError>) {
             let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
-            if let updatedPresentationData = (self.environment?.controller() as? WalletTransactionScreen)?.walletPresentationData {
+            if let updatedPresentationData = (self.environment?.controller() as? WalletTransactionContentController)?.walletPresentationData {
                 return (
                     initial: presentationData.withUpdated(theme: self.environment?.theme ?? updatedPresentationData.initial.theme),
                     signal: updatedPresentationData.signal
@@ -841,6 +846,7 @@ private final class WalletTransactionContentComponent: Component {
             self.commentCredentialChangesDisposable.dispose()
             self.discardCurrentPreparedTransfer()
             self.walletDisposable.dispose()
+            self.gaslessInfoDisposable.dispose()
             self.transferDisposable.dispose()
             self.discardTransferDisposables.dispose()
             self.commentDecryptionDisposable.dispose()
@@ -894,6 +900,7 @@ private final class WalletTransactionContentComponent: Component {
             self.commentWalletIdentity = nil
             self.discardCurrentPreparedTransfer()
             self.walletDisposable.set(nil)
+            self.gaslessInfoDisposable.set(nil)
             self.transferDisposable.set(nil)
             self.transaction = nil
             self.walletContext = nil
@@ -925,7 +932,10 @@ private final class WalletTransactionContentComponent: Component {
                 self.previewComment = walletTransactionComment(source.comment)
                 self.previewCommentEncrypted = source.collectible == nil && source.commentEncrypted
                 self.preparedTransfer = source.preparedTransfer
-                self.displayedFee = source.preparedTransfer?.fee
+                self.displayedFee = source.initialFee
+                if source.collectible == nil {
+                    self.gaslessInfoDisposable.set(walletContext.beginGaslessInfoUpdates())
+                }
                 self.dismissSendScreen = dismissSendScreen
                 self.previewTimestamp = Int32(Date().timeIntervalSince1970)
                 self.isApplyingInput = true
@@ -1022,13 +1032,27 @@ private final class WalletTransactionContentComponent: Component {
             }
             let preparedTransfer = self.preparedTransfer
             let recipient = preparedTransfer?.recipient ?? previewSource.address
-            let amount = preparedTransfer?.amount ?? previewSource.amount
+            let amount = preparedTransfer?.amount ?? (previewSource.isSendAll
+                ? max(0, previewSource.amount - (self.displayedFee ?? 0))
+                : previewSource.amount)
             let collectible = preparedTransfer?.collectible ?? previewSource.collectible
             let gasless: Bool
             if let submittedTransfer = self.submittedTransfer {
                 gasless = self.latestWalletState?.transactions.items.first(where: {
                     $0.presentationId == "pending:\(submittedTransfer.id)"
                 })?.gasless ?? submittedTransfer.gasless
+            } else if collectible == nil,
+                      let component = self.component,
+                      let walletState = self.latestWalletState ?? self.walletContext?.stateValue,
+                      case let .wallet(info) = walletState.phase,
+                      !WalletContext.isSelfTransfer(recipient: recipient, walletAddress: info.address),
+                      !previewSource.isSendAll || preparedTransfer != nil || self.displayedFee != nil {
+                let configuration = WalletConfiguration.with(appConfiguration: component.context.currentAppConfiguration.with { $0 })
+                gasless = WalletContext.isGaslessEligible(
+                    amount: amount,
+                    gaslessInfo: walletState.gaslessInfo.currentValue,
+                    minimumAmount: configuration.transferGaslessMinAmount
+                )
             } else {
                 gasless = false
             }
@@ -1060,6 +1084,7 @@ private final class WalletTransactionContentComponent: Component {
                 return
             }
             self.isClosing = true
+            self.gaslessInfoDisposable.set(nil)
             (controller as? WalletTransactionScreen)?.cancelFirstGramsSuggestion()
             self.invalidateCommentSession()
             self.resetCommentDecryption()
@@ -1547,8 +1572,11 @@ private final class WalletTransactionContentComponent: Component {
             self.previewOperation = .preparing
             self.preparingForSend = authorizeAfterPreparation
             self.componentState?.updated(transition: .easeInOut(duration: 0.2))
+            let collectible = self.preparedTransfer?.collectible ?? previewSource.collectible
+            let requestedAmount = self.preparedTransfer?.requestedAmount ?? previewSource.requestedAmount
+            let sendAll = self.preparedTransfer?.isSendAll ?? previewSource.isSendAll
             let preparation: Signal<WalletContext.PreparedTransfer, WalletContext.WalletError>
-            if let collectible = self.preparedTransfer?.collectible ?? previewSource.collectible {
+            if let collectible {
                 preparation = walletContext.prepareCollectibleTransfer(
                     address: self.preparedTransfer?.recipient ?? previewSource.address,
                     collectible: collectible,
@@ -1557,8 +1585,8 @@ private final class WalletTransactionContentComponent: Component {
             } else {
                 preparation = walletContext.prepareTransfer(
                     address: self.preparedTransfer?.recipient ?? previewSource.address,
-                    amount: self.preparedTransfer?.requestedAmount ?? previewSource.requestedAmount,
-                    sendAll: self.preparedTransfer?.isSendAll ?? previewSource.isSendAll,
+                    amount: requestedAmount,
+                    sendAll: sendAll,
                     comment: comment,
                     commentEncrypted: self.previewCommentEncrypted,
                     session: self.previewCommentEncrypted ? self.commentSession : nil
@@ -1568,7 +1596,17 @@ private final class WalletTransactionContentComponent: Component {
             |> filter { $0.activeOperation == nil }
             |> take(1)
             |> castError(WalletContext.WalletError.self)
-            |> mapToSignal { _ in preparation }
+            |> mapToSignal { state -> Signal<WalletContext.PreparedTransfer, WalletContext.WalletError> in
+                if collectible == nil {
+                    guard let balance = state.balance.currentValue, requestedAmount <= balance else {
+                        return .fail(.insufficientBalance(required: requestedAmount))
+                    }
+                    if sendAll && balance != requestedAmount {
+                        return .fail(.previewFailed)
+                    }
+                }
+                return preparation
+            }
             |> deliverOnMainQueue).start(next: { [weak self] updatedTransfer in
                 guard let self else {
                     _ = walletContext.discardPreparedTransfer(updatedTransfer).start()
@@ -3953,17 +3991,20 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
 }
 
 public final class WalletTransactionPreviewScreen: ViewControllerComponentContainer, WalletTransactionContentController {
+    fileprivate let walletPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?
     private let currentCloseId: String
     private var closeActions: [String: (Bool) -> Void] = [:]
     fileprivate var invalidateCommentSession: (() -> Void)?
 
     public init(
         context: AccountContext,
+        updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? = nil,
         walletContext: WalletContext,
         preparedTransfer: WalletContext.PreparedTransfer,
         dismissSendScreen: @escaping () -> Void
     ) {
         let source = WalletTransactionPreviewSource(preparedTransfer: preparedTransfer)
+        self.walletPresentationData = updatedPresentationData
         self.currentCloseId = walletTransactionModeId(.preview(
             walletContext: walletContext,
             source: source,
@@ -3981,7 +4022,8 @@ public final class WalletTransactionPreviewScreen: ViewControllerComponentContai
             ),
             navigationBarAppearance: .none,
             statusBarStyle: .ignore,
-            theme: .default
+            theme: .default,
+            updatedPresentationData: updatedPresentationData
         )
 
         self.navigationPresentation = .flatModal
@@ -3990,14 +4032,18 @@ public final class WalletTransactionPreviewScreen: ViewControllerComponentContai
 
     public init(
         context: AccountContext,
+        updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? = nil,
         walletContext: WalletContext,
         address: String,
         amount: Int64,
         sendAll: Bool,
         comment: String?,
+        collectible: WalletContext.Collectible? = nil,
+        initialFee: Int64? = nil,
         dismissSendScreen: @escaping () -> Void
     ) {
-        let source = WalletTransactionPreviewSource(address: address, amount: amount, sendAll: sendAll, comment: comment)
+        let source = WalletTransactionPreviewSource(address: address, amount: amount, sendAll: sendAll, comment: comment, collectible: collectible, initialFee: initialFee)
+        self.walletPresentationData = updatedPresentationData
         self.currentCloseId = walletTransactionModeId(.preview(
             walletContext: walletContext,
             source: source,
@@ -4015,7 +4061,8 @@ public final class WalletTransactionPreviewScreen: ViewControllerComponentContai
             ),
             navigationBarAppearance: .none,
             statusBarStyle: .ignore,
-            theme: .default
+            theme: .default,
+            updatedPresentationData: updatedPresentationData
         )
 
         self.navigationPresentation = .flatModal

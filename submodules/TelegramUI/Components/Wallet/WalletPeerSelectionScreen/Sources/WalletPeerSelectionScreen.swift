@@ -414,7 +414,6 @@ private final class WalletPeerSelectionScreenComponent: Component {
         private var chatListDisposable: Disposable?
         private let resolveDisposable = MetaDisposable()
         private let peerAddressDisposable = MetaDisposable()
-        private let transferDisposable = MetaDisposable()
         private var resolveTimer: SwiftSignalKit.Timer?
         private var navigationButtonsRevealTimer: SwiftSignalKit.Timer?
         private var resolveGeneration: Int = 0
@@ -425,7 +424,6 @@ private final class WalletPeerSelectionScreenComponent: Component {
         private var noResultsQuery: String?
         private var displaysNoResults = false
         private var resolvingPeerId: EnginePeer.Id?
-        private var isPreparingTransfer = false
         private var actionGeneration = 0
         private var hasPasteboardText = UIPasteboard.general.hasStrings
         private var hasSpaceForPasteButton = false
@@ -485,16 +483,13 @@ private final class WalletPeerSelectionScreenComponent: Component {
             self.chatListDisposable?.dispose()
             self.resolveDisposable.dispose()
             self.peerAddressDisposable.dispose()
-            self.transferDisposable.dispose()
             self.walletStateDisposable.dispose()
         }
 
         func cancelPendingActions() {
             self.actionGeneration &+= 1
             self.peerAddressDisposable.set(nil)
-            self.transferDisposable.set(nil)
             self.resolvingPeerId = nil
-            self.isPreparingTransfer = false
             if !self.isUpdating {
                 self.state?.updated(transition: .immediate)
             }
@@ -649,7 +644,6 @@ private final class WalletPeerSelectionScreenComponent: Component {
 
             let buttonsAreInteractive = alpha >= 0.999
                 && self.resolvingPeerId == nil
-                && !self.isPreparingTransfer
             self.scanQrButton.isUserInteractionEnabled = buttonsAreInteractive
             if let pasteButtonView = self.pasteButton.view {
                 let displaysPasteButton = self.hasPasteboardText && self.hasSpaceForPasteButton
@@ -724,8 +718,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
 
         func peerSelected(peer: EnginePeer) {
             guard let component = self.component,
-                  self.resolvingPeerId == nil,
-                  !self.isPreparingTransfer else {
+                  self.resolvingPeerId == nil else {
                 return
             }
 
@@ -825,8 +818,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
         }
 
         private func pasteRecipient() {
-            guard self.resolvingPeerId == nil,
-                  !self.isPreparingTransfer else {
+            guard self.resolvingPeerId == nil else {
                 return
             }
             guard let clipboardValue = UIPasteboard.general.string else {
@@ -856,8 +848,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
         @objc private func scanQrPressed() {
             guard let component = self.component,
                   let controller = self.environment?.controller(),
-                  self.resolvingPeerId == nil,
-                  !self.isPreparingTransfer else {
+                  self.resolvingPeerId == nil else {
                 return
             }
             //TODO:localize
@@ -904,8 +895,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
         private func openSendScreen(peer: EnginePeer? = nil, address: String? = nil, resolvedAddress: WalletUserAddress? = nil) {
             guard let component = self.component,
                   let controller = self.environment?.controller(),
-                  self.resolvingPeerId == nil,
-                  !self.isPreparingTransfer else {
+                  self.resolvingPeerId == nil else {
                 return
             }
 
@@ -960,8 +950,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
         private func openRecipient(_ recipient: WalletContext.ResolvedTransferRecipient, peer: WalletPeerSelectionResolvedPeer? = nil) {
             guard let component = self.component,
                   let controller = self.environment?.controller(),
-                  self.resolvingPeerId == nil,
-                  !self.isPreparingTransfer else {
+                  self.resolvingPeerId == nil else {
                 return
             }
 
@@ -970,71 +959,27 @@ private final class WalletPeerSelectionScreenComponent: Component {
                 self.openSendScreen(peer: peer?.peer, address: recipient.transferInput, resolvedAddress: peer?.address)
             case let .collectible(collectible):
                 self.searchBarNode?.deactivate(clear: false)
-                self.isPreparingTransfer = true
-                let generation = self.actionGeneration
-                self.state?.updated(transition: .easeInOut(duration: 0.2))
-                self.transferDisposable.set((component.walletContext.prepareCollectibleTransfer(
+                let dismissSourceScreens: () -> Void = { [weak controller] in
+                    if let controller {
+                        if let navigationController = controller.navigationController as? NavigationController {
+                            var viewControllers = navigationController.viewControllers
+                            viewControllers.removeAll(where: { $0 === controller })
+                            navigationController.setViewControllers(viewControllers, animated: false)
+                        } else {
+                            controller.dismiss(animated: false)
+                        }
+                    }
+                    component.dismissSourceScreen()
+                }
+                controller.push(component.context.sharedContext.makeWalletTransactionPreviewScreen(
+                    context: component.context,
+                    walletContext: component.walletContext,
                     address: recipient.address,
                     collectible: collectible,
-                    comment: nil
-                )
-                |> deliverOnMainQueue).start(next: { [weak self, weak controller] preparedTransfer in
-                    guard let self, self.actionGeneration == generation,
-                          self.component?.walletContext === component.walletContext,
-                          let controller, controller.navigationController?.topViewController === controller else {
-                        let _ = component.walletContext.discardPreparedTransfer(preparedTransfer).startStandalone()
-                        return
-                    }
-                    self.isPreparingTransfer = false
-                    self.state?.updated(transition: .easeInOut(duration: 0.2))
-
-                    let dismissSourceScreens: () -> Void = { [weak controller] in
-                        if let controller {
-                            if let navigationController = controller.navigationController as? NavigationController {
-                                var viewControllers = navigationController.viewControllers
-                                viewControllers.removeAll(where: { $0 === controller })
-                                navigationController.setViewControllers(viewControllers, animated: false)
-                            } else {
-                                controller.dismiss(animated: false)
-                            }
-                        }
-                        component.dismissSourceScreen()
-                    }
-                    controller.push(component.context.sharedContext.makeWalletTransactionPreviewScreen(
-                        context: component.context,
-                        walletContext: component.walletContext,
-                        preparedTransfer: preparedTransfer,
-                        dismissSendScreen: dismissSourceScreens
-                    ))
-                }, error: { [weak self] _ in
-                    guard let self, self.actionGeneration == generation else {
-                        return
-                    }
-                    self.isPreparingTransfer = false
-                    self.state?.updated(transition: .easeInOut(duration: 0.2))
-                    self.presentTransferError()
-                }))
+                    comment: nil,
+                    dismissSendScreen: dismissSourceScreens
+                ))
             }
-        }
-
-        private func presentTransferError() {
-            guard let component = self.component, let controller = self.environment?.controller() else {
-                return
-            }
-            //TODO:localize
-            let title = "Transfer Failed"
-            //TODO:localize
-            let text = "The transfer could not be prepared or sent. Check the address, balance and network connection, then try again."
-            //TODO:localize
-            let ok = "OK"
-            controller.present(textAlertController(
-                context: component.context,
-                updatedPresentationData: self.currentPresentationData(for: component),
-                title: title,
-                text: text,
-                actions: [TextAlertAction(type: .defaultAction, title: ok, action: {
-                })]
-            ), in: .window(.root))
         }
 
         private func updateNavigationBar(
@@ -1307,7 +1252,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
                             right: 16.0
                         ),
                         fitToContentWidth: true,
-                        isEnabled: self.resolvingPeerId == nil && !self.isPreparingTransfer,
+                        isEnabled: self.resolvingPeerId == nil,
                         displaysProgress: false,
                         action: { [weak self] in
                             self?.pasteRecipient()
@@ -1454,7 +1399,6 @@ private final class WalletPeerSelectionScreenComponent: Component {
             transition.setAlpha(view: self.recipientView, alpha: displaysAddressRecipient ? 1.0 : 0.0)
             self.recipientView.isUserInteractionEnabled = displaysAddressRecipient
                 && self.resolvingPeerId == nil
-                && !self.isPreparingTransfer
             if displaysAddressRecipient, let recipient = self.recipient {
                 self.recipientView.update(
                     recipient: recipient,
@@ -1723,8 +1667,8 @@ private final class WalletPeerSelectionScreenComponent: Component {
                             maximumNumberOfLines: 1
                         ))
                     ),
-                    isEnabled: hasRecipient && self.resolvingPeerId == nil && !self.isPreparingTransfer,
-                    displaysProgress: self.isPreparingTransfer,
+                    isEnabled: hasRecipient && self.resolvingPeerId == nil,
+                    displaysProgress: false,
                     action: { [weak self] in
                         self?.openRecipient()
                     }
@@ -1748,7 +1692,6 @@ private final class WalletPeerSelectionScreenComponent: Component {
                 transition.setAlpha(view: buttonView, alpha: hasRecipient ? 1.0 : 0.0)
                 buttonView.isUserInteractionEnabled = hasRecipient
                     && self.resolvingPeerId == nil
-                    && !self.isPreparingTransfer
             }
 
             self.updateNavigationScrolling(
