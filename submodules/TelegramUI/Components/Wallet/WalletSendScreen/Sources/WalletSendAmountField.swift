@@ -310,8 +310,10 @@ class WalletSendAmountField: UIView, UITextFieldDelegate {
     let fractionalFont = WalletSendAmountFonts.fractional
 
     private let gramIconLayoutSize = CGSize(width: 44.0, height: 44.0)
-    private let gramAnimationSize = CGSize(width: 48.0, height: 48.0)
+    var gramAnimationSize: CGSize { return CGSize(width: 48.0, height: 48.0) }
+    var fiatSymbolFont: UIFont { return Font.with(size: 48.0, design: .round, weight: .bold) }
     private var fiatIconSize: CGSize = .zero
+    private var fiatSymbolInkBounds: CGRect = .zero
     private var suffixSize: CGSize = .zero
 
     private(set) var mode: WalletSendInputMode = .gram
@@ -474,6 +476,9 @@ class WalletSendAmountField: UIView, UITextFieldDelegate {
     func willApplyText(_ text: String, selection: NSRange?) {
     }
 
+    func inputAccepted(_ insertedText: String) {
+    }
+
     private func applyText(_ text: String, selection: NSRange?) {
         self.isApplyingText = true
         self.willApplyText(text, selection: selection)
@@ -559,40 +564,16 @@ class WalletSendAmountField: UIView, UITextFieldDelegate {
 
         let currencyTransition: ComponentTransition = self.gramIcon.view == nil ? .immediate : transition
         let iconBlurRadius: CGFloat = 6.0
-        let _ = self.gramIcon.update(
-            transition: transition,
-            component: AnyComponent(LottieComponent(
-                content: LottieComponent.AppBundleContent(name: "GramDiamond"),
-                startingPosition: self.usesAnimatedPresentation ? .end : .begin,
-                size: self.gramAnimationSize,
-                loop: false,
-                lottieSettings: lottieSettings
-            )),
-            environment: {},
-            containerSize: self.gramAnimationSize
-        )
-        if let gramIconView = self.gramIcon.view as? LottieComponent.View {
-            if !self.usesAnimatedPresentation {
-                gramIconView.externalShouldPlay = mode == .gram && isVisible
-            }
-            if gramIconView.superview == nil {
-                gramIconView.isUserInteractionEnabled = false
-                self.contentView.addSubview(gramIconView)
-                if !self.usesAnimatedPresentation {
-                    gramIconView.playOnce()
-                }
-            }
-            currencyTransition.setAlpha(view: gramIconView, alpha: mode == .gram ? 1.0 : 0.0)
-            currencyTransition.setBlur(layer: gramIconView.layer, radius: mode == .gram ? 0.0 : iconBlurRadius)
-        }
+        self.updateGramIcon(theme: theme, lottieSettings: lottieSettings, isVisible: isVisible, transition: currencyTransition)
 
         let currencySymbol = fiatCurrency.symbol
+        self.fiatSymbolInkBounds = WalletSendAmountGlyphMetrics.inkBounds(currencySymbol, font: self.fiatSymbolFont)
         self.fiatIconSize = self.fiatIcon.update(
             transition: transition,
             component: AnyComponent(MultilineTextComponent(
                 text: .plain(NSAttributedString(
                     string: currencySymbol,
-                    font: Font.with(size: 48.0, design: .round, weight: .bold),
+                    font: self.fiatSymbolFont,
                     textColor: UIColor(rgb: 0x219949)
                 )),
                 maximumNumberOfLines: 1
@@ -604,8 +585,10 @@ class WalletSendAmountField: UIView, UITextFieldDelegate {
             if fiatIconView.superview == nil {
                 self.contentView.addSubview(fiatIconView)
             }
-            currencyTransition.setAlpha(view: fiatIconView, alpha: mode == .fiat ? 1.0 : 0.0)
-            currencyTransition.setBlur(layer: fiatIconView.layer, radius: mode == .fiat ? 0.0 : iconBlurRadius)
+            if !self.usesAnimatedPresentation {
+                currencyTransition.setAlpha(view: fiatIconView, alpha: mode == .fiat ? 1.0 : 0.0)
+                currencyTransition.setBlur(layer: fiatIconView.layer, radius: mode == .fiat ? 0.0 : iconBlurRadius)
+            }
         }
 
         self.suffixSize = self.suffix.update(
@@ -653,11 +636,36 @@ class WalletSendAmountField: UIView, UITextFieldDelegate {
         self.setNeedsLayout()
     }
 
+    func updateGramIcon(theme: PresentationTheme, lottieSettings: LottieRenderingSettings, isVisible: Bool, transition: ComponentTransition) {
+        let _ = self.gramIcon.update(
+            transition: transition,
+            component: AnyComponent(LottieComponent(
+                content: LottieComponent.AppBundleContent(name: "GramDiamond"),
+                startingPosition: .begin,
+                size: self.gramAnimationSize,
+                loop: false,
+                lottieSettings: lottieSettings
+            )),
+            environment: {},
+            containerSize: self.gramAnimationSize
+        )
+        if let view = self.gramIcon.view as? LottieComponent.View {
+            view.externalShouldPlay = self.mode == .gram && isVisible
+            if view.superview == nil {
+                view.isUserInteractionEnabled = false
+                self.contentView.addSubview(view)
+                view.playOnce()
+            }
+            transition.setAlpha(view: view, alpha: self.mode == .gram ? 1.0 : 0.0)
+            transition.setBlur(layer: view.layer, radius: self.mode == .gram ? 0.0 : 6.0)
+        }
+    }
+
     override func layoutSubviews() {
         super.layoutSubviews()
 
-        let iconLayoutSize = CGSize(width: 40.0, height: 40.0)
-        let iconSpacing: CGFloat = self.mode == .fiat ? 0.0 : 2.0
+        var iconLayoutSize = CGSize(width: 40.0, height: 40.0)
+        var iconSpacing: CGFloat = self.mode == .fiat ? 0.0 : 2.0
         let suffixSpacing: CGFloat = 3.0
         let displayText = (self.textField.text ?? "").isEmpty ? "0" : (self.textField.text ?? "")
         let displayTextBounds = self.amountTextLayout(displayText).attributedText.boundingRect(
@@ -668,7 +676,20 @@ class WalletSendAmountField: UIView, UITextFieldDelegate {
         let textWidth = max(31.0, ceil(displayTextBounds.width) + 5.0)
         let iconWidth = self.mode == .gram ? self.gramIconLayoutSize.width : self.fiatIconSize.width
 
-        let iconLeadingInset = max(0.0, -floorToScreenPixels((iconLayoutSize.width - iconWidth) / 2.0))
+        let usesFiatInkLayout = self.usesAnimatedPresentation && self.mode == .fiat && !self.fiatSymbolInkBounds.isEmpty
+        if usesFiatInkLayout {
+            self.textField.bounds = CGRect(x: 0.0, y: 0.0, width: textWidth, height: self.bounds.height)
+            self.textField.layoutIfNeeded()
+            let caret = self.textField.nativeCaretRect(for: self.textField.beginningOfDocument)
+            let textRect = self.textField.isEditing ? self.textField.editingRect(forBounds: self.textField.bounds) : self.textField.textRect(forBounds: self.textField.bounds)
+            let textInset = !caret.isNull && !caret.isInfinite && caret.height > 0.0 ? caret.minX : textRect.minX
+            let firstDigitBounds = WalletSendAmountGlyphMetrics.inkBounds(String(displayText.prefix(1)), font: self.integralFont)
+            // Match the reference's gap between visible outlines, including
+            // the larger left bearing of 1 and the editor's own inset.
+            iconLayoutSize.width = self.fiatSymbolInkBounds.width
+            iconSpacing = 8.3 - max(0.0, firstDigitBounds.minX) - textInset
+        }
+        let iconLeadingInset = usesFiatInkLayout ? 0.0 : max(0.0, -floorToScreenPixels((iconLayoutSize.width - iconWidth) / 2.0))
         let totalWidth = iconLeadingInset + iconLayoutSize.width + iconSpacing + textWidth + suffixSpacing + self.suffixSize.width
         let scale = min(1.0, self.bounds.width / totalWidth)
         self.contentView.bounds = CGRect(origin: .zero, size: CGSize(width: totalWidth, height: self.bounds.height))
@@ -690,7 +711,7 @@ class WalletSendAmountField: UIView, UITextFieldDelegate {
         if let fiatIconView = self.fiatIcon.view {
             fiatIconView.frame = CGRect(
                 origin: CGPoint(
-                    x: x + floorToScreenPixels((iconLayoutSize.width - self.fiatIconSize.width) / 2.0),
+                    x: usesFiatInkLayout ? x - self.fiatSymbolInkBounds.minX : x + floorToScreenPixels((iconLayoutSize.width - self.fiatIconSize.width) / 2.0),
                     y: floorToScreenPixels(centerY - self.fiatIconSize.height / 2.0)
                 ),
                 size: self.fiatIconSize
@@ -701,6 +722,16 @@ class WalletSendAmountField: UIView, UITextFieldDelegate {
             origin: CGPoint(x: x, y: 0.0),
             size: CGSize(width: textWidth, height: self.bounds.height)
         )
+        if self.usesAnimatedPresentation, let fiatIconView = self.fiatIcon.view as? TextView,
+           let line = fiatIconView.cachedLayout?.linesRects().first {
+            let amountBaseline = self.textField.frame.minY + self.textField.amountTextBaseline(font: self.integralFont)
+            // Reference: symbolShift (-0.8) + gemNudge (1.75) + optical shift (2.5).
+            let symbolBaseline = amountBaseline - self.integralFont.capHeight / 2.0 + self.fiatSymbolFont.capHeight / 2.0 + 3.45
+            fiatIconView.frame.origin.y = floorToScreenPixels(symbolBaseline - line.minY)
+            if usesFiatInkLayout {
+                fiatIconView.frame.origin.x -= line.minX
+            }
+        }
         x += textWidth + suffixSpacing
         if let suffixView = self.suffix.view {
             suffixView.frame = CGRect(
@@ -750,6 +781,7 @@ class WalletSendAmountField: UIView, UITextFieldDelegate {
             return false
         }
         self.applyText(edit.text, selection: edit.selection)
+        self.inputAccepted(string)
         self.textChanged()
         return true
     }
