@@ -47,7 +47,7 @@ public final class InteractiveDiamondComponent: Component {
             let holding: Bool
         }
 
-        private let diamondLayer = InteractiveDiamondLayer()
+        private let diamondLayer = InteractiveDiamondLayer(backgroundStars: false)
         public let pressGesture = UILongPressGestureRecognizer()
         private var isHolding = false
         public private(set) var isExpanded = false

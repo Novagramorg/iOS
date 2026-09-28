@@ -1,38 +1,32 @@
+import Foundation
 import simd
 
-// MARK: - Diamond cut
-
-/// A closed octagonal cut with broad facets and rounded edges/corners.
 struct DiamondGeometry {
-    /// Base fillet radius; the crown uses a wider transition than the point.
     static let roundingRadius: Float = 0.055
     static let crownRoundingRadius: Float = 0.32865
     static let girdleRoundingRadius: Float = 0.073114
-    /// Gentle curvature along the broad edges prevents a flat side silhouette under tilt.
     static let outlineBow: Float = 0.106987
     struct Vertex {
         var position: SIMD4<Float>
         var normal: SIMD4<Float>
-        // xy: table/crown weights on rounded patches; z: face kind; w: sector.
         var surface: SIMD4<Float>
     }
 
     private(set) var vertices: [Vertex] = []
     private(set) var planes: [SIMD4<Float>] = []
 
+    fileprivate init(vertices: [Vertex], planes: [SIMD4<Float>]) {
+        self.vertices = vertices
+        self.planes = planes
+    }
+
     init(roundingRadius: Float = Self.roundingRadius) {
-        // GramDiamond's central crown occupies ~2/3 of the silhouette's width.
-        // A regular octagon gives only 0.414, so use the reference's broader front
-        // face on all four sides. Equal x/z profiles keep the cut full-width when
-        // viewed from the side. Parallel table/girdle edges keep every quad planar.
         let girdle: [SIMD2<Float>] = [SIMD2(0.70024, 1), SIMD2(1, 0.70024),
             SIMD2(1, -0.70024), SIMD2(0.70024, -1), SIMD2(-0.70024, -1),
             SIMD2(-1, -0.70024), SIMD2(-1, 0.70024), SIMD2(-0.70024, 1)]
         let table: [SIMD2<Float>] = [SIMD2(0.498552, 0.631807), SIMD2(0.631807, 0.498552),
             SIMD2(0.631807, -0.498552), SIMD2(0.498552, -0.631807), SIMD2(-0.498552, -0.631807),
             SIMD2(-0.631807, -0.498552), SIMD2(-0.631807, 0.498552), SIMD2(-0.498552, 0.631807)]
-        // Fit the rounded crown/belt together with the reference viewing pitch.
-        // Their visible front junction stays fixed as the side edges slope down.
         let sections: [(scale: Float, y: Float, table: Bool)] = [
             (0.965, 0.583526, true), (1, 0.571526, true),
             (0.990, -0.081806, false), (1, -0.112806, false), (0.978, -0.151806, false),
@@ -53,7 +47,6 @@ struct DiamondGeometry {
                 p.reverse()
                 n = -n
             }
-            // The large planes define the optical hull; micro-bevels only affect rasterization.
             if kind != 3 { planes.append(SIMD4(n, -simd_dot(n, p[0]))) }
             for j in 1..<(p.count - 1) {
                 for k in [0, j, j + 1] {
@@ -77,13 +70,11 @@ struct DiamondGeometry {
     }
 }
 
-// MARK: - Rounded edges and corners
-
-/// Variable-width fillets with spherical ends and smoothly changing radii.
-/// The broad crown shoulders follow the reference while the point stays narrow.
-/// Fillets meet the base facet planes; a shallow symmetric bow rounds the
-/// projected side edges when the camera sees both the front and back.
 enum DiamondRounding {
+    static let segments = 3
+    static let edgeStep: Float = 0.40
+    static let radialSteps = 2
+
     private struct Sample {
         let normal: SIMD3<Float>
         let material: SIMD3<Float> // table, crown, pavilion weights
@@ -95,7 +86,7 @@ enum DiamondRounding {
         init(_ a: Int, _ b: Int) { self.a = min(a, b); self.b = max(a, b) }
     }
 
-    static func mesh(planes: [SIMD4<Float>], radius: Float, segments: Int = 12) -> [DiamondGeometry.Vertex] {
+    static func mesh(planes: [SIMD4<Float>], radius: Float, segments: Int = DiamondRounding.segments) -> [DiamondGeometry.Vertex] {
         precondition(radius > 0 && radius <= 0.08 && segments >= 3)
         let normals = planes.map { SIMD3($0.x, $0.y, $0.z) }
         let materials: [SIMD3<Float>] = planes.indices.map {
@@ -103,13 +94,9 @@ enum DiamondRounding {
         }
         let doubleNormals = normals.map { SIMD3<Double>($0) }
         let offsets = planes.map { Double($0.w) + Double(radius) }
-        // Float plane normals leave microunit residuals at the shared apex.
-        // Use one tolerance for both vertex and face incidence.
         let incidenceTolerance = 2e-6
         var corners: [SIMD3<Double>] = []
 
-        // Enumerate the vertices of the inset solid by intersecting plane triples.
-        // Double precision avoids tiny artificial faces near the pavilion apex.
         for a in 0..<(planes.count - 2) {
             for b in (a + 1)..<(planes.count - 1) {
                 for c in (b + 1)..<planes.count {
@@ -121,16 +108,12 @@ enum DiamondRounding {
                                  - offsets[c] * simd_cross(na, nb)) / determinant
                     guard planes.indices.allSatisfy({ simd_dot(doubleNormals[$0], point) + offsets[$0] < 2e-7 })
                     else { continue }
-                    // Plane normals originate in Float. Merge coincident
-                    // multi-plane corners before recovering their edge topology.
                     if !corners.contains(where: { simd_distance_squared($0, point) < 1e-10 }) {
                         corners.append(point)
                     }
                 }
             }
         }
-        // Recover the unrounded corner and the direction of its inset. Different
-        // radii can then meet on the same facet planes without moving those planes.
         var sharpPoints: [SIMD3<Float>] = []
         var insetDirections: [SIMD3<Float>] = []
         for corner in corners {
@@ -185,15 +168,12 @@ enum DiamondRounding {
         precondition(!points.isEmpty && edgeFaces.values.allSatisfy { $0.count == 2 }, "Inset must remain a closed convex solid")
 
         func blendNormal(_ a: SIMD3<Float>, _ b: SIMD3<Float>, step: Int, count: Int) -> SIMD3<Float> {
-            // Preserve endpoint bits so adjacent patches use exactly the same positions.
             if step == 0 { return a }
             if step == count { return b }
             let t = Float(step) / Float(count)
             return simd_normalize(a * (1 - t) + b * t)
         }
 
-        // An edge strip and both end caps share these exact samples. Independent
-        // tessellations of the same arc can otherwise leave subpixel cracks.
         func blend(_ a: Sample, _ b: Sample, step: Int, count: Int) -> Sample {
             let t = Float(step) / Float(count)
             return Sample(normal: blendNormal(a.normal, b.normal, step: step, count: count),
@@ -233,13 +213,11 @@ enum DiamondRounding {
             triangle(a, c, d)
         }
 
-        // Cache each edge's rows so faces, fillets and caps share exact vertices.
-        // The radius eases along the edge with zero slope at its spherical ends.
         var edgeRows: [Edge: [[DiamondGeometry.Vertex]]] = [:]
         for edge in edgeFaces.keys.sorted(by: { $0.a == $1.a ? $0.b < $1.b : $0.a < $1.a }) {
             let adjacent = edgeFaces[edge]!
             let arc = arcs[Edge(adjacent[0], adjacent[1])]!
-            let steps = max(1, Int(ceil(simd_distance(sharpPoints[edge.a], sharpPoints[edge.b]) / 0.10)))
+            let steps = max(1, Int(ceil(simd_distance(sharpPoints[edge.a], sharpPoints[edge.b]) / Self.edgeStep)))
             var rows: [[DiamondGeometry.Vertex]] = []
             for row in 0...steps {
                 if row == 0 { rows.append(arc.map { roundedVertex(edge.a, $0) }); continue }
@@ -273,7 +251,6 @@ enum DiamondRounding {
             }
         }
 
-        // Facet boundaries follow the changing fillet width while remaining planar.
         for face in faces.indices where faces[face].count >= 3 {
             let n = normals[face]
             let kind: Float = face == 0 ? 0 : (face <= 8 ? 1 : 2)
@@ -295,9 +272,7 @@ enum DiamondRounding {
             for i in rim.indices { triangle(middle, rim[i], rim[(i+1) % rim.count]) }
         }
 
-        // Spherical caps fill the junctions. Ring subdivision prevents a flat
-        // triangle fan from reintroducing sharp silhouettes at crown and tip.
-        let radialSteps = 5
+        let radialSteps = Self.radialSteps
         for corner in points.indices {
             let incident = incidentFaces[corner]
             guard incident.count >= 3 else { continue }
@@ -321,8 +296,7 @@ enum DiamondRounding {
                 }
             }
         }
-        // Bow the broad X/Z profiles equally. Transform normals with the inverse
-        // Jacobian so the gentle curvature responds to light while rotating.
+
         return result.map { v in
             var v = v
             let x = v.position.x, z = v.position.z, bow = DiamondGeometry.outlineBow
@@ -338,16 +312,12 @@ enum DiamondRounding {
     }
 }
 
-// MARK: - Sparkle geometry
-
 struct DiamondSparkleGeometry {
     struct Anchor {
         var position: SIMD4<Float>
         var normal: SIMD4<Float>
     }
 
-    /// Intersect the final rounded mesh once at initialization. This keeps even
-    /// crown flares attached to the curved surface, rather than the optical hull.
     static func anchors(on geometry: DiamondGeometry) -> [Anchor] {
         let reference = DiamondMath.rotation(x: DiamondMotion.referencePitch, y: 0)
         let projected = geometry.vertices.map { DiamondMath.cameraPoint(reference * $0.position) }
@@ -355,9 +325,6 @@ struct DiamondSparkleGeometry {
         let top = projected.reduce(-Float.infinity) { max($0, $1.y) }
         return (0..<8).map { instance in
             if instance == 0 {
-                // Main star's frame-zero anchor in GramDiamond.json. Project from
-                // the authored image onto the final mesh, rather than estimating
-                // a radial angle/height, which drifts when the cut or pitch changes.
                 let scale = halfWidth / (447.9 * 0.75 / 2)
                 let ray = DiamondMath.cameraRay(at: SIMD2(42.375 * scale, top - 105.075 * scale))
                 let p = reference.transpose * ray.origin
@@ -408,9 +375,6 @@ struct DiamondSparkleGeometry {
         var axisY: SIMD4<Float>
     }
 
-    /// The source composition is aligned to the refined silhouette's top/width.
-    /// Small flares are attached once at their authored peak pose. Moving streaks
-    /// use the 17 optical planes, rather than scanning the tessellated mesh per frame.
     struct Reference {
         let anchors: [Anchor]
         private let appearance: DiamondStyle.Appearance
@@ -443,8 +407,6 @@ struct DiamondSparkleGeometry {
                     origin: SIMD3(p.x, p.y, p.z), direction: direction) else {
                     preconditionFailure("Reference flare must lie on the diamond: \(event.frame)")
                 }
-                // Visibility follows the authored viewing direction. Grazing edge
-                // flashes must remain bright at their reference pose.
                 return Anchor(position: hit.position - SIMD4(direction * 0.003, 0), normal: -d)
             }
         }
@@ -482,8 +444,6 @@ struct DiamondSparkleGeometry {
                     } else if denominator < 0 { near = max(near, -distance / denominator) }
                     else { far = min(far, -distance / denominator) }
                 }
-                // The top-rim glow intentionally extends a little outside the
-                // silhouette in Lottie; retain it on the nearby front-depth plane.
                 let distance = near <= far ? max(0, near - 0.003)
                     : (0.5 - ray.origin.z) / ray.direction.z
                 let position = origin + direction * distance
@@ -519,10 +479,15 @@ struct DiamondSparkleGeometry {
     let small: [Vertex]
     let streakVertices: [Vertex]
 
+    fileprivate init(main: [Vertex], small: [Vertex], streakVertices: [Vertex]) {
+        self.main = main
+        self.small = small
+        self.streakVertices = streakVertices
+    }
+
     init() {
         func tessellate(_ wide: Outline, _ narrow: Outline, layer: Float) -> [Vertex] {
             var result: [Vertex] = []
-            // Every outline is star-shaped about its origin, including the concave arms.
             for segment in wide.vertices.indices {
                 for step in 0..<16 {
                     let t0 = Float(step) / 16, t1 = Float(step + 1) / 16
@@ -539,7 +504,6 @@ struct DiamondSparkleGeometry {
         let centeredStreak = Outline(vertices: Self.streak.vertices.map { $0 - SIMD2(-3.2, -84.1) },
                                      incoming: Self.streak.incoming, outgoing: Self.streak.outgoing)
         streakVertices = tessellate(centeredStreak, centeredStreak, layer: 5)
-        // Painter's order matches the original three overlapping vector groups.
         main = tessellate(Self.circle, Self.circle, layer: 0)
              + tessellate(Self.haloWide, Self.haloNarrow, layer: 1)
              + tessellate(Self.coreWide, Self.coreNarrow, layer: 2)
@@ -549,8 +513,7 @@ struct DiamondSparkleGeometry {
         small = tessellate(smallCircle, smallCircle, layer: 3)
               + tessellate(Self.smallCore, Self.smallCore, layer: 4)
     }
-    // BEGIN GENERATED SPARKLE CONTOURS
-    // Generated by Tools/extract_sparkle.py from GramDiamond.json.
+
     private static let coreWide = Outline(
         vertices: [SIMD2(1.3, -80.9), SIMD2(17.6, -39.5), SIMD2(38.9, -20.7), SIMD2(80.3, -3.1), SIMD2(38.9, 15.7), SIMD2(17.6, 37), SIMD2(0, 80.9), SIMD2(-17.6, 37), SIMD2(-38.9, 15.7), SIMD2(-80.3, -3.1), SIMD2(-38.9, -20.7), SIMD2(-16.3, -40.8)],
         incoming: [SIMD2(-6.3, 0), SIMD2(-6.3, -15.1), SIMD2(-11.3, -3.8), SIMD2(0, -6.3), SIMD2(13.8, -5), SIMD2(5, -11.3), SIMD2(6.3, 0), SIMD2(6.3, 16.3), SIMD2(11.3, 3.8), SIMD2(0, 7.5), SIMD2(-15.1, 5), SIMD2(-5, 11.3)],
@@ -579,19 +542,16 @@ struct DiamondSparkleGeometry {
         vertices: [SIMD2(-7.2, -261), SIMD2(349.5, -86.1), SIMD2(2.5, 89.6), SIMD2(-354.2, -85.3)],
         incoming: [SIMD2(-194.3, 0.2), SIMD2(-2.7, -96.8), SIMD2(194.3, -0.2), SIMD2(2.7, 96.8)],
         outgoing: [SIMD2(194.3, -0.2), SIMD2(2.7, 96.8), SIMD2(-194.3, 0.2), SIMD2(-2.7, -96.8)])
-    // END GENERATED SPARKLE CONTOURS
 }
 
-// MARK: - Transforms
-
-/// Keeps the ordinary camera view slender without flattening the actual cut.
-/// A tiny support-width table is built from the mesh once; frames only interpolate it.
 struct DiamondSilhouette {
-    private let widths: [Float]
+    fileprivate let widths: [Float]
+
+    fileprivate init(widths: [Float]) {
+        self.widths = widths
+    }
 
     init(geometry: DiamondGeometry) {
-        // Perspective support depends on depth as well as X/Z extent. Cache
-        // projected widths once; the frame loop still only interpolates 91 values.
         let points = Array(Set(geometry.vertices.map(\.position)))
         widths = (0...90).map { i in
             let model = DiamondMath.rotation(x: DiamondMotion.referencePitch, y: Float(i) * .pi / 360)
@@ -609,16 +569,12 @@ struct DiamondSilhouette {
         let quadrant = abs(yaw.remainder(dividingBy: .pi / 2))
         let sample = min(90, quadrant * 360 / .pi)
         let i = min(89, Int(sample)), t = sample - Float(i)
-        // Hermite interpolation and zero end tangents avoid a kink when the
-        // camera crosses a front-facing or diagonal orientation in either direction.
         let a = widths[i], b = widths[i+1]
         let da = i == 0 ? 0 : (b - widths[i-1]) / 2
         let db = i == 89 ? 0 : (widths[i+2] - a) / 2
         let width = a + t * (da + t * (3*(b-a) - 2*da - db + t*(2*(a-b) + da + db)))
         let turn = sin(2 * quadrant)
         let targetWidth = widths[0] * (1 - 0.035 * turn * turn)
-        // Full correction near the horizon, then smoothly reveal the real,
-        // symmetric X/Z footprint by a 55° tilt (also for the underside).
         let tilt = min(1, max(0, (abs(sin(pitch)) - sin(Float(0.25)))
             / (sin(Float(0.96)) - sin(Float(0.25)))))
         let reveal = tilt * tilt * (3 - 2 * tilt)
@@ -626,9 +582,143 @@ struct DiamondSilhouette {
     }
 }
 
+struct DiamondRenderData {
+    let geometry: DiamondGeometry
+    let sparkles: DiamondSparkleGeometry
+    let anchors: [DiamondSparkleGeometry.Anchor]
+    let silhouette: DiamondSilhouette
+    let facetProjection: SIMD4<Float>
+    let lensVertices: [SIMD4<Float>]
+
+    init() {
+        let geometry = DiamondGeometry()
+        self.geometry = geometry
+        self.sparkles = DiamondSparkleGeometry()
+        self.anchors = DiamondSparkleGeometry.anchors(on: geometry)
+        self.silhouette = DiamondSilhouette(geometry: geometry)
+        self.facetProjection = {
+            let model = DiamondMath.rotation(x: DiamondMotion.referencePitch, y: 0)
+            let points = geometry.vertices.map { DiamondMath.cameraPoint(model * $0.position) }
+            let width = points.reduce(Float(0)) { max($0, abs($1.x)) }
+            let top = points.reduce(-Float.infinity) { max($0, $1.y) }
+            return SIMD4(cos(DiamondMotion.referencePitch), sin(DiamondMotion.referencePitch), 223.95 / width, top)
+        }()
+        self.lensVertices = {
+            var seen = Set<SIMD3<Int32>>()
+            return geometry.vertices.compactMap { vertex in
+                let p = vertex.position
+                let key = SIMD3<Int32>(Int32((p.x * 40).rounded()), Int32((p.y * 40).rounded()), Int32((p.z * 40).rounded()))
+                return seen.insert(key).inserted ? p : nil
+            }
+        }()
+    }
+
+    private static let cacheVersion = 1
+    private static var cacheURL: URL {
+        return URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("GramDiamond_v\(self.cacheVersion)")
+    }
+    private static var cacheParameters: [Float] {
+        return [
+            Float(DiamondRounding.segments), DiamondRounding.edgeStep, Float(DiamondRounding.radialSteps),
+            DiamondGeometry.roundingRadius, DiamondGeometry.crownRoundingRadius,
+            DiamondGeometry.girdleRoundingRadius, DiamondGeometry.outlineBow,
+            DiamondMotion.referencePitch, DiamondMath.cameraDistance, DiamondMath.cameraScale,
+            Float(MemoryLayout<DiamondGeometry.Vertex>.stride), Float(MemoryLayout<DiamondSparkleGeometry.Vertex>.stride),
+            Float(MemoryLayout<DiamondSparkleGeometry.Anchor>.stride), Float(MemoryLayout<SIMD4<Float>>.stride)
+        ]
+    }
+
+    private struct Archive: Codable {
+        let version: Int
+        let parameters: [Float]
+        let vertices: Data
+        let planes: Data
+        let mainSparkles: Data
+        let smallSparkles: Data
+        let streaks: Data
+        let anchors: Data
+        let widths: Data
+        let facetProjection: Data
+        let lensVertices: Data
+    }
+
+    private init(geometry: DiamondGeometry, sparkles: DiamondSparkleGeometry,
+                 anchors: [DiamondSparkleGeometry.Anchor], silhouette: DiamondSilhouette,
+                 facetProjection: SIMD4<Float>, lensVertices: [SIMD4<Float>]) {
+        self.geometry = geometry
+        self.sparkles = sparkles
+        self.anchors = anchors
+        self.silhouette = silhouette
+        self.facetProjection = facetProjection
+        self.lensVertices = lensVertices
+    }
+
+    static func load() -> DiamondRenderData? {
+        guard let data = try? Data(contentsOf: Self.cacheURL, options: .mappedIfSafe), data.count <= 16 * 1024 * 1024,
+              let archive = try? PropertyListDecoder().decode(Archive.self, from: data),
+              archive.version == Self.cacheVersion, archive.parameters == Self.cacheParameters,
+              let vertices = Self.array(archive.vertices, as: DiamondGeometry.Vertex.self), vertices.count.isMultiple(of: 3),
+              let planes = Self.array(archive.planes, as: SIMD4<Float>.self), planes.count == 17,
+              let main = Self.array(archive.mainSparkles, as: DiamondSparkleGeometry.Vertex.self), main.count.isMultiple(of: 3),
+              let small = Self.array(archive.smallSparkles, as: DiamondSparkleGeometry.Vertex.self), small.count.isMultiple(of: 3),
+              let streaks = Self.array(archive.streaks, as: DiamondSparkleGeometry.Vertex.self), streaks.count.isMultiple(of: 3),
+              let anchors = Self.array(archive.anchors, as: DiamondSparkleGeometry.Anchor.self), anchors.count == 8,
+              let widths = Self.array(archive.widths, as: Float.self), widths.count == 91,
+              widths.allSatisfy({ $0.isFinite && $0 > 0 }),
+              let projection = Self.array(archive.facetProjection, as: SIMD4<Float>.self), projection.count == 1,
+              projection[0].x.isFinite, projection[0].y.isFinite, projection[0].z.isFinite, projection[0].z > 0, projection[0].w.isFinite,
+              let lensVertices = Self.array(archive.lensVertices, as: SIMD4<Float>.self), lensVertices.count <= vertices.count else {
+            return nil
+        }
+        return DiamondRenderData(
+            geometry: DiamondGeometry(vertices: vertices, planes: planes),
+            sparkles: DiamondSparkleGeometry(main: main, small: small, streakVertices: streaks),
+            anchors: anchors, silhouette: DiamondSilhouette(widths: widths),
+            facetProjection: projection[0], lensVertices: lensVertices
+        )
+    }
+
+    func store() {
+        DispatchQueue.global(qos: .utility).async {
+            let archive = Archive(
+                version: Self.cacheVersion, parameters: Self.cacheParameters,
+                vertices: Self.bytes(self.geometry.vertices), planes: Self.bytes(self.geometry.planes),
+                mainSparkles: Self.bytes(self.sparkles.main), smallSparkles: Self.bytes(self.sparkles.small),
+                streaks: Self.bytes(self.sparkles.streakVertices), anchors: Self.bytes(self.anchors),
+                widths: Self.bytes(self.silhouette.widths), facetProjection: Self.bytes([self.facetProjection]),
+                lensVertices: Self.bytes(self.lensVertices)
+            )
+            do {
+                let encoder = PropertyListEncoder()
+                encoder.outputFormat = .binary
+                let data = try encoder.encode(archive)
+                let url = Self.cacheURL
+                if FileManager.default.fileExists(atPath: url.path) {
+                    try FileManager.default.removeItem(at: url)
+                }
+                try data.write(to: url, options: .atomic)
+            } catch {
+                // The cache is optional; render data will be regenerated if needed.
+            }
+        }
+    }
+
+    // Only used for Float and structs containing SIMD4<Float>; no reference-valued fields.
+    private static func bytes<T>(_ values: [T]) -> Data {
+        return values.withUnsafeBytes { Data($0) }
+    }
+
+    private static func array<T>(_ data: Data, as type: T.Type) -> [T]? {
+        let stride = MemoryLayout<T>.stride
+        guard !data.isEmpty, data.count.isMultiple(of: stride) else { return nil }
+        return Array(unsafeUninitializedCapacity: data.count / stride) { buffer, initializedCount in
+            _ = data.copyBytes(to: UnsafeMutableRawBufferPointer(start: buffer.baseAddress, count: data.count))
+            initializedCount = buffer.count
+        }
+    }
+}
+
 enum DiamondMath {
-    // A long camera distance keeps the authored proportions while separating
-    // the near and far girdle contours when viewed slightly from below.
     static let cameraDistance: Float = 6
     static let cameraScale: Float = 0.948985
 
@@ -648,7 +738,6 @@ enum DiamondMath {
     static func rotation(x: Float, y: Float) -> simd_float4x4 {
         let pitch = simd_quatf(angle: x, axis: SIMD3(1, 0, 0))
         let yaw = simd_quatf(angle: y, axis: SIMD3(0, 1, 0))
-        // Spin around the stone's own top-to-bottom axis, then tilt the whole stone.
         return simd_float4x4(pitch * yaw)
     }
 
@@ -656,8 +745,6 @@ enum DiamondMath {
         let halfHeight = Float(1.52) / zoom * max(1, 1 / max(aspect, 0.01))
         let halfWidth = halfHeight * aspect
         if perspective {
-            // Keep the framing offset and billboard sizes independent of depth.
-            // Visible gem depths map inside Metal's [0, 1] depth interval.
             let w0 = 1 / cameraScale, wz = -w0 / cameraDistance
             let framing = 0.12 / halfHeight
             return simd_float4x4(columns: (
@@ -665,7 +752,6 @@ enum DiamondMath {
                 SIMD4(0, framing*wz, -w0/6, wz), SIMD4(0, framing*w0, 0.5*w0, w0)
             ))
         }
-        // Background particles retain their screen-space layout.
         return simd_float4x4(columns: (
             SIMD4(1 / halfWidth, 0, 0, 0), SIMD4(0, 1 / halfHeight, 0, 0),
             SIMD4(0, 0, -1 / 12, 0), SIMD4(0, 0.12 / halfHeight, 0.5, 1)

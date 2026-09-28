@@ -401,7 +401,7 @@ private final class WalletInfoSheetContent: CombinedComponent {
             let secondaryTextColor = theme.actionSheet.secondaryTextColor
 
             let spacing: CGFloat = 16.0
-            var contentSize = CGSize(width: context.availableSize.width, height: 33.0)
+            var contentSize = CGSize(width: context.availableSize.width, height: component.mode == .wallet || component.mode == .firstGrams ? 10.0 : 33.0)
 
             let animationSide: CGFloat = content.logo.name == "GramDiamond" ? 118.0 : 100.0
             let animationSize = CGSize(width: animationSide, height: animationSide)

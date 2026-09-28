@@ -174,12 +174,19 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
     private var didSetReady = false
     private var isReadyScheduled = false
 
-    override init() {
+    override convenience init() {
+        self.init(backgroundStars: true)
+    }
+
+    init(backgroundStars: Bool) {
+        var style = DiamondStyle()
+        style.backgroundStars = backgroundStars
+        self.diamondStyle = style
         self.hapticFeedback = HapticFeedback()
         super.init()
 
         self.isOpaque = false
-        if self.diamondStyle.animationMode == .entrance {
+        if self.diamondStyle.backgroundStars && self.diamondStyle.animationMode == .entrance {
             self.starBursts.append(DiamondStarBurst(startTime: 0, seed: 0))
         }
         self.didEnterHierarchy = { [weak self] in
@@ -231,6 +238,9 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
         }
         let previous = self.diamondStyle
         self.diamondStyle = style
+        if !style.backgroundStars {
+            self.starBursts.removeAll()
+        }
         if previous.animationMode != style.animationMode {
             self.resetAnimation()
         } else {
@@ -259,7 +269,8 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
         self.growVelocity = 0
         self.elapsed = 0
         self.lastTime = nil
-        self.starBursts = self.diamondStyle.animationMode == .entrance ? [DiamondStarBurst(startTime: 0, seed: 0)] : []
+        self.starBursts = self.diamondStyle.backgroundStars && self.diamondStyle.animationMode == .entrance
+            ? [DiamondStarBurst(startTime: 0, seed: 0)] : []
         self.nextBurstSeed = 1
         if wasDragging { self.onHold?(false) }
         self.onPoseUpdated?(self.pose)
@@ -275,7 +286,7 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
     }
 
     func emitStarBurst() {
-        guard self.isInHierarchy, self.isApplicationActive, self.isRenderingEnabled,
+        guard self.diamondStyle.backgroundStars, self.isInHierarchy, self.isApplicationActive, self.isRenderingEnabled,
               !self.reduceMotion, !UIAccessibility.isReduceMotionEnabled else { return }
         self.updateMotion(at: CACurrentMediaTime())
         self.addStarBurst()
@@ -335,7 +346,9 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
         if !self.reduceMotion {
             self.elapsed += dt
         }
-        self.starBursts.removeAll(where: { self.elapsed - $0.startTime >= DiamondStarBurst.lifetime })
+        if self.diamondStyle.backgroundStars {
+            self.starBursts.removeAll(where: { self.elapsed - $0.startTime >= DiamondStarBurst.lifetime })
+        }
         self.motion.step(dt: dt, speed: self.diamondStyle.isRotating ? self.diamondStyle.rotationSpeed : 0, reduceMotion: self.reduceMotion, mode: self.diamondStyle.animationMode, time: self.elapsed, appearance: self.diamondStyle.appearance)
         if self.reduceMotion {
             self.grow = 1
@@ -383,6 +396,7 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
     }
 
     private func addStarBurst() {
+        guard self.diamondStyle.backgroundStars else { return }
         if self.starBursts.count >= 3 {
             self.starBursts.removeFirst()
         }
