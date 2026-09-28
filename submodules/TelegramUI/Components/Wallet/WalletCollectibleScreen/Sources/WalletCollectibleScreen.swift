@@ -661,8 +661,8 @@ private final class WalletCollectibleContentComponent: Component {
                     theme: theme,
                     item: WalletCollectibleHeaderComponent.Item(
                         name: component.collectible.name,
-                        imageUrl: component.collectible.imageUrl,
-                        lottieUrl: component.collectible.lottieUrl,
+                        image: component.collectible.image,
+                        lottie: component.collectible.lottie,
                         collectionName: component.collectible.collectionName,
                         collectionUrl: component.collectible.collectionUrl
                     ),
@@ -1099,8 +1099,8 @@ public final class WalletCollectibleScreen: ViewControllerComponentContainer {
     private var collectiblesState: WalletContext.CollectiblesState
     private var collectibles: [WalletContext.Collectible]
     private var currentAddress: String
-    private var requestedOffset: Int?
-    private var failedOffset: Int?
+    private var requestedPage: WalletContext.CollectiblesState.PageId?
+    private var failedPage: WalletContext.CollectiblesState.PageId?
 
     public init(
         context: AccountContext,
@@ -1234,10 +1234,10 @@ public final class WalletCollectibleScreen: ViewControllerComponentContainer {
     }
 
     private func collectiblesStateUpdated(_ state: WalletContext.CollectiblesState) {
-        if let requestedOffset = self.requestedOffset,
-           state.offset != requestedOffset || !state.canLoadMore {
-            self.requestedOffset = nil
-            self.failedOffset = nil
+        if let requestedPage = self.requestedPage,
+           state.nextPage != requestedPage || !state.canLoadMore {
+            self.requestedPage = nil
+            self.failedPage = nil
         }
 
         var collectibles = state.items
@@ -1311,9 +1311,9 @@ public final class WalletCollectibleScreen: ViewControllerComponentContainer {
     }
 
     private func draggingBegan(_ index: Int) {
-        if self.failedOffset == self.collectiblesState.offset {
-            self.requestedOffset = nil
-            self.failedOffset = nil
+        if self.failedPage == self.collectiblesState.nextPage {
+            self.requestedPage = nil
+            self.failedPage = nil
         }
         self.requestLoadMoreIfNeeded(index: index)
     }
@@ -1321,24 +1321,23 @@ public final class WalletCollectibleScreen: ViewControllerComponentContainer {
     private func requestLoadMoreIfNeeded(index: Int) {
         guard !self.collectibles.isEmpty,
               index >= max(0, self.collectibles.count - 2),
-              self.collectiblesState.canLoadMore,
+              let page = self.collectiblesState.nextPage,
+              !self.collectiblesState.isRefreshing,
               !self.collectiblesState.isLoadingMore,
-              self.collectiblesState.offset >= self.collectibles.count - 1,
-              self.collectiblesState.error == nil || self.failedOffset == nil,
+              self.collectiblesState.error == nil || self.failedPage == nil,
               self.walletContext.stateValue.activeOperation == nil else {
             return
         }
-        let offset = self.collectiblesState.offset
-        guard self.requestedOffset != offset else {
+        guard self.requestedPage != page else {
             return
         }
-        self.requestedOffset = offset
+        self.requestedPage = page
         self.loadMoreDisposable.set((self.walletContext.loadMoreCollectibles()
         |> deliverOnMainQueue).start(error: { [weak self] _ in
-            guard let self, self.requestedOffset == offset else {
+            guard let self, self.requestedPage == page else {
                 return
             }
-            self.failedOffset = offset
+            self.failedPage = page
         }))
     }
 }

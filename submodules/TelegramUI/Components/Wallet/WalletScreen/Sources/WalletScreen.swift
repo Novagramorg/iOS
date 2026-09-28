@@ -1479,7 +1479,7 @@ private final class WalletScreenComponent: Component {
                 }
                 signal = component.walletContext.loadMoreTransactions()
             case .collectibles:
-                guard walletState.collectibles.canLoadMore, !walletState.collectibles.isLoadingMore else {
+                guard walletState.collectibles.canLoadMore, !walletState.collectibles.isRefreshing, !walletState.collectibles.isLoadingMore else {
                     return
                 }
                 signal = component.walletContext.loadMoreCollectibles()

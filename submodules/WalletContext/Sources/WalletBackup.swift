@@ -4,8 +4,6 @@ import TelegramCore
 import WalletBackupCrypto
 import WalletEngineFFI
 
-// Each retry invokes the whole challenge/sign/upload operation. Never reuse a
-// challenge after a server rejection, including a pending on-chain rotation.
 @available(macOS 10.15, *)
 func withWalletBackupRotationRetry<Value>(
     now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },

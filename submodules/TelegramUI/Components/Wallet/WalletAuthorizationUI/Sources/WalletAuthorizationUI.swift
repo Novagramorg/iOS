@@ -211,7 +211,7 @@ public func performWalletAuthorizedOperation<Value>(
 
 public func walletBackupEnableErrorMessage(_ error: WalletContext.WalletError) -> (title: String, text: String) {
     switch error {
-    case .walletKeyMismatch, .storage(.identityMismatch), .proofInvalid:
+    case .walletKeyMismatch, .recoveryPhraseOutdated, .storage(.identityMismatch), .proofInvalid:
         return ("Couldn't Verify Secret Phrase", "This secret phrase may be outdated for your wallet. Enter the current 24-word secret phrase to enable backup.")
     case .rotationNotFound:
         return ("Secret Phrase Update Pending", "Telegram couldn't confirm the secret phrase change on the blockchain yet. Wait a moment and retry, or enter the current secret phrase.")
@@ -228,6 +228,8 @@ public func walletBackupEnableErrorMessage(_ error: WalletContext.WalletError) -
 
 public func walletAuthorizationErrorMessage(_ error: WalletContext.WalletError) -> (title: String, text: String)? {
     switch error {
+    case .recoveryPhraseOutdated:
+        return ("Secret Phrase Has Changed", "The key for this wallet has changed. Enter the current 24-word secret phrase.")
     case .twoStepAuthMissing:
         return ("Two-Step Verification Required", "Set up a Telegram password before changing this wallet.")
     case let .passwordTooFresh(timeout):

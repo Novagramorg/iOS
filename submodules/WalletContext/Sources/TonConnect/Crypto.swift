@@ -21,7 +21,6 @@ enum TonConnectCryptoPrimitives {
 
 @available(macOS 10.15, *)
 enum TonConnectKeyDerivation {
-    /// One 64-byte PBKDF2 block, as required by BIP-39.
     static func pbkdf2SHA512(password: Data, salt: Data, iterations: Int) throws -> Data {
         guard iterations > 0, iterations <= 1_000_000, salt.count <= 1_048_576 else {
             throw TonConnectCryptoError.invalidDerivation
@@ -44,7 +43,6 @@ enum TonConnectKeyDerivation {
         return Data(result)
     }
 
-    /// Path elements are unhardened indices; every element is hardened here.
     static func slip0010(seed: Data, path: [UInt32]) throws -> (key: Data, chainCode: Data) {
         guard !seed.isEmpty, seed.count <= 1_048_576, path.count <= 255,
               path.allSatisfy({ $0 < 0x8000_0000 }) else {
@@ -69,8 +67,6 @@ enum TonConnectKeyDerivation {
     }
 }
 
-/// Derive only from an engine-validated mnemonic; keep within protected access.
-/// Buffer erasure is best effort because Swift/CryptoKit may retain copies.
 @available(macOS 10.15, *)
 final class TonConnectAnchorKey {
     private var seed: Data

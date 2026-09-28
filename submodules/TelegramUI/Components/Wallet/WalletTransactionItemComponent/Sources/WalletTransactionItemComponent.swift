@@ -992,7 +992,7 @@ public final class WalletTransactionItemComponent: Component {
                     transition: transition,
                     component: AnyComponent(WalletCollectibleImageComponent(
                         context: component.context,
-                        imageUrl: collectible.imageUrl,
+                        file: collectible.thumbnail ?? collectible.image,
                         placeholderColor: component.theme.list.mediaPlaceholderColor,
                         cornerRadius: 8.0
                     )),
@@ -1047,7 +1047,7 @@ public final class WalletTransactionItemComponent: Component {
                         transition: .immediate,
                         component: AnyComponent(WalletCollectibleImageComponent(
                             context: component.context,
-                            imageUrl: nil,
+                            file: nil,
                             placeholderColor: component.theme.list.mediaPlaceholderColor,
                             cornerRadius: 8.0
                         )),

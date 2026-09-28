@@ -531,7 +531,7 @@ public struct WalletConfiguration: Equatable, Sendable {
     public static var defaultValue: WalletConfiguration {
         return WalletConfiguration(
             isAvailable: false,
-            explorerUrl: "https://tonviewer.com",
+            explorerUrl: "https://tonscan.org",
             transferMinAmount: 100_000_000,
             transferGaslessMinAmount: 100_000_000,
             transferGaslessDailyLimit: 5

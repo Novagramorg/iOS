@@ -351,7 +351,6 @@ private struct TonConnectJSONStructure {
             let start = self.offset
             while self.offset < self.bytes.count, ![9, 10, 13, 32, 44, 93, 125].contains(self.bytes[self.offset]) { self.offset += 1 }
             guard self.offset > start else { throw TonConnectWireFailure(code: .badRequest) }
-            // JSONDecoder subsequently validates scalar spelling and numeric range.
         }
     }
 

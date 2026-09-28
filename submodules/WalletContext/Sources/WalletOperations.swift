@@ -5,7 +5,73 @@ import TelegramCore
 import Postbox
 import WalletEngineFFI
 
-private let walletOwnershipProofDomain = "telegram.org"
+@available(macOS 10.15, *)
+final class WalletImportRequestState {
+    private(set) var preserveCandidate: Bool
+
+    init(preserveCandidate: Bool) {
+        self.preserveCandidate = preserveCandidate
+    }
+
+    func submit<Value>(
+        verify: () async throws -> Void,
+        persist: () async throws -> Void,
+        request: () async throws -> Value
+    ) async throws -> Value {
+        try await verify()
+        try await persist()
+        try Task.checkCancellation()
+        let previouslyPending = self.preserveCandidate
+        self.preserveCandidate = true
+        do {
+            return try await request()
+        } catch let error as TelegramCore.WalletOperationError {
+            // Password preflight and explicit RPC rejections did not accept
+            // this replacement. A transport failure leaves the outcome unknown.
+            self.preserveCandidate = previouslyPending || error == .network
+            throw error
+        }
+    }
+
+    func shouldDiscard(after error: Error) -> Bool {
+        !self.preserveCandidate || error as? WalletContext.WalletError == .recoveryPhraseOutdated
+    }
+}
+
+@available(macOS 10.15, *)
+func withWalletOwnershipProofRequest<Value>(
+    prepare: () async throws -> Void,
+    validate: () throws -> Void,
+    challenge: () async throws -> TelegramCore.WalletProofChallenge,
+    sign: (TelegramCore.WalletProofChallenge) async throws -> Data,
+    request: (TelegramCore.WalletOwnershipProof) async throws -> Value
+) async throws -> Value {
+    for attempt in 0 ..< 2 {
+        do {
+            try await prepare()
+            try validate()
+            let startedAt = ProcessInfo.processInfo.systemUptime
+            let challenge = try await challenge()
+            guard challenge.domain == "telegram.org", challenge.timestamp > 0 else {
+                throw WalletContext.WalletError.proofInvalid
+            }
+            guard challenge.expires > challenge.timestamp else { throw WalletContext.WalletError.proofExpired }
+            let signature = try await sign(challenge)
+            guard signature.count == 64 else { throw WalletContext.WalletError.proofInvalid }
+            let elapsed = max(0, ProcessInfo.processInfo.systemUptime - startedAt)
+            guard Double(challenge.timestamp) + elapsed < Double(challenge.expires) else {
+                throw WalletContext.WalletError.proofExpired
+            }
+            try validate()
+            return try await request(TelegramCore.WalletOwnershipProof(timestamp: challenge.timestamp, signature: signature))
+        } catch {
+            let expired = error as? WalletContext.WalletError == .proofExpired
+                || error as? TelegramCore.WalletOperationError == .proofExpired
+            guard attempt == 0, expired else { throw error }
+        }
+    }
+    throw WalletContext.WalletError.proofExpired
+}
 
 @available(macOS 10.15, *)
 private func walletCommentEncryptionError(_ error: Error) -> WalletContext.WalletError {
@@ -129,11 +195,13 @@ func stageRecoveryPhraseImport(
     guard detectMnemonicSchemes(words: normalizedWords).contains(.rotation) else {
         throw WalletContext.WalletError.invalidMnemonic
     }
-    let staged = try await runtime.stageTransientReplacement(words: normalizedWords)
+    let staged = try await runtime.stageVerifiedReplacement(words: normalizedWords)
     let disposition: WalletContext.PreparedRecoveryPhraseImport.Disposition
     if walletEngineAddressesEqual(staged.address, sourceAddress) {
         guard staged.signingPublicKey == sourcePublicKey else {
-            try await runtime.discardReplacement(recordId: staged.recordId)
+            if !staged.isPersisted {
+                try await runtime.discardReplacement(recordId: staged.recordId)
+            }
             throw WalletContext.WalletError.storage(.identityMismatch)
         }
         disposition = .currentWallet
@@ -466,12 +534,15 @@ extension WalletContextImpl {
         recordId: String,
         anchorPublicKey: Data,
         signingPublicKey: Data,
-        password: String?
+        password: String?,
+        requestState: WalletImportRequestState
     ) async throws -> TelegramCore.WalletState {
         guard anchorPublicKey.count == 32, signingPublicKey.count == 32 else {
             throw WalletError.publicKeyInvalid
         }
-        return try await self.withWalletOwnershipProof(sign: { challenge in
+        return try await self.withWalletOwnershipProof(prepare: {
+            try await self.runtime.verifyReplacement(recordId: recordId)
+        }, sign: { challenge in
             try await self.runtime.signReplacementProof(
                 recordId: recordId,
                 expectedAnchorPublicKey: anchorPublicKey,
@@ -479,48 +550,36 @@ extension WalletContextImpl {
                 domain: challenge.domain, timestamp: UInt64(challenge.timestamp), payload: challenge.payload
             )
         }, request: { proof in
-            try await WalletSignalRequestContext<TelegramCore.WalletState>().run(
-                self.engine.wallet.replaceWallet(
-                    replacement: .imported(publicKey: signingPublicKey, anchorPublicKey: anchorPublicKey, proof: proof),
-                    password: password
+            try await requestState.submit(verify: {
+                try Task.checkCancellation()
+            }, persist: {
+                try await self.runtime.persistReplacementCandidate(recordId: recordId)
+            }, request: {
+                try await WalletSignalRequestContext<TelegramCore.WalletState>().run(
+                    self.engine.wallet.replaceWallet(
+                        replacement: .imported(publicKey: signingPublicKey, anchorPublicKey: anchorPublicKey, proof: proof),
+                        password: password
+                    )
                 )
-            )
+            })
         })
     }
 
     private func withWalletOwnershipProof<Value: Sendable>(
+        prepare: () async throws -> Void = {},
         validate: () throws -> Void = {},
         sign: (TelegramCore.WalletProofChallenge) async throws -> Data,
         request: (TelegramCore.WalletOwnershipProof) async throws -> Value
     ) async throws -> Value {
-        for attempt in 0 ..< 2 {
-            do {
-                try validate()
-                let startedAt = ProcessInfo.processInfo.systemUptime
-                let challenge = try await WalletSignalRequestContext<TelegramCore.WalletProofChallenge>().run(
-                    self.engine.wallet.getProofChallenge()
-                )
-                guard challenge.domain == walletOwnershipProofDomain, challenge.timestamp > 0 else {
-                    throw WalletError.proofInvalid
-                }
-                guard challenge.expires > challenge.timestamp else { throw WalletError.proofExpired }
-                let signature = try await sign(challenge)
-                guard signature.count == 64 else { throw WalletError.proofInvalid }
-                let elapsed = max(0, ProcessInfo.processInfo.systemUptime - startedAt)
-                guard Double(challenge.timestamp) + elapsed < Double(challenge.expires) else {
-                    throw WalletError.proofExpired
-                }
-                try validate()
-                return try await request(TelegramCore.WalletOwnershipProof(
-                    timestamp: challenge.timestamp, signature: signature
-                ))
-            } catch {
-                let expired = error as? WalletError == .proofExpired
-                    || error as? TelegramCore.WalletOperationError == .proofExpired
-                guard attempt == 0, expired else { throw error }
-            }
-        }
-        throw WalletError.proofExpired
+        try await withWalletOwnershipProofRequest(
+            prepare: prepare,
+            validate: validate,
+            challenge: {
+                try await WalletSignalRequestContext<TelegramCore.WalletProofChallenge>().run(self.engine.wallet.getProofChallenge())
+            },
+            sign: sign,
+            request: request
+        )
     }
 
     func resolveTransferRecipient(_ value: String) async throws -> ResolvedTransferRecipient? {
@@ -599,51 +658,82 @@ extension WalletContextImpl {
         return updated
     }
 
+    private func reconcileReplacementBeforeImport() async throws {
+        guard try await self.runtime.hasReplacementCandidate() else { return }
+        let revision = self.serverStateMutationRevision
+        let state: TelegramCore.WalletState
+        do {
+            state = try await WalletSignalRequestContext<TelegramCore.WalletState>().run(self.engine.wallet.getState())
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            throw WalletError.network
+        }
+        guard !self.isShutdown, self.serverStateMutationRevision == revision else { throw CancellationError() }
+        let promoted: Bool
+        switch state {
+        case let .ready(_, _, _, address, publicKey, _):
+            promoted = try await self.runtime.reconcileReplacementCandidate(
+                serverAddress: address, serverPublicKey: publicKey, discardMismatch: true,
+                archivePreviousWallet: !self.isChangingWalletLocally, serverStateRevision: revision
+            )
+        case let .empty(creating):
+            if !creating {
+                try await self.runtime.discardReplacementAfterAuthoritativeEmptyState(serverStateRevision: revision)
+            }
+            promoted = false
+        }
+        guard !self.isShutdown, self.serverStateMutationRevision == revision else { throw CancellationError() }
+        self.applyServerWalletState(state, forceActivation: promoted)
+        if case let .ready(_, _, _, address, publicKey, _) = state {
+            await self.runtime.updateServerWalletIdentity(address: address, publicKey: publicKey, revision: self.serverStateMutationRevision)
+        } else {
+            await self.runtime.invalidateServerWalletIdentity(revision: self.serverStateMutationRevision)
+        }
+    }
+
     func importWallet(words: [String], password: String?, session: PasscodeSession? = nil, operationId: UUID) async throws -> WalletInfo {
         return try await self.performOperation(.importing, operationId: operationId, session: session) {
             let normalizedWords = normalizedEngineMnemonic(words)
             guard detectMnemonicSchemes(words: normalizedWords).contains(.rotation) else {
                 throw WalletError.invalidMnemonic
             }
-            let staged = try await self.runtime.stageTransientReplacement(words: normalizedWords)
+            try await self.reconcileReplacementBeforeImport()
+            let staged = try await self.runtime.stageVerifiedReplacement(words: normalizedWords)
+            let requestState = WalletImportRequestState(preserveCandidate: staged.isPersisted)
             let requestRevision = self.serverStateMutationRevision
-            let response: TelegramCore.WalletState
             do {
-                response = try await self.replaceWalletWithImportedCandidate(
+                let response = try await self.replaceWalletWithImportedCandidate(
                     recordId: staged.recordId,
                     anchorPublicKey: staged.publicKey,
                     signingPublicKey: staged.signingPublicKey,
-                    password: password
+                    password: password,
+                    requestState: requestState
                 )
-            } catch let error as TelegramCore.WalletOperationError {
-                if error == .network {
-                    try await self.runtime.persistReplacementCandidate(recordId: staged.recordId)
-                } else {
+                let selected = try self.replacementStateAfterRequest(response, startedAt: requestRevision)
+                let state = selected.state
+                let identity = try walletServerIdentity(state)
+                guard walletEngineAddressesEqual(staged.address, identity.address),
+                      staged.signingPublicKey == identity.publicKey else {
+                    try await self.runtime.verifyReplacement(recordId: staged.recordId)
+                    throw WalletError.storage(.identityMismatch)
+                }
+                let serverStateRevision = selected.revision
+                let generation = await self.prepareForRuntimeIdentityChange()
+                let activation = try await self.runtime.commitReplacement(
+                    recordId: staged.recordId,
+                    serverAddress: identity.address,
+                    serverPublicKey: identity.publicKey,
+                    serverStateRevision: serverStateRevision
+                )
+                guard self.serverStateMutationRevision == serverStateRevision else { throw CancellationError() }
+                return self.installRuntimeActivation(state: state, activation: activation, generation: generation)
+            } catch {
+                if requestState.shouldDiscard(after: error) {
                     await self.discardReplacementForCleanup(recordId: staged.recordId)
                 }
                 throw error
-            } catch {
-                await self.discardReplacementForCleanup(recordId: staged.recordId)
-                throw error
             }
-            try await self.runtime.persistReplacementCandidate(recordId: staged.recordId)
-            let selected = try self.replacementStateAfterRequest(response, startedAt: requestRevision)
-            let state = selected.state
-            let identity = try walletServerIdentity(state)
-            guard walletEngineAddressesEqual(staged.address, identity.address),
-                  staged.signingPublicKey == identity.publicKey else {
-                throw WalletError.storage(.identityMismatch)
-            }
-            let serverStateRevision = selected.revision
-            let generation = await self.prepareForRuntimeIdentityChange()
-            let activation = try await self.runtime.commitReplacement(
-                recordId: staged.recordId,
-                serverAddress: identity.address,
-                serverPublicKey: identity.publicKey,
-                serverStateRevision: serverStateRevision
-            )
-            guard self.serverStateMutationRevision == serverStateRevision else { throw CancellationError() }
-            return self.installRuntimeActivation(state: state, activation: activation, generation: generation)
         }
     }
 
@@ -746,7 +836,8 @@ extension WalletContextImpl {
 
     func prepareRecoveryPhraseImport(words: [String], session: PasscodeSession? = nil, operationId: UUID) async throws -> PreparedRecoveryPhraseImport {
         return try await self.performOperation(.preparingRecoveryPhraseImport, operationId: operationId, session: session) {
-            guard let state = self.serverWalletState else {
+            try await self.reconcileReplacementBeforeImport()
+            guard let state = self.deferredServerWalletState?.state ?? self.serverWalletState else {
                 throw WalletError.noWallet
             }
             let sourceIdentity = try walletServerIdentity(state)
@@ -819,6 +910,7 @@ extension WalletContextImpl {
                     await self.discardReplacementForCleanup(recordId: prepared.recordId)
                     throw error
                 }
+                guard self.serverStateMutationRevision == serverStateRevision else { throw CancellationError() }
                 return self.installRuntimeActivation(
                     state: currentServerState,
                     activation: activation,
@@ -827,63 +919,53 @@ extension WalletContextImpl {
                 )
 
             case .replacement:
+                let requestState = WalletImportRequestState(preserveCandidate: try await self.runtime.isPersistedReplacementCandidate(recordId: prepared.recordId))
                 let requestRevision = self.serverStateMutationRevision
-                let response: TelegramCore.WalletState
                 do {
-                    response = try await self.replaceWalletWithImportedCandidate(
+                    let response = try await self.replaceWalletWithImportedCandidate(
                         recordId: prepared.recordId,
                         anchorPublicKey: prepared.candidatePublicKey,
                         signingPublicKey: prepared.candidateSigningPublicKey,
-                        password: password
+                        password: password,
+                        requestState: requestState
                     )
-                } catch let error as TelegramCore.WalletOperationError {
-                    switch error {
-                    case .requestPassword, .invalidPassword, .twoStepAuthMissing:
-                        break
-                    case .network:
-                        try await self.runtime.persistReplacementCandidate(recordId: prepared.recordId)
-                        if self.preparedRecoveryPhraseImportRecordId == prepared.recordId {
-                            self.preparedRecoveryPhraseImportRecordId = nil
-                        }
-                    default:
-                        if self.preparedRecoveryPhraseImportRecordId == prepared.recordId {
-                            self.preparedRecoveryPhraseImportRecordId = nil
-                        }
-                        await self.discardReplacementForCleanup(recordId: prepared.recordId)
-                    }
-                    throw error
-                } catch {
                     if self.preparedRecoveryPhraseImportRecordId == prepared.recordId {
                         self.preparedRecoveryPhraseImportRecordId = nil
                     }
-                    await self.discardReplacementForCleanup(recordId: prepared.recordId)
+                    let selected = try self.replacementStateAfterRequest(response, startedAt: requestRevision)
+                    let state = selected.state
+                    let replacementIdentity = try walletServerIdentity(state)
+                    guard walletEngineAddressesEqual(prepared.candidateAddress, replacementIdentity.address),
+                          prepared.candidateSigningPublicKey == replacementIdentity.publicKey else {
+                        try await self.runtime.verifyReplacement(recordId: prepared.recordId)
+                        throw WalletError.storage(.identityMismatch)
+                    }
+                    let replacementRevision = selected.revision
+                    let generation = await self.prepareForRuntimeIdentityChange()
+                    let activation = try await self.runtime.commitReplacement(
+                        recordId: prepared.recordId,
+                        serverAddress: replacementIdentity.address,
+                        serverPublicKey: replacementIdentity.publicKey,
+                        serverStateRevision: replacementRevision
+                    )
+                    guard self.serverStateMutationRevision == replacementRevision else { throw CancellationError() }
+                    return self.installRuntimeActivation(state: state, activation: activation, generation: generation)
+                } catch {
+                    if let operationError = error as? TelegramCore.WalletOperationError,
+                       operationError == .requestPassword || operationError == .invalidPassword || operationError == .twoStepAuthMissing {
+                        if !requestState.preserveCandidate {
+                            try await self.runtime.retainReplacementForRetry(recordId: prepared.recordId)
+                        }
+                    } else {
+                        if self.preparedRecoveryPhraseImportRecordId == prepared.recordId {
+                            self.preparedRecoveryPhraseImportRecordId = nil
+                        }
+                        if requestState.shouldDiscard(after: error) {
+                            await self.discardReplacementForCleanup(recordId: prepared.recordId)
+                        }
+                    }
                     throw error
                 }
-                try await self.runtime.persistReplacementCandidate(recordId: prepared.recordId)
-                if self.preparedRecoveryPhraseImportRecordId == prepared.recordId {
-                    self.preparedRecoveryPhraseImportRecordId = nil
-                }
-                let selected = try self.replacementStateAfterRequest(response, startedAt: requestRevision)
-                let state = selected.state
-                let replacementIdentity = try walletServerIdentity(state)
-                guard walletEngineAddressesEqual(prepared.candidateAddress, replacementIdentity.address),
-                      prepared.candidateSigningPublicKey == replacementIdentity.publicKey else {
-                    throw WalletError.storage(.identityMismatch)
-                }
-                let replacementRevision = selected.revision
-                let generation = await self.prepareForRuntimeIdentityChange()
-                let activation = try await self.runtime.commitReplacement(
-                    recordId: prepared.recordId,
-                    serverAddress: replacementIdentity.address,
-                    serverPublicKey: replacementIdentity.publicKey,
-                    serverStateRevision: replacementRevision
-                )
-                guard self.serverStateMutationRevision == replacementRevision else { throw CancellationError() }
-                return self.installRuntimeActivation(
-                    state: state,
-                    activation: activation,
-                    generation: generation
-                )
             }
         }
     }
@@ -894,7 +976,7 @@ extension WalletContextImpl {
         if self.preparedRecoveryPhraseImportRecordId == prepared.recordId {
             self.preparedRecoveryPhraseImportRecordId = nil
         }
-        try await self.runtime.discardReplacement(recordId: prepared.recordId)
+        try await self.runtime.discardReplacement(recordId: prepared.recordId, discardPersisted: false)
     }
 
     func enableBackup(expectedAddress: String, words suppliedWords: [String]?, session: PasscodeSession? = nil, operationId: UUID) async throws -> WalletInfo {
@@ -915,8 +997,6 @@ extension WalletContextImpl {
                 if let authorizationSession { try self.authorization.validate(authorizationSession) }
             }
 
-            // Read a single snapshot before a fresh server state can invalidate
-            // the local runtime. This exact phrase supplies both parts and proof.
             var words: [String]
             if let suppliedWords {
                 words = normalizedEngineMnemonic(suppliedWords)
@@ -976,8 +1056,6 @@ extension WalletContextImpl {
                         throw WalletError.walletKeyMismatch
                     }
                     _ = try currentState()
-                    // Persist only the candidate, while protected access is still
-                    // available. An upload may finish after that access is revoked.
                     try await self.runtime.persistReplacementCandidate(recordId: staged.recordId)
                 }
                 if !isComplete(try currentState()) {
@@ -1009,8 +1087,6 @@ extension WalletContextImpl {
                                 if error == .network { preserveCandidate = candidate != nil }
                                 throw error
                             } catch {
-                                // Cancellation or an unexpected transport failure
-                                // does not prove that the server rejected the upload.
                                 preserveCandidate = candidate != nil
                                 throw error
                             }
@@ -1046,8 +1122,6 @@ extension WalletContextImpl {
     }
 
     private func installBackupEnabledState(_ state: TelegramCore.WalletState) -> WalletInfo {
-        // The local phrase path keeps the runtime and signing identity unchanged.
-        // performOperation applies this deferred state after clearing the operation.
         self.deferredServerWalletState = (state, false)
         guard case let .ready(backupEnabled, canExportPhrase, canEnableBackup, address, publicKey, _) = state else {
             preconditionFailure("Expected a verified wallet backup state")
@@ -1447,7 +1521,6 @@ extension WalletContextImpl {
             try Task.checkCancellation()
             guard !self.isShutdown, self.activationGeneration == activationGeneration else { throw WalletError.unavailable }
             do {
-                // Keep the original key source: an on-chain key need not derive the recipient's address.
                 _ = try await self.runtime.resolveEncryptedCommentRecipient(recipient: resolved.address, recipientPublicKey: encryptionPublicKey)
             } catch {
                 try Task.checkCancellation()
@@ -1684,8 +1757,6 @@ extension WalletContextImpl {
                     submission = try await self.prepareTransferSubmission(prepared, recipientPeerId: recipientPeerId, pendingMessageCreated: pendingMessageCreated, session: session, operationId: operationId, control: control, minimumSeqno: minimumSeqno)
                     break
                 } catch WalletTransferSubmissionError.staleSequenceNumber {
-                    // The engine's provider can lag behind the admission read.
-                    // Release the wallet while waiting to prepare a fresh BOC.
                     await stageUpdated?(.waitingForPreviousTransfer)
                     try await self.transferSubmissionClock.sleep(1_000_000_000)
                 }
@@ -2050,62 +2121,35 @@ extension WalletContextImpl {
 
     func loadMoreCollectibles(operationId: UUID) async throws {
         try await self.performOperation(.loadingMoreCollectibles, operationId: operationId) {
-            guard self.currentState.collectibles.canLoadMore else { return Void() }
+            guard let pageId = self.currentState.collectibles.nextPage,
+                  !self.currentState.collectibles.isRefreshing,
+                  !self.currentState.collectibles.isLoadingMore else { return Void() }
             let generation = self.activationGeneration
             let observationId = self.runtimeObservationId
-            let previousRevision = self.collectiblesRevision.latest
-            var resultRevision: UInt64?
+            let request = WalletSignalRequestContext<WalletNfts>()
+            self.collectiblesPaginationRequest = request
+            defer {
+                if self.collectiblesPaginationRequest === request {
+                    self.collectiblesPaginationRequest = nil
+                }
+            }
             self.updateCollectiblesPagination(isLoadingMore: true, error: nil)
             do {
-                let update = try await self.runtime.loadMoreNfts()
-                resultRevision = update.snapshot.revision
+                guard self.canUseNetworkRuntime else { throw WalletError.network }
+                let page = try await request.run(self.engine.wallet.getNfts(
+                    offset: pageId.offset, limit: walletCollectiblesFetchLimit
+                ))
                 try self.checkPaginationOperation(operationId, generation: generation)
-                let items = try await walletEngineCollectibles(update, pagination: true) { items in
-                    try await walletCollectibles(from: items, logger: self.logger)
-                }
-                try self.checkPaginationOperation(operationId, generation: generation)
-                guard self.runtimeObservationId == observationId else { throw CancellationError() }
-                guard items == nil || self.collectiblesRevision.accept(update.snapshot.revision) else {
-                    self.updateCollectiblesPagination(isLoadingMore: false, error: self.currentState.collectibles.error)
-                    return
-                }
-                self.replaceState(
-                    phase: self.currentState.phase,
-                    balance: self.currentState.balance,
-                    transactions: self.currentState.transactions,
-                    collectibles: walletEngineCollectiblesState(
-                        previous: self.currentState.collectibles,
-                        items: items,
-                        hasMore: update.snapshot.nfts.hasMore
-                    ),
-                    pendingTransfers: self.currentState.pendingTransfers,
-                    activeOperation: self.currentState.activeOperation
-                )
+                guard self.runtimeObservationId == observationId,
+                      self.currentState.collectibles.acceptsPage(pageId) else { throw CancellationError() }
+                self.replaceCollectibles(try self.currentState.collectibles.applying(page, offset: pageId.offset, refresh: false))
             } catch {
                 guard self.isCurrentPaginationOperation(operationId, generation: generation),
-                      self.runtimeObservationId == observationId else {
-                    throw CancellationError()
-                }
-                let isCancelled = Task.isCancelled || error is CancellationError
-                let canApply = resultRevision.map { self.collectiblesRevision.isCurrent($0) }
-                    ?? (self.collectiblesRevision.latest == previousRevision)
-                if !canApply {
-                    self.updateCollectiblesPagination(isLoadingMore: false, error: self.currentState.collectibles.error)
-                    throw error
-                }
-                self.replaceState(
-                    phase: self.currentState.phase,
-                    balance: self.currentState.balance,
-                    transactions: self.currentState.transactions,
-                    collectibles: walletEngineCollectiblesState(
-                        previous: self.currentState.collectibles,
-                        failure: isCancelled ? CancellationError() : error
-                    ),
-                    pendingTransfers: self.currentState.pendingTransfers,
-                    activeOperation: self.currentState.activeOperation
-                )
-                if isCancelled { throw CancellationError() }
-                throw error
+                      self.runtimeObservationId == observationId,
+                      self.currentState.collectibles.acceptsPage(pageId) else { throw CancellationError() }
+                let failure: Error = Task.isCancelled ? CancellationError() : error
+                self.replaceCollectibles(self.currentState.collectibles.failing(failure))
+                throw failure
             }
         }
     }
@@ -2151,8 +2195,9 @@ extension WalletContextImpl {
             transactions: self.currentState.transactions,
             collectibles: CollectiblesState(
                 items: collectibles.items,
-                offset: collectibles.offset,
-                canLoadMore: collectibles.canLoadMore,
+                nextOffset: collectibles.nextOffset,
+                generation: collectibles.generation,
+                isRefreshing: collectibles.isRefreshing,
                 isLoadingMore: isLoadingMore,
                 error: error
             ),
@@ -2161,12 +2206,14 @@ extension WalletContextImpl {
         )
     }
 
-    func discardReplacementForCleanup(recordId: String) async {
-        do {
-            try await self.runtime.discardReplacement(recordId: recordId)
-        } catch {
-            self.logger.error("wallet_replacement_cleanup_failed", error)
-        }
+    func discardReplacementForCleanup(recordId: String, discardPersisted: Bool = true) async {
+        await Task { [runtime = self.runtime, logger = self.logger] in
+            do {
+                try await runtime.discardReplacement(recordId: recordId, discardPersisted: discardPersisted)
+            } catch {
+                logger.error("wallet_replacement_cleanup_failed", error)
+            }
+        }.value
     }
 
     func prepareForRuntimeIdentityChange(
@@ -2368,7 +2415,7 @@ extension WalletContextImpl {
                 if self.preparedRecoveryPhraseImportRecordId == prepared.recordId {
                     self.preparedRecoveryPhraseImportRecordId = nil
                 }
-                await self.discardReplacementForCleanup(recordId: prepared.recordId)
+                await self.discardReplacementForCleanup(recordId: prepared.recordId, discardPersisted: false)
             }
             throw error
         }

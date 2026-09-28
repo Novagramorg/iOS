@@ -63,7 +63,7 @@ public final class WalletCollectibleItemComponent: Component {
                 transition: transition,
                 component: AnyComponent(WalletCollectibleImageComponent(
                     context: component.context,
-                    imageUrl: component.collectible.imageUrl,
+                    file: component.collectible.thumbnail,
                     placeholderColor: component.theme.list.mediaPlaceholderColor,
                     cornerRadius: 12.0
                 )),

@@ -394,8 +394,9 @@ private func walletTransactionCollectible(
     return WalletContext.Transaction.CollectibleTransfer(
         address: collectible.address,
         name: collectible.name,
-        imageUrl: collectible.imageUrl,
-        lottieUrl: collectible.lottieUrl,
+        image: collectible.image,
+        thumbnail: collectible.thumbnail,
+        lottie: collectible.lottie,
         collectionName: collectible.collectionName,
         collectionUrl: collectible.collectionUrl,
         kind: kind
@@ -2259,8 +2260,8 @@ private final class WalletTransactionContentComponent: Component {
                         theme: theme,
                         item: WalletCollectibleHeaderComponent.Item(
                             name: collectible.name,
-                            imageUrl: collectible.imageUrl,
-                            lottieUrl: collectible.lottieUrl,
+                            image: collectible.image,
+                            lottie: collectible.lottie,
                             collectionName: collectible.collectionName,
                             collectionUrl: collectible.collectionUrl
                         ),

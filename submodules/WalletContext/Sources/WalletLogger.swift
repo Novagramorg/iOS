@@ -89,6 +89,7 @@ private func walletContextErrorKind(_ error: Error) -> String? {
         case .preparedTransferExpired: return "prepared_transfer_expired"
         case .preparedTransferNotFound: return "prepared_transfer_not_found"
         case .walletKeyMismatch: return "wallet_key_mismatch"
+        case .recoveryPhraseOutdated: return "recovery_phrase_outdated"
         case .network: return "network"
         case .requestPassword: return "request_password"
         case .invalidPassword: return "invalid_password"
@@ -176,6 +177,7 @@ func synchronizationError(_ error: DomainError?) -> WalletContext.Synchronizatio
 @available(macOS 10.15, *)
 func synchronizationError(_ error: Error?) -> WalletContext.SynchronizationError {
     guard let error else { return .engine }
+    if error is WalletGetNftsError { return .network }
     if let error = error as? WalletContext.SynchronizationError { return error }
     if let error = error as? WalletContext.WalletError {
         switch error {
@@ -193,6 +195,7 @@ func synchronizationError(_ error: Error?) -> WalletContext.SynchronizationError
 
 @available(macOS 10.15, *)
 func walletError(_ error: Error) -> WalletContext.WalletError {
+    if error is WalletGetNftsError { return .network }
     if let value = error as? PasscodeError {
         switch value {
         case .cancelled, .staleAuthorization: return .authorizationCancelled

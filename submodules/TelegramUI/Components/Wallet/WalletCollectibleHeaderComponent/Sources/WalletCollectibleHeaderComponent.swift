@@ -4,16 +4,14 @@ import UIKit
 import Display
 import AccountContext
 import SwiftSignalKit
+import TelegramCore
+import GZip
 import TelegramPresentationData
 import ComponentFlow
 import BundleIconComponent
 import MultilineTextComponent
 import LottieComponent
 import WalletCollectibleImageComponent
-
-private let walletCollectibleLottieHosts: Set<String> = [
-    "nft.fragment.com",
-]
 
 public func walletCollectibleFragmentUrl(_ value: String?) -> String? {
     guard let value,
@@ -26,54 +24,66 @@ public func walletCollectibleFragmentUrl(_ value: String?) -> String? {
     return url.absoluteString
 }
 
-private final class WalletRemoteLottieContent: LottieComponent.Content {
-    private static let maximumSize = 5 * 1024 * 1024
+private let walletCollectibleLottieMaximumSize = 5 * 1024 * 1024
 
-    let url: URL
-
-    override var frameRange: Range<Double> {
-        return 0.0 ..< 1.0
+func walletCollectibleLottieData(_ data: Data) -> Data? {
+    guard data.count <= walletCollectibleLottieMaximumSize else { return nil }
+    let decoded: Data
+    if data.starts(with: [0x1f, 0x8b]) {
+        guard let unpacked = TGGUnzipData(data, UInt32(walletCollectibleLottieMaximumSize)) else { return nil }
+        decoded = unpacked
+    } else {
+        decoded = data
     }
+    guard decoded.count <= walletCollectibleLottieMaximumSize,
+          (try? JSONSerialization.jsonObject(with: decoded)) is [String: Any] else { return nil }
+    return decoded
+}
 
-    init?(urlString: String) {
-        guard let url = URL(string: urlString),
-              url.scheme?.lowercased() == "https",
-              let host = url.host?.lowercased(),
-              walletCollectibleLottieHosts.contains(host) else {
-            return nil
-        }
-        self.url = url
+private final class WalletRemoteLottieContent: LottieComponent.Content {
+    let context: AccountContext
+    let file: WalletNftFile
+
+    override var frameRange: Range<Double> { return 0.0 ..< 1.0 }
+
+    init(context: AccountContext, file: WalletNftFile) {
+        self.context = context
+        self.file = file
         super.init()
     }
 
     override func isEqual(to other: LottieComponent.Content) -> Bool {
-        guard let other = other as? WalletRemoteLottieContent else {
-            return false
-        }
-        return self.url == other.url
+        guard let other = other as? WalletRemoteLottieContent else { return false }
+        return self.context === other.context && self.file == other.file
     }
 
     override func load(_ f: @escaping (LottieComponent.ContentData) -> Void) -> Disposable {
-        var request = URLRequest(url: self.url)
-        request.cachePolicy = .returnCacheDataElseLoad
-        request.timeoutInterval = 15.0
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        let task = URLSession.shared.dataTask(with: request) { data, response, _ in
-            guard let response = response as? HTTPURLResponse,
-                  (200 ..< 300).contains(response.statusCode),
-                  response.expectedContentLength <= 0
-                    || response.expectedContentLength <= Int64(Self.maximumSize),
-                  let data,
-                  data.count <= Self.maximumSize,
-                  (try? JSONSerialization.jsonObject(with: data)) is [String: Any] else {
-                return
+        let mediaBox = self.context.account.postbox.mediaBox
+        let resource = self.file.resource
+        return Signal<Data, NoError> { subscriber in
+            let dataDisposable = (mediaBox.resourceData(resource)
+            |> deliverOn(Queue.concurrentDefaultQueue())).start(next: { resourceData in
+                guard resourceData.size <= Int64(walletCollectibleLottieMaximumSize) else {
+                    subscriber.putCompletion()
+                    return
+                }
+                guard resourceData.complete else { return }
+                if let data = try? Data(contentsOf: URL(fileURLWithPath: resourceData.path), options: .mappedIfSafe),
+                   let decoded = walletCollectibleLottieData(data) {
+                    subscriber.putNext(decoded)
+                }
+                subscriber.putCompletion()
+            })
+            let fetchDisposable = mediaBox.fetchedResource(resource, parameters: nil).start(error: { _ in
+                subscriber.putCompletion()
+            })
+            return ActionDisposable {
+                dataDisposable.dispose()
+                fetchDisposable.dispose()
             }
-            f(.animation(data: data, cacheKey: self.url.absoluteString))
-        }
-        task.resume()
-        return ActionDisposable {
-            task.cancel()
-        }
+        }.start(next: { data in
+            f(.animation(data: data, cacheKey: resource.id.stringRepresentation))
+        })
     }
 }
 
@@ -82,21 +92,21 @@ public final class WalletCollectibleHeaderComponent: Component {
 
     public struct Item: Equatable {
         public let name: String
-        public let imageUrl: String?
-        public let lottieUrl: String?
+        public let image: WalletNftFile?
+        public let lottie: WalletNftFile?
         public let collectionName: String?
         public let collectionUrl: String?
 
         public init(
             name: String,
-            imageUrl: String?,
-            lottieUrl: String?,
+            image: WalletNftFile?,
+            lottie: WalletNftFile?,
             collectionName: String?,
             collectionUrl: String?
         ) {
             self.name = name
-            self.imageUrl = imageUrl
-            self.lottieUrl = lottieUrl
+            self.image = image
+            self.lottie = lottie
             self.collectionName = collectionName
             self.collectionUrl = collectionUrl
         }
@@ -131,7 +141,9 @@ public final class WalletCollectibleHeaderComponent: Component {
 
     public final class View: UIView {
         private let image = ComponentView<Empty>()
-        private let lottie = ComponentView<Empty>()
+        private var lottie = ComponentView<Empty>()
+        private var lottieFile: WalletNftFile?
+        private weak var lottieContext: AccountContext?
         private let title = ComponentView<Empty>()
         private let collection = ComponentView<Empty>()
 
@@ -169,7 +181,7 @@ public final class WalletCollectibleHeaderComponent: Component {
                 transition: transition,
                 component: AnyComponent(WalletCollectibleImageComponent(
                     context: component.context,
-                    imageUrl: component.item.imageUrl,
+                    file: component.item.image,
                     placeholderColor: component.theme.list.mediaPlaceholderColor,
                     cornerRadius: mediaCornerRadius
                 )),
@@ -184,8 +196,15 @@ public final class WalletCollectibleHeaderComponent: Component {
                 transition.setFrame(view: imageView, frame: mediaFrame)
             }
 
-            if let lottieUrl = component.item.lottieUrl,
-               let lottieContent = WalletRemoteLottieContent(urlString: lottieUrl) {
+            if self.lottieFile != component.item.lottie || self.lottieContext !== component.context {
+                self.setAnimationVisible(false)
+                self.lottie.view?.removeFromSuperview()
+                self.lottie = ComponentView<Empty>()
+                self.lottieFile = component.item.lottie
+                self.lottieContext = component.context
+            }
+            if let lottie = component.item.lottie {
+                let lottieContent = WalletRemoteLottieContent(context: component.context, file: lottie)
                 let lottieSize = self.lottie.update(
                     transition: transition,
                     component: AnyComponent(LottieComponent(
@@ -214,9 +233,6 @@ public final class WalletCollectibleHeaderComponent: Component {
                     transition.setAlpha(view: lottieView, alpha: 1.0)
                 }
                 self.setAnimationVisible(true)
-            } else if let lottieView = self.lottie.view {
-                self.setAnimationVisible(false)
-                transition.setAlpha(view: lottieView, alpha: 0.0)
             }
 
             var contentHeight = mediaSize.height + 18.0

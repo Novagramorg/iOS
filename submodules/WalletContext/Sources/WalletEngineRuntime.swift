@@ -4,6 +4,68 @@ import PasscodeCore
 import WalletEngineFFI
 
 @available(macOS 10.15, *)
+func verifyWalletImportKey(
+    anchorPublicKey: Data,
+    signingPublicKey: Data,
+    accountState: () async throws -> WalletContext.WalletAccountState,
+    publicKey: () async throws -> Data
+) async throws {
+    guard anchorPublicKey.count == 32, signingPublicKey.count == 32 else {
+        throw WalletContext.WalletError.publicKeyInvalid
+    }
+    do {
+        try Task.checkCancellation()
+        let currentKey: Data
+        switch try await accountState() {
+        case .active:
+            currentKey = try await publicKey()
+            guard currentKey.count == 32 else { throw WalletContext.WalletError.network }
+        case .undeployed:
+            currentKey = anchorPublicKey
+        case .unavailable:
+            throw WalletContext.WalletError.unavailable
+        }
+        try Task.checkCancellation()
+        guard currentKey == signingPublicKey else { throw WalletContext.WalletError.recoveryPhraseOutdated }
+    } catch is CancellationError {
+        throw CancellationError()
+    } catch let error as WalletContext.WalletError {
+        throw error
+    } catch {
+        throw WalletContext.WalletError.network
+    }
+}
+
+@available(macOS 10.15, *)
+enum WalletImportCandidateDisposition: Equatable {
+    case promote
+    case discard
+    case retain
+}
+
+@available(macOS 10.15, *)
+func walletImportCandidateDisposition(
+    sameAddress: Bool,
+    sameSigningKey: Bool,
+    hasPendingKeyRotation: Bool,
+    discardMismatch: Bool,
+    verify: () async throws -> Void,
+    validateRevision: () throws -> Void
+) async throws -> WalletImportCandidateDisposition {
+    try validateRevision()
+    guard !hasPendingKeyRotation else { return .retain }
+    guard sameAddress else { return discardMismatch ? .discard : .retain }
+    do {
+        try await verify()
+    } catch WalletContext.WalletError.recoveryPhraseOutdated {
+        try validateRevision()
+        return discardMismatch ? .discard : .retain
+    }
+    try validateRevision()
+    return sameSigningKey ? .promote : .retain
+}
+
+@available(macOS 10.15, *)
 struct WalletEngineActivation: @unchecked Sendable {
     let snapshot: WalletSnapshot
     let canSign: Bool
@@ -15,6 +77,7 @@ struct WalletEngineStagedWallet: Equatable, Sendable {
     let address: String
     let publicKey: Data
     let signingPublicKey: Data
+    let isPersisted: Bool
 }
 
 @available(macOS 10.15, *)
@@ -53,8 +116,6 @@ actor WalletEngineRuntime {
     private enum FfiCancellation: Equatable {
         case none
         case refresh
-        case refreshNfts
-        case loadMoreNfts
         case sendPreview
         case send
     }
@@ -129,40 +190,45 @@ actor WalletEngineRuntime {
         self.serverWalletIdentity = (address, publicKey)
     }
 
-    func stageReplacement(words: [String]) async throws -> WalletEngineStagedWallet {
+    func hasReplacementCandidate() async throws -> Bool {
+        try await self.storage.loadReplacementCandidate() != nil
+    }
+
+    func isPersistedReplacementCandidate(recordId: String) async throws -> Bool {
+        try await self.storage.loadReplacementCandidate()?.recordId == recordId
+    }
+
+    private func verifyImportKey(address: String, anchorPublicKey: Data, signingPublicKey: Data) async throws {
+        try await verifyWalletImportKey(
+            anchorPublicKey: anchorPublicKey,
+            signingPublicKey: signingPublicKey,
+            accountState: { try await self.statuslessHost.walletAccountState(address: address) },
+            publicKey: { try await self.statuslessHost.walletPublicKey(address: address) }
+        )
+    }
+
+    func verifyReplacement(recordId: String) async throws {
         try await self.withFfi {
-            await self.discardTransientReplacementUnlocked()
-            let words = normalizedEngineMnemonic(words)
-            guard detectMnemonicSchemes(words: words).contains(.rotation) else {
-                throw WalletContext.WalletError.invalidMnemonic
+            guard try await self.storage.loadKeyRotation() == nil else {
+                throw WalletContext.WalletError.operationInProgress
             }
-            if let existing = try await self.storage.loadReplacementCandidate() {
-                try await self.deleteLocalWallet(existing)
-                try await self.storage.removeReplacementCandidate()
+            let revision = self.serverStateRevision
+            let record: WalletEngineDescriptorRecord
+            if let descriptor = self.transientReplacementDescriptor, descriptor.recordId == recordId {
+                record = WalletEngineDescriptorRecord(descriptor: descriptor)
+            } else if let candidate = try await self.storage.loadReplacementCandidate(), candidate.recordId == recordId {
+                record = candidate
+            } else {
+                throw WalletContext.WalletError.storage(.identityMismatch)
             }
-            let imported = try await self.lifecycle.importWallet(request: ImportWalletRequest(
-                recordId: UUID().uuidString.lowercased(),
-                network: .mainnet,
-                recoveryWords: words
-            ))
-            let signingPublicKey = try walletMnemonicSigningPublicKey(words: words)
-            let record = WalletEngineDescriptorRecord(descriptor: imported, signingPublicKey: signingPublicKey)
+            let signingPublicKey = try await self.signingPublicKey(for: record)
             do {
-                try await self.storage.saveReplacementCandidate(record)
+                try await self.verifyImportKey(address: record.address, anchorPublicKey: record.publicKey, signingPublicKey: signingPublicKey)
             } catch {
-                do {
-                    try await self.storage.deleteProtectedSecret(imported.secretRef)
-                } catch {
-                    self.logger.error("wallet_replacement_secret_cleanup_failed", error)
-                }
+                guard self.serverStateRevision == revision else { throw CancellationError() }
                 throw error
             }
-            return WalletEngineStagedWallet(
-                recordId: record.recordId,
-                address: record.address,
-                publicKey: record.publicKey,
-                signingPublicKey: signingPublicKey
-            )
+            guard self.serverStateRevision == revision else { throw CancellationError() }
         }
     }
 
@@ -170,6 +236,9 @@ actor WalletEngineRuntime {
         let recordId = UUID().uuidString.lowercased()
         do {
             return try await self.withFfi {
+                guard try await self.storage.loadKeyRotation() == nil else {
+                    throw WalletContext.WalletError.operationInProgress
+                }
                 if let candidate = try await self.storage.loadReplacementCandidate() {
                     guard let descriptor = candidate.descriptor else { throw WalletContext.WalletError.storage(.corrupted) }
                     let existing = try await self.lifecycle.revealRecoveryPhrase(descriptor: descriptor)
@@ -178,7 +247,7 @@ actor WalletEngineRuntime {
                     }
                     return WalletEngineStagedWallet(
                         recordId: candidate.recordId, address: candidate.address, publicKey: candidate.publicKey,
-                        signingPublicKey: try walletMnemonicSigningPublicKey(words: words)
+                        signingPublicKey: try walletMnemonicSigningPublicKey(words: words), isPersisted: true
                     )
                 }
                 guard self.transientReplacementDescriptor == nil else {
@@ -210,7 +279,8 @@ actor WalletEngineRuntime {
                     recordId: imported.recordId,
                     address: imported.address,
                     publicKey: imported.publicKey,
-                    signingPublicKey: try walletMnemonicSigningPublicKey(words: words)
+                    signingPublicKey: try walletMnemonicSigningPublicKey(words: words),
+                    isPersisted: false
                 )
             }
         } catch {
@@ -218,6 +288,34 @@ actor WalletEngineRuntime {
                 await self.discardTransientReplacementUnlocked(recordId: recordId)
             }
             throw error
+        }
+    }
+
+    func stageVerifiedReplacement(words: [String]) async throws -> WalletEngineStagedWallet {
+        let staged = try await self.stageTransientReplacement(words: words)
+        do {
+            try await self.verifyReplacement(recordId: staged.recordId)
+            return staged
+        } catch {
+            let discardPersisted = error as? WalletContext.WalletError == .recoveryPhraseOutdated
+            await Task {
+                do { try await self.discardReplacement(recordId: staged.recordId, discardPersisted: discardPersisted) }
+                catch { self.logger.error("wallet_replacement_cleanup_failed", error) }
+            }.value
+            throw error
+        }
+    }
+
+    func retainReplacementForRetry(recordId: String) async throws {
+        try await self.withFfi {
+            guard let candidate = try await self.storage.loadReplacementCandidate(), candidate.recordId == recordId,
+                  let descriptor = candidate.descriptor else { return }
+            let secret = try await self.storage.readProtectedSecret(ProtectedSecretRead(
+                secretRef: descriptor.secretRef, reason: .revealRecoveryPhrase, prompt: "Authenticate to import wallet"
+            ))
+            try await self.platformHost.retainTransientProtectedSecret(secretRef: descriptor.secretRef, bytes: secret)
+            self.transientReplacementDescriptor = descriptor
+            try await self.storage.discardReplacementCandidate(recordId: recordId)
         }
     }
 
@@ -287,13 +385,22 @@ actor WalletEngineRuntime {
             guard signingPublicKey == serverPublicKey else {
                 throw WalletContext.WalletError.storage(.identityMismatch)
             }
+            do {
+                try await self.verifyImportKey(address: candidate.address, anchorPublicKey: candidate.publicKey, signingPublicKey: signingPublicKey)
+            } catch {
+                guard self.serverStateRevision == revision else { throw CancellationError() }
+                throw error
+            }
+            guard self.serverStateRevision == revision else { throw CancellationError() }
             try await self.promoteReplacementCandidate(candidate.withSigningPublicKey(signingPublicKey), archivePreviousWallet: archivePreviousWallet)
-            return try await self.activateUnlocked(
+            let activation = try await self.activateUnlocked(
                 serverAddress: serverAddress,
                 serverPublicKey: serverPublicKey,
                 archivePreviousWallet: false,
                 serverStateRevision: revision
             )
+            guard activation.canSign else { throw WalletContext.WalletError.storage(.identityMismatch) }
+            return activation
         }
     }
 
@@ -310,53 +417,73 @@ actor WalletEngineRuntime {
             guard let candidate = try await self.storage.loadReplacementCandidate() else {
                 return false
             }
-            let signingPublicKey: Data?
+            guard try await self.storage.loadKeyRotation() == nil else { return false }
+            guard let descriptor = candidate.descriptor else {
+                throw WalletContext.WalletError.storage(.corrupted)
+            }
+            // A crash during cleanup may leave only the marker. A Keychain
+            // access failure throws; it must not be treated as a missing secret.
+            let hasSecret = try await self.storage.containsProtectedSecret(descriptor.secretRef)
+            guard self.serverStateRevision <= revision else { throw CancellationError() }
+            if !hasSecret {
+                try await self.storage.discardReplacementCandidate(recordId: candidate.recordId)
+                return false
+            }
+            let signingPublicKey: Data
             if let known = candidate.signingPublicKey {
                 signingPublicKey = known
-            } else if candidate.descriptor != nil {
-                signingPublicKey = try? await self.signingPublicKey(for: candidate)
             } else {
-                signingPublicKey = nil
+                signingPublicKey = try await self.signingPublicKey(for: candidate)
             }
-            guard self.serverStateRevision <= revision else { throw CancellationError() }
-            if walletEngineAddressesEqual(candidate.address, serverAddress),
-               signingPublicKey == serverPublicKey,
-               candidate.descriptor != nil {
-                let verifiedCandidate = signingPublicKey.map { candidate.withSigningPublicKey($0) } ?? candidate
-                try await self.promoteReplacementCandidate(verifiedCandidate, archivePreviousWallet: archivePreviousWallet)
+            let disposition = try await walletImportCandidateDisposition(
+                sameAddress: walletEngineAddressesEqual(candidate.address, serverAddress),
+                sameSigningKey: signingPublicKey == serverPublicKey,
+                hasPendingKeyRotation: false,
+                discardMismatch: discardMismatch,
+                verify: {
+                    try await self.verifyImportKey(address: candidate.address, anchorPublicKey: candidate.publicKey, signingPublicKey: signingPublicKey)
+                },
+                validateRevision: {
+                    guard self.serverStateRevision <= revision else { throw CancellationError() }
+                }
+            )
+            switch disposition {
+            case .promote:
+                try await self.promoteReplacementCandidate(candidate.withSigningPublicKey(signingPublicKey), archivePreviousWallet: archivePreviousWallet)
                 return true
-            } else if discardMismatch, signingPublicKey != nil,
-                      !walletEngineAddressesEqual(candidate.address, serverAddress) {
-                try await self.deleteLocalWallet(candidate)
-                try await self.storage.removeReplacementCandidate()
+            case .discard:
+                try await self.storage.discardReplacementCandidate(recordId: candidate.recordId)
+            case .retain:
+                break
             }
             return false
         }
     }
 
-    func discardReplacement(recordId: String) async throws {
+    func discardReplacement(recordId: String, discardPersisted: Bool = true) async throws {
         try await self.withFfi {
             if self.transientReplacementDescriptor?.recordId == recordId {
                 await self.discardTransientReplacementUnlocked(recordId: recordId)
-                return
             }
+            guard discardPersisted else { return }
             guard let candidate = try await self.storage.loadReplacementCandidate(),
                   candidate.recordId == recordId else {
                 return
             }
-            try await self.deleteLocalWallet(candidate)
-            try await self.storage.removeReplacementCandidate()
+            try await self.storage.discardReplacementCandidate(recordId: candidate.recordId)
         }
     }
 
-    func discardReplacementAfterAuthoritativeEmptyState() async throws {
+    func discardReplacementAfterAuthoritativeEmptyState(serverStateRevision: UInt64? = nil) async throws {
+        let revision = serverStateRevision ?? self.serverStateRevision
         try await self.withFfi {
+            guard try await self.storage.loadKeyRotation() == nil else { return }
+            guard self.serverStateRevision <= revision else { throw CancellationError() }
             await self.discardTransientReplacementUnlocked()
             guard let candidate = try await self.storage.loadReplacementCandidate() else {
                 return
             }
-            try await self.deleteLocalWallet(candidate)
-            try await self.storage.removeReplacementCandidate()
+            try await self.storage.discardReplacementCandidate(recordId: candidate.recordId)
         }
     }
 
@@ -572,18 +699,6 @@ actor WalletEngineRuntime {
     func refresh() async throws -> WalletUpdate {
         try await self.withFfi(priority: .background, cancellation: .refresh) {
             try await self.requireClient().refresh()
-        }
-    }
-
-    func refreshNfts() async throws -> WalletUpdate {
-        try await self.withFfi(priority: .background, cancellation: .refreshNfts) {
-            try await self.requireClient().refreshNfts()
-        }
-    }
-
-    func loadMoreNfts() async throws -> WalletUpdate {
-        try await self.withFfi(priority: .background, cancellation: .loadMoreNfts) {
-            try await self.requireClient().loadMoreNfts()
         }
     }
 
@@ -1471,10 +1586,6 @@ actor WalletEngineRuntime {
                 return
             case .refresh:
                 try await client.cancelRefresh()
-            case .refreshNfts:
-                try await client.cancelRefreshNfts()
-            case .loadMoreNfts:
-                try await client.cancelLoadMoreNfts()
             case .sendPreview:
                 try await client.cancelSendPreview()
             case .send:

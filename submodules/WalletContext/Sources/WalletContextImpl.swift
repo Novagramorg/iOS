@@ -63,9 +63,11 @@ actor WalletContextImpl {
     let streamingURLProvider: WalletStreamingURLProvider
     let storedStateWriter: WalletStoredStateWriter
     let output: WalletContextOutput
+    
     var currentState: State
     var transferMinAmount = WalletConfiguration.defaultValue.transferMinAmount
     var transferGaslessMinAmount = WalletConfiguration.defaultValue.transferGaslessMinAmount
+    
     var storedState = WalletStoredState()
     var serverWalletState: TelegramCore.WalletState?
     var isChangingWalletLocally = false
@@ -74,15 +76,17 @@ actor WalletContextImpl {
     var serverStateRefreshRequested = false
     var serverStateMutationRevision: UInt64 = 0
     var serverStateNeedsActivation = false
+    
     var transactionHistory = WalletTransactionHistory()
     var preparedTransfers: [String: PreparedEngineTransferRecord] = [:]
     var pendingTransferRegistrations: [String: WalletPendingTransferRegistrationRecord] = [:]
+    var outgoingTransactionPresentationIdentities: [String: OutgoingTransactionPresentationIdentity] = [:]
+    
     var preparedAuthorizations: [String: PasscodeSession] = [:]
-    var deferredSynchronizationScope: WalletSynchronizationScope = []
+    
     var preparedRecoveryPhraseImportRecordId: String?
     var peerByWalletAddress: [String: EnginePeer] = [:]
-    var outgoingTransactionPresentationIdentities: [String: OutgoingTransactionPresentationIdentity] = [:]
-
+    
     var isStoredStateRestored = false
     var isApplicationInForeground = false
     var isAccountCurrent = false
@@ -107,33 +111,40 @@ actor WalletContextImpl {
     var previousWalletBalancesTask: Task<[WalletContext.PreviousWallet], Error>?
     var serverStateTask: Task<Void, Never>?
     var activationTask: Task<Void, Never>?
+    
+    var balanceTracker = WalletEngineBalanceTracker()
+    
+    var deferredSynchronizationScope: WalletSynchronizationScope = []
     var synchronizationTask: Task<Void, Never>?
     var synchronizationTaskId: UUID?
     var synchronizationGate = WalletSynchronizationRequestGate()
-    var collectiblesSynchronizationTask: Task<Void, Never>?
-    var collectiblesSynchronizationTaskId: UUID?
-    var collectiblesSynchronizationGate = WalletSynchronizationRequestGate()
-    var collectiblesRevision = WalletEngineCollectiblesRevision()
+    
     var runtimeObservationId = UUID()
-    var balanceTracker = WalletEngineBalanceTracker()
     var observationTask: Task<Void, Never>?
     var serverStateRetryTask: Task<Void, Never>?
+            
     var pollingTask: Task<Void, Never>?
     var pollingTaskId: UUID?
+    
     var walletStateFallbackRefreshTask: Task<Void, Never>?
     var walletStateFallbackRefreshTaskId: UUID?
+    
     var pendingTransferExpirationTask: Task<Void, Never>?
     var pendingTransferExpirationTaskId: UUID?
     var pendingTransferExpirationDeadline: Int32?
+    
     var walletTransferResolutions: [String: WalletTransferResolution] = [:]
     var walletTransferHashStates: [String: WalletTransferHashState] = [:]
     var walletTransferResolutionTask: Task<Void, Never>?
     var walletTransferResolutionScheduledAt: Int32?
+    
     var fiatRefreshTask: Task<Void, Never>?
     var fiatRefreshTaskId: UUID?
+    
     var gaslessInfoTask: Task<Void, Never>?
     var gaslessInfoTaskId: UUID?
     var gaslessQuotaRevision: UInt64 = 0
+    
     var streamingClient: WalletToncenterStreamingClient?
     var streamingTask: Task<Void, Never>?
     var streamingRefreshTask: Task<Void, Never>?
@@ -146,11 +157,19 @@ actor WalletContextImpl {
     var streamingPresentationOverlay = WalletStreamingPresentationOverlay()
     var streamingRefreshTracker = WalletStreamingRefreshTracker()
     var expiredPendingStreamingTraceIds = Set<String>()
+    
     var activationGeneration: UInt64 = 0
     var automaticPhraseRecoveryAttemptIdentity: (address: String, publicKey: Data)?
+    
     var balanceLastSuccessfulAt: Int32?
     var fiatLastSuccessfulAt: Int32?
+    
     var storedStateMutationRevision: UInt64 = 0
+    
+    var collectiblesSynchronizationTask: Task<Void, Never>?
+    var collectiblesSynchronizationTaskId: UUID?
+    var collectiblesSynchronizationGate = WalletSynchronizationRequestGate()
+    var collectiblesPaginationRequest: WalletSignalRequestContext<WalletNfts>?
 
     var tonConnectSessions: [Int64: WalletTonConnectSession] = [:]
     var tonConnectSessionRevisions: [Int64: UInt64] = [:]
@@ -168,7 +187,6 @@ actor WalletContextImpl {
     var tonConnectRefreshTask: Task<Void, Never>?
     var tonConnectWalletIdentity: String?
     var tonConnectWasAvailable = false
-
 
     init(
         engine: TelegramEngine,
@@ -210,6 +228,8 @@ actor WalletContextImpl {
         self.activationTask?.cancel()
         self.synchronizationTask?.cancel()
         self.collectiblesSynchronizationTask?.cancel()
+        self.collectiblesPaginationRequest?.cancel()
+        self.collectiblesPaginationRequest = nil
         self.observationTask?.cancel()
         self.serverStateRetryTask?.cancel()
         self.pollingTask?.cancel()
@@ -245,7 +265,7 @@ actor WalletContextImpl {
             self.preparedAuthorizations.removeAll()
             if let recordId = self.preparedRecoveryPhraseImportRecordId {
                 self.preparedRecoveryPhraseImportRecordId = nil
-                Task { await self.discardReplacementForCleanup(recordId: recordId) }
+                Task { await self.discardReplacementForCleanup(recordId: recordId, discardPersisted: false) }
             }
         }
         if becameForeground {
@@ -384,8 +404,7 @@ actor WalletContextImpl {
             ),
             collectibles: CollectiblesState(
                 items: Array(storedState.collectibles.prefix(walletTransactionFetchLimit)),
-                offset: storedState.collectibles.count,
-                canLoadMore: false,
+                nextOffset: nil,
                 isLoadingMore: false,
                 error: nil
             ),
@@ -491,16 +510,22 @@ actor WalletContextImpl {
             let isMutatingReplacementCandidate = self.preparedRecoveryPhraseImportRecordId != nil
                 || self.currentState.activeOperation?.defersServerWalletState == true
             if !isMutatingReplacementCandidate {
-                if case let .ready(_, _, _, address, publicKey, _) = value {
-                    promotedReplacement = try await self.runtime.reconcileReplacementCandidate(
-                        serverAddress: address,
-                        serverPublicKey: publicKey,
-                        discardMismatch: true,
-                        archivePreviousWallet: !self.isChangingWalletLocally,
-                        serverStateRevision: revision
-                    )
-                } else if case .empty = value {
-                    try await self.runtime.discardReplacementAfterAuthoritativeEmptyState()
+                do {
+                    if case let .ready(_, _, _, address, publicKey, _) = value {
+                        promotedReplacement = try await self.runtime.reconcileReplacementCandidate(
+                            serverAddress: address,
+                            serverPublicKey: publicKey,
+                            discardMismatch: true,
+                            archivePreviousWallet: !self.isChangingWalletLocally,
+                            serverStateRevision: revision
+                        )
+                    } else if case .empty(creating: false) = value {
+                        try await self.runtime.discardReplacementAfterAuthoritativeEmptyState(serverStateRevision: revision)
+                    }
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch {
+                    self.logger.error("wallet_replacement_reconciliation_failed", error)
                 }
             }
             if promotedReplacement {
@@ -873,7 +898,6 @@ actor WalletContextImpl {
         self.observationTask?.cancel()
         self.cancelSynchronization()
         self.runtimeObservationId = UUID()
-        self.collectiblesRevision = WalletEngineCollectiblesRevision()
         self.balanceTracker = WalletEngineBalanceTracker()
         if self.currentState.balance.currentValue == nil {
             self.balanceLastSuccessfulAt = nil

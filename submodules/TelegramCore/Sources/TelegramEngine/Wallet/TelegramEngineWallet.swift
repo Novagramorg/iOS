@@ -16,6 +16,10 @@ public extension TelegramEngine {
             return _internal_getWalletState(account: self.account)
         }
 
+        public func getNfts(offset: String, limit: Int32 = 20) -> Signal<WalletNfts, WalletGetNftsError> {
+            return _internal_getWalletNfts(account: self.account, offset: offset, limit: limit)
+        }
+
         public func getExistingWaltBalance() -> Signal<WalletExistingBalance?, NoError> {
             return _internal_getExistingWaltBalance(account: self.account)
         }

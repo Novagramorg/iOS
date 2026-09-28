@@ -12,7 +12,7 @@ private enum WalletEngineRelayError: Error {
     case responseTooLarge
 }
 
-let walletEngineMaximumStatuslessResponseBytes = 4 * 1024 * 1024
+private let maximumStatuslessResponseBytes = 4 * 1024 * 1024
 
 @available(macOS 10.15, *)
 func walletEngineTransportKind(_ code: URLError.Code) -> StatuslessHostErrorKind {
@@ -46,6 +46,10 @@ final class WalletSignalRequestContext<Value>: @unchecked Sendable {
         try Task.checkCancellation()
         self.start(signal)
         return try await self.value()
+    }
+
+    func cancel() {
+        self.finish(.failure(CancellationError()))
     }
 
     func start<SignalError: Error>(_ signal: Signal<Value, SignalError>) {
@@ -232,7 +236,30 @@ actor WalletEngineStatuslessHost: WalletStatuslessHost {
         return publicKey
     }
 
-    func walletBalance(address: String) async throws -> Int64 {
+    func walletAccountState(address: String) async throws -> WalletContext.WalletAccountState {
+        let data = try await self.walletAccountInformation(address: address)
+        return try Self.walletAccountState(fromToncenterResponse: data)
+    }
+
+    static func walletAccountState(fromToncenterResponse data: Data) throws -> WalletContext.WalletAccountState {
+        guard data.count <= maximumStatuslessResponseBytes,
+              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              root["ok"] as? Bool == true, root["error"] == nil,
+              let result = root["result"] as? [String: Any],
+              let state = result["state"] as? String else {
+            throw WalletContext.WalletError.network
+        }
+        switch state {
+        case "active":
+            return .active
+        case "uninit", "uninitialized", "nonexist", "nonexistent":
+            return .undeployed
+        default:
+            return .unavailable
+        }
+    }
+
+    private func walletAccountInformation(address: String) async throws -> Data {
         try Task.checkCancellation()
         guard !address.isEmpty else { throw WalletEngineRelayError.invalidRequest }
         var components = URLComponents()
@@ -256,9 +283,14 @@ actor WalletEngineStatuslessHost: WalletStatuslessHost {
             return value
         }
         let data = Data(response.utf8)
-        guard data.count <= walletEngineMaximumStatuslessResponseBytes else {
+        guard data.count <= maximumStatuslessResponseBytes else {
             throw WalletEngineRelayError.responseTooLarge
         }
+        return data
+    }
+
+    func walletBalance(address: String) async throws -> Int64 {
+        let data = try await self.walletAccountInformation(address: address)
         guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               root["ok"] as? Bool == true,
               let result = root["result"] as? [String: Any] else {
@@ -326,7 +358,7 @@ actor WalletEngineStatuslessHost: WalletStatuslessHost {
                         engine.wallet.performGetRequest(endpoint: endpoint, query: query)
                     )
                 case .post:
-                    guard request.body.count <= walletEngineMaximumStatuslessResponseBytes else {
+                    guard request.body.count <= maximumStatuslessResponseBytes else {
                         throw WalletEngineRelayError.responseTooLarge
                     }
                     let payload: String?
@@ -354,7 +386,7 @@ actor WalletEngineStatuslessHost: WalletStatuslessHost {
         }
 
         let data = Data(response.utf8)
-        guard data.count <= walletEngineMaximumStatuslessResponseBytes else {
+        guard data.count <= maximumStatuslessResponseBytes else {
             throw WalletEngineRelayError.responseTooLarge
         }
         return data
@@ -370,7 +402,7 @@ actor WalletEngineStatuslessHost: WalletStatuslessHost {
 
 @available(macOS 10.15, *)
 func walletEnginePublicKey(fromToncenterResponse data: Data) -> Data? {
-    guard data.count <= walletEngineMaximumStatuslessResponseBytes,
+    guard data.count <= maximumStatuslessResponseBytes,
           let object = try? JSONSerialization.jsonObject(with: data),
           let root = object as? [String: Any],
           root["error"] == nil,

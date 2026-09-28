@@ -1380,6 +1380,41 @@ private final class WalletImportScreenComponent: Component {
             guard let component = self.component, let controller = self.environment?.controller() else {
                 return
             }
+            if error == .recoveryPhraseOutdated {
+                if let prepared = self.activePreparedRecoveryPhraseImport {
+                    self.discardPreparedRecoveryPhraseImport(prepared)
+                }
+                self.endWalletFlow()
+                HapticFeedback().error()
+                self.endEditing(true)
+                //TODO:localize
+                let alert = AlertScreen(
+                    context: component.context,
+                    configuration: AlertScreen.Configuration(allowInputInset: true),
+                    title: "Secret Phrase Has Changed",
+                    text: "The key for this wallet has changed. Enter the current 24-word secret phrase.",
+                    actions: [
+                        AlertScreen.Action(title: "Proceed", type: .default)
+                    ]
+                )
+                alert.dismissed = { [weak self] _ in
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self,
+                              let controller = self.environment?.controller(),
+                              controller.navigationController?.topViewController === controller,
+                              self.window != nil else {
+                            return
+                        }
+                        self.scrollToBottomAfterPaste = false
+                        self.setupWordInputFields(displayNumbers: Array(1 ... 24), preserving: [])
+                        self.componentState?.updated(transition: .immediate)
+                        let _ = self.wordFields.first?.textField.becomeFirstResponder()
+                        self.scrollToTop()
+                    }
+                }
+                controller.present(alert, in: .window(.root))
+                return
+            }
             let message = walletAuthorizationErrorMessage(error)
             controller.present(textAlertController(
                 context: component.context,

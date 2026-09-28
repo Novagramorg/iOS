@@ -36,6 +36,9 @@ extension WalletContextImpl {
             }
         }
         if self.collectiblesSynchronizationGate.beginOrQueue(scope.intersection(.nfts)) != nil {
+            self.collectiblesPaginationRequest?.cancel()
+            self.collectiblesPaginationRequest = nil
+            self.replaceCollectibles(self.currentState.collectibles.startingRefresh())
             let taskId = UUID()
             self.collectiblesSynchronizationTaskId = taskId
             let observationId = self.runtimeObservationId
@@ -191,40 +194,29 @@ extension WalletContextImpl {
 
     private func performCollectiblesSynchronization(taskId: UUID, observationId: UUID) async {
         guard self.isCurrentCollectiblesSynchronization(taskId, observationId: observationId) else { return }
-        let previousRevision = self.collectiblesRevision.latest
-        var resultRevision: UInt64?
+        defer {
+            if self.collectiblesSynchronizationTaskId == taskId {
+                self.collectiblesSynchronizationTask = nil
+                self.collectiblesSynchronizationTaskId = nil
+                let queued = self.collectiblesSynchronizationGate.complete()
+                self.completedSynchronizationResource(.nfts, queued: queued)
+                if !queued.isEmpty {
+                    self.requestSynchronization(scope: queued)
+                }
+            }
+        }
         do {
-            let update = try await self.runtime.refreshNfts()
-            resultRevision = update.snapshot.revision
-            let values = try await walletEngineCollectibles(update, pagination: false) { items in
-                try await walletCollectibles(from: items, logger: self.logger)
-            }
-            guard self.isCurrentCollectiblesSynchronization(taskId,
-            observationId: observationId) else { return }
-            if let values, self.collectiblesRevision.accept(update.snapshot.revision) {
-                self.replaceCollectibles(walletEngineCollectiblesState(
-                    previous: self.currentState.collectibles, items: values,
-                    hasMore: update.snapshot.nfts.hasMore, pagination: false
-                ))
-            }
+            let page = try await WalletSignalRequestContext<WalletNfts>().run(
+                self.engine.wallet.getNfts(offset: "", limit: walletCollectiblesFetchLimit)
+            )
+            guard self.isCurrentCollectiblesSynchronization(taskId, observationId: observationId) else { return }
+            self.replaceCollectibles(try self.currentState.collectibles.applying(page, offset: "", refresh: true))
         } catch {
-            guard self.isCurrentCollectiblesSynchronization(taskId,
-            observationId: observationId) else { return }
+            guard self.isCurrentCollectiblesSynchronization(taskId, observationId: observationId) else { return }
             if !(error is CancellationError) {
                 self.logger.error("wallet_nfts_refresh_failed", error)
             }
-            if resultRevision.map({ self.collectiblesRevision.isCurrent($0) }) ?? (self.collectiblesRevision.latest == previousRevision) {
-                self.replaceCollectibles(walletEngineCollectiblesState(
-                    previous: self.currentState.collectibles, failure: error, pagination: false
-                ))
-            }
-        }
-        self.collectiblesSynchronizationTask = nil
-        self.collectiblesSynchronizationTaskId = nil
-        let queued = self.collectiblesSynchronizationGate.complete()
-        self.completedSynchronizationResource(.nfts, queued: queued)
-        if !queued.isEmpty {
-            self.requestSynchronization(scope: queued)
+            self.replaceCollectibles(self.currentState.collectibles.failing(error))
         }
     }
 
@@ -252,6 +244,11 @@ extension WalletContextImpl {
         self.collectiblesSynchronizationTask = nil
         self.collectiblesSynchronizationTaskId = nil
         self.collectiblesSynchronizationGate.cancel()
+        self.collectiblesPaginationRequest?.cancel()
+        self.collectiblesPaginationRequest = nil
+        if self.currentState.collectibles.isRefreshing || self.currentState.collectibles.isLoadingMore {
+            self.replaceCollectibles(self.currentState.collectibles.cancellingRequests())
+        }
         if let taskId {
             let balance = self.balanceTracker.failRefresh(
                 id: taskId, error: CancellationError(), current: self.currentState.balance,

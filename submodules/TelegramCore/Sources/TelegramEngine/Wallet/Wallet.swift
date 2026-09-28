@@ -250,7 +250,6 @@ public enum WalletGetTransactionsError: Error {
 
 public enum WalletReplacement: Equatable, Sendable {
     case new
-    /// The current signing key and, after rotation, the original key that determines the wallet address.
     case imported(publicKey: Data, anchorPublicKey: Data? = nil, proof: WalletOwnershipProof)
 }
 
