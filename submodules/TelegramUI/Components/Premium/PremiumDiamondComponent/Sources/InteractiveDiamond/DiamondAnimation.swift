@@ -105,12 +105,19 @@ struct DiamondMotion {
         return swayScale * (0.17 * sin(frequencies.x * time + phase.x) + 0.10 * sin(frequencies.y * time + phase.y))
     }
 
-    mutating func fling(direction: Float) {
+    mutating func fling(direction: Float, impulse: Float? = nil) {
         guard !isDragging else { return }
         let currentVelocity = yawSpringVelocity
         targetYaw = yaw
         yawSpringVelocity = 0
-        startRotation(direction: direction, velocity: currentVelocity, isFast: true)
+        if let impulse {
+            tapRotation = nil
+            yawVelocity = 0
+            spinVelocity = 0
+            spin(direction * impulse, decay: 0.7)
+        } else {
+            startRotation(direction: direction, velocity: currentVelocity, isFast: true)
+        }
     }
 
     private mutating func startRotation(direction: Float, velocity: Float, isFast: Bool) {
@@ -658,8 +665,10 @@ enum DiamondSparkleAnimation {
     }
 
     struct RotationPulse {
-        private static let rotationInterval: Float = .pi / 2
-        private static let probability: Float = 0.4
+        private static let rotationInterval: Float = .pi
+        private static let probability: Float = 0.6
+        private static let highSpeedThreshold: Float = 2 * .pi
+        private static let highSpeedProbability: Float = 0.05
         private static let rise: Float = 0.08
         private static let duration: Float = rise + 33.0 / 60.0
         private var rotation: Float = 0
@@ -680,9 +689,11 @@ enum DiamondSparkleAnimation {
         mutating func advance(rotation: Float, dt: Float) {
             self.age = min(Self.duration, self.age + dt)
             self.rotation += abs(rotation)
+            let speed = dt > 0 ? abs(rotation) / dt : 0
+            let probability = speed >= Self.highSpeedThreshold ? Self.highSpeedProbability : Self.probability
             while self.rotation >= Self.rotationInterval {
                 self.rotation -= Self.rotationInterval
-                if Float.random(in: 0 ..< 1) < Self.probability, self.age >= Self.rise {
+                if Float.random(in: 0 ..< 1) < probability, self.age >= Self.rise {
                     self.from = self.state
                     self.age = 0
                 }

@@ -123,7 +123,7 @@ fragment float4 walletCardBackgroundFragment(
             radius * waveFrequency
                 + walletCardHash(ringIndex * 0.37) * 6.2831853072
         ) * waveFilter;
-    constexpr float finishVisibility = 1.0;
+    constexpr float finishVisibility = 0.5;
     float radialFinish = (fineFinish - 0.5)
         * finishDetail
         * finishVisibility

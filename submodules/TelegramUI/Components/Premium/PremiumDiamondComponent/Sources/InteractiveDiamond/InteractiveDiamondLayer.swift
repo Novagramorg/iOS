@@ -406,7 +406,7 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
         }
     }
 
-    func updateDrag(state: UIGestureRecognizer.State, translation: CGPoint = .zero, velocity: CGPoint = .zero, scale: CGFloat = 100.0) {
+    func updateDrag(state: UIGestureRecognizer.State, translation: CGPoint = .zero, velocity: CGPoint = .zero, scale: CGFloat = 100.0, releaseImpulse: Float? = nil) {
         if state != .cancelled && state != .failed {
             guard self.isInHierarchy && self.isApplicationActive && self.isRenderingEnabled else { return }
         }
@@ -425,7 +425,7 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
                 self.motion.step(dt: 0, speed: self.diamondStyle.rotationSpeed, reduceMotion: self.reduceMotion, mode: self.diamondStyle.animationMode, time: self.elapsed, appearance: self.diamondStyle.appearance)
                 self.motion.end(at: now)
                 if abs(velocity.x) > 600.0 && !self.reduceMotion && !UIAccessibility.isReduceMotionEnabled {
-                    self.motion.fling(direction: velocity.x < 0 ? -1 : 1)
+                    self.motion.fling(direction: velocity.x < 0 ? -1 : 1, impulse: releaseImpulse)
                     self.addStarBurst()
                     self.hapticFeedback.impact(.medium)
                 }
