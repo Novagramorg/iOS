@@ -193,14 +193,10 @@ func mergeTransactions(
     let identityIndex = WalletTransactionIdentityIndex(transactions)
     let values = identityIndex.groups.map { indices -> WalletContext.Transaction in
         let current = transactions[indices[0]]
-        // A fresh API response owns the transaction data, including zero fees and
-        // absent comments. Within one batch (or an old cache), keep the first row.
         let preferredIndex = indices.first(where: { $0 >= existing.count }) ?? indices[0]
         let preferred = transactions[preferredIndex]
         let preservePresentationId = current.presentationId != current.id
             || walletIncomingTransactionIdentity(current) != nil
-        // Only carry a missing hash across the same API id, never across an LT
-        // match whose old hash may be precisely the stale data being replaced.
         let fallbackHash = indices.lazy.map { transactions[$0] }.first {
             !$0.id.isEmpty && $0.id == preferred.id && $0.transactionHash != nil
         }?.transactionHash
@@ -257,15 +253,12 @@ func transactionsWithStreamingOverlay(
     peerByAddress: [String: EnginePeer],
     log: ((String) -> Void)? = nil
 ) -> [WalletContext.Transaction] {
-    let resolved = streaming.map { transaction in
-        transactionWithResolvedStreamingPeer(
+    return mergeTransactions(existing: [], new: authoritative + streaming, source: "presentation", log: log).map { transaction in
+        transactionWithResolvedPeer(
             transaction,
             peerByAddress: peerByAddress
         )
     }
-    // Put authoritative rows first so the overlay cannot change their data or
-    // presentation identity, even when it arrives after the history response.
-    return mergeTransactions(existing: [], new: authoritative + resolved, source: "presentation", log: log)
 }
 
 @available(macOS 10.15, *)
@@ -281,7 +274,7 @@ func walletAddressMappingKey(_ address: String) -> String? {
 }
 
 @available(macOS 10.15, *)
-private func transactionWithResolvedStreamingPeer(
+private func transactionWithResolvedPeer(
     _ transaction: WalletContext.Transaction,
     peerByAddress: [String: EnginePeer]
 ) -> WalletContext.Transaction {
@@ -350,8 +343,6 @@ private struct WalletIncomingTransactionIdentity: Hashable {
 
 @available(macOS 10.15, *)
 private func walletIncomingTransactionIdentity(_ transaction: WalletContext.Transaction) -> WalletIncomingTransactionIdentity? {
-    // These identities are scoped to one wallet. An incoming TON transfer has
-    // one inbound message; outgoing transactions may contain multiple transfers.
     guard transaction.status == .completed, transaction.kind == .transfer,
           transaction.direction == .incoming, transaction.currency == .ton,
           transaction.collectible == nil, transaction.amount > 0,
@@ -398,8 +389,6 @@ struct WalletTransactionIdentityIndex {
             }
             return index
         }
-        // Join all aliases before choosing winners: a later row can bridge an
-        // id-only cached row and another row already carrying its hash.
         for (index, transaction) in transactions.enumerated() {
             for identity in walletTransactionIdentities(transaction) {
                 if let previous = self.indicesByIdentity[identity] {
@@ -430,7 +419,6 @@ struct WalletTransactionIdentityIndex {
 
 @available(macOS 10.15, *)
 public extension WalletContext.Transaction {
-    /// Compare records from the same wallet, including corrected incoming hashes.
     func matchesHistoryTransaction(_ other: WalletContext.Transaction) -> Bool {
         WalletTransactionIdentityIndex([self]).contains(other)
     }
@@ -581,14 +569,4 @@ func loadWalletTransactionHistoryPages(
         try Task.checkCancellation()
         if try !apply(request, page) { return }
     }
-}
-
-@available(macOS 10.15, *)
-struct WalletEngineTransferReceipt: Codable, Equatable, Sendable {
-    let recordId: String
-    let walletAddress: String
-    let pendingTransfer: WalletContext.PendingTransfer
-    let receivedAt: Int32
-    let transfer: WalletSentTransfer
-    var transaction: WalletStoredTransaction? = nil
 }
