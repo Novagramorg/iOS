@@ -341,25 +341,6 @@ extension ChatControllerImpl {
                         break
                     }
                     
-                    for bot in attachMenuBots.reversed() {
-                        var peerType = peerType
-                        if bot.peer.id == peer.id {
-                            peerType.insert(.sameBot)
-                            peerType.remove(.bot)
-                        }
-                        let button: AttachmentButtonType = .app(bot)
-                        if !bot.peerTypes.intersection(peerType).isEmpty {
-                            buttons.insert(button, at: 1)
-                            
-                            if case let .bot(botId, _, _) = subject {
-                                if initialButton == nil && bot.peer.id == botId {
-                                    initialButton = button
-                                }
-                            }
-                        }
-                        allButtons.insert(button, at: 1)
-                    }
-                    
                     if !isPaidMessages {
                         if context.isPremium, shortcutMessageList.items.count > 0, let user = peer as? TelegramUser, user.botInfo == nil {
                             if let index = buttons.firstIndex(where: { $0 == .location }) {
@@ -373,6 +354,25 @@ extension ChatControllerImpl {
                                 allButtons.append(.quickReply)
                             }
                         }
+                    }
+
+                    for bot in attachMenuBots {
+                        var peerType = peerType
+                        if bot.peer.id == peer.id {
+                            peerType.insert(.sameBot)
+                            peerType.remove(.bot)
+                        }
+                        let button: AttachmentButtonType = .app(bot)
+                        if !bot.peerTypes.intersection(peerType).isEmpty {
+                            buttons.append(button)
+                            
+                            if case let .bot(botId, _, _) = subject {
+                                if initialButton == nil && bot.peer.id == botId {
+                                    initialButton = button
+                                }
+                            }
+                        }
+                        allButtons.append(button)
                     }
                     
                     return (buttons, allButtons, initialButton)
@@ -416,7 +416,13 @@ extension ChatControllerImpl {
                     if !premiumGiftOptions.isEmpty {
                         buttons.insert(.gift, at: 1)
                     }
-                    buttons.append(.richText)
+                    let firstBotIndex = buttons.firstIndex(where: { button in
+                        if case .app = button {
+                            return true
+                        }
+                        return false
+                    }) ?? buttons.endIndex
+                    buttons.insert(.richText, at: firstBotIndex)
                 }
                 
                 guard let initialButton = initialButton else {

@@ -116,11 +116,13 @@ public struct OpenMessageParams {
     public var mode: ChatControllerInteractionOpenMessageMode
     public var mediaSubject: GalleryMediaSubject?
     public var progress: Promise<Bool>?
+    public var decryptWalletComment: Bool
     
-    public init(mode: ChatControllerInteractionOpenMessageMode, mediaSubject: GalleryMediaSubject? = nil, progress: Promise<Bool>? = nil) {
+    public init(mode: ChatControllerInteractionOpenMessageMode, mediaSubject: GalleryMediaSubject? = nil, progress: Promise<Bool>? = nil, decryptWalletComment: Bool = false) {
         self.mode = mode
         self.mediaSubject = mediaSubject
         self.progress = progress
+        self.decryptWalletComment = decryptWalletComment
     }
 }
 

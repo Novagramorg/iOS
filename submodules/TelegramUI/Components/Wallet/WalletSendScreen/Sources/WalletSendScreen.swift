@@ -1260,7 +1260,7 @@ private final class WalletSendScreenComponent: Component {
             ]
 
             let alertController = AlertScreen(
-                configuration: AlertScreen.Configuration(allowInputInset: true),
+                configuration: AlertScreen.Configuration(dismissOnOutsideTap: false, allowInputInset: true),
                 content: content,
                 actions: [
                     AlertScreen.Action(title: cancel),

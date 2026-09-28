@@ -1086,6 +1086,7 @@ private final class WalletTransactionContentComponent: Component {
             self.isClosing = true
             self.gaslessInfoDisposable.set(nil)
             (controller as? WalletTransactionScreen)?.cancelFirstGramsSuggestion()
+            (controller as? WalletTransactionScreen)?.cancelCommentDecryptionOnOpen()
             self.invalidateCommentSession()
             self.resetCommentDecryption()
             switch self.previewOperation {
@@ -1236,6 +1237,7 @@ private final class WalletTransactionContentComponent: Component {
                   let controller = self.environment?.controller() else {
                 return
             }
+            (controller as? WalletTransactionScreen)?.cancelCommentDecryptionOnOpen()
             guard case let .wallet(info) = walletContext.stateValue.phase else {
                 self.presentCommentDecryptionError(.unavailable)
                 return
@@ -2179,6 +2181,13 @@ private final class WalletTransactionContentComponent: Component {
             }
             (environment.controller() as? WalletTransactionScreen)?.setCommentVisibilityAction(id: incomingModeId, action: { [weak self] visible, leavingTransaction in
                 self?.commentVisibilityUpdated(visible, leavingTransaction: leavingTransaction)
+            })
+            (environment.controller() as? WalletTransactionScreen)?.setCommentDecryptionAction(id: incomingModeId, action: { [weak self] in
+                guard let self, self.modeId == incomingModeId, self.commentIsVisible, !self.isClosing,
+                      self.transaction?.commentEncrypted == true, self.transaction?.comment?.isEmpty == false else {
+                    return
+                }
+                self.encryptedCommentPressed()
             })
 
             let theme = environment.theme
@@ -3660,6 +3669,9 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
     private var currentCloseId: String
     private var closeActions: [String: (Bool) -> Void] = [:]
     private var commentVisibilityActions: [String: (Bool, Bool) -> Void] = [:]
+    private var commentDecryptionActions: [String: () -> Void] = [:]
+    private var hasPendingCommentDecryption: Bool
+    private var isVisibleForCommentDecryption = false
     private var requestedOffset: Int?
     private var failedOffset: Int?
 
@@ -3668,7 +3680,8 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
         updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? = nil,
         walletContext: WalletContext? = nil,
         transaction: WalletContext.Transaction,
-        fromChat: Bool
+        fromChat: Bool,
+        decryptCommentOnOpen: Bool = false
     ) {
         let initialState = walletContext?.stateValue.transactions
         var initialTransactions = initialState?.items.filter(\.isVisibleInWalletHistory) ?? []
@@ -3689,7 +3702,8 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
         self.navigationWalletContext = walletContext
         self.fromChat = fromChat
         self.openExplorer = openExplorer
-        self.checkFirstGramsOnAppear = transaction.direction == .incoming && transaction.currency == .ton && transaction.collectible == nil
+        self.checkFirstGramsOnAppear = !decryptCommentOnOpen && transaction.direction == .incoming && transaction.currency == .ton && transaction.collectible == nil
+        self.hasPendingCommentDecryption = decryptCommentOnOpen && initialTransaction.commentEncrypted && initialTransaction.comment?.isEmpty == false
         self.transactionsState = initialState
         self.transactions = initialTransactions
         self.currentTransactionPresentationId = initialTransaction.presentationId
@@ -3788,6 +3802,9 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
     public override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
 
+        self.isVisibleForCommentDecryption = true
+        self.activatePendingCommentDecryption()
+
         guard self.checkFirstGramsOnAppear else {
             return
         }
@@ -3814,6 +3831,8 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
     }
 
     public override func viewWillDisappear(_ animated: Bool) {
+        self.isVisibleForCommentDecryption = false
+        self.cancelCommentDecryptionOnOpen()
         self.cancelFirstGramsSuggestion()
         super.viewWillDisappear(animated)
         for action in self.commentVisibilityActions.values {
@@ -3846,7 +3865,34 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
         self.commentVisibilityActions[id] = action
     }
 
+    fileprivate func setCommentDecryptionAction(id: String, action: @escaping () -> Void) {
+        guard self.hasPendingCommentDecryption else {
+            return
+        }
+        self.commentDecryptionActions[id] = action
+        if self.isVisibleForCommentDecryption, id == self.currentCloseId {
+            Queue.mainQueue().justDispatch { [weak self] in
+                self?.activatePendingCommentDecryption()
+            }
+        }
+    }
+
+    private func activatePendingCommentDecryption() {
+        guard self.hasPendingCommentDecryption, self.isVisibleForCommentDecryption,
+              let action = self.commentDecryptionActions[self.currentCloseId] else {
+            return
+        }
+        self.cancelCommentDecryptionOnOpen()
+        action()
+    }
+
+    fileprivate func cancelCommentDecryptionOnOpen() {
+        self.hasPendingCommentDecryption = false
+        self.commentDecryptionActions.removeAll()
+    }
+
     fileprivate func requestClose(animated: Bool) {
+        self.cancelCommentDecryptionOnOpen()
         self.dismissAllTooltips()
         if let closeAction = self.closeActions[self.currentCloseId] {
             closeAction(animated)
@@ -3948,6 +3994,7 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
         }
         let transaction = self.transactions[index]
         if self.currentTransactionPresentationId != transaction.presentationId {
+            self.cancelCommentDecryptionOnOpen()
             self.commentVisibilityActions[self.currentCloseId]?(false, true)
         }
         self.currentTransactionPresentationId = transaction.presentationId
@@ -3956,6 +4003,7 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
     }
 
     private func draggingBegan(_ index: Int) {
+        self.cancelCommentDecryptionOnOpen()
         self.dismissAllTooltips()
         if self.failedOffset == self.transactionsState?.offset {
             self.requestedOffset = nil

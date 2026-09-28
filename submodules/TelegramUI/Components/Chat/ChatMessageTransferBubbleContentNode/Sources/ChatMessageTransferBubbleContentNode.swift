@@ -15,6 +15,7 @@ import TelegramStringFormatting
 import WallpaperBackgroundNode
 import ChatMessageBubbleContentNode
 import ChatMessageItemCommon
+import ChatControllerInteraction
 import TextSelectionNode
 import InvisibleInkDustNode
 import ShimmerEffect
@@ -210,6 +211,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
     private let amountNode: TextNode
     private let nameNode: TextNode
     private let addressNode: TextNode
+    private let addressHighlightNode: TextNode
     private let addressShimmerMaskNode: TextNode
     private var shimmerView: TransferCardShimmerView?
     private let sendingClockNode: ASDisplayNode
@@ -304,6 +306,11 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
         self.addressNode.isUserInteractionEnabled = false
         self.addressNode.displaysAsynchronously = false
 
+        self.addressHighlightNode = TextNode()
+        self.addressHighlightNode.isUserInteractionEnabled = false
+        self.addressHighlightNode.displaysAsynchronously = false
+        self.addressHighlightNode.alpha = 0.1
+
         self.addressShimmerMaskNode = TextNode()
         self.addressShimmerMaskNode.isUserInteractionEnabled = false
         self.addressShimmerMaskNode.displaysAsynchronously = false
@@ -350,6 +357,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
         self.cardNode.addSubnode(self.cardBackgroundNode)
         self.cardNode.addSubnode(self.amountNode)
         self.cardNode.addSubnode(self.nameNode)
+        self.cardNode.addSubnode(self.addressHighlightNode)
         self.cardNode.addSubnode(self.addressNode)
         self.cardNode.addSubnode(self.sendingClockNode)
         self.sendingClockNode.addSubnode(self.clockFrameNode)
@@ -737,6 +745,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
         let makeAmountLayout = TextNode.asyncLayout(self.amountNode)
         let makeNameLayout = TextNode.asyncLayout(self.nameNode)
         let makeAddressLayout = TextNode.asyncLayout(self.addressNode)
+        let makeAddressHighlightLayout = TextNode.asyncLayout(self.addressHighlightNode)
         let makeAddressShimmerMaskLayout = TextNode.asyncLayout(self.addressShimmerMaskNode)
         let makeCaptionLayout = TextNode.asyncLayout(self.captionNode)
         let makeRibbonTextLayout = TextNode.asyncLayout(self.ribbonTextNode)
@@ -890,29 +899,11 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                     addressGroups.append(String(peerAddress[addressIndex ..< endIndex]))
                     addressIndex = endIndex
                 }
-                let (addressLayout, addressApply) = makeAddressLayout(TextNodeLayoutArguments(
+                let addressLayoutArguments = TextNodeLayoutArguments(
                     attributedString: NSAttributedString(
                         string: addressGroups.joined(separator: " "),
                         font: Font.with(size: 10.0, design: .monospace, weight: .medium),
-                        textColor: UIColor(rgb: 0x005fdb),
-                        paragraphAlignment: .center
-                    ),
-                    backgroundColor: nil,
-                    maximumNumberOfLines: 2,
-                    truncationType: .end,
-                    constrainedSize: CGSize(width: cardSize.width - 24.0, height: CGFloat.greatestFiniteMagnitude),
-                    alignment: .center,
-                    lineSpacing: 0.05,
-                    cutout: nil,
-                    insets: UIEdgeInsets(),
-                    textShadowColor: UIColor(rgb: 0x138cfe),
-                    textShadowBlur: 0.0
-                ))
-                let (_, addressShimmerMaskApply) = makeAddressShimmerMaskLayout(TextNodeLayoutArguments(
-                    attributedString: NSAttributedString(
-                        string: addressGroups.joined(separator: " "),
-                        font: Font.with(size: 10.0, design: .monospace, weight: .medium),
-                        textColor: .white,
+                        textColor: UIColor(rgb: 0x0765b8),
                         paragraphAlignment: .center
                     ),
                     backgroundColor: nil,
@@ -923,7 +914,18 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                     lineSpacing: 0.05,
                     cutout: nil,
                     insets: UIEdgeInsets()
-                ))
+                )
+                let (addressLayout, addressApply) = makeAddressLayout(addressLayoutArguments)
+                let whiteAddressLayoutArguments = addressLayoutArguments.withAttributedString(
+                    NSAttributedString(
+                        string: addressGroups.joined(separator: " "),
+                        font: Font.with(size: 10.0, design: .monospace, weight: .medium),
+                        textColor: .white,
+                        paragraphAlignment: .center
+                    )
+                )
+                let (_, addressHighlightApply) = makeAddressHighlightLayout(whiteAddressLayoutArguments)
+                let (_, addressShimmerMaskApply) = makeAddressShimmerMaskLayout(whiteAddressLayoutArguments)
 
                 let hasCaption = hasEncryptedCaption || !caption.isEmpty
                 let (captionLayout, captionApply) = makeCaptionLayout(TextNodeLayoutArguments(
@@ -1037,6 +1039,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                         let _ = amountApply()
                         let _ = nameApply()
                         let _ = addressApply()
+                        let _ = addressHighlightApply()
                         let _ = addressShimmerMaskApply()
                         let _ = captionApply()
                         let _ = ribbonTextApply()
@@ -1075,7 +1078,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                                 wallpaper: item.presentationData.theme.wallpaper,
                                 bubbleCorners: item.presentationData.chatBubbleCorners
                             )
-                            let clockColor = UIColor(rgb: 0x5ec2ff)
+                            let clockColor = UIColor.white
                             self.clockFrameNode.image = generateTintedImage(image: graphics.clockMediaFrameImage, color: clockColor)
                             self.clockMinNode.image = generateTintedImage(image: graphics.clockMediaMinImage, color: clockColor)
                         }
@@ -1117,7 +1120,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                             }
                         }
                         self.amountNode.frame = CGRect(
-                            origin: CGPoint(x: floorToScreenPixels((cardSize.width - amountLayout.size.width) * 0.5), y: 61.0),
+                            origin: CGPoint(x: floorToScreenPixels((cardSize.width - amountLayout.size.width) * 0.5), y: 62.0),
                             size: amountLayout.size
                         )
                         self.nameNode.frame = CGRect(
@@ -1128,6 +1131,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                             origin: CGPoint(x: floorToScreenPixels((cardSize.width - addressLayout.size.width) * 0.5), y: 114.0),
                             size: addressLayout.size
                         )
+                        self.addressHighlightNode.frame = self.addressNode.frame.offsetBy(dx: 0.0, dy: 1.0)
                         self.addressShimmerMaskNode.frame = CGRect(origin: .zero, size: addressLayout.size)
 
                         let ribbonSize = TransferCardRibbonGeometry.size
@@ -1339,6 +1343,14 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
         }
 
         let mediaPoint = self.mediaContainerNode.view.convert(point, from: self.view)
+        if gesture == .tap, let captionDustNode = self.captionDustNode, captionDustNode.frame.contains(mediaPoint) {
+            return ChatMessageBubbleContentTapAction(content: .custom({ [weak self] in
+                guard let self, let item = self.item else {
+                    return
+                }
+                let _ = item.controllerInteraction.openMessage(item.message, OpenMessageParams(mode: .default, decryptWalletComment: true))
+            }))
+        }
         if self.cardNode.frame.contains(mediaPoint) || self.captionNode.frame.contains(mediaPoint) || self.mediaBackgroundContent?.frame.contains(mediaPoint) == true {
             return ChatMessageBubbleContentTapAction(content: .openMessage)
         }

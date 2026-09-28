@@ -452,7 +452,7 @@ enum WalletSendRolling {
         static let stagger: Double = 0.05
         static let typing: Double = 0.22
         static let melt: Double = 0.12
-        static let placeholderMelt: Double = 0.2
+        static let placeholderMelt: Double = 0.12
         static let steps = 2
 
         private static let sharpness: Double = 2.2
