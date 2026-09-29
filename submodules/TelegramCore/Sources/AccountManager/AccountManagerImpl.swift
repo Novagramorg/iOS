@@ -535,18 +535,27 @@ final class AccountManagerImpl<Types: AccountManagerTypes> {
         let mutableView = MutableAccountRecordsView<Types>(getRecords: {
             return self.currentAtomicState.records.map { $0.1 }
         }, currentId: self.currentAtomicState.currentRecordId, currentAuth: self.currentAtomicState.currentAuthRecord)
-        let pipe = ValuePipe<AccountRecordsView<Types>>()
-        let index = self.recordsViews.add((mutableView, pipe))
         
         let queue = self.queue
-        return (.single(AccountRecordsView<Types>(mutableView))
-        |> then(pipe.signal()))
-        |> `catch` { _ -> Signal<AccountRecordsView<Types>, NoError> in
-        }
-        |> afterDisposed { [weak self] in
-            queue.async {
-                if let strongSelf = self {
-                    strongSelf.recordsViews.remove(index)
+        return Signal { [weak self] subscriber in
+            guard let strongSelf = self else {
+                subscriber.putCompletion()
+                return EmptyDisposable
+            }
+            let pipe = ValuePipe<AccountRecordsView<Types>>()
+            let index = strongSelf.recordsViews.add((mutableView, pipe))
+            
+            subscriber.putNext(AccountRecordsView<Types>(mutableView))
+            let pipeDisposable = pipe.signal().start(next: { next in
+                subscriber.putNext(next)
+            })
+            
+            return ActionDisposable {
+                pipeDisposable.dispose()
+                queue.async {
+                    if let strongSelf = self {
+                        strongSelf.recordsViews.remove(index)
+                    }
                 }
             }
         }
@@ -582,18 +591,27 @@ final class AccountManagerImpl<Types: AccountManagerTypes> {
     
     private func noticeEntryInternal(transaction: AccountManagerModifier<Types>, key: NoticeEntryKey) -> Signal<NoticeEntryView<Types>, NoError> {
         let mutableView = MutableNoticeEntryView<Types>(accountManagerImpl: self, key: key)
-        let pipe = ValuePipe<NoticeEntryView<Types>>()
-        let index = self.noticeEntryViews.add((mutableView, pipe))
         
         let queue = self.queue
-        return (.single(NoticeEntryView(mutableView))
-        |> then(pipe.signal()))
-        |> `catch` { _ -> Signal<NoticeEntryView<Types>, NoError> in
-        }
-        |> afterDisposed { [weak self] in
-            queue.async {
-                if let strongSelf = self {
-                    strongSelf.noticeEntryViews.remove(index)
+        return Signal { [weak self] subscriber in
+            guard let strongSelf = self else {
+                subscriber.putCompletion()
+                return EmptyDisposable
+            }
+            let pipe = ValuePipe<NoticeEntryView<Types>>()
+            let index = strongSelf.noticeEntryViews.add((mutableView, pipe))
+            
+            subscriber.putNext(NoticeEntryView(mutableView))
+            let pipeDisposable = pipe.signal().start(next: { next in
+                subscriber.putNext(next)
+            })
+            
+            return ActionDisposable {
+                pipeDisposable.dispose()
+                queue.async {
+                    if let strongSelf = self {
+                        strongSelf.noticeEntryViews.remove(index)
+                    }
                 }
             }
         }
@@ -601,18 +619,27 @@ final class AccountManagerImpl<Types: AccountManagerTypes> {
     
     private func accessChallengeDataInternal(transaction: AccountManagerModifier<Types>) -> Signal<AccessChallengeDataView, NoError> {
         let mutableView = MutableAccessChallengeDataView(data: transaction.getAccessChallengeData())
-        let pipe = ValuePipe<AccessChallengeDataView>()
-        let index = self.accessChallengeDataViews.add((mutableView, pipe))
         
         let queue = self.queue
-        return (.single(AccessChallengeDataView(mutableView))
-        |> then(pipe.signal()))
-        |> `catch` { _ -> Signal<AccessChallengeDataView, NoError> in
-        }
-        |> afterDisposed { [weak self] in
-            queue.async {
-                if let strongSelf = self {
-                    strongSelf.accessChallengeDataViews.remove(index)
+        return Signal { [weak self] subscriber in
+            guard let strongSelf = self else {
+                subscriber.putCompletion()
+                return EmptyDisposable
+            }
+            let pipe = ValuePipe<AccessChallengeDataView>()
+            let index = strongSelf.accessChallengeDataViews.add((mutableView, pipe))
+            
+            subscriber.putNext(AccessChallengeDataView(mutableView))
+            let pipeDisposable = pipe.signal().start(next: { next in
+                subscriber.putNext(next)
+            })
+            
+            return ActionDisposable {
+                pipeDisposable.dispose()
+                queue.async {
+                    if let strongSelf = self {
+                        strongSelf.accessChallengeDataViews.remove(index)
+                    }
                 }
             }
         }
