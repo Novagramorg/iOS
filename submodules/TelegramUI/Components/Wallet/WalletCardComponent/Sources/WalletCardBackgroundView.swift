@@ -181,12 +181,27 @@ private func walletCardMetalLibrary(device: MTLDevice) -> MTLLibrary? {
     return library
 }
 
+struct WalletCardLens {
+    let center: CGPoint
+    let hull: [CGPoint]
+    let strength: CGFloat
+    let spin: Float
+}
+
 private final class WalletCardMetalLayer: MetalEngineSubjectLayer, MetalEngineSubject {
     private struct VertexUniforms {
         var bottomLeft = SIMD4<Float>(-1.0, -1.0, 0.0, 1.0)
         var bottomRight = SIMD4<Float>(1.0, -1.0, 0.0, 1.0)
         var topLeft = SIMD4<Float>(-1.0, 1.0, 0.0, 1.0)
         var topRight = SIMD4<Float>(1.0, 1.0, 0.0, 1.0)
+    }
+
+    private struct LensUniforms {
+        var center = SIMD2<Float>(0.0, 0.0)
+        var strength: Float = 0.0
+        var spin: Float = 0.0
+        var count: Int32 = 0
+        var bounds = SIMD4<Float>(repeating: 0.0)
     }
 
     private struct FragmentUniforms {
@@ -237,6 +252,7 @@ private final class WalletCardMetalLayer: MetalEngineSubjectLayer, MetalEngineSu
     private var noiseTexture: MTLTexture?
     private var vertexUniforms = VertexUniforms()
     private var fragmentUniforms = FragmentUniforms()
+    private var lens: WalletCardLens?
 
     override init() {
         let textureLoader = MTKTextureLoader(device: MetalEngine.shared.device)
@@ -268,6 +284,7 @@ private final class WalletCardMetalLayer: MetalEngineSubjectLayer, MetalEngineSu
             self.noiseTexture = layer.noiseTexture
             self.vertexUniforms = layer.vertexUniforms
             self.fragmentUniforms = layer.fragmentUniforms
+            self.lens = layer.lens
         }
     }
 
@@ -301,6 +318,12 @@ private final class WalletCardMetalLayer: MetalEngineSubjectLayer, MetalEngineSu
             surfaceTilt: SIMD2<Float>(Float(surfaceTiltX), Float(surfaceTiltY)),
             cardSize: SIMD2<Float>(Float(max(cardSize.width, 1.0)), Float(max(cardSize.height, 1.0)))
         )
+        self.setNeedsUpdate()
+    }
+
+    func updateLens(_ lens: WalletCardLens?) {
+        if self.lens == nil && lens == nil { return }
+        self.lens = lens
         self.setNeedsUpdate()
     }
 
@@ -363,6 +386,31 @@ private final class WalletCardMetalLayer: MetalEngineSubjectLayer, MetalEngineSu
                     length: MemoryLayout<FragmentUniforms>.size,
                     index: 0
                 )
+                // Diamond compute operations precede compositing, so read its current silhouette here.
+                var lensUniforms = LensUniforms()
+                var hull = [SIMD2<Float>(0.0, 0.0)]
+                if let lens = self.lens, lens.hull.count > 2, lens.strength > 0.001 {
+                    let count = min(64, lens.hull.count)
+                    hull = (0 ..< count).map { index in
+                        let point = lens.hull[index * lens.hull.count / count]
+                        return SIMD2<Float>(Float(point.x), Float(point.y))
+                    }
+                    var minPoint = hull[0]
+                    var maxPoint = hull[0]
+                    for point in hull {
+                        minPoint = simd_min(minPoint, point)
+                        maxPoint = simd_max(maxPoint, point)
+                    }
+                    lensUniforms = LensUniforms(
+                        center: SIMD2<Float>(Float(lens.center.x), Float(lens.center.y)),
+                        strength: Float(min(1.0, lens.strength)), spin: lens.spin, count: Int32(hull.count),
+                        bounds: SIMD4(minPoint.x, minPoint.y, maxPoint.x, maxPoint.y)
+                    )
+                }
+                encoder.setFragmentBytes(&lensUniforms, length: MemoryLayout<LensUniforms>.stride, index: 1)
+                hull.withUnsafeBytes { bytes in
+                    encoder.setFragmentBytes(bytes.baseAddress!, length: bytes.count, index: 2)
+                }
                 encoder.setFragmentTexture(starsTexture, index: 0)
                 encoder.setFragmentTexture(noiseTexture, index: 1)
                 encoder.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4)
@@ -436,6 +484,10 @@ final class WalletCardBackgroundView: UIView {
         CATransaction.setDisableActions(true)
         self.fallbackView.layer.transform = transform
         CATransaction.commit()
+    }
+
+    func updateLens(_ lens: WalletCardLens?) {
+        self.metalView.metalLayer.updateLens(lens)
     }
 
     func render(

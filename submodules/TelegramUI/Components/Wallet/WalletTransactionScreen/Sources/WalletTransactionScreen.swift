@@ -90,6 +90,7 @@ private enum WalletTransactionContentMode {
 }
 
 private final class TransactionCommentComponent: Component {
+    let id: String
     let theme: PresentationTheme
     let strings: PresentationStrings
     let text: NSAttributedString
@@ -97,12 +98,14 @@ private final class TransactionCommentComponent: Component {
     let performAction: (NSAttributedString, TextSelectionAction) -> Void
 
     init(
+        id: String,
         theme: PresentationTheme,
         strings: PresentationStrings,
         text: NSAttributedString,
         controller: @escaping () -> ViewController?,
         performAction: @escaping (NSAttributedString, TextSelectionAction) -> Void
     ) {
+        self.id = id
         self.theme = theme
         self.strings = strings
         self.text = text
@@ -111,6 +114,9 @@ private final class TransactionCommentComponent: Component {
     }
 
     static func ==(lhs: TransactionCommentComponent, rhs: TransactionCommentComponent) -> Bool {
+        if lhs.id != rhs.id {
+            return false
+        }
         if lhs.theme !== rhs.theme {
             return false
         }
@@ -151,6 +157,9 @@ private final class TransactionCommentComponent: Component {
         }
 
         override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+            guard !self.isHidden, self.alpha > 0.0, self.isUserInteractionEnabled, self.point(inside: point, with: event) else {
+                return nil
+            }
             if let textSelectionNode {
                 let localPoint = self.convert(point, to: textSelectionNode.view)
                 if let result = textSelectionNode.view.hitTest(localPoint, with: event) {
@@ -168,6 +177,11 @@ private final class TransactionCommentComponent: Component {
         }
 
         func cancelSelection() {
+            // Cancel the pending long press as well as any visible selection/menu.
+            if let recognizer = self.textSelectionNode?.recognizer, recognizer.isEnabled {
+                recognizer.isEnabled = false
+                recognizer.isEnabled = true
+            }
             self.textSelectionNode?.cancelSelection()
         }
 
@@ -219,7 +233,6 @@ private final class TransactionCommentComponent: Component {
                 )
                 textSelectionNode.enableQuote = false
                 textSelectionNode.enableSpeak = isSpeakSelectionEnabled()
-                textSelectionNode.enableAutomaticScrolling = false
                 textSelectionNode.cancelSelectionOnOutsideTap = true
 
                 self.textSelectionNode = textSelectionNode
@@ -227,6 +240,7 @@ private final class TransactionCommentComponent: Component {
                 self.addSubview(textSelectionNode.view)
             }
 
+            textSelectionNode.enableAutomaticScrolling = true
             textSelectionNode.enableCopy = true
             textSelectionNode.enableShare = true
         }
@@ -237,7 +251,9 @@ private final class TransactionCommentComponent: Component {
             transition: ComponentTransition
         ) -> CGSize {
             if let previousComponent = self.component,
-               previousComponent.text != component.text || previousComponent.theme !== component.theme {
+               previousComponent.id != component.id
+                || previousComponent.text != component.text
+                || previousComponent.theme !== component.theme {
                 self.removeTextSelectionNode()
             }
             self.component = component
@@ -250,7 +266,7 @@ private final class TransactionCommentComponent: Component {
                     insets: UIEdgeInsets(top: 2.0, left: 0.0, bottom: 2.0, right: 0.0)
                 )),
                 environment: {},
-                containerSize: availableSize
+                containerSize: CGSize(width: availableSize.width, height: .greatestFiniteMagnitude)
             )
 
             if let textView = self.text.view as? MultilineTextComponent.View {
@@ -286,6 +302,160 @@ private final class TransactionCommentComponent: Component {
         transition: ComponentTransition
     ) -> CGSize {
         return view.update(component: self, availableSize: availableSize, transition: transition)
+    }
+}
+
+private final class TransactionCommentContainerView: UIView, UIScrollViewDelegate {
+    private final class ScrollView: UIScrollView {
+        override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+            if gestureRecognizer === self.panGestureRecognizer {
+                let velocity = self.panGestureRecognizer.velocity(in: self)
+                if abs(velocity.x) > abs(velocity.y) {
+                    return false
+                }
+            }
+            return super.gestureRecognizerShouldBegin(gestureRecognizer)
+        }
+    }
+
+    private let scrollView = ScrollView()
+    private let fadeMask = CAGradientLayer()
+    private let selectionInset: CGFloat = 12.0
+    private var contentId: String?
+    private var text: String?
+    private var isUpdating = false
+
+    weak var textSelectionView: TransactionCommentComponent.View?
+
+    var contentView: UIView {
+        return self.scrollView
+    }
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+
+        // The stationary mask clips both the bubble background and its text.
+        self.scrollView.clipsToBounds = false
+        self.scrollView.contentInsetAdjustmentBehavior = .never
+        self.scrollView.showsVerticalScrollIndicator = false
+        self.scrollView.showsHorizontalScrollIndicator = false
+        self.scrollView.bounces = false
+        self.scrollView.isDirectionalLockEnabled = true
+        self.scrollView.scrollsToTop = false
+        self.scrollView.delaysContentTouches = false
+        self.scrollView.delegate = self
+        self.addSubview(self.scrollView)
+
+        self.fadeMask.startPoint = CGPoint(x: 0.5, y: 0.0)
+        self.fadeMask.endPoint = CGPoint(x: 0.5, y: 1.0)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        if self.layer.mask != nil && !self.fadeMask.frame.contains(point) {
+            return false
+        }
+        if self.bounds.contains(point) {
+            return true
+        }
+        if let textSelectionView = self.textSelectionView {
+            return textSelectionView.hitTest(self.convert(point, to: textSelectionView), with: event) != nil
+        }
+        return false
+    }
+
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        guard !self.isHidden, self.alpha > 0.0, self.isUserInteractionEnabled, self.point(inside: point, with: event) else {
+            return nil
+        }
+        if let textSelectionView = self.textSelectionView,
+           let result = textSelectionView.hitTest(self.convert(point, to: textSelectionView), with: event) {
+            return result
+        }
+        return super.hitTest(point, with: event)
+    }
+
+    func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        self.textSelectionView?.cancelSelection()
+    }
+
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        if !self.isUpdating {
+            self.updateScrollFade()
+        }
+    }
+
+    private func updateScrollFade() {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer {
+            CATransaction.commit()
+        }
+
+        let size = self.scrollView.bounds.size
+        let maxOffset = max(0.0, self.scrollView.contentSize.height - size.height)
+        guard maxOffset > 0.0, size.height > 0.0 else {
+            self.layer.mask = nil
+            return
+        }
+
+        let fadeHeight = min(12.0, size.height / 2.0)
+        let offset = max(0.0, min(maxOffset, self.scrollView.contentOffset.y))
+        let topFade = min(1.0, offset / fadeHeight)
+        let bottomFade = min(1.0, (maxOffset - offset) / fadeHeight)
+        var maskFrame = CGRect(origin: .zero, size: size).insetBy(dx: -self.selectionInset, dy: 0.0)
+        // At either end there is no hidden text, but selection knobs can extend past the viewport.
+        if offset == 0.0 {
+            maskFrame.origin.y -= self.selectionInset
+            maskFrame.size.height += self.selectionInset
+        }
+        if offset == maxOffset {
+            maskFrame.size.height += self.selectionInset
+        }
+        self.fadeMask.frame = maskFrame
+        self.fadeMask.locations = [
+            0.0,
+            NSNumber(value: Double(fadeHeight / maskFrame.height)),
+            NSNumber(value: Double(1.0 - fadeHeight / maskFrame.height)),
+            1.0
+        ]
+        self.fadeMask.colors = [
+            UIColor.white.withAlphaComponent(1.0 - topFade).cgColor,
+            UIColor.white.cgColor,
+            UIColor.white.cgColor,
+            UIColor.white.withAlphaComponent(1.0 - bottomFade).cgColor
+        ]
+        self.layer.mask = self.fadeMask
+    }
+
+    func update(contentSize: CGSize, maxHeight: CGFloat, id: String, text: String?) -> CGSize {
+        self.isUpdating = true
+        defer {
+            self.isUpdating = false
+        }
+        let resetOffset = self.contentId != id || self.text != text
+        self.contentId = id
+        self.text = text
+        let previousOffset = self.scrollView.contentOffset.y
+        let size = CGSize(width: contentSize.width, height: min(contentSize.height, maxHeight))
+        let maxOffset = max(0.0, contentSize.height - size.height)
+        self.scrollView.isScrollEnabled = maxOffset > 0.0
+        let scrollFrame = CGRect(origin: .zero, size: size)
+        if self.scrollView.frame != scrollFrame {
+            self.scrollView.frame = scrollFrame
+        }
+        if self.scrollView.contentSize != contentSize {
+            self.scrollView.contentSize = contentSize
+        }
+        let contentOffset = CGPoint(x: 0.0, y: resetOffset ? 0.0 : max(0.0, min(maxOffset, previousOffset)))
+        if self.scrollView.contentOffset != contentOffset {
+            self.scrollView.contentOffset = contentOffset
+        }
+        self.updateScrollFade()
+        return size
     }
 }
 
@@ -680,6 +850,7 @@ private final class WalletTransactionContentComponent: Component {
     let mode: WalletTransactionContentMode
     let walletContext: WalletContext?
     let fromChat: Bool
+    let maxCommentHeight: CGFloat
     let openExplorer: (String) -> Void
     let animateOut: ActionSlot<Action<Void>>
 
@@ -688,6 +859,7 @@ private final class WalletTransactionContentComponent: Component {
         mode: WalletTransactionContentMode,
         walletContext: WalletContext?,
         fromChat: Bool,
+        maxCommentHeight: CGFloat,
         openExplorer: @escaping (String) -> Void,
         animateOut: ActionSlot<Action<Void>>
     ) {
@@ -695,12 +867,16 @@ private final class WalletTransactionContentComponent: Component {
         self.mode = mode
         self.walletContext = walletContext
         self.fromChat = fromChat
+        self.maxCommentHeight = maxCommentHeight
         self.openExplorer = openExplorer
         self.animateOut = animateOut
     }
 
     static func ==(lhs: WalletTransactionContentComponent, rhs: WalletTransactionContentComponent) -> Bool {
-        if lhs.context !== rhs.context || lhs.walletContext !== rhs.walletContext || lhs.fromChat != rhs.fromChat {
+        if lhs.context !== rhs.context
+            || lhs.walletContext !== rhs.walletContext
+            || lhs.fromChat != rhs.fromChat
+            || lhs.maxCommentHeight != rhs.maxCommentHeight {
             return false
         }
         switch (lhs.mode, rhs.mode) {
@@ -740,7 +916,8 @@ private final class WalletTransactionContentComponent: Component {
         private let usdValue = ComponentView<Empty>()
         private let processingDot = ComponentView<Empty>()
         private let processingText = ComponentView<Empty>()
-        private let commentBackgroundView = UIImageView()
+        private let commentContainerView = TransactionCommentContainerView(frame: .zero)
+        private let commentBackgroundView = WalletSendCommentBackgroundView(frame: .zero)
         private var commentText = ComponentView<Empty>()
         private let commentButton = ComponentView<Empty>()
         private var commentDustNode: InvisibleInkDustNode?
@@ -806,14 +983,6 @@ private final class WalletTransactionContentComponent: Component {
         private var currentSpeechHolder: SpeechSynthesizerHolder?
         private var isUpdating = false
 
-        private var cachedCommentBubbleImage: (
-            theme: PresentationTheme,
-            corners: PresentationChatBubbleCorners,
-            incoming: Bool,
-            fillColor: UIColor,
-            image: UIImage
-        )?
-
         private func currentPresentationData(for component: WalletTransactionContentComponent) -> (initial: PresentationData, signal: Signal<PresentationData, NoError>) {
             let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
             if let updatedPresentationData = (self.environment?.controller() as? WalletTransactionContentController)?.walletPresentationData {
@@ -828,8 +997,8 @@ private final class WalletTransactionContentComponent: Component {
         override init(frame: CGRect) {
             super.init(frame: frame)
 
-            self.commentBackgroundView.contentMode = .scaleToFill
-            self.addSubview(self.commentBackgroundView)
+            self.addSubview(self.commentContainerView)
+            self.commentContainerView.contentView.addSubview(self.commentBackgroundView)
             self.inputExternalState.updated = { [weak self] in
                 self?.inputTextUpdated()
             }
@@ -2057,34 +2226,6 @@ private final class WalletTransactionContentComponent: Component {
             ))
         }
 
-        private func commentBubbleImage(
-            presentationData: PresentationData,
-            incoming: Bool,
-            fillColor: UIColor
-        ) -> UIImage {
-            let corners = presentationData.chatBubbleCorners
-            if let cached = self.cachedCommentBubbleImage,
-               cached.theme === presentationData.theme,
-               cached.corners == corners,
-               cached.incoming == incoming,
-               cached.fillColor == fillColor {
-                return cached.image
-            }
-            let image = messageBubbleImage(
-                maxCornerRadius: corners.mainRadius,
-                minCornerRadius: corners.auxiliaryRadius,
-                incoming: incoming,
-                fillColor: fillColor,
-                strokeColor: .clear,
-                neighbors: .none,
-                shadow: nil,
-                wallpaper: presentationData.chatWallpaper,
-                knockout: false
-            )
-            self.cachedCommentBubbleImage = (presentationData.theme, corners, incoming, fillColor, image)
-            return image
-        }
-
         private func openExplorer(sourceView: UIView) {
             guard let component = self.component,
                   let controller = self.environment?.controller(),
@@ -2516,20 +2657,17 @@ private final class WalletTransactionContentComponent: Component {
             if displaysCommentBubble, isCommentConcealed || displayedComment != nil {
                 contentHeight += 22.0
                 let presentationData = self.currentPresentationData(for: component).initial
-                let bubbleImage = self.commentBubbleImage(
-                    presentationData: presentationData,
-                    incoming: displayedDirection == .incoming,
-                    fillColor: theme.list.itemInputField.backgroundColor
-                )
                 let commentSize: CGSize
                 if isCommentConcealed {
                     commentSize = CGSize(width: 120.0, height: ceil(Font.regular(15.0).lineHeight))
                     self.commentText.view?.isHidden = true
                     (self.commentText.view as? TransactionCommentComponent.View)?.cancelSelection()
+                    self.commentContainerView.textSelectionView = nil
                 } else {
                     commentSize = self.commentText.update(
                         transition: transition,
                         component: AnyComponent(TransactionCommentComponent(
+                            id: incomingModeId,
                             theme: theme,
                             strings: environment.strings,
                             text: NSAttributedString(
@@ -2548,27 +2686,44 @@ private final class WalletTransactionContentComponent: Component {
                 }
 
                 var commentTransition = transition
-                if self.commentBackgroundView.image == nil {
-                    self.commentBackgroundView.alpha = 0.0
+                if self.commentContainerView.bounds.isEmpty {
+                    self.commentContainerView.alpha = 0.0
                     commentTransition = .immediate
                 }
 
-                let bubbleSize = CGSize(width: commentSize.width + 34.0, height: max(commentSize.height + 14.0, bubbleImage.size.height))
-                self.commentBackgroundView.image = bubbleImage
-                let bubbleFrame = CGRect(
-                    x: floorToScreenPixels(
-                        (availableSize.width - bubbleSize.width) / 2.0
-                        + (displayedDirection == .incoming ? -3.0 : 3.0)
-                    ),
+                let bubbleSize = CGSize(width: commentSize.width + 34.0, height: max(34.0, commentSize.height + 14.0))
+                // Include the directional tail offset while keeping the text centered on screen.
+                let containerSize = self.commentContainerView.update(
+                    contentSize: CGSize(width: bubbleSize.width + 6.0, height: bubbleSize.height),
+                    maxHeight: component.maxCommentHeight,
+                    id: incomingModeId,
+                    text: displayedComment
+                )
+                commentTransition.setFrame(view: self.commentContainerView, frame: CGRect(
+                    x: floorToScreenPixels((availableSize.width - containerSize.width) / 2.0),
                     y: contentHeight,
+                    width: containerSize.width,
+                    height: containerSize.height
+                ))
+                self.commentContainerView.isUserInteractionEnabled = true
+                transition.setAlpha(view: self.commentContainerView, alpha: 1.0)
+                self.commentBackgroundView.update(
+                    size: bubbleSize,
+                    maxCornerRadius: presentationData.chatBubbleCorners.mainRadius,
+                    minCornerRadius: presentationData.chatBubbleCorners.auxiliaryRadius,
+                    theme: theme,
+                    incoming: displayedDirection == .incoming
+                )
+                let bubbleFrame = CGRect(
+                    x: displayedDirection == .incoming ? 0.0 : 6.0,
+                    y: 0.0,
                     width: bubbleSize.width,
                     height: bubbleSize.height
                 )
                 commentTransition.setFrame(view: self.commentBackgroundView, frame: bubbleFrame)
-                transition.setAlpha(view: self.commentBackgroundView, alpha: 1.0)
                 let commentFrame = CGRect(
-                    x: floorToScreenPixels((availableSize.width - commentSize.width) / 2.0),
-                    y: contentHeight + floorToScreenPixels((bubbleSize.height - commentSize.height) / 2.0),
+                    x: floorToScreenPixels((containerSize.width - commentSize.width) / 2.0),
+                    y: floorToScreenPixels((bubbleSize.height - commentSize.height) / 2.0),
                     width: commentSize.width,
                     height: commentSize.height
                 )
@@ -2581,7 +2736,7 @@ private final class WalletTransactionContentComponent: Component {
                         dustNode.isUserInteractionEnabled = false
                         dustNode.isAccessibilityElement = false
                         self.commentDustNode = dustNode
-                        self.addSubview(dustNode.view)
+                        self.commentContainerView.contentView.addSubview(dustNode.view)
                     }
                     dustNode.frame = commentFrame.insetBy(dx: -3.0, dy: -3.0)
                     let rect = CGRect(origin: CGPoint(x: 3.0, y: 3.0), size: commentSize).insetBy(dx: 0.0, dy: 2.0)
@@ -2607,25 +2762,27 @@ private final class WalletTransactionContentComponent: Component {
                             //TODO:localize
                             commentButtonView.accessibilityLabel = "Encrypted comment"
                             commentButtonView.accessibilityHint = "Double-tap to decrypt."
-                            self.addSubview(commentButtonView)
+                            self.commentContainerView.contentView.addSubview(commentButtonView)
                         }
                         commentButtonView.frame = bubbleFrame
-                        self.bringSubviewToFront(commentButtonView)
+                        self.commentContainerView.contentView.bringSubviewToFront(commentButtonView)
                     }
                 } else if let commentView = self.commentText.view {
                     if commentView.superview == nil {
                         commentTransition = .immediate
                         commentView.alpha = 0.0
-                        self.addSubview(commentView)
+                        self.commentContainerView.contentView.addSubview(commentView)
                     }
+                    self.commentContainerView.textSelectionView = commentView as? TransactionCommentComponent.View
                     commentView.isHidden = false
                     commentView.isUserInteractionEnabled = true
                     commentTransition.setFrame(view: commentView, frame: commentFrame)
                     transition.setAlpha(view: commentView, alpha: 1.0)
                 }
-                contentHeight += bubbleSize.height + 32.0
+                contentHeight += containerSize.height + 32.0
             } else {
-                transition.setAlpha(view: self.commentBackgroundView, alpha: 0.0)
+                self.commentContainerView.isUserInteractionEnabled = false
+                transition.setAlpha(view: self.commentContainerView, alpha: 0.0)
                 if let commentView = self.commentText.view {
                     commentView.isUserInteractionEnabled = false
                     (commentView as? TransactionCommentComponent.View)?.cancelSelection()
@@ -3375,6 +3532,7 @@ private final class WalletTransactionSheetComponent: CombinedComponent {
         return { context in
             let environment = context.environment[EnvironmentType.self]
             let controller = environment.controller
+            let availableCommentHeight = context.availableSize.height - environment.safeInsets.top - max(environment.safeInsets.bottom, environment.inputHeight)
             let sheetComponent = sheet.update(
                 component: SheetComponent<EnvironmentType>(
                     content: AnyComponent<EnvironmentType>(WalletTransactionContentComponent(
@@ -3382,6 +3540,7 @@ private final class WalletTransactionSheetComponent: CombinedComponent {
                         mode: .transaction(context.component.transaction),
                         walletContext: context.component.walletContext,
                         fromChat: context.component.fromChat,
+                        maxCommentHeight: floorToScreenPixels(min(150.0, max(80.0, availableCommentHeight * 0.25))),
                         openExplorer: context.component.openExplorer,
                         animateOut: animateOut
                     )),
@@ -3495,6 +3654,7 @@ private final class WalletTransactionPreviewSheetComponent: CombinedComponent {
         return { context in
             let environment = context.environment[EnvironmentType.self]
             let controller = environment.controller
+            let availableCommentHeight = context.availableSize.height - environment.safeInsets.top - max(environment.safeInsets.bottom, environment.inputHeight)
             let sheetComponent = sheet.update(
                 component: ResizableSheetComponent<EnvironmentType>(
                     content: AnyComponent<EnvironmentType>(WalletTransactionContentComponent(
@@ -3506,6 +3666,7 @@ private final class WalletTransactionPreviewSheetComponent: CombinedComponent {
                         ),
                         walletContext: context.component.walletContext,
                         fromChat: false,
+                        maxCommentHeight: floorToScreenPixels(min(150.0, max(80.0, availableCommentHeight * 0.25))),
                         openExplorer: context.component.openExplorer,
                         animateOut: animateOut
                     )),

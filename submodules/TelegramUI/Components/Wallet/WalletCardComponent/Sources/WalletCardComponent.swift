@@ -138,6 +138,8 @@ public final class WalletCardComponent: Component {
         public var balanceGeometryUpdated: (() -> Void)?
 
         private var gramIconContentFrame: CGRect = .zero
+        private var integralBalanceContentFrame: CGRect = .zero
+        private var fractionalBalanceContentFrame: CGRect = .zero
         private var primaryBalanceBaseFrame: CGRect = .zero
         private var secondaryBalanceBaseFrame: CGRect = .zero
         private var balanceTransitionFraction: CGFloat = 0.0
@@ -151,6 +153,7 @@ public final class WalletCardComponent: Component {
             return max(0.0, min(1.0, pitch / (CGFloat.pi / 3.0)))
         }
 
+        private let diamondClipView = WalletCardContentView()
         private let gramDiamond = ComponentView<Empty>()
         private let integralBalance = ComponentView<Empty>()
         private let fractionalBalance = ComponentView<Empty>()
@@ -173,6 +176,11 @@ public final class WalletCardComponent: Component {
         private var gyroRoll = 0.0
         private var panPitch = 0.0
         private var panRoll = 0.0
+        private var diamondRotation: Double?
+        private var previousDiamondRotation: Double?
+        private var diamondRate = 0.0
+        private var diamondRoll = 0.0
+        private var panTilt = 0.0
         private var overscrollPitch = 0.0
         private var isPanning = false
         private let panGestureRecognizer = UIPanGestureRecognizer()
@@ -229,6 +237,10 @@ public final class WalletCardComponent: Component {
             self.primaryBalanceCollapseContainerView.clipsToBounds = false
             self.secondaryBalanceCollapseContainerView.clipsToBounds = false
             self.secondaryBalanceCollapseContainerView.isUserInteractionEnabled = false
+            self.diamondClipView.clipsToBounds = true
+            if #available(iOS 13.0, *) {
+                self.diamondClipView.layer.cornerCurve = .continuous
+            }
             self.primaryBalanceContainerView.clipsToBounds = false
             self.secondaryBalanceContainerView.clipsToBounds = false
             self.foregroundView.addSubview(self.primaryBalanceCollapseContainerView)
@@ -324,6 +336,11 @@ public final class WalletCardComponent: Component {
             self.clipsToBounds = false
             self.layer.masksToBounds = false
             self.currentSize = size
+
+            // Restore the untransformed bounds before laying out updated balance text.
+            for view in [self.integralBalance.view, self.fractionalBalance.view, self.gramDiamond.view].compactMap({ $0 }) {
+                ComponentTransition.immediate.setTransform(view: view, transform: CATransform3DIdentity)
+            }
 
             self.shadowView.bounds = CGRect(origin: .zero, size: size)
             self.shadowView.layer.anchorPoint = CGPoint(x: 0.5, y: 0.5)
@@ -469,8 +486,8 @@ public final class WalletCardComponent: Component {
                 containerSize: CGSize(width: width, height: 100.0)
             )
 
-            let gramIconSize = CGSize(width: floor(28.0 * scale), height: floor(28.0 * scale))
-            let gramIconSpacing = max(0.0, gramIconSize.width - UIScreenPixel)
+            let gramIconSize = CGSize(width: 30.0 * scale, height: 30.0 * scale)
+            let gramIconSpacing = gramIconSize.width + 3.25 * scale
             let integralSize = CGSize(
                 width: gramIconSpacing + integralTextSize.width,
                 height: max(gramIconSize.height, integralTextSize.height)
@@ -507,6 +524,14 @@ public final class WalletCardComponent: Component {
                 primaryBalanceBaseFrame = primaryBalanceBaseFrame.union(fractionalFrame)
             }
             self.primaryBalanceBaseFrame = primaryBalanceBaseFrame
+            self.integralBalanceContentFrame = CGRect(
+                origin: CGPoint(x: gramIconSpacing, y: integralFrame.minY - primaryBalanceBaseFrame.minY),
+                size: integralTextSize
+            )
+            self.fractionalBalanceContentFrame = fractionalFrame.offsetBy(
+                dx: -primaryBalanceBaseFrame.minX,
+                dy: -primaryBalanceBaseFrame.minY
+            )
             ComponentTransition.immediate.setBounds(
                 view: self.primaryBalanceContainerView,
                 bounds: CGRect(origin: CGPoint(), size: primaryBalanceBaseFrame.size)
@@ -518,8 +543,8 @@ public final class WalletCardComponent: Component {
 
             self.gramIconContentFrame = CGRect(
                 origin: CGPoint(
-                    x: integralFrame.minX - primaryBalanceBaseFrame.minX,
-                    y: integralFrame.minY - primaryBalanceBaseFrame.minY - 1.0 * scale
+                    x: integralFrame.minX - primaryBalanceBaseFrame.minX - scale,
+                    y: mainCenterY - primaryBalanceBaseFrame.minY - gramIconSize.height * 0.5 - 3.0 * scale
                 ),
                 size: gramIconSize
             )
@@ -588,44 +613,66 @@ public final class WalletCardComponent: Component {
                 origin: CGPoint(x: 24.0 * scale, y: 114.0 * scale),
                 size: secondarySize
             )
-            let balancesFrame = primaryBalanceBaseFrame.union(self.secondaryBalanceBaseFrame)
-            let diamondSize = CGSize(width: 64.0 * scale, height: 64.0 * scale)
+            let diamondSize = CGSize(width: 96.0 * scale, height: 96.0 * scale)
             let _ = self.gramDiamond.update(
                 transition: .immediate,
                 component: AnyComponent(InteractiveDiamondComponent(
                     size: diamondSize,
-                    diamondWidth: gramIconSize.width * 0.7,
+                    diamondWidth: 26.0 * 1.09 * scale,
                     isVisible: self.isDiamondRenderingEnabled,
                     theme: component.theme,
-                    appearance: .white,
-                    expansionStyle: .downward,
-                    expandedCenter: CGPoint(
-                        x: diamondSize.width * 0.5 + balancesFrame.midX - primaryBalanceBaseFrame.minX - self.gramIconContentFrame.midX,
-                        y: diamondSize.height * 0.5 + size.height * 0.5 - primaryBalanceBaseFrame.minY - self.gramIconContentFrame.midY
-                    )
+                    appearance: .cool,
+                    expansionStyle: .wallet,
+                    tapToSpin: true
                 )),
                 environment: {},
                 containerSize: diamondSize
             )
             if let diamondView = self.gramDiamond.view as? InteractiveDiamondComponent.View {
-                diamondView.pressGesture.isEnabled = false
                 if diamondView.superview == nil {
-                    self.primaryBalanceContainerView.addSubview(diamondView)
+                    self.primaryBalanceContainerView.addSubview(self.diamondClipView)
+                    self.diamondClipView.addSubview(diamondView)
                     self.panGestureRecognizer.require(toFail: diamondView.pressGesture)
                     diamondView.onExpansionChanged = { [weak self] isExpanded in
                         guard let self else { return }
                         if isExpanded {
                             self.primaryBalanceCollapseContainerView.superview?.bringSubviewToFront(self.primaryBalanceCollapseContainerView)
+                        } else {
+                            self.backgroundView.updateLens(nil)
                         }
                         self.updateDiamondRefraction()
                     }
+                    diamondView.onMotionUpdated = { [weak self] motion in
+                        self?.diamondRotation = motion.map { Double($0.rotation) }
+                    }
+                    diamondView.onRefractionUpdated = { [weak self, weak diamondView] geometry in
+                        guard let self, let diamondView else { return }
+                        guard let geometry, self.balanceTransitionFraction == 0.0,
+                              self.isScrollVisible, self.isAnimationVisible,
+                              UIApplication.shared.applicationState == .active else {
+                            self.backgroundView.updateLens(nil)
+                            return
+                        }
+                        self.backgroundView.updateLens(WalletCardLens(
+                            center: diamondView.convert(geometry.center, to: self.foregroundView),
+                            hull: geometry.hull.map { diamondView.convert($0, to: self.foregroundView) },
+                            strength: geometry.strength, spin: geometry.rotation
+                        ))
+                    }
                 }
+                // Clip only the diamond; balances must still travel into the navigation header.
+                ComponentTransition.immediate.setFrame(view: self.diamondClipView, frame: CGRect(
+                    x: -primaryBalanceBaseFrame.minX, y: -primaryBalanceBaseFrame.minY,
+                    width: size.width, height: size.height
+                ))
+                self.diamondClipView.layer.cornerRadius = 20.0 * scale
                 transition.setFrame(view: diamondView, frame: CGRect(
-                    x: self.gramIconContentFrame.midX - diamondSize.width * 0.5,
-                    y: self.gramIconContentFrame.midY - diamondSize.height * 0.5,
+                    x: primaryBalanceBaseFrame.minX + self.gramIconContentFrame.midX - diamondSize.width * 0.5,
+                    y: primaryBalanceBaseFrame.minY + self.gramIconContentFrame.midY - diamondSize.height * 0.5,
                     width: diamondSize.width,
                     height: diamondSize.height
                 ))
+                self.primaryBalanceContainerView.bringSubviewToFront(self.diamondClipView)
             }
 
             ComponentTransition.immediate.setBounds(
@@ -766,7 +813,7 @@ public final class WalletCardComponent: Component {
                 diamond.updateRefractionSource(nil)
                 return
             }
-            let textViews = [self.integralBalance.view, self.fractionalBalance.view, self.currency.view, self.secondaryBalance.view].compactMap { $0 }
+            let textViews = [self.integralBalance.view, self.fractionalBalance.view, self.currency.view].compactMap { $0 }
             let sourceRect = textViews.reduce(CGRect.null) { rect, view in
                 rect.union(view.convert(view.bounds, to: self.primaryBalanceContainerView))
             }.insetBy(dx: -2.0, dy: -2.0).integral
@@ -826,14 +873,33 @@ public final class WalletCardComponent: Component {
                 self.panRoll *= decay
             }
 
+            if !UIAccessibility.isReduceMotionEnabled, let rotation = self.diamondRotation {
+                if let previousRotation = self.previousDiamondRotation {
+                    let delta = atan2(sin(rotation - previousRotation), cos(rotation - previousRotation))
+                    self.diamondRate += (delta / deltaTime - self.diamondRate) * min(1.0, deltaTime * 3.0)
+                }
+                self.previousDiamondRotation = rotation
+            } else {
+                self.previousDiamondRotation = nil
+                self.diamondRate = 0.0
+            }
+            let baseSpin = 2.0 * Double.pi / 26.0
+            let extraSpin = self.diamondRate - baseSpin * (self.diamondRate >= 0.0 ? 1.0 : -1.0)
+            let rollTarget = Self.clamp(
+                0.006 * (abs(self.diamondRate) > baseSpin * 1.5 ? extraSpin : 0.0), Self.maxYaw * 0.18
+            )
+            self.diamondRoll += (rollTarget - self.diamondRoll) * (1.0 - exp(-deltaTime * 2.5))
+            let panTarget = min(1.0, hypot(self.panPitch / Self.maxPitch, self.panRoll / Self.maxYaw))
+            self.panTilt += (panTarget - self.panTilt) * (1.0 - exp(-deltaTime * 8.0))
+
             let cardTargetX = Self.clamp(self.panPitch, Self.maxPitch)
-            let cardTargetY = Self.clamp(self.panRoll, Self.maxYaw)
+            let cardTargetY = Self.clamp(self.panRoll + self.diamondRoll, Self.maxYaw)
             let depthTargetX = Self.clamp(
                 self.gyroPitch + self.panPitch,
                 Self.maxPitch + 0.03
             )
             let depthTargetY = Self.clamp(
-                self.gyroRoll + self.panRoll,
+                self.gyroRoll + self.panRoll + self.diamondRoll,
                 Self.maxYaw + 0.03
             )
             let smoothing = 1.0 - exp(-deltaTime * 8.0)
@@ -896,6 +962,10 @@ public final class WalletCardComponent: Component {
             self.deviceMotionDisposable = nil
             self.gyroPitch = 0.0
             self.gyroRoll = 0.0
+            self.previousDiamondRotation = nil
+            self.diamondRate = 0.0
+            self.diamondRoll = 0.0
+            self.backgroundView.updateLens(nil)
         }
 
         public func updateScrollVisibility(_ isVisible: Bool) {
@@ -1001,6 +1071,8 @@ public final class WalletCardComponent: Component {
             fraction: CGFloat,
             collapseFraction: CGFloat,
             scrollTransform: CATransform3D = CATransform3DIdentity,
+            primaryContentTarget: (size: CGSize, text: CGRect, icon: CGRect)? = nil,
+            contentFraction: CGFloat = 0.0,
             transition: ComponentTransition
         ) {
             let fraction = max(0.0, min(1.0, fraction))
@@ -1009,6 +1081,7 @@ public final class WalletCardComponent: Component {
             self.balanceCollapseFraction = collapseFraction
             self.balanceScrollTransform = scrollTransform
             self.updateBalanceTransitionGeometry()
+            self.updateBalanceContent(target: primaryContentTarget, fraction: contentFraction)
 
             self.updateBalanceContainer(
                 self.primaryBalanceCollapseContainerView,
@@ -1030,6 +1103,19 @@ public final class WalletCardComponent: Component {
                let primaryFrame, !primaryFrame.isEmpty,
                let secondaryFrame, !secondaryFrame.isEmpty,
                primaryCollapsedFrame == nil, secondaryCollapsedFrame == nil {
+                // Pitch compresses the rows without compressing the distance between their centers.
+                // Keep the visible gap tied to the layout while the card is tilted.
+                let primaryRenderedFrame = self.primaryBalanceContainerView.convert(self.primaryBalanceContainerView.bounds, to: balanceTransitionContainer)
+                let secondaryRenderedFrame = self.secondaryBalanceContainerView.convert(self.secondaryBalanceContainerView.bounds, to: balanceTransitionContainer)
+                let targetSpacing = max(0.0, secondaryFrame.minY - primaryFrame.maxY)
+                let spacingAdjustment = (secondaryRenderedFrame.minY - primaryRenderedFrame.maxY - targetSpacing) * 0.5
+                for (containerView, offset) in [(self.primaryBalanceContainerView, spacingAdjustment), (self.secondaryBalanceContainerView, -spacingAdjustment)] {
+                    let center = self.balanceTransitionView.convert(containerView.center, to: balanceTransitionContainer)
+                    ComponentTransition.immediate.setPosition(
+                        view: containerView,
+                        position: self.balanceTransitionView.convert(CGPoint(x: center.x, y: center.y + offset), from: balanceTransitionContainer)
+                    )
+                }
                 let renderedFrame = self.primaryBalanceContainerView.convert(self.primaryBalanceContainerView.bounds, to: balanceTransitionContainer).union(
                     self.secondaryBalanceContainerView.convert(self.secondaryBalanceContainerView.bounds, to: balanceTransitionContainer)
                 )
@@ -1044,6 +1130,58 @@ public final class WalletCardComponent: Component {
             }
             self.updateCardScrollAppearance()
             self.updateProjectedBalanceFrames()
+        }
+
+        private func updateBalanceContent(target: (size: CGSize, text: CGRect, icon: CGRect)?, fraction: CGFloat) {
+            let textFrame = self.fractionalBalanceContentFrame.isEmpty
+                ? self.integralBalanceContentFrame
+                : self.integralBalanceContentFrame.union(self.fractionalBalanceContentFrame)
+            guard !textFrame.isEmpty, !self.gramIconContentFrame.isEmpty else {
+                return
+            }
+
+            func contentFrame(_ source: CGRect, targetFrame: CGRect?) -> CGRect {
+                guard let target, let targetFrame, target.size.width > 0.0, target.size.height > 0.0 else {
+                    return source
+                }
+                let scaleX = self.primaryBalanceBaseFrame.width / target.size.width
+                let scaleY = self.primaryBalanceBaseFrame.height / target.size.height
+                return CGRect(
+                    x: source.minX + (targetFrame.minX * scaleX - source.minX) * fraction,
+                    y: source.minY + (targetFrame.minY * scaleY - source.minY) * fraction,
+                    width: source.width + (targetFrame.width * scaleX - source.width) * fraction,
+                    height: source.height + (targetFrame.height * scaleY - source.height) * fraction
+                )
+            }
+
+            // Match the text and icon separately: their proportions differ from the card's row.
+            let targetTextFrame = contentFrame(textFrame, targetFrame: target?.text)
+            let textScaleX = targetTextFrame.width / textFrame.width
+            let textScaleY = targetTextFrame.height / textFrame.height
+            for (view, frame) in [(self.integralBalance.view, self.integralBalanceContentFrame), (self.fractionalBalance.view, self.fractionalBalanceContentFrame)] {
+                if let view {
+                    ComponentTransition.immediate.setTransform(view: view, transform: CATransform3DMakeScale(textScaleX, textScaleY, 1.0))
+                    ComponentTransition.immediate.setPosition(view: view, position: CGPoint(
+                        x: targetTextFrame.minX + (frame.midX - textFrame.minX) * textScaleX,
+                        y: targetTextFrame.minY + (frame.midY - textFrame.minY) * textScaleY
+                    ))
+                }
+            }
+            if let diamondView = self.gramDiamond.view {
+                let targetIconFrame = target.map { layout in
+                    layout.icon.insetBy(dx: layout.icon.width * 0.095, dy: layout.icon.height * 0.095)
+                }
+                let iconFrame = contentFrame(self.gramIconContentFrame, targetFrame: targetIconFrame)
+                ComponentTransition.immediate.setTransform(view: diamondView, transform: CATransform3DMakeScale(
+                    iconFrame.width / self.gramIconContentFrame.width,
+                    iconFrame.height / self.gramIconContentFrame.height,
+                    1.0
+                ))
+                ComponentTransition.immediate.setPosition(view: diamondView, position: CGPoint(
+                    x: self.primaryBalanceBaseFrame.minX + iconFrame.midX,
+                    y: self.primaryBalanceBaseFrame.minY + iconFrame.midY
+                ))
+            }
         }
 
         private func updateCardScrollAppearance() {
@@ -1284,6 +1422,16 @@ public final class WalletCardComponent: Component {
             let projectedQuad = self.projectedQuad(for: perspectiveTransform)
 
             self.updateProjectedBalanceFrames()
+
+            if let diamond = self.gramDiamond.view as? InteractiveDiamondComponent.View {
+                let scale = self.currentSize.width / 370.0
+                let tilt = self.panTilt * self.panTilt * (3.0 - 2.0 * self.panTilt)
+                diamond.updateWalletTilt(
+                    pitch: CGFloat(cardPitch), roll: CGFloat(self.currentCardY),
+                    scale: 1.0 + 0.16 * CGFloat(tilt),
+                    leftInset: self.primaryBalanceBaseFrame.minX + self.gramIconContentFrame.midX - 14.0 * scale
+                )
+            }
 
             let highlightFraction = min(1.0, self.scrollPitchFraction / 0.64)
             let easedHighlightFraction = highlightFraction * highlightFraction * (3.0 - 2.0 * highlightFraction)

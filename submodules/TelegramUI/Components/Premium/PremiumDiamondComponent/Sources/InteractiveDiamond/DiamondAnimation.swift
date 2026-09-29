@@ -93,6 +93,9 @@ struct DiamondMotion {
         }
     }
     var tilt: Float = 0
+    var targetLean: Float = 0
+    private(set) var lean: Float = 0
+    private var leanVelocity: Float = 0
     var releaseDecay: Float = 0
     var releaseTilt: Float = 0
     private var swayPhase: SIMD2<Float>?
@@ -241,6 +244,8 @@ struct DiamondMotion {
                        mode: DiamondStyle.AnimationMode = .continuous, time: Float = 0, appearance: DiamondStyle.Appearance = .blue) {
         let dt = min(max(dt, 0), 0.05)
         if reduceMotion {
+            lean = targetLean
+            leanVelocity = 0
             isAppearanceImpulseActive = false
             self.rotationSparkle = DiamondSparkleAnimation.RotationPulse()
             tapRotation = nil
@@ -259,6 +264,18 @@ struct DiamondMotion {
             return
         }
 
+        // The card's yaw adds a separate, softer spring without changing drag or spin velocity.
+        var leanRemaining = dt
+        while leanRemaining > 0 && (lean != targetLean || leanVelocity != 0) {
+            let step = min(leanRemaining, 1 / Float(240))
+            leanVelocity += ((targetLean - lean) * 110 - 2 * 0.55 * 10.5 * leanVelocity) * step
+            lean += leanVelocity * step
+            leanRemaining = max(0, leanRemaining - step)
+        }
+        if abs(lean - targetLean) < 0.0001 && abs(leanVelocity) < 0.0001 {
+            lean = targetLean
+            leanVelocity = 0
+        }
         var remaining = dt
         while remaining > 0 {
             let step = min(remaining, 1 / Float(isAppearanceImpulseActive ? 240 : 120))

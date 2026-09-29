@@ -600,8 +600,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
         let rect = self.cardNode.view.convert(sourceRect, to: diamond)
             .offsetBy(dx: -diamond.bounds.midX, dy: -diamond.bounds.midY)
         diamond.updateRefractionSource(InteractiveDiamondComponent.RefractionSource(
-            texture: texture, uv: SIMD4(0.0, 0.0, 1.0, 1.0), rect: rect, preservesColors: true,
-            backgroundColor: SIMD3<Float>(16.0 / 255.0, 147.0 / 255.0, 1.0)
+            texture: texture, uv: SIMD4(0.0, 0.0, 1.0, 1.0), rect: rect, preservesColors: true
         ))
     }
 

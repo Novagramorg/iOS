@@ -352,6 +352,13 @@ private final class WalletNavigationBalanceComponent: Component {
         var primaryTargetFrame: CGRect = .zero
         var secondaryTargetFrame: CGRect = .zero
 
+        var primaryContentLayout: (size: CGSize, text: CGRect, icon: CGRect)? {
+            guard let textView = self.balanceText.view, let iconView = self.gramIcon.view else {
+                return nil
+            }
+            return (self.primaryTargetFrame.size, textView.frame, iconView.frame)
+        }
+
         override init(frame: CGRect) {
             super.init(frame: frame)
 
@@ -671,6 +678,13 @@ private final class WalletScreenComponent: Component {
         }
     }
 
+    private final class BalanceContainerView: UIView {
+        override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+            let result = super.hitTest(point, with: event)
+            return result === self ? nil : result
+        }
+    }
+
     final class View: UIView, UIScrollViewDelegate {
         private enum SelectedSection: Equatable {
             case transactions
@@ -691,7 +705,7 @@ private final class WalletScreenComponent: Component {
         private let cardContainerView: UIView
         private let cardBalanceCoordinateView: UIView
         private let cardVisualContainerView: UIView
-        private let cardBalanceClippingView = UIView()
+        private let cardBalanceClippingView = BalanceContainerView()
         private let navigationBalanceClippingView = UIView()
         private let cardBalanceMaskLayer = CAShapeLayer()
         private let navigationBalanceMaskLayer = CAShapeLayer()
@@ -787,10 +801,9 @@ private final class WalletScreenComponent: Component {
             self.scrollView = ScrollView()
             self.topEdgeEffectView = EdgeEffectView()
             self.cardContainerView = UIView()
-            self.cardBalanceCoordinateView = UIView()
+            self.cardBalanceCoordinateView = BalanceContainerView()
             self.cardVisualContainerView = UIView()
             self.cardContainerView.clipsToBounds = false
-            self.cardBalanceCoordinateView.isUserInteractionEnabled = false
             self.cardVisualContainerView.clipsToBounds = false
             self.scrollView.showsVerticalScrollIndicator = true
             self.scrollView.showsHorizontalScrollIndicator = false
@@ -809,7 +822,6 @@ private final class WalletScreenComponent: Component {
             self.topEdgeEffectView.alpha = 0.0
             self.topEdgeEffectView.isUserInteractionEnabled = false
 
-            self.cardBalanceClippingView.isUserInteractionEnabled = false
             self.navigationBalanceClippingView.isUserInteractionEnabled = false
             self.cardBalanceMaskLayer.fillColor = UIColor.black.cgColor
             self.navigationBalanceMaskLayer.fillColor = UIColor.black.cgColor
@@ -1935,6 +1947,8 @@ private final class WalletScreenComponent: Component {
                 fraction: fraction,
                 collapseFraction: balanceFraction * balanceFraction * balanceFraction,
                 scrollTransform: self.makeCardTransform(fraction: fraction),
+                primaryContentTarget: navigationBalanceView.primaryContentLayout,
+                contentFraction: balanceFraction * balanceFraction * (3.0 - 2.0 * balanceFraction),
                 transition: .immediate
             )
         }

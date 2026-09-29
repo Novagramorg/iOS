@@ -28,6 +28,7 @@ struct DiamondStyle: Equatable {
     var floatAmplitude: Float = 0
     var floatPeriod: Float = 3.2
     var tilt: Float = 0
+    var lean: Float = 0
     var releaseDecay: Float = 0
     var releaseTilt: Float = 0
     var tapToSpin: Bool = false
@@ -147,6 +148,7 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
     var interactionScale: Float = 1
     var refractionSource: InteractiveDiamondComponent.RefractionSource?
     var refractionStrength: Float = 0
+    var onRefractionUpdated: ((InteractiveDiamondComponent.RefractionGeometry?) -> Void)?
     var highlightBoost: Float = 0
     private var appliedHighlightBoost: Float = 0
     private var isHighDynamicRange = false
@@ -229,8 +231,17 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
         return style
     }
 
+    var zoom: Float {
+        get { return self.motion.zoom }
+        set {
+            self.motion.zoom = min(1.6, max(0.6, newValue))
+            self.onPoseUpdated?(self.pose)
+            self.setNeedsUpdate()
+        }
+    }
+
     var pose: DiamondPose {
-        return DiamondPose(yaw: self.motion.yaw, pitch: self.motion.pitch,
+        return DiamondPose(yaw: self.motion.yaw + self.motion.lean, pitch: self.motion.pitch,
             grow: self.grow * self.interactionScale, shift: self.diamondStyle.growShift * (self.grow * self.interactionScale - 1))
     }
 
@@ -356,6 +367,7 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
         self.motion.mainSparkleOnRotation = self.diamondStyle.mainSparkleOnRotation
         self.motion.swayScale = self.diamondStyle.swayScale
         self.motion.tilt = self.diamondStyle.tilt
+        self.motion.targetLean = self.diamondStyle.lean
         self.motion.releaseDecay = self.diamondStyle.releaseDecay
         self.motion.releaseTilt = self.diamondStyle.releaseTilt
     }
@@ -522,6 +534,7 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
             scrollTilt = 0.0
         }
         self.motion.tilt = style.tilt + scrollTilt
+        self.motion.targetLean = style.lean
         self.motion.step(dt: animationDt, speed: style.isRotating ? style.rotationSpeed : 0, reduceMotion: self.reduceMotion, mode: style.animationMode, time: self.elapsed, appearance: style.appearance)
         if dt > animationDt {
             // Keep the appearance spring moving while the authored animation holds its last frame.
@@ -626,7 +639,7 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
         }
     }
 
-    func updateDrag(state: UIGestureRecognizer.State, translation: CGPoint = .zero, velocity: CGPoint = .zero, scale: CGFloat = 100.0, releaseImpulse: Float? = nil, playFlingHaptic: Bool = true, tapSpinDirection: Float? = nil) {
+    func updateDrag(state: UIGestureRecognizer.State, translation: CGPoint = .zero, velocity: CGPoint = .zero, scale: CGFloat = 100.0, releaseImpulse: Float? = nil, playFlingHaptic: Bool = true, allowsFlingBurst: Bool = false, tapSpinDirection: Float? = nil) {
         if state != .cancelled && state != .failed {
             guard self.isInHierarchy && self.isApplicationActive && self.isRenderingEnabled else { return }
         }
@@ -649,7 +662,7 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
                     self.tapSpin(direction: tapSpinDirection, at: now)
                 } else if abs(velocity.x) > 600.0 && !self.reduceMotion && !UIAccessibility.isReduceMotionEnabled {
                     self.motion.fling(direction: velocity.x < 0 ? -1 : 1, impulse: releaseImpulse)
-                    self.addStarBurst()
+                    self.addStarBurst(isFromTap: allowsFlingBurst)
                     if playFlingHaptic {
                         self.hapticFeedback.impact(.medium)
                     }
@@ -744,7 +757,7 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
             pass.depthAttachment.clearDepth = 1
             pass.depthAttachment.storeAction = .dontCare
             guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: pass) else { return nil }
-            renderer.encode(encoder: encoder, size: CGSize(width: CGFloat(size.width), height: CGFloat(size.height)), time: time, starBursts: starBursts, motion: motion, style: style, grow: grow, pixelsPerPoint: Float(pixelsPerPoint), reduceMotion: reduceMotion, lightBackground: lightBackground, refractionSource: refractionSource, refractionStrength: refractionStrength, highlightBoost: highDynamicRange ? highlightBoost : 0, colorPixelFormat: pixelFormat)
+            renderer.encode(encoder: encoder, size: CGSize(width: CGFloat(size.width), height: CGFloat(size.height)), time: time, starBursts: starBursts, motion: motion, style: style, grow: grow, pixelsPerPoint: Float(pixelsPerPoint), reduceMotion: reduceMotion, lightBackground: lightBackground, refractionSource: refractionSource, refractionStrength: refractionStrength, highlightBoost: highDynamicRange ? highlightBoost : 0, colorPixelFormat: pixelFormat, refractionUpdated: self.onRefractionUpdated)
             encoder.endEncoding()
             return RenderedFrame(texture: targets.color, commandBuffer: commandBuffer)
         })
