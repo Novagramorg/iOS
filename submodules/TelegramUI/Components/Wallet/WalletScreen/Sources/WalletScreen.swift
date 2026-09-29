@@ -2460,7 +2460,7 @@ private final class WalletScreenComponent: Component {
             transition: ComponentTransition
         ) -> (originY: CGFloat, size: CGSize) {
             //TODO:localize
-            let title = "Wallet"
+            let title = "Money"
             let leftButton: AnyComponentWithIdentity<NavigationButtonComponentEnvironment> = AnyComponentWithIdentity(
                 id: "back",
                 component: AnyComponent(NavigationButtonComponent(

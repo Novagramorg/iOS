@@ -311,7 +311,7 @@ class WalletSendAmountField: UIView, UITextFieldDelegate {
 
     private let gramIconLayoutSize = CGSize(width: 44.0, height: 44.0)
     var gramAnimationSize: CGSize { return CGSize(width: 48.0, height: 48.0) }
-    var fiatSymbolFont: UIFont { return Font.with(size: 48.0, design: .round, weight: .bold) }
+    var fiatSymbolFont: UIFont { return Font.with(size: 48.0, design: .round, weight: .bold, traits: [.alternateDollarSign]) }
     private var fiatIconSize: CGSize = .zero
     private var fiatSymbolInkBounds: CGRect = .zero
     private var suffixSize: CGSize = .zero

@@ -804,7 +804,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
         self.ribbonTextNode.alpha = 1.0
         ContainedViewLayoutTransition.immediate.updateTintColor(
             layer: self.ribbonBackgroundNode.layer,
-            color: UIColor(rgb: self.isIncomingTransfer ? 0x0075f6 : 0x00cf00)
+            color: UIColor(rgb: self.isIncomingTransfer ? 0x42b0ff : 0x00cf00)
         )
         self.updateSendingClockAnimation()
     }

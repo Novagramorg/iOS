@@ -3158,7 +3158,7 @@ private final class WalletTransactionContentComponent: Component {
                 }
             } else if !self.isPreview && component.fromChat {
                 //TODO:localize
-                actionTitle = "Open My Wallet"
+                actionTitle = "Open My Money"
             } else {
                 //TODO:localize
                 actionTitle = "OK"

@@ -111,7 +111,7 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
 
     override var usesAnimatedPresentation: Bool { return true }
     override var gramAnimationSize: CGSize { return CGSize(width: 96.0, height: 96.0) }
-    override var fiatSymbolFont: UIFont { return Font.with(size: 34.0, design: .round, weight: .bold) }
+    override var fiatSymbolFont: UIFont { return Font.with(size: 34.0, design: .round, weight: .bold, traits: [.alternateDollarSign]) }
 
     override var isUserInteractionEnabled: Bool {
         didSet {
