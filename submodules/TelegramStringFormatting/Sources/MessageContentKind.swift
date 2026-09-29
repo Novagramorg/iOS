@@ -295,7 +295,7 @@ public func messageContentKind(contentSettings: ContentSettings, message: Engine
     }
     for attribute in message.attributes {
         if let attribute = attribute as? RichTextMessageAttribute {
-            return .text(attribute.instantPage.previewAttributedText(strings: strings))
+            return .text(attribute.instantPage.previewAttributedText(strings: strings, dateTimeFormat: dateTimeFormat, associatedMedia: message.associatedMedia))
         }
     }
     return .text(messageTextWithAttributes(message: message))
@@ -488,6 +488,12 @@ public func stringForMediaKind(_ kind: MessageContentKind, strings: Presentation
 
 public func descriptionStringForMessage(contentSettings: ContentSettings, message: EngineMessage, strings: PresentationStrings, nameDisplayOrder: PresentationPersonNameOrder, dateTimeFormat: PresentationDateTimeFormat, accountPeerId: EnginePeer.Id) -> (NSAttributedString, Bool, Bool) {
     let contentKind = messageContentKind(contentSettings: contentSettings, message: message, strings: strings, nameDisplayOrder: nameDisplayOrder, dateTimeFormat: dateTimeFormat, accountPeerId: accountPeerId)
+    if message.richText != nil {
+        let result = stringForMediaKind(contentKind, strings: strings)
+        if contentKind.key != .text || result.0.length != 0 {
+            return (result.0, result.1, false)
+        }
+    }
     if !message.text.isEmpty && ![.expiredImage, .expiredVideo, .poll].contains(contentKind.key) {
         return (foldLineBreaks(messageTextWithAttributes(message: message)), false, true)
     }

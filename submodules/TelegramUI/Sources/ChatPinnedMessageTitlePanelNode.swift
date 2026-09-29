@@ -794,11 +794,7 @@ final class ChatPinnedMessageTitlePanelNode: ChatTitleAccessoryPanelNode {
             }
         } else {
             let textColor = message.media.isEmpty || message.media.first is TelegramMediaWebpage ? theme.chat.inputPanel.primaryTextColor : theme.chat.inputPanel.secondaryTextColor
-            let mutableTextString = NSMutableAttributedString(attributedString: foldLineBreaks(textString))
-            mutableTextString.addAttributes([
-                .font: textFont,
-                .foregroundColor: textColor
-            ], range: NSRange(location: 0, length: mutableTextString.length))
+            let mutableTextString = styleInstantPagePreview(foldLineBreaks(textString), font: textFont, italicFont: Font.italic(textFont.pointSize), textColor: textColor)
             messageText = renderInstantPagePreviewIcons(mutableTextString, font: textFont, textColor: textColor)
         }
         

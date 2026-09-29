@@ -1551,3 +1551,50 @@ faces against `InstantPageTextStyleStack`'s family scheme, and the **whole** pai
 the same running origin. **Do not change a value in `chatMessage` without expecting the editor to move
 with it** — that coupling is the point. Editor-side detail, and what is deferred, is in
 `submodules/TelegramUI/Components/RichTextEditor/CLAUDE.md`.
+
+## Compact InstantPage previews
+
+`TelegramStringFormatting/InstantPagePreviewBuilder.swift` owns the shared compact
+preview. Block traversal, caption handling, collection summaries, whitespace
+normalization, and inline semantics produce one attributed string. The chat list
+uses its `.string` as the backing text and consumes its attributes directly; never
+independently fold the plain and attributed forms or reconstruct rich content from
+message entities.
+
+Collages/slideshows prefer their own caption and credit. Without a collection
+caption, caption-bearing children retain their order and captionless siblings keep
+media labels. Pure image/video collections use localized counts (including nested
+covers/collections). Other media remain ordinary child previews. Empty containers
+are skipped. Thinking text is a fallback when no answer content contributes.
+
+Preview bodies are limited to 200 grapheme clusters, with an ellipsis on truncation.
+Traversal also limits depth (64), nodes (4,096), and inspected UTF-16 units (16,384).
+Spoilers, custom emoji, dates, italic, underline, and strikethrough survive nesting.
+Dates use supplied presentation settings; nil-format dates retain their literal text.
+Unresolved custom emoji keeps its identity in preview metadata and displays alt
+text (or `�` if empty). Only a resolved file receives the native custom-emoji
+attribute: entity text nodes otherwise replace alt text by a blank attachment.
+The modern composer accessory uses the existing entity-aware text component.
+
+`styleInstantPagePreview` applies a consumer's fonts/colors without deleting semantic
+attributes. Formula/table runs use U+FFFC plus icon and fallback metadata, never
+spaces. `renderInstantPagePreviewIcons` consumes icon markers, retaining semantic
+attributes; materialize on the body before adding author prefixes. Its subsequent
+calls are idempotent. `instantPagePreviewPlainText` provides spoken/textual icon
+labels; it must not replace the visual backing string used by attribute ranges.
+
+Regression targets (run through `Make.py test --target` as documented in CLAUDE.md):
+`//submodules/TelegramStringFormatting:TelegramStringFormattingTests` (resource-free
+collector fixtures) and `//submodules/ChatListUI:ChatListUITests` (unhosted
+selection/composition fixtures). The latter bundles real generated strings data
+and English localization, with test-scoped resource lookup redirection for AppBundle.
+Both production and minimal UIKit test hosts deadlocked during pre-main Texture/UIKit
+initialization on iOS 26.5; an iOS 27.0 hosted retry also failed to start tests.
+
+Thumbnail selection and dedicated relative-date refresh timers are outside this
+preview change.
+
+Validation on 2026-09-29: 23 collector tests and 8 selection/composition tests passed;
+the full simulator app build passed after the review fixes. Live screen appearance,
+VoiceOver playback, and attribute-only message-edit invalidation still need manual
+verification; helper tests do not establish those UI behaviors.
