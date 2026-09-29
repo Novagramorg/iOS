@@ -154,8 +154,18 @@ func settingsItems(data: PeerInfoScreenData?, context: AccountContext, presentat
         }))
         
         if WalletConfiguration.with(appConfiguration: context.currentAppConfiguration.with { $0 }).isAvailable {
+            let balanceText: NSAttributedString
+            if let balance = settings.walletBalance, balance > 10_000_000 {
+                let formattedLabel = formatTonAmountText(balance, dateTimeFormat: presentationData.dateTimeFormat)
+                let smallLabelFont = Font.regular(floor(presentationData.listsFontSize.itemListBaseFontSize / 17.0 * 13.0))
+                let labelFont = Font.regular(presentationData.listsFontSize.itemListBaseFontSize)
+                let labelColor = presentationData.theme.list.itemSecondaryTextColor
+                balanceText = tonAmountAttributedString(formattedLabel, integralFont: labelFont, fractionalFont: smallLabelFont, color: labelColor, decimalSeparator: presentationData.dateTimeFormat.decimalSeparator)
+            } else {
+                balanceText = NSAttributedString()
+            }
             //TODO:localize
-            items[.wallet]!.append(PeerInfoScreenDisclosureItem(id: 0, label: .titleBadge(presentationData.strings.Settings_New, presentationData.theme.list.itemAccentColor), text: "Money", icon: PresentationResourcesSettings.money, action: {
+            items[.wallet]!.append(PeerInfoScreenDisclosureItem(id: 0, label: .attributedText(balanceText), additionalBadgeLabel: presentationData.strings.Settings_New, text: "Money", icon: PresentationResourcesSettings.money, action: {
                 interaction.openSettings(.wallet)
             }))
         }

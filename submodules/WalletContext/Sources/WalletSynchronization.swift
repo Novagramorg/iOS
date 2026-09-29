@@ -1,6 +1,5 @@
 import Foundation
 import TelegramCore
-import WalletEngineFFI
 
 @available(macOS 10.15, *)
 extension WalletContextImpl {
@@ -75,7 +74,10 @@ extension WalletContextImpl {
         async let transactions: Void = self.refreshTransactionsIfRequested(scope,
         taskId: taskId,
         generation: generation)
-        _ = await (account, transactions)
+        async let pending: Void = self.resolveEnginePendingIfRequested(scope,
+        taskId: taskId,
+        generation: generation)
+        _ = await (account, transactions, pending)
     }
 
     private func isCurrentSynchronization(_ taskId: UUID, generation: UInt64) -> Bool {
@@ -86,48 +88,24 @@ extension WalletContextImpl {
     private func refreshAccountIfRequested(_ scope: WalletSynchronizationScope, taskId: UUID, generation: UInt64) async {
         guard scope.contains(.account), self.isCurrentSynchronization(taskId,
         generation: generation) else { return }
-        let watermark = self.streamingPresentationOverlay.revision
-        self.balanceTracker.beginRefresh(id: taskId)
-        let result = await captureAsync { try await self.runtime.refresh() }
+        self.requestServerWalletState()
+        await self.serverStateTask?.value
         guard self.isCurrentSynchronization(taskId, generation: generation) else { return }
-        var balance = self.currentState.balance
-        var overlayChanged = false
-        switch result {
-        case let .success(update):
-            let result = self.balanceTracker.completeRefresh(
-                id: taskId, update: update, current: balance,
-                lastSuccessfulAt: self.balanceLastSuccessfulAt, now: currentWalletTimestamp()
-            )
-            balance = result.balance
-            if result.refreshed {
-                overlayChanged = self.streamingPresentationOverlay.clearBalance(through: watermark)
-            }
-            if case let .stale(_, error, _) = balance {
-                self.logger.error("wallet_engine_refresh_failed", error)
-            }
-        case let .failure(error):
-            if !(error is CancellationError) {
-                self.logger.error("wallet_engine_refresh_failed", error)
-            }
-            balance = self.balanceTracker.failRefresh(
-                id: taskId, error: error, current: balance, lastSuccessfulAt: self.balanceLastSuccessfulAt
-            )
-        }
         self.synchronizationGate.completedResource(.account)
         self.completedSynchronizationResource(.account, queued: self.synchronizationGate.queuedScope)
-        self.recordBalanceTimestamp(balance)
-        let previousState = self.currentState
-        self.replaceState(
-            phase: self.currentState.phase, balance: balance,
-            transactions: self.currentState.transactions,
-            pendingTransfers: self.currentState.pendingTransfers,
-            activeOperation: self.currentState.activeOperation
-        )
-        if overlayChanged && previousState == self.currentState {
-            self.publishPresentationState()
-        }
-        if case .stale = balance {
+        if case .stale = self.currentState.balance {
             self.retryStreamingSynchronizationIfNeeded(scope: .account)
+        }
+    }
+
+    private func resolveEnginePendingIfRequested(_ scope: WalletSynchronizationScope, taskId: UUID, generation: UInt64) async {
+        guard scope.contains(.account), self.isCurrentSynchronization(taskId, generation: generation) else { return }
+        do {
+            _ = try await self.runtime.resolvePending()
+        } catch is CancellationError {
+        } catch {
+            guard self.isCurrentSynchronization(taskId, generation: generation) else { return }
+            self.logger.error("wallet_engine_pending_resolution_failed", error)
         }
     }
 
@@ -237,7 +215,6 @@ extension WalletContextImpl {
     }
 
     func cancelSynchronization() {
-        let taskId = self.synchronizationTaskId
         self.synchronizationTask?.cancel()
         self.synchronizationTask = nil
         self.synchronizationTaskId = nil
@@ -250,22 +227,6 @@ extension WalletContextImpl {
         self.collectiblesPaginationRequest = nil
         if self.currentState.collectibles.isRefreshing || self.currentState.collectibles.isLoadingMore {
             self.replaceCollectibles(self.currentState.collectibles.cancellingRequests())
-        }
-        if let taskId {
-            let balance = self.balanceTracker.failRefresh(
-                id: taskId, error: CancellationError(), current: self.currentState.balance,
-                lastSuccessfulAt: self.balanceLastSuccessfulAt
-            )
-            self.recordBalanceTimestamp(balance)
-            if balance != self.currentState.balance {
-                self.replaceState(
-                    phase: self.currentState.phase,
-                    balance: balance,
-                    transactions: self.currentState.transactions,
-                    pendingTransfers: self.currentState.pendingTransfers,
-                    activeOperation: self.currentState.activeOperation
-                )
-            }
         }
     }
 }

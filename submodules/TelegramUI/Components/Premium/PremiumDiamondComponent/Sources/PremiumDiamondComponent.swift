@@ -7,19 +7,44 @@ import SwiftSignalKit
 import TelegramPresentationData
 
 public final class InteractiveDiamondComponent: Component {
+    public enum Appearance: UInt32, CaseIterable, Sendable {
+        case blue = 0
+        case white = 1
+        case cool = 2
+    }
+
+    public enum ExpansionStyle {
+        case centered
+        case downward
+    }
+
+    public enum AnimationMode: Equatable {
+        case continuous
+        case lottie(loop: Bool)
+    }
+
+    public struct MotionState {
+        public let rotation: CGFloat
+        public let time: CFTimeInterval
+        public let transferEnergy: CGFloat?
+    }
+
     public struct RefractionSource: Equatable {
         let texture: MTLTexture
         let uv: SIMD4<Float>
         let rect: CGRect
+        let preservesColors: Bool
 
-        public init(texture: MTLTexture, uv: SIMD4<Float>, rect: CGRect) {
+        public init(texture: MTLTexture, uv: SIMD4<Float>, rect: CGRect, preservesColors: Bool = false) {
             self.texture = texture
             self.uv = uv
             self.rect = rect
+            self.preservesColors = preservesColors
         }
 
         public static func ==(lhs: RefractionSource, rhs: RefractionSource) -> Bool {
             return lhs.texture === rhs.texture && lhs.uv == rhs.uv && lhs.rect == rhs.rect
+                && lhs.preservesColors == rhs.preservesColors
         }
     }
 
@@ -27,17 +52,31 @@ public final class InteractiveDiamondComponent: Component {
     private let diamondWidth: CGFloat
     private let isVisible: Bool
     private let theme: PresentationTheme
+    private let appearance: Appearance
+    private let expansionStyle: ExpansionStyle
+    private let expandedCenter: CGPoint?
+    private let animationMode: AnimationMode
+    private let animateOnAppear: Bool
 
-    public init(size: CGSize, diamondWidth: CGFloat, isVisible: Bool, theme: PresentationTheme) {
+    public init(size: CGSize, diamondWidth: CGFloat, isVisible: Bool, theme: PresentationTheme, appearance: Appearance = .blue, expansionStyle: ExpansionStyle = .centered, expandedCenter: CGPoint? = nil, animationMode: AnimationMode = .continuous, animateOnAppear: Bool = false) {
         self.size = size
         self.diamondWidth = diamondWidth
         self.isVisible = isVisible
         self.theme = theme
+        self.appearance = appearance
+        self.expansionStyle = expansionStyle
+        self.expandedCenter = expandedCenter
+        self.animationMode = animationMode
+        self.animateOnAppear = animateOnAppear
     }
 
     public static func ==(lhs: InteractiveDiamondComponent, rhs: InteractiveDiamondComponent) -> Bool {
         return lhs.size == rhs.size && lhs.diamondWidth == rhs.diamondWidth
-            && lhs.isVisible == rhs.isVisible && lhs.theme === rhs.theme
+            && lhs.isVisible == rhs.isVisible && lhs.theme === rhs.theme && lhs.appearance == rhs.appearance
+            && lhs.expansionStyle == rhs.expansionStyle
+            && lhs.expandedCenter == rhs.expandedCenter
+            && lhs.animationMode == rhs.animationMode
+            && lhs.animateOnAppear == rhs.animateOnAppear
     }
 
     public final class View: UIView {
@@ -47,16 +86,26 @@ public final class InteractiveDiamondComponent: Component {
             let holding: Bool
         }
 
-        private let diamondLayer = InteractiveDiamondLayer()
+        private let diamondLayer = InteractiveDiamondLayer(backgroundStars: false)
         public let pressGesture = UILongPressGestureRecognizer()
         private var isHolding = false
         public private(set) var isExpanded = false
         public var onExpansionChanged: ((Bool) -> Void)?
+        public var onMotionUpdated: ((MotionState?) -> Void)?
+        public var scrollTiltProvider: ((CFTimeInterval) -> Float)? {
+            get { return self.diamondLayer.scrollTiltProvider }
+            set { self.diamondLayer.scrollTiltProvider = newValue }
+        }
         private var restingSize = CGSize.zero
+        private var expansionStyle: ExpansionStyle = .centered
+        private var expandedCenter: CGPoint?
+        private var refractionSource: RefractionSource?
+        private var animationMode: AnimationMode = .continuous
         private var expansion: Expansion?
         private var grip: CGFloat = 0.0
         private var dragPosition: CGPoint?
         private var dragSamples: [(x: CGFloat, time: CFTimeInterval)] = []
+        private var landingHaptic: DispatchWorkItem?
 
         public override var isUserInteractionEnabled: Bool {
             didSet {
@@ -70,6 +119,15 @@ public final class InteractiveDiamondComponent: Component {
                 if !newValue { self.cancelInteraction() }
                 self.diamondLayer.isRenderingEnabled = newValue
             }
+        }
+
+        public var isPlaying: Bool {
+            return self.diamondLayer.isPlaying
+        }
+
+        public func playOnce() {
+            guard self.animationMode == .lottie(loop: false) else { return }
+            self.diamondLayer.resetAnimation()
         }
 
         override init(frame: CGRect) {
@@ -88,8 +146,24 @@ public final class InteractiveDiamondComponent: Component {
             self.diamondLayer.onHold = { [weak self] holding in
                 self?.setHolding(holding)
             }
-            self.diamondLayer.onPoseUpdated = { [weak self] _ in
-                self?.updateExpansion(at: CACurrentMediaTime())
+            self.diamondLayer.onPoseUpdated = { [weak self] pose in
+                guard let self else { return }
+                if self.expansionStyle == .downward {
+                    self.applyExpansion()
+                } else {
+                    self.updateExpansion(at: CACurrentMediaTime())
+                }
+                if let onMotionUpdated = self.onMotionUpdated {
+                    if let state = self.diamondLayer.animationState {
+                        onMotionUpdated(MotionState(
+                            rotation: CGFloat(pose.yaw),
+                            time: CFTimeInterval(state.time),
+                            transferEnergy: state.transferEnergy.map { CGFloat($0) }
+                        ))
+                    } else {
+                        onMotionUpdated(nil)
+                    }
+                }
             }
             self.pressGesture.minimumPressDuration = 0.0
             self.pressGesture.allowableMovement = .greatestFiniteMagnitude
@@ -105,6 +179,7 @@ public final class InteractiveDiamondComponent: Component {
         required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
         deinit {
+            self.landingHaptic?.cancel()
             NotificationCenter.default.removeObserver(self)
         }
 
@@ -113,6 +188,7 @@ public final class InteractiveDiamondComponent: Component {
             if UIAccessibility.isReduceMotionEnabled {
                 self.expansion = nil
                 self.grip = self.isHolding ? 1.0 : 0.0
+                self.diamondLayer.resetGrowth()
                 self.applyExpansion()
             }
         }
@@ -127,6 +203,9 @@ public final class InteractiveDiamondComponent: Component {
         }
 
         public override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+            if self.animationMode != .continuous {
+                return super.point(inside: point, with: event)
+            }
             return CGRect(x: self.bounds.midX - 32.0, y: self.bounds.midY - 32.0, width: 64.0, height: 64.0).contains(point)
         }
 
@@ -135,11 +214,15 @@ public final class InteractiveDiamondComponent: Component {
             let position = gesture.location(in: self)
             switch gesture.state {
             case .began:
+                self.cancelLandingHaptic()
+                Haptics.prime()
                 self.dragPosition = position
                 self.dragSamples = [(position.x, now)]
                 self.diamondLayer.updateDrag(state: .began)
             case .changed, .ended:
                 guard let previous = self.dragPosition else { return }
+                let wasHolding = self.isHolding
+                let releasePower = CGFloat(self.diamondLayer.refractionStrength)
                 let translation = CGPoint(x: position.x - previous.x, y: position.y - previous.y)
                 // Average recent movement so a tiny final touch sample does not erase the fling.
                 self.dragSamples.append((position.x, now))
@@ -151,8 +234,12 @@ public final class InteractiveDiamondComponent: Component {
                 let velocity = CGPoint(x: (position.x - sample.x) / interval, y: 0.0)
                 self.dragPosition = gesture.state == .ended ? nil : position
                 if gesture.state == .ended { self.dragSamples.removeAll(keepingCapacity: true) }
-                self.diamondLayer.updateDrag(state: gesture.state, translation: translation, velocity: velocity, scale: 220.0, releaseImpulse: 3.0 * 6.5)
+                self.diamondLayer.updateDrag(state: gesture.state, translation: translation, velocity: velocity, scale: 220.0, releaseImpulse: 3.0 * 6.5, playFlingHaptic: false)
+                if gesture.state == .ended, wasHolding {
+                    self.scheduleLandingHaptic(power: releasePower)
+                }
             case .cancelled, .failed:
+                self.cancelLandingHaptic()
                 self.dragPosition = nil
                 self.dragSamples.removeAll(keepingCapacity: true)
                 self.diamondLayer.updateDrag(state: .cancelled)
@@ -161,11 +248,37 @@ public final class InteractiveDiamondComponent: Component {
             }
         }
 
+        private func scheduleLandingHaptic(power: CGFloat) {
+            self.cancelLandingHaptic()
+            guard power > 0.2, !self.isHolding else { return }
+            let impact = DispatchWorkItem { [weak self] in
+                guard let self else { return }
+                self.landingHaptic = nil
+                guard self.window != nil, self.isRenderingEnabled, self.isUserInteractionEnabled,
+                      !self.isHolding, UIApplication.shared.applicationState == .active else { return }
+                Haptics.hit(0.35 + 0.4 * min(1.0, power))
+            }
+            self.landingHaptic = impact
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2, execute: impact)
+        }
+
+        private func cancelLandingHaptic() {
+            self.landingHaptic?.cancel()
+            self.landingHaptic = nil
+        }
+
         private func setHolding(_ holding: Bool) {
             guard self.isHolding != holding else { return }
             let now = CACurrentMediaTime()
             self.updateExpansion(at: now)
             self.isHolding = holding
+            if self.expansionStyle == .downward {
+                if UIAccessibility.isReduceMotionEnabled {
+                    self.diamondLayer.resetGrowth()
+                }
+                self.applyExpansion()
+                return
+            }
             if UIAccessibility.isReduceMotionEnabled {
                 self.expansion = nil
                 self.grip = holding ? 1.0 : 0.0
@@ -198,11 +311,30 @@ public final class InteractiveDiamondComponent: Component {
         }
 
         private func applyExpansion() {
-            let expanded = self.isHolding || self.expansion != nil
-            self.diamondLayer.usesHighFrameRate = expanded
-            self.diamondLayer.interactionScale = Float(1.0 + 2.75 * self.grip)
-            self.diamondLayer.refractionStrength = Float(min(1.0, max(0.0, self.grip)))
-            self.diamondLayer.renderSize = expanded ? CGSize(width: 220.0, height: 220.0) : self.restingSize
+            let expanded = self.isHolding || self.expansion != nil || self.diamondLayer.isGrowthAnimating
+            self.diamondLayer.usesHighFrameRate = expanded || self.diamondLayer.hasTransferAnimation
+            self.diamondLayer.interactionScale = self.expansionStyle == .downward ? 1.0 : Float(1.0 + 2.75 * self.grip)
+            let refractionStrength = self.expansionStyle == .downward && self.diamondLayer.diamondStyle.dragGrow != 1.0
+                ? (self.diamondLayer.pose.grow - 1.0) / (self.diamondLayer.diamondStyle.dragGrow - 1.0)
+                : Float(self.grip)
+            self.diamondLayer.refractionStrength = min(1.0, max(0.0, refractionStrength))
+            let restingCenter = CGPoint(x: self.restingSize.width * 0.5, y: self.restingSize.height * 0.5)
+            let expandedCenter = self.expandedCenter ?? restingCenter
+            // Move the rendered layer with the growth spring, keeping gesture coordinates fixed.
+            self.diamondLayer.position = CGPoint(
+                x: restingCenter.x + (expandedCenter.x - restingCenter.x) * CGFloat(refractionStrength),
+                y: restingCenter.y + (expandedCenter.y - restingCenter.y) * CGFloat(refractionStrength)
+            )
+            self.updateRefractionPosition()
+            if self.diamondLayer.isCompletingTransfer {
+                self.diamondLayer.renderSize = CGSize(width: 240.0, height: 240.0)
+            } else if expanded {
+                self.diamondLayer.renderSize = CGSize(width: 220.0, height: 220.0)
+            } else if self.diamondLayer.hasTransferAnimation {
+                self.diamondLayer.renderSize = CGSize(width: 96.0, height: 96.0)
+            } else {
+                self.diamondLayer.renderSize = self.restingSize
+            }
             self.diamondLayer.setNeedsUpdate()
             if self.isExpanded != expanded {
                 self.isExpanded = expanded
@@ -211,7 +343,8 @@ public final class InteractiveDiamondComponent: Component {
         }
 
         public func cancelInteraction() {
-            guard self.isHolding || self.expansion != nil || self.dragPosition != nil else { return }
+            self.cancelLandingHaptic()
+            guard self.isHolding || self.expansion != nil || self.dragPosition != nil || self.diamondLayer.isGrowthAnimating else { return }
             if self.pressGesture.state == .began || self.pressGesture.state == .changed {
                 self.pressGesture.isEnabled = false
                 self.pressGesture.isEnabled = true
@@ -222,6 +355,7 @@ public final class InteractiveDiamondComponent: Component {
             self.isHolding = false
             self.expansion = nil
             self.grip = 0.0
+            self.diamondLayer.resetGrowth()
             self.applyExpansion()
         }
 
@@ -229,19 +363,70 @@ public final class InteractiveDiamondComponent: Component {
             self.diamondLayer.spin(velocity, decay: decay)
         }
 
+        public func updateTransferState(isSending: Bool, animateCompletion: Bool) {
+            self.diamondLayer.updateTransferState(isSending: isSending, animateCompletion: animateCompletion)
+        }
+
         public func updateRefractionSource(_ source: RefractionSource?) {
-            guard self.diamondLayer.refractionSource != source else { return }
-            self.diamondLayer.refractionSource = source
+            guard self.refractionSource != source else { return }
+            self.refractionSource = source
+            self.updateRefractionPosition()
             self.diamondLayer.setNeedsUpdate()
         }
 
+        private func updateRefractionPosition() {
+            guard let source = self.refractionSource else {
+                self.diamondLayer.refractionSource = nil
+                return
+            }
+            self.diamondLayer.refractionSource = RefractionSource(
+                texture: source.texture,
+                uv: source.uv,
+                rect: source.rect.offsetBy(
+                    dx: self.restingSize.width * 0.5 - self.diamondLayer.position.x,
+                    dy: self.restingSize.height * 0.5 - self.diamondLayer.position.y
+                ),
+                preservesColors: source.preservesColors
+            )
+        }
+
         fileprivate func update(component: InteractiveDiamondComponent) -> CGSize {
+            if self.animationMode != component.animationMode {
+                self.cancelInteraction()
+                self.animationMode = component.animationMode
+            }
+            let isInteractive = component.animationMode == .continuous
+            self.pressGesture.isEnabled = isInteractive
+            self.disablesInteractiveModalDismiss = isInteractive
+            self.disablesInteractiveTransitionGestureRecognizer = isInteractive
+            if self.expansionStyle != component.expansionStyle {
+                self.cancelInteraction()
+                self.expansionStyle = component.expansionStyle
+            }
             self.restingSize = component.size
+            self.expandedCenter = component.expandedCenter
             var style = self.diamondLayer.diamondStyle
+            style.animateOnAppear = component.animateOnAppear
+            switch component.animationMode {
+            case .continuous:
+                style.animationMode = .continuous
+                style.referenceAnimationLoops = true
+            case let .lottie(loop):
+                style.animationMode = .reference
+                style.referenceAnimationLoops = loop
+            }
+            style.swayScale = isInteractive ? 1.0 : 0.0
+            style.mainSparkleOnRotation = isInteractive
             style.widthPoints = Float(component.diamondWidth)
+            style.appearance = component.appearance
+            // The card reference keeps the top nearly fixed: 3x growth moves the center down by 24 pt.
+            style.dragGrow = component.expansionStyle == .downward ? 3.0 : 1.0
+            style.growShift = component.expansionStyle == .downward && component.expandedCenter == nil ? 12.0 : 0.0
+            style.growDamping = component.expansionStyle == .downward ? 0.62 : 0.42
+            style.releaseDecay = component.expansionStyle == .downward ? 1.1 : 0.0
+            style.releaseTilt = component.expansionStyle == .downward ? 0.0 : 2.6
             self.diamondLayer.update(style: style)
-            self.diamondLayer.position = CGPoint(x: component.size.width * 0.5, y: component.size.height * 0.5)
-            self.diamondLayer.lightBackground = !component.theme.overallDarkAppearance
+            self.diamondLayer.lightBackground = component.expansionStyle == .centered && !component.theme.overallDarkAppearance
             self.isRenderingEnabled = component.isVisible
             self.applyExpansion()
             return component.size
@@ -320,5 +505,43 @@ public final class PremiumDiamondComponent: Component {
 
     public func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
         return view.update(component: self, availableSize: availableSize, transition: transition)
+    }
+}
+
+public enum Haptics {
+    private static let light = UIImpactFeedbackGenerator(style: .light)
+    private static let firm = UIImpactFeedbackGenerator(style: .rigid)
+    private static let heavy = UIImpactFeedbackGenerator(style: .heavy)
+    private static var pendingRefusal: DispatchWorkItem?
+
+    public static func prime() { light.prepare() }
+
+    public static func hit(_ intensity: CGFloat = 0.45) {
+        light.impactOccurred(intensity: intensity)
+        light.prepare()
+    }
+
+    public static func strong() {
+        heavy.impactOccurred(intensity: 1)
+        heavy.prepare()
+    }
+
+    public static func refuse() {
+        cancelRefusal()
+        firm.impactOccurred(intensity: 0.8)
+        firm.prepare()
+        let secondImpact = DispatchWorkItem {
+            pendingRefusal = nil
+            guard UIApplication.shared.applicationState == .active else { return }
+            firm.impactOccurred(intensity: 0.55)
+            firm.prepare()
+        }
+        pendingRefusal = secondImpact
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.09, execute: secondImpact)
+    }
+
+    public static func cancelRefusal() {
+        pendingRefusal?.cancel()
+        pendingRefusal = nil
     }
 }

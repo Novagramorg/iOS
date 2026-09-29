@@ -595,7 +595,7 @@ class WalletSendAmountField: UIView, UITextFieldDelegate {
             transition: currencyTransition,
             component: AnyComponent(AnimatedTextComponent(
                 font: self.fractionalFont,
-                color: UIColor(rgb: mode == .gram ? 0x0088ff : 0x219949),
+                color: UIColor(rgb: mode == .gram ? (theme.overallDarkAppearance ? 0x30A1F5 : 0x0088ff) : 0x219949),
                 items: [
                     AnimatedTextComponent.Item(id: "currency", content: .text(suffixText))
                 ],
@@ -684,8 +684,6 @@ class WalletSendAmountField: UIView, UITextFieldDelegate {
             let textRect = self.textField.isEditing ? self.textField.editingRect(forBounds: self.textField.bounds) : self.textField.textRect(forBounds: self.textField.bounds)
             let textInset = !caret.isNull && !caret.isInfinite && caret.height > 0.0 ? caret.minX : textRect.minX
             let firstDigitBounds = WalletSendAmountGlyphMetrics.inkBounds(String(displayText.prefix(1)), font: self.integralFont)
-            // Match the reference's gap between visible outlines, including
-            // the larger left bearing of 1 and the editor's own inset.
             iconLayoutSize.width = self.fiatSymbolInkBounds.width
             iconSpacing = 8.3 - max(0.0, firstDigitBounds.minX) - textInset
         }
@@ -725,7 +723,6 @@ class WalletSendAmountField: UIView, UITextFieldDelegate {
         if self.usesAnimatedPresentation, let fiatIconView = self.fiatIcon.view as? TextView,
            let line = fiatIconView.cachedLayout?.linesRects().first {
             let amountBaseline = self.textField.frame.minY + self.textField.amountTextBaseline(font: self.integralFont)
-            // Reference: symbolShift (-0.8) + gemNudge (1.75) + optical shift (2.5).
             let symbolBaseline = amountBaseline - self.integralFont.capHeight / 2.0 + self.fiatSymbolFont.capHeight / 2.0 + 3.45
             fiatIconView.frame.origin.y = floorToScreenPixels(symbolBaseline - line.minY)
             if usesFiatInkLayout {

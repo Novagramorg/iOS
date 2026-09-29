@@ -131,8 +131,8 @@ final class WalletTransactionAmountComponent: Component {
             }
 
             let textColor = component.pending ? component.theme.actionSheet.secondaryTextColor : regularTextColor
-            let integralFont = Font.with(size: 48.0, design: .round, weight: .semibold)
-            let fractionalFont = Font.with(size: 32.0, design: .round, weight: .semibold)
+            let integralFont = Font.with(size: 48.0, design: .round, weight: .bold, traits: [])
+            let fractionalFont = Font.with(size: 32.0, design: .round, weight: .bold)
             let amountAttributedString = tonAmountAttributedString(
                 amountText,
                 integralFont: integralFont,
@@ -150,7 +150,7 @@ final class WalletTransactionAmountComponent: Component {
                         text: .plain(NSAttributedString(
                             string: "GRAM",
                             font: fractionalFont,
-                            textColor: UIColor(rgb: 0x30A1F5)
+                            textColor: UIColor(rgb: component.theme.overallDarkAppearance ? 0x30A1F5 : 0x0088ff)
                         )),
                         maximumNumberOfLines: 1
                     )),
@@ -160,7 +160,7 @@ final class WalletTransactionAmountComponent: Component {
             } else {
                 suffixSize = .zero
             }
-            let spacing: CGFloat = displaysGramSuffix ? 10.0 : 2.0 - UIScreenPixel
+            let spacing: CGFloat = displaysGramSuffix ? 8.0 : 2.0 - UIScreenPixel
             let amountWidth = displaysGramSuffix
                 ? availableSize.width - 60.0 - spacing - suffixSize.width
                 : availableSize.width - 104.0

@@ -15,6 +15,7 @@ import MultilineTextComponent
 import ButtonComponent
 import PlainButtonComponent
 import LottieComponent
+import PremiumDiamondComponent
 import GlassBarButtonComponent
 import GlassControls
 import TableComponent
@@ -854,7 +855,7 @@ private final class WalletTransactionContentComponent: Component {
         }
 
         @objc private func gramAnimationTapped() {
-            guard let animationView = self.gramAnimation.view as? LottieComponent.View, !animationView.isPlaying else {
+            guard let animationView = self.gramAnimation.view as? InteractiveDiamondComponent.View, !animationView.isPlaying else {
                 return
             }
             animationView.playOnce()
@@ -2256,9 +2257,9 @@ private final class WalletTransactionContentComponent: Component {
             let fiatRate = self.latestWalletState?.fiat.selectedRate
             let isKeyChange = transaction.kind == .keyChange
             let displaysGramHeader = transaction.currency == .ton && transaction.collectible == nil && !isKeyChange
-            if !displaysGramHeader, let animationView = self.gramAnimation.view as? LottieComponent.View {
+            if !displaysGramHeader, let animationView = self.gramAnimation.view as? InteractiveDiamondComponent.View {
                 transition.setAlpha(view: animationView, alpha: 0.0)
-                animationView.externalShouldPlay = false
+                animationView.isRenderingEnabled = false
             }
             if !isKeyChange, let headerView = self.keyUpdateHeader.view {
                 transition.setAlpha(view: headerView, alpha: 0.0)
@@ -2336,19 +2337,20 @@ private final class WalletTransactionContentComponent: Component {
                     let animationSize = CGSize(width: 118.0, height: 118.0)
                     let _ = self.gramAnimation.update(
                         transition: transition,
-                        component: AnyComponent(LottieComponent(
-                            content: LottieComponent.AppBundleContent(name: "GramDiamond"),
-                            startingPosition: .begin,
+                        component: AnyComponent(InteractiveDiamondComponent(
                             size: animationSize,
-                            loop: false,
-                            lottieSettings: component.context.lottieRenderingSettings
+                            diamondWidth: 78.0,
+                            isVisible: environment.isVisible,
+                            theme: theme,
+                            animationMode: .lottie(loop: false),
+                            animateOnAppear: true
                         )),
                         environment: {},
                         containerSize: animationSize
                     )
                     contentHeight = 10.0
-                    if let animationView = self.gramAnimation.view as? LottieComponent.View {
-                        animationView.externalShouldPlay = environment.isVisible
+                    if let animationView = self.gramAnimation.view as? InteractiveDiamondComponent.View {
+                        animationView.isRenderingEnabled = environment.isVisible
                         if animationView.superview == nil {
                             animationView.isUserInteractionEnabled = true
                             animationView.addGestureRecognizer(UITapGestureRecognizer(
@@ -2356,7 +2358,6 @@ private final class WalletTransactionContentComponent: Component {
                                 action: #selector(self.gramAnimationTapped)
                             ))
                             self.addSubview(animationView)
-                            animationView.playOnce()
                         }
                         transition.setFrame(view: animationView, frame: CGRect(
                             x: floorToScreenPixels((availableSize.width - animationSize.width) / 2.0),

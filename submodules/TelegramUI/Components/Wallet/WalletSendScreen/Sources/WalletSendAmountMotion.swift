@@ -86,7 +86,7 @@ struct WalletSendAmountGlyph: Equatable {
     }
 }
 
-struct WalletSendAmountMotionTiming {
+struct WalletSendAmountMotionTiming: Equatable {
     static let switchingDuration = WalletSendRolling.Motion.duration
     let start: Double
     let duration: Double
@@ -263,7 +263,7 @@ final class WalletSendAmountMotion {
                 let separator = new.first(where: { glyphs[$0].group == .grouping }).flatMap { glyphs[$0].text.first }
                     ?? old.first(where: { previous[$0].group == .grouping }).flatMap { previous[$0].text.first } ?? "\u{0}"
                 cells = Rolling.Cells.number(from: a, to: b, font: font, color: before.color,
-                    colorTo: after.color, separator: separator, liquid: liquid)
+                    colorTo: after.color, fontTo: fontTo, separator: separator, liquid: liquid)
                 if fromPlaceholder, group == .integer {
                     for i in cells.indices where cells[i].from > 0 {
                         cells[i].span = Rolling.Motion.placeholderMelt
@@ -604,9 +604,10 @@ enum WalletSendRolling {
         }
 
         static func number(from old: String, to new: String, font: GlyphFont, color: UIColor,
-                           colorTo: UIColor? = nil,
+                           colorTo: UIColor? = nil, fontTo: GlyphFont? = nil,
                            separator: Character,
                            liquid: Bool = false) -> [Cell] {
+            let after = fontTo ?? font
             func split(_ text: String) -> (digits: [Character], seps: [Int]) {
                 var digits: [Character] = []
                 var seps: [Int] = []
@@ -656,9 +657,11 @@ enum WalletSendRolling {
                                 from: from, to: to, span: pace)
                 cell.springs = true
                 cell.melts = liquid
+                cell.fontTo = fontTo
                 return cell
             }
             let sepWidth = font.width(separator)
+            let newSepWidth = after.width(separator)
             var items: [(cell: Cell, wasAt: CGFloat?)] = []
 
             func separators(_ slot: (old: Int?, new: Int?)) {
@@ -667,11 +670,11 @@ enum WalletSendRolling {
                 }
                 guard let j = slot.new else { return }
                 if let i = moved[j] {
-                    var moving = cell(.still(separator), sepWidth, sepWidth)
+                    var moving = cell(.still(separator), sepWidth, newSepWidth)
                     moving.orbits = true
                     items.append((moving, sepX[i]))
                 } else if born.contains(j) {
-                    items.append((cell(.pop(nil, separator), 0, sepWidth), nil))
+                    items.append((cell(.pop(nil, separator), 0, newSepWidth), nil))
                 }
             }
 
@@ -680,7 +683,7 @@ enum WalletSendRolling {
                 let was = slot.old.map { a.digits[$0] }
                 let will = slot.new.map { b.digits[$0] }
                 let wasWidth = font.width(was)
-                let willWidth = font.width(will)
+                let willWidth = after.width(will)
                 let kind: Cell.Kind = was == will ? .still(will ?? " ") : .pop(was, will)
                 items.append((cell(kind, wasWidth, willWidth),
                               slot.old.map { digitX[$0] }))

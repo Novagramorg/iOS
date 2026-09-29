@@ -55,11 +55,13 @@ swift_library(
         ":WalletCardComponentMetalSourcesBundle",
     ],
     deps = [
+        "//submodules/SSignalKit/SwiftSignalKit",
         "//submodules/Display",
         "//submodules/MetalEngine",
         "//submodules/ComponentFlow",
         "//submodules/TelegramUI/Components/AnimatedTextComponent",
         "//submodules/TelegramUI/Components/PlainButtonComponent",
+        "//submodules/TelegramUI/Components/Premium/PremiumDiamondComponent",
         "//submodules/Components/BundleIconComponent",
         "//submodules/Components/MultilineTextComponent",
         "//submodules/TelegramPresentationData",

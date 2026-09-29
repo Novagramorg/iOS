@@ -57,6 +57,7 @@ final class DiamondRenderer: ComputeState {
         var uv: SIMD4<Float>
         var viewport: SIMD4<Float> // pixel center, pixels per point, edge count
         var parameters: SIMD4<Float> // strength, yaw, radius in points, light background
+        var center: SIMD4<Float> // lens center in points, preserves source colors, reserved
     }
 
     private struct Lens {
@@ -83,7 +84,6 @@ final class DiamondRenderer: ComputeState {
     private let pipeline: MTLRenderPipelineState
     private let sparklePipeline: MTLRenderPipelineState
     private let referenceHighlightPipeline: MTLRenderPipelineState
-    private let starPipeline: MTLRenderPipelineState
     private let depthState: MTLDepthStencilState
     private let sparkleDepthState: MTLDepthStencilState
     private let vertexBuffer: MTLBuffer
@@ -101,7 +101,14 @@ final class DiamondRenderer: ComputeState {
     private let facetProjection: SIMD4<Float>
     private lazy var referenceHighlights = DiamondSparkleGeometry.Reference(geometry: self.geometry)
     private lazy var whiteReferenceHighlights = DiamondSparkleGeometry.Reference(geometry: self.geometry, appearance: .white)
-    private lazy var silhouette = DiamondSilhouette(geometry: self.geometry)
+    private let silhouette: DiamondSilhouette
+    private let lensVertices: [SIMD4<Float>]
+
+    private lazy var starPipeline: MTLRenderPipelineState? = {
+        guard let library = metalLibrary(device: self.device) else { return nil }
+        return try? Self.makePipeline(device: self.device, library: library, sampleCount: self.sampleCount,
+            vertex: "backgroundStarVertex", fragment: "backgroundStarFragment", blending: true)
+    }()
 
     private lazy var glassPipeline: MTLRenderPipelineState? = {
         guard let library = metalLibrary(device: self.device) else { return nil }
@@ -115,17 +122,6 @@ final class DiamondRenderer: ComputeState {
             vertex: "diamondVertex", fragment: "diamondLensFragment", blending: true)
     }()
 
-    private lazy var lensVertices: [SIMD4<Float>] = {
-        var seen = Set<SIMD3<Int32>>()
-        var result: [SIMD4<Float>] = []
-        for vertex in self.geometry.vertices {
-            let p = vertex.position
-            let key = SIMD3<Int32>(Int32((p.x * 40).rounded()), Int32((p.y * 40).rounded()), Int32((p.z * 40).rounded()))
-            if seen.insert(key).inserted { result.append(p) }
-        }
-        return result
-    }()
-
     required convenience init?(device: MTLDevice) {
         do {
             try self.init(device: device, sampleCount: device.supportsTextureSampleCount(4) ? 4 : 1)
@@ -137,14 +133,19 @@ final class DiamondRenderer: ComputeState {
     private init(device: MTLDevice, sampleCount: Int) throws {
         self.device = device
         self.sampleCount = sampleCount
-        let geometry = DiamondGeometry()
+        let cachedData = DiamondRenderData.load()
+        let renderData: DiamondRenderData
+        if let cachedData {
+            renderData = cachedData
+        } else {
+            renderData = DiamondRenderData()
+            renderData.store()
+        }
+        let geometry = renderData.geometry
         self.geometry = geometry
-        let referenceModel = DiamondMath.rotation(x: DiamondMotion.referencePitch, y: 0)
-        let referencePoints = geometry.vertices.map { DiamondMath.cameraPoint(referenceModel * $0.position) }
-        let referenceWidth = referencePoints.reduce(Float(0)) { max($0, abs($1.x)) }
-        let referenceTop = referencePoints.reduce(-Float.infinity) { max($0, $1.y) }
-        facetProjection = SIMD4(cos(DiamondMotion.referencePitch), sin(DiamondMotion.referencePitch),
-                                223.95 / referenceWidth, referenceTop)
+        self.facetProjection = renderData.facetProjection
+        self.silhouette = renderData.silhouette
+        self.lensVertices = renderData.lensVertices
         vertexCount = geometry.vertices.count
         planeCount = geometry.planes.count
         guard let vb = geometry.vertices.withUnsafeBytes({ bytes in
@@ -156,7 +157,7 @@ final class DiamondRenderer: ComputeState {
         planeBuffer = pb
         vertexBuffer.label = "GramDiamond • bevelled cut"
         planeBuffer.label = "GramDiamond • optical hull"
-        let sparkles = DiamondSparkleGeometry()
+        let sparkles = renderData.sparkles
         mainSparkleVertexCount = sparkles.main.count
         smallSparkleVertexCount = sparkles.small.count
         streakVertexCount = sparkles.streakVertices.count
@@ -170,7 +171,7 @@ final class DiamondRenderer: ComputeState {
         mainSparkleBuffer = main
         smallSparkleBuffer = small
         streakBuffer = streaks
-        let anchors = DiamondSparkleGeometry.anchors(on: geometry)
+        let anchors = renderData.anchors
         guard let anchorBuffer = anchors.withUnsafeBytes({ bytes in
             device.makeBuffer(bytes: bytes.baseAddress!, length: bytes.count, options: .storageModeShared)
         }) else { throw Failure.resource("sparkle anchors") }
@@ -187,7 +188,6 @@ final class DiamondRenderer: ComputeState {
         pipeline = try makePipeline(vertex: "diamondVertex", fragment: "diamondFragment", blending: false)
         sparklePipeline = try makePipeline(vertex: "sparkleVertex", fragment: "sparkleFragment", blending: true)
         referenceHighlightPipeline = try makePipeline(vertex: "referenceHighlightVertex", fragment: "sparkleFragment", blending: true)
-        starPipeline = try makePipeline(vertex: "backgroundStarVertex", fragment: "backgroundStarFragment", blending: true)
         let depth = MTLDepthStencilDescriptor()
         depth.depthCompareFunction = .lessEqual
         depth.isDepthWriteEnabled = true
@@ -223,7 +223,7 @@ final class DiamondRenderer: ComputeState {
         return try device.makeRenderPipelineState(descriptor: descriptor)
     }
 
-    private func lens(source: InteractiveDiamondComponent.RefractionSource?, strength: Float, yaw: Float,
+    private func lens(source: InteractiveDiamondComponent.RefractionSource?, strength: Float, yaw: Float, center: SIMD2<Float>,
                       uniforms: Uniforms, pixelsPerPoint: Float, lightBackground: Bool) -> Lens? {
         guard let source, let pipeline = self.lensPipeline else { return nil }
         // Prepare once when the field supplies its glyph, before the first press.
@@ -233,7 +233,7 @@ final class DiamondRenderer: ComputeState {
         let transform = uniforms.projection * uniforms.model
         var points = vertices.map { vertex -> SIMD2<Float> in
             let p = transform * vertex
-            return SIMD2(p.x, -p.y) / p.w * halfSize * 0.96
+            return (SIMD2(p.x, -p.y) / p.w * halfSize - center) * 0.96
         }
         points.sort { $0.x != $1.x ? $0.x < $1.x : $0.y < $1.y }
         func cross(_ origin: SIMD2<Float>, _ a: SIMD2<Float>, _ b: SIMD2<Float>) -> Float {
@@ -271,7 +271,8 @@ final class DiamondRenderer: ComputeState {
                 rect: SIMD4(Float(rect.minX), Float(rect.minY), Float(rect.width), Float(rect.height)),
                 uv: source.uv,
                 viewport: SIMD4(uniforms.viewport.x * 0.5, uniforms.viewport.y * 0.5, pixelsPerPoint, Float(edges.count)),
-                parameters: SIMD4(min(1, strength), yaw, radius, lightBackground ? 1 : 0)),
+                parameters: SIMD4(min(1, strength), yaw, radius, lightBackground ? 1 : 0),
+                center: SIMD4(center.x, center.y, source.preservesColors ? 1 : 0, 0)),
             edges: edges)
     }
 
@@ -293,7 +294,7 @@ final class DiamondRenderer: ComputeState {
         var projection = DiamondMath.projection(aspect: Float(size.width / max(size.height, 1)),
                                                zoom: zoom)
         projection.columns.0.x *= horizontalScale
-        let shift = style.growShift * (grow - 1)
+        let shift = style.growShift * (grow - 1) + style.verticalOffset
         if shift != 0 && size.height > 0 {
             let dy = -2 * shift * pixelsPerPoint / Float(size.height)
             projection.columns.0.y += dy * projection.columns.0.w
@@ -341,7 +342,8 @@ final class DiamondRenderer: ComputeState {
 
     func encode(encoder: MTLRenderCommandEncoder, size: CGSize, time: Float, starBursts: [DiamondStarBurst], motion: DiamondMotion, style: DiamondStyle, grow: Float, pixelsPerPoint: Float, reduceMotion: Bool, lightBackground: Bool, refractionSource: InteractiveDiamondComponent.RefractionSource?, refractionStrength: Float) {
         var u = uniforms(size: size, time: time, motion: motion, style: style, grow: grow, pixelsPerPoint: pixelsPerPoint, reduceMotion: reduceMotion)
-        let lens = self.lens(source: refractionSource, strength: refractionStrength, yaw: motion.yaw, uniforms: u, pixelsPerPoint: pixelsPerPoint, lightBackground: lightBackground)
+        let lens = self.lens(source: refractionSource, strength: refractionStrength, yaw: motion.yaw,
+            center: SIMD2(0.0, style.growShift * (grow - 1.0) + style.verticalOffset), uniforms: u, pixelsPerPoint: pixelsPerPoint, lightBackground: lightBackground)
         let stonePipeline: MTLRenderPipelineState
         if let lens {
             stonePipeline = lens.pipeline
@@ -351,7 +353,7 @@ final class DiamondRenderer: ComputeState {
             stonePipeline = pipeline
             u.appearance.y = 0
         }
-        if style.backgroundStars && style.starOpacity > 0.001 && !reduceMotion {
+        if style.backgroundStars && style.starOpacity > 0.001 && !reduceMotion, let starPipeline = self.starPipeline {
             let entrance = style.animationMode == .entrance
             var stars = StarUniforms(
                 projection: DiamondMath.projection(aspect: Float(size.width/max(size.height,1)), zoom: max(0.2, style.starZoom), perspective: false),
@@ -359,7 +361,8 @@ final class DiamondRenderer: ComputeState {
                                  0, lightBackground ? 1 : 0),
                 layout: SIMD4(Float(size.width),Float(size.height),Float(DiamondEntrance.steadyStarCount),0),
                 appearance: u.appearance,
-                tint: SIMD4(0, min(1, max(0, style.starOpacity)), max(0.05, style.starEmission), 0))
+                tint: SIMD4(0, min(1, max(0, style.starOpacity)), max(0.05, style.starEmission), max(0.001, style.burstFadeInDuration)))
+            stars.projection.columns.3.y -= 2 * style.verticalOffset * pixelsPerPoint / Float(size.height)
             encoder.setCullMode(.none)
             encoder.setDepthStencilState(sparkleDepthState)
             encoder.setRenderPipelineState(starPipeline)

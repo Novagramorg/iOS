@@ -2835,6 +2835,7 @@ private final class WalletScreenComponent: Component {
             let cardSize = self.card.update(
                 transition: transition,
                 component: AnyComponent(WalletCardComponent(
+                    theme: environment.theme,
                     balance: self.walletState?.balance.currentValue,
                     fiatCurrency: fiatCurrency,
                     fiatRate: fiatRate,

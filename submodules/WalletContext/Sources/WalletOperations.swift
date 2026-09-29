@@ -629,7 +629,8 @@ extension WalletContextImpl {
             let serverStateRevision = selected.revision
             self.deferredServerWalletState = (
                 state,
-                self.deferredServerWalletState?.refreshIfStreamingUnavailable ?? false
+                self.deferredServerWalletState?.refreshIfStreamingUnavailable ?? false,
+                self.deferredServerWalletState?.balanceOverlayRevision
             )
             self.automaticPhraseRecoveryAttemptIdentity = (identity.address, identity.publicKey)
             let generation = await self.prepareForRuntimeIdentityChange()
@@ -1122,7 +1123,7 @@ extension WalletContextImpl {
     }
 
     private func installBackupEnabledState(_ state: TelegramCore.WalletState) -> WalletInfo {
-        self.deferredServerWalletState = (state, false)
+        self.deferredServerWalletState = (state, false, nil)
         guard case let .ready(backupEnabled, canExportPhrase, canEnableBackup, address, publicKey, _) = state else {
             preconditionFailure("Expected a verified wallet backup state")
         }
@@ -2247,10 +2248,10 @@ extension WalletContextImpl {
         generation: UInt64,
         preserveCurrentWalletState: Bool = false
     ) -> WalletInfo {
-        let identity: (backupEnabled: Bool, canExportPhrase: Bool, canEnableBackup: Bool, address: String, publicKey: Data)
+        let identity: (backupEnabled: Bool, canExportPhrase: Bool, canEnableBackup: Bool, address: String, publicKey: Data, balance: Int64)
         switch state {
-        case let .ready(backupEnabled, canExportPhrase, canEnableBackup, address, publicKey, _):
-            identity = (backupEnabled, canExportPhrase, canEnableBackup, address, publicKey)
+        case let .ready(backupEnabled, canExportPhrase, canEnableBackup, address, publicKey, balance):
+            identity = (backupEnabled, canExportPhrase, canEnableBackup, address, publicKey, balance)
         case .empty:
             preconditionFailure("A runtime activation requires a ready server wallet")
         }
@@ -2270,7 +2271,7 @@ extension WalletContextImpl {
         }
         self.replaceState(
             phase: .wallet(info),
-            balance: preserveCurrentWalletState ? self.currentState.balance : .loading(previous: nil),
+            balance: .value(identity.balance, updatedAt: currentWalletTimestamp()),
             transactions: preserveCurrentWalletState
                 ? self.currentState.transactions
                 : TransactionsState(items: [], offset: 0, canLoadMore: false, isLoadingMore: false, error: nil),
@@ -2358,7 +2359,8 @@ extension WalletContextImpl {
                 if activeOperation.defersServerWalletState {
                     if (activeOperation == .disablingBackup || !operationCompleted),
                        let deferred = self.deferredServerWalletState {
-                        self.applyServerWalletState(deferred.state, refreshIfStreamingUnavailable: deferred.refreshIfStreamingUnavailable)
+                        self.applyServerWalletState(deferred.state, refreshIfStreamingUnavailable: deferred.refreshIfStreamingUnavailable,
+                            balanceOverlayRevision: deferred.balanceOverlayRevision)
                     } else {
                         self.applyCompatibleDeferredServerWalletState()
                     }

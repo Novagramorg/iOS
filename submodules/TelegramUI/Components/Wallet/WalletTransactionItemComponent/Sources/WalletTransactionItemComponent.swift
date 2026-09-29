@@ -13,6 +13,90 @@ import StarsAvatarComponent
 import WalletContext
 import WalletCollectibleImageComponent
 
+private final class WalletTransactionGramIconComponent: Component {
+    let isPending: Bool
+    let pendingColor: UIColor
+    let tintColor: UIColor?
+
+    init(isPending: Bool, pendingColor: UIColor, tintColor: UIColor?) {
+        self.isPending = isPending
+        self.pendingColor = pendingColor
+        self.tintColor = tintColor
+    }
+
+    static func ==(lhs: WalletTransactionGramIconComponent, rhs: WalletTransactionGramIconComponent) -> Bool {
+        return lhs.isPending == rhs.isPending
+            && lhs.pendingColor == rhs.pendingColor
+            && lhs.tintColor == rhs.tintColor
+    }
+
+    final class View: UIView {
+        private let iconImage = UIImage(bundleImageName: "Wallet/TransactionGram")?.withRenderingMode(.alwaysOriginal)
+        private let iconView = UIImageView()
+        private let pendingContainer = UIView()
+        private let pendingIconView = UIImageView()
+        private let highlightView = UIImageView()
+        private var component: WalletTransactionGramIconComponent?
+
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+
+            self.addSubview(self.iconView)
+            self.addSubview(self.pendingContainer)
+            self.pendingContainer.addSubview(self.pendingIconView)
+            self.pendingContainer.addSubview(self.highlightView)
+            self.highlightView.image = UIImage(bundleImageName: "Wallet/TransactionGramHighlight")?.withRenderingMode(.alwaysOriginal)
+        }
+
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+
+        func update(component: WalletTransactionGramIconComponent, availableSize: CGSize, transition: ComponentTransition) -> CGSize {
+            let transition: ComponentTransition = self.component == nil ? .immediate : transition
+            if self.component == nil || self.component?.tintColor != component.tintColor {
+                if let tintColor = component.tintColor {
+                    self.iconView.image = generateTintedImage(image: self.iconImage, color: tintColor)
+                } else {
+                    self.iconView.image = self.iconImage
+                }
+            }
+            if self.component?.pendingColor != component.pendingColor {
+                self.pendingIconView.image = generateTintedImage(image: self.iconImage, color: component.pendingColor)
+            }
+            self.component = component
+
+            let size = CGSize(width: min(18.0, availableSize.width), height: min(18.0, availableSize.height))
+            let frame = CGRect(origin: .zero, size: size)
+            self.iconView.frame = frame
+            self.pendingContainer.frame = frame
+            self.pendingIconView.frame = frame
+            self.highlightView.frame = frame
+
+            // Keep the original icon opaque underneath so the fade only changes its color.
+            if case .none = transition.animation {
+                self.pendingContainer.layer.removeAnimation(forKey: "opacity")
+            }
+            transition.setAlpha(view: self.pendingContainer, alpha: component.isPending ? 1.0 : 0.0)
+            return size
+        }
+    }
+
+    func makeView() -> View {
+        return View(frame: .zero)
+    }
+
+    func update(
+        view: View,
+        availableSize: CGSize,
+        state: EmptyComponentState,
+        environment: Environment<Empty>,
+        transition: ComponentTransition
+    ) -> CGSize {
+        return view.update(component: self, availableSize: availableSize, transition: transition)
+    }
+}
+
 private final class WalletTransactionServiceIconComponent: Component {
     let iconName: String
 
@@ -769,13 +853,23 @@ public final class WalletTransactionItemComponent: Component {
                 color: .white,
                 decimalSeparator: component.dateTimeFormat.decimalSeparator
             )
-            let amountIconSize = self.amountIcon.update(
-                transition: transition,
-                component: AnyComponent(BundleIconComponent(
+            let amountIconComponent: AnyComponent<Empty>
+            if transaction.collectible == nil && transaction.currency == .ton {
+                amountIconComponent = AnyComponent(WalletTransactionGramIconComponent(
+                    isPending: isPending,
+                    pendingColor: component.theme.list.itemSecondaryTextColor,
+                    tintColor: isPending ? nil : amountIconColor
+                ))
+            } else {
+                amountIconComponent = AnyComponent(BundleIconComponent(
                     name: amountIconName,
                     tintColor: amountIconColor,
                     maxSize: CGSize(width: 18.0, height: 18.0)
-                )),
+                ))
+            }
+            let amountIconSize = self.amountIcon.update(
+                transition: transition,
+                component: amountIconComponent,
                 environment: {},
                 containerSize: CGSize(width: 18.0, height: 18.0)
             )

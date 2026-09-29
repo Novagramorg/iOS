@@ -1,6 +1,41 @@
 import Foundation
 import simd
 
+// MARK: - Transfer card timing
+
+struct DiamondTransferAnimation {
+    enum Phase {
+        case sending
+        case completion
+    }
+
+    static let completionDuration: Float = 1.8
+    let phase: Phase
+    let startTime: Float
+
+    func presentation(at time: Float) -> (energy: Float, scale: Float, offset: Float) {
+        let t = max(0, time - self.startTime)
+        let energy: Float
+        let hit: Float
+        let breath: Float
+        let blow: Float
+        switch self.phase {
+        case .sending:
+            energy = pow(min(t / 0.45, 1), 0.65)
+            hit = t < 0.42 ? sin(.pi * t / 0.42) * (1 - 0.3 * t / 0.42) : 0
+            breath = sin(2 * .pi * 1.1 * t)
+            blow = 0
+        case .completion:
+            energy = pow(1 - min(t / 0.7, 1), 2.2)
+            hit = 0
+            breath = 0
+            blow = t < 0.9 ? sin(2 * .pi * 1.6 * t) * exp(-t / 0.2) : 0
+        }
+        let offset: Float = self.phase == .sending ? -1.6 * energy * sin(2 * .pi * 1.1 * (t - 0.18)) : 0
+        return (energy, 1 + 0.32 * hit + 0.07 * energy * breath + blow, offset)
+    }
+}
+
 // MARK: - Motion and interaction
 
 struct DiamondMotion {
@@ -48,6 +83,7 @@ struct DiamondMotion {
     private var rawPitchOffset: Float = 0
     private var yawSpringVelocity: Float = 0
     private var pitchSpringVelocity: Float = 0
+    private(set) var isAppearanceImpulseActive = false
     private var yawVelocity: Float = 0
     var swayScale: Float = 0 {
         didSet {
@@ -99,6 +135,16 @@ struct DiamondMotion {
         spinDecay = max(decay, 0.05)
     }
 
+    mutating func stopSpin() {
+        spinVelocity = 0
+    }
+
+    mutating func pushFromBelow() {
+        guard !isDragging else { return }
+        pitchSpringVelocity -= 1.0
+        isAppearanceImpulseActive = true
+    }
+
     private func sway(at time: Float) -> Float {
         guard swayScale != 0, let phase = swayPhase else { return 0 }
         let frequencies = 2 * Float.pi / SIMD2<Float>(5.3, 8.9)
@@ -135,6 +181,7 @@ struct DiamondMotion {
 
     mutating func begin(at time: Double) {
         isDragging = true
+        isAppearanceImpulseActive = false
         tapRotation = nil
         targetYaw = yaw
         targetPitch = pitch
@@ -185,6 +232,7 @@ struct DiamondMotion {
                        mode: DiamondStyle.AnimationMode = .continuous, time: Float = 0, appearance: DiamondStyle.Appearance = .blue) {
         let dt = min(max(dt, 0), 0.05)
         if reduceMotion {
+            isAppearanceImpulseActive = false
             self.rotationSparkle = DiamondSparkleAnimation.RotationPulse()
             tapRotation = nil
             if isDragging {
@@ -204,7 +252,7 @@ struct DiamondMotion {
 
         var remaining = dt
         while remaining > 0 {
-            let step = min(remaining, 1 / Float(120))
+            let step = min(remaining, 1 / Float(isAppearanceImpulseActive ? 240 : 120))
             let previousYaw = yaw
             let stepTime = max(0, time - remaining + step)
             if !isDragging {
@@ -237,10 +285,18 @@ struct DiamondMotion {
 
             let stiffness = Self.springFrequency * Self.springFrequency
             let damping = 2 * Self.springDamping * Self.springFrequency
+            // Match CoreListChatScrollMotion's free oscillation after scrolling stops.
+            let pitchFrequency = isAppearanceImpulseActive ? 2 * Float.pi * 1.25 : Self.springFrequency
+            let pitchDamping = 2 * (isAppearanceImpulseActive ? 0.13 : Self.springDamping) * pitchFrequency
             yawSpringVelocity += ((targetYaw - yaw) * stiffness - damping * yawSpringVelocity) * step
-            pitchSpringVelocity += ((targetPitch - pitch) * stiffness - damping * pitchSpringVelocity) * step
+            pitchSpringVelocity += ((targetPitch - pitch) * pitchFrequency * pitchFrequency - pitchDamping * pitchSpringVelocity) * step
             yaw += yawSpringVelocity * step
             pitch += pitchSpringVelocity * step
+            if isAppearanceImpulseActive && abs(pitch - targetPitch) < 0.0001 && abs(pitchSpringVelocity) < 0.0001 {
+                pitch = targetPitch
+                pitchSpringVelocity = 0
+                isAppearanceImpulseActive = false
+            }
             if mainSparkleOnRotation {
                 rotationSparkle.advance(rotation: yaw - previousYaw, dt: step)
             }
@@ -397,6 +453,9 @@ enum DiamondLightAnimation {
 // MARK: - Authored Lottie highlights
 
 enum DiamondReferenceHighlights {
+    // Hold the last authored frame instead of wrapping back to the start.
+    static let lastFrameTime: Float = 179.0 / 60.0
+
     struct Event {
         let frame: Float
         let position: SIMD2<Float>

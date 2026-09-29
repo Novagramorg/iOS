@@ -11,6 +11,7 @@ import PresentationDataUtils
 import TelegramStringFormatting
 import ComponentFlow
 import WalletSendKeyboardComponent
+import PremiumDiamondComponent
 import ViewControllerComponent
 import BundleIconComponent
 import MultilineTextComponent
@@ -116,6 +117,7 @@ private func walletPresentTransferSuccess(on controller: ViewController, context
         ),
         in: .current
     )
+    HapticFeedback().success()
 }
 
 @MainActor
@@ -768,6 +770,7 @@ private final class WalletSendScreenComponent: Component {
 
         func viewDidAppear() {
             self.isVisible = true
+            Haptics.prime()
             self.activateAmountInputIfNeeded()
             self.resolvePeerAddressIfNeeded()
             self.feePreparationFailed = false
@@ -777,6 +780,7 @@ private final class WalletSendScreenComponent: Component {
 
         func viewWillDisappear() {
             self.isVisible = false
+            Haptics.cancelRefusal()
             self.needsAmountFocus = false
             self.copyAddressToast?.dismiss()
             (self.keyboard.view as? WalletSendKeyboardComponent.View)?.cancelKeyPresses()
@@ -1026,6 +1030,7 @@ private final class WalletSendScreenComponent: Component {
                   let rate = self.currentRate, rate.isFinite, rate > 0.0 else {
                 return
             }
+            Haptics.hit(0.6)
             switch self.inputMode {
             case .gram:
                 self.inputMode = .fiat
@@ -1040,6 +1045,7 @@ private final class WalletSendScreenComponent: Component {
         }
 
         private func dismiss() {
+            Haptics.cancelRefusal()
             self.abandonRestoration()
             self.cancelPendingSend()
             self.isVisible = false
@@ -1115,7 +1121,7 @@ private final class WalletSendScreenComponent: Component {
                 return
             }
             UIPasteboard.general.string = address
-            HapticFeedback().tap()
+            Haptics.hit(0.4)
             self.copyAddressToast?.dismiss()
             let toast = UndoOverlayController(
                 presentationData: self.currentPresentationData(for: component).initial,
@@ -1292,6 +1298,7 @@ private final class WalletSendScreenComponent: Component {
             guard let component = self.component, let controller = self.environment?.controller(), !self.isPreparingTransfer else {
                 return
             }
+            Haptics.hit(0.4)
 
             //TODO:localize
             let depositFunds = "Deposit funds"
@@ -1348,7 +1355,7 @@ private final class WalletSendScreenComponent: Component {
             self.amount = configuration.transferMinAmount
             self.amountField.setAmount(self.amount)
             self.amountField.layer.addShakeAnimation()
-            HapticFeedback().error()
+            Haptics.refuse()
             if !self.isUpdating {
                 self.requestUpdate(transition: .immediate)
             }
@@ -1376,6 +1383,15 @@ private final class WalletSendScreenComponent: Component {
             }
             guard let feeRequest = self.currentFeeRequest else { return }
             self.sendRevision &+= 1
+            Haptics.hit(0.95)
+            let revision = self.sendRevision
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { [weak self] in
+                guard let self, self.sendRevision == revision,
+                      self.isVisible, self.commentSessionAvailable,
+                      self.isPreparingTransfer || self.isSubmittingTransfer,
+                      UIApplication.shared.applicationState == .active else { return }
+                Haptics.hit(0.6)
+            }
             self.pendingSend = WalletSendTransferRequest(
                 feeRequest: feeRequest,
                 publicKey: self.recipientPublicKey,
@@ -1943,7 +1959,9 @@ private final class WalletSendScreenComponent: Component {
                                 id: AnyHashable("close"),
                                 content: .icon("Navigation/Close"),
                                 action: { [weak self] in
-                                    self?.dismiss()
+                                    guard let self else { return }
+                                    Haptics.hit(0.4)
+                                    self.dismiss()
                                 }
                             )
                         ],
@@ -2077,15 +2095,15 @@ private final class WalletSendScreenComponent: Component {
                               !self.isPreparingTransfer, !self.isResolvingSigningAccess, !self.isSubmittingTransfer else {
                             return
                         }
-                        let accepted: Bool
                         switch action {
                         case let .insertText(text):
-                            accepted = self.amountField.insertText(text)
+                            if self.amountField.insertText(text) {
+                                Haptics.hit()
+                            }
                         case .deleteBackward:
-                            accepted = self.amountField.deleteBackward()
-                        }
-                        if accepted {
-                            HapticFeedback().impact(.light)
+                            if self.amountField.deleteBackward() {
+                                Haptics.hit(0.4)
+                            }
                         }
                     }
                 )),
@@ -2229,7 +2247,6 @@ private final class WalletSendScreenComponent: Component {
                 text: self.lastRateText,
                 displaysGramIcon: self.lastRateDisplaysGramIcon,
                 mode: self.inputMode,
-                currencyCode: self.currentFiatCurrency.code,
                 dateTimeFormat: environment.dateTimeFormat,
                 theme: theme,
                 isVisible: environment.isVisible && showRate,
@@ -2638,13 +2655,16 @@ private final class WalletSendScreenComponent: Component {
             }
 
             let sendTitle: String
+            let sendTitlePrefix: String?
             if component.peer == nil {
                 //TODO:localize
                 sendTitle = "Continue"
+                sendTitlePrefix = nil
             } else {
                 //TODO:localize
                 let sendPrefix = "Send "
                 sendTitle = sendPrefix + amountTitle
+                sendTitlePrefix = sendPrefix
             }
             var sendSubtitle: String?
             if component.peer != nil, hasAmount, self.inputMode == .fiat {
@@ -2682,9 +2702,13 @@ private final class WalletSendScreenComponent: Component {
                         id: "send",
                         component: AnyComponent(WalletSendButtonContentComponent(
                             title: sendTitle,
+                            titlePrefix: sendTitlePrefix,
                             subtitle: sendSubtitle,
                             color: theme.list.itemCheckColors.foregroundColor,
-                            isVisible: environment.isVisible && showSendButton
+                            isVisible: environment.isVisible && showSendButton,
+                            mode: self.inputMode,
+                            dateTimeFormat: environment.dateTimeFormat,
+                            timing: (self.amountField as? WalletSendAnimatedAmountField)?.motionTiming
                         ))
                     ),
                     isEnabled: canSend,
