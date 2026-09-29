@@ -132,7 +132,7 @@ public final class InteractiveDiamondComponent: Component {
         private var diamondWidth: CGFloat = 0.0
         private var walletScale: CGFloat = 1.0
         private var walletLeftInset: CGFloat = .greatestFiniteMagnitude
-        private var walletStarCanvasWidth: CGFloat = 240.0
+        private var walletStarCanvasSize = CGSize(width: 240.0, height: 240.0)
         private var expansionStyle: ExpansionStyle = .centered
         private var expandedCenter: CGPoint?
         private var refractionSource: RefractionSource?
@@ -413,12 +413,15 @@ public final class InteractiveDiamondComponent: Component {
                 let halfWidth = self.diamondWidth * CGFloat(self.diamondLayer.pose.grow * self.diamondLayer.zoom) * self.walletScale * 0.55
                 self.diamondLayer.position.x = restingCenter.x + max(0.0, halfWidth - self.walletLeftInset)
             }
+            // Keep particles in card coordinates when growth nudges the gem away from the left edge.
+            self.diamondLayer.starOffset = self.expansionStyle == .wallet
+                ? CGPoint(x: restingCenter.x - self.diamondLayer.position.x, y: restingCenter.y - self.diamondLayer.position.y)
+                : .zero
             self.updateRefractionPosition()
             if self.diamondLayer.isCompletingTransfer || self.diamondLayer.hasStarBursts {
-                self.diamondLayer.renderSize = CGSize(
-                    width: self.expansionStyle == .wallet ? self.walletStarCanvasWidth : 240.0,
-                    height: 240.0
-                )
+                self.diamondLayer.renderSize = self.expansionStyle == .wallet
+                    ? self.walletStarCanvasSize
+                    : CGSize(width: 240.0, height: 240.0)
             } else if expanded {
                 self.diamondLayer.renderSize = CGSize(width: 220.0, height: 220.0)
             } else if self.diamondLayer.hasTransferAnimation {
@@ -460,11 +463,14 @@ public final class InteractiveDiamondComponent: Component {
             self.applyExpansion()
         }
 
-        public func updateWalletTilt(pitch: CGFloat, roll: CGFloat, scale: CGFloat, leftInset: CGFloat, starCanvasWidth: CGFloat) {
+        public func updateWalletTilt(pitch: CGFloat, roll: CGFloat, scale: CGFloat, leftInset: CGFloat, starCanvasSize: CGSize) {
             guard self.expansionStyle == .wallet else { return }
             self.walletScale = scale
             self.walletLeftInset = leftInset
-            self.walletStarCanvasWidth = max(240.0, ceil(starCanvasWidth))
+            self.walletStarCanvasSize = CGSize(
+                width: max(240.0, ceil(starCanvasSize.width)),
+                height: max(240.0, ceil(starCanvasSize.height))
+            )
             var style = self.diamondLayer.diamondStyle
             style.tilt = Float(-pitch * 2.8)
             style.lean = Float(roll * 2.6)
@@ -549,7 +555,9 @@ public final class InteractiveDiamondComponent: Component {
             style.releaseDecay = component.expansionStyle != .centered ? 1.1 : 0.0
             style.releaseTilt = component.expansionStyle != .centered ? 0.0 : 2.6
             style.tapToSpin = isInteractive && component.tapToSpin
+            style.starOpacity = component.expansionStyle == .wallet ? 0.0 : 1.0
             style.rightwardStars = component.expansionStyle == .wallet
+            style.starReferenceSize = component.expansionStyle == .wallet ? 240.0 : 0.0
             if component.expansionStyle != .wallet {
                 style.tilt = 0.0
                 style.lean = 0.0

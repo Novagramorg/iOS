@@ -3344,7 +3344,7 @@ public class ChatMessagePollBubbleContentNode: ChatMessageBubbleContentNode {
                                         timerNode.alpha = 0.0
                                     }
                                 }
-                                timerNode.update(regularColor: messageTheme.secondaryTextColor, proximityColor: messageTheme.scamColor, timeout: deadlineTimeout, deadlineTimestamp: endDate)
+                                timerNode.update(strings: item.presentationData.strings, regularColor: messageTheme.secondaryTextColor, proximityColor: messageTheme.scamColor, timeout: deadlineTimeout, deadlineTimestamp: endDate)
                                 timerNode.frame = CGRect(origin: CGPoint(x: resultSize.width - layoutConstants.text.bubbleInsets.right, y: typeFrame.minY), size: CGSize())
                             } else if let timerNode = strongSelf.timerNode {
                                 strongSelf.timerNode = nil

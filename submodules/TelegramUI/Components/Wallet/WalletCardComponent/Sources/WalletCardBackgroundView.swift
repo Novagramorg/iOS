@@ -578,9 +578,9 @@ final class WalletCardBackgroundView: UIView {
 
     private func configureFallback() {
         self.fallbackView.backgroundColor = UIColor(
-            red: 0x3b / 255.0,
-            green: 0x86 / 255.0,
-            blue: 0xf7 / 255.0,
+            red: 0x0f / 255.0,
+            green: 0x83 / 255.0,
+            blue: 0xff / 255.0,
             alpha: 1.0
         )
         self.fallbackView.isUserInteractionEnabled = false
@@ -591,9 +591,10 @@ final class WalletCardBackgroundView: UIView {
 
         self.fallbackBaseGradient.startPoint = CGPoint(x: 0.0, y: 0.0)
         self.fallbackBaseGradient.endPoint = CGPoint(x: 1.0, y: 1.0)
+        // Use the same blue/azure palette as Wallet/CardChatGradient and the Metal material.
         self.fallbackBaseGradient.colors = [
-            UIColor(red: 0x2f / 255.0, green: 0x7d / 255.0, blue: 0xf5 / 255.0, alpha: 1.0).cgColor,
-            UIColor(red: 0x47 / 255.0, green: 0x8f / 255.0, blue: 0xf9 / 255.0, alpha: 1.0).cgColor,
+            UIColor(red: 0x08 / 255.0, green: 0x72 / 255.0, blue: 0xfe / 255.0, alpha: 1.0).cgColor,
+            UIColor(red: 0x10 / 255.0, green: 0x85 / 255.0, blue: 0xfe / 255.0, alpha: 1.0).cgColor,
         ]
         self.fallbackBaseGradient.locations = [0.0, 1.0]
         self.fallbackView.layer.addSublayer(self.fallbackBaseGradient)
@@ -602,7 +603,7 @@ final class WalletCardBackgroundView: UIView {
         self.fallbackRadialGradient.startPoint = CGPoint(x: 0.42, y: 0.48)
         self.fallbackRadialGradient.endPoint = CGPoint(x: 1.0, y: 1.0)
         self.fallbackRadialGradient.colors = [
-            UIColor(red: 0.20, green: 0.68, blue: 1.0, alpha: 0.18).cgColor,
+            UIColor(red: 0x1f / 255.0, green: 0xac / 255.0, blue: 0xff / 255.0, alpha: 0.35).cgColor,
             UIColor.clear.cgColor,
         ]
         self.fallbackRadialGradient.locations = [0.0, 1.0]

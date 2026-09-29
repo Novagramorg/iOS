@@ -109,15 +109,11 @@ private final class WalletWordsScreenComponent: Component {
             let bodyText: String
             switch component.mode {
             case .view, .verify, .backupDisable(updateSecretPhrase: false):
-                //TODO:localize
-                titleText = "Your Secret Phrase"
-                //TODO:localize
-                bodyText = "Your Secret Phrase is the key to\u{00a0}back up your wallet. Keep it secret and\u{00a0}secure at all times."
+                titleText = environment.strings.Wallet_Words_Title
+                bodyText = environment.strings.Wallet_SecretPhraseInfo
             case .replacement, .backupDisable(updateSecretPhrase: true):
-                //TODO:localize
-                titleText = "New Secret Phrase"
-                //TODO:localize
-                bodyText = "A new secret phrase for your wallet has been generated. Write it down and keep it secret."
+                titleText = environment.strings.Wallet_Words_NewTitle
+                bodyText = environment.strings.Wallet_Words_NewText
             }
             let sideInset = 30.0 + max(environment.safeInsets.left, environment.safeInsets.right)
             let contentWidth = max(0.0, min(430.0, availableSize.width - sideInset * 2.0))
@@ -423,13 +419,11 @@ private final class WalletWordsSheetComponent: CombinedComponent {
             let buttonTitle: String
             switch context.component.mode {
             case .view, .verify:
-                //TODO:localize
-                buttonTitle = "Done"
+                buttonTitle = environment.strings.Common_Done
             case .replacement:
-                //TODO:localize
-                buttonTitle = "Continue"
+                buttonTitle = environment.strings.Wallet_Continue
             case .backupDisable:
-                buttonTitle = "Continue"
+                buttonTitle = environment.strings.Wallet_Continue
             }
             let sheetComponent = sheet.update(
                 component: ResizableSheetComponent<EnvironmentType>(
@@ -605,12 +599,11 @@ public final class WalletWordsScreen: ViewControllerComponentContainer {
             return
         }
         if self.mode.retainsVerificationScreens, Date().timeIntervalSince(self.displayedAt) < 10.0 {
-            //TODO:localize
             self.present(textAlertController(
                 context: self.context,
-                title: "Sure done?",
-                text: "You didn't have enough time to write these words down.",
-                actions: [TextAlertAction(type: .genericAction, title: "OK, sorry", action: {
+                title: self.context.sharedContext.currentPresentationData.with { $0 }.strings.Wallet_Words_TooFastTitle,
+                text: self.context.sharedContext.currentPresentationData.with { $0 }.strings.Wallet_Words_TooFastText,
+                actions: [TextAlertAction(type: .genericAction, title: self.context.sharedContext.currentPresentationData.with { $0 }.strings.Wallet_Words_TooFastAction, action: {
                 })]
             ), in: .window(.root))
             return

@@ -355,7 +355,7 @@ final class DiamondRenderer: ComputeState {
                         referenceCrownFlash: flashes.0, referencePavilionFlash: flashes.1)
     }
 
-    func encode(encoder: MTLRenderCommandEncoder, size: CGSize, time: Float, starBursts: [DiamondStarBurst], motion: DiamondMotion, style: DiamondStyle, grow: Float, pixelsPerPoint: Float, reduceMotion: Bool, lightBackground: Bool, refractionSource: InteractiveDiamondComponent.RefractionSource?, refractionStrength: Float, highlightBoost: Float, colorPixelFormat: MTLPixelFormat, refractionUpdated: ((InteractiveDiamondComponent.RefractionGeometry?) -> Void)? = nil) {
+    func encode(encoder: MTLRenderCommandEncoder, size: CGSize, time: Float, starBursts: [DiamondStarBurst], starOffset: CGPoint, motion: DiamondMotion, style: DiamondStyle, grow: Float, pixelsPerPoint: Float, reduceMotion: Bool, lightBackground: Bool, refractionSource: InteractiveDiamondComponent.RefractionSource?, refractionStrength: Float, highlightBoost: Float, colorPixelFormat: MTLPixelFormat, refractionUpdated: ((InteractiveDiamondComponent.RefractionGeometry?) -> Void)? = nil) {
         guard let pipelines = colorPixelFormat == .rgba16Float ? self.hdrPipelines : self.sdrPipelines else { return }
         let sparklePipeline = pipelines.sparkle
         let referenceHighlightPipeline = pipelines.referenceHighlight
@@ -383,15 +383,20 @@ final class DiamondRenderer: ComputeState {
         }
         if style.backgroundStars && style.starOpacity > 0.001 && !reduceMotion, let starPipeline = pipelines.stars {
             let entrance = style.animationMode == .entrance
+            // A larger render target reveals more flight without scaling particles or their trajectories.
+            let starZoomScale = style.starReferenceSize > 0
+                ? style.starReferenceSize * pixelsPerPoint / Float(max(1, min(size.width, size.height)))
+                : 1.0
             var stars = StarUniforms(
-                projection: DiamondMath.projection(aspect: Float(size.width/max(size.height,1)), zoom: max(0.2, style.starZoom), perspective: false),
+                projection: DiamondMath.projection(aspect: Float(size.width/max(size.height,1)), zoom: max(0.2, style.starZoom) * starZoomScale, perspective: false),
                 animation: SIMD4(0, DiamondEntrance.particleTime(at:time,entrance:entrance),
                                  0, lightBackground ? 1 : 0),
                 layout: SIMD4(Float(size.width),Float(size.height),Float(DiamondEntrance.steadyStarCount),0),
                 appearance: u.appearance,
                 tint: SIMD4(1, min(1, max(0, style.starOpacity)), max(0.05, style.starEmission), max(0.001, style.burstFadeInDuration)))
             stars.appearance.w = style.rightwardStars ? 1 : 0
-            stars.projection.columns.3.y -= 2 * style.verticalOffset * pixelsPerPoint / Float(size.height)
+            stars.projection.columns.3.x += 2 * Float(starOffset.x) * pixelsPerPoint / Float(size.width)
+            stars.projection.columns.3.y -= 2 * (style.verticalOffset + Float(starOffset.y)) * pixelsPerPoint / Float(size.height)
             encoder.setCullMode(.none)
             encoder.setDepthStencilState(sparkleDepthState)
             encoder.setRenderPipelineState(starPipeline)
@@ -404,7 +409,8 @@ final class DiamondRenderer: ComputeState {
                 var burstStars = stars
                 if burst.isFromTap {
                     // Tap bursts keep their flight and brightness if a transfer finishes meanwhile.
-                    burstStars.projection = DiamondMath.projection(aspect: Float(size.width/max(size.height,1)), zoom: 1, perspective: false)
+                    burstStars.projection = DiamondMath.projection(aspect: Float(size.width/max(size.height,1)), zoom: starZoomScale, perspective: false)
+                    burstStars.projection.columns.3.x = stars.projection.columns.3.x
                     burstStars.projection.columns.3.y = stars.projection.columns.3.y
                     burstStars.tint.x = 1.6
                     burstStars.tint.z = 0.5

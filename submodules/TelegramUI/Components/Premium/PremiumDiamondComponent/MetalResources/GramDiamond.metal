@@ -71,19 +71,15 @@ vertex BackgroundStarRaster backgroundStarVertex(uint vertexIndex [[vertex_id]],
     float fadeIn = burst ? smoothstep(0.0,u.tint.w,u.animation.x) : smoothstep(0,0.10,progress);
     float fade = fadeIn * (1-smoothstep(0.62,1.0,progress)) * alive * u.tint.y;
     float depth = mix(0.60,1.0,starRandom(seed+3));
-    float sector = starRandom(seed+4);
     float spread = starRandom(seed+14);
     const float verticalSpread = 0.78;
     float2 direction;
     if (u.appearance.w > 0.5) {
-        // The wallet gem sits near the left edge: 85% cross the card, 15% fan up/down.
-        float elevation = mix(-M_PI_F/9.0,M_PI_F/9.0,spread);
-        if (sector >= 0.85) {
-            float side = starRandom(seed+15) < 0.5 ? -1.0 : 1.0;
-            elevation = side * mix(M_PI_F/3.0,M_PI_F*17.0/36.0,spread);
-        }
+        // A single continuous fan to the right, with no separate vertical lobes.
+        float elevation = mix(-M_PI_F/3.0,M_PI_F/3.0,spread);
         direction = float2(cos(elevation),sin(elevation));
     } else {
+        float sector = starRandom(seed+4);
         float lowerFanAngle = atan(tan(-M_PI_F/6.0)/verticalSpread);
         float elevation = sector < 0.85 ? mix(lowerFanAngle,0.34,spread) : mix(0.52,1.40,spread);
         float side = starRandom(seed+15) < 0.5 ? -1.0 : 1.0;

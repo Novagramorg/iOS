@@ -1709,12 +1709,10 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                 )
                 let text: String
                 if message.effectivelyIncoming(accountPeerId) {
-                    //TODO:localize
-                    text = "\(compactAuthorName) sent you \(amountText)"
+                    text = strings.Notification_GramTransfer(compactAuthorName, amountText).string
                 } else {
                     let conversationPeerName = message.peers[message.id.peerId].flatMap(EnginePeer.init)?.compactDisplayTitle ?? compactAuthorName
-                    //TODO:localize
-                    text = "You sent \(conversationPeerName) \(amountText)"
+                    text = strings.Notification_GramTransferYou(conversationPeerName, amountText).string
                 }
                 attributedString = NSAttributedString(string: text, font: titleFont, textColor: primaryTextColor)
             case let .starGiftPurchaseOffer(gift, amount, _, _, _):

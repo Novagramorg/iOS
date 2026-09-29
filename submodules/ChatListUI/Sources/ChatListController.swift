@@ -1301,8 +1301,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
             if id == nil {
                 items.append(.separator)
                 
-                //TODO:localize
-                items.append(.custom(ChatListFoldersTipContextItem(text: "Tap and hold  #**Chats**\nto view all folders."), false))
+                items.append(.custom(ChatListFoldersTipContextItem(text: self.presentationData.strings.ChatList_FoldersTip), false))
             }
             
             if let sourceNode {

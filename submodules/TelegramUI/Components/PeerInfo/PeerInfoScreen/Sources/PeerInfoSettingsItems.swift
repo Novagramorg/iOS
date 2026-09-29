@@ -170,8 +170,7 @@ func settingsItems(data: PeerInfoScreenData?, context: AccountContext, presentat
             } else {
                 balanceText = NSAttributedString()
             }
-            //TODO:localize
-            items[.wallet]!.append(PeerInfoScreenDisclosureItem(id: 0, label: .attributedText(balanceText), additionalBadgeLabel: presentationData.strings.Settings_New, text: "Money", icon: PresentationResourcesSettings.money, action: {
+            items[.wallet]!.append(PeerInfoScreenDisclosureItem(id: 0, label: .attributedText(balanceText), additionalBadgeLabel: presentationData.strings.Settings_New, text: presentationData.strings.Settings_Money, icon: PresentationResourcesSettings.money, action: {
                 interaction.openSettings(.wallet)
             }))
         }

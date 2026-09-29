@@ -1330,11 +1330,9 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
 
                 let ribbonTitle: String
                 if isIncoming {
-                    //TODO:localize
-                    ribbonTitle = "received"
+                    ribbonTitle = item.presentationData.strings.Chat_GramTransfer_Received
                 } else {
-                    //TODO:localize
-                    ribbonTitle = "sent"
+                    ribbonTitle = item.presentationData.strings.Chat_GramTransfer_Sent
                 }
                 let ribbonTextLayoutArguments = TextNodeLayoutArguments(
                     attributedString: NSAttributedString(
@@ -1583,9 +1581,6 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                                 } else {
                                     dustNode = InvisibleInkDustNode(textNode: nil, enableAnimations: item.context.sharedContext.energyUsageSettings.fullTranslucency)
                                     dustNode.isUserInteractionEnabled = false
-                                    dustNode.isAccessibilityElement = true
-                                    //TODO:localize
-                                    dustNode.accessibilityLabel = "Encrypted comment"
                                     self.captionDustNode = dustNode
                                     self.mediaContainerNode.addSubnode(dustNode)
                                 }
@@ -1799,19 +1794,6 @@ private func walletTransferServiceMessageString(
     let primaryTextColor = serviceMessageColorComponents(theme: presentationData.0, wallpaper: presentationData.1).primaryText
     let regularFont = Font.regular(13.0)
     let semiboldFont = Font.semibold(13.0)
-    let result = NSMutableAttributedString()
-
-    func append(_ text: String, font: UIFont, additionalAttributes: [NSAttributedString.Key: Any] = [:]) {
-        var attributes: [NSAttributedString.Key: Any] = [
-            .font: font,
-            .foregroundColor: primaryTextColor
-        ]
-        for (key, value) in additionalAttributes {
-            attributes[key] = value
-        }
-        result.append(NSAttributedString(string: text, attributes: attributes))
-    }
-
     let conversationPeer = message.enginePeers[message.id.peerId] ?? message.author
     let peerName = conversationPeer?.compactDisplayTitle ?? ""
     let peerMentionAttributes: [NSAttributedString.Key: Any]
@@ -1823,39 +1805,32 @@ private func walletTransferServiceMessageString(
         peerMentionAttributes = [:]
     }
 
-    //TODO:localize
-    let youText = "You"
-    //TODO:localize
-    let sentText = " sent "
-    //TODO:localize
-    let sentYouText = " sent you "
-    //TODO:localize
-    let worthPrefixText = " ("
-    //TODO:localize
-    let worthSuffixText = ")"
-    
-    if isIncoming {
-        append(peerName, font: semiboldFont, additionalAttributes: peerMentionAttributes)
-        append(sentYouText, font: regularFont)
-    } else {
-        append(youText, font: regularFont)
-        append(sentText, font: regularFont)
-        append(peerName, font: regularFont, additionalAttributes: peerMentionAttributes)
-        append(" ", font: regularFont)
-    }
-
     let amountText = formatTonAmountText(
         amount,
         dateTimeFormat: dateTimeFormat,
         maxDecimalPositions: 3,
         formatString: strings.Currency_Grams
     )
-    append(amountText, font: semiboldFont)
-    
+    let text: PresentationStrings.FormattedString
     if let fiatValue {
-        append(worthPrefixText, font: regularFont)
-        append(fiatValue, font: regularFont)
-        append(worthSuffixText, font: regularFont)
+        text = isIncoming
+            ? strings.Chat_GramTransfer_WithFiat(peerName, amountText, fiatValue)
+            : strings.Chat_GramTransfer_WithFiatYou(peerName, amountText, fiatValue)
+    } else {
+        text = isIncoming
+            ? strings.Notification_GramTransfer(peerName, amountText)
+            : strings.Notification_GramTransferYou(peerName, amountText)
+    }
+    let result = NSMutableAttributedString(string: text.string, font: regularFont, textColor: primaryTextColor)
+    for range in text.ranges {
+        if range.index == 0 {
+            result.addAttributes(peerMentionAttributes, range: range.range)
+            if isIncoming {
+                result.addAttribute(.font, value: semiboldFont, range: range.range)
+            }
+        } else if range.index == 1 {
+            result.addAttribute(.font, value: semiboldFont, range: range.range)
+        }
     }
 
     return result

@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import LocalAuthentication
 import Display
 import AccountContext
 import TelegramPresentationData
@@ -1135,8 +1136,7 @@ private final class WalletScreenComponent: Component {
                     style: .glass,
                     title: AnyComponent(MultilineTextComponent(
                         text: .plain(NSAttributedString(
-                            //TODO:localize
-                            string: "You also have funds in Walt",
+                            string: environment.strings.Wallet_WaltBalance,
                             font: font,
                             textColor: textColor
                         )),
@@ -1150,8 +1150,8 @@ private final class WalletScreenComponent: Component {
             }
             if let availableEarnings = self.availableEarnings, availableEarnings.currency == .ton, availableEarnings.amount > .zero {
                 let amount = formatCurrencyAmountText(availableEarnings, dateTimeFormat: environment.dateTimeFormat, maxDecimalPositions: nil)
-                //TODO:localize
-                let title = NSMutableAttributedString(string: "You have ", font: font, textColor: textColor)
+                let balanceTitle = environment.strings.Wallet_EarningsBalance("💎\(amount)")
+                let title = NSMutableAttributedString(string: balanceTitle.string, font: font, textColor: textColor)
                 let amountText = NSMutableAttributedString(string: "💎\(amount)", font: font, textColor: environment.theme.list.itemAccentColor)
                 if let earningsIcon = self.earningsIcon {
                     let range = (amountText.string as NSString).range(of: "💎")
@@ -1159,9 +1159,9 @@ private final class WalletScreenComponent: Component {
                     amountText.addAttribute(.baselineOffset, value: 1.5, range: range)
                     amountText.addAttribute(.kern, value: 0.0, range: range)
                 }
-                title.append(amountText)
-                //TODO:localize
-                title.append(NSAttributedString(string: " in Gram Earnings", font: font, textColor: textColor))
+                for range in balanceTitle.ranges.reversed() where range.index == 0 {
+                    title.replaceCharacters(in: range.range, with: amountText)
+                }
                 
                 appendItem(id: "earnings", title: title, action: { [weak self] in
                     self?.openEarnings()
@@ -1169,8 +1169,8 @@ private final class WalletScreenComponent: Component {
             }
             if self.previousWalletsBalance > 0 {
                 let amount = formatTonAmountText(self.previousWalletsBalance, dateTimeFormat: environment.dateTimeFormat, maxDecimalPositions: 2)
-                //TODO:localize
-                let title = NSMutableAttributedString(string: "You also have ", font: font, textColor: textColor)
+                let balanceTitle = environment.strings.Wallet_PreviousWalletsBalance("💎\(amount)")
+                let title = NSMutableAttributedString(string: balanceTitle.string, font: font, textColor: textColor)
                 let amountText = NSMutableAttributedString(string: "💎\(amount)", font: font, textColor: environment.theme.list.itemAccentColor)
                 if let earningsIcon = self.earningsIcon {
                     let range = (amountText.string as NSString).range(of: "💎")
@@ -1178,9 +1178,9 @@ private final class WalletScreenComponent: Component {
                     amountText.addAttribute(.baselineOffset, value: 1.5, range: range)
                     amountText.addAttribute(.kern, value: 0.0, range: range)
                 }
-                title.append(amountText)
-                //TODO:localize
-                title.append(NSAttributedString(string: " in old wallets", font: font, textColor: textColor))
+                for range in balanceTitle.ranges.reversed() where range.index == 0 {
+                    title.replaceCharacters(in: range.range, with: amountText)
+                }
                 appendItem(id: "previousWallets", title: title, action: { [weak self] in
                     self?.openWalletSettings()
                 })
@@ -1543,10 +1543,6 @@ private final class WalletScreenComponent: Component {
                 tabsTransition = .immediate
             }
 
-            //TODO:localize
-            let transactionsTitle = "Transactions"
-            //TODO:localize
-            let collectiblesTitle = "Collectibles"
             let transactionsTabId = AnyHashable("transactions")
             let collectiblesTabId = AnyHashable("collectibles")
             self.transactionTabs.parentState = state
@@ -1559,7 +1555,7 @@ private final class WalletScreenComponent: Component {
                         HorizontalTabsComponent.Tab(
                             id: transactionsTabId,
                             content: .title(HorizontalTabsComponent.Tab.Title(
-                                text: transactionsTitle,
+                                text: environment.strings.Wallet_Transactions,
                                 entities: [],
                                 enableAnimations: false
                             )),
@@ -1575,7 +1571,7 @@ private final class WalletScreenComponent: Component {
                         HorizontalTabsComponent.Tab(
                             id: collectiblesTabId,
                             content: .title(HorizontalTabsComponent.Tab.Title(
-                                text: collectiblesTitle,
+                                text: environment.strings.Wallet_Collectibles,
                                 entities: [],
                                 enableAnimations: false
                             )),
@@ -1987,10 +1983,8 @@ private final class WalletScreenComponent: Component {
             guard let component = self.component, let controller = self.environment?.controller() else {
                 return
             }
-            //TODO:localize
-            let scannerInfo = "Find QR that contains a wallet address\nor connect an app"
             let scanner = QrCodeScanScreen(context: component.context, subject: .customValidated(
-                info: scannerInfo,
+                info: self.currentPresentationData(for: component).initial.strings.Wallet_ScanQR,
                 validate: { value in
                     return WalletContext.isTonConnectUrl(value)
                         || WalletContext.transferAddress(from: value) != nil
@@ -2329,22 +2323,15 @@ private final class WalletScreenComponent: Component {
             }
             let presentationData = self.currentPresentationData(for: component).initial
 
-            //TODO:localize
-            let currency = "Currency"
-            //TODO:localize
-            let passcode = "Passcode & Face ID"
-            //TODO:localize
-            let keysAndBackup = "Keys & Backup"
-            //TODO:localize
-            let connectedApps = "Connected Apps"
-            //TODO:localize
-            let howItWorks = "How It Works"
-
             let selectedCurrency = self.walletState?.fiat.selectedCurrency ?? .usd
+
+            let biometricContext = LAContext()
+            _ = biometricContext.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: nil)
+            let hasTouchId = biometricContext.biometryType == .touchID
 
             let items: [ContextMenuItem] = [
                 .action(ContextMenuActionItem(
-                    text: currency,
+                    text: presentationData.strings.Wallet_Currency,
                     textLayout: .secondLineWithValue(selectedCurrency.code),
                     icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Globe"), color: theme.contextMenu.primaryColor)
@@ -2400,9 +2387,9 @@ private final class WalletScreenComponent: Component {
                     }
                 )),
                 .action(ContextMenuActionItem(
-                    text: passcode,
+                    text: hasTouchId ? presentationData.strings.Wallet_PasscodeTouchId : presentationData.strings.Wallet_PasscodeFaceId,
                     icon: { theme in
-                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FaceId"), color: theme.contextMenu.primaryColor)
+                        return generateTintedImage(image: UIImage(bundleImageName: hasTouchId ? "Chat/Context Menu/TouchId" : "Chat/Context Menu/FaceId"), color: theme.contextMenu.primaryColor)
                     },
                     action: { [weak self] _, dismiss in
                         dismiss(.default)
@@ -2410,7 +2397,7 @@ private final class WalletScreenComponent: Component {
                     }
                 )),
                 .action(ContextMenuActionItem(
-                    text: keysAndBackup,
+                    text: presentationData.strings.Wallet_KeysAndBackup,
                     icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Cloud"), color: theme.contextMenu.primaryColor)
                     },
@@ -2421,7 +2408,7 @@ private final class WalletScreenComponent: Component {
                 )),
                 .separator,
                 .action(ContextMenuActionItem(
-                    text: howItWorks,
+                    text: presentationData.strings.Wallet_Info_Title,
                     icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Help"), color: theme.contextMenu.primaryColor)
                     },
@@ -2433,7 +2420,7 @@ private final class WalletScreenComponent: Component {
             ]
 
             let connectedAppsItem = ContextMenuItem.action(ContextMenuActionItem(
-                text: connectedApps,
+                text: presentationData.strings.Wallet_Apps_Title,
                 icon: { theme in
                     return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Apps"), color: theme.contextMenu.primaryColor)
                 },
@@ -2473,8 +2460,6 @@ private final class WalletScreenComponent: Component {
             environment: EnvironmentType,
             transition: ComponentTransition
         ) -> (originY: CGFloat, size: CGSize) {
-            //TODO:localize
-            let title = "Money"
             let leftButton: AnyComponentWithIdentity<NavigationButtonComponentEnvironment> = AnyComponentWithIdentity(
                 id: "back",
                 component: AnyComponent(NavigationButtonComponent(
@@ -2564,7 +2549,7 @@ private final class WalletScreenComponent: Component {
             let navigationTitleSize = self.navigationTitle.update(
                 transition: transition,
                 component: AnyComponent(Text(
-                    text: title,
+                    text: environment.strings.Settings_Money,
                     font: Font.semibold(17.0),
                     color: environment.theme.rootController.navigationBar.primaryTextColor
                 )),
@@ -2905,10 +2890,6 @@ private final class WalletScreenComponent: Component {
                 }
             }
 
-            //TODO:localize
-            let addFundsTitle = "Add Funds"
-            //TODO:localize
-            let sendTitle = "Send"
             let buttonsSpacing: CGFloat = 10.0
             let addFundsButtonWidth = floorToScreenPixels((cardWidth - buttonsSpacing) * 0.5)
             let sendButtonWidth = cardWidth - buttonsSpacing - addFundsButtonWidth
@@ -2928,7 +2909,7 @@ private final class WalletScreenComponent: Component {
                     content: AnyComponentWithIdentity(
                         id: "title",
                         component: AnyComponent(Text(
-                            text: addFundsTitle,
+                            text: environment.strings.Wallet_AddFunds,
                             font: Font.semibold(17.0),
                             color: environment.theme.list.itemCheckColors.foregroundColor
                         ))
@@ -2966,7 +2947,7 @@ private final class WalletScreenComponent: Component {
                     content: AnyComponentWithIdentity(
                         id: "title",
                         component: AnyComponent(Text(
-                            text: sendTitle,
+                            text: environment.strings.Wallet_Send,
                             font: Font.semibold(17.0),
                             color: environment.theme.list.itemCheckColors.foregroundColor
                         ))
@@ -3028,8 +3009,7 @@ private final class WalletScreenComponent: Component {
                                 style: .glass,
                                 title: AnyComponent(MultilineTextComponent(
                                     text: .plain(NSAttributedString(
-                                        //TODO:localize
-                                        string: "Protect Your Account",
+                                        string: environment.strings.Wallet_ProtectAccount,
                                         font: Font.regular(17.0),
                                         textColor: environment.theme.list.itemDestructiveColor
                                     )),
@@ -3221,19 +3201,6 @@ private final class WalletScreenComponent: Component {
                 self.collectiblesSection.clearVisibleItems()
                 self.hideSection(self.transactionsSection, transition: transition)
 
-                //TODO:localize
-                let instantTransfersTitle = "Send Money Instantly"
-                //TODO:localize
-                let instantTransfersText = "Send Grams in any chat, just like\nsharing a photo."
-                //TODO:localize
-                let zeroFeesTitle = "No Fees"
-                //TODO:localize
-                let zeroFeesText = "First 5 transfers each day are free, the\u{00a0}rest cost almost nothing."
-                //TODO:localize
-                let blockchainVerifiedTitle = "Blockchain Verified"
-                //TODO:localize
-                let blockchainVerifiedText = "All transactions are recorded\nand verifiable on a public ledger."
-
                 let titleColor = environment.theme.actionSheet.primaryTextColor
                 let textColor = environment.theme.actionSheet.secondaryTextColor
                 let accentColor = environment.theme.list.itemAccentColor
@@ -3241,9 +3208,9 @@ private final class WalletScreenComponent: Component {
                     AnyComponentWithIdentity(
                         id: "instantTransfers",
                         component: AnyComponent(InfoParagraphComponent(
-                            title: instantTransfersTitle,
+                            title: environment.strings.Wallet_Empty_InstantTransfersTitle,
                             titleColor: titleColor,
-                            text: instantTransfersText,
+                            text: environment.strings.Wallet_Info_InstantTransfersText,
                             textColor: textColor,
                             accentColor: accentColor,
                             iconName: "Wallet/InfoFast",
@@ -3253,9 +3220,9 @@ private final class WalletScreenComponent: Component {
                     AnyComponentWithIdentity(
                         id: "zeroFees",
                         component: AnyComponent(InfoParagraphComponent(
-                            title: zeroFeesTitle,
+                            title: environment.strings.Wallet_Empty_ZeroFeesTitle,
                             titleColor: titleColor,
-                            text: zeroFeesText,
+                            text: environment.strings.Wallet_Info_ZeroFeesText,
                             textColor: textColor,
                             accentColor: accentColor,
                             iconName: "Wallet/InfoCheap",
@@ -3265,9 +3232,9 @@ private final class WalletScreenComponent: Component {
                     AnyComponentWithIdentity(
                         id: "blockchainVerified",
                         component: AnyComponent(InfoParagraphComponent(
-                            title: blockchainVerifiedTitle,
+                            title: environment.strings.Wallet_Info_BlockchainVerifiedTitle,
                             titleColor: titleColor,
-                            text: blockchainVerifiedText,
+                            text: environment.strings.Wallet_Info_BlockchainVerifiedText,
                             textColor: textColor,
                             accentColor: accentColor,
                             iconName: "Wallet/InfoVerified",
@@ -3310,24 +3277,23 @@ private final class WalletScreenComponent: Component {
                 }
                 contentHeight = emptyTransactionsOriginY + emptyTransactionsInfoSize.height
 
-                //TODO:localize
-                let termsString = "By using Wallet you agree to Terms of Service."
-                let termsLink = "Terms of Service"
+                let termsString = environment.strings.Wallet_TermsText(environment.strings.Wallet_TermsLink)
                 let termsText = NSMutableAttributedString(
-                    string: termsString,
+                    string: termsString.string,
                     attributes: [
                         .font: Font.regular(13.0),
                         .foregroundColor: textColor
                     ]
                 )
-                let termsLinkRange = (termsString as NSString).range(of: termsLink)
-                termsText.addAttributes(
-                    [
-                        .foregroundColor: accentColor,
-                        NSAttributedString.Key(rawValue: TelegramTextAttributes.URL): environment.strings.Settings_Terms_URL
-                    ],
-                    range: termsLinkRange
-                )
+                for range in termsString.ranges where range.index == 0 {
+                    termsText.addAttributes(
+                        [
+                            .foregroundColor: accentColor,
+                            NSAttributedString.Key(rawValue: TelegramTextAttributes.URL): environment.strings.Settings_Terms_URL
+                        ],
+                        range: range.range
+                    )
+                }
 
                 self.emptyTransactionsFooter.parentState = state
                 let emptyTransactionsFooterSize = self.emptyTransactionsFooter.update(

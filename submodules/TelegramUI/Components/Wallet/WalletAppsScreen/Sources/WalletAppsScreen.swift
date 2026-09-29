@@ -176,8 +176,7 @@ private final class WalletAppsScreenComponent: Component {
                         completion(false)
                         return
                     }
-                    //TODO:localize
-                    self.disconnect(ids: [session.id], all: false, toast: "\(manifest.name) disconnected.", completion: completion)
+                    self.disconnect(ids: [session.id], all: false, toast: self.currentPresentationData(for: component).initial.strings.Wallet_Apps_Disconnected(manifest.name).string, completion: completion)
                 },
                 closed: { [weak self] in
                     self?.infoController = nil
@@ -194,25 +193,25 @@ private final class WalletAppsScreenComponent: Component {
                   let component = self.component, let controller = self.environment?.controller() else {
                 return
             }
+            let strings = self.currentPresentationData(for: component).initial.strings
             let progress = ValuePromise<Bool>(false, ignoreRepeated: true)
             let enabled = progress.get() |> map { !$0 }
-            //TODO:localize
             let alert = AlertScreen(
                 configuration: AlertScreen.Configuration(actionAlignment: .vertical, dismissOnOutsideTap: false),
                 content: [
-                    AnyComponentWithIdentity(id: "title", component: AnyComponent(AlertTitleComponent(title: "Disconnect All Apps?"))),
-                    AnyComponentWithIdentity(id: "text", component: AnyComponent(AlertTextComponent(content: .plain("These apps will lose access to your wallet. You can connect them again at any time."))))
+                    AnyComponentWithIdentity(id: "title", component: AnyComponent(AlertTitleComponent(title: strings.Wallet_Apps_DisconnectAllTitle))),
+                    AnyComponentWithIdentity(id: "text", component: AnyComponent(AlertTextComponent(content: .plain(strings.Wallet_Apps_DisconnectAllText))))
                 ],
                 actions: [
                     AlertScreen.Action(
-                        title: "Disconnect All",
+                        title: strings.Wallet_Apps_DisconnectAllAction,
                         type: .destructive,
                         action: { [weak self] in
                             guard let self else {
                                 return
                             }
                             let ids = Set(connectedAppSessions(self.sessions ?? []).map(\.id))
-                            self.disconnect(ids: ids, all: true, toast: "All apps disconnected.") { [weak self] succeeded in
+                            self.disconnect(ids: ids, all: true, toast: strings.Wallet_Apps_AllDisconnected) { [weak self] succeeded in
                                 if succeeded {
                                     self?.dismissAllAppsAlert()
                                 }
@@ -222,7 +221,7 @@ private final class WalletAppsScreenComponent: Component {
                         isEnabled: enabled,
                         progress: progress.get()
                     ),
-                    AlertScreen.Action(title: "Cancel", action: {}, isEnabled: enabled)
+                    AlertScreen.Action(title: strings.Common_Cancel, action: {}, isEnabled: enabled)
                 ],
                 updatedPresentationData: self.currentPresentationData(for: component)
             )
@@ -329,11 +328,10 @@ private final class WalletAppsScreenComponent: Component {
             guard let component = self.component, let controller = self.environment?.controller() else {
                 return
             }
-            //TODO:localize
-            let text = all ? "Unable to disconnect these apps. Please try again." : "Unable to disconnect this app. Please try again."
+            let strings = self.currentPresentationData(for: component).initial.strings
             controller.present(AlertScreen(
-                content: [AnyComponentWithIdentity(id: "text", component: AnyComponent(AlertTextComponent(content: .plain(text))))],
-                actions: [AlertScreen.Action(title: "OK", action: {})],
+                content: [AnyComponentWithIdentity(id: "text", component: AnyComponent(AlertTextComponent(content: .plain(all ? strings.Wallet_Apps_DisconnectAllError : strings.Wallet_Apps_DisconnectError))))],
+                actions: [AlertScreen.Action(title: strings.Common_OK, action: {})],
                 updatedPresentationData: self.currentPresentationData(for: component)
             ), in: .window(.root))
         }
@@ -384,12 +382,11 @@ private final class WalletAppsScreenComponent: Component {
             let sideInset = 16.0 + max(environment.safeInsets.left, environment.safeInsets.right)
             var items: [AnyComponentWithIdentity<Empty>] = []
             if apps.count > 1 {
-                //TODO:localize
                 items.append(AnyComponentWithIdentity(id: "disconnectAll", component: AnyComponent(ListActionItemComponent(
                     theme: theme,
                     style: .glass,
                     title: AnyComponent(MultilineTextComponent(
-                        text: .plain(NSAttributedString(string: "Disconnect All Apps", font: Font.regular(17.0), textColor: theme.list.itemDestructiveColor)),
+                        text: .plain(NSAttributedString(string: environment.strings.Wallet_Apps_DisconnectAll, font: Font.regular(17.0), textColor: theme.list.itemDestructiveColor)),
                         maximumNumberOfLines: 0
                     )),
                     leftIcon: .custom(AnyComponentWithIdentity(id: "icon", component: AnyComponent(BundleIconComponent(name: "Item List/Block", tintColor: theme.list.itemDestructiveColor))), false),
@@ -429,15 +426,13 @@ private final class WalletAppsScreenComponent: Component {
             self.section.parentState = state
             let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
             let headerFont = Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize)
-            //TODO:localize
-            let connectionsHeader = "Active Connections"
             let sectionSize = self.section.update(
                 transition: transition,
                 component: AnyComponent(ListSectionComponent(
                     theme: theme,
                     style: .glass,
                     header: AnyComponent(MultilineTextComponent(
-                        text: .plain(NSAttributedString(string: connectionsHeader.uppercased(), font: headerFont, textColor: theme.list.freeTextColor)),
+                        text: .plain(NSAttributedString(string: environment.strings.Wallet_Apps_ActiveConnections.uppercased(), font: headerFont, textColor: theme.list.freeTextColor)),
                         maximumNumberOfLines: 0
                     )),
                     footer: AnyComponent(MultilineTextComponent(
@@ -492,8 +487,7 @@ public final class WalletAppsScreen: ViewControllerComponentContainer {
             theme: .default,
             updatedPresentationData: updatedPresentationData
         )
-        //TODO:localize
-        self.title = "Connected Apps"
+        self.title = updatedPresentationData.initial.strings.Wallet_Apps_Title
         self.attemptNavigation = { [weak self] _ in
             guard let self else {
                 return true

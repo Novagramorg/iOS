@@ -58,17 +58,16 @@ extension ChatControllerImpl {
                 return
             }
 
-            // TODO: localize
             var items: [ContextMenuItem] = []
             if WalletConfiguration.with(appConfiguration: self.context.currentAppConfiguration.with { $0 }).isAvailable {
-                items.append(.action(ContextMenuActionItem(text: "Send Money", icon: { theme in
+                items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.Wallet_SendMoney, icon: { theme in
                     return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Ton"), color: theme.contextMenu.primaryColor)
                 }, action: { [weak self] _, dismiss in
                     dismiss(.default)
                     self?.openResolved(result: .sendGrams(transfer: WalletSendRequest(recipient: recipient, amountNanograms: nil)), sourceMessageId: message.id)
                 })))
             }
-            items.append(.action(ContextMenuActionItem(text: "Copy Address", icon: { theme in
+            items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.Wallet_CopyAddress, icon: { theme in
                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Copy"), color: theme.contextMenu.primaryColor)
             }, action: { [weak self] _, dismiss in
                 dismiss(.default)
@@ -76,9 +75,9 @@ extension ChatControllerImpl {
                     return
                 }
                 UIPasteboard.general.string = address
-                self.present(UndoOverlayController(presentationData: self.presentationData, content: .copy(text: "Address copied"), elevatedLayout: false, animateInAsReplacement: false, action: { _ in return false }), in: .current)
+                self.present(UndoOverlayController(presentationData: self.presentationData, content: .copy(text: self.presentationData.strings.Wallet_AddressCopied), elevatedLayout: false, animateInAsReplacement: false, action: { _ in return false }), in: .current)
             })))
-            items.append(.action(ContextMenuActionItem(text: "View in Explorer", icon: { theme in
+            items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.Wallet_ViewInExplorer, icon: { theme in
                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Search"), color: theme.contextMenu.primaryColor)
             }, action: { [weak self] _, dismiss in
                 dismiss(.default)
@@ -95,7 +94,7 @@ extension ChatControllerImpl {
             if case let .peer(peer, _) = recipient {
                 let avatarSize = CGSize(width: 28.0, height: 28.0)
                 let avatarSignal = peerAvatarCompleteImage(account: self.context.account, peer: peer, size: avatarSize)
-                let subtitle = NSMutableAttributedString(string: "View Profile >")
+                let subtitle = NSMutableAttributedString(string: self.presentationData.strings.Wallet_ViewProfile)
                 if let range = subtitle.string.range(of: ">"), let arrowImage = UIImage(bundleImageName: "Item List/InlineTextRightArrow") {
                     subtitle.addAttribute(.attachment, value: arrowImage, range: NSRange(range, in: subtitle.string))
                     subtitle.addAttribute(.baselineOffset, value: 1.0, range: NSRange(range, in: subtitle.string))
@@ -106,7 +105,7 @@ extension ChatControllerImpl {
                 })))
             } else {
                 let emptyAction: ((ContextMenuActionItem.Action) -> Void)? = nil
-                items.append(.action(ContextMenuActionItem(text: "This address has no linked Telegram account.", textLayout: .multiline, textFont: .small, icon: { _ in return nil }, action: emptyAction)))
+                items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.Wallet_UnlinkedAddress, textLayout: .multiline, textFont: .small, icon: { _ in return nil }, action: emptyAction)))
             }
 
             let controller = makeContextController(presentationData: self.presentationData, source: source, items: .single(ContextController.Items(content: .list(items))), recognizer: params.gesture, gesture: nil, disableScreenshots: false)

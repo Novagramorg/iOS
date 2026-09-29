@@ -39,6 +39,7 @@ struct DiamondStyle: Equatable {
     var widthPoints: Float = 0
     var starOpacity: Float = 1
     var starZoom: Float = 1
+    var starReferenceSize: Float = 0 // Fixed shorter canvas side in points; zero follows the canvas.
     var starEmission: Float = 1
     var rightwardStars: Bool = false
     var burstSize: Float = 1
@@ -147,6 +148,7 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
     var scrollTiltProvider: ((CFTimeInterval) -> Float)?
     var lightBackground = false
     var interactionScale: Float = 1
+    var starOffset: CGPoint = .zero
     var refractionSource: InteractiveDiamondComponent.RefractionSource?
     var refractionStrength: Float = 0
     var onRefractionUpdated: ((InteractiveDiamondComponent.RefractionGeometry?) -> Void)?
@@ -311,6 +313,7 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
             self.grow = layer.grow
             self.growVelocity = layer.growVelocity
             self.interactionScale = layer.interactionScale
+            self.starOffset = layer.starOffset
             self.refractionSource = layer.refractionSource
             self.refractionStrength = layer.refractionStrength
             self.highlightBoost = layer.highlightBoost
@@ -349,7 +352,9 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
         if !style.tapToSpin {
             self.cancelTapSpin()
         }
-        if !style.backgroundStars && !self.isCompletingTransfer {
+        if style.starOpacity <= 0.001 {
+            self.starBursts.removeAll()
+        } else if !style.backgroundStars && !self.isCompletingTransfer {
             self.starBursts.removeAll(where: { !$0.isFromTap })
         }
         if previous.animationMode != style.animationMode || previous.referenceAnimationLoops != style.referenceAnimationLoops {
@@ -592,6 +597,7 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
     }
 
     private func addStarBurst(at time: Float? = nil, isFromTap: Bool = false) {
+        guard self.diamondStyle.starOpacity > 0.001 else { return }
         guard self.diamondStyle.backgroundStars || self.isCompletingTransfer || (isFromTap && self.diamondStyle.tapToSpin) else { return }
         if self.starBursts.count >= 3 {
             self.starBursts.removeFirst()
@@ -719,6 +725,7 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
         let motion = self.motion
         let time = self.elapsed
         let starBursts = self.starBursts
+        let starOffset = self.starOffset
         let reduceMotion = self.reduceMotion
         let lightBackground = self.lightBackground
         let style = self.effectiveStyle
@@ -758,7 +765,7 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
             pass.depthAttachment.clearDepth = 1
             pass.depthAttachment.storeAction = .dontCare
             guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: pass) else { return nil }
-            renderer.encode(encoder: encoder, size: CGSize(width: CGFloat(size.width), height: CGFloat(size.height)), time: time, starBursts: starBursts, motion: motion, style: style, grow: grow, pixelsPerPoint: Float(pixelsPerPoint), reduceMotion: reduceMotion, lightBackground: lightBackground, refractionSource: refractionSource, refractionStrength: refractionStrength, highlightBoost: highDynamicRange ? highlightBoost : 0, colorPixelFormat: pixelFormat, refractionUpdated: self.onRefractionUpdated)
+            renderer.encode(encoder: encoder, size: CGSize(width: CGFloat(size.width), height: CGFloat(size.height)), time: time, starBursts: starBursts, starOffset: starOffset, motion: motion, style: style, grow: grow, pixelsPerPoint: Float(pixelsPerPoint), reduceMotion: reduceMotion, lightBackground: lightBackground, refractionSource: refractionSource, refractionStrength: refractionStrength, highlightBoost: highDynamicRange ? highlightBoost : 0, colorPixelFormat: pixelFormat, refractionUpdated: self.onRefractionUpdated)
             encoder.endEncoding()
             return RenderedFrame(texture: targets.color, commandBuffer: commandBuffer)
         })

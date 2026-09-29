@@ -85,12 +85,10 @@ private func walletSendShortAddress(_ address: String) -> String {
 
 @MainActor
 private func walletPresentTransferSuccess(on controller: ViewController, context: AccountContext, presentationData: PresentationData, peer: EnginePeer) {
-    //TODO:localize
-    let text = "Grams have been sent to **\(peer.compactDisplayTitle)**."
     controller.present(
         UndoOverlayController(
             presentationData: presentationData,
-            content: .emoji(name: "Celebrate", text: text, interactive: true),
+            content: .emoji(name: "Celebrate", text: presentationData.strings.Wallet_Transfer_Success(peer.compactDisplayTitle).string, interactive: true),
             position: .bottom,
             action: { [weak controller] action in
                 guard case .info = action,
@@ -122,18 +120,12 @@ private func walletPresentTransferSuccess(on controller: ViewController, context
 
 @MainActor
 private func walletPresentSubmissionUnknown(on controller: ViewController, context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)) -> ViewController {
-    //TODO:localize
-    let title = "Transfer Pending"
-    //TODO:localize
-    let text = "The transfer may have been sent. Don’t send it again while its status is being checked."
-    //TODO:localize
-    let ok = "OK"
     let alert = textAlertController(
         context: context,
         updatedPresentationData: updatedPresentationData,
-        title: title,
-        text: text,
-        actions: [TextAlertAction(type: .defaultAction, title: ok, action: {
+        title: updatedPresentationData.initial.strings.Wallet_Transfer_PendingTitle,
+        text: updatedPresentationData.initial.strings.Wallet_Transfer_PendingText,
+        actions: [TextAlertAction(type: .defaultAction, title: updatedPresentationData.initial.strings.Common_OK, action: {
         })]
     )
     controller.present(alert, in: .window(.root))
@@ -143,34 +135,31 @@ private func walletPresentSubmissionUnknown(on controller: ViewController, conte
 @MainActor
 private func walletPresentTransferError(_ error: WalletContext.WalletError?, on controller: ViewController, context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)) {
     guard error != .authorizationCancelled else { return }
-    //TODO:localize
     let title: String
     let text: String
     switch error {
     case .walletKeyMismatch:
-        title = "Wallet Key Changed"
-        text = "The wallet key has changed. Refresh the wallet and restore access with its current recovery phrase if needed, then confirm the transfer again."
+        title = updatedPresentationData.initial.strings.Wallet_Transfer_KeyChangedTitle
+        text = updatedPresentationData.initial.strings.Wallet_Transfer_KeyChangedText
     case .commentTooLong:
-        title = "Comment Too Long"
-        text = "The encrypted comment is too long. Shorten it and try again."
+        title = updatedPresentationData.initial.strings.Wallet_Transfer_CommentTooLongTitle
+        text = updatedPresentationData.initial.strings.Wallet_Transfer_CommentTooLongText
     case .commentEncryptionRecipientUnavailable:
-        title = "Couldn't Encrypt Comment"
-        text = "This wallet can't receive encrypted comments now."
+        title = updatedPresentationData.initial.strings.Wallet_Transfer_CommentEncryptionErrorTitle
+        text = updatedPresentationData.initial.strings.Wallet_Transfer_CommentEncryptionUnavailable
     case .commentEncryptionFailed:
-        title = "Couldn't Encrypt Comment"
-        text = "The comment could not be encrypted for this wallet. Check the network connection and try again."
+        title = updatedPresentationData.initial.strings.Wallet_Transfer_CommentEncryptionErrorTitle
+        text = updatedPresentationData.initial.strings.Wallet_Transfer_CommentEncryptionErrorText
     default:
-        title = "Transfer Failed"
-        text = "The transfer could not be prepared or sent. Check the address, balance and network connection, then try again."
+        title = updatedPresentationData.initial.strings.Wallet_Transfer_ErrorTitle
+        text = updatedPresentationData.initial.strings.Wallet_Transfer_ErrorText
     }
-    //TODO:localize
-    let ok = "OK"
     controller.present(textAlertController(
         context: context,
         updatedPresentationData: updatedPresentationData,
         title: title,
         text: text,
-        actions: [TextAlertAction(type: .defaultAction, title: ok, action: {
+        actions: [TextAlertAction(type: .defaultAction, title: updatedPresentationData.initial.strings.Common_OK, action: {
         })]
     ), in: .window(.root))
 }
@@ -1125,8 +1114,7 @@ private final class WalletSendScreenComponent: Component {
             self.copyAddressToast?.dismiss()
             let toast = UndoOverlayController(
                 presentationData: self.currentPresentationData(for: component).initial,
-                //TODO:localize
-                content: .copy(text: "TON address copied to clipboard"),
+                content: .copy(text: self.currentPresentationData(for: component).initial.strings.Wallet_TonAddressCopied),
                 position: .bottom,
                 action: { _ in false }
             )
@@ -1149,16 +1137,14 @@ private final class WalletSendScreenComponent: Component {
             if let peer = component.peer {
                 let fullName = peer.displayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder)
                 let shortName = peer.compactDisplayTitle.isEmpty ? fullName : peer.compactDisplayTitle
-                //TODO:localize
-                title = "\(shortName)’s wallet"
+                title = presentationData.strings.Wallet_Send_RecipientWallet(shortName).string
                 if let username = peer.addressName, !username.isEmpty {
                     recipientName = "@\(username)"
                 } else {
                     recipientName = fullName
                 }
             } else {
-                //TODO:localize
-                title = "Unlinked wallet"
+                title = presentationData.strings.Wallet_Send_UnlinkedWallet
                 recipientName = nil
             }
             let peerId = component.peer?.id
@@ -1225,31 +1211,22 @@ private final class WalletSendScreenComponent: Component {
                 return
             }
 
+            let strings = self.currentPresentationData(for: component).initial.strings
             let inputState = AlertMultilineInputFieldComponent.ExternalState()
             let publicCommentState = AlertCheckComponent.ExternalState()
             let isEditingComment = self.comment?.isEmpty == false
-            //TODO:localize
-            let title = isEditingComment ? "Edit Comment" : "Add comment"
-            //TODO:localize
-            let placeholder = "Optional message"
-            //TODO:localize
-            let publicCommentTitle = "Make comment public"
-            //TODO:localize
-            let cancel = "Cancel"
-            //TODO:localize
-            let actionTitle = isEditingComment ? "Save" : "Add"
 
             let content: [AnyComponentWithIdentity<AlertComponentEnvironment>] = [
                 AnyComponentWithIdentity(
                     id: "title",
-                    component: AnyComponent(AlertTitleComponent(title: title))
+                    component: AnyComponent(AlertTitleComponent(title: isEditingComment ? strings.Wallet_Send_EditComment : strings.Wallet_Send_AddComment))
                 ),
                 AnyComponentWithIdentity(
                     id: "input",
                     component: AnyComponent(AlertMultilineInputFieldComponent(
                         context: component.context,
                         initialValue: NSAttributedString(string: self.comment ?? ""),
-                        placeholder: placeholder,
+                        placeholder: strings.Wallet_OptionalMessage,
                         maxHeight: (controller.view.window?.bounds.height ?? UIScreen.main.bounds.height) * 0.31,
                         returnKeyType: .default,
                         keyboardType: .default,
@@ -1262,7 +1239,7 @@ private final class WalletSendScreenComponent: Component {
                 AnyComponentWithIdentity(
                     id: "publicComment",
                     component: AnyComponent(AlertCheckComponent(
-                        title: publicCommentTitle,
+                        title: strings.Wallet_Send_PublicComment,
                         initialValue: self.isCommentPublic,
                         externalState: publicCommentState
                     ))
@@ -1273,8 +1250,8 @@ private final class WalletSendScreenComponent: Component {
                 configuration: AlertScreen.Configuration(dismissOnOutsideTap: false, allowInputInset: true),
                 content: content,
                 actions: [
-                    AlertScreen.Action(title: cancel),
-                    AlertScreen.Action(title: actionTitle, type: .default, action: { [weak self] in
+                    AlertScreen.Action(title: strings.Common_Cancel),
+                    AlertScreen.Action(title: isEditingComment ? strings.Common_Save : strings.Wallet_Send_Add, type: .default, action: { [weak self] in
                         guard let self, !self.isPreparingTransfer, !self.isSubmittingTransfer else {
                             return
                         }
@@ -1300,11 +1277,10 @@ private final class WalletSendScreenComponent: Component {
             }
             Haptics.hit(0.4)
 
-            //TODO:localize
-            let depositFunds = "Deposit funds"
+            let strings = self.currentPresentationData(for: component).initial.strings
             var items: [ContextMenuItem] = [
                 .action(ContextMenuActionItem(
-                    text: depositFunds,
+                    text: strings.Wallet_Send_DepositFunds,
                     icon: { theme in
                         return generateTintedImage(
                             image: UIImage(bundleImageName: "Chat/Context Menu/AddCircle"),
@@ -1318,10 +1294,8 @@ private final class WalletSendScreenComponent: Component {
                 ))
             ]
             if component.peer != nil {
-                //TODO:localize
-                let commentActionTitle = self.comment?.isEmpty == false ? "Edit Comment" : "Add comment"
                 items.append(.action(ContextMenuActionItem(
-                    text: commentActionTitle,
+                    text: self.comment?.isEmpty == false ? strings.Wallet_Send_EditComment : strings.Wallet_Send_AddComment,
                     icon: { theme in
                         return generateTintedImage(
                             image: UIImage(bundleImageName: "Chat/Context Menu/MessageBubble"),
@@ -1936,13 +1910,6 @@ private final class WalletSendScreenComponent: Component {
             let theme = environment.theme
             self.backgroundColor = theme.list.modalPlainBackgroundColor
 
-            //TODO:localize
-            let titleText = NSAttributedString(
-                string: "Send Money to ",
-                font: Font.semibold(17.0),
-                textColor: theme.list.itemPrimaryTextColor
-            )
-
             let headerButtonSize = CGSize(width: 44.0, height: 44.0)
             let headerOriginY = environment.safeInsets.top + 16.0
             let controlButtonsWidth = max(
@@ -2009,7 +1976,11 @@ private final class WalletSendScreenComponent: Component {
             let titleSize = self.title.update(
                 transition: transition,
                 component: AnyComponent(MultilineTextComponent(
-                    text: .plain(titleText),
+                    text: .plain(NSAttributedString(
+                        string: environment.strings.Wallet_Send_Title,
+                        font: Font.semibold(17.0),
+                        textColor: theme.list.itemPrimaryTextColor
+                    )),
                     horizontalAlignment: .center,
                     maximumNumberOfLines: 1
                 )),
@@ -2181,8 +2152,7 @@ private final class WalletSendScreenComponent: Component {
                 transition: transition
             )
 
-            //TODO:localize
-            let emptyHint = "Tap to set amount"
+            let emptyHint = environment.strings.Wallet_Send_AmountPlaceholder
             let showEmptyHint = !self.needsAmountFocus && !self.hasActivatedAmountInput && !self.amountField.isInputActive && !self.amountField.hasInputText
             let emptyHintSize = self.emptyHint.update(
                 transition: transition,
@@ -2285,13 +2255,11 @@ private final class WalletSendScreenComponent: Component {
                 rateVisibilityTransition.setScale(view: rateButtonView, scale: showRate ? 1.0 : 0.01)
             }
 
-            //TODO:localize
-            let insufficientText = "Insufficient funds."
             let insufficientTextSize = self.insufficientText.update(
                 transition: transition,
                 component: AnyComponent(MultilineTextComponent(
                     text: .plain(NSAttributedString(
-                        string: insufficientText,
+                        string: environment.strings.Wallet_Send_InsufficientFunds,
                         font: Font.regular(14.0),
                         textColor: theme.list.itemDestructiveColor
                     )),
@@ -2307,8 +2275,6 @@ private final class WalletSendScreenComponent: Component {
                 width: availableSize.width - 32.0,
                 height: 22.0
             )
-            //TODO:localize
-            let depositTitle = "Deposit funds"
             let showDeposit = hasZeroBalance || isInsufficient || (!hasAmount && !hasPositiveBalance)
             let isDepositInline = !hasZeroBalance && (hasAmount || hasPositiveBalance)
             let depositItems: [AnyComponentWithIdentity<Empty>] = [
@@ -2316,7 +2282,7 @@ private final class WalletSendScreenComponent: Component {
                     id: "title",
                     component: AnyComponent(MultilineTextComponent(
                         text: .plain(NSAttributedString(
-                            string: depositTitle,
+                            string: environment.strings.Wallet_Send_DepositFunds,
                             font: Font.regular(14.0),
                             textColor: theme.list.itemAccentColor
                         )),
@@ -2482,19 +2448,14 @@ private final class WalletSendScreenComponent: Component {
                     formatString: environment.strings.Currency_Grams
                 )
             } else {
-                //TODO:localize
-                let unavailableBalance = "—"
-                formattedBalance = unavailableBalance
+                formattedBalance = "–"
             }
-            //TODO:localize
-            let balancePrefix = "Balance: "
-            let balanceText = balancePrefix + formattedBalance
 
             let balanceTextSize = self.balanceText.update(
                 transition: transition,
                 component: AnyComponent(MultilineTextComponent(
                     text: .plain(NSAttributedString(
-                        string: balanceText,
+                        string: environment.strings.Wallet_Send_Balance(formattedBalance).string,
                         font: Font.regular(14.0),
                         textColor: theme.list.itemSecondaryTextColor
                     )),
@@ -2566,8 +2527,7 @@ private final class WalletSendScreenComponent: Component {
                             id: "title",
                             component: AnyComponent(MultilineTextComponent(
                                 text: .plain(NSAttributedString(
-                                    //TODO:localize
-                                    string: "Network fee:",
+                                    string: environment.strings.Wallet_Send_NetworkFee,
                                     font: Font.regular(14.0),
                                     textColor: theme.list.itemSecondaryTextColor
                                 )),
@@ -2653,14 +2613,16 @@ private final class WalletSendScreenComponent: Component {
             let sendTitle: String
             let sendTitlePrefix: String?
             if component.peer == nil {
-                //TODO:localize
-                sendTitle = "Continue"
+                sendTitle = environment.strings.Wallet_Continue
                 sendTitlePrefix = nil
             } else {
-                //TODO:localize
-                let sendPrefix = "Send "
-                sendTitle = sendPrefix + amountTitle
-                sendTitlePrefix = sendPrefix
+                let formattedTitle = environment.strings.Wallet_Send_Amount(amountTitle)
+                sendTitle = formattedTitle.string
+                if let amountRange = formattedTitle.ranges.first(where: { $0.index == 0 }) {
+                    sendTitlePrefix = (formattedTitle.string as NSString).substring(to: amountRange.range.location)
+                } else {
+                    sendTitlePrefix = nil
+                }
             }
             var sendSubtitle: String?
             if component.peer != nil, hasAmount, self.inputMode == .fiat {

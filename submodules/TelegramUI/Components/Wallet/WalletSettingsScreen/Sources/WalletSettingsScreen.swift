@@ -552,8 +552,8 @@ private final class WalletSettingsScreenComponent: Component {
                 settingsController?.present(UndoOverlayController(
                     presentationData: presentationData,
                     content: .actionSucceeded(
-                        title: "Wallet Imported",
-                        text: "Your wallet was restored from your secret phrase.",
+                        title: component.context.sharedContext.currentPresentationData.with { $0 }.strings.Wallet_Settings_WalletImportedTitle,
+                        text: component.context.sharedContext.currentPresentationData.with { $0 }.strings.Wallet_Settings_WalletImportedText,
                         cancel: nil,
                         destructive: false
                     ),
@@ -1427,8 +1427,8 @@ private final class WalletSettingsScreenComponent: Component {
                     mode: .importWallet,
                     completion: { [weak self] in
                         self?.completeWalletReplacement(
-                            toastTitle: "Wallet Imported",
-                            toastText: "Your wallet was restored from your secret phrase."
+                            toastTitle: component.context.sharedContext.currentPresentationData.with { $0 }.strings.Wallet_Settings_WalletImportedTitle,
+                            toastText: component.context.sharedContext.currentPresentationData.with { $0 }.strings.Wallet_Settings_WalletImportedText
                         )
                     }
                 ))
@@ -1462,7 +1462,6 @@ private final class WalletSettingsScreenComponent: Component {
                     guard let walletController else {
                         return
                     }
-                    //TODO:localize
                     walletController.present(UndoOverlayController(
                         presentationData: presentationData,
                         content: .actionSucceeded(
@@ -1519,8 +1518,8 @@ private final class WalletSettingsScreenComponent: Component {
                     self?.endWalletFlow()
                     let complete: () -> Void = { [weak self] in
                         self?.completeWalletReplacement(
-                            toastTitle: "Wallet Created",
-                            toastText: "Your new wallet is ready to use."
+                            toastTitle: component.context.sharedContext.currentPresentationData.with { $0 }.strings.Wallet_Settings_WalletCreatedTitle,
+                            toastText: component.context.sharedContext.currentPresentationData.with { $0 }.strings.Wallet_Settings_WalletCreatedText
                         )
                     }
                     if let alertController {
@@ -1651,18 +1650,6 @@ private final class WalletSettingsScreenComponent: Component {
             let theme = environment.theme
             self.backgroundColor = theme.list.blocksBackgroundColor
 
-            //TODO:localize
-            let recoveryHeader = "Secret Phrase"
-            //TODO:localize
-            //TODO:localize
-            let backupHeader = "Encrypted Backup"
-            //TODO:localize
-            let enableBackupAction = "Enable Backup"
-            //TODO:localize
-            let disableBackupAction = "Disable Backup"
-            //TODO:localize
-            let deleteWalletAction = "Delete Wallet"
-
             let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
             let headerFont = Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize)
             let footerFont = Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize)
@@ -1689,16 +1676,6 @@ private final class WalletSettingsScreenComponent: Component {
                 canEnterRecoveryPhrase = false
                 backupEnabled = false
             }
-            //TODO:localize
-            let recoveryAction = canEnterRecoveryPhrase ? "Enter Secret Phrase" : "Show Secret Phrase"
-            //TODO:localize
-            let recoveryFooter = canEnterRecoveryPhrase
-                ? "Enter your secret phrase to restore access to this wallet."
-                : "You can transfer your wallet to another device by copying your 12- or 24-word secret phrase."
-            //TODO:localize
-            let backupFooter = backupEnabled
-                ? "Your encrypted key backup is split into three parts and stored across three continents.\n\nIt can only be reassembled on your devices, so no one — not even Telegram — can access your key."
-                : "Your encrypted key backup will be split into three parts and stored across three continents.\n\nIt can only be reassembled on your devices, so no one — not even Telegram — can access your key."
 
             self.recoverySection.parentState = self.state
             let recoverySectionSize = self.recoverySection.update(
@@ -1708,7 +1685,7 @@ private final class WalletSettingsScreenComponent: Component {
                     style: .glass,
                     header: AnyComponent(MultilineTextComponent(
                         text: .plain(NSAttributedString(
-                            string: recoveryHeader.uppercased(),
+                            string: environment.strings.Wallet_SecretPhrase.uppercased(),
                             font: headerFont,
                             textColor: theme.list.freeTextColor
                         )),
@@ -1716,7 +1693,7 @@ private final class WalletSettingsScreenComponent: Component {
                     )),
                     footer: AnyComponent(MultilineTextComponent(
                         text: .plain(NSAttributedString(
-                            string: recoveryFooter,
+                            string: canEnterRecoveryPhrase ? environment.strings.Wallet_Settings_EnterSecretPhraseInfo : environment.strings.Wallet_Settings_SecretPhraseInfo,
                             font: footerFont,
                             textColor: theme.list.freeTextColor
                         )),
@@ -1728,7 +1705,7 @@ private final class WalletSettingsScreenComponent: Component {
                             style: .glass,
                             title: AnyComponent(MultilineTextComponent(
                                 text: .plain(NSAttributedString(
-                                    string: recoveryAction,
+                                    string: canEnterRecoveryPhrase ? environment.strings.Wallet_Settings_EnterSecretPhrase : environment.strings.Wallet_ShowSecretPhrase,
                                     font: actionFont,
                                     textColor: theme.list.itemAccentColor
                                 )),
@@ -1772,7 +1749,7 @@ private final class WalletSettingsScreenComponent: Component {
                     style: .glass,
                     title: AnyComponent(MultilineTextComponent(
                         text: .plain(NSAttributedString(
-                            string: enableBackupAction,
+                            string: environment.strings.Wallet_Settings_EnableBackup,
                             font: actionFont,
                             textColor: theme.list.itemAccentColor
                         )),
@@ -1790,7 +1767,7 @@ private final class WalletSettingsScreenComponent: Component {
                     style: .glass,
                     title: AnyComponent(MultilineTextComponent(
                         text: .plain(NSAttributedString(
-                            string: disableBackupAction,
+                            string: environment.strings.Wallet_Settings_DisableBackup,
                             font: actionFont,
                             textColor: theme.list.itemDestructiveColor
                         )),
@@ -1811,7 +1788,7 @@ private final class WalletSettingsScreenComponent: Component {
                         style: .glass,
                         header: AnyComponent(MultilineTextComponent(
                             text: .plain(NSAttributedString(
-                                string: backupHeader.uppercased(),
+                                string: environment.strings.Wallet_Settings_Backup.uppercased(),
                                 font: headerFont,
                                 textColor: theme.list.freeTextColor
                             )),
@@ -1819,7 +1796,7 @@ private final class WalletSettingsScreenComponent: Component {
                         )),
                         footer: AnyComponent(MultilineTextComponent(
                             text: .plain(NSAttributedString(
-                                string: backupFooter,
+                                string: backupEnabled ? environment.strings.Wallet_Settings_BackupEnabledInfo : environment.strings.Wallet_Settings_BackupDisabledInfo,
                                 font: footerFont,
                                 textColor: theme.list.freeTextColor
                             )),
@@ -1862,7 +1839,7 @@ private final class WalletSettingsScreenComponent: Component {
                             style: .glass,
                             title: AnyComponent(MultilineTextComponent(
                                 text: .plain(NSAttributedString(
-                                    string: deleteWalletAction,
+                                    string: environment.strings.Wallet_Settings_DeleteWallet,
                                     font: actionFont,
                                     textColor: theme.list.itemDestructiveColor
                                 )),
@@ -1897,10 +1874,9 @@ private final class WalletSettingsScreenComponent: Component {
                 let subtitleFont = Font.regular(presentationData.listsFontSize.baseDisplaySize * 14.0 / 17.0)
                 let calendar = Calendar.current
                 let dateFormatter = DateFormatter()
-                //TODO:localize
-                dateFormatter.locale = Locale(identifier: "en_US_POSIX")
+                dateFormatter.locale = Locale(identifier: environment.strings.baseLanguageCode)
                 dateFormatter.timeZone = calendar.timeZone
-                dateFormatter.dateFormat = "d MMM yyyy"
+                dateFormatter.setLocalizedDateFormatFromTemplate("d MMM yyyy")
 
                 let previousWalletItems: [AnyComponentWithIdentity<Empty>] = self.previousWallets.map { wallet in
                     let text = NSMutableAttributedString(string: "")
@@ -1938,17 +1914,14 @@ private final class WalletSettingsScreenComponent: Component {
                     let lastUsedDate = Date(timeIntervalSince1970: Double(wallet.lastUsedAt))
                     let lastUsedText: String
                     if calendar.isDateInToday(lastUsedDate) {
-                        //TODO:localize
-                        lastUsedText = "today"
+                        lastUsedText = environment.strings.Weekday_Today.lowercased()
                     } else if calendar.isDateInYesterday(lastUsedDate) {
-                        //TODO:localize
-                        lastUsedText = "yesterday"
+                        lastUsedText = environment.strings.Weekday_Yesterday.lowercased()
                     } else {
                         lastUsedText = dateFormatter.string(from: lastUsedDate)
                     }
-                    //TODO:localize
                     text.append(NSAttributedString(
-                        string: "\n\(balanceText) — last used \(lastUsedText)",
+                        string: environment.strings.Wallet_Settings_LastUsed(balanceText, lastUsedText).string,
                         font: subtitleFont,
                         textColor: theme.list.itemSecondaryTextColor
                     ))
@@ -1981,8 +1954,7 @@ private final class WalletSettingsScreenComponent: Component {
                         style: .glass,
                         header: AnyComponent(MultilineTextComponent(
                             text: .plain(NSAttributedString(
-                                //TODO:localize
-                                string: "Previous Wallets".uppercased(),
+                                string: environment.strings.Wallet_Settings_PreviousWallets.uppercased(),
                                 font: headerFont,
                                 textColor: theme.list.freeTextColor
                             )),
@@ -1990,8 +1962,7 @@ private final class WalletSettingsScreenComponent: Component {
                         )),
                         footer: AnyComponent(MultilineTextComponent(
                             text: .plain(NSAttributedString(
-                                //TODO:localize
-                                string: "Wallets you used before on this device. Save their secret phrases — they'll be removed if you log out or reinstall the app.",
+                                string: environment.strings.Wallet_Settings_PreviousWalletsInfo,
                                 font: footerFont,
                                 textColor: theme.list.freeTextColor
                             )),
@@ -2115,9 +2086,6 @@ private final class WalletSettingsScreenComponent: Component {
 
 public final class WalletSettingsScreen: ViewControllerComponentContainer {
     public init(context: AccountContext, walletContext: WalletContext) {
-        //TODO:localize
-        let title = "Keys & Backup"
-
         let updatedPresentationData = presentationDataWithDefaultAccent((
             initial: context.sharedContext.currentPresentationData.with { $0 },
             signal: context.sharedContext.presentationData
@@ -2130,7 +2098,7 @@ public final class WalletSettingsScreen: ViewControllerComponentContainer {
             updatedPresentationData: updatedPresentationData
         )
 
-        self.title = title
+        self.title = updatedPresentationData.initial.strings.Wallet_KeysAndBackup
         self.scrollToTop = { [weak self] in
             guard let self, let componentView = self.node.hostView.componentView as? WalletSettingsScreenComponent.View else {
                 return
