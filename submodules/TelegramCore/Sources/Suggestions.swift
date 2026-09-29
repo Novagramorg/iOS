@@ -104,7 +104,7 @@ public enum ServerProvidedSuggestion: Equatable {
         case .setupPasskey:
             return "SETUP_PASSKEY"
         case .walletFirstIncomingTransfer:
-            return "FIRST_GRAMS"
+            return "WALLET_FIRST_INCOMING_TRANSFER"
         case let .link(id, _, _, _):
             return id
         }
