@@ -16,6 +16,7 @@ import BalancedTextComponent
 import BundleIconComponent
 import MultilineTextComponent
 import LottieComponent
+import PremiumDiamondComponent
 import GlassBarButtonComponent
 import ButtonComponent
 import InfoParagraphComponent
@@ -373,6 +374,7 @@ private final class WalletInfoSheetContent: CombinedComponent {
     static var body: Body {
         let closeButton = Child(GlassBarButtonComponent.self)
         let animation = Child(LottieComponent.self)
+        let diamond = Child(InteractiveDiamondComponent.self)
         let title = Child(BalancedTextComponent.self)
         let text = Child(BalancedTextComponent.self)
         let list = Child(List<Empty>.self)
@@ -401,29 +403,47 @@ private final class WalletInfoSheetContent: CombinedComponent {
             let secondaryTextColor = theme.actionSheet.secondaryTextColor
 
             let spacing: CGFloat = 16.0
-            var contentSize = CGSize(width: context.availableSize.width, height: component.mode == .wallet || component.mode == .firstGrams ? 10.0 : 33.0)
+            var contentSize = CGSize(width: context.availableSize.width, height: [.wallet, .gram, .firstGrams].contains(component.mode) ? 10.0 : 33.0)
 
             let animationSide: CGFloat = content.logo.name == "GramDiamond" ? 118.0 : 100.0
             let animationSize = CGSize(width: animationSide, height: animationSide)
-            let animation = animation.update(
-                component: LottieComponent(
-                    content: LottieComponent.AppBundleContent(name: content.logo.name),
-                    startingPosition: .begin,
-                    size: animationSize,
-                    loop: content.logo.loop,
-                    playOnce: content.logo.loop ? nil : state.playRecoveryAnimation,
-                    lottieSettings: component.context.lottieRenderingSettings
-                ),
-                availableSize: animationSize,
-                transition: context.transition
-            )
-            context.add(animation
-                .position(CGPoint(x: context.availableSize.width / 2.0, y: contentSize.height + animation.size.height / 2.0))
-            )
-            if !content.logo.loop {
-                state.playRecoveryAnimationIfNeeded()
+            if content.logo.name == "GramDiamond" {
+                let diamond = diamond.update(
+                    component: InteractiveDiamondComponent(
+                        size: animationSize,
+                        diamondWidth: 78.0,
+                        isVisible: environment.isVisible,
+                        theme: theme,
+                        animationMode: .lottie(loop: true),
+                        animateOnAppear: true
+                    ),
+                    availableSize: animationSize,
+                    transition: context.transition
+                )
+                context.add(diamond
+                    .position(CGPoint(x: context.availableSize.width / 2.0, y: contentSize.height + diamond.size.height / 2.0))
+                )
+            } else {
+                let animation = animation.update(
+                    component: LottieComponent(
+                        content: LottieComponent.AppBundleContent(name: content.logo.name),
+                        startingPosition: .begin,
+                        size: animationSize,
+                        loop: content.logo.loop,
+                        playOnce: content.logo.loop ? nil : state.playRecoveryAnimation,
+                        lottieSettings: component.context.lottieRenderingSettings
+                    ),
+                    availableSize: animationSize,
+                    transition: context.transition
+                )
+                context.add(animation
+                    .position(CGPoint(x: context.availableSize.width / 2.0, y: contentSize.height + animation.size.height / 2.0))
+                )
+                if !content.logo.loop {
+                    state.playRecoveryAnimationIfNeeded()
+                }
             }
-            contentSize.height += animation.size.height
+            contentSize.height += animationSize.height
             contentSize.height += 8.0
 
             let title = title.update(

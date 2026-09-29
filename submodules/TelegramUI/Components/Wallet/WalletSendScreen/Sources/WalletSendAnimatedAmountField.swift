@@ -85,7 +85,6 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
     private static let inputRefusalAnimationKey = "walletSendInputRefusal"
     private static let symbolTransitionKey = "walletSendSymbolTransition"
     private static let symbolPulseKey = "walletSendSymbolPulse"
-    private let hapticFeedback = HapticFeedback()
     private let motion = WalletSendAmountMotion(liquid: true)
     private var displayLink: SharedDisplayLinkDriver.Link?
     private var previousMode: WalletSendInputMode?
@@ -311,15 +310,7 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
         guard self.visible, self.applicationIsActive, self.window != nil,
               self.isUserInteractionEnabled, self.isInputActive else { return }
         
-        self.hapticFeedback.impact(.rigid, intensity: 0.8)
-        self.hapticFeedback.prepareImpact(.rigid)
-        let secondImpact = DispatchWorkItem { [weak self] in
-            guard let self else { return }
-            guard self.visible, self.applicationIsActive, self.window != nil,
-                  self.isUserInteractionEnabled, self.isInputActive else { return }
-            self.hapticFeedback.impact(.rigid, intensity: 0.55)
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.09, execute: secondImpact)
+        Haptics.refuse()
 
         guard !UIAccessibility.isReduceMotionEnabled else {
             return
@@ -345,6 +336,7 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
     }
 
     private func stopInputRefusal() {
+        Haptics.cancelRefusal()
         self.layer.removeAnimation(forKey: Self.inputRefusalAnimationKey)
     }
 

@@ -115,7 +115,6 @@ actor WalletEngineRuntime {
 
     private enum FfiCancellation: Equatable {
         case none
-        case refresh
         case sendPreview
         case send
     }
@@ -696,9 +695,9 @@ actor WalletEngineRuntime {
         return try walletMnemonicSigningPublicKey(words: words)
     }
 
-    func refresh() async throws -> WalletUpdate {
-        try await self.withFfi(priority: .background, cancellation: .refresh) {
-            try await self.requireClient().refresh()
+    func resolvePending() async throws -> SendSnapshot {
+        try await self.withFfi(priority: .background) {
+            try await self.requireClient().resolvePending()
         }
     }
 
@@ -1584,8 +1583,6 @@ actor WalletEngineRuntime {
             switch cancellation {
             case .none:
                 return
-            case .refresh:
-                try await client.cancelRefresh()
             case .sendPreview:
                 try await client.cancelSendPreview()
             case .send:

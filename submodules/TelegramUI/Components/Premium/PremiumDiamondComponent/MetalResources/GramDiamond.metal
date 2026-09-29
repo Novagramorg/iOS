@@ -30,7 +30,7 @@ struct StarUniforms {
     float4 animation; // burst age, transport time, burst enabled, light background
     float4 layout; // viewport pixels, steady instance count, burst seed
     float4 appearance; // palette identifier, reserved
-    float4 tint; // y: star opacity, z: emission radius
+    float4 tint; // y: star opacity, z: emission radius, w: burst fade-in seconds
 };
 struct BackgroundStarRaster {
     float4 position [[position]];
@@ -68,7 +68,7 @@ vertex BackgroundStarRaster backgroundStarVertex(uint vertexIndex [[vertex_id]],
     seed += cycle*7919u;
     float progress = saturate(age/lifetime);
     float alive = float(age >= 0 && age < lifetime) * (burst ? u.animation.z : 1);
-    float fadeIn = burst ? smoothstep(0.0,0.25,age) : smoothstep(0,0.10,progress);
+    float fadeIn = burst ? smoothstep(0.0,u.tint.w,u.animation.x) : smoothstep(0,0.10,progress);
     float fade = fadeIn * (1-smoothstep(0.62,1.0,progress)) * alive * u.tint.y;
     float depth = mix(0.60,1.0,starRandom(seed+3));
     float sector = starRandom(seed+4);
@@ -831,15 +831,16 @@ struct DiamondLensUniforms {
     float4 uv;
     float4 viewport; // pixel center, pixels per point, edge count
     float4 parameters; // strength, yaw, radius in points, light background
+    float4 center; // lens center in points, preserves source colors, reserved
 };
 
 fragment float4 diamondLensFragment(Raster in [[stage_in]], constant Uniforms &u [[buffer(1)]],
                                     const device float4 *planes [[buffer(2)]],
                                     constant DiamondLensUniforms &lens [[buffer(3)]],
                                     constant float4 *edges [[buffer(4)]],
-                                    texture2d<float> glyph [[texture(0)]]) {
+                                    texture2d<float> source [[texture(0)]]) {
     float4 stone = diamondSurface(in, u, planes);
-    float2 position = (in.position.xy - lens.viewport.xy) / lens.viewport.z;
+    float2 position = (in.position.xy - lens.viewport.xy) / lens.viewport.z - lens.center.xy;
     float distanceToEdge = 1e9;
     for (uint i = 0; i < uint(lens.viewport.w); ++i) {
         distanceToEdge = min(distanceToEdge, dot(edges[i].xy, position) + edges[i].z);
@@ -857,16 +858,24 @@ fragment float4 diamondLensFragment(Raster in [[stage_in]], constant Uniforms &u
     float crown = 1.0 - smoothstep(-0.25, 0.05, q.y);
     float2 bend = float2(prism * 0.12, mix(-0.08 * q.y, 0.09, crown)) * radius;
     float zoom = mix(0.84, 0.72, crown * (1.0 - smoothstep(0.2, 0.6, abs(q.x))));
-    float2 samplePosition = position * mix(1.0, zoom, edge) + bend * edge;
-    float2 glyphPosition = (samplePosition - lens.rect.xy) / lens.rect.zw;
-    if (any(glyphPosition < 0.0) || any(glyphPosition > 1.0)) return stone;
+    float2 samplePosition = lens.center.xy + position * mix(1.0, zoom, edge) + bend * edge;
+    float2 sourcePosition = (samplePosition - lens.rect.xy) / lens.rect.zw;
+    if (any(sourcePosition < 0.0) || any(sourcePosition > 1.0)) return stone;
 
-    // The atlas is an alpha mask. Keep sampling inside this glyph's tile.
-    constexpr sampler glyphSampler(mag_filter::linear, min_filter::linear, address::clamp_to_edge);
-    float2 halfTexel = 0.5 / float2(glyph.get_width(), glyph.get_height());
-    float2 uv = clamp(lens.uv.xy + glyphPosition * lens.uv.zw,
+    // Keep sampling within the source, including when it is a tile in the amount's mask atlas.
+    constexpr sampler sourceSampler(mag_filter::linear, min_filter::linear, address::clamp_to_edge);
+    float2 halfTexel = 0.5 / float2(source.get_width(), source.get_height());
+    float2 uv = clamp(lens.uv.xy + sourcePosition * lens.uv.zw,
                       lens.uv.xy + halfTexel, lens.uv.xy + lens.uv.zw - halfTexel);
-    float opacity = glyph.sample(glyphSampler, uv).r * 0.55 * strength * smoothstep(0.0, 1.5, distanceToEdge);
+    float4 sampledColor = source.sample(sourceSampler, uv);
+    float coverage = strength * smoothstep(0.0, 1.5, distanceToEdge);
+    if (lens.center.z > 0.5) {
+        // The card snapshot contains premultiplied color, including antialiased edges.
+        float opacity = 0.7 * coverage;
+        stone.rgb = stone.rgb * (1.0 - sampledColor.a * opacity) + sampledColor.rgb * stone.a * opacity;
+        return stone;
+    }
+    float opacity = sampledColor.r * 0.55 * coverage;
     float3 tint = lens.parameters.w > 0.5 ? float3(0.02, 0.13, 0.48) : float3(1.0);
     stone.rgb = mix(stone.rgb, tint * stone.a, opacity);
     return stone;

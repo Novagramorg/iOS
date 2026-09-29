@@ -586,6 +586,9 @@ public final class CoreVirtualListView: UIView {
     public var onLoadedEdgeReached: ((CoreListLoadedEdge) -> Void)?
 
     // Embedding seam (used by the TelegramUI ChatHistoryListViewBackend adapter).
+    // User-driven offset delta (drag/momentum/bounce), before window rebasing. Programmatic
+    // shifts are excluded. Timestamp is monotonic wall time; observers must not mutate the list.
+    public var onUserScrollDelta: ((_ delta: CGFloat, _ timestamp: CFTimeInterval) -> Void)?
     // Fired after each user-scroll rebalance so a host can recompute its visible index range.
     public var onVisibleWindowChanged: (() -> Void)?
     // Fired when the user starts an interactive drag (the scroll engine's pan reaches `.began`); not
@@ -2591,12 +2594,14 @@ public final class CoreVirtualListView: UIView {
     }
 
     private func handleUserScroll(_ currentY: CGFloat) {
+        let timestamp = CACurrentMediaTime()
         var delta = currentY - previousOffset
         if abs(delta) > logicalSize.height {
             delta = logicalSize.height * (delta > 0 ? 1 : -1)
             engine.setOffset(previousOffset + delta)
         }
         previousOffset = engine.offset
+        onUserScrollDelta?(delta, timestamp)
         rebalanceActiveWindow()
         refreshReachedLoadedEdges()
         // The floating clamp is viewport-dependent, and `rebalanceActiveWindow` runs `render()` only

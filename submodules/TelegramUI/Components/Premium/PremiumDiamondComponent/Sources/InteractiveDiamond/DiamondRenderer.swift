@@ -57,6 +57,7 @@ final class DiamondRenderer: ComputeState {
         var uv: SIMD4<Float>
         var viewport: SIMD4<Float> // pixel center, pixels per point, edge count
         var parameters: SIMD4<Float> // strength, yaw, radius in points, light background
+        var center: SIMD4<Float> // lens center in points, preserves source colors, reserved
     }
 
     private struct Lens {
@@ -222,7 +223,7 @@ final class DiamondRenderer: ComputeState {
         return try device.makeRenderPipelineState(descriptor: descriptor)
     }
 
-    private func lens(source: InteractiveDiamondComponent.RefractionSource?, strength: Float, yaw: Float,
+    private func lens(source: InteractiveDiamondComponent.RefractionSource?, strength: Float, yaw: Float, center: SIMD2<Float>,
                       uniforms: Uniforms, pixelsPerPoint: Float, lightBackground: Bool) -> Lens? {
         guard let source, let pipeline = self.lensPipeline else { return nil }
         // Prepare once when the field supplies its glyph, before the first press.
@@ -232,7 +233,7 @@ final class DiamondRenderer: ComputeState {
         let transform = uniforms.projection * uniforms.model
         var points = vertices.map { vertex -> SIMD2<Float> in
             let p = transform * vertex
-            return SIMD2(p.x, -p.y) / p.w * halfSize * 0.96
+            return (SIMD2(p.x, -p.y) / p.w * halfSize - center) * 0.96
         }
         points.sort { $0.x != $1.x ? $0.x < $1.x : $0.y < $1.y }
         func cross(_ origin: SIMD2<Float>, _ a: SIMD2<Float>, _ b: SIMD2<Float>) -> Float {
@@ -270,7 +271,8 @@ final class DiamondRenderer: ComputeState {
                 rect: SIMD4(Float(rect.minX), Float(rect.minY), Float(rect.width), Float(rect.height)),
                 uv: source.uv,
                 viewport: SIMD4(uniforms.viewport.x * 0.5, uniforms.viewport.y * 0.5, pixelsPerPoint, Float(edges.count)),
-                parameters: SIMD4(min(1, strength), yaw, radius, lightBackground ? 1 : 0)),
+                parameters: SIMD4(min(1, strength), yaw, radius, lightBackground ? 1 : 0),
+                center: SIMD4(center.x, center.y, source.preservesColors ? 1 : 0, 0)),
             edges: edges)
     }
 
@@ -292,7 +294,7 @@ final class DiamondRenderer: ComputeState {
         var projection = DiamondMath.projection(aspect: Float(size.width / max(size.height, 1)),
                                                zoom: zoom)
         projection.columns.0.x *= horizontalScale
-        let shift = style.growShift * (grow - 1)
+        let shift = style.growShift * (grow - 1) + style.verticalOffset
         if shift != 0 && size.height > 0 {
             let dy = -2 * shift * pixelsPerPoint / Float(size.height)
             projection.columns.0.y += dy * projection.columns.0.w
@@ -340,7 +342,8 @@ final class DiamondRenderer: ComputeState {
 
     func encode(encoder: MTLRenderCommandEncoder, size: CGSize, time: Float, starBursts: [DiamondStarBurst], motion: DiamondMotion, style: DiamondStyle, grow: Float, pixelsPerPoint: Float, reduceMotion: Bool, lightBackground: Bool, refractionSource: InteractiveDiamondComponent.RefractionSource?, refractionStrength: Float) {
         var u = uniforms(size: size, time: time, motion: motion, style: style, grow: grow, pixelsPerPoint: pixelsPerPoint, reduceMotion: reduceMotion)
-        let lens = self.lens(source: refractionSource, strength: refractionStrength, yaw: motion.yaw, uniforms: u, pixelsPerPoint: pixelsPerPoint, lightBackground: lightBackground)
+        let lens = self.lens(source: refractionSource, strength: refractionStrength, yaw: motion.yaw,
+            center: SIMD2(0.0, style.growShift * (grow - 1.0) + style.verticalOffset), uniforms: u, pixelsPerPoint: pixelsPerPoint, lightBackground: lightBackground)
         let stonePipeline: MTLRenderPipelineState
         if let lens {
             stonePipeline = lens.pipeline
@@ -358,7 +361,8 @@ final class DiamondRenderer: ComputeState {
                                  0, lightBackground ? 1 : 0),
                 layout: SIMD4(Float(size.width),Float(size.height),Float(DiamondEntrance.steadyStarCount),0),
                 appearance: u.appearance,
-                tint: SIMD4(0, min(1, max(0, style.starOpacity)), max(0.05, style.starEmission), 0))
+                tint: SIMD4(0, min(1, max(0, style.starOpacity)), max(0.05, style.starEmission), max(0.001, style.burstFadeInDuration)))
+            stars.projection.columns.3.y -= 2 * style.verticalOffset * pixelsPerPoint / Float(size.height)
             encoder.setCullMode(.none)
             encoder.setDepthStencilState(sparkleDepthState)
             encoder.setRenderPipelineState(starPipeline)

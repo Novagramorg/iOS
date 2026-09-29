@@ -4,11 +4,7 @@ import MetalEngine
 import Display
 
 struct DiamondStyle: Equatable {
-    enum Appearance: UInt32, CaseIterable, Sendable {
-        case blue = 0
-        case white = 1
-        case cool = 2
-    }
+    typealias Appearance = InteractiveDiamondComponent.Appearance
     var appearance: Appearance = .blue
     enum AnimationMode: String, CaseIterable, Sendable {
         case continuous
@@ -16,6 +12,8 @@ struct DiamondStyle: Equatable {
         case entrance
     }
     var animationMode: AnimationMode = .entrance
+    var referenceAnimationLoops: Bool = true
+    var animateOnAppear: Bool = false
     var rotationSpeed: Float = 2 * .pi / 18 * 1.70775
     var isRotating: Bool = true
     var sparkles: Bool = true
@@ -32,12 +30,14 @@ struct DiamondStyle: Equatable {
     var releaseTilt: Float = 0
     var dragGrow: Float = 1
     var growShift: Float = 0
+    var verticalOffset: Float = 0
     var growDamping: Float = 0.42
     var widthPoints: Float = 0
     var starOpacity: Float = 1
     var starZoom: Float = 1
     var starEmission: Float = 1
     var burstSize: Float = 1
+    var burstFadeInDuration: Float = 0.5
     var steadyStars: Bool = true
     init() {}
 }
@@ -126,6 +126,7 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
     var onReady: (() -> Void)?
     var onHold: ((Bool) -> Void)?
     var onPoseUpdated: ((DiamondPose) -> Void)?
+    var scrollTiltProvider: ((CFTimeInterval) -> Float)?
     var lightBackground = false
     var interactionScale: Float = 1
     var refractionSource: InteractiveDiamondComponent.RefractionSource?
@@ -153,6 +154,53 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
         }
     }
     private(set) var diamondStyle = DiamondStyle()
+    private var hasCompletedReferenceAnimation: Bool {
+        return self.diamondStyle.animationMode == .reference && !self.diamondStyle.referenceAnimationLoops
+            && self.elapsed >= DiamondReferenceHighlights.lastFrameTime
+    }
+
+    var isPlaying: Bool {
+        return self.displayLink != nil && !self.hasCompletedReferenceAnimation
+    }
+    private var isSendingTransfer = false
+    private var transferAnimation: DiamondTransferAnimation?
+
+    var hasTransferAnimation: Bool {
+        return !self.reduceMotion && self.transferAnimation != nil
+    }
+
+    var isCompletingTransfer: Bool {
+        return !self.reduceMotion && self.transferAnimation?.phase == .completion
+    }
+
+    var animationState: (time: Float, transferEnergy: Float?)? {
+        guard self.isInHierarchy, self.isApplicationActive, self.isRenderingEnabled, !self.reduceMotion else {
+            return nil
+        }
+        return (self.elapsed, self.transferAnimation?.presentation(at: self.elapsed).energy)
+    }
+
+    private var effectiveStyle: DiamondStyle {
+        var style = self.diamondStyle
+        if !self.reduceMotion, let animation = self.transferAnimation {
+            let presentation = animation.presentation(at: self.elapsed)
+            style.rotationSpeed *= 1 + 5 * presentation.energy
+            style.swayScale *= 1 + 1.4 * presentation.energy
+            style.widthPoints *= presentation.scale
+            style.growShift *= presentation.scale
+            style.verticalOffset += presentation.offset
+            if animation.phase == .completion {
+                style.backgroundStars = true
+                style.steadyStars = false
+                // Scaling the flight with the stone's rebound can stall outward motion.
+                style.starZoom = 0.62
+                style.starEmission = 0.3
+                style.burstSize = 0.8
+                style.burstFadeInDuration = 0.03
+            }
+        }
+        return style
+    }
 
     var pose: DiamondPose {
         return DiamondPose(yaw: self.motion.yaw, pitch: self.motion.pitch,
@@ -163,6 +211,16 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
     private var motion = DiamondMotion()
     private var grow: Float = 1
     private var growVelocity: Float = 0
+    var isGrowthAnimating: Bool {
+        return self.grow != 1 || self.growVelocity != 0
+    }
+
+    func resetGrowth() {
+        self.grow = self.motion.isDragging ? self.diamondStyle.dragGrow : 1
+        self.growVelocity = 0
+        self.setNeedsUpdate()
+    }
+
     private let hapticFeedback: HapticFeedback
     private var starBursts: [DiamondStarBurst] = []
     private var nextBurstSeed: UInt32 = 1
@@ -171,6 +229,7 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
     private var displayLink: SharedDisplayLinkDriver.Link?
     private var isApplicationActive = UIApplication.shared.applicationState == .active
     private var reduceMotion = false
+    private var didAnimateAppearance = false
     private var didSetReady = false
     private var isReadyScheduled = false
 
@@ -205,6 +264,8 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
         super.init(layer: layer)
         if let layer = layer as? InteractiveDiamondLayer {
             self.diamondStyle = layer.diamondStyle
+            self.isSendingTransfer = layer.isSendingTransfer
+            self.transferAnimation = layer.transferAnimation
             self.motion = layer.motion
             self.grow = layer.grow
             self.growVelocity = layer.growVelocity
@@ -219,6 +280,7 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
             self.elapsed = layer.elapsed
             self.lightBackground = layer.lightBackground
             self.reduceMotion = layer.reduceMotion
+            self.didAnimateAppearance = layer.didAnimateAppearance
         }
     }
 
@@ -238,10 +300,10 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
         }
         let previous = self.diamondStyle
         self.diamondStyle = style
-        if !style.backgroundStars {
+        if !style.backgroundStars && !self.isCompletingTransfer {
             self.starBursts.removeAll()
         }
-        if previous.animationMode != style.animationMode {
+        if previous.animationMode != style.animationMode || previous.referenceAnimationLoops != style.referenceAnimationLoops {
             self.resetAnimation()
         } else {
             self.updateMotionStyle()
@@ -274,7 +336,7 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
         self.nextBurstSeed = 1
         if wasDragging { self.onHold?(false) }
         self.onPoseUpdated?(self.pose)
-        self.setNeedsUpdate()
+        self.updateAnimationState()
     }
 
     func spin(_ velocity: Float, decay: Float = 0.7) {
@@ -291,6 +353,36 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
         self.updateMotion(at: CACurrentMediaTime())
         self.addStarBurst()
         self.setNeedsUpdate()
+    }
+
+    func updateTransferState(isSending: Bool, animateCompletion: Bool) {
+        guard self.isSendingTransfer != isSending else { return }
+        if self.lastTime != nil {
+            self.updateMotion(at: CACurrentMediaTime())
+        }
+        self.isSendingTransfer = isSending
+        self.cancelTransferCompletion()
+        if isSending {
+            self.transferAnimation = DiamondTransferAnimation(phase: .sending, startTime: self.elapsed)
+        } else if animateCompletion && self.isInHierarchy && self.isApplicationActive && self.isRenderingEnabled
+            && !self.reduceMotion && !UIAccessibility.isReduceMotionEnabled {
+            self.transferAnimation = DiamondTransferAnimation(phase: .completion, startTime: self.elapsed)
+            self.motion.spin(self.diamondStyle.rotationSpeed < 0 ? -11 : 11, decay: 0.7)
+            // Both bursts use the renderer's clock; hiding the card cancels them together.
+            self.addStarBurst(at: self.elapsed)
+            self.addStarBurst(at: self.elapsed + 0.2)
+        } else {
+            self.transferAnimation = nil
+        }
+        self.onPoseUpdated?(self.pose)
+        self.setNeedsUpdate()
+    }
+
+    private func cancelTransferCompletion() {
+        guard self.transferAnimation?.phase == .completion else { return }
+        self.transferAnimation = nil
+        self.starBursts.removeAll()
+        self.motion.stopSpin()
     }
 
     @objc private func applicationDidBecomeActive() {
@@ -316,11 +408,20 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
 
     private func updateAnimationState() {
         let isVisible = self.isInHierarchy && self.isApplicationActive && self.isRenderingEnabled
-        if isVisible && !self.reduceMotion {
+        if isVisible && self.diamondStyle.animateOnAppear && !self.didAnimateAppearance {
+            self.didAnimateAppearance = true
+            if !self.reduceMotion && !UIAccessibility.isReduceMotionEnabled {
+                self.motion.pushFromBelow()
+            }
+        }
+        if isVisible && !self.reduceMotion && (!self.hasCompletedReferenceAnimation || self.motion.isAppearanceImpulseActive) {
             if self.displayLink == nil {
                 self.displayLink = SharedDisplayLinkDriver.shared.add(framesPerSecond: self.usesHighFrameRate ? .max : .fps(60), { [weak self] _ in
                     guard let self else { return }
                     self.updateMotion(at: CACurrentMediaTime())
+                    if self.hasCompletedReferenceAnimation && !self.motion.isAppearanceImpulseActive {
+                        self.updateAnimationState()
+                    }
                     self.setNeedsUpdate()
                 })
             }
@@ -328,12 +429,13 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
             self.displayLink?.invalidate()
             self.displayLink = nil
             self.lastTime = nil
+            self.cancelTransferCompletion()
             if !isVisible && self.motion.isDragging {
                 self.motion.end(at: CACurrentMediaTime(), cancelled: true)
                 self.motion.step(dt: 0, speed: self.diamondStyle.rotationSpeed, reduceMotion: self.reduceMotion, mode: self.diamondStyle.animationMode, time: self.elapsed, appearance: self.diamondStyle.appearance)
                 self.onHold?(false)
-                self.onPoseUpdated?(self.pose)
             }
+            self.onPoseUpdated?(self.pose)
         }
         if isVisible {
             self.setNeedsUpdate()
@@ -343,15 +445,37 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
     private func updateMotion(at time: CFTimeInterval) {
         let dt = Float(self.lastTime.map { min(max(0, time - $0), 0.05) } ?? 0)
         self.lastTime = time
-        if !self.reduceMotion {
-            self.elapsed += dt
+        var animationDt = dt
+        if self.diamondStyle.animationMode == .reference && !self.diamondStyle.referenceAnimationLoops {
+            animationDt = min(dt, max(0, DiamondReferenceHighlights.lastFrameTime - self.elapsed))
         }
-        if self.diamondStyle.backgroundStars {
+        if !self.reduceMotion {
+            self.elapsed += animationDt
+        }
+        if let animation = self.transferAnimation, animation.phase == .completion,
+           self.elapsed - animation.startTime >= DiamondTransferAnimation.completionDuration {
+            self.transferAnimation = nil
+            self.starBursts.removeAll()
+        }
+        let style = self.effectiveStyle
+        if style.backgroundStars {
             self.starBursts.removeAll(where: { self.elapsed - $0.startTime >= DiamondStarBurst.lifetime })
         }
-        self.motion.step(dt: dt, speed: self.diamondStyle.isRotating ? self.diamondStyle.rotationSpeed : 0, reduceMotion: self.reduceMotion, mode: self.diamondStyle.animationMode, time: self.elapsed, appearance: self.diamondStyle.appearance)
+        self.motion.swayScale = style.swayScale
+        let scrollTilt: Float
+        if self.isInHierarchy && self.isApplicationActive && self.isRenderingEnabled && !self.reduceMotion {
+            scrollTilt = self.scrollTiltProvider?(time) ?? 0.0
+        } else {
+            scrollTilt = 0.0
+        }
+        self.motion.tilt = style.tilt + scrollTilt
+        self.motion.step(dt: animationDt, speed: style.isRotating ? style.rotationSpeed : 0, reduceMotion: self.reduceMotion, mode: style.animationMode, time: self.elapsed, appearance: style.appearance)
+        if dt > animationDt {
+            // Keep the appearance spring moving while the authored animation holds its last frame.
+            self.motion.step(dt: dt - animationDt, speed: 0, reduceMotion: self.reduceMotion, mode: style.animationMode, time: self.elapsed, appearance: style.appearance)
+        }
         if self.reduceMotion {
-            self.grow = 1
+            self.grow = self.motion.isDragging ? self.diamondStyle.dragGrow : 1
             self.growVelocity = 0
         } else if self.diamondStyle.dragGrow != 1 || self.grow != 1 || self.growVelocity != 0 {
             let target: Float = self.motion.isDragging ? self.diamondStyle.dragGrow : 1
@@ -395,12 +519,12 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
         self.setNeedsUpdate()
     }
 
-    private func addStarBurst() {
-        guard self.diamondStyle.backgroundStars else { return }
+    private func addStarBurst(at time: Float? = nil) {
+        guard self.diamondStyle.backgroundStars || self.isCompletingTransfer else { return }
         if self.starBursts.count >= 3 {
             self.starBursts.removeFirst()
         }
-        self.starBursts.append(DiamondStarBurst(startTime: self.elapsed, seed: self.nextBurstSeed))
+        self.starBursts.append(DiamondStarBurst(startTime: time ?? self.elapsed, seed: self.nextBurstSeed))
         self.nextBurstSeed = (self.nextBurstSeed + 1) % 65536
     }
 
@@ -420,7 +544,7 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
         }
     }
 
-    func updateDrag(state: UIGestureRecognizer.State, translation: CGPoint = .zero, velocity: CGPoint = .zero, scale: CGFloat = 100.0, releaseImpulse: Float? = nil) {
+    func updateDrag(state: UIGestureRecognizer.State, translation: CGPoint = .zero, velocity: CGPoint = .zero, scale: CGFloat = 100.0, releaseImpulse: Float? = nil, playFlingHaptic: Bool = true) {
         if state != .cancelled && state != .failed {
             guard self.isInHierarchy && self.isApplicationActive && self.isRenderingEnabled else { return }
         }
@@ -441,7 +565,9 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
                 if abs(velocity.x) > 600.0 && !self.reduceMotion && !UIAccessibility.isReduceMotionEnabled {
                     self.motion.fling(direction: velocity.x < 0 ? -1 : 1, impulse: releaseImpulse)
                     self.addStarBurst()
-                    self.hapticFeedback.impact(.medium)
+                    if playFlingHaptic {
+                        self.hapticFeedback.impact(.medium)
+                    }
                 }
                 self.onHold?(false)
             }
@@ -484,7 +610,7 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
         let starBursts = self.starBursts
         let reduceMotion = self.reduceMotion
         let lightBackground = self.lightBackground
-        let style = self.diamondStyle
+        let style = self.effectiveStyle
         let grow = self.grow * self.interactionScale
         let refractionSource = self.refractionSource
         let refractionStrength = self.refractionStrength

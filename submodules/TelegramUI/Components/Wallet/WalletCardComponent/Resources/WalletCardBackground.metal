@@ -8,6 +8,7 @@ struct WalletCardVertexOutput {
 
 struct WalletCardShaderUniforms {
     float time;
+    float reflectionRotation;
     float highlightTiltX;
     float highlightTiltY;
     float cornerRadius;
@@ -165,7 +166,8 @@ fragment float4 walletCardBackgroundFragment(
         -1.0,
         1.0
     );
-    float reflectionAngle = rotationTurn * 1.5707963268;
+    // Device rotation is clockwise in UIKit; this material uses an upward Y axis.
+    float reflectionAngle = rotationTurn * 1.5707963268 - uniforms.reflectionRotation;
     float sineAngle = sin(reflectionAngle);
     float cosineAngle = cos(reflectionAngle);
     float2 keyDirection = float2(

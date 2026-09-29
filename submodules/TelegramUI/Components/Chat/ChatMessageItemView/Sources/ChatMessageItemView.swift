@@ -657,6 +657,7 @@ open class ChatMessageItemView: ListViewItemNode, ChatMessageItemNodeProtocol {
     open var item: ChatMessageItem?
     open var accessibilityData: ChatMessageAccessibilityData?
     open var safeInsets = UIEdgeInsets()
+    open var scrollTiltProvider: ((CFTimeInterval) -> Float)?
     
     open var awaitingAppliedReaction: (MessageReaction.Reaction?, () -> Void)?
     
@@ -684,6 +685,7 @@ open class ChatMessageItemView: ListViewItemNode, ChatMessageItemNodeProtocol {
         super.reuse()
         
         self.item = nil
+        self.scrollTiltProvider = nil
         self.frame = CGRect()
     }
     

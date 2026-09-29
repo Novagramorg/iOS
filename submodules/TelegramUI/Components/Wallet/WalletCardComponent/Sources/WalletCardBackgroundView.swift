@@ -1,9 +1,152 @@
 import Foundation
+import CoreMotion
+import simd
+import SwiftSignalKit
 import Display
 import Metal
 import MetalKit
 import MetalEngine
 import UIKit
+
+public final class WalletCardBackgroundMotion {
+    public static let shared = WalletCardBackgroundMotion()
+
+    private(set) var surfaceTilt = SIMD2<Double>(repeating: 0.0)
+    var currentRotation: Double {
+        return self.smoothedRotation
+    }
+
+    private static let lightDirection = simd_normalize(SIMD3<Double>(-0.5, 0.5, 1.0))
+
+    private let motionManager = CMMotionManager()
+    private var subscriberCount = 0
+    private var startTime: TimeInterval = 0.0
+    private var referenceAttitude: simd_quatd?
+    private var interfaceOrientation: UIInterfaceOrientation?
+    private var previousAngle: Double?
+    private var targetRotation: Double = 0.0
+    private var smoothedRotation: Double = 0.0
+    private var lastUpdateTime: CFTimeInterval?
+    private var isFrameCached = false
+
+    private init() {
+    }
+
+    public func subscribe() -> Disposable {
+        self.subscriberCount += 1
+        if self.subscriberCount == 1 && self.motionManager.isDeviceMotionAvailable {
+            self.startTime = ProcessInfo.processInfo.systemUptime
+            self.motionManager.deviceMotionUpdateInterval = 1.0 / 60.0
+            self.motionManager.startDeviceMotionUpdates(using: .xArbitraryZVertical)
+        }
+        return ActionDisposable { [weak self] in
+            if Thread.isMainThread {
+                self?.unsubscribe()
+            } else {
+                Queue.mainQueue().async { self?.unsubscribe() }
+            }
+        }
+    }
+
+    private func unsubscribe() {
+        self.subscriberCount -= 1
+        guard self.subscriberCount == 0 else { return }
+        self.motionManager.stopDeviceMotionUpdates()
+        self.referenceAttitude = nil
+        self.interfaceOrientation = nil
+        self.previousAngle = nil
+        self.surfaceTilt = .zero
+        self.targetRotation = self.smoothedRotation
+        self.lastUpdateTime = nil
+        self.isFrameCached = false
+    }
+
+    public func rotation(at time: CFTimeInterval, orientation: UIInterfaceOrientation) -> CGFloat {
+        if self.isFrameCached {
+            return CGFloat(self.smoothedRotation)
+        }
+        guard self.motionManager.isDeviceMotionActive,
+              let motion = self.motionManager.deviceMotion, motion.timestamp >= self.startTime else {
+            return CGFloat(self.smoothedRotation)
+        }
+        // The shared display link calls all clients synchronously. Reuse one result for that batch.
+        self.isFrameCached = true
+        Queue.mainQueue().async { [weak self] in
+            self?.isFrameCached = false
+        }
+        let deltaTime = min(0.1, max(0.0, self.lastUpdateTime.map { time - $0 } ?? 0.0))
+        self.lastUpdateTime = time
+
+        let quaternion = motion.attitude.quaternion
+        let attitude = simd_normalize(simd_quatd(ix: quaternion.x, iy: quaternion.y, iz: quaternion.z, r: quaternion.w))
+        let referenceAttitude = self.referenceAttitude ?? attitude
+        self.referenceAttitude = referenceAttitude
+
+        // Keep the light fixed in the initial reference frame, then project it onto the screen.
+        let direction = simd_act(attitude.conjugate * referenceAttitude, Self.lightDirection)
+        func screenVector(_ vector: SIMD3<Double>) -> SIMD2<Double> {
+            switch orientation {
+            case .landscapeLeft:
+                return SIMD2<Double>(vector.y, vector.x)
+            case .landscapeRight:
+                return SIMD2<Double>(-vector.y, -vector.x)
+            case .portraitUpsideDown:
+                return SIMD2<Double>(-vector.x, vector.y)
+            default:
+                return SIMD2<Double>(vector.x, -vector.y)
+            }
+        }
+        let screenDirection = screenVector(direction)
+        let normal = simd_act(referenceAttitude.conjugate * attitude, SIMD3<Double>(0.0, 0.0, 1.0))
+        let screenNormal = screenVector(normal)
+        let forward = max(normal.z, 0.15)
+        self.surfaceTilt = SIMD2<Double>(atan2(-screenNormal.y, forward), atan2(screenNormal.x, forward))
+
+        if self.interfaceOrientation != orientation {
+            self.interfaceOrientation = orientation
+            self.previousAngle = nil
+            self.targetRotation = self.smoothedRotation
+        }
+        if simd_length(screenDirection) >= 0.1 {
+            let angle = atan2(screenDirection.y, screenDirection.x)
+            if let previousAngle = self.previousAngle {
+                let delta = angle - previousAngle
+                self.targetRotation += atan2(sin(delta), cos(delta))
+            }
+            self.previousAngle = angle
+        }
+        self.smoothedRotation += (self.targetRotation - self.smoothedRotation) * (1.0 - exp(-deltaTime / 0.1))
+        return CGFloat(self.smoothedRotation)
+    }
+}
+
+struct WalletCardBackgroundRotation {
+    private(set) var value = WalletCardBackgroundMotion.shared.currentRotation
+    private var transition: (time: CFTimeInterval, offset: Double)?
+
+    mutating func reset(to rotation: Double) {
+        self.value = rotation
+        self.transition = nil
+    }
+
+    mutating func resume(at time: CFTimeInterval, to rotation: Double) {
+        let delta = self.value - rotation
+        self.transition = (time, atan2(sin(delta), cos(delta)))
+    }
+
+    mutating func update(at time: CFTimeInterval, to rotation: Double) {
+        if let transition = self.transition {
+            let progress = min(1.0, max(0.0, (time - transition.time) / 0.22))
+            let remaining = 1.0 - progress
+            self.value = rotation + transition.offset * remaining * remaining * remaining
+            if progress >= 1.0 {
+                self.transition = nil
+            }
+        } else {
+            self.value = rotation
+        }
+    }
+}
 
 struct WalletCardProjectedQuad {
     var bottomLeft = SIMD4<Float>(-1.0, -1.0, 0.0, 1.0)
@@ -48,6 +191,7 @@ private final class WalletCardMetalLayer: MetalEngineSubjectLayer, MetalEngineSu
 
     private struct FragmentUniforms {
         var time: Float = 0.0
+        var reflectionRotation: Float = 0.0
         var highlightTiltX: Float = 0.0
         var highlightTiltY: Float = 0.0
         var cornerRadius: Float = 0.0
@@ -133,6 +277,7 @@ private final class WalletCardMetalLayer: MetalEngineSubjectLayer, MetalEngineSu
 
     func update(
         time: Double,
+        reflectionRotation: Double,
         highlightTiltX: Double,
         highlightTiltY: Double,
         surfaceTiltX: Double,
@@ -149,6 +294,7 @@ private final class WalletCardMetalLayer: MetalEngineSubjectLayer, MetalEngineSu
         )
         self.fragmentUniforms = FragmentUniforms(
             time: Float(time),
+            reflectionRotation: Float(reflectionRotation.truncatingRemainder(dividingBy: 2.0 * .pi)),
             highlightTiltX: Float(highlightTiltX),
             highlightTiltY: Float(highlightTiltY),
             cornerRadius: Float(cornerRadius),
@@ -256,6 +402,8 @@ final class WalletCardBackgroundView: UIView {
     private let metalView = WalletCardMetalView()
     private var cardSize = CGSize.zero
     private var cornerRadius: CGFloat = 0.0
+    private var currentTime = 0.0
+    private var currentReflectionRotation = WalletCardBackgroundMotion.shared.currentRotation
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -280,7 +428,7 @@ final class WalletCardBackgroundView: UIView {
         self.cardSize = cardSize
         self.cornerRadius = cornerRadius
         self.layoutContent()
-        self.renderStaticFrame()
+        self.renderStaticFrame(time: self.currentTime, reflectionRotation: self.currentReflectionRotation)
     }
 
     func updateFallbackTransform(_ transform: CATransform3D) {
@@ -292,12 +440,15 @@ final class WalletCardBackgroundView: UIView {
 
     func render(
         time: Double,
+        reflectionRotation: Double,
         highlightTiltX: Double,
         highlightTiltY: Double,
         surfaceTiltX: Double,
         surfaceTiltY: Double,
         quad: WalletCardProjectedQuad
     ) {
+        self.currentTime = time
+        self.currentReflectionRotation = reflectionRotation
         // The fallback is an alternative to Metal, not a second background to
         // composite through the projected quad. Keeping it visible after the
         // engine has allocated its surface makes any transient uncovered area
@@ -305,6 +456,7 @@ final class WalletCardBackgroundView: UIView {
         self.fallbackView.isHidden = self.metalView.metalLayer.contents != nil
         self.metalView.metalLayer.update(
             time: time,
+            reflectionRotation: reflectionRotation,
             highlightTiltX: highlightTiltX,
             highlightTiltY: highlightTiltY,
             surfaceTiltX: surfaceTiltX,
@@ -338,7 +490,7 @@ final class WalletCardBackgroundView: UIView {
         )
     }
 
-    private func renderStaticFrame() {
+    func renderStaticFrame(time: Double = 0.0, reflectionRotation: Double) {
         guard self.cardSize.width > 0.0, self.cardSize.height > 0.0 else {
             return
         }
@@ -357,7 +509,8 @@ final class WalletCardBackgroundView: UIView {
         }
 
         self.render(
-            time: 0.0,
+            time: time,
+            reflectionRotation: reflectionRotation,
             highlightTiltX: 0.0,
             highlightTiltY: 0.0,
             surfaceTiltX: 0.0,

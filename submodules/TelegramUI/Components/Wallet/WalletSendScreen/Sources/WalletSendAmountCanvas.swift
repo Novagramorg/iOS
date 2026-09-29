@@ -320,8 +320,7 @@ private final class WalletSendAmountLayer: MetalEngineSubjectLayer, MetalEngineS
 final class WalletSendAmountCanvas: UIView {
     override class var layerClass: AnyClass { WalletSendAmountLayer.self }
     private var metalLayer: WalletSendAmountLayer { layer as! WalletSendAmountLayer }
-    private var separators = ""
-    private var currencyCode: String?
+    private var glyphFonts: [WalletSendAmountGlyphAtlas.FontCharacters] = []
     private var atlasKey: WalletSendAmountGlyphAtlas.Key?
     var onFrameReady: (() -> Void)?
     var isAvailable: Bool { metalLayer.glyphAtlas != nil }
@@ -345,9 +344,22 @@ final class WalletSendAmountCanvas: UIView {
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     func prepareGlyphs(separators: String, currencyCode: String) {
-        guard self.separators != separators || self.currencyCode != currencyCode || atlasKey == nil else { return }
-        self.separators = separators
-        self.currencyCode = currencyCode
+        prepareGlyphs(WalletSendAmountGlyphAtlas.Key(scale: 1.0, separators: separators, currencyCode: currencyCode).fonts)
+    }
+
+    func prepareGlyphs(text: String, font: UIFont, separators: String) {
+        // Keep digits and previously seen letters ready for rolling and interrupted
+        // transitions without rebuilding the atlas on every keystroke.
+        var characters = "0123456789" + separators + text
+        if glyphFonts.count == 1, let previous = glyphFonts.first, previous.font == font {
+            characters += previous.characters
+        }
+        prepareGlyphs([WalletSendAmountGlyphAtlas.FontCharacters(font: font, characters: characters)])
+    }
+
+    private func prepareGlyphs(_ fonts: [WalletSendAmountGlyphAtlas.FontCharacters]) {
+        guard self.glyphFonts != fonts || atlasKey == nil else { return }
+        self.glyphFonts = fonts
         atlasKey = nil
         updateAtlas(scale: window?.screen.scale ?? UIScreen.main.scale)
     }
@@ -358,8 +370,8 @@ final class WalletSendAmountCanvas: UIView {
 
     private func updateAtlas(scale: CGFloat) {
         if atlasKey?.scale == scale, metalLayer.glyphAtlas != nil { return }
-        guard let currencyCode else { return }
-        let key = WalletSendAmountGlyphAtlas.Key(scale: scale, separators: separators, currencyCode: currencyCode)
+        guard !glyphFonts.isEmpty else { return }
+        let key = WalletSendAmountGlyphAtlas.Key(scale: scale, fonts: glyphFonts)
         let atlas = WalletSendAmountMetal.shared?.atlas(for: key)
         if let previous = metalLayer.glyphAtlas, previous !== atlas,
            !metalLayer.previousGlyphAtlases.contains(where: { $0 === previous }) {
@@ -404,15 +416,34 @@ enum WalletSendAmountFonts {
 }
 
 final class WalletSendAmountGlyphAtlas {
+    struct FontCharacters: Hashable {
+        let font: UIFont
+        let characters: String
+
+        init(font: UIFont, characters: String) {
+            self.font = font
+            self.characters = String(Set(characters).sorted())
+        }
+    }
+
     struct Key: Hashable {
         let scale: CGFloat
-        let numericCharacters: String
-        let currencyCharacters: String
+        let fonts: [FontCharacters]
+
+        init(scale: CGFloat, fonts: [FontCharacters]) {
+            self.scale = scale
+            self.fonts = fonts
+        }
 
         init(scale: CGFloat, separators: String, currencyCode: String) {
             self.scale = scale
-            self.numericCharacters = String(Set("0123456789" + separators).sorted())
-            self.currencyCharacters = String(Set("GRAM" + currencyCode).sorted())
+            let numericCharacters = "0123456789" + separators
+            let suffixCharacters = numericCharacters + "GRAM" + currencyCode
+            self.fonts = [
+                FontCharacters(font: WalletSendAmountFonts.integral, characters: numericCharacters),
+                FontCharacters(font: WalletSendAmountFonts.fractional, characters: suffixCharacters),
+                FontCharacters(font: WalletSendAmountFonts.rate, characters: suffixCharacters + "~")
+            ]
         }
     }
 
@@ -442,14 +473,9 @@ final class WalletSendAmountGlyphAtlas {
     init?(device: MTLDevice, key: Key) {
         let scale = key.scale
         var outlines: [Outline] = []
-        let suffixCharacters = String(Set(key.numericCharacters + key.currencyCharacters).sorted())
-        let fonts: [(UIFont, String)] = [
-            (WalletSendAmountFonts.integral, key.numericCharacters),
-            (WalletSendAmountFonts.fractional, suffixCharacters),
-            (WalletSendAmountFonts.rate, suffixCharacters + "~")
-        ]
-        for (font, characters) in fonts {
-            for character in characters {
+        for fontCharacters in key.fonts {
+            let font = fontCharacters.font
+            for character in fontCharacters.characters {
                 let text = String(character)
                 let width = WalletSendAmountGlyphMetrics.width(text, font: font)
                 let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: [.font: font]))

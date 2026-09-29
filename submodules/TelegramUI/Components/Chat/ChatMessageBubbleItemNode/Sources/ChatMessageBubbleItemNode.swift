@@ -737,7 +737,27 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
     
     private var contentContainersWrapperNode: ASDisplayNode
     private var contentContainers: [ContentContainer] = []
-    public private(set) var contentNodes: [ChatMessageBubbleContentNode] = []
+    public private(set) var contentNodes: [ChatMessageBubbleContentNode] = [] {
+        didSet {
+            for case let contentNode as ChatMessageTransferBubbleContentNode in oldValue {
+                contentNode.scrollTiltProvider = nil
+            }
+            self.updateScrollTiltProvider()
+        }
+    }
+
+    override public var scrollTiltProvider: ((CFTimeInterval) -> Float)? {
+        didSet {
+            self.updateScrollTiltProvider()
+        }
+    }
+
+    private func updateScrollTiltProvider() {
+        for case let contentNode as ChatMessageTransferBubbleContentNode in self.contentNodes {
+            contentNode.scrollTiltProvider = self.scrollTiltProvider
+        }
+    }
+
     private var mosaicStatusNode: ChatMessageDateAndStatusNode?
     private var actionButtonsNode: ChatMessageActionButtonsNode?
     private var reactionButtonsNode: ChatMessageReactionButtonsNode?
@@ -7809,7 +7829,9 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         }
         
         for contentNode in self.contentNodes {
-            if contentNode is ChatMessageMediaBubbleContentNode || contentNode is ChatMessageGiftBubbleContentNode || contentNode is ChatMessageWebpageBubbleContentNode || contentNode is ChatMessageInvoiceBubbleContentNode || contentNode is ChatMessageGameBubbleContentNode || contentNode is ChatMessageInstantVideoBubbleContentNode || contentNode is ChatMessageRichDataBubbleContentNode {
+            if contentNode is ChatMessageTransferBubbleContentNode {
+                contentNode.visibility = mapVisibility(self.forceStopAnimations ? .none : effectiveMediaVisibility, boundsSize: self.bounds.size, insets: self.insets, to: contentNode)
+            } else if contentNode is ChatMessageMediaBubbleContentNode || contentNode is ChatMessageGiftBubbleContentNode || contentNode is ChatMessageWebpageBubbleContentNode || contentNode is ChatMessageInvoiceBubbleContentNode || contentNode is ChatMessageGameBubbleContentNode || contentNode is ChatMessageInstantVideoBubbleContentNode || contentNode is ChatMessageRichDataBubbleContentNode {
                 contentNode.visibility = mapVisibility(effectiveMediaVisibility, boundsSize: self.bounds.size, insets: self.insets, to: contentNode)
             } else {
                 contentNode.visibility = mapVisibility(effectiveVisibility, boundsSize: self.bounds.size, insets: self.insets, to: contentNode)
