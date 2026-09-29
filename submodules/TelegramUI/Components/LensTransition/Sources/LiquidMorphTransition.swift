@@ -24,12 +24,18 @@ public final class LiquidMorphTransition {
     }
 
     private var animation: LTTransitionDriver?
+    private var generation = 0
     public private(set) var isAnimating = false
 
+    /// A second transition is rejected while one runs, unless `interruptingCurrent` is set:
+    /// then it starts at once and UIKit hands it the running morph (the driver passes the
+    /// in-flight coordinator as `previousAnimation`). The interrupted transition's completion
+    /// still fires, typically together with the new one's, but only the newest transition
+    /// clears `isAnimating`.
     @discardableResult
-    public func animate(from: UITargetedPreview, to: UITargetedPreview, attachment: CGPoint, in container: UIView, sourceIdentity: UIView? = nil, alongsideAnimations: (() -> Void)? = nil, completion: @escaping () -> Void) -> Bool {
+    public func animate(from: UITargetedPreview, to: UITargetedPreview, attachment: CGPoint, in container: UIView, sourceIdentity: UIView? = nil, interruptingCurrent: Bool = false, alongsideAnimations: (() -> Void)? = nil, completion: @escaping () -> Void) -> Bool {
         assert(Thread.isMainThread)
-        guard !isAnimating, Self.isSupported, container.window != nil,
+        guard !isAnimating || interruptingCurrent, Self.isSupported, container.window != nil,
               from.target.container.window != nil, to.target.container.window != nil,
               from.view.window != nil, to.view.window != nil,
               from.size.width > 0, from.size.height > 0, to.size.width > 0, to.size.height > 0,
@@ -44,13 +50,17 @@ public final class LiquidMorphTransition {
         guard let animation = LTTransitionDriver(source: from, destination: to, pivot: through, container: container, sourceIdentity: sourceIdentity, alongside: alongsideAnimations) else { return false }
         isAnimating = true
         self.animation = animation
+        generation += 1
+        let transitionGeneration = generation
         let finished = { [self] in
             // UIKit calls our completion before its own cleanup. Hand views back only
             // after that cleanup, keeping the coordinator alive through the callback.
             DispatchQueue.main.async { [self, animation] in
                 withExtendedLifetime(animation) {
-                    self.animation = nil
-                    self.isAnimating = false
+                    if self.generation == transitionGeneration {
+                        self.animation = nil
+                        self.isAnimating = false
+                    }
                     completion()
                 }
             }

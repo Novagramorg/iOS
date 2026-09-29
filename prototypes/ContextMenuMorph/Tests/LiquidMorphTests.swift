@@ -357,6 +357,82 @@ import ContextMenuMorph
         window.isHidden = true
     }
 
+    // A close requested while the menu is still opening must start at once. UIKit's opening
+    // completion arrives ~1 s after the menu looks open (1.27 s measured on iOS 27), so deferring
+    // the close until then leaves a menu that ignores taps outside it.
+    func testCloseRequestedDuringOpenTakesOverImmediately() {
+        checkCloseTakesOverOpen(after: 0.3)
+    }
+
+    func testCloseRequestedAsOpenStartsTakesOverImmediately() {
+        checkCloseTakesOverOpen(after: 0)
+    }
+
+    private func checkCloseTakesOverOpen(after delay: CFTimeInterval) {
+        let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first!
+        let window = UIWindow(windowScene: scene)
+        let controller = UIViewController()
+        window.rootViewController = controller
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        let container = controller.view!
+        let source = UIView(frame: CGRect(x: 20, y: 100, width: 44, height: 44))
+        source.backgroundColor = .systemBlue
+        source.layer.cornerRadius = 22
+        let menu = UIVisualEffectView(effect: UIGlassEffect(style: .regular))
+        menu.frame = CGRect(x: 20, y: 100, width: 250, height: 240)
+        container.addSubview(menu)
+        container.addSubview(source)
+        let accessory = UIView(frame: CGRect(x: 20, y: 350, width: 250, height: 30))
+        accessory.alpha = 0
+        container.addSubview(accessory)
+        let originalFrame = source.frame
+        let from = UITargetedPreview(view: source)
+        let to = UITargetedPreview(view: menu)
+        let engine = LiquidMorphTransition()
+        var openCompletions = 0
+        var closeCompletions = 0
+        XCTAssertTrue(engine.animate(from: from, to: to, attachment: source.center, in: container, sourceIdentity: source, alongsideAnimations: { accessory.alpha = 1 }) {
+            openCompletions += 1
+            // The superseded opening must not report the running close as finished.
+            XCTAssertEqual(engine.isAnimating, closeCompletions == 0)
+        })
+        let start = CACurrentMediaTime()
+        while CACurrentMediaTime() - start < delay {
+            RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01))
+        }
+        XCTAssertTrue(engine.isAnimating)
+        XCTAssertEqual(openCompletions, 0, "The opening must still be running when the close is requested")
+        XCTAssertFalse(engine.animate(from: to, to: from, attachment: source.center, in: container, sourceIdentity: source) { XCTFail("Concurrent transition accepted") })
+
+        var closeStarted = false
+        XCTAssertTrue(engine.animate(from: to, to: from, attachment: source.center, in: container, sourceIdentity: source, interruptingCurrent: true, alongsideAnimations: {
+            closeStarted = true
+            accessory.alpha = 0
+        }) {
+            closeCompletions += 1
+            XCTAssertFalse(engine.isAnimating)
+        })
+        XCTAssertTrue(closeStarted, "The close must start when requested, not after the opening completes")
+        XCTAssertTrue(engine.isAnimating)
+
+        let deadline = Date(timeIntervalSinceNow: 10)
+        while (openCompletions == 0 || closeCompletions == 0) && Date() < deadline {
+            RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01))
+        }
+        // Drain a little longer so a duplicate callback would be counted.
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.3))
+        XCTAssertEqual(openCompletions, 1)
+        XCTAssertEqual(closeCompletions, 1)
+        XCTAssertFalse(engine.isAnimating)
+        XCTAssertEqual(accessory.alpha, 0)
+        XCTAssertEqual(source.frame, originalFrame)
+        XCTAssertTrue(source.superview === container)
+        XCTAssertTrue(menu.superview === container)
+        XCTAssertEqual(source.alpha, 1)
+        XCTAssertFalse(source.isHidden)
+    }
+
     func testRoundTripRestoresHierarchyAndRejectsConcurrentMutation() {
         print("TEST ReduceMotion=\(UIAccessibility.isReduceMotionEnabled)")
         XCTAssertTrue(LiquidMorphTransition.isSupported)

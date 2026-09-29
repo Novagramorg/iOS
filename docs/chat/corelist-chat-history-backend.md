@@ -1093,6 +1093,15 @@ mid-collection control, and the mechanism itself. Note the shape this bug shares
 **a chat's jump differs from CoreList's synthetic fixtures precisely at the collection edges and at
 the constant-identity rows, and all three times that difference was invisible to a green suite.**
 
+**Two jumps in a row, the second reversing the first mid-flight** (for example, jump to a reply,
+then tap scroll-to-bottom before the travel ends) drew the previous window through the new one. The
+first jump's outgoing strip was still parked in the viewport, and CoreList placed the second
+destination against the loaded window alone, which put it exactly on that strip for the whole
+travel. Fixed CoreList-side on 2026-09-29 (see "The outgoing strip is everything on its way out" in
+the CoreList `CLAUDE.md`) and locked by `CarouselChainOverlapTests`, including the chat's own shape
+where the second jump reloads the very history the first one left. Runtime-verified in the chat
+on 2026-09-29.
+
 **Verification status (2026-07-31): runtime-verified.** `CoreListDemoTests` covers resolver placement
 against a far unloaded target, the direction fallback, carousel fade suppression from both sides, and
 carousel strip separation at both collection edges (620 tests green). All six chat behaviors were
