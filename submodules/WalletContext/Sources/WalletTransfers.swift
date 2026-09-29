@@ -363,7 +363,7 @@ func walletTransferChainState(engine: TelegramEngine, address: String) async thr
 
 @available(macOS 10.15, *)
 extension WalletContextImpl {
-    func waitForPreviousWalletTransfer(wallet: WalletInfo, generation: UInt64, operationId: UUID, expiresAt: Int32, requireAuthorizationAvailable: Bool = true) async throws -> UInt32? {
+    func waitForPreviousWalletTransfer(wallet: WalletInfo, generation: UInt64, operationId: UUID, expiresAt: Int32, requireAuthorizationAvailable: Bool = true, allowResolvedWithoutChainCheck: Bool = false) async throws -> UInt32? {
         let startedAt = ProcessInfo.processInfo.systemUptime
         let authorizationGeneration = try self.authorization.operationGeneration(requireAvailable: requireAuthorizationAvailable)
         guard let descriptor = try await self.storage.loadDescriptor(),
@@ -381,6 +381,18 @@ extension WalletContextImpl {
                 continue
             }
             guard let previous = self.transferSubmissions.current(recordId: descriptor.recordId, walletAddress: wallet.address) else {
+                return nil
+            }
+            if allowResolvedWithoutChainCheck && previous.resolution != .pending {
+                try await self.persistWalletTransferResolution(previous.operationId)
+                try Task.checkCancellation()
+                try self.authorization.validateGeneration(authorizationGeneration, requireAvailable: requireAuthorizationAvailable)
+                guard !self.isShutdown, self.activationGeneration == generation,
+                      case let .wallet(current) = self.currentState.phase,
+                      current.address == wallet.address, current.publicKey == wallet.publicKey else { throw WalletError.unavailable }
+                guard expiresAt > self.transferSubmissionClock.now() else { throw WalletError.preparedTransferExpired }
+                guard self.currentState.activeOperation == nil,
+                      self.transferSubmissions.current(recordId: descriptor.recordId, walletAddress: wallet.address) == previous else { continue }
                 return nil
             }
             var record = previous
@@ -534,7 +546,7 @@ extension WalletContextImpl {
             }
             if self.activationGeneration == generation {
                 if case WalletTransferSubmissionError.staleSequenceNumber = error {
-                    // Keep the preview for a retry after provider catch-up.
+
                 } else {
                     self.preparedTransfers[prepared.id] = nil
                 }

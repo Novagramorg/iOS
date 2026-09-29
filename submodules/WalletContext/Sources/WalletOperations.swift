@@ -438,7 +438,7 @@ public extension WalletContext {
         }
     }
 
-    func prepareTransfer(address: String, amount: Int64, sendAll: Bool = false, comment: String?, commentEncrypted: Bool = false, recipientPublicKey: Data? = nil, session: PasscodeSession? = nil, pendingRegistration: PendingTransferRegistration? = nil) -> Signal<PreparedTransfer, WalletError> {
+    func prepareTransfer(address: String, amount: Int64, sendAll: Bool = false, comment: String?, commentEncrypted: Bool = false, recipientPublicKey: Data? = nil, session: PasscodeSession? = nil, pendingRegistration: PendingTransferRegistration? = nil, estimatedFee: Int64? = nil) -> Signal<PreparedTransfer, WalletError> {
         self.signal(
             name: "preparing_transfer",
             discardResult: { [impl = self.impl] prepared in
@@ -454,6 +454,7 @@ public extension WalletContext {
                 recipientPublicKey: recipientPublicKey,
                 session: session,
                 pendingRegistration: pendingRegistration,
+                estimatedFee: estimatedFee,
                 operationId: operationId
             )
         }
@@ -1493,6 +1494,7 @@ extension WalletContextImpl {
         recipientPublicKey: Data? = nil,
         session: PasscodeSession? = nil,
         pendingRegistration: WalletContext.PendingTransferRegistration? = nil,
+        estimatedFee: Int64? = nil,
         operationId: UUID
     ) async throws -> PreparedTransfer {
         let resolved = try resolveTransferInput(address: address, amount: amount, comment: comment)
@@ -1586,23 +1588,44 @@ extension WalletContextImpl {
             )
             try Task.checkCancellation()
             guard !self.isShutdown, self.activationGeneration == activationGeneration else { throw WalletError.unavailable }
-            let preview: SendPreview
-            do {
-                preview = try await self.runtime.previewSend(intent: intent)
-            } catch {
-                try Task.checkCancellation()
-                guard !self.isShutdown, self.activationGeneration == activationGeneration else { throw WalletError.unavailable }
-                guard walletPreviewNeedsSeqnoRetry(error) else { throw error }
-                self.logger.log("event=wallet_preview_seqno_retry operation_id=\(operationId.uuidString.lowercased()) error_code=133 retry_delay_ms=1000")
-                try await Task.sleep(nanoseconds: 1_000_000_000)
-                try Task.checkCancellation()
-                guard !self.isShutdown, self.activationGeneration == activationGeneration else { throw WalletError.unavailable }
-                preview = try await self.runtime.previewSend(intent: intent)
+            let canUseEstimatedFee: Bool
+            switch body {
+            case .empty, .comment:
+                canUseEstimatedFee = true
+            case .rawPayload:
+                canUseEstimatedFee = encryptComment
             }
-            try Task.checkCancellation()
-            guard !self.isShutdown, self.activationGeneration == activationGeneration else { throw WalletError.unavailable }
-            guard !preview.emulation.isIncomplete else { throw WalletError.previewIncomplete }
-            guard let fee = Int64(preview.emulation.walletFeesNanograms) else { throw WalletError.previewFailed }
+            let fee: Int64
+            let expiresAt: Int32
+            if WalletContext.useWalletTransferApi, !resolvedSendAll, canUseEstimatedFee,
+               case .engineDefault = resolved.expiration,
+               let estimatedFee, estimatedFee >= 0,
+               let balance = self.currentState.balance.currentValue,
+               resolved.amount < balance, estimatedFee < balance - resolved.amount {
+                fee = estimatedFee
+                // Bound the local request; signing still obtains fresh chain state and its own validUntil.
+                expiresAt = Int32(clamping: Int64(currentWalletTimestamp()) + 300)
+            } else {
+                let preview: SendPreview
+                do {
+                    preview = try await self.runtime.previewSend(intent: intent)
+                } catch {
+                    try Task.checkCancellation()
+                    guard !self.isShutdown, self.activationGeneration == activationGeneration else { throw WalletError.unavailable }
+                    guard walletPreviewNeedsSeqnoRetry(error) else { throw error }
+                    self.logger.log("event=wallet_preview_seqno_retry operation_id=\(operationId.uuidString.lowercased()) error_code=133 retry_delay_ms=1000")
+                    try await Task.sleep(nanoseconds: 1_000_000_000)
+                    try Task.checkCancellation()
+                    guard !self.isShutdown, self.activationGeneration == activationGeneration else { throw WalletError.unavailable }
+                    preview = try await self.runtime.previewSend(intent: intent)
+                }
+                try Task.checkCancellation()
+                guard !self.isShutdown, self.activationGeneration == activationGeneration else { throw WalletError.unavailable }
+                guard !preview.emulation.isIncomplete else { throw WalletError.previewIncomplete }
+                guard let previewFee = Int64(preview.emulation.walletFeesNanograms) else { throw WalletError.previewFailed }
+                fee = previewFee
+                expiresAt = Int32(clamping: preview.validUntil)
+            }
             let effectiveAmount: Int64
             if resolvedSendAll {
                 guard fee < resolved.amount else {
@@ -1626,7 +1649,7 @@ extension WalletContextImpl {
                 comment: resolved.comment,
                 commentEncrypted: encryptComment,
                 fee: fee,
-                expiresAt: Int32(clamping: preview.validUntil)
+                expiresAt: expiresAt
             )
             if let pendingRegistration {
                 let encryptedComment: String?
@@ -1750,8 +1773,15 @@ extension WalletContextImpl {
         do {
             while true {
                 try self.authorization.validateGeneration(authorizationGeneration, requireAvailable: requireAuthorizationAvailable)
+                let allowResolvedWithoutChainCheck: Bool
+                if WalletContext.useWalletTransferApi, let record = self.preparedTransfers[prepared.id], case .send = record.request {
+                    allowResolvedWithoutChainCheck = true
+                } else {
+                    allowResolvedWithoutChainCheck = false
+                }
                 let minimumSeqno = try await self.waitForPreviousWalletTransfer(wallet: wallet, generation: generation,
-                    operationId: operationId, expiresAt: prepared.expiresAt, requireAuthorizationAvailable: requireAuthorizationAvailable)
+                    operationId: operationId, expiresAt: prepared.expiresAt, requireAuthorizationAvailable: requireAuthorizationAvailable,
+                    allowResolvedWithoutChainCheck: allowResolvedWithoutChainCheck)
                 try Task.checkCancellation()
                 await stageUpdated?(.signing)
                 do {

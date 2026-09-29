@@ -57,7 +57,7 @@ extension WalletContextImpl {
         let resolved = try resolveTransferInput(address: address, amount: amount, comment: comment)
         let resolvedSendAll = sendAll && !resolved.hasLinkAmount
         let fee = max(0, estimatedFee ?? 0)
-        // An estimate cannot reject a transfer; preparation performs the exact check.
+        // An estimate cannot reject a transfer; preparation falls back to emulation if the estimate does not fit.
         let displayAmount = resolvedSendAll && fee < resolved.amount ? resolved.amount - fee : resolved.amount
         let encrypted = commentEncrypted && resolved.comment?.isEmpty == false
         let pendingComment = encrypted ? nil : resolved.comment
