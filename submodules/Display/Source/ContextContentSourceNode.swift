@@ -2,6 +2,22 @@ import Foundation
 import UIKit
 import AsyncDisplayKit
 
+private var morphsIntoContextMenuKey: UInt8 = 0
+
+public extension UIView {
+    /// Opts this view in to UIKit's liquid morph (iOS 26+) when it is the reference
+    /// view of a context menu; every other source keeps the standard presentation.
+    /// For now only navigation-header glass capsules holding a single button set it.
+    var morphsIntoContextMenu: Bool {
+        get {
+            return (objc_getAssociatedObject(self, &morphsIntoContextMenuKey) as? Bool) ?? false
+        }
+        set {
+            objc_setAssociatedObject(self, &morphsIntoContextMenuKey, newValue ? true : nil, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+        }
+    }
+}
+
 open class ContextReferenceContentNode: ASDisplayNode {
     /// Source decorations rendered outside this node (for example, a shared blur mask).
     public var additionalContextMenuSourceViews: [UIView] = []

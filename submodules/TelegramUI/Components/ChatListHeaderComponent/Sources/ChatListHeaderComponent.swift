@@ -325,6 +325,13 @@ public final class ChatListHeaderComponent: Component {
         private(set) var leftButtonsWidth: CGFloat = 0.0
         private(set) var rightButtonsWidth: CGFloat = 0.0
         
+        var leftButtonCount: Int {
+            return (self.backButtonView != nil ? 1 : 0) + self.leftButtonViews.count
+        }
+        var rightButtonCount: Int {
+            return self.rightButtonViews.count
+        }
+        
         init(
             backPressed: @escaping () -> Void,
             openStatusSetup: @escaping (UIView) -> Void,
@@ -1135,6 +1142,16 @@ public final class ChatListHeaderComponent: Component {
                 }
             }
 
+            var visibleContentViews: [ContentView] = []
+            if let primaryContentView = self.primaryContentView, self.secondaryContentView == nil || component.secondaryTransition < 1.0 {
+                visibleContentViews.append(primaryContentView)
+            }
+            if let secondaryContentView = self.secondaryContentView, component.secondaryTransition > 0.0 {
+                visibleContentViews.append(secondaryContentView)
+            }
+            let leftButtonCount = visibleContentViews.reduce(0, { $0 + $1.leftButtonCount })
+            let rightButtonCount = visibleContentViews.reduce(0, { $0 + $1.rightButtonCount })
+
             if leftButtonsEffectiveWidth != 0.0 {
                 let leftButtonsBackgroundContainer: GlassContextExtractableContainer
                 var leftButtonsBackgroundContainerTransition = transition
@@ -1150,6 +1167,7 @@ public final class ChatListHeaderComponent: Component {
                 let leftButtonsContainerFrame = CGRect(origin: CGPoint(x: component.leftInset, y: 0.0), size: CGSize(width: max(44.0, leftButtonsEffectiveWidth), height: 44.0))
                 leftButtonsBackgroundContainerTransition.setFrame(view: leftButtonsBackgroundContainer, frame: leftButtonsContainerFrame)
                 leftButtonsBackgroundContainer.update(size: leftButtonsContainerFrame.size, cornerRadius: leftButtonsContainerFrame.height * 0.5, isDark: component.theme.overallDarkAppearance, tintColor: .init(kind: .panel), isInteractive: true, transition: leftButtonsBackgroundContainerTransition)
+                leftButtonsBackgroundContainer.morphsIntoContextMenu = leftButtonCount == 1
                 leftButtonsBackgroundContainerTransition.setFrame(view: self.leftButtonsContainer, frame: CGRect(origin: CGPoint(), size: leftButtonsContainerFrame.size)) 
             } else {
                 if let leftButtonsBackgroundContainer = self.leftButtonsBackgroundContainer {
@@ -1179,6 +1197,7 @@ public final class ChatListHeaderComponent: Component {
                 }
                 rightButtonsBackgroundContainerTransition.setFrame(view: rightButtonsBackgroundContainer, frame: rightButtonsContainerFrame)
                 rightButtonsBackgroundContainer.update(size: rightButtonsContainerFrame.size, cornerRadius: rightButtonsContainerFrame.height * 0.5, isDark: component.theme.overallDarkAppearance, tintColor: .init(kind: .panel), isInteractive: true, transition: transition)
+                rightButtonsBackgroundContainer.morphsIntoContextMenu = rightButtonCount == 1
                 rightButtonsBackgroundContainerTransition.setFrame(view: self.rightButtonsContainer, frame: CGRect(origin: CGPoint(), size: rightButtonsContainerFrame.size))
             } else {
                 if let rightButtonsBackgroundContainer = self.rightButtonsBackgroundContainer {

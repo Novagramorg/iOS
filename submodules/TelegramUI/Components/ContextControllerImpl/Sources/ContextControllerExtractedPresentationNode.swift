@@ -966,6 +966,9 @@ final class ContextControllerExtractedPresentationNode: ASDisplayNode, ContextCo
         var isContentResizeableVertically: Bool = false
         let _ = isContentResizeableVertically
         var liquidMorphSource: (container: UIView, sourceRect: CGRect, sourcePath: UIBezierPath?)?
+        // A morphing menu takes the source's place: it shares the source's top edge (bottom
+        // edge when growing upward) and the side edge nearest the screen edge.
+        var morphMenuAnchor: (sourceFrame: CGRect, growsUpward: Bool, alignsRight: Bool)?
         
         switch self.source {
         case let .location(location):
@@ -979,7 +982,7 @@ final class ContextControllerExtractedPresentationNode: ASDisplayNode, ContextCo
             if let transitionInfo = reference.transitionInfo() ?? self.liquidMorphReferenceInfo {
                 let referenceView = transitionInfo.referenceView
                 let sourceRect = referenceView.bounds.inset(by: transitionInfo.insets)
-                if ContextControllerActionsStackNodeImpl.supportsLiquidMorph, referenceView.window != nil, !sourceRect.isEmpty, !sourceRect.isInfinite, !sourceRect.isNull {
+                if ContextControllerActionsStackNodeImpl.supportsLiquidMorph, referenceView.morphsIntoContextMenu, referenceView.window != nil, !sourceRect.isEmpty, !sourceRect.isInfinite, !sourceRect.isNull {
                     var sourcePath = transitionInfo.sourcePath ?? ContextReferenceContentNode.sourcePath(for: referenceView)
                     if sourcePath == nil, let extractable = referenceView as? ContextExtractableContainer {
                         sourcePath = UIBezierPath(roundedRect: sourceRect, cornerRadius: extractable.normalState.cornerRadius)
@@ -1003,6 +1006,10 @@ final class ContextControllerExtractedPresentationNode: ASDisplayNode, ContextCo
                 } else {
                     referenceRect = convertFrame(referenceView.bounds.inset(by: transitionInfo.insets), from: referenceView, to: self.view)
                     self.liquidMorphReferenceRect = referenceRect
+                }
+                // Keep the placement for the menu's lifetime even if the source stops opting in.
+                if liquidMorphSource != nil || self.hasActiveLiquidMorph {
+                    morphMenuAnchor = (referenceRect, transitionInfo.actionsPosition == .top, referenceRect.midX >= layout.size.width * 0.5)
                 }
                 contentRect = referenceRect.insetBy(dx: -2.0, dy: 0.0)
                 contentRect.size.width += 5.0
@@ -1119,6 +1126,12 @@ final class ContextControllerExtractedPresentationNode: ASDisplayNode, ContextCo
             let actionsConstrainedHeight: CGFloat
             if let actionsPositionLock = self.actionsStackNode.topPositionLock {
                 actionsConstrainedHeight = layout.size.height - bottomInset - layout.intrinsicInsets.bottom - actionsPositionLock
+            } else if let morphMenuAnchor {
+                if morphMenuAnchor.growsUpward {
+                    actionsConstrainedHeight = morphMenuAnchor.sourceFrame.maxY - contentTopInset
+                } else {
+                    actionsConstrainedHeight = layout.size.height - morphMenuAnchor.sourceFrame.minY - bottomInset - layout.intrinsicInsets.bottom
+                }
             } else {
                 if case let .reference(reference) = self.source, reference.keepInPlace {
                     actionsConstrainedHeight = layout.size.height - contentRect.maxY - contentActionsSpacing - bottomInset - layout.intrinsicInsets.bottom
@@ -1315,24 +1328,36 @@ final class ContextControllerExtractedPresentationNode: ASDisplayNode, ContextCo
                 }
             }
             
-            if case let .reference(reference) = self.source, let transitionInfo = reference.transitionInfo() ?? self.liquidMorphReferenceInfo, let customPosition = transitionInfo.customPosition {
+            if let morphMenuAnchor {
+                let sourceFrame = morphMenuAnchor.sourceFrame
+                actionsFrame.origin.x = morphMenuAnchor.alignsRight ? sourceFrame.maxX - actionsFrame.width : sourceFrame.minX
+                actionsFrame.origin.x = max(actionsEdgeInset, min(layout.size.width - actionsEdgeInset - actionsFrame.width, actionsFrame.origin.x))
+                actionsFrame.origin.y = morphMenuAnchor.growsUpward ? sourceFrame.maxY - actionsFrame.height : sourceFrame.minY
+            } else if case let .reference(reference) = self.source, let transitionInfo = reference.transitionInfo() ?? self.liquidMorphReferenceInfo, let customPosition = transitionInfo.customPosition {
                 actionsFrame = actionsFrame.offsetBy(dx: customPosition.x, dy: customPosition.y)
             }
             
             var additionalActionsFrame: CGRect
             let combinedActionsFrame: CGRect
             if additionalActionsSize.height > 0.0 {
-                additionalActionsFrame = CGRect(origin: actionsFrame.origin, size: additionalActionsSize)
-                actionsFrame = actionsFrame.offsetBy(dx: 0.0, dy: additionalActionsSize.height + 10.0)
+                if let morphMenuAnchor {
+                    // The morphing stack stays on the source; the additional one follows it.
+                    let additionalX = morphMenuAnchor.alignsRight ? actionsFrame.maxX - additionalActionsSize.width : actionsFrame.minX
+                    let additionalY = morphMenuAnchor.growsUpward ? actionsFrame.minY - 10.0 - additionalActionsSize.height : actionsFrame.maxY + 10.0
+                    additionalActionsFrame = CGRect(origin: CGPoint(x: additionalX, y: additionalY), size: additionalActionsSize)
+                } else {
+                    additionalActionsFrame = CGRect(origin: actionsFrame.origin, size: additionalActionsSize)
+                    actionsFrame = actionsFrame.offsetBy(dx: 0.0, dy: additionalActionsSize.height + 10.0)
+                }
                 combinedActionsFrame = actionsFrame.union(additionalActionsFrame)
             } else {
-                additionalActionsFrame = .zero
+                additionalActionsFrame = CGRect(origin: actionsFrame.origin, size: additionalActionsSize)
                 combinedActionsFrame = actionsFrame
             }
         
             transition.updateFrame(node: self.actionsContainerNode, frame: combinedActionsFrame.offsetBy(dx: 0.0, dy: additionalVisibleOffsetY))
-            transition.updateFrame(node: self.actionsStackNode, frame: CGRect(origin: CGPoint(x: 0.0, y: combinedActionsFrame.height - actionsSize.height), size: actionsSize), beginWithCurrentState: true)
-            transition.updateFrame(node: self.additionalActionsStackNode, frame: CGRect(origin: .zero, size: additionalActionsSize), beginWithCurrentState: true)
+            transition.updateFrame(node: self.actionsStackNode, frame: actionsFrame.offsetBy(dx: -combinedActionsFrame.minX, dy: -combinedActionsFrame.minY), beginWithCurrentState: true)
+            transition.updateFrame(node: self.additionalActionsStackNode, frame: additionalActionsFrame.offsetBy(dx: -combinedActionsFrame.minX, dy: -combinedActionsFrame.minY), beginWithCurrentState: true)
             
             if let contentNode = itemContentNode {
                 var contentFrame = CGRect(origin: CGPoint(x: contentParentGlobalFrame.minX + contentRect.minX - contentNode.containingItem.contentRect.minX, y: contentRect.minY - contentNode.containingItem.contentRect.minY + contentVerticalOffset + additionalVisibleOffsetY), size: contentNode.containingItem.view.bounds.size)
@@ -1399,7 +1424,7 @@ final class ContextControllerExtractedPresentationNode: ASDisplayNode, ContextCo
                 if keepInPlace, case .extracted = self.source {
                     contentHeight = (layout.statusBarHeight ?? 0.0) + actionsFrame.height + abs(actionsFrame.minY) + bottomInset + layout.intrinsicInsets.bottom
                 } else {
-                    contentHeight = actionsFrame.maxY + bottomInset + layout.intrinsicInsets.bottom
+                    contentHeight = combinedActionsFrame.maxY + bottomInset + layout.intrinsicInsets.bottom
                 }
             }
             let contentSize = CGSize(width: layout.size.width, height: contentHeight)

@@ -1206,6 +1206,7 @@ final class GiftStoreScreenComponent: Component {
         
         override init(frame: CGRect) {
             self.balanceBackgroundView = GlassContextExtractableContainer()
+            self.balanceBackgroundView.morphsIntoContextMenu = true
             
             self.scrollView = ScrollView()
             self.scrollView.showsVerticalScrollIndicator = true

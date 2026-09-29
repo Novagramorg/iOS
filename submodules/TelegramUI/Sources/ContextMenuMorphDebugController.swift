@@ -210,7 +210,11 @@ final class ContextMenuMorphDebugController: ViewController {
             }
         }
         let originalSourceMaskAlpha = separateMask?.alpha
-        let controller = makeContextController(presentationData: defaultPresentationData(), source: .reference(Source(navigationSource ?? separateSource?.view ?? button, top: button.tag >= 3, insets: insets, path: path)), items: .single(self.items(for: button)))
+        let sourceView = navigationSource ?? separateSource?.view ?? button
+        // Production opts in only single-button header capsules; the gallery
+        // exercises the morph on every source shape.
+        sourceView.morphsIntoContextMenu = true
+        let controller = makeContextController(presentationData: defaultPresentationData(), source: .reference(Source(sourceView, top: button.tag >= 3, insets: insets, path: path)), items: .single(self.items(for: button)))
         self.present(controller, in: .window(.root))
         guard let index else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + ((index == 15 || index == 18 || (index >= 20 && index % 2 == 1)) ? 0.05 : (index < 6 || index >= 12 ? 1.2 : 0.05))) { [weak self, weak controller] in
@@ -282,6 +286,7 @@ final class ContextMenuMorphDebugController: ViewController {
         background.mask = mask
         self.view.addSubview(background)
         self.view.addSubview(source.view)
+        source.view.morphsIntoContextMenu = true
         source.additionalContextMenuSourceViews = [mask]
         source.contextMenuSourcePath = UIBezierPath(roundedRect: source.bounds, cornerRadius: 16)
         source.makeContextMenuSourceContent = { [weak self, weak source] in

@@ -138,7 +138,10 @@ final class PeerInfoHeaderButtonNode: HighlightableButtonNode {
     }
     
     private func prepareForContextMenu() {
-        guard #available(iOS 26.0, *), self.key == .more || self.key == .mute else { return }
+        // Only a source that morphs into its menu needs full opacity when the menu opens.
+        // Profile action buttons do not opt in to the morph for now, so they keep the
+        // normal release fade.
+        guard #available(iOS 26.0, *), self.key == .more || self.key == .mute, self.referenceNode.view.morphsIntoContextMenu else { return }
         self.contextMenuActivated = true
         self.alpha = 1.0
         self.layer.removeAnimation(forKey: "opacity")
