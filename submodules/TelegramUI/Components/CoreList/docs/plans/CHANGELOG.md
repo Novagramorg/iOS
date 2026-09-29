@@ -25,6 +25,13 @@ Current extensions are retained under `docs/superpowers/specs/`.
 
 ## Landed work
 
+- **2026-09-29 — a second jump reversed mid-flight lands on the first's outgoing strip**: carousel
+  adjacency placed the incoming window against the loaded window only, so a jump back the way an
+  in-flight jump came landed exactly on that jump's strip, still parked in `carouselExitOverlay`,
+  and carried both coincident for the whole travel (300pt of overlap on a 300pt viewport). The
+  outgoing band now includes every viewport-anchored strip, and those strips' exit tracks are
+  re-timed onto the pass that now carries them, so a late reversal leaves no empty band and an
+  immediate jump leaves no strip frozen over the destination. `CarouselChainOverlapTests`.
 - **2026-08-03 — a completion Core Animation never sends**: the exit overlay's teardown hangs on a
   CA completion, and **Core Animation does not run an animation whose `fromValue` equals its
   `toValue`** — it changes nothing, the render server has nothing to schedule, and

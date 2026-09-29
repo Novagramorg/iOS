@@ -588,6 +588,25 @@ final class ListAnimationController {
         return exit.owner
     }
 
+    /// Re-times a detached exit onto `transition`; `completion` replaces the teardown the original
+    /// `makeExit` installed, which the replacement discards. An immediate transition tears it down now.
+    func retimeExit(owner: ListAnimationOwner,
+                    layer: CALayer,
+                    transition: CoreListTransition,
+                    transactionTime: TimeInterval,
+                    completion: @escaping () -> Void) {
+        guard case .exit = owner,
+              let binding = bindings[owner],
+              binding.value === layer
+        else { return }
+        let mutation = model.retimeExit(owner: owner,
+                                        at: transactionTime,
+                                        transition: transition.scaled(by: durationFactor()))
+        apply(mutation, owner: owner, property: .opacity,
+              layer: layer, binding: binding, removesOwner: true,
+              cleanup: completion)
+    }
+
     @discardableResult
     func makeTransient(identity: AnyHashable,
                        layer: CALayer,

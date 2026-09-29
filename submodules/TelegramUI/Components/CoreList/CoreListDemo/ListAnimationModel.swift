@@ -448,6 +448,19 @@ final class ListAnimationModel {
                                  opacityMutation: mutation)
     }
 
+    /// Moves an exit's teardown deadline onto `transition`: its opacity track restarts from the current
+    /// value toward the target it already has. That track is what tears the member down (see
+    /// `beginExit`), so this is how a detached member is kept alive by a later pass. Like `beginExit` it
+    /// never early-outs on an equal endpoint — returning `.unchanged` would leave the old deadline.
+    func retimeExit(owner: ListAnimationOwner,
+                    at time: TimeInterval,
+                    transition: CoreListTransition) -> ListAnimationMutation {
+        guard case .exit = owner, let state = states[owner] else { return .unchanged }
+        let from = resumeValue(for: owner, property: .opacity, at: time) ?? state.opacity
+        return replace(owner: owner, property: .opacity, from: from, to: state.opacity,
+                       at: time, transition: transition)
+    }
+
     func beginTransient(from owner: ListAnimationOwner,
                         at time: TimeInterval) -> ListAnimationOwner {
         precondition(owner.isLive)

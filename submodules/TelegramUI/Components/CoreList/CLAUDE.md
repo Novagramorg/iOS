@@ -700,6 +700,24 @@ final frames and travel on one additive `sublayerTransform` (`Display/Source/Lis
 residual crossing remains on a short viewport and is inherent (a held strip and sliding content must
 cross): 48/10 peak/mean against 179/65 for content-anchoring, which is what the z-ordering is for.
 
+**The outgoing strip is everything on its way out, not just the loaded window**
+(`carouselOutgoingStrip`). A carousel still in flight has its own outgoing strip parked in
+`carouselExitOverlay`; jump again, back the way the first jump came, and adjacency against the loaded
+window alone puts the incoming window exactly where that strip is drawn. The two ride the same track,
+coincident, for the whole pass: 300pt of stale-over-live overlap on a 300pt viewport, and in a chat,
+where rows are transparent, the previous window drawn through the new one. Same-direction chains
+were always clean, because the parked strip sits on the far side, and so was any second jump made
+after the first had settled. So adjacency uses the union of the loaded window and every
+viewport-anchored strip. **That strip then has to live as long as the track now carrying it**
+(`retimeCarouselExitStrips` → `retimeExit`): its own deadline belongs to the pass that parked it, so a
+reversal just before that pass ends would remove it mid-travel and leave its band empty, 300pt blank
+at worst. Viewport carries already get the same from the generation re-stamp; a ghost block's
+lifetime is its members' exit tracks, re-timed onto this pass's
+transition, which also tears them down at once on an immediate jump rather than leaving them frozen
+in the viewport over the destination. `CarouselChainOverlapTests` covers all four direction pairs,
+mid-flight and settled, the late reversal, the immediate jump, and the chat's own jump straight back
+to the newest messages, where the incoming rows share identities with the parked strip.
+
 Mutation anchors use the engine offset clamped to the currently known loaded edges. Rubber-band displacement
 is presentation-only: it is restored to the displayed engine offset after settled geometry is resolved and
 must not influence anchor identity, direction, or edge pinning. At the settled loaded top edge, an ordinary

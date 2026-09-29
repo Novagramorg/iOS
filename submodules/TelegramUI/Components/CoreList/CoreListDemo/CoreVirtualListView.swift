@@ -1885,11 +1885,23 @@ public final class CoreVirtualListView: UIView {
                 let oldRenderedOffset = oldBoundsOriginY + currentViewportCorrection
                 let oldLoadedTop = oldContainerOriginY - oldRenderedOffset
                 let newLoadedTop = containerOriginY - transactionOffset
+                // The outgoing strip is everything on its way out, not just the loaded window: a
+                // carousel still in flight has its own outgoing strip parked in the viewport. Placed
+                // against the loaded window alone, a jump back the way the earlier one came lands the
+                // incoming window exactly on that strip and carries both, coincident, for the whole
+                // travel.
+                let outgoingStrip = carouselOutgoingStrip(
+                    loadedTop: oldLoadedTop,
+                    loadedHeight: oldWindow.height,
+                    viewportCorrection: currentViewportCorrection,
+                    excluding: Set(newGhostBlockIDs),
+                    at: transactionTime
+                )
                 let viewportFrom = ViewportTransitionGeometry.carouselViewportFrom(
                     direction: direction,
-                    oldVisibleTop: oldLoadedTop,
+                    oldVisibleTop: outgoingStrip.lowerBound,
                     newVisibleTop: newLoadedTop,
-                    oldStripHeight: oldWindow.height,
+                    oldStripHeight: outgoingStrip.upperBound - outgoingStrip.lowerBound,
                     newWindowHeight: newWindow.height
                 )
                 let syntheticOldSettledOffset = transactionOffset
@@ -1909,23 +1921,30 @@ public final class CoreVirtualListView: UIView {
                 if case .immediate = mutation {
                     resetViewportCarries()
                 }
+                // An earlier carousel's strip is now carried by THIS track, so it has to live exactly
+                // as long as this track. Its own deadline could fall while the travel is still
+                // bringing it across the screen, and the band the placement above reserved for it
+                // would then cross the viewport empty. Viewport carries get the same by the
+                // generation re-stamp below; a ghost block's lifetime is its members' exit tracks.
+                retimeCarouselExitStrips(excluding: Set(newGhostBlockIDs),
+                                         transition: transition,
+                                         transactionTime: transactionTime)
 
 #if DEBUG
                 if let track = mutation.startedTrack {
                     assert(abs(track.from - viewportFrom) <= 1e-6)
                     let mappedOldTop = ViewportTransitionGeometry.mappedContentY(
-                        oldScreenY: oldLoadedTop,
+                        oldScreenY: outgoingStrip.lowerBound,
                         newEngineOffset: transactionOffset,
                         viewportFrom: viewportFrom
                     )
                     let initialOutgoingTop = mappedOldTop
                         - (transactionOffset + viewportFrom)
                     let initialIncomingTop = newLoadedTop - viewportFrom
-                    assert(abs(initialOutgoingTop - oldLoadedTop) <= 1e-6)
+                    assert(abs(initialOutgoingTop - outgoingStrip.lowerBound) <= 1e-6)
                     switch direction {
                     case .forward:
-                        assert(abs(initialIncomingTop
-                                   - (initialOutgoingTop + oldWindow.height)) <= 1e-6)
+                        assert(abs(initialIncomingTop - outgoingStrip.upperBound) <= 1e-6)
                     case .backward:
                         assert(abs(initialIncomingTop + newWindow.height
                                    - initialOutgoingTop) <= 1e-6)
@@ -4145,6 +4164,57 @@ public final class CoreVirtualListView: UIView {
         }
         assertGhostInvariants()
         assertOverlayInvariants()
+    }
+
+    /// The screen band a carousel travels away from: the old loaded window plus every strip an earlier
+    /// carousel parked in `carouselExitOverlay`, whose screen Y is its mirror Y minus the correction.
+    /// `excluding` names this pass's own blocks, which are still in content space until promotion.
+    private func carouselOutgoingStrip(loadedTop: CGFloat,
+                                       loadedHeight: CGFloat,
+                                       viewportCorrection: CGFloat,
+                                       excluding: Set<GhostBlockID>,
+                                       at time: TimeInterval) -> ClosedRange<CGFloat> {
+        var minY = loadedTop
+        var maxY = loadedTop + loadedHeight
+        for block in ghostLedger.snapshots
+            where block.anchoring == .viewport
+                && block.visibleMemberCount > 0
+                && !excluding.contains(block.id) {
+            let offset = ghostRenders[block.id].flatMap {
+                animationController.ghostBlockOffset(owner: $0.owner, at: time)
+            } ?? 0
+            let rootY = block.settledRootY + offset - viewportCorrection
+            minY = min(minY, rootY + block.localMinY)
+            maxY = max(maxY, rootY + block.localMaxY)
+        }
+        for carry in viewportCarries where carry.isScreenAnchored {
+            let top = carry.view.layer.position.y - viewportCorrection
+            minY = min(minY, top)
+            maxY = max(maxY, top + carry.view.bounds.height)
+        }
+        return minY...maxY
+    }
+
+    /// Hands every earlier carousel strip's teardown to this pass's transition. See the call site.
+    private func retimeCarouselExitStrips(excluding: Set<GhostBlockID>,
+                                          transition: CoreListTransition,
+                                          transactionTime: TimeInterval) {
+        for block in ghostLedger.snapshots
+            where block.anchoring == .viewport && !excluding.contains(block.id) {
+            guard let render = ghostRenders[block.id] else { continue }
+            for member in render.members.values {
+                let blockID = block.id
+                animationController.retimeExit(
+                    owner: member.owner,
+                    layer: member.view.layer,
+                    transition: transition,
+                    transactionTime: transactionTime
+                ) { [weak self, weak view = member.view] in
+                    guard let view else { return }
+                    self?.finishGhostMember(blockID: blockID, view: view)
+                }
+            }
+        }
     }
 
     /// Rebases the mirror overlay's children when the shared viewport correction steps under them.
