@@ -1755,13 +1755,24 @@ private final class WalletTransactionContentComponent: Component {
                     comment: comment
                 )
             } else {
+                let estimatedFee: Int64?
+                let previewAge = Date().timeIntervalSince1970 - TimeInterval(self.previewTimestamp)
+                if !sendAll, self.preparedTransfer == nil, previewSource.preparedTransfer == nil,
+                   !self.preparedTransferNeedsRefresh, previewAge >= 0, previewAge < 300,
+                   comment == walletTransactionComment(previewSource.comment),
+                   self.previewCommentEncrypted == previewSource.commentEncrypted {
+                    estimatedFee = previewSource.initialFee
+                } else {
+                    estimatedFee = nil
+                }
                 preparation = walletContext.prepareTransfer(
                     address: self.preparedTransfer?.recipient ?? previewSource.address,
                     amount: requestedAmount,
                     sendAll: sendAll,
                     comment: comment,
                     commentEncrypted: self.previewCommentEncrypted,
-                    session: self.previewCommentEncrypted ? self.commentSession : nil
+                    session: self.previewCommentEncrypted ? self.commentSession : nil,
+                    estimatedFee: estimatedFee
                 )
             }
             self.transferDisposable.set((walletContext.state

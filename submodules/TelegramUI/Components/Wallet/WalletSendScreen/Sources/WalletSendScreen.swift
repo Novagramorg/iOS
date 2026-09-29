@@ -323,7 +323,8 @@ fileprivate final class WalletPeerTransferSubmission {
                             commentEncrypted: request.commentEncrypted,
                             recipientPublicKey: request.publicKey,
                             session: session,
-                            pendingRegistration: registration
+                            pendingRegistration: registration,
+                            estimatedFee: request.estimatedFee
                         )
                     }
                 }
@@ -2182,16 +2183,24 @@ private final class WalletSendScreenComponent: Component {
 
             //TODO:localize
             let emptyHint = "Tap to set amount"
+            let showEmptyHint = !self.needsAmountFocus && !self.hasActivatedAmountInput && !self.amountField.isInputActive && !self.amountField.hasInputText
             let emptyHintSize = self.emptyHint.update(
                 transition: transition,
-                component: AnyComponent(MultilineTextComponent(
-                    text: .plain(NSAttributedString(
-                        string: emptyHint,
-                        font: Font.regular(15.0),
-                        textColor: theme.list.itemSecondaryTextColor
+                component: AnyComponent(PlainButtonComponent(
+                    content: AnyComponent(MultilineTextComponent(
+                        text: .plain(NSAttributedString(
+                            string: emptyHint,
+                            font: Font.regular(15.0),
+                            textColor: theme.list.itemSecondaryTextColor
+                        )),
+                        horizontalAlignment: .center,
+                        maximumNumberOfLines: 1
                     )),
-                    horizontalAlignment: .center,
-                    maximumNumberOfLines: 1
+                    action: { [weak self] in
+                        self?.amountField.activateInput()
+                    },
+                    isEnabled: showEmptyHint && isAmountInputEnabled,
+                    animateScale: false
                 )),
                 environment: {},
                 containerSize: CGSize(width: availableSize.width - 32.0, height: 24.0)
@@ -2202,7 +2211,6 @@ private final class WalletSendScreenComponent: Component {
                 width: emptyHintSize.width,
                 height: emptyHintSize.height
             )
-            let showEmptyHint = !self.needsAmountFocus && !self.hasActivatedAmountInput && !self.amountField.isInputActive && !self.amountField.hasInputText
             if showEmptyHint {
                 centralContentFrame = centralContentFrame.union(emptyHintFrame)
             }
@@ -2210,6 +2218,7 @@ private final class WalletSendScreenComponent: Component {
                 if emptyHintView.superview == nil {
                     self.addSubview(emptyHintView)
                 }
+                emptyHintView.accessibilityLabel = emptyHint
                 emptyHintView.accessibilityElementsHidden = !showEmptyHint
                 contentPositionTransition.setBounds(view: emptyHintView, bounds: CGRect(origin: .zero, size: emptyHintFrame.size))
                 centralContentLayouts.append((emptyHintView, emptyHintFrame, contentPositionTransition))
