@@ -217,6 +217,7 @@ public struct PresentationResourcesSettings {
     })
     
     public static let ton = renderSettingsIcon(name: "Item List/Icons/Gram", backgroundColors: [colorBlue])
+    public static let gramEarnings = renderSettingsIcon(name: "Item List/Icons/Earnings", backgroundColors: [colorBlue])
     
     public static let money = UIImage(bundleImageName: "Settings/Gram")
  

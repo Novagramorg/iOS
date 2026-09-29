@@ -165,6 +165,9 @@ public final class WalletCardComponent: Component {
         private var displayLink: SharedDisplayLinkDriver.Link?
         private var reflectionRotation = WalletCardBackgroundRotation()
         private var isAnimationVisible = false
+        private var isDiamondRenderingEnabled: Bool {
+            return self.isAnimationVisible && (self.isScrollVisible || self.balanceTransitionContainer != nil)
+        }
 
         private var gyroPitch = 0.0
         private var gyroRoll = 0.0
@@ -592,7 +595,7 @@ public final class WalletCardComponent: Component {
                 component: AnyComponent(InteractiveDiamondComponent(
                     size: diamondSize,
                     diamondWidth: gramIconSize.width * 0.7,
-                    isVisible: component.isVisible,
+                    isVisible: self.isDiamondRenderingEnabled,
                     theme: component.theme,
                     appearance: .white,
                     expansionStyle: .downward,
@@ -860,8 +863,7 @@ public final class WalletCardComponent: Component {
 
         private func updateAnimationState() {
             if let diamond = self.gramDiamond.view as? InteractiveDiamondComponent.View {
-                diamond.isRenderingEnabled = self.component?.isVisible == true && self.isAnimationVisible
-                    && (self.isScrollVisible || self.balanceTransitionContainer != nil)
+                diamond.isRenderingEnabled = self.isDiamondRenderingEnabled
                 self.updateDiamondInteraction()
             }
             guard self.component != nil, self.isAnimationVisible,

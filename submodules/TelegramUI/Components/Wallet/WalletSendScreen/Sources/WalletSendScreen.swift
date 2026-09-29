@@ -593,7 +593,7 @@ private final class WalletSendScreenComponent: Component {
         private let balanceText = ComponentView<Empty>()
         private let feeText = ComponentView<Empty>()
         private let sendButton = ComponentView<Empty>()
-        private let commentBackgroundView = UIImageView()
+        private let commentBackgroundView = WalletSendCommentBackgroundView()
         private let commentText = ComponentView<Empty>()
 
         var isAmountInputActive: Bool {
@@ -2403,18 +2403,6 @@ private final class WalletSendScreenComponent: Component {
 
                 let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
 
-                self.commentBackgroundView.image = messageBubbleImage(
-                    maxCornerRadius: presentationData.chatBubbleCorners.mainRadius,
-                    minCornerRadius: presentationData.chatBubbleCorners.auxiliaryRadius,
-                    incoming: false,
-                    fillColor: theme.list.itemSecondaryTextColor,
-                    strokeColor: theme.list.itemSecondaryTextColor,
-                    neighbors: .none,
-                    shadow: nil,
-                    wallpaper: presentationData.chatWallpaper,
-                    knockout: false,
-                    onlyOutline: true
-                )
                 let commentSize = self.commentText.update(
                     transition: commentTransition,
                     component: AnyComponent(MultilineTextComponent(
@@ -2430,6 +2418,12 @@ private final class WalletSendScreenComponent: Component {
                     containerSize: CGSize(width: availableSize.width - 120.0, height: 1000.0)
                 )
                 let bubbleSize = CGSize(width: commentSize.width + 34.0, height: max(34.0, commentSize.height + 14.0))
+                self.commentBackgroundView.update(
+                    size: bubbleSize,
+                    maxCornerRadius: presentationData.chatBubbleCorners.mainRadius,
+                    minCornerRadius: presentationData.chatBubbleCorners.auxiliaryRadius,
+                    theme: theme
+                )
                 let commentOriginY: CGFloat
                 if isInsufficient {
                     commentOriginY = (isDepositInline ? depositButtonFrame.maxY : insufficientTextFrame.maxY) + 8.0

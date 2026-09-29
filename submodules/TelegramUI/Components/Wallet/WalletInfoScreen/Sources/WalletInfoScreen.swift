@@ -178,7 +178,7 @@ private func walletInfoContent(
         //TODO:localize
         let storeTitle = "Store"
         //TODO:localize
-        let storeText = "Keep your Grams in Telegram (#→ Wallet) or other wallets."
+        let storeText = "Keep your Grams in Telegram (#→ Money) or other wallets."
         //TODO:localize
         let buttonTitle = "Got it"
 
@@ -400,7 +400,7 @@ private final class WalletInfoSheetContent: CombinedComponent {
             let boldTextFont = Font.semibold(15.0)
 
             let textColor = theme.actionSheet.primaryTextColor
-            let secondaryTextColor = theme.actionSheet.secondaryTextColor
+            let secondaryTextColor = theme.list.itemSecondaryTextColor
 
             let spacing: CGFloat = 16.0
             var contentSize = CGSize(width: context.availableSize.width, height: [.wallet, .gram, .firstGrams].contains(component.mode) ? 10.0 : 33.0)
