@@ -142,9 +142,9 @@ vertex BackgroundStarRaster backgroundStarVertex(uint vertexIndex [[vertex_id]],
     BackgroundStarRaster out;
     out.position = u.projection*float4(center+point,-1.6-depth,1);
     out.uv = uv;
-    out.color = float4(mix(darkColor,lightColor,u.animation.w),
+    out.color = float4(mix(darkColor,lightColor,u.animation.w) * u.tint.x,
                        fade*mix(0.52,0.95,starRandom(seed+11))*mix(0.80,1.0,depth));
-    out.haloOpacity = mix(0.075,0.035,u.animation.w);
+    out.haloOpacity = mix(0.075,0.035,u.animation.w) * u.tint.x;
     return out;
 }
 
@@ -692,6 +692,15 @@ float3 coolInnerGlow(float3 color, float3 position, float3 ray, float3 normal, f
     return mix(color,float3(0.96,1,1),glow);
 }
 
+// With an EDR target, lifts the brightest parts above SDR white ("light HDR"). Applied as the last
+// step of each stone fragment, on the premultiplied output; a no-op when boost is 0.
+static float4 withHighlightBoost(float4 color, float boost) {
+    if (boost <= 0.0 || color.a <= 0.0) return color;
+    float3 straight = color.rgb / color.a;
+    float luminance = dot(straight, float3(0.2126, 0.7152, 0.0722));
+    return float4(straight * (1.0 + boost * smoothstep(0.55, 1.0, luminance)) * color.a, color.a);
+}
+
 float4 diamondSurface(Raster in, constant Uniforms &u, const device float4 *planes) {
     float3 n = normalize(in.normal);
     float cameraDistance = -u.projection[3].w / u.projection[2].w;
@@ -823,62 +832,154 @@ float4 diamondSurface(Raster in, constant Uniforms &u, const device float4 *plan
 
 fragment float4 diamondFragment(Raster in [[stage_in]], constant Uniforms &u [[buffer(1)]],
                                 const device float4 *planes [[buffer(2)]]) {
-    return diamondSurface(in, u, planes);
+    return withHighlightBoost(diamondSurface(in, u, planes), u.appearance.z);
 }
 
 struct DiamondLensUniforms {
     float4 rect;
     float4 uv;
     float4 viewport; // pixel center, pixels per point, edge count
-    float4 parameters; // strength, yaw, radius in points, light background
-    float4 center; // lens center in points, preserves source colors, reserved
+    float4 parameters; // strength, yaw, radius in points, mode (0 mask, 1 dark mask, 2 color)
+    float4 center; // stone center in points (x, y)
+    float4 tint; // color backdrop's background color (rgb), enabled (w)
 };
+
+// Luminosity blend helpers (W3C compositing spec), on unpremultiplied sRGB-encoded colors.
+static float blendLum(float3 c) { return dot(c, float3(0.3, 0.59, 0.11)); }
+static float3 blendClipColor(float3 c) {
+    float l = blendLum(c), n = min(c.r, min(c.g, c.b)), x = max(c.r, max(c.g, c.b));
+    if (n < 0.0) c = l + (c - l) * l / max(l - n, 1e-4);
+    if (x > 1.0) c = l + (c - l) * (1.0 - l) / max(x - l, 1e-4);
+    return c;
+}
+static float3 blendSetLum(float3 c, float l) { return blendClipColor(c + (l - blendLum(c))); }
+
+// Maps a lens point (points, relative to the view's center) into the source texture, or returns
+// a negative coordinate when it falls outside the source rect. Sampling stays inside the source's
+// tile of the atlas.
+static float2 lensSourceUV(constant DiamondLensUniforms &lens, float2 samplePosition, float2 halfTexel) {
+    float2 glyphPosition = (samplePosition - lens.rect.xy) / lens.rect.zw;
+    if (any(glyphPosition < 0.0) || any(glyphPosition > 1.0)) return float2(-1.0);
+    return clamp(lens.uv.xy + glyphPosition * lens.uv.zw,
+                 lens.uv.xy + halfTexel, lens.uv.xy + lens.uv.zw - halfTexel);
+}
 
 fragment float4 diamondLensFragment(Raster in [[stage_in]], constant Uniforms &u [[buffer(1)]],
                                     const device float4 *planes [[buffer(2)]],
                                     constant DiamondLensUniforms &lens [[buffer(3)]],
                                     constant float4 *edges [[buffer(4)]],
-                                    texture2d<float> source [[texture(0)]]) {
+                                    texture2d<float> glyph [[texture(0)]]) {
     float4 stone = diamondSurface(in, u, planes);
-    float2 position = (in.position.xy - lens.viewport.xy) / lens.viewport.z - lens.center.xy;
+    float2 position = (in.position.xy - lens.viewport.xy) / lens.viewport.z;
     float distanceToEdge = 1e9;
     for (uint i = 0; i < uint(lens.viewport.w); ++i) {
         distanceToEdge = min(distanceToEdge, dot(edges[i].xy, position) + edges[i].z);
     }
-    if (distanceToEdge <= 0.0) return stone;
+    if (distanceToEdge <= 0.0) return withHighlightBoost(stone, u.appearance.z);
+    // Fades lens effects out over the stone's outermost 1.5pt.
+    float rimFade = smoothstep(0.0, 1.5, distanceToEdge);
 
     // The reference's faceted lens, in screen points and on the gem's own frame.
+    bool colorBackdrop = lens.parameters.w > 1.5;
     float strength = lens.parameters.x;
-    float edge = smoothstep(0.0, 5.0, distanceToEdge) * strength;
+    // A color backdrop is always fully bent; strength only sets how much of it shows.
+    float edge = smoothstep(0.0, 5.0, distanceToEdge) * (colorBackdrop ? 1.0 : strength);
     float radius = max(lens.parameters.z, 1.0);
-    float2 q = position / radius;
+    float2 local = position - lens.center.xy;
+    float2 q = local / radius;
     float facet = (asin(clamp(q.x, -0.999, 0.999)) - lens.parameters.y) / (M_PI_F / 4.0);
     float wave = sin(M_PI_F * facet);
     float prism = sign(wave) * pow(abs(wave), 0.6);
     float crown = 1.0 - smoothstep(-0.25, 0.05, q.y);
     float2 bend = float2(prism * 0.12, mix(-0.08 * q.y, 0.09, crown)) * radius;
     float zoom = mix(0.84, 0.72, crown * (1.0 - smoothstep(0.2, 0.6, abs(q.x))));
-    float2 samplePosition = lens.center.xy + position * mix(1.0, zoom, edge) + bend * edge;
-    float2 sourcePosition = (samplePosition - lens.rect.xy) / lens.rect.zw;
-    if (any(sourcePosition < 0.0) || any(sourcePosition > 1.0)) return stone;
+    constexpr sampler glyphSampler(mag_filter::linear, min_filter::linear, address::clamp_to_edge);
+    float2 halfTexel = 0.5 / float2(glyph.get_width(), glyph.get_height());
 
-    // Keep sampling within the source, including when it is a tile in the amount's mask atlas.
-    constexpr sampler sourceSampler(mag_filter::linear, min_filter::linear, address::clamp_to_edge);
-    float2 halfTexel = 0.5 / float2(source.get_width(), source.get_height());
-    float2 uv = clamp(lens.uv.xy + sourcePosition * lens.uv.zw,
-                      lens.uv.xy + halfTexel, lens.uv.xy + lens.uv.zw - halfTexel);
-    float4 sampledColor = source.sample(sourceSampler, uv);
-    float coverage = strength * smoothstep(0.0, 1.5, distanceToEdge);
-    if (lens.center.z > 0.5) {
-        // The card snapshot contains premultiplied color, including antialiased edges.
-        float opacity = 0.7 * coverage;
-        stone.rgb = stone.rgb * (1.0 - sampledColor.a * opacity) + sampledColor.rgb * stone.a * opacity;
-        return stone;
+    if (colorBackdrop) {
+        float3 stoneColor = stone.rgb / max(stone.a, 1e-4);
+        // The stone takes the surroundings' hue, keeping its own shading (luminosity blend).
+        // Luminosity is capped below white, where the hue would be clipped away, and the brightest
+        // part is added back as a softer highlight, so near-white facets stay light blue.
+        if (lens.tint.w > 0.5) {
+            float luminance = blendLum(stoneColor);
+            float tinted = min(luminance, 0.82);
+            float3 tintedColor = blendSetLum(lens.tint.rgb, tinted) + (luminance - tinted) * 0.6;
+            // Our snapshot is attached when expansion begins; fade its tint in with the lens.
+            stoneColor = mix(stoneColor, tintedColor, strength * rimFade);
+        }
+        // Dispersion ("fire") differs per facet: each facet splits colors along its own direction and
+        // by its own amount, more at steep facet edges and in the pavilion. Facets move with the
+        // stone's rotation, so the fringes change from facet to facet as it turns.
+        float facetIndex = floor(facet) + (crown > 0.5 ? 17.0 : 0.0);
+        float facetRandom = fract(sin(facetIndex * 12.9898 + 4.1414) * 43758.5453);
+        float facetAngle = atan2(bend.y, bend.x + 1e-4) + (facetRandom - 0.5) * 2.4;
+        float fire = mix(0.25, 1.0, facetRandom) * mix(0.35, 1.0, abs(prism)) * mix(1.3, 0.7, crown);
+        float2 fireOffset = float2(cos(facetAngle), sin(facetAngle)) * fire * edge * radius * 0.05;
+        // Magnify what's seen through the stone more than the mask lens does (~1.5-1.7x instead of
+        // ~1.2-1.4x), so the bending, tint and fire read clearly.
+        float2 basePosition = lens.center.xy + local * mix(1.0, zoom * 0.8, edge) + bend * edge;
+        float3 channelColor = 0.0, channelAlpha = 0.0;
+        for (int channel = 0; channel < 3; ++channel) {
+            // Red bends least, blue most.
+            float2 samplePosition = basePosition + fireOffset * (float(channel) - 1.0);
+            float2 uv = lensSourceUV(lens, samplePosition, halfTexel);
+            if (uv.x < 0.0) continue;
+            float4 sample = glyph.sample(glyphSampler, uv);
+            channelColor[channel] = sample[channel];
+            channelAlpha[channel] = sample.a;
+        }
+        // How much light a facet lets through: bright, reflective facets mostly show their highlight,
+        // darker ones are clear, so text behind fades in and out as the stone turns.
+        float transmission = mix(0.2, 1.0, 1.0 - smoothstep(0.4, 0.95, blendLum(stoneColor)));
+        // Premultiplied: only covered pixels of the backdrop show through, filtered by the facet's color
+        // as if the light passed through it.
+        float3 filtered = channelColor * mix(float3(1.0), stoneColor, 0.5);
+        // The crown (upper facets) is mostly surface highlight, so less shows through it.
+        float crownFacets = saturate(in.facetWeights.x + in.facetWeights.y);
+        float amount = strength * transmission * mix(1.0, 0.6, crownFacets) * rimFade;
+        float3 color = stoneColor * (1.0 - channelAlpha * amount) + filtered * amount;
+
+        // Internal reflections, only in the pavilion (from the stone's own facet weights): an inverted,
+        // smaller image of the surroundings, pushed along the facet's normal, so it moves with the stone
+        // like something deep inside it. The farther the reflected point, the fainter and softer it is.
+        float pavilion = saturate(in.facetWeights.z);
+        if (pavilion > 0.01) {
+            float3 normal = normalize(in.normal);
+            float3 reflected = reflect(float3(0.0, 0.0, -1.0), normal);
+            float2 offset = -local * 0.55 + float2(reflected.x, -reflected.y) * radius * 0.9;
+            float travel = length(offset);
+            float depthFade = exp(-travel / (radius * 1.1));
+            float blur = travel * 0.04;
+            float4 reflection = 0.0;
+            float samples = 0.0;
+            for (int tap = 0; tap < 4; ++tap) {
+                float2 tapOffset = float2(tap % 2 == 0 ? -1.0 : 1.0, tap < 2 ? -1.0 : 1.0) * blur;
+                float2 reflectionUV = lensSourceUV(lens, lens.center.xy + offset + tapOffset, halfTexel);
+                if (reflectionUV.x < 0.0) continue;
+                reflection += glyph.sample(glyphSampler, reflectionUV);
+                samples += 1.0;
+            }
+            if (samples > 0.0) {
+                reflection /= samples;
+                // Schlick's Fresnel with diamond's F0 = 0.17.
+                float schlick = 0.17 + 0.83 * pow(1.0 - saturate(abs(normal.z)), 5.0);
+                float reflectionAmount = strength * pavilion * mix(0.35, 0.8, schlick) * depthFade
+                    * rimFade;
+                color = color * (1.0 - reflection.a * reflectionAmount)
+                    + reflection.rgb * mix(float3(1.0), stoneColor, 0.15) * reflectionAmount;
+            }
+        }
+        stone.rgb = color * stone.a;
+        return withHighlightBoost(stone, u.appearance.z);
     }
-    float opacity = sampledColor.r * 0.55 * coverage;
+
+    float2 uv = lensSourceUV(lens, lens.center.xy + local * mix(1.0, zoom, edge) + bend * edge, halfTexel);
+    if (uv.x < 0.0) return withHighlightBoost(stone, u.appearance.z);
+    float opacity = glyph.sample(glyphSampler, uv).r * 0.55 * strength * rimFade;
     float3 tint = lens.parameters.w > 0.5 ? float3(0.02, 0.13, 0.48) : float3(1.0);
     stone.rgb = mix(stone.rgb, tint * stone.a, opacity);
-    return stone;
+    return withHighlightBoost(stone, u.appearance.z);
 }
 
 struct SparkleVertex { float4 contours; float4 material; };
@@ -1002,6 +1103,8 @@ fragment float4 sparkleFragment(SparkleRaster in [[stage_in]], constant Uniforms
     } else if (uint(u.appearance.x) == 2) {
         color = in.layer == 1 ? float3(0.82,0.96,1) : float3(1);
     }
-    alpha *= in.strength;
-    return float4(color * alpha, alpha);
+    // Keep premultiplied alpha valid when HDR exposes values above SDR white.
+    alpha = saturate(alpha * in.strength);
+    // Match the stone's HDR brightness so SDR-white flares do not darken its highlights.
+    return withHighlightBoost(float4(color * alpha, alpha), u.appearance.z);
 }

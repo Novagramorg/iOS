@@ -1,8 +1,9 @@
 import UIKit
 import Display
 import TelegramPresentationData
+import GlassBackgroundComponent
 
-final class WalletSendCommentBackgroundView: UIImageView {
+final class WalletSendCommentBackgroundView: UIView {
     private struct Parameters: Equatable {
         let size: CGSize
         let scale: CGFloat
@@ -13,10 +14,36 @@ final class WalletSendCommentBackgroundView: UIImageView {
         let isDark: Bool
     }
 
+    private let imageView = UIImageView()
+    private let glassHighlightRecognizer = GlassHighlightGestureRecognizer(target: nil, action: nil)
     private var parameters: Parameters?
+
+    override var isUserInteractionEnabled: Bool {
+        didSet {
+            self.glassHighlightRecognizer.isEnabled = self.isUserInteractionEnabled
+            if !self.isUserInteractionEnabled {
+                self.layer.removeAnimation(forKey: "sublayerTransform")
+                self.layer.sublayerTransform = CATransform3DIdentity
+            }
+        }
+    }
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+
+        self.imageView.contentMode = .scaleToFill
+        self.addSubview(self.imageView)
+        self.addGestureRecognizer(self.glassHighlightRecognizer)
+        self.isUserInteractionEnabled = false
+    }
+
+    required init?(coder: NSCoder) {
+        preconditionFailure()
+    }
 
     func update(size: CGSize, maxCornerRadius: CGFloat, minCornerRadius: CGFloat, theme: PresentationTheme) {
         guard size.width > 0.0, size.height > 0.0 else { return }
+        self.imageView.frame = CGRect(origin: .zero, size: size)
         let parameters = Parameters(
             size: size,
             scale: self.window?.screen.scale ?? UIScreen.main.scale,
@@ -29,7 +56,7 @@ final class WalletSendCommentBackgroundView: UIImageView {
         guard self.parameters != parameters else { return }
         if let image = Self.generateImage(parameters: parameters) {
             self.parameters = parameters
-            self.image = image
+            self.imageView.image = image
         }
     }
 

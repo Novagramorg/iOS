@@ -631,7 +631,8 @@ extension ChatControllerImpl {
                             walletContext: walletContext,
                             displaySuccessToast: false,
                             allowOpenRecipientChat: false,
-                            completed: { [weak self] in
+                            completed: { [weak self, weak attachmentController] in
+                                attachmentController?.attachmentButton = nil
                                 self?.scrollToEndOfHistory()
                             }
                         )

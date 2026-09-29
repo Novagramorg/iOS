@@ -25,9 +25,12 @@ struct DiamondStyle: Equatable {
     var zoom: Float = 0.72
     var whiten: Float = 0
     var swayScale: Float = 0
+    var floatAmplitude: Float = 0
+    var floatPeriod: Float = 3.2
     var tilt: Float = 0
     var releaseDecay: Float = 0
     var releaseTilt: Float = 0
+    var tapToSpin: Bool = false
     var dragGrow: Float = 1
     var growShift: Float = 0
     var verticalOffset: Float = 0
@@ -52,6 +55,17 @@ struct DiamondPose {
 final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject {
     private final class CompositeState: RenderToLayerState {
         let pipelineState: MTLRenderPipelineState
+        private let device: MTLDevice
+        private let descriptor: MTLRenderPipelineDescriptor
+        private lazy var hdrPipelineState: MTLRenderPipelineState? = {
+            let descriptor = self.descriptor.copy() as! MTLRenderPipelineDescriptor
+            descriptor.colorAttachments[0].pixelFormat = .rgba16Float
+            return try? self.device.makeRenderPipelineState(descriptor: descriptor)
+        }()
+
+        func pipelineState(for pixelFormat: RenderLayerSpec.PixelFormat) -> MTLRenderPipelineState? {
+            return pixelFormat == .rgba16Float ? self.hdrPipelineState : self.pipelineState
+        }
 
         required init?(device: MTLDevice) {
             guard let library = metalLibrary(device: device),
@@ -72,6 +86,8 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
                 return nil
             }
             self.pipelineState = pipelineState
+            self.device = device
+            self.descriptor = descriptor
         }
     }
 
@@ -81,9 +97,9 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
         let multisampleColor: MTLTexture?
         let depth: MTLTexture
 
-        init?(device: MTLDevice, size: RenderSize, sampleCount: Int) {
+        init?(device: MTLDevice, size: RenderSize, sampleCount: Int, pixelFormat: MTLPixelFormat) {
             self.size = size
-            let colorDescriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm, width: size.width, height: size.height, mipmapped: false)
+            let colorDescriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: pixelFormat, width: size.width, height: size.height, mipmapped: false)
             colorDescriptor.storageMode = .private
             colorDescriptor.usage = [.renderTarget, .shaderRead]
             guard let color = device.makeTexture(descriptor: colorDescriptor) else {
@@ -131,6 +147,9 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
     var interactionScale: Float = 1
     var refractionSource: InteractiveDiamondComponent.RefractionSource?
     var refractionStrength: Float = 0
+    var highlightBoost: Float = 0
+    private var appliedHighlightBoost: Float = 0
+    private var isHighDynamicRange = false
     var usesHighFrameRate = false {
         didSet {
             guard self.usesHighFrameRate != oldValue else { return }
@@ -164,13 +183,23 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
     }
     private var isSendingTransfer = false
     private var transferAnimation: DiamondTransferAnimation?
+    private static let bumpDurationFactor: Float = 2.0
+    private var bumpAnimation: DiamondTransferAnimation?
 
     var hasTransferAnimation: Bool {
         return !self.reduceMotion && self.transferAnimation != nil
     }
 
+    var hasBumpAnimation: Bool {
+        return !self.reduceMotion && self.bumpAnimation != nil
+    }
+
     var isCompletingTransfer: Bool {
         return !self.reduceMotion && self.transferAnimation?.phase == .completion
+    }
+
+    var hasStarBursts: Bool {
+        return !self.reduceMotion && !self.starBursts.isEmpty
     }
 
     var animationState: (time: Float, transferEnergy: Float?)? {
@@ -182,6 +211,10 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
 
     private var effectiveStyle: DiamondStyle {
         var style = self.diamondStyle
+        if !self.reduceMotion && self.starBursts.contains(where: { $0.isFromTap }) {
+            style.backgroundStars = true
+            style.steadyStars = false
+        }
         if !self.reduceMotion, let animation = self.transferAnimation {
             let presentation = animation.presentation(at: self.elapsed)
             style.rotationSpeed *= 1 + 5 * presentation.energy
@@ -198,6 +231,12 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
                 style.burstSize = 0.8
                 style.burstFadeInDuration = 0.03
             }
+        }
+        if !self.reduceMotion, let animation = self.bumpAnimation {
+            let time = animation.startTime + (self.elapsed - animation.startTime) / Self.bumpDurationFactor
+            let scale = animation.presentation(at: time).scale
+            style.widthPoints *= scale
+            style.growShift *= scale
         }
         return style
     }
@@ -224,6 +263,8 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
     private let hapticFeedback: HapticFeedback
     private var starBursts: [DiamondStarBurst] = []
     private var nextBurstSeed: UInt32 = 1
+    private var tapStreak = 0
+    private var lastTapTime: CFTimeInterval?
     private var elapsed: Float = 0
     private var lastTime: CFTimeInterval?
     private var displayLink: SharedDisplayLinkDriver.Link?
@@ -266,17 +307,23 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
             self.diamondStyle = layer.diamondStyle
             self.isSendingTransfer = layer.isSendingTransfer
             self.transferAnimation = layer.transferAnimation
+            self.bumpAnimation = layer.bumpAnimation
             self.motion = layer.motion
             self.grow = layer.grow
             self.growVelocity = layer.growVelocity
             self.interactionScale = layer.interactionScale
             self.refractionSource = layer.refractionSource
             self.refractionStrength = layer.refractionStrength
+            self.highlightBoost = layer.highlightBoost
+            self.appliedHighlightBoost = layer.appliedHighlightBoost
+            self.isHighDynamicRange = layer.isHighDynamicRange
             self.usesHighFrameRate = layer.usesHighFrameRate
             self.renderSize = layer.renderSize
             self.isRenderingEnabled = layer.isRenderingEnabled
             self.starBursts = layer.starBursts
             self.nextBurstSeed = layer.nextBurstSeed
+            self.tapStreak = layer.tapStreak
+            self.lastTapTime = layer.lastTapTime
             self.elapsed = layer.elapsed
             self.lightBackground = layer.lightBackground
             self.reduceMotion = layer.reduceMotion
@@ -300,8 +347,11 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
         }
         let previous = self.diamondStyle
         self.diamondStyle = style
+        if !style.tapToSpin {
+            self.cancelTapSpin()
+        }
         if !style.backgroundStars && !self.isCompletingTransfer {
-            self.starBursts.removeAll()
+            self.starBursts.removeAll(where: { !$0.isFromTap })
         }
         if previous.animationMode != style.animationMode || previous.referenceAnimationLoops != style.referenceAnimationLoops {
             self.resetAnimation()
@@ -325,6 +375,8 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
 
     func resetAnimation() {
         let wasDragging = self.motion.isDragging
+        self.cancelTapSpin()
+        self.bumpAnimation = nil
         self.motion = DiamondMotion()
         self.updateMotionStyle()
         self.grow = 1
@@ -347,6 +399,16 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
         self.setNeedsUpdate()
     }
 
+    func animateBump(delay: Double) {
+        guard self.diamondStyle.animationMode == .continuous,
+              self.isInHierarchy, self.isApplicationActive, self.isRenderingEnabled,
+              !self.reduceMotion, !UIAccessibility.isReduceMotionEnabled else { return }
+        self.updateMotion(at: CACurrentMediaTime())
+        self.bumpAnimation = DiamondTransferAnimation(phase: .completion, startTime: self.elapsed + Float(max(0.0, delay)))
+        self.onPoseUpdated?(self.pose)
+        self.setNeedsUpdate()
+    }
+
     func emitStarBurst() {
         guard self.diamondStyle.backgroundStars, self.isInHierarchy, self.isApplicationActive, self.isRenderingEnabled,
               !self.reduceMotion, !UIAccessibility.isReduceMotionEnabled else { return }
@@ -360,7 +422,9 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
         if self.lastTime != nil {
             self.updateMotion(at: CACurrentMediaTime())
         }
+        self.cancelTapSpin()
         self.isSendingTransfer = isSending
+        self.bumpAnimation = nil
         self.cancelTransferCompletion()
         if isSending {
             self.transferAnimation = DiamondTransferAnimation(phase: .sending, startTime: self.elapsed)
@@ -429,6 +493,15 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
             self.displayLink?.invalidate()
             self.displayLink = nil
             self.lastTime = nil
+            self.cancelTapSpin()
+            self.bumpAnimation = nil
+            if !isVisible {
+                self.appliedHighlightBoost = 0
+                self.updateDynamicRange(highDynamicRange: false)
+                if self.renderTargets?.color.pixelFormat == .rgba16Float {
+                    self.renderTargets = nil
+                }
+            }
             self.cancelTransferCompletion()
             if !isVisible && self.motion.isDragging {
                 self.motion.end(at: CACurrentMediaTime(), cancelled: true)
@@ -455,12 +528,14 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
         if let animation = self.transferAnimation, animation.phase == .completion,
            self.elapsed - animation.startTime >= DiamondTransferAnimation.completionDuration {
             self.transferAnimation = nil
-            self.starBursts.removeAll()
+            self.starBursts.removeAll(where: { !$0.isFromTap })
         }
+        if let animation = self.bumpAnimation,
+           self.elapsed - animation.startTime >= DiamondTransferAnimation.completionDuration * Self.bumpDurationFactor {
+            self.bumpAnimation = nil
+        }
+        self.starBursts.removeAll(where: { self.elapsed - $0.startTime >= DiamondStarBurst.lifetime })
         let style = self.effectiveStyle
-        if style.backgroundStars {
-            self.starBursts.removeAll(where: { self.elapsed - $0.startTime >= DiamondStarBurst.lifetime })
-        }
         self.motion.swayScale = style.swayScale
         let scrollTilt: Float
         if self.isInHierarchy && self.isApplicationActive && self.isRenderingEnabled && !self.reduceMotion {
@@ -492,6 +567,11 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
             }
         }
         self.onPoseUpdated?(self.pose)
+        let boostTarget = self.highlightBoost * self.refractionStrength
+        self.appliedHighlightBoost += (boostTarget - self.appliedHighlightBoost) * (1 - exp(-dt / 0.25))
+        if abs(self.appliedHighlightBoost - boostTarget) < 0.001 {
+            self.appliedHighlightBoost = boostTarget
+        }
     }
 
     @objc func handleTap(_ gesture: UITapGestureRecognizer) {
@@ -519,13 +599,37 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
         self.setNeedsUpdate()
     }
 
-    private func addStarBurst(at time: Float? = nil) {
-        guard self.diamondStyle.backgroundStars || self.isCompletingTransfer else { return }
+    private func addStarBurst(at time: Float? = nil, isFromTap: Bool = false) {
+        guard self.diamondStyle.backgroundStars || self.isCompletingTransfer || (isFromTap && self.diamondStyle.tapToSpin) else { return }
         if self.starBursts.count >= 3 {
             self.starBursts.removeFirst()
         }
-        self.starBursts.append(DiamondStarBurst(startTime: time ?? self.elapsed, seed: self.nextBurstSeed))
+        self.starBursts.append(DiamondStarBurst(startTime: time ?? self.elapsed, seed: self.nextBurstSeed, isFromTap: isFromTap))
         self.nextBurstSeed = (self.nextBurstSeed + 1) % 65536
+    }
+
+    private func tapSpin(direction: Float, at time: CFTimeInterval) {
+        let current = self.motion.spinAtPress
+        let sign: Float = abs(current) > 0.5 ? (current < 0 ? -1 : 1) : direction
+        let top: Float = 16.0
+        self.tapStreak = self.lastTapTime.map { time - $0 < 1.0 } == true ? self.tapStreak + 1 : 1
+        self.lastTapTime = time
+        // Four taps reach the limit even when some velocity decays between presses.
+        let streakSpeed = top * Float(self.tapStreak) / 4.0
+        let speed = min(top, max(abs(current) + 5.0, streakSpeed))
+        let reachedTop = speed >= top * 0.95
+        if reachedTop { self.tapStreak = 0 }
+        self.motion.setSpin(sign * speed, decay: reachedTop ? 2.5 : max(self.diamondStyle.releaseDecay, 0.05))
+        if reachedTop { self.addStarBurst(isFromTap: true) }
+    }
+
+    func cancelTapSpin() {
+        if self.lastTapTime != nil {
+            self.motion.stopSpin()
+        }
+        self.tapStreak = 0
+        self.lastTapTime = nil
+        self.starBursts.removeAll(where: { $0.isFromTap })
     }
 
     @objc func handlePan(_ gesture: UIPanGestureRecognizer) {
@@ -544,7 +648,7 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
         }
     }
 
-    func updateDrag(state: UIGestureRecognizer.State, translation: CGPoint = .zero, velocity: CGPoint = .zero, scale: CGFloat = 100.0, releaseImpulse: Float? = nil, playFlingHaptic: Bool = true) {
+    func updateDrag(state: UIGestureRecognizer.State, translation: CGPoint = .zero, velocity: CGPoint = .zero, scale: CGFloat = 100.0, releaseImpulse: Float? = nil, playFlingHaptic: Bool = true, tapSpinDirection: Float? = nil) {
         if state != .cancelled && state != .failed {
             guard self.isInHierarchy && self.isApplicationActive && self.isRenderingEnabled else { return }
         }
@@ -562,7 +666,10 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
             if state == .ended {
                 self.motion.step(dt: 0, speed: self.diamondStyle.rotationSpeed, reduceMotion: self.reduceMotion, mode: self.diamondStyle.animationMode, time: self.elapsed, appearance: self.diamondStyle.appearance)
                 self.motion.end(at: now)
-                if abs(velocity.x) > 600.0 && !self.reduceMotion && !UIAccessibility.isReduceMotionEnabled {
+                if let tapSpinDirection, self.diamondStyle.tapToSpin, !self.isSendingTransfer,
+                   !self.reduceMotion, !UIAccessibility.isReduceMotionEnabled {
+                    self.tapSpin(direction: tapSpinDirection, at: now)
+                } else if abs(velocity.x) > 600.0 && !self.reduceMotion && !UIAccessibility.isReduceMotionEnabled {
                     self.motion.fling(direction: velocity.x < 0 ? -1 : 1, impulse: releaseImpulse)
                     self.addStarBurst()
                     if playFlingHaptic {
@@ -600,6 +707,18 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
         }
     }
 
+    private func updateDynamicRange(highDynamicRange: Bool) {
+        guard self.isHighDynamicRange != highDynamicRange else { return }
+        self.isHighDynamicRange = highDynamicRange
+        if #available(iOS 26.0, *) {
+            // 1.4 in extended sRGB is approximately 2.2 in linear-light headroom.
+            self.contentsHeadroom = highDynamicRange ? 2.2 : 1.0
+            self.preferredDynamicRange = highDynamicRange ? .high : .standard
+        } else if #available(iOS 17.0, *) {
+            self.wantsExtendedDynamicRangeContent = highDynamicRange
+        }
+    }
+
     func update(context: MetalEngineSubjectContext) {
         let canvasSize = self.renderSize ?? self.bounds.size
         guard self.isInHierarchy, self.isApplicationActive, self.isRenderingEnabled, canvasSize.width > 0.0, canvasSize.height > 0.0 else { return }
@@ -614,11 +733,21 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
         let grow = self.grow * self.interactionScale
         let refractionSource = self.refractionSource
         let refractionStrength = self.refractionStrength
+        let highlightBoost = reduceMotion ? self.highlightBoost * refractionStrength : self.appliedHighlightBoost
+        let highDynamicRange: Bool
+        if #available(iOS 17.0, *) {
+            highDynamicRange = UIScreen.main.potentialEDRHeadroom > 1.0
+                && (highlightBoost > 0.001 || self.highlightBoost * refractionStrength > 0.001)
+        } else {
+            highDynamicRange = false
+        }
+        let pixelFormat: MTLPixelFormat = highDynamicRange ? .rgba16Float : .bgra8Unorm
+        self.updateDynamicRange(highDynamicRange: highDynamicRange)
 
         let frame = context.compute(state: DiamondRenderer.self, commands: { [weak self] commandBuffer, renderer -> RenderedFrame? in
             guard let self else { return nil }
-            if self.renderTargets?.size != size {
-                self.renderTargets = RenderTargets(device: renderer.device, size: size, sampleCount: renderer.sampleCount)
+            if self.renderTargets?.size != size || self.renderTargets?.color.pixelFormat != pixelFormat {
+                self.renderTargets = RenderTargets(device: renderer.device, size: size, sampleCount: renderer.sampleCount, pixelFormat: pixelFormat)
             }
             guard let targets = self.renderTargets else { return nil }
 
@@ -637,14 +766,14 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
             pass.depthAttachment.clearDepth = 1
             pass.depthAttachment.storeAction = .dontCare
             guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: pass) else { return nil }
-            renderer.encode(encoder: encoder, size: CGSize(width: CGFloat(size.width), height: CGFloat(size.height)), time: time, starBursts: starBursts, motion: motion, style: style, grow: grow, pixelsPerPoint: Float(pixelsPerPoint), reduceMotion: reduceMotion, lightBackground: lightBackground, refractionSource: refractionSource, refractionStrength: refractionStrength)
+            renderer.encode(encoder: encoder, size: CGSize(width: CGFloat(size.width), height: CGFloat(size.height)), time: time, starBursts: starBursts, motion: motion, style: style, grow: grow, pixelsPerPoint: Float(pixelsPerPoint), reduceMotion: reduceMotion, lightBackground: lightBackground, refractionSource: refractionSource, refractionStrength: refractionStrength, highlightBoost: highDynamicRange ? highlightBoost : 0, colorPixelFormat: pixelFormat)
             encoder.endEncoding()
             return RenderedFrame(texture: targets.color, commandBuffer: commandBuffer)
         })
 
         // Transparent atlas padding keeps ancestor scaling from sampling neighboring allocations.
         let edgeInset = 2
-        context.renderToLayer(spec: RenderLayerSpec(size: size, edgeInset: edgeInset), state: CompositeState.self, layer: self, inputs: frame, commands: { [weak self] encoder, placement, frame in
+        context.renderToLayer(spec: RenderLayerSpec(size: size, edgeInset: edgeInset, pixelFormat: highDynamicRange ? .rgba16Float : .bgra8Unorm), state: CompositeState.self, layer: self, inputs: frame, commands: { [weak self] encoder, placement, frame in
             guard let frame else { return }
             if let self, self.renderSize != nil, self.bounds.size != canvasSize {
                 CATransaction.begin()

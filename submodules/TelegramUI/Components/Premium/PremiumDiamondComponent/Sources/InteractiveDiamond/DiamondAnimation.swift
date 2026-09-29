@@ -97,6 +97,7 @@ struct DiamondMotion {
     var releaseTilt: Float = 0
     private var swayPhase: SIMD2<Float>?
     private var spinVelocity: Float = 0
+    private(set) var spinAtPress: Float = 0
     private var spinDecay: Float = 0.7
     private var lastDragTime: Double = 0
     private var timeSinceRelease: Float = 10
@@ -137,6 +138,13 @@ struct DiamondMotion {
 
     mutating func stopSpin() {
         spinVelocity = 0
+    }
+
+    mutating func setSpin(_ velocity: Float, decay: Float) {
+        guard !isDragging else { return }
+        tapRotation = nil
+        spinVelocity = velocity
+        spinDecay = max(decay, 0.05)
     }
 
     mutating func pushFromBelow() {
@@ -180,6 +188,7 @@ struct DiamondMotion {
     }
 
     mutating func begin(at time: Double) {
+        spinAtPress = spinVelocity
         isDragging = true
         isAppearanceImpulseActive = false
         tapRotation = nil
@@ -350,6 +359,7 @@ struct DiamondStarBurst {
     static let lifetime: Float = 6.4
     let startTime: Float
     let seed: UInt32
+    var isFromTap: Bool = false
 }
 
 enum DiamondEntrance {

@@ -82,12 +82,26 @@ public struct RenderSize: Equatable {
 }
 
 public struct RenderLayerSpec: Equatable {
+    public enum PixelFormat {
+        case bgra8Unorm
+        case rgba16Float
+
+        fileprivate var metalFormat: MTLPixelFormat {
+            switch self {
+            case .bgra8Unorm: return .bgra8Unorm
+            case .rgba16Float: return .rgba16Float
+            }
+        }
+    }
+
     public var size: RenderSize
     public var edgeInset: Int
+    public var pixelFormat: PixelFormat
     
-    public init(size: RenderSize, edgeInset: Int = 0) {
+    public init(size: RenderSize, edgeInset: Int = 0, pixelFormat: PixelFormat = .bgra8Unorm) {
         self.size = size
         self.edgeInset = edgeInset
+        self.pixelFormat = pixelFormat
     }
 }
 
@@ -111,8 +125,15 @@ public struct RenderLayerPlacement: Equatable {
 
 public protocol RenderToLayerState: AnyObject {
     var pipelineState: MTLRenderPipelineState { get }
+    func pipelineState(for pixelFormat: RenderLayerSpec.PixelFormat) -> MTLRenderPipelineState?
     
     init?(device: MTLDevice)
+}
+
+public extension RenderToLayerState {
+    func pipelineState(for pixelFormat: RenderLayerSpec.PixelFormat) -> MTLRenderPipelineState? {
+        return pixelFormat == .bgra8Unorm ? self.pipelineState : nil
+    }
 }
 
 public protocol ComputeState: AnyObject {
@@ -523,6 +544,7 @@ public final class MetalEngine {
         let id: Int
         let width: Int
         let height: Int
+        let pixelFormat: RenderLayerSpec.PixelFormat
         
         let ioSurface: IOSurface
         let texture: MTLTexture
@@ -532,26 +554,32 @@ public final class MetalEngine {
             return self.packContext.isEmpty
         }
         
-        init?(id: Int, device: MTLDevice, width: Int, height: Int) {
+        init?(id: Int, device: MTLDevice, width: Int, height: Int, pixelFormat: RenderLayerSpec.PixelFormat) {
             self.id = id
             self.width = width
             self.height = height
+            self.pixelFormat = pixelFormat
             
             self.packContext = ShelfPackContext(width: Int32(width), height: Int32(height))
             
             let ioSurfaceProperties: [String: Any] = [
                 kIOSurfaceWidth as String: width,
                 kIOSurfaceHeight as String: height,
-                kIOSurfaceBytesPerElement as String: 4,
-                kIOSurfacePixelFormat as String: kCVPixelFormatType_32BGRA
+                kIOSurfaceBytesPerElement as String: pixelFormat == .rgba16Float ? 8 : 4,
+                kIOSurfacePixelFormat as String: pixelFormat == .rgba16Float ? kCVPixelFormatType_64RGBAHalf : kCVPixelFormatType_32BGRA
             ]
             guard let ioSurface = IOSurfaceCreate(ioSurfaceProperties as CFDictionary) else {
                 return nil
             }
             self.ioSurface = ioSurface
+            if pixelFormat == .rgba16Float,
+               let colorSpace = CGColorSpace(name: CGColorSpace.extendedSRGB),
+               let propertyList = colorSpace.copyPropertyList() {
+                IOSurfaceSetValue(ioSurface, kIOSurfaceColorSpace, propertyList)
+            }
             
             let textureDescriptor = MTLTextureDescriptor()
-            textureDescriptor.pixelFormat = .bgra8Unorm
+            textureDescriptor.pixelFormat = pixelFormat.metalFormat
             textureDescriptor.width = Int(width)
             textureDescriptor.height = Int(height)
             textureDescriptor.storageMode = .shared
@@ -579,6 +607,7 @@ public final class MetalEngine {
         }
         
         func allocateIfPossible(renderingParameters: RenderLayerSpec) -> SurfaceAllocation? {
+            guard renderingParameters.pixelFormat == self.pixelFormat else { return nil }
             let width = renderingParameters.allocationWidth
             let height = renderingParameters.allocationHeight
             
@@ -645,6 +674,13 @@ public final class MetalEngine {
         let library: MTLLibrary
         let commandQueue: MTLCommandQueue
         let clearPipelineState: MTLRenderPipelineState
+        private lazy var hdrClearPipelineState: MTLRenderPipelineState? = {
+            let descriptor = MTLRenderPipelineDescriptor()
+            descriptor.vertexFunction = self.library.makeFunction(name: "clearVertex")
+            descriptor.fragmentFunction = self.library.makeFunction(name: "clearFragment")
+            descriptor.colorAttachments[0].pixelFormat = .rgba16Float
+            return try? self.device.makeRenderPipelineState(descriptor: descriptor)
+        }()
         
         #if targetEnvironment(simulator)
         let _layer: CALayer
@@ -754,11 +790,11 @@ public final class MetalEngine {
             fatalError("init(coder:) has not been implemented")
         }
         
-        private func addSurface(width: Int, height: Int) -> Surface? {
+        private func addSurface(width: Int, height: Int, pixelFormat: RenderLayerSpec.PixelFormat) -> Surface? {
             let surfaceId = self.nextSurfaceId
             self.nextSurfaceId += 1
             
-            let surface = Surface(id: surfaceId, device: self.device, width: width, height: height)
+            let surface = Surface(id: surfaceId, device: self.device, width: width, height: height, pixelFormat: pixelFormat)
             self.surfaces[surfaceId] = surface
             
             return surface
@@ -791,7 +827,7 @@ public final class MetalEngine {
                         let surfaceWidth = max(1024, alignUp(renderingParameters.allocationWidth * 2, alignment: 64))
                         let surfaceHeight = max(512, alignUp(renderingParameters.allocationHeight, alignment: 64))
                         
-                        if let surface = self.addSurface(width: surfaceWidth, height: surfaceHeight) {
+                        if let surface = self.addSurface(width: surfaceWidth, height: surfaceHeight, pixelFormat: renderSpec.pixelFormat) {
                             if let allocation = surface.allocateIfPossible(renderingParameters: renderingParameters) {
                                 layer.surfaceAllocation = allocation
                                 layer.contentsRect = allocation.effectivePhase.contentsRect
@@ -809,10 +845,13 @@ public final class MetalEngine {
                         }
                     }
                     if updatedSurfaceId == nil {
-                        let surfaceWidth = alignUp(2048, alignment: 64)
-                        let surfaceHeight = alignUp(2048, alignment: 64)
+                        // EDR is normally used by one expanded subject. Avoid a full 32 MB atlas.
+                        let surfaceWidth = renderSpec.pixelFormat == .rgba16Float
+                            ? alignUp(renderSpec.allocationWidth * 2, alignment: 64) : 2048
+                        let surfaceHeight = renderSpec.pixelFormat == .rgba16Float
+                            ? alignUp(renderSpec.allocationHeight, alignment: 64) : 2048
                         
-                        if let surface = self.addSurface(width: surfaceWidth, height: surfaceHeight) {
+                        if let surface = self.addSurface(width: surfaceWidth, height: surfaceHeight, pixelFormat: renderSpec.pixelFormat) {
                             if let allocation = surface.allocateIfPossible(renderingParameters: renderingParameters) {
                                 layer.surfaceAllocation = allocation
                                 layer.contentsRect = allocation.effectivePhase.contentsRect
@@ -1009,7 +1048,11 @@ public final class MetalEngine {
                         }
                         
                         if !clearQuads.isEmpty {
-                            renderEncoder.setRenderPipelineState(self.clearPipelineState)
+                            guard let clearPipeline = surface.pixelFormat == .rgba16Float ? self.hdrClearPipelineState : self.clearPipelineState else {
+                                renderEncoder.endEncoding()
+                                continue
+                            }
+                            renderEncoder.setRenderPipelineState(clearPipeline)
                             
                             //TODO:use buffer if too many vertices
                             renderEncoder.setVertexBytes(clearQuads, length: 4 * clearQuads.count * 2, index: 0)
@@ -1022,9 +1065,9 @@ public final class MetalEngine {
                             guard let state = self.renderStates[stateId] else {
                                 continue
                             }
-                            if !renderToLayerOperations.isEmpty {
-                                renderEncoder.setRenderPipelineState(state.pipelineState)
-                            }
+                            guard renderToLayerOperations.contains(where: { $0.layer?.surfaceAllocation?.surfaceId == id }),
+                                  let pipeline = state.pipelineState(for: surface.pixelFormat) else { continue }
+                            renderEncoder.setRenderPipelineState(pipeline)
                             for renderToLayerOperation in renderToLayerOperations {
                                 guard let layer = renderToLayerOperation.layer else {
                                     continue

@@ -704,7 +704,6 @@ private final class WalletSendScreenComponent: Component {
                 }
             }
 
-            self.commentBackgroundView.contentMode = .scaleToFill
             self.commentBackgroundView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(self.commentPressed)))
             self.addSubview(self.commentBackgroundView)
         }
@@ -2445,12 +2444,11 @@ private final class WalletSendScreenComponent: Component {
                 if let commentTextView = self.commentText.view {
                     if commentTextView.superview == nil {
                         commentTextView.isUserInteractionEnabled = false
-                        commentTextView.alpha = 0.0
-                        self.addSubview(commentTextView)
+                        self.commentBackgroundView.addSubview(commentTextView)
                     }
                     let commentTextFrame = CGRect(
-                        x: bubbleFrame.minX + 12.0,
-                        y: bubbleFrame.minY + floorToScreenPixels((bubbleFrame.height - commentSize.height) / 2.0),
+                        x: 14.0 - UIScreenPixel,
+                        y: floorToScreenPixels((bubbleFrame.height - commentSize.height) / 2.0),
                         width: commentSize.width,
                         height: commentSize.height
                     )
@@ -2458,17 +2456,12 @@ private final class WalletSendScreenComponent: Component {
                         view: commentTextView,
                         bounds: CGRect(origin: .zero, size: commentTextFrame.size)
                     )
-                    let positionedCommentTextFrame = commentTextFrame.offsetBy(dx: 2.0 - UIScreenPixel, dy: 0.0)
-                    centralContentLayouts.append((commentTextView, positionedCommentTextFrame, commentPositionTransition))
-                    statusVisibilityTransition.setAlpha(view: commentTextView, alpha: 1.0)
+                    commentPositionTransition.setPosition(view: commentTextView, position: commentTextFrame.center)
                 }
                 statusVisibilityTransition.setAlpha(view: self.commentBackgroundView, alpha: 1.0)
             } else {
                 self.commentBackgroundView.isUserInteractionEnabled = false
                 statusVisibilityTransition.setAlpha(view: self.commentBackgroundView, alpha: 0.0)
-                if let commentTextView = self.commentText.view {
-                    statusVisibilityTransition.setAlpha(view: commentTextView, alpha: 0.0)
-                }
             }
 
             let formattedBalance: String

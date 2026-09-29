@@ -34,17 +34,20 @@ public final class InteractiveDiamondComponent: Component {
         let uv: SIMD4<Float>
         let rect: CGRect
         let preservesColors: Bool
+        let backgroundColor: SIMD3<Float>?
 
-        public init(texture: MTLTexture, uv: SIMD4<Float>, rect: CGRect, preservesColors: Bool = false) {
+        public init(texture: MTLTexture, uv: SIMD4<Float>, rect: CGRect, preservesColors: Bool = false, backgroundColor: SIMD3<Float>? = nil) {
             self.texture = texture
             self.uv = uv
             self.rect = rect
             self.preservesColors = preservesColors
+            self.backgroundColor = backgroundColor
         }
 
         public static func ==(lhs: RefractionSource, rhs: RefractionSource) -> Bool {
             return lhs.texture === rhs.texture && lhs.uv == rhs.uv && lhs.rect == rhs.rect
                 && lhs.preservesColors == rhs.preservesColors
+                && lhs.backgroundColor == rhs.backgroundColor
         }
     }
 
@@ -57,8 +60,9 @@ public final class InteractiveDiamondComponent: Component {
     private let expandedCenter: CGPoint?
     private let animationMode: AnimationMode
     private let animateOnAppear: Bool
+    private let tapToSpin: Bool
 
-    public init(size: CGSize, diamondWidth: CGFloat, isVisible: Bool, theme: PresentationTheme, appearance: Appearance = .blue, expansionStyle: ExpansionStyle = .centered, expandedCenter: CGPoint? = nil, animationMode: AnimationMode = .continuous, animateOnAppear: Bool = false) {
+    public init(size: CGSize, diamondWidth: CGFloat, isVisible: Bool, theme: PresentationTheme, appearance: Appearance = .blue, expansionStyle: ExpansionStyle = .centered, expandedCenter: CGPoint? = nil, animationMode: AnimationMode = .continuous, animateOnAppear: Bool = false, tapToSpin: Bool = false) {
         self.size = size
         self.diamondWidth = diamondWidth
         self.isVisible = isVisible
@@ -68,6 +72,7 @@ public final class InteractiveDiamondComponent: Component {
         self.expandedCenter = expandedCenter
         self.animationMode = animationMode
         self.animateOnAppear = animateOnAppear
+        self.tapToSpin = tapToSpin
     }
 
     public static func ==(lhs: InteractiveDiamondComponent, rhs: InteractiveDiamondComponent) -> Bool {
@@ -77,6 +82,7 @@ public final class InteractiveDiamondComponent: Component {
             && lhs.expandedCenter == rhs.expandedCenter
             && lhs.animationMode == rhs.animationMode
             && lhs.animateOnAppear == rhs.animateOnAppear
+            && lhs.tapToSpin == rhs.tapToSpin
     }
 
     public final class View: UIView {
@@ -104,6 +110,7 @@ public final class InteractiveDiamondComponent: Component {
         private var expansion: Expansion?
         private var grip: CGFloat = 0.0
         private var dragPosition: CGPoint?
+        private var pressStart: (position: CGPoint, time: CFTimeInterval)?
         private var dragSamples: [(x: CGFloat, time: CFTimeInterval)] = []
         private var landingHaptic: DispatchWorkItem?
 
@@ -217,6 +224,7 @@ public final class InteractiveDiamondComponent: Component {
                 self.cancelLandingHaptic()
                 Haptics.prime()
                 self.dragPosition = position
+                self.pressStart = (position, now)
                 self.dragSamples = [(position.x, now)]
                 self.diamondLayer.updateDrag(state: .began)
             case .changed, .ended:
@@ -232,15 +240,27 @@ public final class InteractiveDiamondComponent: Component {
                 let sample = self.dragSamples[0]
                 let interval = CGFloat(max(now - sample.time, 1.0 / 240.0))
                 let velocity = CGPoint(x: (position.x - sample.x) / interval, y: 0.0)
+                let tapDirection: Float?
+                if gesture.state == .ended, self.diamondLayer.diamondStyle.tapToSpin,
+                   let pressStart = self.pressStart, now - pressStart.time < 0.25,
+                   hypot(position.x - pressStart.position.x, position.y - pressStart.position.y) < 10.0 {
+                    tapDirection = position.x < self.bounds.midX ? -1.0 : 1.0
+                } else {
+                    tapDirection = nil
+                }
                 self.dragPosition = gesture.state == .ended ? nil : position
-                if gesture.state == .ended { self.dragSamples.removeAll(keepingCapacity: true) }
-                self.diamondLayer.updateDrag(state: gesture.state, translation: translation, velocity: velocity, scale: 220.0, releaseImpulse: 3.0 * 6.5, playFlingHaptic: false)
+                if gesture.state == .ended {
+                    self.pressStart = nil
+                    self.dragSamples.removeAll(keepingCapacity: true)
+                }
+                self.diamondLayer.updateDrag(state: gesture.state, translation: translation, velocity: velocity, scale: 220.0, releaseImpulse: 3.0 * 6.5, playFlingHaptic: false, tapSpinDirection: tapDirection)
                 if gesture.state == .ended, wasHolding {
                     self.scheduleLandingHaptic(power: releasePower)
                 }
             case .cancelled, .failed:
                 self.cancelLandingHaptic()
                 self.dragPosition = nil
+                self.pressStart = nil
                 self.dragSamples.removeAll(keepingCapacity: true)
                 self.diamondLayer.updateDrag(state: .cancelled)
             default:
@@ -312,7 +332,7 @@ public final class InteractiveDiamondComponent: Component {
 
         private func applyExpansion() {
             let expanded = self.isHolding || self.expansion != nil || self.diamondLayer.isGrowthAnimating
-            self.diamondLayer.usesHighFrameRate = expanded || self.diamondLayer.hasTransferAnimation
+            self.diamondLayer.usesHighFrameRate = expanded || self.diamondLayer.hasTransferAnimation || self.diamondLayer.hasBumpAnimation
             self.diamondLayer.interactionScale = self.expansionStyle == .downward ? 1.0 : Float(1.0 + 2.75 * self.grip)
             let refractionStrength = self.expansionStyle == .downward && self.diamondLayer.diamondStyle.dragGrow != 1.0
                 ? (self.diamondLayer.pose.grow - 1.0) / (self.diamondLayer.diamondStyle.dragGrow - 1.0)
@@ -326,11 +346,11 @@ public final class InteractiveDiamondComponent: Component {
                 y: restingCenter.y + (expandedCenter.y - restingCenter.y) * CGFloat(refractionStrength)
             )
             self.updateRefractionPosition()
-            if self.diamondLayer.isCompletingTransfer {
+            if self.diamondLayer.isCompletingTransfer || self.diamondLayer.hasStarBursts {
                 self.diamondLayer.renderSize = CGSize(width: 240.0, height: 240.0)
             } else if expanded {
                 self.diamondLayer.renderSize = CGSize(width: 220.0, height: 220.0)
-            } else if self.diamondLayer.hasTransferAnimation {
+            } else if self.diamondLayer.hasTransferAnimation || self.diamondLayer.hasBumpAnimation {
                 self.diamondLayer.renderSize = CGSize(width: 96.0, height: 96.0)
             } else {
                 self.diamondLayer.renderSize = self.restingSize
@@ -344,13 +364,18 @@ public final class InteractiveDiamondComponent: Component {
 
         public func cancelInteraction() {
             self.cancelLandingHaptic()
-            guard self.isHolding || self.expansion != nil || self.dragPosition != nil || self.diamondLayer.isGrowthAnimating else { return }
+            self.diamondLayer.cancelTapSpin()
+            guard self.isHolding || self.expansion != nil || self.dragPosition != nil || self.diamondLayer.isGrowthAnimating else {
+                self.applyExpansion()
+                return
+            }
             if self.pressGesture.state == .began || self.pressGesture.state == .changed {
                 self.pressGesture.isEnabled = false
                 self.pressGesture.isEnabled = true
             }
             if self.isHolding { self.diamondLayer.updateDrag(state: .cancelled) }
             self.dragPosition = nil
+            self.pressStart = nil
             self.dragSamples.removeAll(keepingCapacity: true)
             self.isHolding = false
             self.expansion = nil
@@ -361,6 +386,10 @@ public final class InteractiveDiamondComponent: Component {
 
         public func spin(_ velocity: Float, decay: Float) {
             self.diamondLayer.spin(velocity, decay: decay)
+        }
+
+        public func animateBump(delay: Double = 0.0) {
+            self.diamondLayer.animateBump(delay: delay)
         }
 
         public func updateTransferState(isSending: Bool, animateCompletion: Bool) {
@@ -386,7 +415,8 @@ public final class InteractiveDiamondComponent: Component {
                     dx: self.restingSize.width * 0.5 - self.diamondLayer.position.x,
                     dy: self.restingSize.height * 0.5 - self.diamondLayer.position.y
                 ),
-                preservesColors: source.preservesColors
+                preservesColors: source.preservesColors,
+                backgroundColor: source.backgroundColor
             )
         }
 
@@ -416,6 +446,9 @@ public final class InteractiveDiamondComponent: Component {
                 style.referenceAnimationLoops = loop
             }
             style.swayScale = isInteractive ? 1.0 : 0.0
+            style.floatAmplitude = isInteractive ? 1.5 : 0.0
+            style.floatPeriod = 3.2
+            self.diamondLayer.highlightBoost = isInteractive ? 0.4 : 0.0
             style.mainSparkleOnRotation = isInteractive
             style.widthPoints = Float(component.diamondWidth)
             style.appearance = component.appearance
@@ -425,6 +458,7 @@ public final class InteractiveDiamondComponent: Component {
             style.growDamping = component.expansionStyle == .downward ? 0.62 : 0.42
             style.releaseDecay = component.expansionStyle == .downward ? 1.1 : 0.0
             style.releaseTilt = component.expansionStyle == .downward ? 0.0 : 2.6
+            style.tapToSpin = isInteractive && component.tapToSpin
             self.diamondLayer.update(style: style)
             self.diamondLayer.lightBackground = component.expansionStyle == .centered && !component.theme.overallDarkAppearance
             self.isRenderingEnabled = component.isVisible

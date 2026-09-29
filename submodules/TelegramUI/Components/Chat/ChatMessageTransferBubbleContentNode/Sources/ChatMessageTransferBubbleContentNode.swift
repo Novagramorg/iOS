@@ -152,6 +152,9 @@ private func transferCardWalletState(_ state: WalletContext.State, operationId: 
 }
 
 private final class TransferCardShimmerView: UIView {
+    let repeatAnimation: Bool
+    var completion: (() -> Void)?
+
     private let surfaceLayer = SimpleGradientLayer()
     private let borderGlowLayer = SimpleGradientLayer()
     private let borderLayer = SimpleGradientLayer()
@@ -162,7 +165,9 @@ private final class TransferCardShimmerView: UIView {
     private var currentLayout: (size: CGSize, addressFrame: CGRect)?
     private var animationStartTime: CFTimeInterval?
 
-    init(addressMask: UIView) {
+    init(addressMask: UIView, repeatAnimation: Bool) {
+        self.repeatAnimation = repeatAnimation
+
         super.init(frame: .zero)
         self.isUserInteractionEnabled = false
         self.clipsToBounds = true
@@ -270,7 +275,14 @@ private final class TransferCardShimmerView: UIView {
         group.animations = animations
         group.duration = duration
         group.beginTime = layer.convertTime(animationStartTime, from: nil)
-        group.repeatCount = .infinity
+        group.repeatCount = self.repeatAnimation ? .infinity : 0.0
+        if !self.repeatAnimation, layer === self.surfaceLayer {
+            group.completion = { [weak self] finished in
+                if finished {
+                    self?.completion?()
+                }
+            }
+        }
         layer.add(group, forKey: "shimmer")
     }
 }
@@ -302,6 +314,8 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
     private let addressHighlightNode: TextNode
     private let addressShimmerMaskNode: TextNode
     private var shimmerView: TransferCardShimmerView?
+    private var isHighlighted = false
+    private var isPlayingHighlightShimmer = false
     private let sendingClockNode: ASDisplayNode
     private let clockFrameNode: ASImageNode
     private let clockMinNode: ASImageNode
@@ -362,6 +376,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                 if self.visibility == .none {
                     self.stopCardBackgroundMotion()
                     self.finishCompletionAnimation()
+                    self.isPlayingHighlightShimmer = false
                 }
                 self.updateSendingClockAnimation()
                 self.updateShimmer(animated: false)
@@ -585,7 +600,8 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
         let rect = self.cardNode.view.convert(sourceRect, to: diamond)
             .offsetBy(dx: -diamond.bounds.midX, dy: -diamond.bounds.midY)
         diamond.updateRefractionSource(InteractiveDiamondComponent.RefractionSource(
-            texture: texture, uv: SIMD4(0.0, 0.0, 1.0, 1.0), rect: rect, preservesColors: true
+            texture: texture, uv: SIMD4(0.0, 0.0, 1.0, 1.0), rect: rect, preservesColors: true,
+            backgroundColor: SIMD3<Float>(16.0 / 255.0, 147.0 / 255.0, 1.0)
         ))
     }
 
@@ -602,6 +618,8 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
             self.finishCompletionAnimation()
             self.shimmerView?.removeFromSuperview()
             self.shimmerView = nil
+            self.isHighlighted = false
+            self.isPlayingHighlightShimmer = false
         }
 
         let walletContext = item.context.walletContext
@@ -735,15 +753,29 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
     }
 
     private func updateShimmer(animated: Bool) {
-        let displayShimmer = self.displayedTransferStatus == .pending && self.visibility != .none
+        let displayShimmer = (self.displayedTransferStatus == .pending || self.isPlayingHighlightShimmer) && self.visibility != .none
         if displayShimmer {
+            let repeatAnimation = !self.isPlayingHighlightShimmer
             let shimmerView: TransferCardShimmerView
-            if let current = self.shimmerView {
+            if let current = self.shimmerView, current.repeatAnimation == repeatAnimation {
                 shimmerView = current
             } else {
-                shimmerView = TransferCardShimmerView(addressMask: self.addressShimmerMaskNode.view)
+                self.shimmerView?.removeFromSuperview()
+                shimmerView = TransferCardShimmerView(addressMask: self.addressShimmerMaskNode.view, repeatAnimation: repeatAnimation)
                 self.shimmerView = shimmerView
                 self.cardNode.view.addSubview(shimmerView)
+                if !repeatAnimation {
+                    (self.cardIcon.view as? InteractiveDiamondComponent.View)?.animateBump(delay: 0.18)
+                    shimmerView.completion = { [weak self, weak shimmerView] in
+                        guard let self, let shimmerView, self.shimmerView === shimmerView else {
+                            return
+                        }
+                        self.isPlayingHighlightShimmer = false
+                        self.shimmerView = nil
+                        shimmerView.removeFromSuperview()
+                        self.updateShimmer(animated: false)
+                    }
+                }
             }
             if let iconView = self.cardIcon.view, iconView.superview === self.cardNode.view {
                 self.cardNode.view.bringSubviewToFront(iconView)
@@ -1084,7 +1116,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                 }
                 let isIncoming = engineMessage.effectivelyIncoming(item.context.account.peerId)
                 let caption = commentEncrypted ? "" : (comment ?? "")
-                let hasEncryptedCaption = commentEncrypted && comment?.isEmpty == false
+                let hasEncryptedCaption = commentEncrypted
 
                 let fiatState = item.context.walletContext?.stateValue.fiat
                 let fiatValue: String?
@@ -1403,7 +1435,8 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                                 isVisible: self.visibility != .none,
                                 theme: item.presentationData.theme.theme,
                                 appearance: .cool,
-                                expansionStyle: .downward
+                                expansionStyle: .downward,
+                                tapToSpin: true
                             )),
                             environment: {},
                             containerSize: animationSize
@@ -1573,6 +1606,23 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
     override public func updateAbsoluteRect(_ rect: CGRect, within containerSize: CGSize) {
         self.absoluteRect = (rect, containerSize)
 
+    }
+
+    override public func updateHighlightedState(animated: Bool) -> Bool {
+        guard let item = self.item else {
+            return false
+        }
+        let highlighted = item.controllerInteraction.highlightedState?.messageStableId == item.message.stableId
+        if self.isHighlighted != highlighted {
+            self.isHighlighted = highlighted
+            if highlighted {
+                self.isPlayingHighlightShimmer = true
+                self.shimmerView?.removeFromSuperview()
+                self.shimmerView = nil
+                self.updateShimmer(animated: false)
+            }
+        }
+        return highlighted
     }
 
     override public func updateTouchesAtPoint(_ point: CGPoint?) {
