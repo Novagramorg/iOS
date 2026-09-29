@@ -183,15 +183,9 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
     }
     private var isSendingTransfer = false
     private var transferAnimation: DiamondTransferAnimation?
-    private static let bumpDurationFactor: Float = 2.0
-    private var bumpAnimation: DiamondTransferAnimation?
 
     var hasTransferAnimation: Bool {
         return !self.reduceMotion && self.transferAnimation != nil
-    }
-
-    var hasBumpAnimation: Bool {
-        return !self.reduceMotion && self.bumpAnimation != nil
     }
 
     var isCompletingTransfer: Bool {
@@ -231,12 +225,6 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
                 style.burstSize = 0.8
                 style.burstFadeInDuration = 0.03
             }
-        }
-        if !self.reduceMotion, let animation = self.bumpAnimation {
-            let time = animation.startTime + (self.elapsed - animation.startTime) / Self.bumpDurationFactor
-            let scale = animation.presentation(at: time).scale
-            style.widthPoints *= scale
-            style.growShift *= scale
         }
         return style
     }
@@ -307,7 +295,6 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
             self.diamondStyle = layer.diamondStyle
             self.isSendingTransfer = layer.isSendingTransfer
             self.transferAnimation = layer.transferAnimation
-            self.bumpAnimation = layer.bumpAnimation
             self.motion = layer.motion
             self.grow = layer.grow
             self.growVelocity = layer.growVelocity
@@ -376,7 +363,6 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
     func resetAnimation() {
         let wasDragging = self.motion.isDragging
         self.cancelTapSpin()
-        self.bumpAnimation = nil
         self.motion = DiamondMotion()
         self.updateMotionStyle()
         self.grow = 1
@@ -399,14 +385,12 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
         self.setNeedsUpdate()
     }
 
-    func animateBump(delay: Double) {
-        guard self.diamondStyle.animationMode == .continuous,
-              self.isInHierarchy, self.isApplicationActive, self.isRenderingEnabled,
+    func pushFromBelow(strength: Float) {
+        guard self.isInHierarchy, self.isApplicationActive, self.isRenderingEnabled,
               !self.reduceMotion, !UIAccessibility.isReduceMotionEnabled else { return }
         self.updateMotion(at: CACurrentMediaTime())
-        self.bumpAnimation = DiamondTransferAnimation(phase: .completion, startTime: self.elapsed + Float(max(0.0, delay)))
-        self.onPoseUpdated?(self.pose)
-        self.setNeedsUpdate()
+        self.motion.pushFromBelow(strength: strength)
+        self.updateAnimationState()
     }
 
     func emitStarBurst() {
@@ -424,7 +408,6 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
         }
         self.cancelTapSpin()
         self.isSendingTransfer = isSending
-        self.bumpAnimation = nil
         self.cancelTransferCompletion()
         if isSending {
             self.transferAnimation = DiamondTransferAnimation(phase: .sending, startTime: self.elapsed)
@@ -494,7 +477,6 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
             self.displayLink = nil
             self.lastTime = nil
             self.cancelTapSpin()
-            self.bumpAnimation = nil
             if !isVisible {
                 self.appliedHighlightBoost = 0
                 self.updateDynamicRange(highDynamicRange: false)
@@ -529,10 +511,6 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
            self.elapsed - animation.startTime >= DiamondTransferAnimation.completionDuration {
             self.transferAnimation = nil
             self.starBursts.removeAll(where: { !$0.isFromTap })
-        }
-        if let animation = self.bumpAnimation,
-           self.elapsed - animation.startTime >= DiamondTransferAnimation.completionDuration * Self.bumpDurationFactor {
-            self.bumpAnimation = nil
         }
         self.starBursts.removeAll(where: { self.elapsed - $0.startTime >= DiamondStarBurst.lifetime })
         let style = self.effectiveStyle

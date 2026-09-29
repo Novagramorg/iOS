@@ -765,7 +765,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                 self.shimmerView = shimmerView
                 self.cardNode.view.addSubview(shimmerView)
                 if !repeatAnimation {
-                    (self.cardIcon.view as? InteractiveDiamondComponent.View)?.animateBump(delay: 0.18)
+                    self.animateHighlightBump()
                     shimmerView.completion = { [weak self, weak shimmerView] in
                         guard let self, let shimmerView, self.shimmerView === shimmerView else {
                             return
@@ -803,6 +803,38 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                 self.shimmerView = nil
             }
         }
+    }
+
+    private func animateHighlightBump() {
+        guard self.visibility != .none, UIApplication.shared.applicationState == .active,
+              !UIAccessibility.isReduceMotionEnabled else {
+            return
+        }
+        let delay = 0.18
+        let durationFactor = 1.7
+        let duration = 0.9 * durationFactor
+        let frameCount = Int(ceil(duration * 120.0))
+        var values: [NSNumber] = [1.0]
+        var keyTimes: [NSNumber] = [0.0]
+        for index in 0 ... frameCount {
+            let progress = Double(index) / Double(frameCount)
+            let time = duration * progress / durationFactor
+            let bump = index == frameCount ? 0.0 : sin(2.0 * .pi * 1.6 * time) * exp(-time / 0.2)
+            values.append(NSNumber(value: 1.0 + 0.06 * bump))
+            keyTimes.append(NSNumber(value: (delay + duration * progress) / (delay + duration)))
+        }
+        self.mediaContainerNode.layer.animateKeyframes(
+            values: values,
+            keyTimes: keyTimes,
+            duration: delay + duration,
+            keyPath: "transform.scale"
+        )
+        Queue.mainQueue().after(delay, { [weak self, weak shimmerView = self.shimmerView] in
+            guard let self, let shimmerView, self.shimmerView === shimmerView, self.visibility != .none else {
+                return
+            }
+            (self.cardIcon.view as? InteractiveDiamondComponent.View)?.pushFromBelow(strength: 1.5)
+        })
     }
 
     private func removeRibbonAnimation() {

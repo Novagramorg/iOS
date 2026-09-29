@@ -147,9 +147,9 @@ struct DiamondMotion {
         spinDecay = max(decay, 0.05)
     }
 
-    mutating func pushFromBelow() {
+    mutating func pushFromBelow(strength: Float = 1.0) {
         guard !isDragging else { return }
-        pitchSpringVelocity -= 1.0
+        pitchSpringVelocity -= strength
         isAppearanceImpulseActive = true
     }
 

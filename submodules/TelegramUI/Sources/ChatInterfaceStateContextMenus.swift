@@ -1183,6 +1183,23 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             }
         }
         
+        var isReplyThreadHead = false
+        if case let .replyThread(replyThreadMessage) = chatPresentationInterfaceState.chatLocation {
+            isReplyThreadHead = messages[0].id == replyThreadMessage.effectiveTopId
+        }
+        
+        if !isPinnedMessages, !isReplyThreadHead, data.canReply {
+            actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Conversation_ContextMenuReply, icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Reply"), color: theme.actionSheet.primaryTextColor)
+            }, action: { c, _ in
+                interfaceInteraction.setupReplyMessage(messages[0].id, nil, { transition, completed in
+                    c?.dismiss(result: .custom(transition), completion: {
+                        completed()
+                    })
+                })
+            })))
+        }
+        
         if data.messageActions.options.contains(.sendGift), !message.id.peerId.isTelegramNotifications {
             let sendGiftTitle: String
             var isIncoming = message.effectivelyIncoming(context.account.peerId)
@@ -1222,23 +1239,6 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             }, action: { _, f in
                 f(.dismissWithoutContent)
                 (interfaceInteraction.chatController() as? ChatControllerImpl)?.openResolved(result: .sendGrams(transfer: WalletSendRequest(recipient: .peer(peer), amountNanograms: nil)), sourceMessageId: message.id)
-            })))
-        }
-
-        var isReplyThreadHead = false
-        if case let .replyThread(replyThreadMessage) = chatPresentationInterfaceState.chatLocation {
-            isReplyThreadHead = messages[0].id == replyThreadMessage.effectiveTopId
-        }
-        
-        if !isPinnedMessages, !isReplyThreadHead, data.canReply {
-            actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Conversation_ContextMenuReply, icon: { theme in
-                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Reply"), color: theme.actionSheet.primaryTextColor)
-            }, action: { c, _ in
-                interfaceInteraction.setupReplyMessage(messages[0].id, nil, { transition, completed in
-                    c?.dismiss(result: .custom(transition), completion: {
-                        completed()
-                    })
-                })
             })))
         }
         

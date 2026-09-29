@@ -332,7 +332,7 @@ public final class InteractiveDiamondComponent: Component {
 
         private func applyExpansion() {
             let expanded = self.isHolding || self.expansion != nil || self.diamondLayer.isGrowthAnimating
-            self.diamondLayer.usesHighFrameRate = expanded || self.diamondLayer.hasTransferAnimation || self.diamondLayer.hasBumpAnimation
+            self.diamondLayer.usesHighFrameRate = expanded || self.diamondLayer.hasTransferAnimation
             self.diamondLayer.interactionScale = self.expansionStyle == .downward ? 1.0 : Float(1.0 + 2.75 * self.grip)
             let refractionStrength = self.expansionStyle == .downward && self.diamondLayer.diamondStyle.dragGrow != 1.0
                 ? (self.diamondLayer.pose.grow - 1.0) / (self.diamondLayer.diamondStyle.dragGrow - 1.0)
@@ -350,7 +350,7 @@ public final class InteractiveDiamondComponent: Component {
                 self.diamondLayer.renderSize = CGSize(width: 240.0, height: 240.0)
             } else if expanded {
                 self.diamondLayer.renderSize = CGSize(width: 220.0, height: 220.0)
-            } else if self.diamondLayer.hasTransferAnimation || self.diamondLayer.hasBumpAnimation {
+            } else if self.diamondLayer.hasTransferAnimation {
                 self.diamondLayer.renderSize = CGSize(width: 96.0, height: 96.0)
             } else {
                 self.diamondLayer.renderSize = self.restingSize
@@ -388,8 +388,8 @@ public final class InteractiveDiamondComponent: Component {
             self.diamondLayer.spin(velocity, decay: decay)
         }
 
-        public func animateBump(delay: Double = 0.0) {
-            self.diamondLayer.animateBump(delay: delay)
+        public func pushFromBelow(strength: Float = 1.0) {
+            self.diamondLayer.pushFromBelow(strength: strength)
         }
 
         public func updateTransferState(isSending: Bool, animateCompletion: Bool) {
