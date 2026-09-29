@@ -2340,6 +2340,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 self.buttonNodes[buttonKey] = buttonNode
                 self.buttonsContainerNode.addSubnode(buttonNode)
                 self.buttonsMaskView.addSubview(buttonNode.backgroundContainerView)
+                buttonNode.contextMenuSourceContainer = self.buttonsContainerNode.view
             }
             
             let buttonFrame = CGRect(origin: CGPoint(x: buttonRightOrigin.x - buttonSize.width, y: buttonRightOrigin.y), size: buttonSize)

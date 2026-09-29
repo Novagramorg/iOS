@@ -3,6 +3,25 @@ import UIKit
 import AsyncDisplayKit
 
 open class ContextReferenceContentNode: ASDisplayNode {
+    /// Source decorations rendered outside this node (for example, a shared blur mask).
+    public var additionalContextMenuSourceViews: [UIView] = []
+    /// Visible source outline in this node's bounds, including separately drawn backdrops.
+    public var contextMenuSourcePath: UIBezierPath?
+    /// Supplies a live foreground/backdrop container for sources with a shared background.
+    public var makeContextMenuSourceContent: (() -> ContextMenuSourceContent?)?
+
+    public static func makeSourceContent(for view: UIView) -> (() -> ContextMenuSourceContent?)? {
+        return (view.asyncdisplaykit_node as? ContextReferenceContentNode)?.makeContextMenuSourceContent
+    }
+
+    public static func sourcePath(for view: UIView) -> UIBezierPath? {
+        return (view.asyncdisplaykit_node as? ContextReferenceContentNode)?.contextMenuSourcePath
+    }
+
+    public static func additionalSourceViews(for view: UIView) -> [UIView] {
+        return (view.asyncdisplaykit_node as? ContextReferenceContentNode)?.additionalContextMenuSourceViews ?? []
+    }
+
     override public init() {
         super.init()
     }

@@ -1142,6 +1142,13 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             }, appDelegate: self, testingEnvironment: isUITest)
             
             presentationDataPromise.set(sharedContext.presentationData)
+            #if targetEnvironment(simulator)
+            if CommandLine.arguments.contains("--context-menu-morph-gallery") {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+                    self?.mainWindow.present(ContextMenuMorphDebugController(), on: .root)
+                }
+            }
+            #endif
             
             sharedContext.presentGlobalController = { [weak self] c, a in
                 guard let strongSelf = self else {
