@@ -38,6 +38,7 @@ public struct Font {
         
         public static let italic = Traits(rawValue: 1 << 0)
         public static let monospacedNumbers = Traits(rawValue: 1 << 1)
+        public static let alternateDollarSign = Traits(rawValue: 1 << 2)
     }
     
     public enum Width {
@@ -177,14 +178,23 @@ public struct Font {
                 symbolicTraits.insert(.traitItalic)
             }
             var updatedDescriptor: UIFontDescriptor? = descriptor.withSymbolicTraits(symbolicTraits)
+            var featureSettings: [[String: Any]] = []
             if traits.contains(.monospacedNumbers) {
+                featureSettings.append([
+                    UIFontDescriptor.FeatureKey.type.rawValue: kNumberSpacingType,
+                    UIFontDescriptor.FeatureKey.selector.rawValue: kMonospacedNumbersSelector
+                ])
+            }
+            if traits.contains(.alternateDollarSign) {
+                featureSettings.append([
+                    kCTFontOpenTypeFeatureTag as String: "cv09",
+                    kCTFontOpenTypeFeatureValue as String: 1
+                ])
+            }
+            if !featureSettings.isEmpty {
                 updatedDescriptor = updatedDescriptor?.addingAttributes([
-                UIFontDescriptor.AttributeName.featureSettings: [
-                  [UIFontDescriptor.FeatureKey.type:
-                   kNumberSpacingType,
-                   UIFontDescriptor.FeatureKey.selector:
-                   kMonospacedNumbersSelector]
-                ]])
+                    UIFontDescriptor.AttributeName.featureSettings: featureSettings
+                ])
             }
             switch design {
                 case .serif:

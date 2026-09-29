@@ -287,8 +287,13 @@ extension ChatControllerImpl {
                 isScheduledMessages = true
             }
 
-            if case .default = subject, !isScheduledMessages, banSendText == nil, let user = self.presentationInterfaceState.renderedPeer?.peer as? TelegramUser, user.id != self.context.account.peerId, !user.isDeleted, !isServicePeer(user), user.botInfo == nil, let fileIndex = availableButtons.firstIndex(of: .file) {
-                availableButtons.insert(.money, at: fileIndex + 1)
+            switch subject {
+            case .default, .gift:
+                if WalletConfiguration.with(appConfiguration: self.context.currentAppConfiguration.with { $0 }).isAvailable, !isScheduledMessages, banSendText == nil, let user = self.presentationInterfaceState.renderedPeer?.peer as? TelegramUser, user.id != self.context.account.peerId, !user.isDeleted, !isServicePeer(user), user.botInfo == nil, !user.flags.contains(.isSupport), let fileIndex = availableButtons.firstIndex(of: .file) {
+                    availableButtons.insert(.money, at: fileIndex + 1)
+                }
+            case .edit, .bot:
+                break
             }
 
             var isPaidMessages = false
@@ -336,25 +341,6 @@ extension ChatControllerImpl {
                         break
                     }
                     
-                    for bot in attachMenuBots.reversed() {
-                        var peerType = peerType
-                        if bot.peer.id == peer.id {
-                            peerType.insert(.sameBot)
-                            peerType.remove(.bot)
-                        }
-                        let button: AttachmentButtonType = .app(bot)
-                        if !bot.peerTypes.intersection(peerType).isEmpty {
-                            buttons.insert(button, at: 1)
-                            
-                            if case let .bot(botId, _, _) = subject {
-                                if initialButton == nil && bot.peer.id == botId {
-                                    initialButton = button
-                                }
-                            }
-                        }
-                        allButtons.insert(button, at: 1)
-                    }
-                    
                     if !isPaidMessages {
                         if context.isPremium, shortcutMessageList.items.count > 0, let user = peer as? TelegramUser, user.botInfo == nil {
                             if let index = buttons.firstIndex(where: { $0 == .location }) {
@@ -368,6 +354,25 @@ extension ChatControllerImpl {
                                 allButtons.append(.quickReply)
                             }
                         }
+                    }
+
+                    for bot in attachMenuBots {
+                        var peerType = peerType
+                        if bot.peer.id == peer.id {
+                            peerType.insert(.sameBot)
+                            peerType.remove(.bot)
+                        }
+                        let button: AttachmentButtonType = .app(bot)
+                        if !bot.peerTypes.intersection(peerType).isEmpty {
+                            buttons.append(button)
+                            
+                            if case let .bot(botId, _, _) = subject {
+                                if initialButton == nil && bot.peer.id == botId {
+                                    initialButton = button
+                                }
+                            }
+                        }
+                        allButtons.append(button)
                     }
                     
                     return (buttons, allButtons, initialButton)
@@ -411,7 +416,13 @@ extension ChatControllerImpl {
                     if !premiumGiftOptions.isEmpty {
                         buttons.insert(.gift, at: 1)
                     }
-                    buttons.append(.richText)
+                    let firstBotIndex = buttons.firstIndex(where: { button in
+                        if case .app = button {
+                            return true
+                        }
+                        return false
+                    }) ?? buttons.endIndex
+                    buttons.insert(.richText, at: firstBotIndex)
                 }
                 
                 guard let initialButton = initialButton else {
@@ -615,11 +626,13 @@ extension ChatControllerImpl {
                         let controller = WalletSendScreen(
                             context: strongSelf.context,
                             updatedPresentationData: strongSelf.updatedPresentationData,
+                            useDefaultAccent: false,
                             peer: peer,
                             walletContext: walletContext,
                             displaySuccessToast: false,
                             allowOpenRecipientChat: false,
-                            completed: { [weak self] in
+                            completed: { [weak self, weak attachmentController] in
+                                attachmentController?.attachmentButton = nil
                                 self?.scrollToEndOfHistory()
                             }
                         )

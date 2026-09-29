@@ -2835,8 +2835,8 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
         
         if case .assets(_, .story) = self.subject {
             if self.selectionCount > 0 {
-                let text = self.forCollage ? self.presentationData.strings.MediaPicker_AddToCollage : self.presentationData.strings.MediaPicker_CreateStory(self.selectionCount)
-                self.mainButtonStatePromise.set(.single(AttachmentMainButtonState(text: text, badge: nil, font: .bold, background: .color(self.presentationData.theme.actionSheet.controlAccentColor), textColor: self.presentationData.theme.list.itemCheckColors.foregroundColor, isVisible: true, progress: .none, isEnabled: true, hasShimmer: false, position: .top, hidesPanelBackground: true)))
+                let text = self.forCollage ? self.presentationData.strings.MediaPicker_CombineIntoCollage : self.presentationData.strings.MediaPicker_CreateStory(self.selectionCount)
+                self.mainButtonStatePromise.set(.single(AttachmentMainButtonState(text: text, badge: nil, font: .bold, background: .color(self.presentationData.theme.actionSheet.controlAccentColor), textColor: self.presentationData.theme.list.itemCheckColors.foregroundColor, isVisible: true, progress: .none, isEnabled: true, hasShimmer: false, iconName: self.forCollage ? "Media Editor/Collage" : nil, position: .top, hidesPanelBackground: true)))
                 
                 if !self.forCollage && self.selectionCount > 1 && self.selectionCount <= 6 {
                     self.secondaryButtonStatePromise.set(.single(AttachmentMainButtonState(text: self.presentationData.strings.MediaPicker_CombineIntoCollage, badge: nil, font: .bold, background: .color(self.presentationData.theme.rootController.navigationBar.opaqueBackgroundColor), textColor: .white, isVisible: true, progress: .none, isEnabled: true, hasShimmer: false, iconName: "Media Editor/Collage", smallSpacing: false, position: .bottom)))

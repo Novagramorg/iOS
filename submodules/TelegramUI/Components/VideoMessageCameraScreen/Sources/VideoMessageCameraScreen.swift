@@ -940,7 +940,7 @@ public class VideoMessageCameraScreen: ViewController {
             self.controller = controller
             self.context = controller.context
             
-            if let _ = self.context.getAppConfigValue("ios_killswitch_disable_neo_round_camera") {
+            if let _ = self.context.getAppConfigValue("ios_killswitch_disable_neo_round_camera_v2") {
                 self.cameraImpl = LegacyCameraImpl.shared
             } else {
                 self.cameraImpl = NeoCameraImpl.shared

@@ -352,6 +352,13 @@ private final class WalletNavigationBalanceComponent: Component {
         var primaryTargetFrame: CGRect = .zero
         var secondaryTargetFrame: CGRect = .zero
 
+        var primaryContentLayout: (size: CGSize, text: CGRect, icon: CGRect)? {
+            guard let textView = self.balanceText.view, let iconView = self.gramIcon.view else {
+                return nil
+            }
+            return (self.primaryTargetFrame.size, textView.frame, iconView.frame)
+        }
+
         override init(frame: CGRect) {
             super.init(frame: frame)
 
@@ -645,23 +652,36 @@ private final class WalletScreenComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
 
     let context: AccountContext
+    let updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)
     let walletContext: WalletContext
 
     init(
         context: AccountContext,
+        updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>),
         walletContext: WalletContext
     ) {
         self.context = context
+        self.updatedPresentationData = updatedPresentationData
         self.walletContext = walletContext
     }
 
     static func ==(lhs: WalletScreenComponent, rhs: WalletScreenComponent) -> Bool {
-        return lhs.context === rhs.context && lhs.walletContext === rhs.walletContext
+        return lhs.context === rhs.context
+            && lhs.updatedPresentationData.initial === rhs.updatedPresentationData.initial
+            && lhs.updatedPresentationData.signal === rhs.updatedPresentationData.signal
+            && lhs.walletContext === rhs.walletContext
     }
 
     private final class ScrollView: UIScrollView {
         override func touchesShouldCancel(in view: UIView) -> Bool {
             return true
+        }
+    }
+
+    private final class BalanceContainerView: UIView {
+        override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+            let result = super.hitTest(point, with: event)
+            return result === self ? nil : result
         }
     }
 
@@ -685,12 +705,12 @@ private final class WalletScreenComponent: Component {
         private let cardContainerView: UIView
         private let cardBalanceCoordinateView: UIView
         private let cardVisualContainerView: UIView
-        private let cardBalanceClippingView = UIView()
+        private let cardBalanceClippingView = BalanceContainerView()
         private let navigationBalanceClippingView = UIView()
         private let cardBalanceMaskLayer = CAShapeLayer()
         private let navigationBalanceMaskLayer = CAShapeLayer()
         private let additionalBalancesSection = ComponentView<Empty>()
-        private let earningsIcon = UIImage(bundleImageName: "Wallet/TransactionGram")
+        private let earningsIcon = UIImage(bundleImageName: "Wallet/TransactionGram")?.withRenderingMode(.alwaysOriginal)
         private let card = ComponentView<Empty>()
         private let addFundsButton = ComponentView<Empty>()
         private let sendButton = ComponentView<Empty>()
@@ -770,14 +790,20 @@ private final class WalletScreenComponent: Component {
             return max(0.0, self.scrollView.contentOffset.y) - self.cardTransitionDistance * 0.6 * fraction * (1.0 - fraction)
         }
 
+        private func currentPresentationData(for component: WalletScreenComponent) -> (initial: PresentationData, signal: Signal<PresentationData, NoError>) {
+            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+            return (
+                initial: presentationData.withUpdated(theme: self.environment?.theme ?? component.updatedPresentationData.initial.theme),
+                signal: component.updatedPresentationData.signal
+            )
+        }
         override init(frame: CGRect) {
             self.scrollView = ScrollView()
             self.topEdgeEffectView = EdgeEffectView()
             self.cardContainerView = UIView()
-            self.cardBalanceCoordinateView = UIView()
+            self.cardBalanceCoordinateView = BalanceContainerView()
             self.cardVisualContainerView = UIView()
             self.cardContainerView.clipsToBounds = false
-            self.cardBalanceCoordinateView.isUserInteractionEnabled = false
             self.cardVisualContainerView.clipsToBounds = false
             self.scrollView.showsVerticalScrollIndicator = true
             self.scrollView.showsHorizontalScrollIndicator = false
@@ -796,7 +822,6 @@ private final class WalletScreenComponent: Component {
             self.topEdgeEffectView.alpha = 0.0
             self.topEdgeEffectView.isUserInteractionEnabled = false
 
-            self.cardBalanceClippingView.isUserInteractionEnabled = false
             self.navigationBalanceClippingView.isUserInteractionEnabled = false
             self.cardBalanceMaskLayer.fillColor = UIColor.black.cgColor
             self.navigationBalanceMaskLayer.fillColor = UIColor.black.cgColor
@@ -1058,9 +1083,10 @@ private final class WalletScreenComponent: Component {
             guard let component = self.component, let controller = self.environment?.controller() else {
                 return
             }
-            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+            let presentationData = self.currentPresentationData(for: component).initial
             controller.present(textAlertController(
                 context: component.context,
+                updatedPresentationData: self.currentPresentationData(for: component),
                 title: nil,
                 text: presentationData.strings.Login_UnknownError,
                 actions: [
@@ -1160,7 +1186,15 @@ private final class WalletScreenComponent: Component {
                 })
             }
             guard !items.isEmpty else {
-                self.additionalBalancesSection.view?.removeFromSuperview()
+                if let sectionView = self.additionalBalancesSection.view {
+                    if transition.animation.isImmediate {
+                        sectionView.removeFromSuperview()
+                    } else {
+                        transition.setAlpha(view: sectionView, alpha: 0.0, completion: { _ in
+                            sectionView.removeFromSuperview()
+                        })
+                    }
+                }
                 return 0.0
             }
 
@@ -1182,6 +1216,7 @@ private final class WalletScreenComponent: Component {
             )
             if let sectionView = self.additionalBalancesSection.view {
                 if sectionView.superview == nil {
+                    sectionView.alpha = 1.0
                     self.topContentContainerView.addSubview(sectionView)
                 }
                 sectionTransition.setFrame(view: sectionView, frame: CGRect(origin: origin, size: sectionSize))
@@ -1198,7 +1233,7 @@ private final class WalletScreenComponent: Component {
                   controller.navigationController?.topViewController === controller else {
                 return
             }
-            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+            let presentationData = self.currentPresentationData(for: component).initial
             controller.present(
                 UndoOverlayController(
                     presentationData: presentationData,
@@ -1456,7 +1491,7 @@ private final class WalletScreenComponent: Component {
                 }
                 signal = component.walletContext.loadMoreTransactions()
             case .collectibles:
-                guard walletState.collectibles.canLoadMore, !walletState.collectibles.isLoadingMore else {
+                guard walletState.collectibles.canLoadMore, !walletState.collectibles.isRefreshing, !walletState.collectibles.isLoadingMore else {
                     return
                 }
                 signal = component.walletContext.loadMoreCollectibles()
@@ -1912,6 +1947,8 @@ private final class WalletScreenComponent: Component {
                 fraction: fraction,
                 collapseFraction: balanceFraction * balanceFraction * balanceFraction,
                 scrollTransform: self.makeCardTransform(fraction: fraction),
+                primaryContentTarget: navigationBalanceView.primaryContentLayout,
+                contentFraction: balanceFraction * balanceFraction * (3.0 - 2.0 * balanceFraction),
                 transition: .immediate
             )
         }
@@ -2005,6 +2042,7 @@ private final class WalletScreenComponent: Component {
                     self.componentState?.updated(transition: .easeInOut(duration: 0.2))
                     self.signingAccessDisposable.set(performWalletAuthorizedOperation(
                         context: component.context,
+                        updatedPresentationData: self.currentPresentationData(for: component),
                         present: { [weak controller] alert in
                             controller?.present(alert, in: .window(.root))
                         },
@@ -2099,6 +2137,7 @@ private final class WalletScreenComponent: Component {
             let generation = self.restorationGeneration
             controller.present(textAlertController(
                 context: component.context,
+                updatedPresentationData: self.currentPresentationData(for: component),
                 title: message?.title ?? "Couldn’t Restore Wallet",
                 text: message?.text ?? "Check the network connection and try again.",
                 actions: [
@@ -2136,7 +2175,7 @@ private final class WalletScreenComponent: Component {
                 return
             }
             let viewControllers = Array(navigationController.viewControllers.prefix(through: walletControllerIndex))
-            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+            let presentationData = self.currentPresentationData(for: component).initial
             navigationController.setViewControllers(viewControllers, animated: true)
             Queue.mainQueue().after(0.4) { [weak walletController] in
                 walletController?.present(UndoOverlayController(
@@ -2159,6 +2198,7 @@ private final class WalletScreenComponent: Component {
             }
             controller.push(component.context.sharedContext.makeWalletInfoScreen(
                 context: component.context,
+                updatedPresentationData: self.currentPresentationData(for: component),
                 mode: .wallet,
                 completion: nil
             ))
@@ -2191,6 +2231,7 @@ private final class WalletScreenComponent: Component {
                 return
             }
             let context = component.context
+            let updatedPresentationData = self.currentPresentationData(for: component)
             let _ = passcodeOptionsAccessController(
                 context: context,
                 preferredModalWidth: 480.0,
@@ -2203,7 +2244,7 @@ private final class WalletScreenComponent: Component {
                 authorizationCompleted: { [weak controller] result in
                     guard case let .success(session) = result else { return }
                     guard let navigation = controller?.navigationController as? NavigationController else { session.invalidate(); return }
-                    navigation.replaceTopController(PasscodeOptionsScreen(context: context, settingsSession: session, allowFourDigitPasscode: false), animated: true)
+                    navigation.replaceTopController(PasscodeOptionsScreen(context: context, updatedPresentationData: updatedPresentationData, settingsSession: session, allowFourDigitPasscode: false), animated: true)
                 }
             ).start(next: { [weak controller] passcodeController in
                 if let passcodeController {
@@ -2234,9 +2275,11 @@ private final class WalletScreenComponent: Component {
             }
             controller.push(component.context.sharedContext.makeWalletTransactionScreen(
                 context: component.context,
+                updatedPresentationData: self.currentPresentationData(for: component),
                 walletContext: component.walletContext,
                 transaction: transaction,
-                fromChat: false
+                fromChat: false,
+                decryptCommentOnOpen: false
             ))
         }
 
@@ -2284,7 +2327,7 @@ private final class WalletScreenComponent: Component {
             guard let component = self.component, let controller = self.environment?.controller() else {
                 return
             }
-            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+            let presentationData = self.currentPresentationData(for: component).initial
 
             //TODO:localize
             let currency = "Currency"
@@ -2431,7 +2474,7 @@ private final class WalletScreenComponent: Component {
             transition: ComponentTransition
         ) -> (originY: CGFloat, size: CGSize) {
             //TODO:localize
-            let title = "Wallet"
+            let title = "Money"
             let leftButton: AnyComponentWithIdentity<NavigationButtonComponentEnvironment> = AnyComponentWithIdentity(
                 id: "back",
                 component: AnyComponent(NavigationButtonComponent(
@@ -2806,6 +2849,7 @@ private final class WalletScreenComponent: Component {
             let cardSize = self.card.update(
                 transition: transition,
                 component: AnyComponent(WalletCardComponent(
+                    theme: environment.theme,
                     balance: self.walletState?.balance.currentValue,
                     fiatCurrency: fiatCurrency,
                     fiatRate: fiatRate,
@@ -2875,9 +2919,10 @@ private final class WalletScreenComponent: Component {
                 foreground: environment.theme.list.itemCheckColors.foregroundColor,
                 pressedColor: environment.theme.list.itemCheckColors.fillColor.withMultipliedAlpha(0.9)
             )
+            let isNewAddFundsButton = self.addFundsButton.view?.superview == nil
             self.addFundsButton.parentState = state
             let addFundsButtonSize = self.addFundsButton.update(
-                transition: transition,
+                transition: isNewAddFundsButton ? .immediate : transition,
                 component: AnyComponent(ButtonComponent(
                     background: buttonBackground,
                     content: AnyComponentWithIdentity(
@@ -2900,18 +2945,22 @@ private final class WalletScreenComponent: Component {
                 if addFundsButtonView.superview == nil {
                     self.topContentContainerView.addSubview(addFundsButtonView)
                 }
-                contentLayoutTransition.setFrame(
+                let buttonFrame = CGRect(
+                    origin: CGPoint(x: environment.safeInsets.left + sideInset, y: buttonsOriginY),
+                    size: addFundsButtonSize
+                )
+                let layoutTransition: ComponentTransition = isNewAddFundsButton ? .immediate : contentLayoutTransition
+                layoutTransition.setPosition(view: addFundsButtonView, position: buttonFrame.center)
+                layoutTransition.setBounds(
                     view: addFundsButtonView,
-                    frame: CGRect(
-                        origin: CGPoint(x: environment.safeInsets.left + sideInset, y: buttonsOriginY),
-                        size: addFundsButtonSize
-                    )
+                    bounds: CGRect(origin: .zero, size: buttonFrame.size)
                 )
             }
 
+            let isNewSendButton = self.sendButton.view?.superview == nil
             self.sendButton.parentState = state
             let sendButtonSize = self.sendButton.update(
-                transition: transition,
+                transition: isNewSendButton ? .immediate : transition,
                 component: AnyComponent(ButtonComponent(
                     background: buttonBackground,
                     content: AnyComponentWithIdentity(
@@ -2935,15 +2984,18 @@ private final class WalletScreenComponent: Component {
                 if sendButtonView.superview == nil {
                     self.topContentContainerView.addSubview(sendButtonView)
                 }
-                contentLayoutTransition.setFrame(
+                let buttonFrame = CGRect(
+                    origin: CGPoint(
+                        x: environment.safeInsets.left + sideInset + addFundsButtonWidth + buttonsSpacing,
+                        y: buttonsOriginY
+                    ),
+                    size: sendButtonSize
+                )
+                let layoutTransition: ComponentTransition = isNewSendButton ? .immediate : contentLayoutTransition
+                layoutTransition.setPosition(view: sendButtonView, position: buttonFrame.center)
+                layoutTransition.setBounds(
                     view: sendButtonView,
-                    frame: CGRect(
-                        origin: CGPoint(
-                            x: environment.safeInsets.left + sideInset + addFundsButtonWidth + buttonsSpacing,
-                            y: buttonsOriginY
-                        ),
-                        size: sendButtonSize
-                    )
+                    bounds: CGRect(origin: .zero, size: buttonFrame.size)
                 )
             }
 
@@ -3410,15 +3462,21 @@ public final class WalletScreen: ViewControllerComponentContainer {
         walletContext: WalletContext
     ) {
         self.walletContext = walletContext
+        let updatedPresentationData = presentationDataWithDefaultAccent((
+            initial: context.sharedContext.currentPresentationData.with { $0 },
+            signal: context.sharedContext.presentationData
+        ))
         super.init(
             context: context,
             component: WalletScreenComponent(
                 context: context,
+                updatedPresentationData: updatedPresentationData,
                 walletContext: walletContext
             ),
             navigationBarAppearance: .transparent,
             statusBarStyle: .default,
-            theme: .default
+            theme: .default,
+            updatedPresentationData: updatedPresentationData
         )
 
         self.navigationPresentation = .modalInLargeLayout

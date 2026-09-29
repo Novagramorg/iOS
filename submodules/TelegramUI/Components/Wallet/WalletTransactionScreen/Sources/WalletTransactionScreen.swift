@@ -15,6 +15,7 @@ import MultilineTextComponent
 import ButtonComponent
 import PlainButtonComponent
 import LottieComponent
+import PremiumDiamondComponent
 import GlassBarButtonComponent
 import GlassControls
 import TableComponent
@@ -49,6 +50,7 @@ private struct WalletTransactionPreviewSource: Equatable {
     let comment: String?
     let commentEncrypted: Bool
     let collectible: WalletContext.Collectible?
+    let initialFee: Int64?
     let preparedTransfer: WalletContext.PreparedTransfer?
 
     init(preparedTransfer: WalletContext.PreparedTransfer) {
@@ -60,10 +62,11 @@ private struct WalletTransactionPreviewSource: Equatable {
         self.comment = preparedTransfer.comment
         self.commentEncrypted = preparedTransfer.commentEncrypted
         self.collectible = preparedTransfer.collectible
+        self.initialFee = preparedTransfer.fee
         self.preparedTransfer = preparedTransfer
     }
 
-    init(address: String, amount: Int64, sendAll: Bool, comment: String?) {
+    init(address: String, amount: Int64, sendAll: Bool, comment: String?, collectible: WalletContext.Collectible?, initialFee: Int64?) {
         self.id = UUID().uuidString
         self.address = address
         self.amount = amount
@@ -71,7 +74,8 @@ private struct WalletTransactionPreviewSource: Equatable {
         self.isSendAll = sendAll
         self.comment = comment
         self.commentEncrypted = false
-        self.collectible = nil
+        self.collectible = collectible
+        self.initialFee = initialFee
         self.preparedTransfer = nil
     }
 }
@@ -86,6 +90,7 @@ private enum WalletTransactionContentMode {
 }
 
 private final class TransactionCommentComponent: Component {
+    let id: String
     let theme: PresentationTheme
     let strings: PresentationStrings
     let text: NSAttributedString
@@ -93,12 +98,14 @@ private final class TransactionCommentComponent: Component {
     let performAction: (NSAttributedString, TextSelectionAction) -> Void
 
     init(
+        id: String,
         theme: PresentationTheme,
         strings: PresentationStrings,
         text: NSAttributedString,
         controller: @escaping () -> ViewController?,
         performAction: @escaping (NSAttributedString, TextSelectionAction) -> Void
     ) {
+        self.id = id
         self.theme = theme
         self.strings = strings
         self.text = text
@@ -107,6 +114,9 @@ private final class TransactionCommentComponent: Component {
     }
 
     static func ==(lhs: TransactionCommentComponent, rhs: TransactionCommentComponent) -> Bool {
+        if lhs.id != rhs.id {
+            return false
+        }
         if lhs.theme !== rhs.theme {
             return false
         }
@@ -147,6 +157,9 @@ private final class TransactionCommentComponent: Component {
         }
 
         override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+            guard !self.isHidden, self.alpha > 0.0, self.isUserInteractionEnabled, self.point(inside: point, with: event) else {
+                return nil
+            }
             if let textSelectionNode {
                 let localPoint = self.convert(point, to: textSelectionNode.view)
                 if let result = textSelectionNode.view.hitTest(localPoint, with: event) {
@@ -164,6 +177,11 @@ private final class TransactionCommentComponent: Component {
         }
 
         func cancelSelection() {
+            // Cancel the pending long press as well as any visible selection/menu.
+            if let recognizer = self.textSelectionNode?.recognizer, recognizer.isEnabled {
+                recognizer.isEnabled = false
+                recognizer.isEnabled = true
+            }
             self.textSelectionNode?.cancelSelection()
         }
 
@@ -215,7 +233,6 @@ private final class TransactionCommentComponent: Component {
                 )
                 textSelectionNode.enableQuote = false
                 textSelectionNode.enableSpeak = isSpeakSelectionEnabled()
-                textSelectionNode.enableAutomaticScrolling = false
                 textSelectionNode.cancelSelectionOnOutsideTap = true
 
                 self.textSelectionNode = textSelectionNode
@@ -223,6 +240,7 @@ private final class TransactionCommentComponent: Component {
                 self.addSubview(textSelectionNode.view)
             }
 
+            textSelectionNode.enableAutomaticScrolling = true
             textSelectionNode.enableCopy = true
             textSelectionNode.enableShare = true
         }
@@ -233,7 +251,9 @@ private final class TransactionCommentComponent: Component {
             transition: ComponentTransition
         ) -> CGSize {
             if let previousComponent = self.component,
-               previousComponent.text != component.text || previousComponent.theme !== component.theme {
+               previousComponent.id != component.id
+                || previousComponent.text != component.text
+                || previousComponent.theme !== component.theme {
                 self.removeTextSelectionNode()
             }
             self.component = component
@@ -246,7 +266,7 @@ private final class TransactionCommentComponent: Component {
                     insets: UIEdgeInsets(top: 2.0, left: 0.0, bottom: 2.0, right: 0.0)
                 )),
                 environment: {},
-                containerSize: availableSize
+                containerSize: CGSize(width: availableSize.width, height: .greatestFiniteMagnitude)
             )
 
             if let textView = self.text.view as? MultilineTextComponent.View {
@@ -285,7 +305,162 @@ private final class TransactionCommentComponent: Component {
     }
 }
 
+private final class TransactionCommentContainerView: UIView, UIScrollViewDelegate {
+    private final class ScrollView: UIScrollView {
+        override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+            if gestureRecognizer === self.panGestureRecognizer {
+                let velocity = self.panGestureRecognizer.velocity(in: self)
+                if abs(velocity.x) > abs(velocity.y) {
+                    return false
+                }
+            }
+            return super.gestureRecognizerShouldBegin(gestureRecognizer)
+        }
+    }
+
+    private let scrollView = ScrollView()
+    private let fadeMask = CAGradientLayer()
+    private let selectionInset: CGFloat = 12.0
+    private var contentId: String?
+    private var text: String?
+    private var isUpdating = false
+
+    weak var textSelectionView: TransactionCommentComponent.View?
+
+    var contentView: UIView {
+        return self.scrollView
+    }
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+
+        // The stationary mask clips both the bubble background and its text.
+        self.scrollView.clipsToBounds = false
+        self.scrollView.contentInsetAdjustmentBehavior = .never
+        self.scrollView.showsVerticalScrollIndicator = false
+        self.scrollView.showsHorizontalScrollIndicator = false
+        self.scrollView.bounces = false
+        self.scrollView.isDirectionalLockEnabled = true
+        self.scrollView.scrollsToTop = false
+        self.scrollView.delaysContentTouches = false
+        self.scrollView.delegate = self
+        self.addSubview(self.scrollView)
+
+        self.fadeMask.startPoint = CGPoint(x: 0.5, y: 0.0)
+        self.fadeMask.endPoint = CGPoint(x: 0.5, y: 1.0)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        if self.layer.mask != nil && !self.fadeMask.frame.contains(point) {
+            return false
+        }
+        if self.bounds.contains(point) {
+            return true
+        }
+        if let textSelectionView = self.textSelectionView {
+            return textSelectionView.hitTest(self.convert(point, to: textSelectionView), with: event) != nil
+        }
+        return false
+    }
+
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        guard !self.isHidden, self.alpha > 0.0, self.isUserInteractionEnabled, self.point(inside: point, with: event) else {
+            return nil
+        }
+        if let textSelectionView = self.textSelectionView,
+           let result = textSelectionView.hitTest(self.convert(point, to: textSelectionView), with: event) {
+            return result
+        }
+        return super.hitTest(point, with: event)
+    }
+
+    func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        self.textSelectionView?.cancelSelection()
+    }
+
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        if !self.isUpdating {
+            self.updateScrollFade()
+        }
+    }
+
+    private func updateScrollFade() {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer {
+            CATransaction.commit()
+        }
+
+        let size = self.scrollView.bounds.size
+        let maxOffset = max(0.0, self.scrollView.contentSize.height - size.height)
+        guard maxOffset > 0.0, size.height > 0.0 else {
+            self.layer.mask = nil
+            return
+        }
+
+        let fadeHeight = min(12.0, size.height / 2.0)
+        let offset = max(0.0, min(maxOffset, self.scrollView.contentOffset.y))
+        let topFade = min(1.0, offset / fadeHeight)
+        let bottomFade = min(1.0, (maxOffset - offset) / fadeHeight)
+        var maskFrame = CGRect(origin: .zero, size: size).insetBy(dx: -self.selectionInset, dy: 0.0)
+        // At either end there is no hidden text, but selection knobs can extend past the viewport.
+        if offset == 0.0 {
+            maskFrame.origin.y -= self.selectionInset
+            maskFrame.size.height += self.selectionInset
+        }
+        if offset == maxOffset {
+            maskFrame.size.height += self.selectionInset
+        }
+        self.fadeMask.frame = maskFrame
+        self.fadeMask.locations = [
+            0.0,
+            NSNumber(value: Double(fadeHeight / maskFrame.height)),
+            NSNumber(value: Double(1.0 - fadeHeight / maskFrame.height)),
+            1.0
+        ]
+        self.fadeMask.colors = [
+            UIColor.white.withAlphaComponent(1.0 - topFade).cgColor,
+            UIColor.white.cgColor,
+            UIColor.white.cgColor,
+            UIColor.white.withAlphaComponent(1.0 - bottomFade).cgColor
+        ]
+        self.layer.mask = self.fadeMask
+    }
+
+    func update(contentSize: CGSize, maxHeight: CGFloat, id: String, text: String?) -> CGSize {
+        self.isUpdating = true
+        defer {
+            self.isUpdating = false
+        }
+        let resetOffset = self.contentId != id || self.text != text
+        self.contentId = id
+        self.text = text
+        let previousOffset = self.scrollView.contentOffset.y
+        let size = CGSize(width: contentSize.width, height: min(contentSize.height, maxHeight))
+        let maxOffset = max(0.0, contentSize.height - size.height)
+        self.scrollView.isScrollEnabled = maxOffset > 0.0
+        let scrollFrame = CGRect(origin: .zero, size: size)
+        if self.scrollView.frame != scrollFrame {
+            self.scrollView.frame = scrollFrame
+        }
+        if self.scrollView.contentSize != contentSize {
+            self.scrollView.contentSize = contentSize
+        }
+        let contentOffset = CGPoint(x: 0.0, y: resetOffset ? 0.0 : max(0.0, min(maxOffset, previousOffset)))
+        if self.scrollView.contentOffset != contentOffset {
+            self.scrollView.contentOffset = contentOffset
+        }
+        self.updateScrollFade()
+        return size
+    }
+}
+
 private protocol WalletTransactionContentController: AnyObject {
+    var walletPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? { get }
     func setCloseAction(id: String, action: @escaping (Bool) -> Void)
     func requestClose(animated: Bool)
     func dismissAllTooltips()
@@ -348,9 +523,9 @@ private final class WalletTransactionFeePlaceholderComponent: Component {
                 if shapeView.superview !== self.shimmerView.contentView {
                     self.shimmerView.contentView.addSubview(shapeView)
                 }
-                transition.setFrame(view: shapeView, frame: CGRect(origin: CGPoint(x: 0.0, y: UIScreenPixel), size: shapeSize))
+                transition.setFrame(view: shapeView, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: shapeSize))
             }
-            transition.setFrame(view: self.shimmerView, frame: CGRect(origin: CGPoint(x: 0.0, y: UIScreenPixel), size: size))
+            transition.setFrame(view: self.shimmerView, frame: CGRect(origin: CGPoint(x: 0.0, y: 1.0), size: size))
             self.shimmerView.update(
                 size: size,
                 containerWidth: size.width,
@@ -358,7 +533,7 @@ private final class WalletTransactionFeePlaceholderComponent: Component {
                 gradientWidth: 60.0,
                 transition: transition
             )
-            return size
+            return CGSize(width: size.width, height: size.height + 4.0)
         }
     }
 
@@ -394,8 +569,9 @@ private func walletTransactionCollectible(
     return WalletContext.Transaction.CollectibleTransfer(
         address: collectible.address,
         name: collectible.name,
-        imageUrl: collectible.imageUrl,
-        lottieUrl: collectible.lottieUrl,
+        image: collectible.image,
+        thumbnail: collectible.thumbnail,
+        lottie: collectible.lottie,
         collectionName: collectible.collectionName,
         collectionUrl: collectible.collectionUrl,
         kind: kind
@@ -674,6 +850,7 @@ private final class WalletTransactionContentComponent: Component {
     let mode: WalletTransactionContentMode
     let walletContext: WalletContext?
     let fromChat: Bool
+    let maxCommentHeight: CGFloat
     let openExplorer: (String) -> Void
     let animateOut: ActionSlot<Action<Void>>
 
@@ -682,6 +859,7 @@ private final class WalletTransactionContentComponent: Component {
         mode: WalletTransactionContentMode,
         walletContext: WalletContext?,
         fromChat: Bool,
+        maxCommentHeight: CGFloat,
         openExplorer: @escaping (String) -> Void,
         animateOut: ActionSlot<Action<Void>>
     ) {
@@ -689,12 +867,16 @@ private final class WalletTransactionContentComponent: Component {
         self.mode = mode
         self.walletContext = walletContext
         self.fromChat = fromChat
+        self.maxCommentHeight = maxCommentHeight
         self.openExplorer = openExplorer
         self.animateOut = animateOut
     }
 
     static func ==(lhs: WalletTransactionContentComponent, rhs: WalletTransactionContentComponent) -> Bool {
-        if lhs.context !== rhs.context || lhs.walletContext !== rhs.walletContext || lhs.fromChat != rhs.fromChat {
+        if lhs.context !== rhs.context
+            || lhs.walletContext !== rhs.walletContext
+            || lhs.fromChat != rhs.fromChat
+            || lhs.maxCommentHeight != rhs.maxCommentHeight {
             return false
         }
         switch (lhs.mode, rhs.mode) {
@@ -734,7 +916,8 @@ private final class WalletTransactionContentComponent: Component {
         private let usdValue = ComponentView<Empty>()
         private let processingDot = ComponentView<Empty>()
         private let processingText = ComponentView<Empty>()
-        private let commentBackgroundView = UIImageView()
+        private let commentContainerView = TransactionCommentContainerView(frame: .zero)
+        private let commentBackgroundView = WalletSendCommentBackgroundView(frame: .zero)
         private var commentText = ComponentView<Empty>()
         private let commentButton = ComponentView<Empty>()
         private var commentDustNode: InvisibleInkDustNode?
@@ -793,25 +976,29 @@ private final class WalletTransactionContentComponent: Component {
         private var isApplyingInput = false
 
         private let walletDisposable = MetaDisposable()
+        private let gaslessInfoDisposable = MetaDisposable()
         private let transferDisposable = MetaDisposable()
         private let discardTransferDisposables = DisposableSet()
         private let hapticFeedback = HapticFeedback()
         private var currentSpeechHolder: SpeechSynthesizerHolder?
         private var isUpdating = false
 
-        private var cachedCommentBubbleImage: (
-            theme: PresentationTheme,
-            corners: PresentationChatBubbleCorners,
-            incoming: Bool,
-            fillColor: UIColor,
-            image: UIImage
-        )?
+        private func currentPresentationData(for component: WalletTransactionContentComponent) -> (initial: PresentationData, signal: Signal<PresentationData, NoError>) {
+            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+            if let updatedPresentationData = (self.environment?.controller() as? WalletTransactionContentController)?.walletPresentationData {
+                return (
+                    initial: presentationData.withUpdated(theme: self.environment?.theme ?? updatedPresentationData.initial.theme),
+                    signal: updatedPresentationData.signal
+                )
+            }
+            return (initial: presentationData, signal: component.context.sharedContext.presentationData)
+        }
 
         override init(frame: CGRect) {
             super.init(frame: frame)
 
-            self.commentBackgroundView.contentMode = .scaleToFill
-            self.addSubview(self.commentBackgroundView)
+            self.addSubview(self.commentContainerView)
+            self.commentContainerView.contentView.addSubview(self.commentBackgroundView)
             self.inputExternalState.updated = { [weak self] in
                 self?.inputTextUpdated()
             }
@@ -829,6 +1016,7 @@ private final class WalletTransactionContentComponent: Component {
             self.commentCredentialChangesDisposable.dispose()
             self.discardCurrentPreparedTransfer()
             self.walletDisposable.dispose()
+            self.gaslessInfoDisposable.dispose()
             self.transferDisposable.dispose()
             self.discardTransferDisposables.dispose()
             self.commentDecryptionDisposable.dispose()
@@ -836,7 +1024,7 @@ private final class WalletTransactionContentComponent: Component {
         }
 
         @objc private func gramAnimationTapped() {
-            guard let animationView = self.gramAnimation.view as? LottieComponent.View, !animationView.isPlaying else {
+            guard let animationView = self.gramAnimation.view as? InteractiveDiamondComponent.View, !animationView.isPlaying else {
                 return
             }
             animationView.playOnce()
@@ -882,6 +1070,7 @@ private final class WalletTransactionContentComponent: Component {
             self.commentWalletIdentity = nil
             self.discardCurrentPreparedTransfer()
             self.walletDisposable.set(nil)
+            self.gaslessInfoDisposable.set(nil)
             self.transferDisposable.set(nil)
             self.transaction = nil
             self.walletContext = nil
@@ -913,7 +1102,10 @@ private final class WalletTransactionContentComponent: Component {
                 self.previewComment = walletTransactionComment(source.comment)
                 self.previewCommentEncrypted = source.collectible == nil && source.commentEncrypted
                 self.preparedTransfer = source.preparedTransfer
-                self.displayedFee = source.preparedTransfer?.fee
+                self.displayedFee = source.initialFee
+                if source.collectible == nil {
+                    self.gaslessInfoDisposable.set(walletContext.beginGaslessInfoUpdates())
+                }
                 self.dismissSendScreen = dismissSendScreen
                 self.previewTimestamp = Int32(Date().timeIntervalSince1970)
                 self.isApplyingInput = true
@@ -1010,13 +1202,27 @@ private final class WalletTransactionContentComponent: Component {
             }
             let preparedTransfer = self.preparedTransfer
             let recipient = preparedTransfer?.recipient ?? previewSource.address
-            let amount = preparedTransfer?.amount ?? previewSource.amount
+            let amount = preparedTransfer?.amount ?? (previewSource.isSendAll
+                ? max(0, previewSource.amount - (self.displayedFee ?? 0))
+                : previewSource.amount)
             let collectible = preparedTransfer?.collectible ?? previewSource.collectible
             let gasless: Bool
             if let submittedTransfer = self.submittedTransfer {
                 gasless = self.latestWalletState?.transactions.items.first(where: {
                     $0.presentationId == "pending:\(submittedTransfer.id)"
                 })?.gasless ?? submittedTransfer.gasless
+            } else if collectible == nil,
+                      let component = self.component,
+                      let walletState = self.latestWalletState ?? self.walletContext?.stateValue,
+                      case let .wallet(info) = walletState.phase,
+                      !WalletContext.isSelfTransfer(recipient: recipient, walletAddress: info.address),
+                      !previewSource.isSendAll || preparedTransfer != nil || self.displayedFee != nil {
+                let configuration = WalletConfiguration.with(appConfiguration: component.context.currentAppConfiguration.with { $0 })
+                gasless = WalletContext.isGaslessEligible(
+                    amount: amount,
+                    gaslessInfo: walletState.gaslessInfo.currentValue,
+                    minimumAmount: configuration.transferGaslessMinAmount
+                )
             } else {
                 gasless = false
             }
@@ -1048,7 +1254,9 @@ private final class WalletTransactionContentComponent: Component {
                 return
             }
             self.isClosing = true
+            self.gaslessInfoDisposable.set(nil)
             (controller as? WalletTransactionScreen)?.cancelFirstGramsSuggestion()
+            (controller as? WalletTransactionScreen)?.cancelCommentDecryptionOnOpen()
             self.invalidateCommentSession()
             self.resetCommentDecryption()
             switch self.previewOperation {
@@ -1132,6 +1340,7 @@ private final class WalletTransactionContentComponent: Component {
             let actionTitle = "Got it"
             let alertController = textAlertController(
                 context: component.context,
+                updatedPresentationData: self.currentPresentationData(for: component),
                 title: title,
                 text: text,
                 actions: [
@@ -1198,6 +1407,7 @@ private final class WalletTransactionContentComponent: Component {
                   let controller = self.environment?.controller() else {
                 return
             }
+            (controller as? WalletTransactionScreen)?.cancelCommentDecryptionOnOpen()
             guard case let .wallet(info) = walletContext.stateValue.phase else {
                 self.presentCommentDecryptionError(.unavailable)
                 return
@@ -1216,6 +1426,7 @@ private final class WalletTransactionContentComponent: Component {
                 self.isRestoringCommentKey = true
                 self.commentAuthorizationDisposable.set(performWalletAuthorizedOperation(
                     context: component.context,
+                    updatedPresentationData: self.currentPresentationData(for: component),
                     present: { [weak controller] alert in
                         controller?.present(alert, in: .window(.root))
                     },
@@ -1272,6 +1483,7 @@ private final class WalletTransactionContentComponent: Component {
             let message = walletAuthorizationErrorMessage(error)
             controller.present(textAlertController(
                 context: component.context,
+                updatedPresentationData: self.currentPresentationData(for: component),
                 title: message?.title ?? "Couldn’t Restore Wallet",
                 text: message?.text ?? "Check the network connection and try again.",
                 actions: [
@@ -1357,6 +1569,7 @@ private final class WalletTransactionContentComponent: Component {
             //TODO:localize
             controller.present(textAlertController(
                 context: component.context,
+                updatedPresentationData: self.currentPresentationData(for: component),
                 title: authorizationMessage?.title ?? "Couldn't Decrypt Comment",
                 text: authorizationMessage?.text ?? "The comment could not be decrypted.",
                 actions: [TextAlertAction(type: .defaultAction, title: "OK", action: {})]
@@ -1531,8 +1744,11 @@ private final class WalletTransactionContentComponent: Component {
             self.previewOperation = .preparing
             self.preparingForSend = authorizeAfterPreparation
             self.componentState?.updated(transition: .easeInOut(duration: 0.2))
+            let collectible = self.preparedTransfer?.collectible ?? previewSource.collectible
+            let requestedAmount = self.preparedTransfer?.requestedAmount ?? previewSource.requestedAmount
+            let sendAll = self.preparedTransfer?.isSendAll ?? previewSource.isSendAll
             let preparation: Signal<WalletContext.PreparedTransfer, WalletContext.WalletError>
-            if let collectible = self.preparedTransfer?.collectible ?? previewSource.collectible {
+            if let collectible {
                 preparation = walletContext.prepareCollectibleTransfer(
                     address: self.preparedTransfer?.recipient ?? previewSource.address,
                     collectible: collectible,
@@ -1541,8 +1757,8 @@ private final class WalletTransactionContentComponent: Component {
             } else {
                 preparation = walletContext.prepareTransfer(
                     address: self.preparedTransfer?.recipient ?? previewSource.address,
-                    amount: self.preparedTransfer?.requestedAmount ?? previewSource.requestedAmount,
-                    sendAll: self.preparedTransfer?.isSendAll ?? previewSource.isSendAll,
+                    amount: requestedAmount,
+                    sendAll: sendAll,
                     comment: comment,
                     commentEncrypted: self.previewCommentEncrypted,
                     session: self.previewCommentEncrypted ? self.commentSession : nil
@@ -1552,7 +1768,17 @@ private final class WalletTransactionContentComponent: Component {
             |> filter { $0.activeOperation == nil }
             |> take(1)
             |> castError(WalletContext.WalletError.self)
-            |> mapToSignal { _ in preparation }
+            |> mapToSignal { state -> Signal<WalletContext.PreparedTransfer, WalletContext.WalletError> in
+                if collectible == nil {
+                    guard let balance = state.balance.currentValue, requestedAmount <= balance else {
+                        return .fail(.insufficientBalance(required: requestedAmount))
+                    }
+                    if sendAll && balance != requestedAmount {
+                        return .fail(.previewFailed)
+                    }
+                }
+                return preparation
+            }
             |> deliverOnMainQueue).start(next: { [weak self] updatedTransfer in
                 guard let self else {
                     _ = walletContext.discardPreparedTransfer(updatedTransfer).start()
@@ -1712,7 +1938,7 @@ private final class WalletTransactionContentComponent: Component {
             //TODO:localize
             let successPrefix = isCollectible ? "Collectible has been sent to" : "Grams have been sent to"
             let text = "\(successPrefix) **\(walletTransactionShortAddress(address))**."
-            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+            let presentationData = self.currentPresentationData(for: component).initial
             controller.present(
                 UndoOverlayController(
                     presentationData: presentationData,
@@ -1738,6 +1964,7 @@ private final class WalletTransactionContentComponent: Component {
             let ok = "OK"
             controller.present(textAlertController(
                 context: component.context,
+                updatedPresentationData: self.currentPresentationData(for: component),
                 title: title,
                 text: text,
                 actions: [TextAlertAction(type: .defaultAction, title: ok, action: {
@@ -1771,6 +1998,7 @@ private final class WalletTransactionContentComponent: Component {
             let ok = "OK"
             controller.present(textAlertController(
                 context: component.context,
+                updatedPresentationData: self.currentPresentationData(for: component),
                 title: title,
                 text: text,
                 actions: [TextAlertAction(type: .defaultAction, title: ok, action: {
@@ -1789,7 +2017,7 @@ private final class WalletTransactionContentComponent: Component {
             (controller as? WalletTransactionContentController)?.dismissAllTooltips()
             
             //TODO:localize
-            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+            let presentationData = self.currentPresentationData(for: component).initial
             controller.present(
                 UndoOverlayController(
                     presentationData: presentationData,
@@ -1862,7 +2090,7 @@ private final class WalletTransactionContentComponent: Component {
             case .copy:
                 storeAttributedTextInPasteboard(text)
 
-                let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+                let presentationData = self.currentPresentationData(for: component).initial
                 controller.present(
                     UndoOverlayController(
                         presentationData: presentationData,
@@ -1937,7 +2165,7 @@ private final class WalletTransactionContentComponent: Component {
                               let controller = self.environment?.controller() else {
                             return
                         }
-                        let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+                        let presentationData = self.currentPresentationData(for: component).initial
                         let translationController = await component.context.sharedContext.makeTextProcessingScreen(
                             context: component.context,
                             theme: nil,
@@ -1998,34 +2226,6 @@ private final class WalletTransactionContentComponent: Component {
             ))
         }
 
-        private func commentBubbleImage(
-            presentationData: PresentationData,
-            incoming: Bool,
-            fillColor: UIColor
-        ) -> UIImage {
-            let corners = presentationData.chatBubbleCorners
-            if let cached = self.cachedCommentBubbleImage,
-               cached.theme === presentationData.theme,
-               cached.corners == corners,
-               cached.incoming == incoming,
-               cached.fillColor == fillColor {
-                return cached.image
-            }
-            let image = messageBubbleImage(
-                maxCornerRadius: corners.mainRadius,
-                minCornerRadius: corners.auxiliaryRadius,
-                incoming: incoming,
-                fillColor: fillColor,
-                strokeColor: .clear,
-                neighbors: .none,
-                shadow: nil,
-                wallpaper: presentationData.chatWallpaper,
-                knockout: false
-            )
-            self.cachedCommentBubbleImage = (presentationData.theme, corners, incoming, fillColor, image)
-            return image
-        }
-
         private func openExplorer(sourceView: UIView) {
             guard let component = self.component,
                   let controller = self.environment?.controller(),
@@ -2063,10 +2263,14 @@ private final class WalletTransactionContentComponent: Component {
                             color: theme.contextMenu.primaryColor
                         )
                     },
-                    action: { [weak controller] _, dismiss in
+                    action: { [weak self, weak controller] _, dismiss in
                         dismiss(.default)
+                        guard let self else {
+                            return
+                        }
                         controller?.push(component.context.sharedContext.makeWalletInfoScreen(
                             context: component.context,
+                            updatedPresentationData: self.currentPresentationData(for: component),
                             mode: .gram,
                             completion: nil
                         ))
@@ -2074,7 +2278,7 @@ private final class WalletTransactionContentComponent: Component {
                 )))
             }
             let contextController = makeContextController(
-                presentationData: component.context.sharedContext.currentPresentationData.with { $0 },
+                presentationData: self.currentPresentationData(for: component).initial,
                 source: .reference(WalletTransactionContextReferenceContentSource(sourceView: sourceView)),
                 items: .single(ContextController.Items(content: .list(items))),
                 gesture: nil
@@ -2119,6 +2323,13 @@ private final class WalletTransactionContentComponent: Component {
             }
             (environment.controller() as? WalletTransactionScreen)?.setCommentVisibilityAction(id: incomingModeId, action: { [weak self] visible, leavingTransaction in
                 self?.commentVisibilityUpdated(visible, leavingTransaction: leavingTransaction)
+            })
+            (environment.controller() as? WalletTransactionScreen)?.setCommentDecryptionAction(id: incomingModeId, action: { [weak self] in
+                guard let self, self.modeId == incomingModeId, self.commentIsVisible, !self.isClosing,
+                      self.transaction?.commentEncrypted == true, self.transaction?.comment?.isEmpty == false else {
+                    return
+                }
+                self.encryptedCommentPressed()
             })
 
             let theme = environment.theme
@@ -2187,9 +2398,9 @@ private final class WalletTransactionContentComponent: Component {
             let fiatRate = self.latestWalletState?.fiat.selectedRate
             let isKeyChange = transaction.kind == .keyChange
             let displaysGramHeader = transaction.currency == .ton && transaction.collectible == nil && !isKeyChange
-            if !displaysGramHeader, let animationView = self.gramAnimation.view as? LottieComponent.View {
+            if !displaysGramHeader, let animationView = self.gramAnimation.view as? InteractiveDiamondComponent.View {
                 transition.setAlpha(view: animationView, alpha: 0.0)
-                animationView.externalShouldPlay = false
+                animationView.isRenderingEnabled = false
             }
             if !isKeyChange, let headerView = self.keyUpdateHeader.view {
                 transition.setAlpha(view: headerView, alpha: 0.0)
@@ -2238,8 +2449,8 @@ private final class WalletTransactionContentComponent: Component {
                         theme: theme,
                         item: WalletCollectibleHeaderComponent.Item(
                             name: collectible.name,
-                            imageUrl: collectible.imageUrl,
-                            lottieUrl: collectible.lottieUrl,
+                            image: collectible.image,
+                            lottie: collectible.lottie,
                             collectionName: collectible.collectionName,
                             collectionUrl: collectible.collectionUrl
                         ),
@@ -2267,19 +2478,20 @@ private final class WalletTransactionContentComponent: Component {
                     let animationSize = CGSize(width: 118.0, height: 118.0)
                     let _ = self.gramAnimation.update(
                         transition: transition,
-                        component: AnyComponent(LottieComponent(
-                            content: LottieComponent.AppBundleContent(name: "GramDiamond"),
-                            startingPosition: .begin,
+                        component: AnyComponent(InteractiveDiamondComponent(
                             size: animationSize,
-                            loop: false,
-                            lottieSettings: component.context.lottieRenderingSettings
+                            diamondWidth: 78.0,
+                            isVisible: environment.isVisible,
+                            theme: theme,
+                            animationMode: .lottie(loop: false),
+                            animateOnAppear: true
                         )),
                         environment: {},
                         containerSize: animationSize
                     )
                     contentHeight = 10.0
-                    if let animationView = self.gramAnimation.view as? LottieComponent.View {
-                        animationView.externalShouldPlay = environment.isVisible
+                    if let animationView = self.gramAnimation.view as? InteractiveDiamondComponent.View {
+                        animationView.isRenderingEnabled = environment.isVisible
                         if animationView.superview == nil {
                             animationView.isUserInteractionEnabled = true
                             animationView.addGestureRecognizer(UITapGestureRecognizer(
@@ -2287,7 +2499,6 @@ private final class WalletTransactionContentComponent: Component {
                                 action: #selector(self.gramAnimationTapped)
                             ))
                             self.addSubview(animationView)
-                            animationView.playOnce()
                         }
                         transition.setFrame(view: animationView, frame: CGRect(
                             x: floorToScreenPixels((availableSize.width - animationSize.width) / 2.0),
@@ -2445,21 +2656,18 @@ private final class WalletTransactionContentComponent: Component {
             }
             if displaysCommentBubble, isCommentConcealed || displayedComment != nil {
                 contentHeight += 22.0
-                let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
-                let bubbleImage = self.commentBubbleImage(
-                    presentationData: presentationData,
-                    incoming: displayedDirection == .incoming,
-                    fillColor: theme.list.itemInputField.backgroundColor
-                )
+                let presentationData = self.currentPresentationData(for: component).initial
                 let commentSize: CGSize
                 if isCommentConcealed {
                     commentSize = CGSize(width: 120.0, height: ceil(Font.regular(15.0).lineHeight))
                     self.commentText.view?.isHidden = true
                     (self.commentText.view as? TransactionCommentComponent.View)?.cancelSelection()
+                    self.commentContainerView.textSelectionView = nil
                 } else {
                     commentSize = self.commentText.update(
                         transition: transition,
                         component: AnyComponent(TransactionCommentComponent(
+                            id: incomingModeId,
                             theme: theme,
                             strings: environment.strings,
                             text: NSAttributedString(
@@ -2478,27 +2686,44 @@ private final class WalletTransactionContentComponent: Component {
                 }
 
                 var commentTransition = transition
-                if self.commentBackgroundView.image == nil {
-                    self.commentBackgroundView.alpha = 0.0
+                if self.commentContainerView.bounds.isEmpty {
+                    self.commentContainerView.alpha = 0.0
                     commentTransition = .immediate
                 }
 
-                let bubbleSize = CGSize(width: commentSize.width + 34.0, height: max(commentSize.height + 14.0, bubbleImage.size.height))
-                self.commentBackgroundView.image = bubbleImage
-                let bubbleFrame = CGRect(
-                    x: floorToScreenPixels(
-                        (availableSize.width - bubbleSize.width) / 2.0
-                        + (displayedDirection == .incoming ? -3.0 : 3.0)
-                    ),
+                let bubbleSize = CGSize(width: commentSize.width + 34.0, height: max(34.0, commentSize.height + 14.0))
+                // Include the directional tail offset while keeping the text centered on screen.
+                let containerSize = self.commentContainerView.update(
+                    contentSize: CGSize(width: bubbleSize.width + 6.0, height: bubbleSize.height),
+                    maxHeight: component.maxCommentHeight,
+                    id: incomingModeId,
+                    text: displayedComment
+                )
+                commentTransition.setFrame(view: self.commentContainerView, frame: CGRect(
+                    x: floorToScreenPixels((availableSize.width - containerSize.width) / 2.0),
                     y: contentHeight,
+                    width: containerSize.width,
+                    height: containerSize.height
+                ))
+                self.commentContainerView.isUserInteractionEnabled = true
+                transition.setAlpha(view: self.commentContainerView, alpha: 1.0)
+                self.commentBackgroundView.update(
+                    size: bubbleSize,
+                    maxCornerRadius: presentationData.chatBubbleCorners.mainRadius,
+                    minCornerRadius: presentationData.chatBubbleCorners.auxiliaryRadius,
+                    theme: theme,
+                    incoming: displayedDirection == .incoming
+                )
+                let bubbleFrame = CGRect(
+                    x: displayedDirection == .incoming ? 0.0 : 6.0,
+                    y: 0.0,
                     width: bubbleSize.width,
                     height: bubbleSize.height
                 )
                 commentTransition.setFrame(view: self.commentBackgroundView, frame: bubbleFrame)
-                transition.setAlpha(view: self.commentBackgroundView, alpha: 1.0)
                 let commentFrame = CGRect(
-                    x: floorToScreenPixels((availableSize.width - commentSize.width) / 2.0),
-                    y: contentHeight + floorToScreenPixels((bubbleSize.height - commentSize.height) / 2.0),
+                    x: floorToScreenPixels((containerSize.width - commentSize.width) / 2.0),
+                    y: floorToScreenPixels((bubbleSize.height - commentSize.height) / 2.0),
                     width: commentSize.width,
                     height: commentSize.height
                 )
@@ -2511,7 +2736,7 @@ private final class WalletTransactionContentComponent: Component {
                         dustNode.isUserInteractionEnabled = false
                         dustNode.isAccessibilityElement = false
                         self.commentDustNode = dustNode
-                        self.addSubview(dustNode.view)
+                        self.commentContainerView.contentView.addSubview(dustNode.view)
                     }
                     dustNode.frame = commentFrame.insetBy(dx: -3.0, dy: -3.0)
                     let rect = CGRect(origin: CGPoint(x: 3.0, y: 3.0), size: commentSize).insetBy(dx: 0.0, dy: 2.0)
@@ -2537,25 +2762,27 @@ private final class WalletTransactionContentComponent: Component {
                             //TODO:localize
                             commentButtonView.accessibilityLabel = "Encrypted comment"
                             commentButtonView.accessibilityHint = "Double-tap to decrypt."
-                            self.addSubview(commentButtonView)
+                            self.commentContainerView.contentView.addSubview(commentButtonView)
                         }
                         commentButtonView.frame = bubbleFrame
-                        self.bringSubviewToFront(commentButtonView)
+                        self.commentContainerView.contentView.bringSubviewToFront(commentButtonView)
                     }
                 } else if let commentView = self.commentText.view {
                     if commentView.superview == nil {
                         commentTransition = .immediate
                         commentView.alpha = 0.0
-                        self.addSubview(commentView)
+                        self.commentContainerView.contentView.addSubview(commentView)
                     }
+                    self.commentContainerView.textSelectionView = commentView as? TransactionCommentComponent.View
                     commentView.isHidden = false
                     commentView.isUserInteractionEnabled = true
                     commentTransition.setFrame(view: commentView, frame: commentFrame)
                     transition.setAlpha(view: commentView, alpha: 1.0)
                 }
-                contentHeight += bubbleSize.height + 32.0
+                contentHeight += containerSize.height + 32.0
             } else {
-                transition.setAlpha(view: self.commentBackgroundView, alpha: 0.0)
+                self.commentContainerView.isUserInteractionEnabled = false
+                transition.setAlpha(view: self.commentContainerView, alpha: 0.0)
                 if let commentView = self.commentText.view {
                     commentView.isUserInteractionEnabled = false
                     (commentView as? TransactionCommentComponent.View)?.cancelSelection()
@@ -2716,9 +2943,9 @@ private final class WalletTransactionContentComponent: Component {
                 if displayedFee > 0 {
                     var feeItems: [AnyComponentWithIdentity<Empty>] = [
                         AnyComponentWithIdentity(id: "icon", component: AnyComponent(BundleIconComponent(
-                            name: "Ads/TonAbout",
-                            tintColor: UIColor(rgb: 0x30a1f5),
-                            maxSize: CGSize(width: 14.0, height: 14.0)
+                            name: "Wallet/TransactionGram",
+                            tintColor: nil,
+                            maxSize: CGSize(width: 20.0, height: 20.0)
                         ))),
                         AnyComponentWithIdentity(id: "amount", component: AnyComponent(MultilineTextComponent(
                             text: .plain(NSAttributedString(
@@ -2798,9 +3025,9 @@ private final class WalletTransactionContentComponent: Component {
                             id: "gaslessFee",
                             component: AnyComponent(HStack([
                                 AnyComponentWithIdentity(id: "icon", component: AnyComponent(BundleIconComponent(
-                                    name: "Ads/TonAbout",
-                                    tintColor: UIColor(rgb: 0x30a1f5),
-                                    maxSize: CGSize(width: 14.0, height: 14.0)
+                                    name: "Wallet/TransactionGram",
+                                    tintColor: nil,
+                                    maxSize: CGSize(width: 20.0, height: 20.0)
                                 ))),
                                 AnyComponentWithIdentity(id: "text", component: AnyComponent(MultilineTextComponent(
                                     text: .plain(NSAttributedString(
@@ -2883,6 +3110,7 @@ private final class WalletTransactionContentComponent: Component {
                             }
                             self.environment?.controller()?.push(component.context.sharedContext.makeWalletInfoScreen(
                                 context: component.context,
+                                updatedPresentationData: self.currentPresentationData(for: component),
                                 mode: .gram,
                                 completion: nil
                             ))
@@ -3087,7 +3315,7 @@ private final class WalletTransactionContentComponent: Component {
                 }
             } else if !self.isPreview && component.fromChat {
                 //TODO:localize
-                actionTitle = "Open My Wallet"
+                actionTitle = "Open My Money"
             } else {
                 //TODO:localize
                 actionTitle = "OK"
@@ -3304,6 +3532,7 @@ private final class WalletTransactionSheetComponent: CombinedComponent {
         return { context in
             let environment = context.environment[EnvironmentType.self]
             let controller = environment.controller
+            let availableCommentHeight = context.availableSize.height - environment.safeInsets.top - max(environment.safeInsets.bottom, environment.inputHeight)
             let sheetComponent = sheet.update(
                 component: SheetComponent<EnvironmentType>(
                     content: AnyComponent<EnvironmentType>(WalletTransactionContentComponent(
@@ -3311,6 +3540,7 @@ private final class WalletTransactionSheetComponent: CombinedComponent {
                         mode: .transaction(context.component.transaction),
                         walletContext: context.component.walletContext,
                         fromChat: context.component.fromChat,
+                        maxCommentHeight: floorToScreenPixels(min(150.0, max(80.0, availableCommentHeight * 0.25))),
                         openExplorer: context.component.openExplorer,
                         animateOut: animateOut
                     )),
@@ -3424,6 +3654,7 @@ private final class WalletTransactionPreviewSheetComponent: CombinedComponent {
         return { context in
             let environment = context.environment[EnvironmentType.self]
             let controller = environment.controller
+            let availableCommentHeight = context.availableSize.height - environment.safeInsets.top - max(environment.safeInsets.bottom, environment.inputHeight)
             let sheetComponent = sheet.update(
                 component: ResizableSheetComponent<EnvironmentType>(
                     content: AnyComponent<EnvironmentType>(WalletTransactionContentComponent(
@@ -3435,6 +3666,7 @@ private final class WalletTransactionPreviewSheetComponent: CombinedComponent {
                         ),
                         walletContext: context.component.walletContext,
                         fromChat: false,
+                        maxCommentHeight: floorToScreenPixels(min(150.0, max(80.0, availableCommentHeight * 0.25))),
                         openExplorer: context.component.openExplorer,
                         animateOut: animateOut
                     )),
@@ -3578,6 +3810,7 @@ private func walletTransactionOpenExplorer(context: AccountContext) -> (String) 
 
 public final class WalletTransactionScreen: ViewControllerComponentContainer, WalletTransactionContentController {
     private let accountContext: AccountContext
+    fileprivate let walletPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?
     private let navigationWalletContext: WalletContext?
     private let fromChat: Bool
     private let openExplorer: (String) -> Void
@@ -3598,14 +3831,19 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
     private var currentCloseId: String
     private var closeActions: [String: (Bool) -> Void] = [:]
     private var commentVisibilityActions: [String: (Bool, Bool) -> Void] = [:]
+    private var commentDecryptionActions: [String: () -> Void] = [:]
+    private var hasPendingCommentDecryption: Bool
+    private var isVisibleForCommentDecryption = false
     private var requestedOffset: Int?
     private var failedOffset: Int?
 
     public init(
         context: AccountContext,
+        updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? = nil,
         walletContext: WalletContext? = nil,
         transaction: WalletContext.Transaction,
-        fromChat: Bool
+        fromChat: Bool,
+        decryptCommentOnOpen: Bool = false
     ) {
         let initialState = walletContext?.stateValue.transactions
         var initialTransactions = initialState?.items.filter(\.isVisibleInWalletHistory) ?? []
@@ -3622,10 +3860,12 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
         let openExplorer = walletTransactionOpenExplorer(context: context)
 
         self.accountContext = context
+        self.walletPresentationData = updatedPresentationData
         self.navigationWalletContext = walletContext
         self.fromChat = fromChat
         self.openExplorer = openExplorer
-        self.checkFirstGramsOnAppear = transaction.direction == .incoming && transaction.currency == .ton && transaction.collectible == nil
+        self.checkFirstGramsOnAppear = !decryptCommentOnOpen && transaction.direction == .incoming && transaction.currency == .ton && transaction.collectible == nil
+        self.hasPendingCommentDecryption = decryptCommentOnOpen && initialTransaction.commentEncrypted && initialTransaction.comment?.isEmpty == false
         self.transactionsState = initialState
         self.transactions = initialTransactions
         self.currentTransactionPresentationId = initialTransaction.presentationId
@@ -3666,7 +3906,8 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
             component: WalletTransactionRootComponent(content: initialComponent),
             navigationBarAppearance: .none,
             statusBarStyle: .ignore,
-            theme: .default
+            theme: .default,
+            updatedPresentationData: updatedPresentationData
         )
         indexUpdatedImpl = { [weak self] index in
             self?.currentIndexUpdated(index)
@@ -3723,6 +3964,9 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
     public override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
 
+        self.isVisibleForCommentDecryption = true
+        self.activatePendingCommentDecryption()
+
         guard self.checkFirstGramsOnAppear else {
             return
         }
@@ -3737,6 +3981,10 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
             }
             navigationController.pushViewController(self.accountContext.sharedContext.makeWalletInfoScreen(
                 context: self.accountContext,
+                updatedPresentationData: self.walletPresentationData ?? (
+                    initial: self.accountContext.sharedContext.currentPresentationData.with { $0 },
+                    signal: self.accountContext.sharedContext.presentationData
+                ),
                 mode: .firstGrams,
                 completion: nil
             ))
@@ -3745,6 +3993,8 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
     }
 
     public override func viewWillDisappear(_ animated: Bool) {
+        self.isVisibleForCommentDecryption = false
+        self.cancelCommentDecryptionOnOpen()
         self.cancelFirstGramsSuggestion()
         super.viewWillDisappear(animated)
         for action in self.commentVisibilityActions.values {
@@ -3777,7 +4027,34 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
         self.commentVisibilityActions[id] = action
     }
 
+    fileprivate func setCommentDecryptionAction(id: String, action: @escaping () -> Void) {
+        guard self.hasPendingCommentDecryption else {
+            return
+        }
+        self.commentDecryptionActions[id] = action
+        if self.isVisibleForCommentDecryption, id == self.currentCloseId {
+            Queue.mainQueue().justDispatch { [weak self] in
+                self?.activatePendingCommentDecryption()
+            }
+        }
+    }
+
+    private func activatePendingCommentDecryption() {
+        guard self.hasPendingCommentDecryption, self.isVisibleForCommentDecryption,
+              let action = self.commentDecryptionActions[self.currentCloseId] else {
+            return
+        }
+        self.cancelCommentDecryptionOnOpen()
+        action()
+    }
+
+    fileprivate func cancelCommentDecryptionOnOpen() {
+        self.hasPendingCommentDecryption = false
+        self.commentDecryptionActions.removeAll()
+    }
+
     fileprivate func requestClose(animated: Bool) {
+        self.cancelCommentDecryptionOnOpen()
         self.dismissAllTooltips()
         if let closeAction = self.closeActions[self.currentCloseId] {
             closeAction(animated)
@@ -3879,6 +4156,7 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
         }
         let transaction = self.transactions[index]
         if self.currentTransactionPresentationId != transaction.presentationId {
+            self.cancelCommentDecryptionOnOpen()
             self.commentVisibilityActions[self.currentCloseId]?(false, true)
         }
         self.currentTransactionPresentationId = transaction.presentationId
@@ -3887,6 +4165,7 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
     }
 
     private func draggingBegan(_ index: Int) {
+        self.cancelCommentDecryptionOnOpen()
         self.dismissAllTooltips()
         if self.failedOffset == self.transactionsState?.offset {
             self.requestedOffset = nil
@@ -3922,17 +4201,20 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
 }
 
 public final class WalletTransactionPreviewScreen: ViewControllerComponentContainer, WalletTransactionContentController {
+    fileprivate let walletPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?
     private let currentCloseId: String
     private var closeActions: [String: (Bool) -> Void] = [:]
     fileprivate var invalidateCommentSession: (() -> Void)?
 
     public init(
         context: AccountContext,
+        updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? = nil,
         walletContext: WalletContext,
         preparedTransfer: WalletContext.PreparedTransfer,
         dismissSendScreen: @escaping () -> Void
     ) {
         let source = WalletTransactionPreviewSource(preparedTransfer: preparedTransfer)
+        self.walletPresentationData = updatedPresentationData
         self.currentCloseId = walletTransactionModeId(.preview(
             walletContext: walletContext,
             source: source,
@@ -3950,7 +4232,8 @@ public final class WalletTransactionPreviewScreen: ViewControllerComponentContai
             ),
             navigationBarAppearance: .none,
             statusBarStyle: .ignore,
-            theme: .default
+            theme: .default,
+            updatedPresentationData: updatedPresentationData
         )
 
         self.navigationPresentation = .flatModal
@@ -3959,14 +4242,18 @@ public final class WalletTransactionPreviewScreen: ViewControllerComponentContai
 
     public init(
         context: AccountContext,
+        updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? = nil,
         walletContext: WalletContext,
         address: String,
         amount: Int64,
         sendAll: Bool,
         comment: String?,
+        collectible: WalletContext.Collectible? = nil,
+        initialFee: Int64? = nil,
         dismissSendScreen: @escaping () -> Void
     ) {
-        let source = WalletTransactionPreviewSource(address: address, amount: amount, sendAll: sendAll, comment: comment)
+        let source = WalletTransactionPreviewSource(address: address, amount: amount, sendAll: sendAll, comment: comment, collectible: collectible, initialFee: initialFee)
+        self.walletPresentationData = updatedPresentationData
         self.currentCloseId = walletTransactionModeId(.preview(
             walletContext: walletContext,
             source: source,
@@ -3984,7 +4271,8 @@ public final class WalletTransactionPreviewScreen: ViewControllerComponentContai
             ),
             navigationBarAppearance: .none,
             statusBarStyle: .ignore,
-            theme: .default
+            theme: .default,
+            updatedPresentationData: updatedPresentationData
         )
 
         self.navigationPresentation = .flatModal

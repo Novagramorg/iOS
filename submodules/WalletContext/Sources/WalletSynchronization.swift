@@ -1,6 +1,5 @@
 import Foundation
 import TelegramCore
-import WalletEngineFFI
 
 @available(macOS 10.15, *)
 extension WalletContextImpl {
@@ -36,6 +35,9 @@ extension WalletContextImpl {
             }
         }
         if self.collectiblesSynchronizationGate.beginOrQueue(scope.intersection(.nfts)) != nil {
+            self.collectiblesPaginationRequest?.cancel()
+            self.collectiblesPaginationRequest = nil
+            self.replaceCollectibles(self.currentState.collectibles.startingRefresh())
             let taskId = UUID()
             self.collectiblesSynchronizationTaskId = taskId
             let observationId = self.runtimeObservationId
@@ -72,7 +74,10 @@ extension WalletContextImpl {
         async let transactions: Void = self.refreshTransactionsIfRequested(scope,
         taskId: taskId,
         generation: generation)
-        _ = await (account, transactions)
+        async let pending: Void = self.resolveEnginePendingIfRequested(scope,
+        taskId: taskId,
+        generation: generation)
+        _ = await (account, transactions, pending)
     }
 
     private func isCurrentSynchronization(_ taskId: UUID, generation: UInt64) -> Bool {
@@ -83,48 +88,24 @@ extension WalletContextImpl {
     private func refreshAccountIfRequested(_ scope: WalletSynchronizationScope, taskId: UUID, generation: UInt64) async {
         guard scope.contains(.account), self.isCurrentSynchronization(taskId,
         generation: generation) else { return }
-        let watermark = self.streamingPresentationOverlay.revision
-        self.balanceTracker.beginRefresh(id: taskId)
-        let result = await captureAsync { try await self.runtime.refresh() }
+        self.requestServerWalletState()
+        await self.serverStateTask?.value
         guard self.isCurrentSynchronization(taskId, generation: generation) else { return }
-        var balance = self.currentState.balance
-        var overlayChanged = false
-        switch result {
-        case let .success(update):
-            let result = self.balanceTracker.completeRefresh(
-                id: taskId, update: update, current: balance,
-                lastSuccessfulAt: self.balanceLastSuccessfulAt, now: currentWalletTimestamp()
-            )
-            balance = result.balance
-            if result.refreshed {
-                overlayChanged = self.streamingPresentationOverlay.clearBalance(through: watermark)
-            }
-            if case let .stale(_, error, _) = balance {
-                self.logger.error("wallet_engine_refresh_failed", error)
-            }
-        case let .failure(error):
-            if !(error is CancellationError) {
-                self.logger.error("wallet_engine_refresh_failed", error)
-            }
-            balance = self.balanceTracker.failRefresh(
-                id: taskId, error: error, current: balance, lastSuccessfulAt: self.balanceLastSuccessfulAt
-            )
-        }
         self.synchronizationGate.completedResource(.account)
         self.completedSynchronizationResource(.account, queued: self.synchronizationGate.queuedScope)
-        self.recordBalanceTimestamp(balance)
-        let previousState = self.currentState
-        self.replaceState(
-            phase: self.currentState.phase, balance: balance,
-            transactions: self.currentState.transactions,
-            pendingTransfers: self.currentState.pendingTransfers,
-            activeOperation: self.currentState.activeOperation
-        )
-        if overlayChanged && previousState == self.currentState {
-            self.publishPresentationState()
-        }
-        if case .stale = balance {
+        if case .stale = self.currentState.balance {
             self.retryStreamingSynchronizationIfNeeded(scope: .account)
+        }
+    }
+
+    private func resolveEnginePendingIfRequested(_ scope: WalletSynchronizationScope, taskId: UUID, generation: UInt64) async {
+        guard scope.contains(.account), self.isCurrentSynchronization(taskId, generation: generation) else { return }
+        do {
+            _ = try await self.runtime.resolvePending()
+        } catch is CancellationError {
+        } catch {
+            guard self.isCurrentSynchronization(taskId, generation: generation) else { return }
+            self.logger.error("wallet_engine_pending_resolution_failed", error)
         }
     }
 
@@ -132,6 +113,7 @@ extension WalletContextImpl {
         guard scope.contains(.transactions), self.isCurrentSynchronization(taskId,
         generation: generation) else { return }
         let watermark = self.streamingPresentationOverlay.revision
+        let transactionsAtRequest = self.currentState.transactions.items
         let result = await captureAsync {
             try await WalletSignalRequestContext<TelegramCore.WalletTransactions>().run(
                 self.engine.wallet.getTransactions(inbound: true,
@@ -150,6 +132,7 @@ extension WalletContextImpl {
                 WalletTransactionHistory.Page(items: walletTransactions(from: response.items),
                 nextOffset: response.nextOffset),
                 previous: transactions,
+                retaining: transactions.items.filter { !transactionsAtRequest.contains($0) },
                 log: self.logger.log
             )
             let reconciliation = self.pendingTransfers(pending, reconcilingWith: transactions.items)
@@ -191,40 +174,29 @@ extension WalletContextImpl {
 
     private func performCollectiblesSynchronization(taskId: UUID, observationId: UUID) async {
         guard self.isCurrentCollectiblesSynchronization(taskId, observationId: observationId) else { return }
-        let previousRevision = self.collectiblesRevision.latest
-        var resultRevision: UInt64?
+        defer {
+            if self.collectiblesSynchronizationTaskId == taskId {
+                self.collectiblesSynchronizationTask = nil
+                self.collectiblesSynchronizationTaskId = nil
+                let queued = self.collectiblesSynchronizationGate.complete()
+                self.completedSynchronizationResource(.nfts, queued: queued)
+                if !queued.isEmpty {
+                    self.requestSynchronization(scope: queued)
+                }
+            }
+        }
         do {
-            let update = try await self.runtime.refreshNfts()
-            resultRevision = update.snapshot.revision
-            let values = try await walletEngineCollectibles(update, pagination: false) { items in
-                try await walletCollectibles(from: items, logger: self.logger)
-            }
-            guard self.isCurrentCollectiblesSynchronization(taskId,
-            observationId: observationId) else { return }
-            if let values, self.collectiblesRevision.accept(update.snapshot.revision) {
-                self.replaceCollectibles(walletEngineCollectiblesState(
-                    previous: self.currentState.collectibles, items: values,
-                    hasMore: update.snapshot.nfts.hasMore, pagination: false
-                ))
-            }
+            let page = try await WalletSignalRequestContext<WalletNfts>().run(
+                self.engine.wallet.getNfts(offset: "", limit: walletCollectiblesFetchLimit)
+            )
+            guard self.isCurrentCollectiblesSynchronization(taskId, observationId: observationId) else { return }
+            self.replaceCollectibles(try self.currentState.collectibles.applying(page, offset: "", refresh: true))
         } catch {
-            guard self.isCurrentCollectiblesSynchronization(taskId,
-            observationId: observationId) else { return }
+            guard self.isCurrentCollectiblesSynchronization(taskId, observationId: observationId) else { return }
             if !(error is CancellationError) {
                 self.logger.error("wallet_nfts_refresh_failed", error)
             }
-            if resultRevision.map({ self.collectiblesRevision.isCurrent($0) }) ?? (self.collectiblesRevision.latest == previousRevision) {
-                self.replaceCollectibles(walletEngineCollectiblesState(
-                    previous: self.currentState.collectibles, failure: error, pagination: false
-                ))
-            }
-        }
-        self.collectiblesSynchronizationTask = nil
-        self.collectiblesSynchronizationTaskId = nil
-        let queued = self.collectiblesSynchronizationGate.complete()
-        self.completedSynchronizationResource(.nfts, queued: queued)
-        if !queued.isEmpty {
-            self.requestSynchronization(scope: queued)
+            self.replaceCollectibles(self.currentState.collectibles.failing(error))
         }
     }
 
@@ -243,7 +215,6 @@ extension WalletContextImpl {
     }
 
     func cancelSynchronization() {
-        let taskId = self.synchronizationTaskId
         self.synchronizationTask?.cancel()
         self.synchronizationTask = nil
         self.synchronizationTaskId = nil
@@ -252,21 +223,10 @@ extension WalletContextImpl {
         self.collectiblesSynchronizationTask = nil
         self.collectiblesSynchronizationTaskId = nil
         self.collectiblesSynchronizationGate.cancel()
-        if let taskId {
-            let balance = self.balanceTracker.failRefresh(
-                id: taskId, error: CancellationError(), current: self.currentState.balance,
-                lastSuccessfulAt: self.balanceLastSuccessfulAt
-            )
-            self.recordBalanceTimestamp(balance)
-            if balance != self.currentState.balance {
-                self.replaceState(
-                    phase: self.currentState.phase,
-                    balance: balance,
-                    transactions: self.currentState.transactions,
-                    pendingTransfers: self.currentState.pendingTransfers,
-                    activeOperation: self.currentState.activeOperation
-                )
-            }
+        self.collectiblesPaginationRequest?.cancel()
+        self.collectiblesPaginationRequest = nil
+        if self.currentState.collectibles.isRefreshing || self.currentState.collectibles.isLoadingMore {
+            self.replaceCollectibles(self.currentState.collectibles.cancellingRequests())
         }
     }
 }

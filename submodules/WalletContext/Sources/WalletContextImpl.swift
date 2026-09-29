@@ -63,26 +63,30 @@ actor WalletContextImpl {
     let streamingURLProvider: WalletStreamingURLProvider
     let storedStateWriter: WalletStoredStateWriter
     let output: WalletContextOutput
+    
     var currentState: State
     var transferMinAmount = WalletConfiguration.defaultValue.transferMinAmount
     var transferGaslessMinAmount = WalletConfiguration.defaultValue.transferGaslessMinAmount
+    
     var storedState = WalletStoredState()
     var serverWalletState: TelegramCore.WalletState?
     var isChangingWalletLocally = false
     var pendingInitialServerWalletState: (state: TelegramCore.WalletState, refreshIfStreamingUnavailable: Bool)?
-    var deferredServerWalletState: (state: TelegramCore.WalletState, refreshIfStreamingUnavailable: Bool)?
+    var deferredServerWalletState: (state: TelegramCore.WalletState, refreshIfStreamingUnavailable: Bool, balanceOverlayRevision: UInt64?)?
     var serverStateRefreshRequested = false
     var serverStateMutationRevision: UInt64 = 0
     var serverStateNeedsActivation = false
+    
     var transactionHistory = WalletTransactionHistory()
     var preparedTransfers: [String: PreparedEngineTransferRecord] = [:]
     var pendingTransferRegistrations: [String: WalletPendingTransferRegistrationRecord] = [:]
+    var outgoingTransactionPresentationIdentities: [String: OutgoingTransactionPresentationIdentity] = [:]
+    
     var preparedAuthorizations: [String: PasscodeSession] = [:]
-    var deferredSynchronizationScope: WalletSynchronizationScope = []
+    
     var preparedRecoveryPhraseImportRecordId: String?
     var peerByWalletAddress: [String: EnginePeer] = [:]
-    var outgoingTransactionPresentationIdentities: [String: OutgoingTransactionPresentationIdentity] = [:]
-
+    
     var isStoredStateRestored = false
     var isApplicationInForeground = false
     var isAccountCurrent = false
@@ -107,33 +111,38 @@ actor WalletContextImpl {
     var previousWalletBalancesTask: Task<[WalletContext.PreviousWallet], Error>?
     var serverStateTask: Task<Void, Never>?
     var activationTask: Task<Void, Never>?
+    
+    var deferredSynchronizationScope: WalletSynchronizationScope = []
     var synchronizationTask: Task<Void, Never>?
     var synchronizationTaskId: UUID?
     var synchronizationGate = WalletSynchronizationRequestGate()
-    var collectiblesSynchronizationTask: Task<Void, Never>?
-    var collectiblesSynchronizationTaskId: UUID?
-    var collectiblesSynchronizationGate = WalletSynchronizationRequestGate()
-    var collectiblesRevision = WalletEngineCollectiblesRevision()
+    
     var runtimeObservationId = UUID()
-    var balanceTracker = WalletEngineBalanceTracker()
     var observationTask: Task<Void, Never>?
     var serverStateRetryTask: Task<Void, Never>?
+            
     var pollingTask: Task<Void, Never>?
     var pollingTaskId: UUID?
+    
     var walletStateFallbackRefreshTask: Task<Void, Never>?
     var walletStateFallbackRefreshTaskId: UUID?
+    
     var pendingTransferExpirationTask: Task<Void, Never>?
     var pendingTransferExpirationTaskId: UUID?
     var pendingTransferExpirationDeadline: Int32?
+    
     var walletTransferResolutions: [String: WalletTransferResolution] = [:]
     var walletTransferHashStates: [String: WalletTransferHashState] = [:]
     var walletTransferResolutionTask: Task<Void, Never>?
     var walletTransferResolutionScheduledAt: Int32?
+    
     var fiatRefreshTask: Task<Void, Never>?
     var fiatRefreshTaskId: UUID?
+    
     var gaslessInfoTask: Task<Void, Never>?
     var gaslessInfoTaskId: UUID?
     var gaslessQuotaRevision: UInt64 = 0
+    
     var streamingClient: WalletToncenterStreamingClient?
     var streamingTask: Task<Void, Never>?
     var streamingRefreshTask: Task<Void, Never>?
@@ -146,11 +155,19 @@ actor WalletContextImpl {
     var streamingPresentationOverlay = WalletStreamingPresentationOverlay()
     var streamingRefreshTracker = WalletStreamingRefreshTracker()
     var expiredPendingStreamingTraceIds = Set<String>()
+    
     var activationGeneration: UInt64 = 0
     var automaticPhraseRecoveryAttemptIdentity: (address: String, publicKey: Data)?
+    
     var balanceLastSuccessfulAt: Int32?
     var fiatLastSuccessfulAt: Int32?
+    
     var storedStateMutationRevision: UInt64 = 0
+    
+    var collectiblesSynchronizationTask: Task<Void, Never>?
+    var collectiblesSynchronizationTaskId: UUID?
+    var collectiblesSynchronizationGate = WalletSynchronizationRequestGate()
+    var collectiblesPaginationRequest: WalletSignalRequestContext<WalletNfts>?
 
     var tonConnectSessions: [Int64: WalletTonConnectSession] = [:]
     var tonConnectSessionRevisions: [Int64: UInt64] = [:]
@@ -168,7 +185,6 @@ actor WalletContextImpl {
     var tonConnectRefreshTask: Task<Void, Never>?
     var tonConnectWalletIdentity: String?
     var tonConnectWasAvailable = false
-
 
     init(
         engine: TelegramEngine,
@@ -210,6 +226,8 @@ actor WalletContextImpl {
         self.activationTask?.cancel()
         self.synchronizationTask?.cancel()
         self.collectiblesSynchronizationTask?.cancel()
+        self.collectiblesPaginationRequest?.cancel()
+        self.collectiblesPaginationRequest = nil
         self.observationTask?.cancel()
         self.serverStateRetryTask?.cancel()
         self.pollingTask?.cancel()
@@ -245,7 +263,7 @@ actor WalletContextImpl {
             self.preparedAuthorizations.removeAll()
             if let recordId = self.preparedRecoveryPhraseImportRecordId {
                 self.preparedRecoveryPhraseImportRecordId = nil
-                Task { await self.discardReplacementForCleanup(recordId: recordId) }
+                Task { await self.discardReplacementForCleanup(recordId: recordId, discardPersisted: false) }
             }
         }
         if becameForeground {
@@ -292,7 +310,7 @@ actor WalletContextImpl {
             self.pendingInitialServerWalletState = (value, true)
             return
         }
-        self.applyServerWalletState(value, refreshIfStreamingUnavailable: true)
+        self.applyServerWalletState(value, refreshIfStreamingUnavailable: true, balanceOverlayRevision: self.streamingPresentationOverlay.revision)
     }
 
     func updateStateSubscriberDemand(count: Int, revision: UInt64) {
@@ -323,9 +341,6 @@ actor WalletContextImpl {
         self.pendingScreenSynchronizationScope.formIntersection(self.visibleScreenSynchronizationScope)
         if openedScope.contains(.transactions) || hasNewGaslessInfoRequests {
             self.requestGaslessInfo()
-        }
-        if openedScope.contains(.transactions) {
-            self.requestServerWalletState(forceRefreshAfterCurrent: self.serverWalletState != nil)
         }
         self.requestSynchronization(scope: openedScope)
         self.evaluateRuntimeDemand()
@@ -384,8 +399,7 @@ actor WalletContextImpl {
             ),
             collectibles: CollectiblesState(
                 items: Array(storedState.collectibles.prefix(walletTransactionFetchLimit)),
-                offset: storedState.collectibles.count,
-                canLoadMore: false,
+                nextOffset: nil,
                 isLoadingMore: false,
                 error: nil
             ),
@@ -466,6 +480,7 @@ actor WalletContextImpl {
         let revision = self.serverStateMutationRevision
         let walletStateRevision = self.latestWalletStateRevision
         let generation = self.activationGeneration
+        let balanceOverlayRevision = self.streamingPresentationOverlay.revision
         defer {
             self.serverStateTask = nil
             if self.serverStateRefreshRequested {
@@ -491,16 +506,22 @@ actor WalletContextImpl {
             let isMutatingReplacementCandidate = self.preparedRecoveryPhraseImportRecordId != nil
                 || self.currentState.activeOperation?.defersServerWalletState == true
             if !isMutatingReplacementCandidate {
-                if case let .ready(_, _, _, address, publicKey, _) = value {
-                    promotedReplacement = try await self.runtime.reconcileReplacementCandidate(
-                        serverAddress: address,
-                        serverPublicKey: publicKey,
-                        discardMismatch: true,
-                        archivePreviousWallet: !self.isChangingWalletLocally,
-                        serverStateRevision: revision
-                    )
-                } else if case .empty = value {
-                    try await self.runtime.discardReplacementAfterAuthoritativeEmptyState()
+                do {
+                    if case let .ready(_, _, _, address, publicKey, _) = value {
+                        promotedReplacement = try await self.runtime.reconcileReplacementCandidate(
+                            serverAddress: address,
+                            serverPublicKey: publicKey,
+                            discardMismatch: true,
+                            archivePreviousWallet: !self.isChangingWalletLocally,
+                            serverStateRevision: revision
+                        )
+                    } else if case .empty(creating: false) = value {
+                        try await self.runtime.discardReplacementAfterAuthoritativeEmptyState(serverStateRevision: revision)
+                    }
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch {
+                    self.logger.error("wallet_replacement_reconciliation_failed", error)
                 }
             }
             if promotedReplacement {
@@ -518,10 +539,24 @@ actor WalletContextImpl {
             }
             self.serverStateRetryTask?.cancel()
             self.serverStateRetryTask = nil
-            self.applyServerWalletState(value, forceActivation: promotedReplacement)
+            self.applyServerWalletState(value, forceActivation: promotedReplacement, balanceOverlayRevision: balanceOverlayRevision)
         } catch is CancellationError {
         } catch {
             self.logger.error("wallet_state_failed", error)
+            if !self.isShutdown,
+               self.serverStateMutationRevision == revision,
+               self.latestWalletStateRevision == walletStateRevision,
+               self.activationGeneration == generation,
+               case .wallet = self.currentState.phase {
+                self.replaceState(
+                    phase: self.currentState.phase,
+                    balance: .stale(previous: self.currentState.balance.currentValue, error: .network,
+                        lastSuccessfulAt: self.balanceLastSuccessfulAt),
+                    transactions: self.currentState.transactions,
+                    pendingTransfers: self.currentState.pendingTransfers,
+                    activeOperation: self.currentState.activeOperation
+                )
+            }
             self.scheduleServerStateRetry()
         }
     }
@@ -529,7 +564,8 @@ actor WalletContextImpl {
     func applyServerWalletState(
         _ value: TelegramCore.WalletState,
         forceActivation: Bool = false,
-        refreshIfStreamingUnavailable: Bool = false
+        refreshIfStreamingUnavailable: Bool = false,
+        balanceOverlayRevision: UInt64? = nil
     ) {
         if !forceActivation,
            self.currentState.activeOperation == .creating,
@@ -539,7 +575,8 @@ actor WalletContextImpl {
            pendingPublicKey == publicKey {
             self.deferredServerWalletState = (
                 value,
-                refreshIfStreamingUnavailable || (self.deferredServerWalletState?.refreshIfStreamingUnavailable ?? false)
+                refreshIfStreamingUnavailable || (self.deferredServerWalletState?.refreshIfStreamingUnavailable ?? false),
+                balanceOverlayRevision
             )
             return
         }
@@ -559,7 +596,7 @@ actor WalletContextImpl {
         if self.currentState.activeOperation?.defersServerWalletState == true {
             let shouldRefreshIfStreamingUnavailable = refreshIfStreamingUnavailable
                 || (self.deferredServerWalletState?.refreshIfStreamingUnavailable ?? false)
-            self.deferredServerWalletState = (value, shouldRefreshIfStreamingUnavailable)
+            self.deferredServerWalletState = (value, shouldRefreshIfStreamingUnavailable, balanceOverlayRevision)
             return
         }
         self.deferredServerWalletState = nil
@@ -572,10 +609,16 @@ actor WalletContextImpl {
             )
         }
         if !self.serverStateNeedsActivation,
-           case let .ready(backupEnabled, canExportPhrase, canEnableBackup, address, publicKey, _) = value,
+           case let .ready(backupEnabled, canExportPhrase, canEnableBackup, address, publicKey, serverBalance) = value,
            case let .wallet(currentInfo) = self.currentState.phase,
            walletEngineAddressesEqual(currentInfo.address, address),
            currentInfo.publicKey == publicKey.map({ String(format: "%02x", $0) }).joined() {
+            // A request may only replace streaming values received before it started.
+            // Reapplying cached server state does not invalidate a streaming value.
+            let overlayChanged = balanceOverlayRevision.map {
+                self.streamingPresentationOverlay.clearBalance(through: $0)
+            } ?? false
+            let previousState = self.currentState
             self.replaceState(
                 phase: .wallet(WalletInfo(
                     address: currentInfo.address,
@@ -585,11 +628,14 @@ actor WalletContextImpl {
                     canEnableBackup: canEnableBackup,
                     canSign: currentInfo.canSign
                 )),
-                balance: self.currentState.balance,
+                balance: .value(serverBalance, updatedAt: currentWalletTimestamp()),
                 transactions: self.currentState.transactions,
                 pendingTransfers: self.currentState.pendingTransfers,
                 activeOperation: self.currentState.activeOperation
             )
+            if overlayChanged && self.currentState == previousState {
+                self.publishPresentationState()
+            }
             if refreshIfStreamingUnavailable {
                 self.scheduleWalletStateFallbackRefreshIfNeeded()
             }
@@ -658,11 +704,10 @@ actor WalletContextImpl {
                 activeOperation: nil,
                 gaslessInfo: .idle
             )
-        case let .ready(backupEnabled, canExportPhrase, canEnableBackup, address, publicKey, _):
+        case let .ready(backupEnabled, canExportPhrase, canEnableBackup, address, publicKey, serverBalance):
             let isSameCachedIdentity = self.storedState.walletAddress.map {
                 walletEngineAddressesEqual($0, address)
             } ?? false
-            let previousBalance = isSameCachedIdentity ? self.currentState.balance.currentValue : nil
             let supersededBalance = isSameCachedIdentity ? nil : self.currentState.balance.currentValue
             let archivePreviousWallet = !self.isChangingWalletLocally
             self.observationTask?.cancel()
@@ -674,7 +719,7 @@ actor WalletContextImpl {
             }
             self.replaceState(
                 phase: .restoring,
-                balance: .loading(previous: previousBalance),
+                balance: .value(serverBalance, updatedAt: currentWalletTimestamp()),
                 transactions: isSameCachedIdentity
                     ? self.currentState.transactions
                     : TransactionsState(items: [], offset: 0, canLoadMore: false, isLoadingMore: false, error: nil),
@@ -800,7 +845,7 @@ actor WalletContextImpl {
             let submissions = try await self.storage.loadTransferSubmissions()
             guard !Task.isCancelled, self.activationGeneration == generation else { return }
             self.transferSubmissions.restore(submissions)
-            await self.restoreTransferReceipts(recordId: activation.snapshot.recordId, walletAddress: address, generation: generation)
+            await self.restorePendingTransfers(generation: generation)
             guard !Task.isCancelled, self.activationGeneration == generation else { return }
             self.replaceState(
                 phase: .wallet(info),
@@ -865,7 +910,8 @@ actor WalletContextImpl {
         guard isCompatible else { return }
         self.applyServerWalletState(
             value,
-            refreshIfStreamingUnavailable: deferred.refreshIfStreamingUnavailable
+            refreshIfStreamingUnavailable: deferred.refreshIfStreamingUnavailable,
+            balanceOverlayRevision: deferred.balanceOverlayRevision
         )
     }
 
@@ -873,11 +919,6 @@ actor WalletContextImpl {
         self.observationTask?.cancel()
         self.cancelSynchronization()
         self.runtimeObservationId = UUID()
-        self.collectiblesRevision = WalletEngineCollectiblesRevision()
-        self.balanceTracker = WalletEngineBalanceTracker()
-        if self.currentState.balance.currentValue == nil {
-            self.balanceLastSuccessfulAt = nil
-        }
         self.applyEngineSnapshot(snapshot)
         self.observationTask = Task { [weak self] in
             await self?.observeWallet(snapshot: snapshot, generation: generation)
@@ -904,13 +945,6 @@ actor WalletContextImpl {
     }
 
     func applyEngineSnapshot(_ snapshot: WalletSnapshot) {
-        let balance = self.balanceTracker.observe(
-            snapshot,
-            current: self.currentState.balance,
-            lastSuccessfulAt: self.balanceLastSuccessfulAt,
-            now: currentWalletTimestamp()
-        )
-        self.recordBalanceTimestamp(balance)
         self.reconcileKeyRotation(snapshot.send)
         let reconciledPending = self.reconcilePendingTransfers(snapshot.send)
         let historyReconciliation = self.pendingTransfers(
@@ -929,7 +963,7 @@ actor WalletContextImpl {
         let previousState = self.currentState
         self.replaceState(
             phase: self.currentState.phase,
-            balance: balance,
+            balance: self.currentState.balance,
             transactions: self.currentState.transactions,
             pendingTransfers: historyReconciliation.pendingTransfers,
             activeOperation: self.currentState.activeOperation
@@ -1091,6 +1125,7 @@ actor WalletContextImpl {
         gaslessInfo: Resource<WalletGaslessInfo>? = nil
     ) {
         defer { self.evaluateWalletTransferResolution() }
+        self.recordBalanceTimestamp(balance)
         let expirationResult = self.removingExpiredPendingTransfers(
             pendingTransfers,
             now: currentWalletTimestamp()
@@ -1563,9 +1598,4 @@ func walletEngineBalance(_ nanograms: String) -> Int64? {
 @available(macOS 10.15, *)
 func walletEngineAcceptsSubmission(_ phase: SendPhase) -> Bool {
     phase == .submitted || phase == .submissionUnknown || phase == .confirmed
-}
-
-@available(macOS 10.15, *)
-func walletEngineAcceptsSignHandoff(_ phase: SendPhase) -> Bool {
-    phase == .handedOff
 }

@@ -8,12 +8,55 @@ struct WalletCardVertexOutput {
 
 struct WalletCardShaderUniforms {
     float time;
+    float reflectionRotation;
     float highlightTiltX;
     float highlightTiltY;
     float cornerRadius;
     float2 surfaceTilt;
     float2 cardSize;
 };
+
+struct WalletCardLens {
+    float2 center;
+    float strength;
+    float spin;
+    int count;
+    float4 bounds;
+};
+
+static inline float2 walletCardLensPoint(float2 position, constant WalletCardLens &lens,
+                                       constant float2 *hull) {
+    int n = lens.count;
+    // Most of the card is outside the lens; avoid walking the hull for those pixels.
+    if (n < 3 || lens.strength <= 0.001 || any(position < lens.bounds.xy) || any(position > lens.bounds.zw)) return position;
+    bool inside = false;
+    float best = 1e9;
+    float radius = 0.0;
+    for (int i = 0, j = n - 1; i < n; j = i++) {
+        float2 a = hull[i];
+        float2 b = hull[j];
+        if (((a.y > position.y) != (b.y > position.y)) &&
+            (position.x < (b.x - a.x) * (position.y - a.y) / (b.y - a.y) + a.x)) {
+            inside = !inside;
+        }
+        float2 e = b - a;
+        float h = clamp(dot(position - a, e) / max(dot(e, e), 1e-4), 0.0, 1.0);
+        best = min(best, distance(position, a + e * h));
+        radius = max(radius, distance(a, lens.center));
+    }
+    if (!inside) return position;
+    float edge = smoothstep(0.0, 4.0, best) * lens.strength;
+    float2 d = position - lens.center;
+    float2 q = d / max(radius, 1.0);
+    const float facet = M_PI_F / 4.0;
+    float u = (asin(clamp(q.x, -0.999, 0.999)) - lens.spin) / facet;
+    float wave = sin(M_PI_F * u);
+    float prism = sign(wave) * pow(abs(wave), 0.6);
+    float crown = 1.0 - smoothstep(-0.25, 0.05, q.y);
+    float2 bend = float2(prism * 0.12, mix(-0.08 * q.y, 0.09, crown)) * radius;
+    float zoom = mix(0.84, 0.72, crown * (1.0 - smoothstep(0.2, 0.6, abs(q.x))));
+    return lens.center + d * mix(1.0, zoom, edge) + bend * edge;
+}
 
 struct WalletCardVertexUniforms {
     float4 bottomLeft;
@@ -90,15 +133,18 @@ vertex WalletCardVertexOutput walletCardBackgroundVertex(
 fragment float4 walletCardBackgroundFragment(
     WalletCardVertexOutput input [[stage_in]],
     constant WalletCardShaderUniforms &uniforms [[buffer(0)]],
+    constant WalletCardLens &lens [[buffer(1)]],
+    constant float2 *hull [[buffer(2)]],
     texture2d<float> starsMap [[texture(0)]],
     texture2d<float> noiseMap [[texture(1)]]
 ) {
     constexpr sampler cardSampler(filter::linear, address::clamp_to_edge);
     constexpr sampler noiseSampler(filter::linear, address::repeat);
 
-    float2 uv = input.uv;
     float safeWidth = max(uniforms.cardSize.x, 1.0);
     float safeHeight = max(uniforms.cardSize.y, 1.0);
+    float2 uv = walletCardLensPoint(input.uv * float2(safeWidth, safeHeight), lens, hull)
+        / float2(safeWidth, safeHeight);
 
     float2 cardPosition = float2(
         (uv.x - 0.5) * 2.0,
@@ -123,7 +169,7 @@ fragment float4 walletCardBackgroundFragment(
             radius * waveFrequency
                 + walletCardHash(ringIndex * 0.37) * 6.2831853072
         ) * waveFilter;
-    constexpr float finishVisibility = 1.0;
+    constexpr float finishVisibility = 0.5;
     float radialFinish = (fineFinish - 0.5)
         * finishDetail
         * finishVisibility
@@ -165,7 +211,8 @@ fragment float4 walletCardBackgroundFragment(
         -1.0,
         1.0
     );
-    float reflectionAngle = rotationTurn * 1.5707963268;
+    // Device rotation is clockwise in UIKit; this material uses an upward Y axis.
+    float reflectionAngle = rotationTurn * 1.5707963268 - uniforms.reflectionRotation;
     float sineAngle = sin(reflectionAngle);
     float cosineAngle = cos(reflectionAngle);
     float2 keyDirection = float2(
@@ -251,7 +298,7 @@ fragment float4 walletCardBackgroundFragment(
 
     float2 halfSize = float2(safeWidth, safeHeight) * 0.5;
     float radiusPoints = min(uniforms.cornerRadius, min(halfSize.x, halfSize.y));
-    float2 roundedPoint = abs(uv * float2(safeWidth, safeHeight) - halfSize)
+    float2 roundedPoint = abs(input.uv * float2(safeWidth, safeHeight) - halfSize)
         - (halfSize - radiusPoints);
     float roundedDistance = length(max(roundedPoint, 0.0))
         + min(max(roundedPoint.x, roundedPoint.y), 0.0)

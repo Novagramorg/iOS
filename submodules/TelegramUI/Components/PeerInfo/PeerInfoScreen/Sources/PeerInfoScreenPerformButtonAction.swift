@@ -648,7 +648,7 @@ extension PeerInfoScreenNode {
                         }
                     }
 
-                    if strongSelf.peerId.namespace == Namespaces.Peer.CloudUser, user.id != strongSelf.context.account.peerId, !user.isDeleted, user.botInfo == nil, !user.flags.contains(.isSupport) {
+                    if WalletConfiguration.with(appConfiguration: strongSelf.context.currentAppConfiguration.with { $0 }).isAvailable, strongSelf.peerId.namespace == Namespaces.Peer.CloudUser, user.id != strongSelf.context.account.peerId, !user.isDeleted, user.botInfo == nil, !user.flags.contains(.isSupport) {
                         items.append(.action(ContextMenuActionItem(text: "Send Money", icon: { theme in
                             generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Ton"), color: theme.contextMenu.primaryColor)
                         }, action: { [weak self] _, f in
@@ -657,7 +657,7 @@ extension PeerInfoScreenNode {
                             guard let self, let controller = self.controller, let peer = self.data?.peer, let walletContext = self.context.walletContext else {
                                 return
                             }
-                            let sendController = WalletSendScreen(context: self.context, updatedPresentationData: controller.updatedPresentationData, peer: peer, walletContext: walletContext, displaySuccessToast: false, allowOpenRecipientChat: false, completed: { [weak self] in
+                            let sendController = WalletSendScreen(context: self.context, updatedPresentationData: controller.updatedPresentationData, useDefaultAccent: false, peer: peer, walletContext: walletContext, displaySuccessToast: false, allowOpenRecipientChat: false, completed: { [weak self] in
                                 guard let self, let navigationController = self.controller?.navigationController as? NavigationController else {
                                     return
                                 }

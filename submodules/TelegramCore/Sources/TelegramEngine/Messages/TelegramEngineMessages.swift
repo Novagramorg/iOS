@@ -889,6 +889,10 @@ public extension TelegramEngine {
             return _internal_attachMenuBots(postbox: self.account.postbox)
         }
         
+        public func attachMenuBotsUpdates() -> Signal<[AttachMenuBot], NoError> {
+            return _internal_attachMenuBotsUpdates(postbox: self.account.postbox)
+        }
+        
         public func getBotApp(botId: PeerId, shortName: String, cached: Bool = false) -> Signal<BotApp, GetBotAppError> {
             return _internal_getBotApp(account: self.account, reference: .shortName(peerId: botId, shortName: shortName))
         }

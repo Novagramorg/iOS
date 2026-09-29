@@ -266,7 +266,7 @@ private func autolockStringForTimeout(strings: PresentationStrings, timeout: Int
     }
 }
 
-private func passcodeOptionsControllerEntries(presentationData: PresentationData, state: PasscodeOptionsControllerState, passcodeOptionsData: PasscodeOptionsData) -> [PasscodeOptionsEntry] {
+private func passcodeOptionsControllerEntries(context: AccountContext, presentationData: PresentationData, state: PasscodeOptionsControllerState, passcodeOptionsData: PasscodeOptionsData) -> [PasscodeOptionsEntry] {
     var entries: [PasscodeOptionsEntry] = []
     
     let challenge = state.protection.map { $0.passcode.map { accessChallengeData(reference: $0) } ?? PostboxAccessChallengeData.none } ?? passcodeOptionsData.accessChallenge
@@ -289,20 +289,22 @@ private func passcodeOptionsControllerEntries(presentationData: PresentationData
                         entries.append(.touchId(presentationData.theme, presentationData.strings.PasscodeSettings_UnlockWithFaceId, passcodeOptionsData.presentationSettings.enableBiometrics))
                 }
             }
-            //TODO:localize
-            entries.append(.walletHeader(presentationData.theme, "Lock Wallet".uppercased()))
-            let protectionEnabled = state.protection?.enabled == true
-            
-            let controlsEnabled = !state.protectionUnavailable
-            //TODO:localize
-            entries.append(.walletPasscode(presentationData.theme, "Confirm with Passcode", protectionEnabled, controlsEnabled))
-            if protectionEnabled && (state.canUseBiometrics || state.protection?.biometricsEnabled == true) {
+            if WalletConfiguration.with(appConfiguration: context.currentAppConfiguration.with { $0 }).isAvailable {
                 //TODO:localize
-                let title = state.faceID ? "Confirm with Face ID" : "Confirm with Touch ID"
-                entries.append(.walletBiometrics(presentationData.theme, title, state.protection?.biometricsEnabled == true, controlsEnabled))
+                entries.append(.walletHeader(presentationData.theme, "Lock Wallet".uppercased()))
+                let protectionEnabled = state.protection?.enabled == true
+
+                let controlsEnabled = !state.protectionUnavailable
+                //TODO:localize
+                entries.append(.walletPasscode(presentationData.theme, "Confirm with Passcode", protectionEnabled, controlsEnabled))
+                if protectionEnabled && (state.canUseBiometrics || state.protection?.biometricsEnabled == true) {
+                    //TODO:localize
+                    let title = state.faceID ? "Confirm with Face ID" : "Confirm with Touch ID"
+                    entries.append(.walletBiometrics(presentationData.theme, title, state.protection?.biometricsEnabled == true, controlsEnabled))
+                }
+                //TODO:localize
+                entries.append(.walletInfo(presentationData.theme, "Required when sending funds or confirming other sensitive Wallet actions."))
             }
-            //TODO:localize
-            entries.append(.walletInfo(presentationData.theme, "Required when sending funds or confirming other sensitive Wallet actions."))
     }
     
     return entries
@@ -695,7 +697,7 @@ public func passcodeOptionsController(context: AccountContext, focusOnItemTag: P
         currentAutolockTimeout = passcodeOptionsData.presentationSettings.autolockTimeout
 
         let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text(presentationData.strings.PasscodeSettings_Title), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back), animateChanges: false)
-        let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: passcodeOptionsControllerEntries(presentationData: presentationData, state: state, passcodeOptionsData: passcodeOptionsData), style: .blocks, ensureVisibleItemTag: focusOnItemTag, emptyStateItem: nil, animateChanges: true)
+        let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: passcodeOptionsControllerEntries(context: context, presentationData: presentationData, state: state, passcodeOptionsData: passcodeOptionsData), style: .blocks, ensureVisibleItemTag: focusOnItemTag, emptyStateItem: nil, animateChanges: true)
         
         return (controllerState, (listState, arguments))
     } |> afterDisposed {

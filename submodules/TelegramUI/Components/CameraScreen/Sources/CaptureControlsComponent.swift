@@ -878,6 +878,8 @@ final class CaptureControlsComponent: Component {
         
         private let shutterUpdateOffsetX = ActionSlot<(CGFloat, ComponentTransition)>()
         private let shutterUpdateOffsetY = ActionSlot<(CGFloat, ComponentTransition)>()
+        private let flipButtonAnimationAction = ActionSlot<Void>()
+        private let bottomFlipButtonAnimationAction = ActionSlot<Void>()
         
         private let shutterHightlightedAction = ActionSlot<Bool>()
         
@@ -961,8 +963,8 @@ final class CaptureControlsComponent: Component {
                         component.lockRecording()
                         
                         var blobOffset: CGFloat = 0.0
-                        if let galleryButton = self.galleryButtonView.view {
-                            blobOffset = galleryButton.center.x - self.frame.width / 2.0
+                        if let lockView = self.lockView.view {
+                            blobOffset = lockView.center.x - self.frame.width / 2.0
                         }
                         self.updateShutterOffsetX(blobOffset, transition: .spring(duration: 0.35))
                         
@@ -1060,8 +1062,8 @@ final class CaptureControlsComponent: Component {
                     self.wasBanding = isBanding
                     scheduledYOffsetUpdate = (blobOffset, transition)
                 } else {
-                    if let galleryButton = self.galleryButtonView.view, let flipButton = self.flipButtonView.view {
-                        blobOffset = max(galleryButton.center.x, min(flipButton.center.x, location.x))
+                    if let lockView = self.lockView.view, let flipButton = self.flipButtonView.view {
+                        blobOffset = max(lockView.center.x, min(flipButton.center.x, location.x))
                     }
                     blobOffset -= self.frame.width / 2.0
                     var isBanding = false
@@ -1308,6 +1310,13 @@ final class CaptureControlsComponent: Component {
             }
             
             if !component.isTablet && component.hasAccess {
+                if !isLiveActive {
+                    component.flipAnimationAction.connect { [weak self] _ in
+                        self?.flipButtonAnimationAction.invoke(Void())
+                        self?.bottomFlipButtonAnimationAction.invoke(Void())
+                    }
+                }
+
                 let flipButtonOriginX = availableSize.width - 48.0 - buttonSideInset
                 let flipButtonMaskFrame: CGRect = CGRect(origin: CGPoint(x: availableSize.width / 2.0 - (flipButtonOriginX + 22.0) + 6.0 + self.shutterOffsetX, y: 8.0), size: CGSize(width: 32.0, height: 32.0))
                 
@@ -1319,7 +1328,7 @@ final class CaptureControlsComponent: Component {
                                 id: "flip",
                                 component: AnyComponent(
                                     FlipButtonContentComponent(
-                                        action: component.flipAnimationAction,
+                                        action: self.flipButtonAnimationAction,
                                         maskFrame: flipButtonMaskFrame,
                                         tintColor: component.tintColor
                                     )
@@ -1360,7 +1369,7 @@ final class CaptureControlsComponent: Component {
                             state: .tintedGlass,
                             component: AnyComponentWithIdentity(id: "flip", component: AnyComponent(
                                 FlipButtonContentComponent(
-                                    action: component.flipAnimationAction,
+                                    action: self.bottomFlipButtonAnimationAction,
                                     maskFrame: flipButtonMaskFrame,
                                     tintColor: component.tintColor
                                 )

@@ -250,8 +250,7 @@ final class StarsStatisticsScreenComponent: Component {
                 return false
             }
             let pinnedOffset = max(0.0, panelContainerView.frame.minY - navigationMetrics.navigationHeight)
-            // Section heights can be fractional, while scrolling may settle on a pixel boundary.
-            return abs(scrollBounds.minY - pinnedOffset) <= UIScreenPixel
+            return abs(scrollBounds.minY - pinnedOffset) <= 1.0
         }
 
         private func updateScrolling(transition: ComponentTransition) {

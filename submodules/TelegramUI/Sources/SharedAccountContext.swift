@@ -4215,6 +4215,10 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         return WalletInfoScreen(context: context, mode: mode, completion: completion)
     }
 
+    public func makeWalletInfoScreen(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>), mode: WalletInfoScreenMode, completion: (() -> Void)?) -> ViewController {
+        return WalletInfoScreen(context: context, updatedPresentationData: updatedPresentationData, mode: mode, completion: completion)
+    }
+
     public func makeWalletConnectScreen(context: AccountContext, walletContext: WalletContext, request: WalletContext.TonConnectRequest, cancelled: @escaping () -> Void, connect: @escaping (@escaping (Result<Void, WalletContext.WalletError>) -> Void) -> Void) -> ViewController {
         return WalletConnectScreen(context: context, walletContext: walletContext, request: request, cancelled: cancelled, connect: connect)
     }
@@ -4223,12 +4227,16 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         return WalletTransferScreen(context: context, walletContext: walletContext, request: request, cancelled: cancelled, confirm: confirm)
     }
 
-    public func makeWalletTransactionScreen(context: AccountContext, transaction: WalletContext.Transaction, fromChat: Bool) -> ViewController {
-        return WalletTransactionScreen(context: context, transaction: transaction, fromChat: fromChat)
+    public func makeWalletTransactionScreen(context: AccountContext, transaction: WalletContext.Transaction, fromChat: Bool, decryptCommentOnOpen: Bool) -> ViewController {
+        return WalletTransactionScreen(context: context, transaction: transaction, fromChat: fromChat, decryptCommentOnOpen: decryptCommentOnOpen)
     }
 
-    public func makeWalletTransactionScreen(context: AccountContext, walletContext: WalletContext, transaction: WalletContext.Transaction, fromChat: Bool) -> ViewController {
-        return WalletTransactionScreen(context: context, walletContext: walletContext, transaction: transaction, fromChat: fromChat)
+    public func makeWalletTransactionScreen(context: AccountContext, walletContext: WalletContext, transaction: WalletContext.Transaction, fromChat: Bool, decryptCommentOnOpen: Bool) -> ViewController {
+        return WalletTransactionScreen(context: context, walletContext: walletContext, transaction: transaction, fromChat: fromChat, decryptCommentOnOpen: decryptCommentOnOpen)
+    }
+
+    public func makeWalletTransactionScreen(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>), walletContext: WalletContext, transaction: WalletContext.Transaction, fromChat: Bool, decryptCommentOnOpen: Bool) -> ViewController {
+        return WalletTransactionScreen(context: context, updatedPresentationData: updatedPresentationData, walletContext: walletContext, transaction: transaction, fromChat: fromChat, decryptCommentOnOpen: decryptCommentOnOpen)
     }
 
     public func makeWalletTransactionPreviewScreen(context: AccountContext, walletContext: WalletContext, preparedTransfer: WalletContext.PreparedTransfer, dismissSendScreen: @escaping () -> Void) -> ViewController {
@@ -4240,7 +4248,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         )
     }
 
-    public func makeWalletTransactionPreviewScreen(context: AccountContext, walletContext: WalletContext, address: String, amount: Int64, sendAll: Bool, comment: String?, dismissSendScreen: @escaping () -> Void) -> ViewController {
+    public func makeWalletTransactionPreviewScreen(context: AccountContext, walletContext: WalletContext, address: String, amount: Int64, sendAll: Bool, comment: String?, initialFee: Int64?, dismissSendScreen: @escaping () -> Void) -> ViewController {
         return WalletTransactionPreviewScreen(
             context: context,
             walletContext: walletContext,
@@ -4248,6 +4256,34 @@ public final class SharedAccountContextImpl: SharedAccountContext {
             amount: amount,
             sendAll: sendAll,
             comment: comment,
+            initialFee: initialFee,
+            dismissSendScreen: dismissSendScreen
+        )
+    }
+
+    public func makeWalletTransactionPreviewScreen(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>), walletContext: WalletContext, address: String, amount: Int64, sendAll: Bool, comment: String?, initialFee: Int64?, dismissSendScreen: @escaping () -> Void) -> ViewController {
+        return WalletTransactionPreviewScreen(
+            context: context,
+            updatedPresentationData: updatedPresentationData,
+            walletContext: walletContext,
+            address: address,
+            amount: amount,
+            sendAll: sendAll,
+            comment: comment,
+            initialFee: initialFee,
+            dismissSendScreen: dismissSendScreen
+        )
+    }
+
+    public func makeWalletTransactionPreviewScreen(context: AccountContext, walletContext: WalletContext, address: String, collectible: WalletContext.Collectible, comment: String?, dismissSendScreen: @escaping () -> Void) -> ViewController {
+        return WalletTransactionPreviewScreen(
+            context: context,
+            walletContext: walletContext,
+            address: address,
+            amount: 0,
+            sendAll: false,
+            comment: comment,
+            collectible: collectible,
             dismissSendScreen: dismissSendScreen
         )
     }

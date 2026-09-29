@@ -16,6 +16,9 @@
 #import <MtProtoKit/MTLogging.h>
 #import <MtProtoKit/MTKeychain.h>
 #import "MTInternalInterfaces.h"
+@interface MTContext (CancelPending)
+- (void)cancelPendingActions;
+@end
 
 @interface MTTemporaryKeychain : NSObject<MTKeychain> {
     NSMutableDictionary<NSString *, id> *_dict;
@@ -99,6 +102,7 @@ static NSData *base64_decode(NSString *str) {
     ];
     
     id<EncryptionProvider> encryptionProvider = currentContext.encryptionProvider;
+    __weak MTContext *weakCurrentContext = currentContext;
     
     NSMutableArray *signals = [[NSMutableArray alloc] init];
     for (NSArray *hostAndHostname in hosts) {
@@ -161,7 +165,8 @@ static NSData *base64_decode(NSString *str) {
                     NSMutableData *finalData = [[NSMutableData alloc] initWithData:result];
                     [finalData setLength:256];
                     MTBackupDatacenterData *datacenterData = MTIPDataDecode(encryptionProvider, finalData, phoneNumber);
-                    if (datacenterData != nil && [self checkIpData:datacenterData timestamp:(int32_t)[currentContext globalTime] source:@"resolveGoogle"]) {
+                    __strong MTContext *strongCurrentContext = weakCurrentContext;
+                    if (strongCurrentContext != nil && datacenterData != nil && [self checkIpData:datacenterData timestamp:(int32_t)[strongCurrentContext globalTime] source:@"resolveGoogle"]) {
                         return [MTSignal single:datacenterData];
                     }
                 }
@@ -295,12 +300,14 @@ MTAtomic *sharedFetchConfigKeychains() {
         id requestId = request.internalId;
         return [[MTBlockDisposable alloc] initWithBlock:^{
             [requestService removeRequestByInternalId:requestId];
-            [mtProto pause];
+            [mtProto stop];
+            [context cancelPendingActions];
         }];
     }];
 }
 
 + (MTSignal * _Nonnull)fetchBackupIps:(bool)isTestingEnvironment currentContext:(MTContext * _Nonnull)currentContext additionalSource:(MTSignal * _Nullable)additionalSource phoneNumber:(NSString * _Nullable)phoneNumber mainDatacenterId:(NSInteger)mainDatacenterId {
+    __weak MTContext *weakCurrentContext = currentContext;
     NSMutableArray *signals = [[NSMutableArray alloc] init];
     [signals addObject:[self fetchBackupIpsResolveGoogle:isTestingEnvironment phoneNumber:phoneNumber currentContext:currentContext addressOverride:currentContext.apiEnvironment.accessHostOverride]];
     if (additionalSource != nil) {
@@ -308,7 +315,8 @@ MTAtomic *sharedFetchConfigKeychains() {
             if (![datacenterData isKindOfClass:[MTBackupDatacenterData class]]) {
                 return [MTSignal complete];
             }
-            if (datacenterData != nil && [self checkIpData:datacenterData timestamp:(int32_t)[currentContext globalTime] source:@"resolveExternal"]) {
+            __strong MTContext *strongCurrentContext = weakCurrentContext;
+            if (strongCurrentContext != nil && datacenterData != nil && [self checkIpData:datacenterData timestamp:(int32_t)[strongCurrentContext globalTime] source:@"resolveExternal"]) {
                 return [MTSignal single:datacenterData];
             } else {
                 return [MTSignal complete];
@@ -317,11 +325,12 @@ MTAtomic *sharedFetchConfigKeychains() {
     }
     
     return [[[MTSignal mergeSignals:signals] take:1] mapToSignal:^MTSignal *(MTBackupDatacenterData *data) {
-        if (data != nil && data.addressList.count != 0) {
+        __strong MTContext *strongCurrentContext = weakCurrentContext;
+        if (strongCurrentContext != nil && data != nil && data.addressList.count != 0) {
             NSMutableArray *signals = [[NSMutableArray alloc] init];
             NSTimeInterval delay = 0.0;
             for (MTBackupDatacenterAddress *address in data.addressList) {
-                MTSignal *signal = [self fetchConfigFromAddress:address currentContext:currentContext mainDatacenterId:mainDatacenterId];
+                MTSignal *signal = [self fetchConfigFromAddress:address currentContext:strongCurrentContext mainDatacenterId:mainDatacenterId];
                 if (delay > DBL_EPSILON) {
                     signal = [signal delay:delay onQueue:[[MTQueue alloc] init]];
                 }

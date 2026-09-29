@@ -428,6 +428,13 @@ static void copyKeychainDictionaryKey(NSString * _Nonnull group, NSString * _Non
     }];
 }
 
+- (void)cancelPendingActions
+{
+    [[MTContext contextQueue] dispatchOnQueue:^{
+        [self cleanup];
+    }];
+}
+
 - (void)performBatchUpdates:(void (^)())block
 {
     if (block != nil)
@@ -524,11 +531,12 @@ static void copyKeychainDictionaryKey(NSString * _Nonnull group, NSString * _Non
     [[MTContext contextQueue] dispatchOnQueue:^
     {
         bool alreadyContains = false;
-        for (MTWeakContextChangeListener *value in _changeListeners) {
-            id<MTContextChangeListener> target = value.target;
-            if (target == changeListener) {
+        for (NSInteger i = (NSInteger)_changeListeners.count - 1; i >= 0; i--) {
+            id<MTContextChangeListener> target = _changeListeners[i].target;
+            if (target == nil) {
+                [_changeListeners removeObjectAtIndex:(NSUInteger)i];
+            } else if (target == changeListener) {
                 alreadyContains = true;
-                break;
             }
         }
         

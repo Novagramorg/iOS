@@ -263,18 +263,10 @@ struct WalletTransferData: Sendable {
 }
 
 @available(macOS 10.15, *)
-struct WalletTransferSubmissionResult: Sendable {
-    let pendingTransfer: WalletContext.PendingTransfer
-    let receipt: WalletEngineTransferReceipt?
-    let transaction: WalletContext.Transaction?
-}
-
-@available(macOS 10.15, *)
 struct WalletAPISubmission: Sendable {
-    let pending: WalletContext.PendingTransfer
     let generation: UInt64
     let startedAt: TimeInterval
-    let task: Task<WalletTransferSubmissionResult, Error>
+    let task: Task<WalletContext.PendingTransfer, Error>
 }
 
 @available(macOS 10.15, *)
@@ -313,8 +305,6 @@ func walletTransferResolutionCandidate(_ pending: WalletContext.PendingTransfer,
     }
     guard matches.count == 1, let transaction = matches.first, !transaction.id.isEmpty,
           transaction.status == .failed || transaction.status == .completed else { return nil }
-    // A relayer message can cover several operations, including the same recipient.
-    // Never reuse a transaction already attributed to a different local operation.
     guard !history.contains(where: {
         ($0.id == transaction.id || (transaction.transactionHash != nil && $0.transactionHash == transaction.transactionHash))
             && $0.presentationId.hasPrefix("pending:") && $0.presentationId != "pending:\(pending.id)"
@@ -528,18 +518,15 @@ extension WalletContextImpl {
                 request.start(self.engine.wallet.sendTransfer(dataNormal: data.normal, dataGasless: data.gasless,
                     randomId: randomId, pendingMessage: submittedPending.pendingMessage))
                 return Task {
-                    try await self.submitTransferData(request, recordId: preparedData.recordId,
-                        walletAddress: walletAddress, pending: submittedPending,
-                        generation: generation, requestStartedAt: requestStartedAt)
+                    try await self.submitTransferData(request, pending: submittedPending,
+                        generation: generation, startedAt: startedAt, requestStartedAt: requestStartedAt)
                 }
             }
-            return WalletAPISubmission(pending: submittedPending,
-                generation: generation, startedAt: startedAt, task: task)
+            return WalletAPISubmission(generation: generation, startedAt: startedAt, task: task)
         } catch {
             self.logger.error("wallet_transfer_api_failed", error)
             if case WalletTransferSubmissionError.staleSequenceNumber = error,
                self.pendingTransferRegistrations[pending.id] != nil {
-                // Reuse the same early receipt while the provider catches up.
                 throw error
             }
             if let registration = self.pendingTransferRegistrations[pending.id]?.registration {
@@ -567,67 +554,26 @@ extension WalletContextImpl {
     }
 
     func finishWalletApiSubmission(_ submission: WalletAPISubmission) async throws -> PendingTransfer {
-        let pending = submission.pending
         let generation = submission.generation
-        defer {
-            let event = self.transferSubmissions.entries[pending.id]?.confirmed == true ? "wallet_transfer_late_response" : "wallet_transfer_rpc_finished"
-            self.logger.log("event=\(event) operation_id=\(pending.id) elapsed_ms=\(Int((ProcessInfo.processInfo.systemUptime - submission.startedAt) * 1000.0))")
-            self.transferSubmissions.finishedRPC(pending.id)
-        }
-        let result = try await submission.task.value
+        let accepted = try await submission.task.value
         guard !self.isShutdown, self.activationGeneration == generation else {
             throw WalletError.unavailable
-        }
-        let accepted = acceptedWalletTransferSubmission(
-            pending: self.latestPendingTransfer(result.pendingTransfer),
-            messageHash: nil,
-            phase: self.transferSubmissions.entries[pending.id]?.confirmed == true ? .confirmed : (result.receipt == nil ? .submissionUnknown : .submitted),
-            acceptedAt: result.receipt?.receivedAt ?? currentWalletTimestamp(),
-            sentTransfer: result.receipt?.transfer
-        ) ?? result.pendingTransfer
-        self.preparedTransfers[pending.id] = nil
-        let candidate = result.transaction ?? accepted.sentTransfer.flatMap {
-            self.cachedWalletTransferTransaction(accepted, msgHash: $0.msgHash)
-        }
-        let finalTransaction = accepted.status == .confirmed && candidate?.status == .failed ? nil : candidate
-        if let finalTransaction {
-            await self.applyWalletFinalTransaction(finalTransaction, pending: accepted, generation: generation)
-            guard !self.isShutdown, self.activationGeneration == generation else { throw WalletError.unavailable }
-            if let sent = accepted.sentTransfer {
-                self.rememberWalletFinalTransaction(finalTransaction, msgHash: sent.msgHash)
-            }
-            self.requestSynchronization(scope: [.account], force: true)
-            if finalTransaction.status == .failed { throw WalletSendTransferError.sendFailed }
-            return walletTransferConfirmed(accepted, transaction: finalTransaction)
-        }
-        if let receipt = result.receipt {
-            self.trackWalletTransferResolution(accepted, receivedAt: receipt.receivedAt)
-        }
-        var values = self.currentState.pendingTransfers.filter { $0.id != accepted.id }
-        values.append(accepted)
-        self.resolveStreamingPendingMessage(accepted)
-        let reconciliation = self.pendingTransfers(values, reconcilingWith: self.currentState.transactions.items)
-        self.replaceState(
-            phase: self.currentState.phase,
-            balance: self.currentState.balance,
-            transactions: self.currentState.transactions,
-            pendingTransfers: reconciliation.pendingTransfers,
-            activeOperation: self.currentState.activeOperation
-        )
-        if result.receipt == nil || self.streamingConnectionState != .subscribed {
-            self.requestSynchronization(scope: [.account, .transactions], force: true)
         }
         return accepted
     }
 
     private func submitTransferData(
         _ request: WalletSignalRequestContext<WalletSendTransferResult>,
-        recordId: String,
-        walletAddress: String,
         pending: PendingTransfer,
         generation: UInt64,
+        startedAt: TimeInterval,
         requestStartedAt: TimeInterval
-    ) async throws -> WalletTransferSubmissionResult {
+    ) async throws -> PendingTransfer {
+        defer {
+            let event = self.transferSubmissions.entries[pending.id]?.confirmed == true ? "wallet_transfer_late_response" : "wallet_transfer_rpc_finished"
+            self.logger.log("event=\(event) operation_id=\(pending.id) elapsed_ms=\(Int((ProcessInfo.processInfo.systemUptime - startedAt) * 1000.0))")
+            self.transferSubmissions.finishedRPC(pending.id)
+        }
         let pendingMessage = pending.pendingMessage
         let clock = self.transferSubmissionClock
         let response: WalletSendTransferResult?
@@ -679,14 +625,14 @@ extension WalletContextImpl {
         } catch {
             response = nil
         }
+        guard !self.isShutdown, self.activationGeneration == generation else { throw WalletError.unavailable }
         let transfer = response?.transfer
-        let finalTransaction = response?.transaction.flatMap { walletTransactions(from: [$0]).first }
         if let transfer {
-            self.logger.log("event=wallet_transfer_receipt operation_id=\(pending.id) msg_hash=\(transfer.msgHash) gasless=\(transfer.gasless ? 1 : 0)")
+            self.logger.log("event=wallet_transfer_accepted operation_id=\(pending.id) msg_hash=\(transfer.msgHash) gasless=\(transfer.gasless ? 1 : 0)")
         }
         let receivedAt = currentWalletTimestamp()
         guard let accepted = acceptedWalletTransferSubmission(
-            pending: self.activationGeneration == generation ? self.latestPendingTransfer(pending) : pending,
+            pending: self.latestPendingTransfer(pending),
             messageHash: nil,
             phase: self.transferSubmissions.entries[pending.id]?.confirmed == true ? .confirmed : (transfer == nil ? .submissionUnknown : .submitted),
             acceptedAt: receivedAt,
@@ -694,25 +640,43 @@ extension WalletContextImpl {
         ) else {
             throw WalletContext.WalletError.unavailable
         }
-        let receipt = transfer.map {
-            WalletEngineTransferReceipt(
-                recordId: recordId,
-                walletAddress: walletAddress,
-                pendingTransfer: accepted,
-                receivedAt: receivedAt,
-                transfer: $0,
-                transaction: accepted.status == .confirmed && finalTransaction?.status == .failed
-                    ? nil : finalTransaction.map(WalletStoredTransaction.init)
-            )
-        }
-        if let receipt {
-            do {
-                try await self.storage.saveTransferReceipt(receipt)
-            } catch {
-                self.logger.error("wallet_transfer_receipt_save_failed", error)
+        self.preparedTransfers[pending.id] = nil
+        let candidate = walletHistoryTransactionForPending(accepted, transactions: self.currentState.transactions.items)
+            ?? response?.transaction.flatMap { walletTransactions(from: [$0]).first }
+            ?? accepted.sentTransfer.flatMap { self.cachedWalletTransferTransaction(accepted, msgHash: $0.msgHash) }
+        let finalTransaction = accepted.status == .confirmed && candidate?.status == .failed ? nil : candidate
+        if let finalTransaction {
+            await self.applyWalletFinalTransaction(finalTransaction, pending: accepted, generation: generation, source: "send_response")
+            guard !self.isShutdown, self.activationGeneration == generation else { throw WalletError.unavailable }
+            if let sent = accepted.sentTransfer {
+                self.rememberWalletFinalTransaction(finalTransaction, msgHash: sent.msgHash)
             }
+            self.requestSynchronization(scope: [.account], force: true)
+            try await self.persistWalletTransferState(generation: generation)
+            if finalTransaction.status == .failed { throw WalletSendTransferError.sendFailed }
+            return walletTransferConfirmed(accepted, transaction: finalTransaction)
         }
-        return WalletTransferSubmissionResult(pendingTransfer: accepted, receipt: receipt, transaction: finalTransaction)
+        self.trackWalletTransferResolution(accepted, receivedAt: receivedAt)
+        var values = self.currentState.pendingTransfers.filter { $0.id != accepted.id }
+        values.append(accepted)
+        self.resolveStreamingPendingMessage(accepted)
+        let reconciliation = self.pendingTransfers(values, reconcilingWith: self.currentState.transactions.items)
+        self.replaceState(
+            phase: self.currentState.phase, balance: self.currentState.balance,
+            transactions: self.currentState.transactions, pendingTransfers: reconciliation.pendingTransfers,
+            activeOperation: self.currentState.activeOperation
+        )
+        if transfer == nil || self.streamingConnectionState != .subscribed {
+            self.requestSynchronization(scope: [.account, .transactions], force: true)
+        }
+        try await self.persistWalletTransferState(generation: generation)
+        return accepted
+    }
+
+    func persistWalletTransferState(generation: UInt64) async throws {
+        guard !self.isShutdown, self.activationGeneration == generation,
+              await self.storedStateWriter.storeAndWait(self.storedState, revision: self.storedStateMutationRevision),
+              !self.isShutdown, self.activationGeneration == generation else { throw WalletError.unavailable }
     }
 
     func trackWalletTransferResolution(_ pending: PendingTransfer, receivedAt: Int32? = nil) {
@@ -743,7 +707,6 @@ extension WalletContextImpl {
             return
         }
         guard let deadline = (self.walletTransferResolutions.values.map(\.nextAttemptAt) + remoteDeadlines).min() else {
-            // A running request may still be applying the rest of a transaction batch.
             if self.walletTransferResolutionScheduledAt != nil {
                 self.cancelWalletTransferResolution()
             }
@@ -814,20 +777,6 @@ extension WalletContextImpl {
                         self.walletTransferResolutions[id] = nil
                         continue
                     }
-                } else if pending.transactionHash != nil {
-                    let unresolved: Bool
-                    if let reference = pending.pendingMessage {
-                        unresolved = try await WalletSignalRequestContext<Bool>().run(
-                            self.engine.wallet.hasUnresolvedPendingTransferMessage(reference) |> castError(WalletError.self)
-                        )
-                    } else {
-                        unresolved = false
-                    }
-                    guard self.isCurrentWalletTransferResolution(generation) else { return }
-                    if !unresolved {
-                        self.walletTransferResolutions[id] = nil
-                        continue
-                    }
                 }
                 unresolvedIds.append(id)
             }
@@ -873,12 +822,15 @@ extension WalletContextImpl {
     private func applyWalletTransferResolution(operationId: String, transaction: Transaction, generation: UInt64) async throws -> Bool {
         guard self.isCurrentWalletTransferResolution(generation),
               let pending = self.pendingWalletTransferResolution(operationId) else { return false }
-        if let knownHash = pending.transactionHash, let hash = transaction.transactionHash, knownHash != hash { return false }
+        if transaction.status == .failed,
+           pending.status == .confirmed || self.transferSubmissions.entries[pending.id]?.confirmed == true {
+            return false
+        }
         await self.applyWalletFinalTransaction(transaction, pending: pending, generation: generation, source: "transfer_resolution")
         return !self.isShutdown && self.activationGeneration == generation
     }
 
-    func applyWalletFinalTransaction(_ transaction: Transaction, pending: PendingTransfer?, generation: UInt64, source: String = "transfer_receipt") async {
+    func applyWalletFinalTransaction(_ transaction: Transaction, pending: PendingTransfer?, generation: UInt64, source: String = "transfer_resolution") async {
         guard !self.isShutdown, self.activationGeneration == generation, !transaction.id.isEmpty else { return }
         if transaction.status == .failed, let pending,
            pending.status == .confirmed || self.transferSubmissions.entries[pending.id]?.confirmed == true {
@@ -931,7 +883,6 @@ extension WalletContextImpl {
         self.logPendingTransferHistoryReconciliation(reconciliation, removedStreamingTraceCount: removed)
         if let reference = pending?.pendingMessage,
            case let .user(peer, _, _) = transaction.peer, peer.id.toInt64() == reference.peerId {
-            // Message reconciliation is local and must not turn a final transfer into a network failure.
             do {
                 try await WalletSignalRequestContext<Void>().run(
                     self.engine.wallet.resolvePendingTransferMessage(reference, transactionId: transaction.id, failed: transaction.status == .failed)

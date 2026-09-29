@@ -337,12 +337,15 @@ real shipped bug, not a hypothetical: see "Content offsets" in
 `docs/chat/corelist-chat-history-backend.md`.
 
 `visibleRectUpdated(_:)` on `CoreListItemView` pushes each loaded row the part of itself inside the
-viewport, in the row's own coordinate space, or `nil` when it is not visible. It fires at the end of
-`render()` and at the end of `handleUserScroll` — the two points the window is maintained — using the
-projection `rebalanceActiveWindow` uses (settled frames at the live engine offset), against the FULL
+viewport, in the row's own coordinate space, or `nil` when it is not visible. It fires after the final
+engine offset is installed in `applyChanges` and `rebuildFromScratch`, and at the end of
+`handleUserScroll`, using the projection `rebalanceActiveWindow` uses (settled frames at the live
+engine offset), against the FULL
 viewport rect: inset space is visible, interactive list space. During a programmatic animated viewport
 move it therefore reports the destination, which is the window that pass already loaded; there is no
-display link here to sample an in-flight animation. A row leaving the live window is notified `nil`
+display link here to sample an in-flight animation. Do not publish from `render()`: mutation passes
+have installed the new window there but still carry the old engine offset, so destination rows can
+remain incorrectly invisible until the next user scroll. A row leaving the live window is notified `nil`
 by one uniform rule — the notifier holds weak references to the views it last reported visible — which
 covers rebalance unloads, ghost-block members and the transient exit-overlay carry alike. It has a
 default no-op, so item views opt in. `CoreListNodeHostView` (TelegramUI) maps it onto

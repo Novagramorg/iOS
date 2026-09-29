@@ -165,6 +165,7 @@ public struct Namespaces {
         public static let cachedCurrencyRates: Int8 = 56
         public static let cachedExistingWaltBalance: Int8 = 57
         public static let notificationRequestMessageIds: Int8 = 58
+        public static let cachedWalletUserAddresses: Int8 = 59
     }
     
     public struct UnorderedItemList {

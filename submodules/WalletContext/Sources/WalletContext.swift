@@ -530,24 +530,28 @@ public final class WalletContext {
 public struct WalletConfiguration: Equatable, Sendable {
     public static var defaultValue: WalletConfiguration {
         return WalletConfiguration(
-            explorerUrl: "https://tonviewer.com",
+            isAvailable: false,
+            explorerUrl: "https://tonscan.org",
             transferMinAmount: 100_000_000,
             transferGaslessMinAmount: 100_000_000,
             transferGaslessDailyLimit: 5
         )
     }
 
+    public let isAvailable: Bool
     public let explorerUrl: String
     public let transferMinAmount: Int64
     public let transferGaslessMinAmount: Int64
     public let transferGaslessDailyLimit: Int32
 
     private init(
+        isAvailable: Bool,
         explorerUrl: String,
         transferMinAmount: Int64,
         transferGaslessMinAmount: Int64,
         transferGaslessDailyLimit: Int32
     ) {
+        self.isAvailable = isAvailable
         self.explorerUrl = explorerUrl
         self.transferMinAmount = transferMinAmount
         self.transferGaslessMinAmount = transferGaslessMinAmount
@@ -555,6 +559,7 @@ public struct WalletConfiguration: Equatable, Sendable {
     }
 
     public static func with(appConfiguration: AppConfiguration) -> WalletConfiguration {
+        let isAvailable = appConfiguration.data?["wallet_available"] as? Bool ?? self.defaultValue.isAvailable
         var explorerUrl = self.defaultValue.explorerUrl
         if let value = appConfiguration.data?["ton_blockchain_explorer_url"] as? String {
             explorerUrl = value
@@ -574,6 +579,7 @@ public struct WalletConfiguration: Equatable, Sendable {
             transferGaslessDailyLimit = Int32(value)
         }
         return WalletConfiguration(
+            isAvailable: isAvailable,
             explorerUrl: explorerUrl,
             transferMinAmount: transferMinAmount,
             transferGaslessMinAmount: transferGaslessMinAmount,

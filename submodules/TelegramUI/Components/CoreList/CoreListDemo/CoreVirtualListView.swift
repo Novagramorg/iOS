@@ -586,6 +586,9 @@ public final class CoreVirtualListView: UIView {
     public var onLoadedEdgeReached: ((CoreListLoadedEdge) -> Void)?
 
     // Embedding seam (used by the TelegramUI ChatHistoryListViewBackend adapter).
+    // User-driven offset delta (drag/momentum/bounce), before window rebasing. Programmatic
+    // shifts are excluded. Timestamp is monotonic wall time; observers must not mutate the list.
+    public var onUserScrollDelta: ((_ delta: CGFloat, _ timestamp: CFTimeInterval) -> Void)?
     // Fired after each user-scroll rebalance so a host can recompute its visible index range.
     public var onVisibleWindowChanged: (() -> Void)?
     // Fired when the user starts an interactive drag (the scroll engine's pan reaches `.began`); not
@@ -1667,6 +1670,9 @@ public final class CoreVirtualListView: UIView {
         // attachment solve consumes the offset, so a header parked against the pre-pass value lands
         // a whole inset-change away from where it belongs.
         renderAttachments()
+        // Visibility also depends on the final offset. Publishing it from render() would combine
+        // the new window with the old offset and leave destination rows paused after a scrollTo.
+        notifyVisibleRects()
 
         for item in newWindow.items {
             let identity = effectiveItems[item.index].identity
@@ -2358,7 +2364,10 @@ public final class CoreVirtualListView: UIView {
     }
 
     private func rebuildFromScratch() {
-        defer { refreshReachedLoadedEdges() }
+        defer {
+            notifyVisibleRects()
+            refreshReachedLoadedEdges()
+        }
         engine.haltMotionInPlace()
         resetViewportCarries()
         animationController.reset()
@@ -2591,12 +2600,14 @@ public final class CoreVirtualListView: UIView {
     }
 
     private func handleUserScroll(_ currentY: CGFloat) {
+        let timestamp = CACurrentMediaTime()
         var delta = currentY - previousOffset
         if abs(delta) > logicalSize.height {
             delta = logicalSize.height * (delta > 0 ? 1 : -1)
             engine.setOffset(previousOffset + delta)
         }
         previousOffset = engine.offset
+        onUserScrollDelta?(delta, timestamp)
         rebalanceActiveWindow()
         refreshReachedLoadedEdges()
         // The floating clamp is viewport-dependent, and `rebalanceActiveWindow` runs `render()` only
@@ -2604,9 +2615,8 @@ public final class CoreVirtualListView: UIView {
         // otherwise never re-solve. The solve is a pure function of the settled window and the
         // offset, so running it again after a rebalance that DID render is an exact no-op.
         renderAttachments()
-        // Before the host callback, so a host reacting to it already sees fresh row visibility. A
-        // scroll that leaves the window untouched runs no render(), so this is the only path that
-        // reports the new rects.
+        // After any rebase and before the host callback, so the host sees final row visibility
+        // whether or not the loaded window changed.
         notifyVisibleRects()
         onVisibleWindowChanged?()
     }
@@ -3166,9 +3176,8 @@ public final class CoreVirtualListView: UIView {
         declaredEdges = (edges.min, edges.max)
         shiftExitOverlayChildren(by: engine.offset - offsetBeforeEdges)
         containerOriginY = newOriginY
-        // After the assignment above: both the attachment solve and the notifier project against it.
+        // The caller publishes visibility after it also settles the engine offset.
         renderAttachments()
-        notifyVisibleRects()
     }
 
     private func settledState(_ window: Window,

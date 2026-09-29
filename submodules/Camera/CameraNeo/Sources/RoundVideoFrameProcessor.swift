@@ -169,8 +169,8 @@ private final class RoundVideoMetalDecoration {
 }
 
 final class RoundVideoFrameProcessor {
-    static let outputWidth = 400
-    static let outputHeight = 400
+    static let outputWidth = 480
+    static let outputHeight = 480
 
     private let device: MTLDevice
     private let mediaQueue: DispatchQueue

@@ -147,7 +147,13 @@ public extension WalletContext {
             self.lastUsedAt = lastUsedAt
         }
     }
-
+    
+    enum WalletAccountState: Equatable {
+        case active
+        case undeployed
+        case unavailable
+    }
+    
     struct WalletInfo: Equatable, Sendable {
         public let address: String
         public let publicKey: String
@@ -475,8 +481,9 @@ public extension WalletContext {
 
             public let address: String
             public let name: String
-            public let imageUrl: String?
-            public let lottieUrl: String?
+            public let image: WalletNftFile?
+            public let thumbnail: WalletNftFile?
+            public let lottie: WalletNftFile?
             public let collectionName: String?
             public let collectionUrl: String?
             public let kind: Kind
@@ -484,16 +491,18 @@ public extension WalletContext {
             public init(
                 address: String,
                 name: String,
-                imageUrl: String?,
-                lottieUrl: String? = nil,
+                image: WalletNftFile?,
+                thumbnail: WalletNftFile? = nil,
+                lottie: WalletNftFile? = nil,
                 collectionName: String? = nil,
                 collectionUrl: String? = nil,
                 kind: Kind
             ) {
                 self.address = address
                 self.name = name
-                self.imageUrl = imageUrl
-                self.lottieUrl = lottieUrl
+                self.image = image
+                self.thumbnail = thumbnail
+                self.lottie = lottie
                 self.collectionName = collectionName
                 self.collectionUrl = collectionUrl
                 self.kind = kind
@@ -610,66 +619,82 @@ public extension WalletContext {
 
         public let address: String
         public let name: String
-        public let imageUrl: String?
         public let subtitle: String
         public let kind: Kind
         public let description: String?
-        public let lottieUrl: String?
         public let collectionName: String?
         public let collectionUrl: String?
         public let attributes: [String: String]
         public let giftSlug: String?
+        // Optional for caches written before the server NFT API. Legacy URL
+        // keys are deliberately not decoded or used to create media resources.
+        public let nft: WalletNftItem?
+
+        public var image: WalletNftFile? { self.nft?.image ?? self.nft?.imageSmall }
+        public var thumbnail: WalletNftFile? { self.nft?.imageSmall ?? self.nft?.image }
+        public var lottie: WalletNftFile? { self.nft?.lottie }
 
         public init(
             address: String,
             name: String,
-            imageUrl: String?,
             subtitle: String = "NFT",
             kind: Kind = .other,
             description: String? = nil,
-            lottieUrl: String? = nil,
             collectionName: String? = nil,
             collectionUrl: String? = nil,
             attributes: [String: String] = [:],
-            giftSlug: String? = nil
+            giftSlug: String? = nil,
+            nft: WalletNftItem? = nil
         ) {
             self.address = address
             self.name = name
-            self.imageUrl = imageUrl
             self.subtitle = subtitle
             self.kind = kind
             self.description = description
-            self.lottieUrl = lottieUrl
             self.collectionName = collectionName
             self.collectionUrl = collectionUrl
             self.attributes = attributes
             self.giftSlug = giftSlug
+            self.nft = nft
         }
     }
 
     struct CollectiblesState: Equatable, Sendable {
+        public struct PageId: Equatable, Sendable {
+            public let offset: String
+            public let generation: UInt64
+        }
+
         public let items: [Collectible]
-        public let offset: Int
-        public let canLoadMore: Bool
+        public let nextOffset: String?
+        public let generation: UInt64
+        public let isRefreshing: Bool
         public let isLoadingMore: Bool
         public let error: SynchronizationError?
 
+        public var canLoadMore: Bool { self.nextOffset != nil }
+        public var nextPage: PageId? {
+            return self.nextOffset.map { PageId(offset: $0, generation: self.generation) }
+        }
+
         public init(
             items: [Collectible],
-            offset: Int,
-            canLoadMore: Bool,
+            nextOffset: String?,
+            generation: UInt64 = 0,
+            isRefreshing: Bool = false,
             isLoadingMore: Bool,
             error: SynchronizationError?
         ) {
             self.items = items
-            self.offset = offset
-            self.canLoadMore = canLoadMore
+            self.nextOffset = nextOffset
+            self.generation = generation
+            self.isRefreshing = isRefreshing
             self.isLoadingMore = isLoadingMore
             self.error = error
         }
 
         public static var empty: CollectiblesState {
-            return CollectiblesState(items: [], offset: 0, canLoadMore: false, isLoadingMore: false, error: nil)
+            return CollectiblesState(items: [], nextOffset: nil, isLoadingMore: false, error: nil)
         }
     }
 
@@ -958,6 +983,7 @@ public extension WalletContext {
         case preparedTransferExpired
         case preparedTransferNotFound
         case walletKeyMismatch
+        case recoveryPhraseOutdated
         case network
         case requestPassword
         case invalidPassword
@@ -1051,9 +1077,9 @@ extension WalletContext.Resource: Sendable where Value: Sendable {
 extension WalletContext.ActiveOperation {
     var defersServerWalletState: Bool {
         switch self {
-        case .creating, .importing, .preparingRecoveryPhraseImport, .completingRecoveryPhraseImport, .disablingBackup:
+        case .creating, .importing, .preparingRecoveryPhraseImport, .completingRecoveryPhraseImport, .enablingBackup, .disablingBackup:
             return true
-        case .recoveringPhrase, .enablingBackup, .preparingBackupDisable,
+        case .recoveringPhrase, .preparingBackupDisable,
              .preparingTransfer, .submittingTransfer, .tonConnect, .decryptingComment, .loadingMoreTransactions, .loadingMoreCollectibles:
             return false
         }

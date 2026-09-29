@@ -7,6 +7,87 @@ import ComponentFlow
 import ComponentDisplayAdapters
 import ChatMessageItem
 import ChatMessageItemImpl
+import ChatMessageItemView
+
+// Shared by the chat's diamonds; their existing animation clocks advance this spring on demand.
+// All inputs are user-scroll deltas in screen coordinates, with downward content movement positive.
+private final class CoreListChatScrollMotion {
+    var holding = false
+    private var pendingDelta: CGFloat = 0.0
+    private var reported: CFTimeInterval?
+    private var rate: CGFloat = 0.0
+    private var stepped: CFTimeInterval?
+    private var velocity: CGFloat = 0.0
+    private var tiltValue: CGFloat = 0.0
+    private var tiltSpeed: CGFloat = 0.0
+    private var hold: CGFloat = 0.0
+
+    func report(delta: CGFloat, at time: CFTimeInterval) {
+        self.pendingDelta += delta
+        guard let reported = self.reported else {
+            self.reported = time
+            self.pendingDelta = 0.0
+            return
+        }
+        let dt = time - reported
+        guard dt > 0.0005 else { return }
+        let rate = self.pendingDelta / CGFloat(min(dt, 0.1))
+        self.rate += (rate - self.rate) * min(1.0, CGFloat(dt) * 40.0)
+        self.pendingDelta = 0.0
+        self.reported = time
+    }
+
+    func tilt(at time: CFTimeInterval) -> Float {
+        if let reported = self.reported, time - reported > 0.06 {
+            self.rate = 0.0
+        }
+        guard let stepped = self.stepped else {
+            self.stepped = time
+            return Float(self.tiltValue)
+        }
+        let raw = time - stepped
+        guard raw > 0.001 else { return Float(self.tiltValue) }
+        self.stepped = time
+        if raw > 0.2 {
+            // No diamond has sampled us recently. Drop the old oscillation, keeping fresh input.
+            self.resetOscillation()
+            return 0.0
+        }
+
+        let dt = CGFloat(min(raw, 0.05))
+        self.hold += ((self.holding ? 1.0 : 0.0) - self.hold) * min(1.0, dt * 8.0)
+        self.velocity += (self.rate - self.velocity) * min(1.0, dt * (18.0 - 9.0 * self.hold))
+        let target = 0.5 * tanh(self.velocity / 520.0)
+        let a = min(max((abs(target) - 0.05) / 0.15, 0.0), 1.0)
+        let drive = a * a * (3.0 - 2.0 * a)
+        let damping: CGFloat = 0.13 + 0.75 * drive
+        let frequency: CGFloat = 2.0 * .pi * (1.25 - 0.2 * drive)
+        var remaining = dt
+        while remaining > 0.0 {
+            let step = min(remaining, 1.0 / 240.0)
+            self.tiltSpeed += (frequency * frequency * (target - self.tiltValue) - 2.0 * damping * frequency * self.tiltSpeed) * step
+            self.tiltValue += self.tiltSpeed * step
+            remaining -= step
+        }
+        return Float(self.tiltValue)
+    }
+
+    func reset() {
+        self.holding = false
+        self.pendingDelta = 0.0
+        self.reported = nil
+        self.rate = 0.0
+        self.stepped = nil
+        self.resetOscillation()
+    }
+
+    private func resetOscillation() {
+        self.velocity = 0.0
+        self.tiltValue = 0.0
+        self.tiltSpeed = 0.0
+        self.hold = 0.0
+    }
+}
 
 // CoreList cannot depend on ComponentFlow — its Bazel target has no `deps` and its demo builds
 // standalone in Xcode — so it carries a case-for-case copy of the transition value model. This is
@@ -71,6 +152,12 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
     // Internal rather than private: the header adapter in CoreListChatHistoryHeaders.swift
     // enumerates attachments through it. Still invisible outside TelegramUI.
     let coreList: CoreVirtualListView
+
+    private let scrollMotion = CoreListChatScrollMotion()
+    fileprivate lazy var scrollTiltProvider: (CFTimeInterval) -> Float = { [weak self] time in
+        guard let self, !self.globalIgnoreScrollingEvents else { return 0.0 }
+        return self.scrollMotion.tilt(at: time)
+    }
 
     // Ordered entry array: the source of truth for what CoreVirtualListView displays. Mirrors the
     // ListView transaction model (delete/insert/update over indices) with a stable serial per entry
@@ -222,6 +309,9 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
         didSet {
             if self.globalIgnoreScrollingEvents != oldValue {
                 self.coreList.isUserInteractionEnabled = !self.globalIgnoreScrollingEvents
+                if self.globalIgnoreScrollingEvents {
+                    self.scrollMotion.reset()
+                }
             }
         }
     }
@@ -586,6 +676,11 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
         let _ = self.view
         self.view.addSubview(self.coreList)
 
+        self.coreList.onUserScrollDelta = { [weak self] delta, timestamp in
+            guard let self, !self.globalIgnoreScrollingEvents else { return }
+            self.scrollMotion.report(delta: self.rotated ? delta : -delta, at: timestamp)
+        }
+
         // Report visible-range and content-offset changes so the history controller paginates and the
         // chat chrome tracks the scroll. Reading the callbacks off `self` at call time picks up
         // whatever the controller has since assigned.
@@ -646,6 +741,7 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
             }
             self.didMoveContentDuringDrag = false
             self.isTracking = true
+            self.scrollMotion.holding = !self.globalIgnoreScrollingEvents
             self.noteHeaderFlashingActivity()
 
             func cancelContextGestures(view: UIView) {
@@ -678,6 +774,7 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
         self.coreList.didEndDragging = { [weak self] in
             guard let self else { return }
             self.isTracking = false
+            self.scrollMotion.holding = false
 
             let isDecelerating = self.coreList.isScrollFlightActive
             // `contentOffset.y < -48.0` (ListView.swift:913) against the near edge. Its only consumer is
@@ -1978,6 +2075,7 @@ private final class CoreListNodeHostView: UIView, CoreListItemView {
         }
         self.lastWidth = width
         self.contentDirty = false
+        (self.itemNode as? ChatMessageItemView)?.scrollTiltProvider = self.backend?.scrollTiltProvider
         // A rect may have arrived before this node existed, and a relayout can change the insets the
         // fraction divides by, so re-derive visibility from the rect we hold.
         self.applyVisibility()

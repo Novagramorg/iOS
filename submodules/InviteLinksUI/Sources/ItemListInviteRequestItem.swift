@@ -734,7 +734,7 @@ public class ItemListInviteRequestItemNode: ListViewItemNode, ItemListItemNode {
                     strongSelf.avatarNode.frame = avatarFrame
                     
                     if let importer = item.importer, let peer = importer.peer.peer.flatMap({ EnginePeer($0) }) {
-                        strongSelf.avatarNode.setPeer(context: item.context, theme: item.presentationData.theme, peer: peer, overrideImage: nil, emptyColor: item.presentationData.theme.list.mediaPlaceholderColor, synchronousLoad: false, storeUnrounded: true)
+                        strongSelf.avatarNode.setPeer(context: item.context, theme: item.presentationData.theme, peer: peer, overrideImage: peer.isDeleted ? .deletedIcon : nil, emptyColor: item.presentationData.theme.list.mediaPlaceholderColor, synchronousLoad: false, storeUnrounded: true)
                     }
                     
                     transition.updateFrame(node: strongSelf.titleNode, frame: CGRect(origin: CGPoint(x: leftInset, y: verticalInset), size: titleLayout.size))

@@ -193,14 +193,10 @@ func mergeTransactions(
     let identityIndex = WalletTransactionIdentityIndex(transactions)
     let values = identityIndex.groups.map { indices -> WalletContext.Transaction in
         let current = transactions[indices[0]]
-        // A fresh API response owns the transaction data, including zero fees and
-        // absent comments. Within one batch (or an old cache), keep the first row.
         let preferredIndex = indices.first(where: { $0 >= existing.count }) ?? indices[0]
         let preferred = transactions[preferredIndex]
         let preservePresentationId = current.presentationId != current.id
             || walletIncomingTransactionIdentity(current) != nil
-        // Only carry a missing hash across the same API id, never across an LT
-        // match whose old hash may be precisely the stale data being replaced.
         let fallbackHash = indices.lazy.map { transactions[$0] }.first {
             !$0.id.isEmpty && $0.id == preferred.id && $0.transactionHash != nil
         }?.transactionHash
@@ -257,15 +253,12 @@ func transactionsWithStreamingOverlay(
     peerByAddress: [String: EnginePeer],
     log: ((String) -> Void)? = nil
 ) -> [WalletContext.Transaction] {
-    let resolved = streaming.map { transaction in
-        transactionWithResolvedStreamingPeer(
+    return mergeTransactions(existing: [], new: authoritative + streaming, source: "presentation", log: log).map { transaction in
+        transactionWithResolvedPeer(
             transaction,
             peerByAddress: peerByAddress
         )
     }
-    // Put authoritative rows first so the overlay cannot change their data or
-    // presentation identity, even when it arrives after the history response.
-    return mergeTransactions(existing: [], new: authoritative + resolved, source: "presentation", log: log)
 }
 
 @available(macOS 10.15, *)
@@ -281,7 +274,7 @@ func walletAddressMappingKey(_ address: String) -> String? {
 }
 
 @available(macOS 10.15, *)
-private func transactionWithResolvedStreamingPeer(
+private func transactionWithResolvedPeer(
     _ transaction: WalletContext.Transaction,
     peerByAddress: [String: EnginePeer]
 ) -> WalletContext.Transaction {
@@ -350,8 +343,6 @@ private struct WalletIncomingTransactionIdentity: Hashable {
 
 @available(macOS 10.15, *)
 private func walletIncomingTransactionIdentity(_ transaction: WalletContext.Transaction) -> WalletIncomingTransactionIdentity? {
-    // These identities are scoped to one wallet. An incoming TON transfer has
-    // one inbound message; outgoing transactions may contain multiple transfers.
     guard transaction.status == .completed, transaction.kind == .transfer,
           transaction.direction == .incoming, transaction.currency == .ton,
           transaction.collectible == nil, transaction.amount > 0,
@@ -371,6 +362,7 @@ private func walletIncomingTransactionIdentity(_ transaction: WalletContext.Tran
 private enum WalletTransactionIdentity: Hashable {
     case id(String)
     case hash(String)
+    case outgoingOperation(id: String, recipient: String)
     case incoming(WalletIncomingTransactionIdentity)
 }
 
@@ -379,6 +371,13 @@ private func walletTransactionIdentities(_ transaction: WalletContext.Transactio
     var result: [WalletTransactionIdentity] = []
     if !transaction.id.isEmpty { result.append(.id(transaction.id)) }
     if let hash = transaction.transactionHash, !hash.isEmpty { result.append(.hash(hash)) }
+    if transaction.direction == .outgoing, transaction.kind == .transfer,
+       transaction.currency == .ton, transaction.collectible == nil,
+       transaction.presentationId.hasPrefix("pending:"),
+       transaction.presentationId.count > "pending:".count,
+       let address = transaction.peer.address, let recipient = walletAddressMappingKey(address) {
+        result.append(.outgoingOperation(id: transaction.presentationId, recipient: recipient))
+    }
     if let incoming = walletIncomingTransactionIdentity(transaction) { result.append(.incoming(incoming)) }
     return result
 }
@@ -398,8 +397,6 @@ struct WalletTransactionIdentityIndex {
             }
             return index
         }
-        // Join all aliases before choosing winners: a later row can bridge an
-        // id-only cached row and another row already carrying its hash.
         for (index, transaction) in transactions.enumerated() {
             for identity in walletTransactionIdentities(transaction) {
                 if let previous = self.indicesByIdentity[identity] {
@@ -430,7 +427,6 @@ struct WalletTransactionIdentityIndex {
 
 @available(macOS 10.15, *)
 public extension WalletContext.Transaction {
-    /// Compare records from the same wallet, including corrected incoming hashes.
     func matchesHistoryTransaction(_ other: WalletContext.Transaction) -> Bool {
         WalletTransactionIdentityIndex([self]).contains(other)
     }
@@ -440,12 +436,15 @@ public extension WalletContext.Transaction {
 private func sortedWalletTransactions(
     _ transactions: [WalletContext.Transaction]
 ) -> [WalletContext.Transaction] {
-    transactions.sorted { lhs, rhs in
-        if lhs.timestamp != rhs.timestamp {
-            return lhs.timestamp > rhs.timestamp
-        }
-        return decimalStringIsGreater(lhs.logicalTime, rhs.logicalTime)
+    transactions.sorted(by: walletTransactionIsNewer)
+}
+
+@available(macOS 10.15, *)
+private func walletTransactionIsNewer(_ lhs: WalletContext.Transaction, _ rhs: WalletContext.Transaction) -> Bool {
+    if lhs.timestamp != rhs.timestamp {
+        return lhs.timestamp > rhs.timestamp
     }
+    return decimalStringIsGreater(lhs.logicalTime, rhs.logicalTime)
 }
 
 @available(macOS 10.15, *)
@@ -503,6 +502,7 @@ struct WalletTransactionHistory {
     mutating func applyRefresh(
         _ page: Page,
         previous: WalletContext.TransactionsState,
+        retaining: [WalletContext.Transaction] = [],
         log: ((String) -> Void)? = nil
     ) -> WalletContext.TransactionsState {
         let existingIdentities = WalletTransactionIdentityIndex(previous.items)
@@ -512,7 +512,24 @@ struct WalletTransactionHistory {
             self.routeRevision &+= 1
         }
         self.hasLoadedFirstPage = true
-        let items = mergeTransactions(existing: previous.items, new: page.items, source: "refresh", log: log)
+        var existing = previous.items
+        let orderedPage = sortedWalletTransactions(page.items)
+        if let newest = orderedPage.first, let oldest = orderedPage.last {
+            let pageIdentities = WalletTransactionIdentityIndex(page.items)
+            let retainedIdentities = WalletTransactionIdentityIndex(retaining)
+            existing.removeAll { transaction in
+                let keep = pageIdentities.contains(transaction)
+                    || retainedIdentities.contains(transaction)
+                    || transaction.status == .pending
+                    || walletTransactionIsNewer(transaction, newest)
+                    || (page.nextOffset != nil && walletTransactionIsNewer(oldest, transaction))
+                if !keep {
+                    log?("event=wallet_history_cache_replaced id=\(transaction.id) hash=\(transaction.transactionHash ?? "nil")")
+                }
+                return !keep
+            }
+        }
+        let items = mergeTransactions(existing: existing, new: page.items, source: "refresh", log: log)
         return WalletContext.TransactionsState(
             items: items,
             offset: items.count,
@@ -581,14 +598,4 @@ func loadWalletTransactionHistoryPages(
         try Task.checkCancellation()
         if try !apply(request, page) { return }
     }
-}
-
-@available(macOS 10.15, *)
-struct WalletEngineTransferReceipt: Codable, Equatable, Sendable {
-    let recordId: String
-    let walletAddress: String
-    let pendingTransfer: WalletContext.PendingTransfer
-    let receivedAt: Int32
-    let transfer: WalletSentTransfer
-    var transaction: WalletStoredTransaction? = nil
 }

@@ -5,6 +5,7 @@ import AccountContext
 import SwiftSignalKit
 import TelegramCore
 import TelegramPresentationData
+import PresentationDataUtils
 import TelegramStringFormatting
 import ComponentFlow
 import ViewControllerComponent
@@ -339,14 +340,14 @@ private final class WalletCollectibleContentComponent: Component {
 
     let context: AccountContext
     let collectible: WalletContext.Collectible
-    let openExternalUrl: (String) -> Void
+    let openExternalUrl: (String, PresentationTheme) -> Void
     let openTransfer: () -> Void
     let animateOut: ActionSlot<Action<Void>>
 
     init(
         context: AccountContext,
         collectible: WalletContext.Collectible,
-        openExternalUrl: @escaping (String) -> Void,
+        openExternalUrl: @escaping (String, PresentationTheme) -> Void,
         openTransfer: @escaping () -> Void,
         animateOut: ActionSlot<Action<Void>>
     ) {
@@ -442,7 +443,8 @@ private final class WalletCollectibleContentComponent: Component {
 
         private func openExplorer(sourceView: UIView) {
             guard let component = self.component,
-                  let controller = self.environment?.controller() as? WalletCollectibleScreen else {
+                  let environment = self.environment,
+                  let controller = environment.controller() as? WalletCollectibleScreen else {
                 return
             }
             let configuration = WalletConfiguration.with(appConfiguration: component.context.currentAppConfiguration.with { $0 })
@@ -459,12 +461,12 @@ private final class WalletCollectibleContentComponent: Component {
                     dismiss(.default)
                     
                     if let explorerUrl {
-                        component.openExternalUrl(explorerUrl)
+                        component.openExternalUrl(explorerUrl, environment.theme)
                     }
                 }
             )
             let contextController = makeContextController(
-                presentationData: component.context.sharedContext.currentPresentationData.with { $0 },
+                presentationData: component.context.sharedContext.currentPresentationData.with { $0 }.withUpdated(theme: environment.theme),
                 source: .reference(WalletCollectibleContextReferenceContentSource(sourceView: sourceView)),
                 items: .single(ContextController.Items(content: .list([.action(item)]))),
                 gesture: nil
@@ -661,13 +663,15 @@ private final class WalletCollectibleContentComponent: Component {
                     theme: theme,
                     item: WalletCollectibleHeaderComponent.Item(
                         name: component.collectible.name,
-                        imageUrl: component.collectible.imageUrl,
-                        lottieUrl: component.collectible.lottieUrl,
+                        image: component.collectible.image,
+                        lottie: component.collectible.lottie,
                         collectionName: component.collectible.collectionName,
                         collectionUrl: component.collectible.collectionUrl
                     ),
                     displaysCollection: displaysCollection,
-                    openCollection: component.openExternalUrl
+                    openCollection: { url in
+                        component.openExternalUrl(url, theme)
+                    }
                 )),
                 environment: {},
                 containerSize: CGSize(width: availableSize.width, height: 1000.0)
@@ -781,7 +785,7 @@ private final class WalletCollectibleContentComponent: Component {
                         guard let url = walletCollectibleFragmentUrl(collectible: component.collectible) else {
                             return
                         }
-                        component.openExternalUrl(url)
+                        component.openExternalUrl(url, theme)
                     }
                 )),
                 environment: {},
@@ -892,7 +896,7 @@ private final class WalletCollectiblePagerComponent: Component {
     let collectibles: [WalletContext.Collectible]
     let initialIndex: Int
     let itemSpacing: CGFloat
-    let openExternalUrl: (String) -> Void
+    let openExternalUrl: (String, PresentationTheme) -> Void
     let openTransfer: (WalletContext.Collectible) -> Void
     let indexUpdated: (Int) -> Void
     let draggingBegan: (Int) -> Void
@@ -902,7 +906,7 @@ private final class WalletCollectiblePagerComponent: Component {
         collectibles: [WalletContext.Collectible],
         initialIndex: Int,
         itemSpacing: CGFloat,
-        openExternalUrl: @escaping (String) -> Void,
+        openExternalUrl: @escaping (String, PresentationTheme) -> Void,
         openTransfer: @escaping (WalletContext.Collectible) -> Void,
         indexUpdated: @escaping (Int) -> Void,
         draggingBegan: @escaping (Int) -> Void
@@ -966,13 +970,13 @@ private final class WalletCollectibleSheetComponent: CombinedComponent {
 
     let context: AccountContext
     let collectible: WalletContext.Collectible
-    let openExternalUrl: (String) -> Void
+    let openExternalUrl: (String, PresentationTheme) -> Void
     let openTransfer: () -> Void
 
     init(
         context: AccountContext,
         collectible: WalletContext.Collectible,
-        openExternalUrl: @escaping (String) -> Void,
+        openExternalUrl: @escaping (String, PresentationTheme) -> Void,
         openTransfer: @escaping () -> Void
     ) {
         self.context = context
@@ -1090,7 +1094,7 @@ private final class WalletCollectibleSheetComponent: CombinedComponent {
 public final class WalletCollectibleScreen: ViewControllerComponentContainer {
     private let accountContext: AccountContext
     private let walletContext: WalletContext
-    private let openExternalUrl: (String) -> Void
+    private let openExternalUrl: (String, PresentationTheme) -> Void
     private let collectibleSent: (String) -> Void
     private let stateDisposable = MetaDisposable()
     private let loadMoreDisposable = MetaDisposable()
@@ -1099,8 +1103,8 @@ public final class WalletCollectibleScreen: ViewControllerComponentContainer {
     private var collectiblesState: WalletContext.CollectiblesState
     private var collectibles: [WalletContext.Collectible]
     private var currentAddress: String
-    private var requestedOffset: Int?
-    private var failedOffset: Int?
+    private var requestedPage: WalletContext.CollectiblesState.PageId?
+    private var failedPage: WalletContext.CollectiblesState.PageId?
 
     public init(
         context: AccountContext,
@@ -1108,19 +1112,23 @@ public final class WalletCollectibleScreen: ViewControllerComponentContainer {
         collectible: WalletContext.Collectible,
         collectibleSent: @escaping (String) -> Void
     ) {
+        let updatedPresentationData = presentationDataWithDefaultAccent((
+            initial: context.sharedContext.currentPresentationData.with { $0 },
+            signal: context.sharedContext.presentationData
+        ))
         let initialState = walletContext.stateValue.collectibles
         var initialCollectibles = initialState.items
         if !initialCollectibles.contains(where: { $0.address == collectible.address }) {
             initialCollectibles.insert(collectible, at: 0)
         }
         let initialIndex = initialCollectibles.firstIndex(where: { $0.address == collectible.address }) ?? 0
-        let openExternalUrl: (String) -> Void = { url in
+        let openExternalUrl: (String, PresentationTheme) -> Void = { url, theme in
             context.sharedContext.openExternalUrl(
                 context: context,
                 urlContext: .generic,
                 url: url,
                 forceExternal: true,
-                presentationData: context.sharedContext.currentPresentationData.with { $0 },
+                presentationData: context.sharedContext.currentPresentationData.with { $0 }.withUpdated(theme: theme),
                 navigationController: nil,
                 dismissInput: {
                 }
@@ -1158,7 +1166,8 @@ public final class WalletCollectibleScreen: ViewControllerComponentContainer {
             ),
             navigationBarAppearance: .none,
             statusBarStyle: .ignore,
-            theme: .default
+            theme: .default,
+            updatedPresentationData: updatedPresentationData
         )
         indexUpdatedImpl = { [weak self] index in
             self?.currentIndexUpdated(index)
@@ -1234,10 +1243,10 @@ public final class WalletCollectibleScreen: ViewControllerComponentContainer {
     }
 
     private func collectiblesStateUpdated(_ state: WalletContext.CollectiblesState) {
-        if let requestedOffset = self.requestedOffset,
-           state.offset != requestedOffset || !state.canLoadMore {
-            self.requestedOffset = nil
-            self.failedOffset = nil
+        if let requestedPage = self.requestedPage,
+           state.nextPage != requestedPage || !state.canLoadMore {
+            self.requestedPage = nil
+            self.failedPage = nil
         }
 
         var collectibles = state.items
@@ -1311,9 +1320,9 @@ public final class WalletCollectibleScreen: ViewControllerComponentContainer {
     }
 
     private func draggingBegan(_ index: Int) {
-        if self.failedOffset == self.collectiblesState.offset {
-            self.requestedOffset = nil
-            self.failedOffset = nil
+        if self.failedPage == self.collectiblesState.nextPage {
+            self.requestedPage = nil
+            self.failedPage = nil
         }
         self.requestLoadMoreIfNeeded(index: index)
     }
@@ -1321,24 +1330,23 @@ public final class WalletCollectibleScreen: ViewControllerComponentContainer {
     private func requestLoadMoreIfNeeded(index: Int) {
         guard !self.collectibles.isEmpty,
               index >= max(0, self.collectibles.count - 2),
-              self.collectiblesState.canLoadMore,
+              let page = self.collectiblesState.nextPage,
+              !self.collectiblesState.isRefreshing,
               !self.collectiblesState.isLoadingMore,
-              self.collectiblesState.offset >= self.collectibles.count - 1,
-              self.collectiblesState.error == nil || self.failedOffset == nil,
+              self.collectiblesState.error == nil || self.failedPage == nil,
               self.walletContext.stateValue.activeOperation == nil else {
             return
         }
-        let offset = self.collectiblesState.offset
-        guard self.requestedOffset != offset else {
+        guard self.requestedPage != page else {
             return
         }
-        self.requestedOffset = offset
+        self.requestedPage = page
         self.loadMoreDisposable.set((self.walletContext.loadMoreCollectibles()
         |> deliverOnMainQueue).start(error: { [weak self] _ in
-            guard let self, self.requestedOffset == offset else {
+            guard let self, self.requestedPage == page else {
                 return
             }
-            self.failedOffset = offset
+            self.failedPage = page
         }))
     }
 }

@@ -2,8 +2,8 @@ import Foundation
 import UIKit
 import Display
 import ComponentFlow
-import LottieComponent
 import LottieSettings
+import PremiumDiamondComponent
 import TelegramPresentationData
 import WalletContext
 
@@ -22,7 +22,6 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
         var gram: CGRect
         var fiat: CGRect
         var caret: CGRect
-        var gramAlpha: CGFloat
 
         func interpolate(to other: Layout, progress p: CGFloat) -> Layout {
             return Layout(
@@ -30,8 +29,52 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
                 height: self.height + (other.height - self.height) * p,
                 gram: walletSendAmountMotionRect(self.gram, other.gram, p),
                 fiat: walletSendAmountMotionRect(self.fiat, other.fiat, p),
-                caret: walletSendAmountMotionRect(self.caret, other.caret, p),
-                gramAlpha: self.gramAlpha + (other.gramAlpha - self.gramAlpha) * p
+                caret: walletSendAmountMotionRect(self.caret, other.caret, p)
+            )
+        }
+    }
+
+    private struct SymbolState {
+        var drop: CGFloat
+        var tilt: CGFloat
+        var blur: CGFloat
+        var alpha: CGFloat
+
+        var transform: CATransform3D {
+            var transform = CATransform3DIdentity
+            transform = CATransform3DRotate(transform, self.tilt, 0.0, 0.0, 1.0)
+            return CATransform3DTranslate(transform, 0.0, self.drop, 0.0)
+        }
+    }
+
+    private struct SymbolTransition {
+        let timing: WalletSendAmountMotionTiming
+        let toGram: Bool
+        var gramFrom: SymbolState?
+        var fiatFrom: SymbolState?
+
+        var duration: Double { return self.timing.reduced ? self.timing.duration : self.timing.duration + 1.5 }
+
+        func state(gram: Bool, at time: Double) -> SymbolState {
+            let elapsed = max(0.0, time - self.timing.start)
+            let p = self.timing.layoutProgress(at: time)
+            let arriving = gram == self.toGram
+            let from = gram ? self.gramFrom : self.fiatFrom
+            let toAlpha: CGFloat = arriving ? 1.0 : 0.0
+            let fromAlpha = from?.alpha ?? (1.0 - toAlpha)
+            let alpha = fromAlpha + (toAlpha - fromAlpha) * p
+            if self.timing.reduced {
+                return SymbolState(drop: 0.0, tilt: 0.0, blur: 0.0, alpha: alpha)
+            }
+            let tail = max(0.0, elapsed - 0.3)
+            let fromDrop = from?.drop ?? (arriving ? 16.0 : 0.0)
+            let toDrop: CGFloat = arriving ? 0.0 : 16.0
+            return SymbolState(
+                drop: fromDrop + (toDrop - fromDrop) * p,
+                tilt: CGFloat(20.0 * sin(2.0 * .pi * 1.6 * tail) * exp(-tail / 0.5)) * .pi / 180.0
+                    + (from?.tilt ?? 0.0) * (1.0 - p),
+                blur: 6.0 * sin(.pi * alpha),
+                alpha: alpha
             )
         }
     }
@@ -39,7 +82,10 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
     private let canvas = WalletSendAmountCanvas(frame: .zero)
     private let caretView = UIView()
     private static let caretBlinkAnimationKey = "walletSendCaretBlink"
-    private let motion = WalletSendAmountMotion()
+    private static let inputRefusalAnimationKey = "walletSendInputRefusal"
+    private static let symbolTransitionKey = "walletSendSymbolTransition"
+    private static let symbolPulseKey = "walletSendSymbolPulse"
+    private let motion = WalletSendAmountMotion(liquid: true)
     private var displayLink: SharedDisplayLinkDriver.Link?
     private var previousMode: WalletSendInputMode?
     private var previousText = ""
@@ -50,18 +96,40 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
     private var applicationIsActive = UIApplication.shared.applicationState == .active
     private var updating = false
     private var rendering = false
-    private var pendingDiamond = false
+    private var nativeInteraction = false
+    private var symbolTransition: SymbolTransition?
     private var placeholder: NSAttributedString?
     private var previousSelection: NSRange?
     private var availableWidth: CGFloat = 0.0
-    private var frameDuration = 1.0 / 60.0
+    private var frameDuration = 1.0 / 120.0
     private(set) var motionTiming: WalletSendAmountMotionTiming?
 
+    private var isSwitchingSymbols: Bool {
+        guard let transition = self.symbolTransition else { return false }
+        return transition.timing.progress(at: CACurrentMediaTime()) < 1.0
+    }
+
     override var usesAnimatedPresentation: Bool { return true }
+    override var gramAnimationSize: CGSize { return CGSize(width: 96.0, height: 96.0) }
+    override var fiatSymbolFont: UIFont { return Font.with(size: 34.0, design: .round, weight: .bold, traits: [.alternateDollarSign]) }
+
+    override var isUserInteractionEnabled: Bool {
+        didSet {
+            if !self.isUserInteractionEnabled {
+                self.stopInputRefusal()
+            }
+            self.updateDiamondVisibility()
+        }
+    }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
         self.canvas.isHidden = true
+        self.canvas.onFrameReady = { [weak self] in
+            guard let self, self.visible, self.applicationIsActive, self.window != nil, !self.nativeInteraction else { return }
+            self.setNativeTextVisible(false)
+            self.textField.displaysNativeCaret = !self.motion.isAnimating(at: CACurrentMediaTime())
+        }
         self.contentView.addSubview(self.canvas)
         self.caretView.isUserInteractionEnabled = false
         self.caretView.accessibilityElementsHidden = true
@@ -69,9 +137,13 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
         self.caretView.isHidden = true
         self.contentView.addSubview(self.caretView)
         self.textField.usesCustomCaret = true
-        self.textField.interactionBegan = { [weak self] in self?.finishMotion() }
+        self.textField.interactionBegan = { [weak self] in
+            self?.nativeInteraction = true
+            self?.finishMotion()
+        }
         NotificationCenter.default.addObserver(self, selector: #selector(self.applicationDidBecomeActive), name: UIApplication.didBecomeActiveNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(self.applicationWillResignActive), name: UIApplication.willResignActiveNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(self.reduceMotionChanged), name: UIAccessibility.reduceMotionStatusDidChangeNotification, object: nil)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -84,26 +156,46 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
     override func didMoveToWindow() {
         super.didMoveToWindow()
         if self.window == nil {
-            self.stopDiamond(at: .end)
+            self.stopInputRefusal()
+            self.stopSymbolAnimations()
             self.finishMotion()
         } else {
+            self.updateDiamondVisibility()
             self.setNeedsLayout()
         }
     }
 
     @objc private func applicationDidBecomeActive() {
         self.applicationIsActive = true
+        self.updateDiamondVisibility()
+        self.setNeedsLayout()
         self.updateCaretAppearance()
     }
 
     @objc private func applicationWillResignActive() {
         self.applicationIsActive = false
-        self.stopDiamond(at: .end)
+        self.stopInputRefusal()
+        self.canvas.isRenderingEnabled = false
+        self.stopSymbolAnimations()
+        self.finishMotion()
+    }
+
+    @objc private func reduceMotionChanged() {
+        if UIAccessibility.isReduceMotionEnabled {
+            self.layer.removeAnimation(forKey: Self.inputRefusalAnimationKey)
+        }
+        self.stopSymbolAnimations()
         self.finishMotion()
     }
 
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        if !self.isHidden, self.alpha > 0.01, self.isUserInteractionEnabled,
+           let diamond = self.gramIcon.view as? InteractiveDiamondComponent.View,
+           let hit = diamond.hitTest(diamond.convert(point, from: self), with: event) {
+            return hit
+        }
         if event?.type == .touches, self.point(inside: point, with: event) {
+            self.nativeInteraction = true
             self.finishMotion()
         }
         return super.hitTest(point, with: event)
@@ -116,24 +208,79 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
     ) {
         self.updating = true
         defer { self.updating = false }
-        if mode != self.mode {
-            self.stopDiamond(at: mode == .gram ? .begin : nil)
-        }
+        let previousCaretColor = self.caretView.layer.presentation()?.backgroundColor ?? self.caretView.layer.backgroundColor
+        let modeChanged = mode != self.mode
         if !isVisible {
-            self.stopDiamond(at: .end)
+            self.stopInputRefusal()
         }
         self.visible = isVisible
+        if !isVisible { self.stopSymbolAnimations() }
+        self.canvas.prepareGlyphs(separators: dateTimeFormat.decimalSeparator + dateTimeFormat.groupingSeparator, currencyCode: fiatCurrency.code)
+        self.canvas.isRenderingEnabled = isVisible && self.applicationIsActive
         super.update(mode: mode, amount: amount, rate: rate, fiatCurrency: fiatCurrency, dateTimeFormat: dateTimeFormat, theme: theme, lottieSettings: lottieSettings, isVisible: isVisible, transition: .immediate)
         self.placeholder = self.textField.attributedPlaceholder
         self.layoutIfNeeded()
+        if modeChanged, isVisible, self.window != nil, let previousCaretColor, let timing = self.motionTiming {
+            let animation = CABasicAnimation(keyPath: "backgroundColor")
+            animation.fromValue = previousCaretColor
+            animation.toValue = self.textField.caretColor.cgColor
+            animation.duration = timing.duration
+            animation.timingFunction = CAMediaTimingFunction(controlPoints: 0.25, 0.8, 0.45, 1.0)
+            self.caretView.layer.add(animation, forKey: "backgroundColor")
+        }
         if !isVisible {
-            self.pendingDiamond = false
             self.finishMotion()
         }
     }
 
+    override func updateGramIcon(theme: PresentationTheme, lottieSettings: LottieRenderingSettings, isVisible: Bool, transition: ComponentTransition) {
+        let _ = self.gramIcon.update(
+            transition: .immediate,
+            component: AnyComponent(InteractiveDiamondComponent(
+                size: self.gramAnimationSize,
+                diamondWidth: 34.0,
+                isVisible: isVisible && self.applicationIsActive && (self.mode == .gram || self.previousMode == .gram || self.isSwitchingSymbols),
+                theme: theme
+            )),
+            environment: {},
+            containerSize: self.gramAnimationSize
+        )
+        if let view = self.gramIcon.view as? InteractiveDiamondComponent.View, view.superview == nil {
+            self.contentView.addSubview(view)
+            view.layer.zPosition = 1.0
+            for gesture in self.gestureRecognizers ?? [] where gesture is UITapGestureRecognizer {
+                gesture.require(toFail: view.pressGesture)
+            }
+            view.onExpansionChanged = { [weak self, weak view] expanded in
+                guard let self else { return }
+                self.layer.zPosition = expanded ? 1.0 : 0.0
+                if expanded {
+                    view?.layer.removeAnimation(forKey: Self.symbolPulseKey)
+                }
+            }
+        }
+        self.updateDiamondVisibility()
+    }
+
+    override func inputAccepted(_ insertedText: String) {
+        guard self.visible, self.applicationIsActive, self.window != nil else { return }
+        let velocity: Float
+        if insertedText.isEmpty {
+            velocity = 6.5
+        } else if let digit = insertedText.last(where: { $0.wholeNumberValue != nil })?.wholeNumberValue {
+            velocity = -(5.5 + 0.25 * Float(digit))
+        } else {
+            velocity = -3.5
+        }
+        if self.mode == .gram {
+            (self.gramIcon.view as? InteractiveDiamondComponent.View)?.spin(velocity, decay: 0.7)
+        }
+        self.pulseSymbols(at: CACurrentMediaTime())
+    }
+
     override func willApplyText(_ text: String, selection: NSRange?) {
         if text != (self.textField.text ?? "") || (selection != nil && selection != self.textField.selectionRange) {
+            self.nativeInteraction = false
             self.resetCaretBlink()
         }
         guard self.previousMode != nil, self.visible, self.window != nil else { return }
@@ -145,20 +292,59 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
         if !self.updating { self.layoutIfNeeded() }
     }
 
-    override func insertText(_ text: String) {
-        super.insertText(text)
-        self.layoutIfNeeded()
+    @discardableResult
+    override func insertText(_ text: String) -> Bool {
+        let accepted = super.insertText(text)
+        if accepted { self.layoutIfNeeded() }
+        return accepted
     }
 
-    override func deleteBackward() {
-        super.deleteBackward()
-        self.layoutIfNeeded()
+    @discardableResult
+    override func deleteBackward() -> Bool {
+        let accepted = super.deleteBackward()
+        if accepted { self.layoutIfNeeded() }
+        return accepted
+    }
+
+    override func inputRejected() {
+        guard self.visible, self.applicationIsActive, self.window != nil,
+              self.isUserInteractionEnabled, self.isInputActive else { return }
+        
+        Haptics.refuse()
+
+        guard !UIAccessibility.isReduceMotionEnabled else {
+            return
+        }
+        let initialOffset: CGFloat
+        if self.layer.animation(forKey: Self.inputRefusalAnimationKey) != nil {
+            initialOffset = (self.layer.presentation()?.transform.m41 ?? self.layer.transform.m41) - self.layer.transform.m41
+        } else {
+            initialOffset = 0.0
+        }
+        let animation = CAKeyframeAnimation(keyPath: "transform.translation.x")
+        animation.values = (0 ... 60).map { step -> NSNumber in
+            let t = CGFloat(step) / 60.0
+            let carry = max(0.0, 1.0 - 6.0 * t)
+            let x = 9.0 * sin(6.0 * .pi * t) * (1.0 - t) + initialOffset * carry * carry
+            return NSNumber(value: Double(x))
+        }
+        animation.duration = 0.42
+        animation.calculationMode = .linear
+        animation.timingFunction = CAMediaTimingFunction(name: .linear)
+        animation.isAdditive = true
+        self.layer.add(animation, forKey: Self.inputRefusalAnimationKey)
+    }
+
+    private func stopInputRefusal() {
+        Haptics.cancelRefusal()
+        self.layer.removeAnimation(forKey: Self.inputRefusalAnimationKey)
     }
 
     override func textFieldDidChangeSelection(_ textField: UITextField) {
         super.textFieldDidChangeSelection(textField)
         if !self.isApplyingText && !self.rendering && !self.updating,
            self.previousText == (textField.text ?? ""), self.previousSelection != self.textField.selectionRange {
+            self.nativeInteraction = true
             self.resetCaretBlink()
             self.finishMotion()
         }
@@ -171,6 +357,8 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
     }
 
     override func textFieldDidEndEditing(_ textField: UITextField) {
+        (self.gramIcon.view as? InteractiveDiamondComponent.View)?.cancelInteraction()
+        self.stopInputRefusal()
         self.finishMotion()
         super.textFieldDidEndEditing(textField)
     }
@@ -193,7 +381,7 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
         let caret = self.textField.nativeCaretRect(for: self.textField.beginningOfDocument)
         let hasCaretGeometry = !caret.isNull && !caret.isInfinite && caret.height > 0.0
         let textRect = self.textField.isEditing ? self.textField.editingRect(forBounds: self.textField.bounds) : self.textField.textRect(forBounds: self.textField.bounds)
-        let baseline = self.textField.frame.minY + (hasCaretGeometry ? caret.midY : textRect.midY) + (self.integralFont.ascender + self.integralFont.descender) / 2.0
+        let baseline = self.textField.frame.minY + self.textField.amountTextBaseline(font: self.integralFont)
         let origin = CGPoint(x: self.textField.frame.minX + (hasCaretGeometry ? caret.minX : textRect.minX), y: baseline)
         var glyphs = WalletSendAmountGlyph.text(attributedText, origin: origin, group: .integer)
         let decimal = self.dateTimeFormat?.decimalSeparator ?? "."
@@ -213,8 +401,7 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
         let targetLayout = Layout(
             width: self.contentView.bounds.width, height: self.contentView.bounds.height,
             gram: self.gramIcon.view?.frame ?? .zero, fiat: self.fiatIcon.view?.frame ?? .zero,
-            caret: selectedCaret.offsetBy(dx: self.textField.frame.minX, dy: self.textField.frame.minY),
-            gramAlpha: self.mode == .gram ? 1.0 : 0.0
+            caret: selectedCaret.offsetBy(dx: self.textField.frame.minX, dy: self.textField.frame.minY)
         )
         let modeChanged = self.previousMode != nil && self.previousMode != self.mode
         if modeChanged {
@@ -223,15 +410,26 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
         let sizeChanged = self.availableWidth != self.bounds.width
         self.availableWidth = self.bounds.width
         if glyphs != self.motion.target {
-            let mayAnimate = self.previousMode != nil && self.visible && self.window != nil && !sizeChanged && (self.textField.selectionRange?.length ?? 0) == 0
+            // Focus and initial layout can refine positions without changing
+            // the amount. Only content changes should start a glyph transition.
+            let contentChanged = self.previousText != rawText || modeChanged || glyphs.count != self.motion.target.count
+                || zip(glyphs, self.motion.target).contains { lhs, rhs in
+                    lhs.text != rhs.text || lhs.font != rhs.font || lhs.color != rhs.color || lhs.group != rhs.group
+                }
+            let mayAnimate = contentChanged && self.previousMode != nil && self.visible && self.applicationIsActive && self.window != nil && self.canvas.isAvailable && !sizeChanged && (self.textField.selectionRange?.length ?? 0) == 0
             let oldValue = Double(self.previousText.replacingOccurrences(of: decimal, with: ".")) ?? 0.0
             let newValue = Double(rawText.replacingOccurrences(of: decimal, with: ".")) ?? 0.0
             let timing = mayAnimate ? WalletSendAmountMotionTiming(spin: modeChanged, up: newValue >= oldValue, start: now) : nil
             self.layoutFrom = sourceLayout ?? targetLayout
             self.layoutTo = targetLayout
-            self.motion.update(glyphs, timing: timing, at: now)
+            self.motion.update(glyphs, width: targetLayout.width, timing: timing, at: now, frameDuration: self.frameDuration,
+                fromPlaceholder: self.previousText.isEmpty && !rawText.isEmpty && !modeChanged)
             self.motionTiming = timing
-            if modeChanged { self.pendingDiamond = self.mode == .gram && mayAnimate }
+            if modeChanged {
+                self.switchSymbols(timing: timing, at: now)
+            } else if self.previousMode == nil {
+                self.stopSymbolAnimations()
+            }
         } else if self.previousSelection != self.textField.selectionRange {
             self.motion.finish()
         }
@@ -260,6 +458,7 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
         let wasRendering = self.rendering
         self.rendering = true
         defer { self.rendering = wasRendering }
+        let visible = visible || !self.canvas.isAvailable || !self.canvas.hasFrame
         if !visible { self.textField.displaysNativeCaret = false }
         self.textField.rendersText = visible
         if let placeholder = self.placeholder {
@@ -278,31 +477,57 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
 
     private func presentationLayout(at time: Double) -> Layout? {
         if let timing = self.motion.timing, let from = self.layoutFrom, let to = self.layoutTo {
-            return from.interpolate(to: to, progress: WalletSendAmountMotionTiming.ease(timing.progress(at: time)))
+            var layout = from.interpolate(to: to, progress: timing.layoutProgress(at: time))
+            layout.width += self.motion.widthAdjustment(at: time)
+            layout.caret.origin.x = self.motion.caretPosition(at: time, fromX: from.caret.midX, toX: to.caret.midX) - layout.caret.width / 2.0
+            return layout
         }
         return self.currentLayout
     }
 
     private func renderFrame(at now: Double = CACurrentMediaTime()) {
-        guard self.motion.isAnimating(at: now), let timing = self.motion.timing, let layout = self.presentationLayout(at: now) else {
+        guard self.motion.isAnimating(at: now), let layout = self.presentationLayout(at: now) else {
             self.finishMotion()
             return
         }
         self.currentLayout = layout
         UIView.performWithoutAnimation {
-            self.apply(layout: layout, reduced: timing.reduced)
-            self.canvas.frame = CGRect(x: -32.0, y: -32.0, width: layout.width + 64.0, height: layout.height + 64.0)
-            self.canvas.frameDuration = self.frameDuration
-            self.canvas.sprites = self.motion.frame(at: now, frameDuration: self.frameDuration).map { sprite in
-                var sprite = sprite
-                sprite.glyph.position.x += 32.0
-                sprite.glyph.position.y += 32.0
-                return sprite
-            }
+            self.apply(layout: layout)
+            self.drawText(layout: layout, at: now)
             self.contentView.bringSubviewToFront(self.canvas)
             self.contentView.bringSubviewToFront(self.caretView)
             self.updateCaretAppearance()
         }
+    }
+
+    private func drawText(layout: Layout, at now: Double) {
+        self.canvas.isRenderingEnabled = self.visible && self.applicationIsActive
+        // Keep the drawable size fixed throughout a transition; centering is
+        // owned by contentView, so no GPU surface needs resizing every frame.
+        let width = ceil(max(self.bounds.width, layout.width, self.layoutFrom?.width ?? 0, self.layoutTo?.width ?? 0) / 64.0) * 64.0
+        self.canvas.frame = CGRect(x: -32.0, y: -32.0, width: width + 64.0, height: layout.height + 64.0)
+        self.canvas.frameDuration = self.frameDuration
+        let sprites = self.motion.frame(at: now, frameDuration: self.frameDuration).map { sprite in
+            var sprite = sprite
+            sprite.glyph.position.x += 32.0
+            sprite.glyph.position.y += 32.0
+            return sprite
+        }
+        self.canvas.update(sprites: sprites, isAnimating: self.motion.isAnimating(at: now))
+        self.updateDiamondRefraction()
+    }
+
+    private func updateDiamondRefraction() {
+        guard let diamond = self.gramIcon.view as? InteractiveDiamondComponent.View else { return }
+        guard self.mode == .gram,
+              let glyph = self.motion.target.first(where: { $0.group == .integer && $0.text.first?.wholeNumberValue != nil }),
+              let mask = self.canvas.glyphMask(for: glyph) else {
+            diamond.updateRefractionSource(nil)
+            return
+        }
+        let rect = self.contentView.convert(mask.rect.offsetBy(dx: glyph.position.x, dy: glyph.position.y), to: diamond)
+            .offsetBy(dx: -diamond.bounds.midX, dy: -diamond.bounds.midY)
+        diamond.updateRefractionSource(InteractiveDiamondComponent.RefractionSource(texture: mask.texture, uv: mask.uv, rect: rect))
     }
 
     private func resetCaretBlink() {
@@ -340,27 +565,123 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
         self.caretView.layer.add(animation, forKey: Self.caretBlinkAnimationKey)
     }
 
-    private func apply(layout: Layout, reduced: Bool) {
+    private func apply(layout: Layout) {
         self.contentView.bounds = CGRect(x: 0.0, y: 0.0, width: layout.width, height: layout.height)
         self.contentView.center = CGPoint(x: self.bounds.midX, y: self.bounds.midY)
         let scale = min(1.0, self.bounds.width / max(1.0, layout.width))
         self.contentView.transform = CGAffineTransform(scaleX: scale, y: scale)
-        for (view, rect, alpha) in [(self.gramIcon.view, layout.gram, layout.gramAlpha), (self.fiatIcon.view, layout.fiat, 1.0 - layout.gramAlpha)] {
+        for (view, rect) in [(self.gramIcon.view, layout.gram), (self.fiatIcon.view, layout.fiat)] {
             guard let view else { continue }
-            view.transform = .identity
-            view.frame = rect
-            view.alpha = alpha
-            let iconScale = reduced ? 1.0 : 0.7 + 0.3 * alpha
-            view.transform = CGAffineTransform(scaleX: iconScale, y: iconScale)
-            ComponentTransition.immediate.setBlur(layer: view.layer, radius: reduced ? 0.0 : 6.0 * (1.0 - alpha))
+            view.bounds = CGRect(origin: .zero, size: rect.size)
+            view.center = CGPoint(x: rect.midX, y: rect.midY)
         }
     }
 
-    private func stopDiamond(at position: LottieComponent.StartingPosition? = nil) {
-        self.pendingDiamond = false
-        let diamond = self.gramIcon.view as? LottieComponent.View
-        diamond?.externalShouldPlay = false
-        diamond?.stop(at: position)
+    private func switchSymbols(timing: WalletSendAmountMotionTiming?, at now: Double) {
+        guard let timing else {
+            self.stopSymbolAnimations()
+            return
+        }
+        var transition = SymbolTransition(timing: timing, toGram: self.mode == .gram)
+        if let previous = self.symbolTransition {
+            transition.gramFrom = previous.state(gram: true, at: now)
+            transition.fiatFrom = previous.state(gram: false, at: now)
+        }
+        self.symbolTransition = transition
+        self.updateDiamondVisibility()
+        (self.gramIcon.view as? InteractiveDiamondComponent.View)?.spin(timing.up ? -9.0 : 9.0, decay: 0.8)
+
+        for (view, gram) in [(self.gramIcon.view, true), (self.fiatIcon.view, false)] {
+            guard let view else { continue }
+            // Only the arriving symbol needs the settling tail. The hidden
+            // diamond can stop drawing as soon as the fade is over.
+            let arriving = gram == transition.toGram
+            let duration = arriving ? transition.duration : timing.duration
+            let count = Int(ceil(duration * 120.0))
+            let states = (0 ... count).map { index in
+                transition.state(gram: gram, at: timing.start + duration * Double(index) / Double(count))
+            }
+            let transform = CAKeyframeAnimation(keyPath: "transform")
+            transform.values = states.map { NSValue(caTransform3D: $0.transform) }
+            let opacity = CAKeyframeAnimation(keyPath: "opacity")
+            opacity.values = states.map { NSNumber(value: Double($0.alpha)) }
+            let blur = CAKeyframeAnimation(keyPath: "filters.gaussianBlur.inputRadius")
+            blur.values = states.map { NSNumber(value: Double($0.blur)) }
+            let animations = timing.reduced ? [opacity] : [transform, opacity, blur]
+            for animation in animations {
+                animation.duration = duration
+                animation.calculationMode = .linear
+            }
+            UIView.performWithoutAnimation {
+                view.layer.transform = CATransform3DIdentity
+                view.alpha = arriving ? 1.0 : 0.0
+                if !timing.reduced, let filter = CALayer.blur() {
+                    filter.setValue(0.0 as NSNumber, forKey: "inputRadius")
+                    view.layer.filters = [filter]
+                }
+            }
+            let group = CAAnimationGroup()
+            group.animations = animations
+            group.duration = duration
+            group.beginTime = view.layer.convertTime(timing.start, from: nil)
+            group.timingFunction = CAMediaTimingFunction(name: .linear)
+            if #available(iOS 15.0, *) {
+                group.preferredFrameRateRange = CAFrameRateRange(minimum: 30.0, maximum: Float(UIScreen.main.maximumFramesPerSecond), preferred: Float(UIScreen.main.maximumFramesPerSecond))
+            }
+            group.completion = { [weak self, weak view] completed in
+                guard let self, completed, self.symbolTransition?.timing.start == timing.start else { return }
+                view?.layer.filters = nil
+                if arriving {
+                    self.symbolTransition = nil
+                }
+                self.updateDiamondVisibility()
+            }
+            view.layer.add(group, forKey: Self.symbolTransitionKey)
+        }
+        self.pulseSymbols(at: now)
+    }
+
+    private func pulseSymbols(at now: Double) {
+        guard !UIAccessibility.isReduceMotionEnabled else { return }
+        for view in [self.gramIcon.view, self.fiatIcon.view] {
+            guard let view else { continue }
+            if let diamond = view as? InteractiveDiamondComponent.View, diamond.isExpanded { continue }
+            let fromScale = view.layer.presentation()?.sublayerTransform.m11 ?? 1.0
+            let pulse = CAKeyframeAnimation(keyPath: "sublayerTransform")
+            pulse.values = (0 ... 51).map { index in
+                let t = CGFloat(index) / 51.0
+                let scale = 1.0 + 0.14 * sin(.pi * t) * (1.0 - 0.3 * t)
+                    + (fromScale - 1.0) * (1.0 - WalletSendAmountMotionTiming.ease(t))
+                return NSValue(caTransform3D: CATransform3DMakeScale(scale, scale, 1.0))
+            }
+            pulse.duration = 0.42
+            pulse.beginTime = view.layer.convertTime(now, from: nil)
+            pulse.calculationMode = .linear
+            view.layer.add(pulse, forKey: Self.symbolPulseKey)
+        }
+    }
+
+    private func updateDiamondVisibility() {
+        guard let diamond = self.gramIcon.view as? InteractiveDiamondComponent.View else { return }
+        let visible = self.visible && self.applicationIsActive && self.window != nil
+        diamond.isRenderingEnabled = visible && (self.mode == .gram || self.isSwitchingSymbols)
+        diamond.isUserInteractionEnabled = visible && self.isUserInteractionEnabled && self.mode == .gram && !self.isSwitchingSymbols
+    }
+
+    private func stopSymbolAnimations() {
+        self.symbolTransition = nil
+        UIView.performWithoutAnimation {
+            for (view, gram) in [(self.gramIcon.view, true), (self.fiatIcon.view, false)] {
+                guard let view else { continue }
+                view.layer.removeAnimation(forKey: Self.symbolTransitionKey)
+                view.layer.removeAnimation(forKey: Self.symbolPulseKey)
+                view.layer.transform = CATransform3DIdentity
+                view.layer.sublayerTransform = CATransform3DIdentity
+                view.layer.filters = nil
+                view.alpha = (gram == (self.mode == .gram)) ? 1.0 : 0.0
+            }
+        }
+        self.updateDiamondVisibility()
     }
 
     private func finishMotion() {
@@ -370,13 +691,20 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
         self.displayLink?.invalidate()
         self.displayLink = nil
         self.motion.finish()
+        if !self.visible || self.window == nil || !self.applicationIsActive {
+            self.caretView.layer.removeAnimation(forKey: "backgroundColor")
+        }
         UIView.performWithoutAnimation {
             if let layout = self.layoutTo {
                 self.currentLayout = layout
-                self.apply(layout: layout, reduced: true)
+                self.apply(layout: layout)
                 self.caretView.frame = layout.caret
             }
-            self.setNativeTextVisible(true)
+            if let layout = self.currentLayout, self.visible, self.applicationIsActive, self.window != nil {
+                self.drawText(layout: layout, at: CACurrentMediaTime())
+            }
+            self.setNativeTextVisible(self.nativeInteraction || !self.visible || !self.applicationIsActive)
+            self.textField.displaysNativeCaret = true
             if let selection = self.textField.selectedTextRange, var layout = self.currentLayout {
                 layout.caret = self.textField.amountCaretRect(for: selection.end).offsetBy(dx: self.textField.frame.minX, dy: self.textField.frame.minY)
                 self.currentLayout = layout
@@ -385,13 +713,6 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
             self.previousSelection = self.textField.selectionRange
             self.updateCaretAppearance()
         }
-        let diamond = self.gramIcon.view as? LottieComponent.View
-        let canPlayDiamond = self.visible && self.window != nil && self.applicationIsActive
-            && self.mode == .gram && !UIAccessibility.isReduceMotionEnabled
-        diamond?.externalShouldPlay = canPlayDiamond
-        if self.pendingDiamond {
-            self.pendingDiamond = false
-            if canPlayDiamond { diamond?.playOnce() }
-        }
+        self.updateDiamondVisibility()
     }
 }

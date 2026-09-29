@@ -737,7 +737,27 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
     
     private var contentContainersWrapperNode: ASDisplayNode
     private var contentContainers: [ContentContainer] = []
-    public private(set) var contentNodes: [ChatMessageBubbleContentNode] = []
+    public private(set) var contentNodes: [ChatMessageBubbleContentNode] = [] {
+        didSet {
+            for case let contentNode as ChatMessageTransferBubbleContentNode in oldValue {
+                contentNode.scrollTiltProvider = nil
+            }
+            self.updateScrollTiltProvider()
+        }
+    }
+
+    override public var scrollTiltProvider: ((CFTimeInterval) -> Float)? {
+        didSet {
+            self.updateScrollTiltProvider()
+        }
+    }
+
+    private func updateScrollTiltProvider() {
+        for case let contentNode as ChatMessageTransferBubbleContentNode in self.contentNodes {
+            contentNode.scrollTiltProvider = self.scrollTiltProvider
+        }
+    }
+
     private var mosaicStatusNode: ChatMessageDateAndStatusNode?
     private var actionButtonsNode: ChatMessageActionButtonsNode?
     private var reactionButtonsNode: ChatMessageReactionButtonsNode?
@@ -1469,6 +1489,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                     else if let media = media as? TelegramMediaAction {
                         if case .phoneCall = media.action {
                         } else if case .conferenceCall = media.action {
+                        } else if case .gramTransfer = media.action {
                         } else {
                             return false
                         }
@@ -6946,9 +6967,12 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         }
         
         var highlightedState: HighlightedState?
+        var hasCustomHighlight = false
         
         for contentNode in self.contentNodes {
-            let _ = contentNode.updateHighlightedState(animated: animated)
+            if contentNode.updateHighlightedState(animated: animated) {
+                hasCustomHighlight = true
+            }
         }
         
         if let highlightedStateValue = item.controllerInteraction.highlightedState {
@@ -6976,7 +7000,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             if let backgroundType = self.backgroundType {
                 let graphics = PresentationResourcesChat.principalGraphics(theme: item.presentationData.theme.theme, wallpaper: item.presentationData.theme.wallpaper, bubbleCorners: item.presentationData.chatBubbleCorners)
                 
-                if self.highlightedState != nil, !(self.backgroundNode.layer.mask is SimpleLayer) {
+                if self.highlightedState != nil, !hasCustomHighlight, !(self.backgroundNode.layer.mask is SimpleLayer) {
                     let backgroundHighlightNode: ChatMessageBackground
                     if let current = self.backgroundHighlightNode {
                         backgroundHighlightNode = current
@@ -7809,7 +7833,9 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         }
         
         for contentNode in self.contentNodes {
-            if contentNode is ChatMessageMediaBubbleContentNode || contentNode is ChatMessageGiftBubbleContentNode || contentNode is ChatMessageWebpageBubbleContentNode || contentNode is ChatMessageInvoiceBubbleContentNode || contentNode is ChatMessageGameBubbleContentNode || contentNode is ChatMessageInstantVideoBubbleContentNode || contentNode is ChatMessageRichDataBubbleContentNode {
+            if contentNode is ChatMessageTransferBubbleContentNode {
+                contentNode.visibility = mapVisibility(self.forceStopAnimations ? .none : effectiveMediaVisibility, boundsSize: self.bounds.size, insets: self.insets, to: contentNode)
+            } else if contentNode is ChatMessageMediaBubbleContentNode || contentNode is ChatMessageGiftBubbleContentNode || contentNode is ChatMessageWebpageBubbleContentNode || contentNode is ChatMessageInvoiceBubbleContentNode || contentNode is ChatMessageGameBubbleContentNode || contentNode is ChatMessageInstantVideoBubbleContentNode || contentNode is ChatMessageRichDataBubbleContentNode {
                 contentNode.visibility = mapVisibility(effectiveMediaVisibility, boundsSize: self.bounds.size, insets: self.insets, to: contentNode)
             } else {
                 contentNode.visibility = mapVisibility(effectiveVisibility, boundsSize: self.bounds.size, insets: self.insets, to: contentNode)

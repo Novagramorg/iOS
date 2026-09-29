@@ -200,6 +200,21 @@ final class AttachmentContainer: ASDisplayNode, ASGestureRecognizerDelegate {
         return true
     }
     
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        guard gestureRecognizer === self.panGestureRecognizer else {
+            return true
+        }
+
+        var currentView = touch.view
+        while let view = currentView, view !== self.wrappingNode.view {
+            if view.disablesInteractiveModalDismiss {
+                return false
+            }
+            currentView = view.superview
+        }
+        return true
+    }
+
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
         if let _ = gestureRecognizer as? UIPanGestureRecognizer, otherGestureRecognizer is UIPanGestureRecognizer {
             if let _ = otherGestureRecognizer.view?.superview as? MKMapView {
@@ -228,7 +243,7 @@ final class AttachmentContainer: ASDisplayNode, ASGestureRecognizerDelegate {
         return self.panGestureArguments != nil || self.isAnimating
     }
     
-    private var panGestureArguments: (topInset: CGFloat, offset: CGFloat, scrollView: UIScrollView?, listNode: ListView?)?
+    private var panGestureArguments: (topInset: CGFloat, offset: CGFloat, scrollView: UIScrollView?, listNode: ListView?, isFullSize: Bool)?
     @objc func panGesture(_ recognizer: UIPanGestureRecognizer) {
         guard let (layout, controllers, coveredByModalTransition) = self.validLayout, let lastController = controllers.last else {
             return
@@ -247,6 +262,12 @@ final class AttachmentContainer: ASDisplayNode, ASGestureRecognizerDelegate {
         
         switch recognizer.state {
             case .began:
+                // Keep the gesture mode stable even if input focus changes during the drag.
+                let isFullSize = self.isFullSize || !lastController.allowsCollapsing
+                if isFullSize {
+                    self.isExpanded = true
+                }
+
                 let point = recognizer.location(in: self.view)
                 let currentHitView = self.hitTest(point, with: nil)
                 
@@ -264,9 +285,9 @@ final class AttachmentContainer: ASDisplayNode, ASGestureRecognizerDelegate {
                     topInset = edgeTopInset
                 }
                 
-                self.panGestureArguments = (topInset, 0.0, scrollView, listNode)
+                self.panGestureArguments = (topInset, 0.0, scrollView, listNode, isFullSize)
             case .changed:
-                guard let (topInset, panOffset, scrollView, listNode) = self.panGestureArguments else {
+                guard let (topInset, panOffset, scrollView, listNode, isFullSize) = self.panGestureArguments else {
                     return
                 }
                 let visibleContentOffset = listNode?.visibleContentOffset()
@@ -295,7 +316,7 @@ final class AttachmentContainer: ASDisplayNode, ASGestureRecognizerDelegate {
                     }
                 }
                 
-                self.panGestureArguments = (topInset, translation, scrollView, listNode)
+                self.panGestureArguments = (topInset, translation, scrollView, listNode, isFullSize)
                 
                 if !self.isExpanded {
                     if currentOffset > 0.0, let scrollView = scrollView {
@@ -303,7 +324,7 @@ final class AttachmentContainer: ASDisplayNode, ASGestureRecognizerDelegate {
                     }
                 }
             
-                if !self.isExpanded || self.isFullSize, translation > 40.0, let shouldCancelPanGesture = self.shouldCancelPanGesture, shouldCancelPanGesture() {
+                if !self.isExpanded || isFullSize, translation > 40.0, let shouldCancelPanGesture = self.shouldCancelPanGesture, shouldCancelPanGesture() {
                     if lastController.isMinimizable {
                         
                     } else {
@@ -314,7 +335,7 @@ final class AttachmentContainer: ASDisplayNode, ASGestureRecognizerDelegate {
                 }
             
                 var bounds = self.bounds
-                if self.isExpanded && !self.isFullSize {
+                if self.isExpanded && !isFullSize {
                     bounds.origin.y = -max(0.0, translation - edgeTopInset)
                 } else {
                     bounds.origin.y = -translation
@@ -324,7 +345,7 @@ final class AttachmentContainer: ASDisplayNode, ASGestureRecognizerDelegate {
             
                 self.update(layout: layout, controllers: controllers, coveredByModalTransition: coveredByModalTransition, transition: .immediate)
             case .ended:
-                guard let (currentTopInset, panOffset, scrollView, listNode) = self.panGestureArguments else {
+                guard let (currentTopInset, panOffset, scrollView, listNode, isFullSize) = self.panGestureArguments else {
                     return
                 }
                 self.panGestureArguments = nil
@@ -346,7 +367,7 @@ final class AttachmentContainer: ASDisplayNode, ASGestureRecognizerDelegate {
                 }
             
                 var bounds = self.bounds
-                if self.isExpanded && !self.isFullSize {
+                if self.isExpanded && !isFullSize {
                     bounds.origin.y = -max(0.0, translation - edgeTopInset)
                 } else {
                     bounds.origin.y = -translation
@@ -371,7 +392,7 @@ final class AttachmentContainer: ASDisplayNode, ASGestureRecognizerDelegate {
                 var dismissing = false
             
                 let thresholdOffset: CGFloat
-                if self.isFullSize {
+                if isFullSize {
                     thresholdOffset = -180.0
                 } else {
                     thresholdOffset = -60.0
@@ -384,7 +405,7 @@ final class AttachmentContainer: ASDisplayNode, ASGestureRecognizerDelegate {
                         minimizing = true
                     }
                 } else if self.isExpanded {
-                    if (velocity.y > 300.0 || offset > topInset / 2.0) && !self.isFullSize {
+                    if (velocity.y > 300.0 || offset > topInset / 2.0) && !isFullSize {
                         self.isExpanded = false
                         if let listNode = listNode {
                             listNode.scroller.setContentOffset(CGPoint(), animated: false)
@@ -495,6 +516,7 @@ final class AttachmentContainer: ASDisplayNode, ASGestureRecognizerDelegate {
         let defaultTopInset = attachmentDefaultTopInset(layout: layout)
         let isLandscape = layout.orientation == .landscape
         let edgeTopInset = isLandscape ? 0.0 : defaultTopInset
+        let isFullSize = self.panGestureArguments?.isFullSize ?? self.isFullSize
         
         var effectiveExpanded = self.isExpanded
         if case .regular = layout.metrics.widthClass {
@@ -502,7 +524,7 @@ final class AttachmentContainer: ASDisplayNode, ASGestureRecognizerDelegate {
         }
         
         let topInset: CGFloat
-        if !self.isFullSize, let (panInitialTopInset, panOffset, _, _) = self.panGestureArguments {
+        if !isFullSize, let (panInitialTopInset, panOffset, _, _, _) = self.panGestureArguments {
             if effectiveExpanded {
                 topInset = min(edgeTopInset, panInitialTopInset + max(0.0, panOffset))
             } else {
@@ -521,7 +543,7 @@ final class AttachmentContainer: ASDisplayNode, ASGestureRecognizerDelegate {
             modalProgress = 0.0
             scaleProgress = 1.0
         } else {
-            if self.isFullSize, self.panGestureArguments != nil {
+            if isFullSize, self.panGestureArguments != nil {
                 modalProgress = 1.0 - min(1.0, max(0.0, -1.0 * self.bounds.minY / defaultTopInset))
                 scaleProgress = min(1.0, max(0.0, -1.0 * self.bounds.minY / defaultTopInset))
             } else {

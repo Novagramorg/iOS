@@ -8,27 +8,10 @@ import SwiftSignalKit
 import TelegramCore
 import ComponentFlow
 import PhotoResources
-import TextFormat
-import Svg
-
-private let walletCollectibleSvgMaximumSize: Int64 = 5 * 1024 * 1024
-
-private func walletCollectibleImageMimeType(_ urlString: String) -> String {
-    guard let url = URL(string: urlString), url.pathExtension.lowercased() == "svg" else {
-        return "image/jpeg"
-    }
-    return "image/svg+xml"
-}
-
-private func walletCollectibleDataLooksLikeSvg(_ data: Data) -> Bool {
-    let prefix = String(decoding: data.prefix(512), as: UTF8.self).lowercased()
-    return prefix.contains("<svg")
-}
 
 private func walletCollectibleWebFileImage(
     account: Account,
-    file: TelegramMediaWebFile,
-    isSvgUrl: Bool
+    file: TelegramMediaWebFile
 ) -> Signal<(TransformImageArguments) -> DrawingContext?, NoError> {
     return account.postbox.mediaBox.resourceData(file.resource)
     |> map { fullSizeData in
@@ -47,20 +30,6 @@ private func walletCollectibleWebFileImage(
                     imageOrientation = imageOrientationFromSource(imageSource)
                     fullSizeImage = image
                 }
-//                else if fullSizeData.size <= walletCollectibleSvgMaximumSize,
-//                          let data = try? Data(contentsOf: URL(fileURLWithPath: fullSizeData.path), options: [.mappedIfSafe]),
-//                          Int64(data.count) <= walletCollectibleSvgMaximumSize,
-//                          (isSvgUrl || walletCollectibleDataLooksLikeSvg(data)),
-//                          let image = drawSvgImage(
-//                            data: data,
-//                            size: arguments.boundingSize,
-//                            backgroundColor: nil,
-//                            foregroundColor: nil,
-//                            scale: UIScreenScale,
-//                            opaque: false
-//                          )?.cgImage {
-//                    fullSizeImage = image
-//                }
 
                 if let fullSizeImage {
                     let drawingRect = arguments.drawingRect
@@ -108,25 +77,25 @@ private func walletCollectibleWebFileImage(
 
 public final class WalletCollectibleImageComponent: Component {
     public let context: AccountContext
-    public let imageUrl: String?
+    public let file: WalletNftFile?
     public let placeholderColor: UIColor
     public let cornerRadius: CGFloat
 
     public init(
         context: AccountContext,
-        imageUrl: String?,
+        file: WalletNftFile?,
         placeholderColor: UIColor,
         cornerRadius: CGFloat
     ) {
         self.context = context
-        self.imageUrl = imageUrl
+        self.file = file
         self.placeholderColor = placeholderColor
         self.cornerRadius = cornerRadius
     }
 
     public static func ==(lhs: WalletCollectibleImageComponent, rhs: WalletCollectibleImageComponent) -> Bool {
         return lhs.context === rhs.context
-            && lhs.imageUrl == rhs.imageUrl
+            && lhs.file == rhs.file
             && lhs.placeholderColor == rhs.placeholderColor
             && lhs.cornerRadius == rhs.cornerRadius
     }
@@ -137,7 +106,7 @@ public final class WalletCollectibleImageComponent: Component {
         private let fetchDisposable = MetaDisposable()
 
         private weak var accountContext: AccountContext?
-        private var imageUrl: String?
+        private var file: WalletNftFile?
 
         override init(frame: CGRect) {
             super.init(frame: frame)
@@ -194,25 +163,23 @@ public final class WalletCollectibleImageComponent: Component {
                 emptyColor: component.placeholderColor
             ))()
 
-            if self.accountContext !== component.context || self.imageUrl != component.imageUrl {
+            if self.accountContext !== component.context || self.file != component.file {
                 self.accountContext = component.context
-                self.imageUrl = component.imageUrl
+                self.file = component.file
                 self.fetchDisposable.set(nil)
                 self.imageNode.reset()
 
-                if let imageUrl = component.imageUrl, !imageUrl.isEmpty {
-                    let mimeType = walletCollectibleImageMimeType(imageUrl)
+                if let file = component.file {
                     let image = TelegramMediaWebFile(
-                        resource: HttpReferenceMediaResource(url: imageUrl, size: nil),
-                        mimeType: mimeType,
-                        size: 0,
+                        resource: file.resource,
+                        mimeType: file.mimeType,
+                        size: file.size,
                         attributes: []
                     )
                     self.imageNode.isHidden = false
                     self.imageNode.setSignal(walletCollectibleWebFileImage(
                         account: component.context.account,
-                        file: image,
-                        isSvgUrl: mimeType == "image/svg+xml"
+                        file: image
                     ))
                     self.fetchDisposable.set(chatMessageWebFileInteractiveFetched(
                         account: component.context.account,

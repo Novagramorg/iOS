@@ -122,15 +122,6 @@ actor WalletEngineStorage {
         try self.writeCodable(descriptor, service: self.descriptorService, account: "wallet")
     }
 
-    func loadTransferReceipts() throws -> [WalletEngineTransferReceipt] {
-        do {
-            return try self.readCodable(service: self.descriptorService, account: "transfer-receipts") ?? []
-        } catch WalletEngineStorageError.corrupted {
-            try? self.remove(service: self.descriptorService, account: "transfer-receipts")
-            return []
-        }
-    }
-
     func loadTransferSubmissions() throws -> [WalletTransferSubmissionRecord] {
         try self.readCodable(service: self.descriptorService, account: "transfer-submissions") ?? []
     }
@@ -150,15 +141,6 @@ actor WalletEngineStorage {
               records[index].resolution == .pending || resolution == .consumed else { return }
         records[index].resolution = resolution
         try self.writeCodable(records, service: self.descriptorService, account: "transfer-submissions")
-    }
-
-    func saveTransferReceipt(_ receipt: WalletEngineTransferReceipt) throws {
-        var receipts = try self.loadTransferReceipts().filter {
-            $0.pendingTransfer.id != receipt.pendingTransfer.id
-                && Int64($0.receivedAt) + Int64(walletPendingTransferUILifetime) > Int64(receipt.receivedAt)
-        }
-        receipts.append(receipt)
-        try self.writeCodable(receipts, service: self.descriptorService, account: "transfer-receipts")
     }
 
     func loadArchivedWallets() throws -> [WalletEngineArchivedWalletRecord] {
@@ -262,6 +244,18 @@ actor WalletEngineStorage {
 
     func removeReplacementCandidate() throws {
         try self.remove(service: self.descriptorService, account: "replacement-candidate")
+    }
+
+    func discardReplacementCandidate(recordId: String) throws {
+        try discardWalletReplacementCandidate(
+            recordId: recordId,
+            loadCandidate: { try self.loadReplacementCandidate() },
+            isSecretReferenced: { secretRef in
+                try walletReplacementSecretIsReferenced(secretRef, active: self.loadDescriptor(), archived: self.loadArchivedWallets(), rotation: self.loadKeyRotation())
+            },
+            deleteSecret: { try self.deleteProtectedSecret(ProtectedSecretRef(value: $0)) },
+            removeCandidate: { try self.removeReplacementCandidate() }
+        )
     }
 
     func loadKeyRotation() throws -> WalletEngineKeyRotationRecord? {
@@ -490,7 +484,6 @@ actor WalletEngineStorage {
         guard !request.secretRef.value.isEmpty, !request.bytes.isEmpty else {
             throw protectedSecretFailure(.policyViolation, "Protected secret is empty")
         }
-        // Product policy is enforced by the vault, including the explicit opt-out.
         let envelope = try WalletVault.encrypt(request.bytes, namespace: self.namespace)
         try self.write(envelope, service: self.secretService, account: request.secretRef.value)
     }
@@ -588,7 +581,6 @@ actor WalletEngineStorage {
     }
 
     private func write(_ data: Data, service: String, account: String) throws {
-        // Complete an interrupted legacy migration before replacing this slot.
         if service == self.secretService { try WalletVault.migrate(namespace: self.namespace, account: account) }
         let query = try self.baseQuery(service: service, account: account)
         let updateStatus = SecItemUpdate(
@@ -617,6 +609,37 @@ actor WalletEngineStorage {
             throw WalletEngineStorageError.keychainStatus(status)
         }
     }
+}
+
+@available(macOS 10.15, *)
+func discardWalletReplacementCandidate(
+    recordId: String,
+    loadCandidate: () throws -> WalletEngineDescriptorRecord?,
+    isSecretReferenced: (String) throws -> Bool,
+    deleteSecret: (String) throws -> Void,
+    removeCandidate: () throws -> Void
+) throws {
+    guard let candidate = try loadCandidate(), candidate.recordId == recordId else { return }
+    if let secretRef = candidate.secretRef, try !isSecretReferenced(secretRef) {
+        try deleteSecret(secretRef)
+    }
+    try removeCandidate()
+}
+
+@available(macOS 10.15, *)
+func walletReplacementSecretIsReferenced(
+    _ secretRef: String,
+    active: WalletEngineDescriptorRecord?,
+    archived: [WalletEngineArchivedWalletRecord],
+    rotation: WalletEngineKeyRotationRecord?
+) -> Bool {
+    if active?.secretRef == secretRef || archived.contains(where: { $0.descriptor.secretRef == secretRef }) {
+        return true
+    }
+    if let rotation, [rotation.activeSecretRef, rotation.rollbackSecretRef, rotation.candidateSecretRef].contains(secretRef) {
+        return true
+    }
+    return false
 }
 
 @available(macOS 10.15, *)
@@ -665,6 +688,10 @@ actor WalletEnginePlatformHost: WalletPlatformHost {
         self.transientProtectedSecrets[secretRef.value] = nil
     }
 
+    func retainTransientProtectedSecret(secretRef: ProtectedSecretRef, bytes: Data) throws {
+        self.transientProtectedSecrets[secretRef.value] = try WalletVault.encrypt(bytes, namespace: self.storage.namespace)
+    }
+
     func removeAllTransientProtectedSecrets() {
         self.captureNextProtectedSecret = false
         self.transientProtectedSecrets.removeAll()
@@ -701,8 +728,6 @@ actor WalletEnginePlatformHost: WalletPlatformHost {
         do {
             if let authorization = self.authorization { try await authorization.waitUntilAvailable() }
             try await WalletAuthorizationScope.$session.withValue(self.authorization) {
-                // Engine presence requests use the app's configured wallet policy,
-                // including PIN authorization and the explicit unprotected choice.
                 _ = try WalletVault.access(namespace: self.storage.namespace)
                 if self.captureNextProtectedSecret {
                     self.captureNextProtectedSecret = false

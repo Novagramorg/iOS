@@ -22,6 +22,7 @@ import SettingsUI
 import UrlHandling
 import TelegramCallsUI
 import UndoUI
+import WalletContext
 import ImportStickerPackUI
 import PeerInfoUI
 import Markdown
@@ -1138,6 +1139,10 @@ func openResolvedUrlImpl(
                 }
             }
         case let .sendGrams(transfer, tonConnectUrl):
+            guard WalletConfiguration.with(appConfiguration: context.currentAppConfiguration.with { $0 }).isAvailable else {
+                present(UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: presentationData.strings.Wallet_Unavailable, timeout: nil, customUndoText: nil), action: { _ in return false }), nil)
+                return
+            }
             if let tonConnectUrl {
                 dismissInput()
                 context.walletContext?.processTonConnectUrl(tonConnectUrl)

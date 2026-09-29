@@ -6,6 +6,7 @@ import WalletContext
 import WalletConnectScreen
 import SwiftSignalKit
 import TelegramPresentationData
+import PresentationDataUtils
 import ComponentFlow
 import ViewControllerComponent
 import MultilineTextComponent
@@ -25,9 +26,9 @@ private func connectedAppSessions(_ sessions: [WalletContext.TonConnectSession])
     }
 }
 
-private func presentDisconnectedOverlay(context: AccountContext, controller: ViewController, text: String) {
+private func presentDisconnectedOverlay(presentationData: PresentationData, controller: ViewController, text: String) {
     controller.present(UndoOverlayController(
-        presentationData: context.sharedContext.currentPresentationData.with { $0 },
+        presentationData: presentationData,
         content: .actionSucceeded(title: nil, text: text, cancel: nil, destructive: false),
         position: .bottom,
         action: { _ in false }
@@ -38,15 +39,20 @@ private final class WalletAppsScreenComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
 
     let context: AccountContext
+    let updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)
     let walletContext: WalletContext
 
-    init(context: AccountContext, walletContext: WalletContext) {
+    init(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>), walletContext: WalletContext) {
         self.context = context
+        self.updatedPresentationData = updatedPresentationData
         self.walletContext = walletContext
     }
 
     static func ==(lhs: WalletAppsScreenComponent, rhs: WalletAppsScreenComponent) -> Bool {
-        return lhs.context === rhs.context && lhs.walletContext === rhs.walletContext
+        return lhs.context === rhs.context
+            && lhs.updatedPresentationData.initial === rhs.updatedPresentationData.initial
+            && lhs.updatedPresentationData.signal === rhs.updatedPresentationData.signal
+            && lhs.walletContext === rhs.walletContext
     }
 
     final class View: UIView {
@@ -72,6 +78,14 @@ private final class WalletAppsScreenComponent: Component {
 
         var isDisconnecting: Bool {
             return self.operationId != nil
+        }
+
+        private func currentPresentationData(for component: WalletAppsScreenComponent) -> (initial: PresentationData, signal: Signal<PresentationData, NoError>) {
+            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+            return (
+                initial: presentationData.withUpdated(theme: self.environment?.theme ?? component.updatedPresentationData.initial.theme),
+                signal: component.updatedPresentationData.signal
+            )
         }
 
         override init(frame: CGRect) {
@@ -137,10 +151,10 @@ private final class WalletAppsScreenComponent: Component {
                 }
                 let toast = self.pendingToast
                 self.pendingToast = nil
-                controller.finish(toast: toast)
+                controller.finish(toast: toast, presentationData: self.currentPresentationData(for: component).initial)
             } else if self.allAppsAlert == nil, let toast = self.pendingToast {
                 self.pendingToast = nil
-                presentDisconnectedOverlay(context: component.context, controller: controller, text: toast)
+                presentDisconnectedOverlay(presentationData: self.currentPresentationData(for: component).initial, controller: controller, text: toast)
             }
         }
 
@@ -154,6 +168,7 @@ private final class WalletAppsScreenComponent: Component {
             }
             let infoController = WalletAppInfoScreen(
                 context: component.context,
+                updatedPresentationData: self.currentPresentationData(for: component),
                 sessionId: session.id,
                 manifest: manifest,
                 disconnect: { [weak self] completion in
@@ -183,7 +198,6 @@ private final class WalletAppsScreenComponent: Component {
             let enabled = progress.get() |> map { !$0 }
             //TODO:localize
             let alert = AlertScreen(
-                context: component.context,
                 configuration: AlertScreen.Configuration(actionAlignment: .vertical, dismissOnOutsideTap: false),
                 content: [
                     AnyComponentWithIdentity(id: "title", component: AnyComponent(AlertTitleComponent(title: "Disconnect All Apps?"))),
@@ -209,7 +223,8 @@ private final class WalletAppsScreenComponent: Component {
                         progress: progress.get()
                     ),
                     AlertScreen.Action(title: "Cancel", action: {}, isEnabled: enabled)
-                ]
+                ],
+                updatedPresentationData: self.currentPresentationData(for: component)
             )
             self.allAppsAlert = alert
             self.allAppsProgress = progress
@@ -317,9 +332,9 @@ private final class WalletAppsScreenComponent: Component {
             //TODO:localize
             let text = all ? "Unable to disconnect these apps. Please try again." : "Unable to disconnect this app. Please try again."
             controller.present(AlertScreen(
-                context: component.context,
                 content: [AnyComponentWithIdentity(id: "text", component: AnyComponent(AlertTextComponent(content: .plain(text))))],
-                actions: [AlertScreen.Action(title: "OK", action: {})]
+                actions: [AlertScreen.Action(title: "OK", action: {})],
+                updatedPresentationData: self.currentPresentationData(for: component)
             ), in: .window(.root))
         }
 
@@ -462,17 +477,20 @@ private final class WalletAppsScreenComponent: Component {
 }
 
 public final class WalletAppsScreen: ViewControllerComponentContainer {
-    private let context: AccountContext
     fileprivate var hasAppeared = false
     fileprivate var isFinishing = false
 
     public init(context: AccountContext, walletContext: WalletContext) {
-        self.context = context
+        let updatedPresentationData = presentationDataWithDefaultAccent((
+            initial: context.sharedContext.currentPresentationData.with { $0 },
+            signal: context.sharedContext.presentationData
+        ))
         super.init(
             context: context,
-            component: WalletAppsScreenComponent(context: context, walletContext: walletContext),
+            component: WalletAppsScreenComponent(context: context, updatedPresentationData: updatedPresentationData, walletContext: walletContext),
             navigationBarAppearance: .default,
-            theme: .default
+            theme: .default,
+            updatedPresentationData: updatedPresentationData
         )
         //TODO:localize
         self.title = "Connected Apps"
@@ -507,18 +525,17 @@ public final class WalletAppsScreen: ViewControllerComponentContainer {
         (self.node.hostView.componentView as? WalletAppsScreenComponent.View)?.scheduleReconciliation()
     }
 
-    fileprivate func finish(toast: String?) {
+    fileprivate func finish(toast: String?, presentationData: PresentationData) {
         guard !self.isFinishing else {
             return
         }
         self.isFinishing = true
-        let context = self.context
         if let navigationController = self.navigationController as? NavigationController,
            let index = navigationController.viewControllers.firstIndex(where: { $0 === self }) {
             let previousController = navigationController.viewControllers.prefix(upTo: index).last as? ViewController
             navigationController.setViewControllers(navigationController.viewControllers.filter { $0 !== self }, animated: true, completion: { [weak previousController] in
                 if let toast, let previousController {
-                    presentDisconnectedOverlay(context: context, controller: previousController, text: toast)
+                    presentDisconnectedOverlay(presentationData: presentationData, controller: previousController, text: toast)
                 }
             })
         } else {

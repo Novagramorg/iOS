@@ -40,6 +40,8 @@ public enum DeviceMetrics: CaseIterable, Equatable {
     case iPhone16ProMax
     case iPhoneAir
     case iPhoneDuo
+    case iPhone18Pro
+    case iPhone18ProMax
     case iPad
     case iPadMini
     case iPad102Inch
@@ -104,7 +106,9 @@ public enum DeviceMetrics: CaseIterable, Equatable {
             .iPadPro11Inch,
             .iPadPro,
             .iPadPro3rdGen,
-            .iPadMini6thGen
+            .iPadMini6thGen,
+            .iPhone18Pro,
+            .iPhone18ProMax
         ]
     }
     
@@ -201,6 +205,10 @@ public enum DeviceMetrics: CaseIterable, Equatable {
                 return [.iPhoneAir]
             case "iPhone19,4":
                 return [.iPhoneDuo]
+            case "iPhone19,2":
+                return [.iPhone18Pro]
+            case "iPhone19,3", "iPhone19,7":
+                return [.iPhone18ProMax]
             default:
                 return []
         }
@@ -256,9 +264,9 @@ public enum DeviceMetrics: CaseIterable, Equatable {
             return CGSize(width: 430.0, height: 932.0)
         case .iPhone14ProMaxZoomed:
             return CGSize(width: 375.0, height: 812.0)
-        case .iPhone16Pro:
+        case .iPhone16Pro, .iPhone18Pro:
             return CGSize(width: 402.0, height: 874.0)
-        case .iPhone16ProMax:
+        case .iPhone16ProMax, .iPhone18ProMax:
             return CGSize(width: 440.0, height: 956.0)
         case .iPhoneAir:
             return CGSize(width: 420.0, height: 912.0)
@@ -297,7 +305,7 @@ public enum DeviceMetrics: CaseIterable, Equatable {
                 return 53.0 + UIScreenPixel
             case .iPhone14Pro, .iPhone14ProMax:
                 return 55.0
-            case .iPhone16Pro, .iPhone16ProMax:
+            case .iPhone16Pro, .iPhone16ProMax, .iPhone18Pro, .iPhone18ProMax:
                 return 62.0
             case .iPhoneAir:
                 return 62.0
@@ -314,7 +322,7 @@ public enum DeviceMetrics: CaseIterable, Equatable {
                 return inLandscape ? UIEdgeInsets(top: 0.0, left: 44.0, bottom: 0.0, right: 44.0) : UIEdgeInsets(top: 44.0, left: 0.0, bottom: 0.0, right: 0.0)
             case .iPhone12Mini, .iPhone12, .iPhone12ProMax, .iPhone13Mini, .iPhone13, .iPhone13Pro, .iPhone13ProMax:
                 return inLandscape ? UIEdgeInsets(top: 0.0, left: 47.0, bottom: 0.0, right: 47.0) : UIEdgeInsets(top: 44.0, left: 0.0, bottom: 0.0, right: 0.0)
-            case .iPhone14Pro, .iPhone14ProMax, .iPhone16Pro, .iPhone16ProMax:
+            case .iPhone14Pro, .iPhone14ProMax, .iPhone16Pro, .iPhone16ProMax, .iPhone18Pro, .iPhone18ProMax:
                 return inLandscape ? UIEdgeInsets(top: 0.0, left: 59.0, bottom: 0.0, right: 59.0) : UIEdgeInsets(top: 44.0, left: 0.0, bottom: 0.0, right: 0.0)
             case .iPhoneAir:
                 return inLandscape ? UIEdgeInsets(top: 0.0, left: 68.0, bottom: 0.0, right: 68.0) : UIEdgeInsets(top: 68.0, left: 0.0, bottom: 0.0, right: 0.0)
@@ -325,7 +333,7 @@ public enum DeviceMetrics: CaseIterable, Equatable {
     
     public func onScreenNavigationHeight(inLandscape: Bool, systemOnScreenNavigationHeight: CGFloat?) -> CGFloat? {
         switch self {
-        case .iPhoneX, .iPhoneXSMax, .iPhoneXr, .iPhone12Mini, .iPhone12, .iPhone12ProMax, .iPhone13Mini, .iPhone13, .iPhone13Pro, .iPhone13ProMax, .iPhone14Pro, .iPhone14ProMax, .iPhone16Pro, .iPhone16ProMax, .iPhoneAir, .iPhoneDuo:
+        case .iPhoneX, .iPhoneXSMax, .iPhoneXr, .iPhone12Mini, .iPhone12, .iPhone12ProMax, .iPhone13Mini, .iPhone13, .iPhone13Pro, .iPhone13ProMax, .iPhone14Pro, .iPhone14ProMax, .iPhone16Pro, .iPhone16ProMax, .iPhoneAir, .iPhoneDuo, .iPhone18Pro, .iPhone18ProMax:
             if #available(iOS 26.0, *) {
                 return 20.0
             } else {
@@ -369,7 +377,7 @@ public enum DeviceMetrics: CaseIterable, Equatable {
                 return 54.0
             case .iPhone14ProMaxZoomed:
                 return 47.0
-            case .iPhone16Pro, .iPhone16ProMax:
+            case .iPhone16Pro, .iPhone16ProMax, .iPhone18Pro, .iPhone18ProMax:
                 return 54.0
             case .iPhoneAir:
                 return 59.0
@@ -401,7 +409,7 @@ public enum DeviceMetrics: CaseIterable, Equatable {
                 return 162.0
             case .iPhone6, .iPhone6Plus:
                 return 163.0
-            case .iPhoneX, .iPhoneXSMax, .iPhoneXr, .iPhone12Mini, .iPhone12, .iPhone12ProMax, .iPhone13Mini, .iPhone13, .iPhone13Pro, .iPhone13ProMax, .iPhone14Pro, .iPhone14ProZoomed, .iPhone14ProMax, .iPhone14ProMaxZoomed, .iPhone16Pro, .iPhone16ProMax:
+            case .iPhoneX, .iPhoneXSMax, .iPhoneXr, .iPhone12Mini, .iPhone12, .iPhone12ProMax, .iPhone13Mini, .iPhone13, .iPhone13Pro, .iPhone13ProMax, .iPhone14Pro, .iPhone14ProZoomed, .iPhone14ProMax, .iPhone14ProMaxZoomed, .iPhone16Pro, .iPhone16ProMax, .iPhone18Pro, .iPhone18ProMax:
                 return 172.0
             case .iPhoneAir:
                 return 172.0
@@ -424,11 +432,11 @@ public enum DeviceMetrics: CaseIterable, Equatable {
                     return 216.0
                 case .iPhone6Plus:
                     return 226.0
-                case .iPhoneX, .iPhone12Mini, .iPhone12, .iPhone13Mini, .iPhone13, .iPhone13Pro, .iPhone14Pro, .iPhone14ProZoomed, .iPhone14ProMaxZoomed, .iPhone16Pro:
+                case .iPhoneX, .iPhone12Mini, .iPhone12, .iPhone13Mini, .iPhone13, .iPhone13Pro, .iPhone14Pro, .iPhone14ProZoomed, .iPhone14ProMaxZoomed, .iPhone16Pro, .iPhone18Pro:
                     return 292.0
                 case .iPhoneAir:
                     return 292.0
-                case .iPhoneXSMax, .iPhoneXr, .iPhone12ProMax, .iPhone13ProMax, .iPhone14ProMax, .iPhone16ProMax:
+                case .iPhoneXSMax, .iPhoneXr, .iPhone12ProMax, .iPhone13ProMax, .iPhone14ProMax, .iPhone16ProMax, .iPhone18ProMax:
                     return 302.0
                 case .iPad, .iPad102Inch, .iPadPro10Inch:
                     return 263.0
@@ -449,7 +457,7 @@ public enum DeviceMetrics: CaseIterable, Equatable {
     func predictiveInputHeight(inLandscape: Bool) -> CGFloat {
         if inLandscape {
             switch self {
-                case .iPhone4, .iPhone5, .iPhone6, .iPhone6Plus, .iPhoneX, .iPhoneXSMax, .iPhoneXr, .iPhone12Mini, .iPhone12, .iPhone12ProMax, .iPhone13Mini, .iPhone13, .iPhone13Pro, .iPhone13ProMax, .iPhone14Pro, .iPhone14ProZoomed, .iPhone14ProMax, .iPhone14ProMaxZoomed, .iPhone16Pro, .iPhone16ProMax, .iPhoneAir, .iPhoneDuo:
+                case .iPhone4, .iPhone5, .iPhone6, .iPhone6Plus, .iPhoneX, .iPhoneXSMax, .iPhoneXr, .iPhone12Mini, .iPhone12, .iPhone12ProMax, .iPhone13Mini, .iPhone13, .iPhone13Pro, .iPhone13ProMax, .iPhone14Pro, .iPhone14ProZoomed, .iPhone14ProMax, .iPhone14ProMaxZoomed, .iPhone16Pro, .iPhone16ProMax, .iPhoneAir, .iPhoneDuo, .iPhone18Pro, .iPhone18ProMax:
                     return 37.0
                 case .iPad, .iPad102Inch, .iPadPro10Inch, .iPadPro11Inch, .iPadPro, .iPadPro3rdGen, .iPadMini, .iPadMini6thGen:
                     return 50.0
@@ -460,7 +468,7 @@ public enum DeviceMetrics: CaseIterable, Equatable {
             switch self {
                 case .iPhone4, .iPhone5:
                     return 37.0
-                case .iPhone6, .iPhoneX, .iPhoneXSMax, .iPhoneXr, .iPhone12Mini, .iPhone12, .iPhone12ProMax, .iPhone13Mini, .iPhone13, .iPhone13Pro, .iPhone13ProMax, .iPhone14Pro, .iPhone14ProZoomed, .iPhone14ProMax, .iPhone14ProMaxZoomed, .iPhone16Pro, .iPhone16ProMax, .iPhoneAir, .iPhoneDuo:
+                case .iPhone6, .iPhoneX, .iPhoneXSMax, .iPhoneXr, .iPhone12Mini, .iPhone12, .iPhone12ProMax, .iPhone13Mini, .iPhone13, .iPhone13Pro, .iPhone13ProMax, .iPhone14Pro, .iPhone14ProZoomed, .iPhone14ProMax, .iPhone14ProMaxZoomed, .iPhone16Pro, .iPhone16ProMax, .iPhoneAir, .iPhoneDuo, .iPhone18Pro, .iPhone18ProMax:
                     return 44.0
                 case .iPhone6Plus:
                     return 45.0
@@ -476,6 +484,55 @@ public enum DeviceMetrics: CaseIterable, Equatable {
         return self.keyboardHeight(inLandscape: inLandscape) + predictiveInputHeight(inLandscape: inLandscape)
     }
     
+    public var cutoutFrame: CGRect? {
+        let size: CGSize
+        let top: CGFloat
+        switch self {
+        case .iPhoneX, .iPhoneXSMax:
+            size = CGSize(width: 223.0, height: 30.0)
+            top = 0.0
+        case .iPhoneXr:
+            size = CGSize(width: 246.0, height: 33.0)
+            top = 0.0
+        case .iPhone12Mini:
+            size = CGSize(width: 242.0, height: 34.0)
+            top = 0.0
+        case .iPhone12, .iPhone12ProMax:
+            size = CGSize(width: 222.0, height: 32.0)
+            top = 0.0
+        case .iPhone13Mini:
+            size = CGSize(width: 189.0, height: 38.0)
+            top = 0.0
+        case .iPhone13, .iPhone13Pro, .iPhone13ProMax:
+            size = CGSize(width: 176.0, height: 34.0)
+            top = 0.0
+        case .iPhone14Pro, .iPhone14ProMax:
+            size = CGSize(width: 126.0, height: 112.0 / 3.0)
+            top = 11.0
+        case .iPhone16Pro, .iPhone16ProMax:
+            size = CGSize(width: 126.0, height: 112.0 / 3.0)
+            top = 41.0 / 3.0
+        case .iPhone18Pro, .iPhone18ProMax:
+            // Temporarily use the iPhone 16 Pro / Pro Max cutout geometry.
+            size = CGSize(width: 126.0, height: 112.0 / 3.0)
+            top = 41.0 / 3.0
+        case .iPhoneAir:
+            size = CGSize(width: 126.0, height: 112.0 / 3.0)
+            top = 59.0 / 3.0
+        case .iPhone14ProZoomed, .iPhone14ProMaxZoomed:
+            let standardDevice: DeviceMetrics = self == .iPhone14ProZoomed ? .iPhone14Pro : .iPhone14ProMax
+            guard let standardFrame = standardDevice.cutoutFrame else {
+                return nil
+            }
+            let factor = self.profileScreenSize.width / standardDevice.profileScreenSize.width
+            size = CGSize(width: standardFrame.width * factor, height: standardFrame.height * factor)
+            top = standardFrame.minY * factor
+        default:
+            return nil
+        }
+        return CGRect(x: (self.profileScreenSize.width - size.width) / 2.0, y: top, width: size.width, height: size.height)
+    }
+
     public var hasTopNotch: Bool {
         switch self {
             case .iPhoneX, .iPhoneXSMax, .iPhoneXr, .iPhone12Mini, .iPhone12, .iPhone12ProMax:
@@ -487,7 +544,7 @@ public enum DeviceMetrics: CaseIterable, Equatable {
     
     public var hasDynamicIsland: Bool {
         switch self {
-            case .iPhone14Pro, .iPhone14ProZoomed, .iPhone14ProMax, .iPhone14ProMaxZoomed, .iPhone16Pro, .iPhone16ProMax, .iPhoneAir:
+            case .iPhone14Pro, .iPhone14ProZoomed, .iPhone14ProMax, .iPhone14ProMaxZoomed, .iPhone16Pro, .iPhone16ProMax, .iPhoneAir, .iPhone18Pro, .iPhone18ProMax:
                 return true
             default:
                 return false

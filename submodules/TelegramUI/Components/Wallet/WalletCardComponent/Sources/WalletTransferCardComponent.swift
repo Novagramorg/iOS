@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import SwiftSignalKit
 import Display
 import ComponentFlow
 import AnimatedTextComponent
@@ -60,6 +61,17 @@ public final class WalletTransferCardComponent: Component {
         private let infoButton = ComponentView<Empty>()
 
         private var component: WalletTransferCardComponent?
+        private var displayLink: SharedDisplayLinkDriver.Link?
+        private var deviceMotionDisposable: Disposable?
+        private var reflectionRotation = WalletCardBackgroundRotation()
+
+        public override var isHidden: Bool {
+            didSet {
+                if self.isHidden != oldValue {
+                    self.updateAnimationState()
+                }
+            }
+        }
 
         override public init(frame: CGRect) {
             super.init(frame: frame)
@@ -71,10 +83,72 @@ public final class WalletTransferCardComponent: Component {
             if #available(iOS 13.0, *) {
                 self.layer.cornerCurve = .continuous
             }
+
+            NotificationCenter.default.addObserver(self, selector: #selector(self.updateAnimationState), name: UIApplication.didBecomeActiveNotification, object: nil)
+            NotificationCenter.default.addObserver(self, selector: #selector(self.stopAnimation), name: UIApplication.willResignActiveNotification, object: nil)
+            NotificationCenter.default.addObserver(self, selector: #selector(self.updateAnimationState), name: UIAccessibility.reduceMotionStatusDidChangeNotification, object: nil)
         }
 
         required init?(coder: NSCoder) {
             fatalError("init(coder:) has not been implemented")
+        }
+
+        deinit {
+            self.displayLink?.invalidate()
+            self.deviceMotionDisposable?.dispose()
+            NotificationCenter.default.removeObserver(self)
+        }
+
+        public override func didMoveToWindow() {
+            super.didMoveToWindow()
+            if self.window != nil {
+                self.reflectionRotation.reset(to: WalletCardBackgroundMotion.shared.currentRotation)
+            }
+            self.updateAnimationState()
+            if self.window != nil {
+                self.backgroundView.renderStaticFrame(reflectionRotation: self.reflectionRotation.value)
+            }
+        }
+
+        @objc private func updateAnimationState() {
+            guard self.component != nil, self.window != nil, !self.isHidden,
+                  UIApplication.shared.applicationState == .active, !UIAccessibility.isReduceMotionEnabled else {
+                self.stopAnimation()
+                return
+            }
+            if self.deviceMotionDisposable == nil {
+                self.deviceMotionDisposable = WalletCardBackgroundMotion.shared.subscribe()
+                self.updateBackgroundMotion(isResuming: true)
+            }
+            if self.displayLink == nil {
+                self.displayLink = SharedDisplayLinkDriver.shared.add { [weak self] _ in
+                    self?.updateBackgroundMotion()
+                }
+            }
+            self.updateBackgroundMotion()
+        }
+
+        @objc private func stopAnimation() {
+            self.displayLink?.invalidate()
+            self.displayLink = nil
+            self.deviceMotionDisposable?.dispose()
+            self.deviceMotionDisposable = nil
+        }
+
+        private func updateBackgroundMotion(isResuming: Bool = false) {
+            guard self.deviceMotionDisposable != nil, let window = self.window else { return }
+            let time = CACurrentMediaTime()
+            let rotation = Double(WalletCardBackgroundMotion.shared.rotation(
+                at: time,
+                orientation: window.windowScene?.interfaceOrientation ?? .portrait
+            ))
+            let previousRotation = self.reflectionRotation.value
+            if isResuming {
+                self.reflectionRotation.resume(at: time, to: rotation)
+            }
+            self.reflectionRotation.update(at: time, to: rotation)
+            guard self.reflectionRotation.value != previousRotation else { return }
+            self.backgroundView.renderStaticFrame(reflectionRotation: self.reflectionRotation.value)
         }
 
         func update(
@@ -346,6 +420,7 @@ public final class WalletTransferCardComponent: Component {
                 )
             )
             self.backgroundView.update(cardSize: size, cornerRadius: 20.0 * scale)
+            self.updateAnimationState()
             return size
         }
     }

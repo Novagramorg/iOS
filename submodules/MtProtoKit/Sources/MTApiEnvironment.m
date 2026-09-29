@@ -24,6 +24,7 @@ static NSData * _Nullable parseHexString(NSString * _Nonnull hex) {
         char *b2 = NULL;
         *bp++ = strtol(buf, &b2, 16);
         if (b2 != buf + 2) {
+            free(bytes);
             return nil;
         }
     }
@@ -560,6 +561,10 @@ NSString *suffix = @"";
         return @"iPhone 17 Pro Max";
     if ([platform isEqualToString:@"iPhone18,4"])
         return @"iPhone Air";
+    if ([platform isEqualToString:@"iPhone19,2"])
+        return @"iPhone 18 Pro";
+    if ([platform isEqualToString:@"iPhone19,3"] || [platform isEqualToString:@"iPhone19,7"])
+        return @"iPhone 18 Pro Max";
         
     if ([platform hasPrefix:@"iPod1"])
         return @"iPod touch 1G";

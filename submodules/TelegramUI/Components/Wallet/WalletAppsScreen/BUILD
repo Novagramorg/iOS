@@ -19,6 +19,7 @@ swift_library(
         "//submodules/Components/ViewControllerComponent",
         "//submodules/Display",
         "//submodules/ItemListUI",
+        "//submodules/PresentationDataUtils",
         "//submodules/SSignalKit/SwiftSignalKit",
         "//submodules/TelegramPresentationData",
         "//submodules/TelegramUI/Components/AlertComponent",

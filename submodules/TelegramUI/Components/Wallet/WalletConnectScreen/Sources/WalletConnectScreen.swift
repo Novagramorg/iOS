@@ -416,6 +416,7 @@ private final class WalletConnectSheetContent: CombinedComponent {
             let fiatRate = state.walletState?.fiat.selectedRate
             let card = card.update(
                 component: WalletCardComponent(
+                    theme: environment.theme,
                     balance: state.walletState?.balance.currentValue,
                     fiatCurrency: fiatCurrency,
                     fiatRate: fiatRate,
