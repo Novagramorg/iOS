@@ -40,6 +40,7 @@ struct DiamondStyle: Equatable {
     var starOpacity: Float = 1
     var starZoom: Float = 1
     var starEmission: Float = 1
+    var rightwardStars: Bool = false
     var burstSize: Float = 1
     var burstFadeInDuration: Float = 0.5
     var steadyStars: Bool = true

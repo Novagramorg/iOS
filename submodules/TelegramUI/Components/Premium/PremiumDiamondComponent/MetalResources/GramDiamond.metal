@@ -29,7 +29,7 @@ struct StarUniforms {
     float4x4 projection;
     float4 animation; // burst age, transport time, burst enabled, light background
     float4 layout; // viewport pixels, steady instance count, burst seed
-    float4 appearance; // palette identifier, reserved
+    float4 appearance; // x: palette identifier, w: rightward fan
     float4 tint; // y: star opacity, z: emission radius, w: burst fade-in seconds
 };
 struct BackgroundStarRaster {
@@ -74,10 +74,21 @@ vertex BackgroundStarRaster backgroundStarVertex(uint vertexIndex [[vertex_id]],
     float sector = starRandom(seed+4);
     float spread = starRandom(seed+14);
     const float verticalSpread = 0.78;
-    float lowerFanAngle = atan(tan(-M_PI_F/6.0)/verticalSpread);
-    float elevation = sector < 0.85 ? mix(lowerFanAngle,0.34,spread) : mix(0.52,1.40,spread);
-    float side = starRandom(seed+15) < 0.5 ? -1.0 : 1.0;
-    float2 direction = float2(side*cos(elevation),sin(elevation));
+    float2 direction;
+    if (u.appearance.w > 0.5) {
+        // The wallet gem sits near the left edge: 85% cross the card, 15% fan up/down.
+        float elevation = mix(-M_PI_F/9.0,M_PI_F/9.0,spread);
+        if (sector >= 0.85) {
+            float side = starRandom(seed+15) < 0.5 ? -1.0 : 1.0;
+            elevation = side * mix(M_PI_F/3.0,M_PI_F*17.0/36.0,spread);
+        }
+        direction = float2(cos(elevation),sin(elevation));
+    } else {
+        float lowerFanAngle = atan(tan(-M_PI_F/6.0)/verticalSpread);
+        float elevation = sector < 0.85 ? mix(lowerFanAngle,0.34,spread) : mix(0.52,1.40,spread);
+        float side = starRandom(seed+15) < 0.5 ? -1.0 : 1.0;
+        direction = float2(side*cos(elevation),sin(elevation));
+    }
     float distance;
     if (burst) {
         float travelTime = max(age,0.0);

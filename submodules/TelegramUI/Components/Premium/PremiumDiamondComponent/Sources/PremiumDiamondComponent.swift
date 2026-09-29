@@ -30,7 +30,6 @@ public final class InteractiveDiamondComponent: Component {
         public let transferEnergy: CGFloat?
     }
 
-    /// The same projected silhouette used by the text lens, in view coordinates.
     public struct RefractionGeometry {
         public var center: CGPoint
         public var hull: [CGPoint]
@@ -105,6 +104,7 @@ public final class InteractiveDiamondComponent: Component {
         private var isHolding = false
         public private(set) var isExpanded = false
         public var onExpansionChanged: ((Bool) -> Void)?
+        public var onLanding: ((CGFloat) -> Void)?
         public var onMotionUpdated: ((MotionState?) -> Void)?
         public var onRefractionUpdated: ((RefractionGeometry?) -> Void)? {
             didSet {
@@ -132,6 +132,7 @@ public final class InteractiveDiamondComponent: Component {
         private var diamondWidth: CGFloat = 0.0
         private var walletScale: CGFloat = 1.0
         private var walletLeftInset: CGFloat = .greatestFiniteMagnitude
+        private var walletStarCanvasWidth: CGFloat = 240.0
         private var expansionStyle: ExpansionStyle = .centered
         private var expandedCenter: CGPoint?
         private var refractionSource: RefractionSource?
@@ -141,7 +142,7 @@ public final class InteractiveDiamondComponent: Component {
         private var dragPosition: CGPoint?
         private var pressStart: (position: CGPoint, time: CFTimeInterval)?
         private var dragSamples: [(x: CGFloat, time: CFTimeInterval)] = []
-        private var landingHaptic: DispatchWorkItem?
+        private var landingFeedback: DispatchWorkItem?
 
         public override var isUserInteractionEnabled: Bool {
             didSet {
@@ -219,7 +220,7 @@ public final class InteractiveDiamondComponent: Component {
         required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
         deinit {
-            self.landingHaptic?.cancel()
+            self.landingFeedback?.cancel()
             NotificationCenter.default.removeObserver(self)
         }
 
@@ -258,7 +259,7 @@ public final class InteractiveDiamondComponent: Component {
             let position = gesture.location(in: self)
             switch gesture.state {
             case .began:
-                self.cancelLandingHaptic()
+                self.cancelLandingFeedback()
                 Haptics.prime()
                 self.dragPosition = position
                 self.pressStart = (position, now)
@@ -269,7 +270,6 @@ public final class InteractiveDiamondComponent: Component {
                 let wasHolding = self.isHolding
                 let releasePower = CGFloat(self.diamondLayer.refractionStrength)
                 let translation = CGPoint(x: position.x - previous.x, y: position.y - previous.y)
-                // Average recent movement so a tiny final touch sample does not erase the fling.
                 self.dragSamples.append((position.x, now))
                 while self.dragSamples.count > 2 && self.dragSamples[0].time < now - 0.08 {
                     self.dragSamples.removeFirst()
@@ -302,10 +302,10 @@ public final class InteractiveDiamondComponent: Component {
                     Haptics.hit(0.4)
                 }
                 if gesture.state == .ended, wasHolding, self.expansionStyle != .wallet {
-                    self.scheduleLandingHaptic(power: releasePower)
+                    self.scheduleLandingFeedback(power: releasePower)
                 }
             case .cancelled, .failed:
-                self.cancelLandingHaptic()
+                self.cancelLandingFeedback()
                 self.dragPosition = nil
                 self.pressStart = nil
                 self.dragSamples.removeAll(keepingCapacity: true)
@@ -330,23 +330,26 @@ public final class InteractiveDiamondComponent: Component {
                 || (gestureRecognizer === self.pressGesture && otherGestureRecognizer === self.pinchGesture)
         }
 
-        private func scheduleLandingHaptic(power: CGFloat) {
-            self.cancelLandingHaptic()
-            guard power > 0.2, !self.isHolding else { return }
+        private func scheduleLandingFeedback(power: CGFloat) {
+            self.cancelLandingFeedback()
+            guard power > 0.0, (power > 0.2 || self.onLanding != nil), !self.isHolding else { return }
             let impact = DispatchWorkItem { [weak self] in
                 guard let self else { return }
-                self.landingHaptic = nil
+                self.landingFeedback = nil
                 guard self.window != nil, self.isRenderingEnabled, self.isUserInteractionEnabled,
                       !self.isHolding, UIApplication.shared.applicationState == .active else { return }
-                Haptics.hit(0.35 + 0.4 * min(1.0, power))
+                if power > 0.2 {
+                    Haptics.hit(0.35 + 0.4 * min(1.0, power))
+                }
+                self.onLanding?(min(1.0, power))
             }
-            self.landingHaptic = impact
+            self.landingFeedback = impact
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2, execute: impact)
         }
 
-        private func cancelLandingHaptic() {
-            self.landingHaptic?.cancel()
-            self.landingHaptic = nil
+        private func cancelLandingFeedback() {
+            self.landingFeedback?.cancel()
+            self.landingFeedback = nil
         }
 
         private func setHolding(_ holding: Bool) {
@@ -402,7 +405,6 @@ public final class InteractiveDiamondComponent: Component {
             self.diamondLayer.refractionStrength = min(1.0, max(0.0, refractionStrength))
             let restingCenter = CGPoint(x: self.restingSize.width * 0.5, y: self.restingSize.height * 0.5)
             let expandedCenter = self.expandedCenter ?? restingCenter
-            // Move the rendered layer with the growth spring, keeping gesture coordinates fixed.
             self.diamondLayer.position = CGPoint(
                 x: restingCenter.x + (expandedCenter.x - restingCenter.x) * CGFloat(refractionStrength),
                 y: restingCenter.y + (expandedCenter.y - restingCenter.y) * CGFloat(refractionStrength)
@@ -413,7 +415,10 @@ public final class InteractiveDiamondComponent: Component {
             }
             self.updateRefractionPosition()
             if self.diamondLayer.isCompletingTransfer || self.diamondLayer.hasStarBursts {
-                self.diamondLayer.renderSize = CGSize(width: 240.0, height: 240.0)
+                self.diamondLayer.renderSize = CGSize(
+                    width: self.expansionStyle == .wallet ? self.walletStarCanvasWidth : 240.0,
+                    height: 240.0
+                )
             } else if expanded {
                 self.diamondLayer.renderSize = CGSize(width: 220.0, height: 220.0)
             } else if self.diamondLayer.hasTransferAnimation {
@@ -434,7 +439,7 @@ public final class InteractiveDiamondComponent: Component {
                 self.pinchGesture.isEnabled = self.expansionStyle == .wallet
             }
             self.initialZoom = nil
-            self.cancelLandingHaptic()
+            self.cancelLandingFeedback()
             self.diamondLayer.cancelTapSpin()
             guard self.isHolding || self.expansion != nil || self.dragPosition != nil || self.diamondLayer.isGrowthAnimating else {
                 self.applyExpansion()
@@ -455,11 +460,11 @@ public final class InteractiveDiamondComponent: Component {
             self.applyExpansion()
         }
 
-        /// Card motion is applied to the model, keeping hit testing and the text lens in card coordinates.
-        public func updateWalletTilt(pitch: CGFloat, roll: CGFloat, scale: CGFloat, leftInset: CGFloat) {
+        public func updateWalletTilt(pitch: CGFloat, roll: CGFloat, scale: CGFloat, leftInset: CGFloat, starCanvasWidth: CGFloat) {
             guard self.expansionStyle == .wallet else { return }
             self.walletScale = scale
             self.walletLeftInset = leftInset
+            self.walletStarCanvasWidth = max(240.0, ceil(starCanvasWidth))
             var style = self.diamondLayer.diamondStyle
             style.tilt = Float(-pitch * 2.8)
             style.lean = Float(roll * 2.6)
@@ -538,13 +543,13 @@ public final class InteractiveDiamondComponent: Component {
             style.widthPoints = Float(component.diamondWidth * (component.expansionStyle == .wallet ? self.walletScale : 1.0))
             style.appearance = component.appearance
             style.widthCompensation = component.expansionStyle != .wallet
-            // The card reference keeps the top nearly fixed: 3x growth moves the center down by 24 pt.
             style.dragGrow = component.expansionStyle == .wallet ? 2.6 : (component.expansionStyle == .downward ? 3.0 : 1.0)
             style.growShift = component.expansionStyle == .downward && component.expandedCenter == nil ? 12.0 : 0.0
             style.growDamping = component.expansionStyle != .centered ? 0.62 : 0.42
             style.releaseDecay = component.expansionStyle != .centered ? 1.1 : 0.0
             style.releaseTilt = component.expansionStyle != .centered ? 0.0 : 2.6
             style.tapToSpin = isInteractive && component.tapToSpin
+            style.rightwardStars = component.expansionStyle == .wallet
             if component.expansionStyle != .wallet {
                 style.tilt = 0.0
                 style.lean = 0.0

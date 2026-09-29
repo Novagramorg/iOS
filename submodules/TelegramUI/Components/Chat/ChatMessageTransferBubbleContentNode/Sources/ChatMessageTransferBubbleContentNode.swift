@@ -804,6 +804,25 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
         }
     }
 
+    private func animateDiamondLandingBump(power: CGFloat) {
+        guard self.visibility != .none, !self.isSendingTransfer,
+              UIApplication.shared.applicationState == .active, !UIAccessibility.isReduceMotionEnabled else {
+            return
+        }
+        let duration = 1.0
+        let frameCount = Int(duration * 120.0)
+        let values = (0 ... frameCount).map { index -> NSNumber in
+            let time = duration * Double(index) / Double(frameCount)
+            let bounce = index == frameCount ? 0.0 : sin(2.0 * .pi * 2.4 * time) * exp(-time / 0.2)
+            return NSNumber(value: 1.0 - 0.05 * Double(power) * bounce)
+        }
+        self.mediaContainerNode.layer.animateKeyframes(
+            values: values,
+            duration: duration,
+            keyPath: "sublayerTransform.scale"
+        )
+    }
+
     private func animateHighlightBump() {
         guard self.visibility != .none, UIApplication.shared.applicationState == .active,
               !UIAccessibility.isReduceMotionEnabled else {
@@ -1487,7 +1506,14 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                                     self.updateDiamondRefraction()
                                 }
                                 iconView.onMotionUpdated = { [weak self] state in
-                                    self?.updateCardBackgroundRotation(state)
+                                    guard let self else { return }
+                                    if state == nil {
+                                        self.mediaContainerNode.layer.removeAnimation(forKey: "sublayerTransform.scale")
+                                    }
+                                    self.updateCardBackgroundRotation(state)
+                                }
+                                iconView.onLanding = { [weak self] power in
+                                    self?.animateDiamondLandingBump(power: power)
                                 }
                             }
                             iconView.frame = CGRect(

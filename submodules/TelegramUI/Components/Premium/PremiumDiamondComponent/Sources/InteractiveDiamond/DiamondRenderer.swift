@@ -390,6 +390,7 @@ final class DiamondRenderer: ComputeState {
                 layout: SIMD4(Float(size.width),Float(size.height),Float(DiamondEntrance.steadyStarCount),0),
                 appearance: u.appearance,
                 tint: SIMD4(1, min(1, max(0, style.starOpacity)), max(0.05, style.starEmission), max(0.001, style.burstFadeInDuration)))
+            stars.appearance.w = style.rightwardStars ? 1 : 0
             stars.projection.columns.3.y -= 2 * style.verticalOffset * pixelsPerPoint / Float(size.height)
             encoder.setCullMode(.none)
             encoder.setDepthStencilState(sparkleDepthState)
