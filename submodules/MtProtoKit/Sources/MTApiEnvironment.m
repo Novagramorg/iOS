@@ -24,6 +24,7 @@ static NSData * _Nullable parseHexString(NSString * _Nonnull hex) {
         char *b2 = NULL;
         *bp++ = strtol(buf, &b2, 16);
         if (b2 != buf + 2) {
+            free(bytes);
             return nil;
         }
     }
