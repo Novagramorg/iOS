@@ -202,6 +202,10 @@ public final class ChunkMediaPlayerV2: ChunkMediaPlayer {
     }
 
     public var actionAtEnd: MediaPlayerActionAtEnd = .stop
+
+    // A position this close to the duration counts as the end. HLS needs the slack: its chunks do not
+    // always line up with the declared duration.
+    private static let endTolerance: Double = 0.1
     
     private var didSeekOnce: Bool = false
     private var isPlaying: Bool = false
@@ -743,9 +747,14 @@ public final class ChunkMediaPlayerV2: ChunkMediaPlayer {
             }
         }
         
+        // A video no longer than the end tolerance is at its end from position 0, so it is not played:
+        // its clock never moves. Its media is still requested while playback is asked for, so it shows
+        // its first frame, and its end action runs once, below.
+        let isTooShortToPlay = duration > 0.0 && duration <= ChunkMediaPlayerV2.endTolerance
+
         var effectiveRate: Double = 0.0
         if self.isPlaying {
-            if !isBuffering {
+            if !isBuffering && !isTooShortToPlay {
                 effectiveRate = self.baseRate
             }
         }
@@ -769,7 +778,7 @@ public final class ChunkMediaPlayerV2: ChunkMediaPlayer {
             self.renderSynchronizer.setRate(0.0, time: .invalid)
         }
 
-        if effectiveRate != 0.0 {
+        if effectiveRate != 0.0 || (isTooShortToPlay && self.isPlaying) {
             self.triggerRequestMediaData(now: now)
         }
         
@@ -811,12 +820,19 @@ public final class ChunkMediaPlayerV2: ChunkMediaPlayer {
             self.onSeeked?()
         }
 
-        if duration > 0.0 && timestampSeconds >= duration - 0.1 {
+        if duration > 0.0 && timestampSeconds >= duration - ChunkMediaPlayerV2.endTolerance {
             if !self.stoppedAtEnd {
                 switch self.actionAtEnd {
                 case let .loop(f):
-                    self.stoppedAtEnd = false
-                    self.seek(timestamp: 0.0, play: true, notify: true)
+                    // Looping a video that is too short to play would seek to where its clock already is,
+                    // and that no-op seek re-enters this check synchronously, without bound.
+                    if isTooShortToPlay {
+                        self.stoppedAtEnd = true
+                        self.pause()
+                    } else {
+                        self.stoppedAtEnd = false
+                        self.seek(timestamp: 0.0, play: true, notify: true)
+                    }
                     f?()
                 case .stop:
                     self.stoppedAtEnd = true
@@ -826,7 +842,7 @@ public final class ChunkMediaPlayerV2: ChunkMediaPlayer {
                     self.pause()
                     f()
                 case let .loopDisablingSound(f):
-                    if duration - 0.1 <= 0.0 {
+                    if isTooShortToPlay {
                         self.stoppedAtEnd = true
                         self.pause()
                     } else {
