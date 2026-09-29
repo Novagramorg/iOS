@@ -12,7 +12,6 @@ public final class LensTransitionContainer: UIView {
     private var sourcePreview: UITargetedPreview?
     private var sourceVisibilityAssertion: AnyObject?
     private weak var originalSourceView: UIView?
-    private var pendingDismissal: (() -> Void)?
     private var isPresenting = false
     private var pendingLayout: (CGSize, CGFloat, Bool)?
     private var cornerRadius: CGFloat = 30.0
@@ -98,15 +97,13 @@ public final class LensTransitionContainer: UIView {
             }
             alongsideAnimations()
         }, completion: { [weak self] in
-            guard let self else { return }
+            // A close that took over this opening owns the menu from then on.
+            guard let self, self.isPresenting else { return }
             self.isPresenting = false
             if let (size, radius, dark) = self.pendingLayout {
                 self.pendingLayout = nil
                 self.update(size: size, cornerRadius: radius, isDark: dark, transition: .immediate)
             }
-            let pendingDismissal = self.pendingDismissal
-            self.pendingDismissal = nil
-            pendingDismissal?()
         }) {
             self.isPresenting = false
             self.morph = nil
@@ -117,13 +114,11 @@ public final class LensTransitionContainer: UIView {
     }
 
     public func animateOut(alongsideAnimations: @escaping () -> Void = {}, completion: @escaping () -> Void) {
-        if self.isPresenting {
-            self.pendingDismissal = { [weak self] in
-                guard let self else { completion(); return }
-                self.animateOut(alongsideAnimations: alongsideAnimations, completion: completion)
-            }
-            return
-        }
+        // A close requested while the menu is still opening starts now and takes over the
+        // running morph. UIKit reports an opening complete about a second after the menu
+        // looks open, so waiting for it left an open menu that ignored taps until then.
+        let interruptsPresentation = self.isPresenting
+        self.isPresenting = false
         self.sourceLease?.content?.updateGeometry()
         if #available(iOS 26.0, *), let morph = self.morph as? LiquidMorphTransition,
            let originalSourceView = self.originalSourceView, originalSourceView.window != nil,
@@ -133,7 +128,7 @@ public final class LensTransitionContainer: UIView {
             // source transform, as UIKit does for its dismissal preview.
             let attachment = destination.target.container.convert(destination.target.center, to: self)
             let menu = self.makeMenuPreview()
-            if morph.animate(from: menu, to: destination, attachment: attachment, in: self, sourceIdentity: originalSourceView, alongsideAnimations: alongsideAnimations, completion: { [weak self] in
+            if morph.animate(from: menu, to: destination, attachment: attachment, in: self, sourceIdentity: originalSourceView, interruptingCurrent: interruptsPresentation, alongsideAnimations: alongsideAnimations, completion: { [weak self] in
                 self?.finishDismissal()
                 completion()
             }) {

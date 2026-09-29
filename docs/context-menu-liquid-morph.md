@@ -125,6 +125,18 @@ Opening and closing use the real source view as their shared identity, including
 
 The full Telegram build passed. The production overlapping-profile check and all 26 standard menu checks passed on iOS 26.0 and 27.0. The recorded second opening takes over without leaving the returning button visible. The build is installed on the requested iPhone 18 Pro; the installed framework hash matches the tested artifact.
 
+## Dismissal during presentation (2026-09-29)
+
+A close requested while the menu is still opening starts immediately and takes over the running morph. Before this, `LensTransitionContainer.animateOut` held the close until the opening's completion, and `ContextControllerNode.animateOut` disables interaction at the first dismiss request, so an outside tap left an open menu that ignored every tap until the opening finished. That wait is long. UIKit reports a morph complete only when every spring has settled: on the iOS 27 simulator the opening completes 1.27 s after it starts and a close 1.67 s after it starts, while the menu reaches full size in about 0.25 s.
+
+The takeover uses the same native handoff as rapid reopening. `LiquidMorphTransition.animate(..., interruptingCurrent: true)` starts a second driver while the first runs; the driver finds the in-flight coordinator by source identity and passes it as `previousAnimation`, so UIKit reverses the running morph from where it is. A plain second `animate` is still rejected. Both completions fire (together, in the measurements, when the close finishes). Only the newest transition clears `isAnimating`, and the container ignores a superseded opening's completion, so its deferred layout is never applied to a closing menu. If the source has left the window, the close fades at once instead of after the opening. UIKit still completes and releases the interrupted opening even after its host leaves the window (measured).
+
+The morph itself does not block touches. It adds no Core Animation animations to app views (UIKit renders it through `_UIReparentingView` / `_UIPortalView`), so UIKit's hit-test rule for views with non-interactive UIView animations never applies, and the menu's model frame is final from the first frame. Rows hit-test normally from about 0.1 s into the opening, and the dismiss area throughout.
+
+Coverage: `testCloseRequestedDuringOpenTakesOverImmediately` (close 0.3 s into the opening) and `testCloseRequestedAsOpenStartsTakesOverImmediately` (same run-loop turn) failed on the deferring code and pass on iOS 27.0, along with the other twelve prototype tests. The prototype app's 18 cycles, 12 of them dismissed as they open, pass. The gallery checks that dismiss 50 ms into presentation exercise this path in production.
+
+Still open: the controller's dismissal completion, and therefore any action run from `dismiss(completion:)`, waits for the close to settle.
+
 ## Live profile sources
 
 Profile reference nodes now provide a live transition-content factory. `ContextMenuSourceLease` shares its result across overlapping menus. The container reparents the actual foreground into an unpressed ancestor with a matching `NavigationBackgroundNode` (same color, blur, saturation, rounded geometry, and Reduce Transparency treatment). The source's shared-background mask stays hidden until the last lease ends. Both animation directions target the same live view; UIKit receives the original reference view as the logical source identity for interruption handoff.
