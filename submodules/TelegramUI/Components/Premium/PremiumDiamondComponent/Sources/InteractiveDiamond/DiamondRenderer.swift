@@ -56,9 +56,8 @@ final class DiamondRenderer: ComputeState {
         var rect: SIMD4<Float>
         var uv: SIMD4<Float>
         var viewport: SIMD4<Float> // pixel center, pixels per point, edge count
-        var parameters: SIMD4<Float> // strength, yaw, radius in points, mode (mask, dark mask, color)
-        var center: SIMD4<Float> // projected stone center in points
-        var tint: SIMD4<Float> // backdrop color (rgb), enabled (w)
+        var parameters: SIMD4<Float> // strength, yaw, radius in points, light background
+        var center: SIMD4<Float> // projected stone center in points, preserves source colors, reserved
     }
 
     private struct Lens {
@@ -66,6 +65,7 @@ final class DiamondRenderer: ComputeState {
         let texture: MTLTexture
         var uniforms: LensUniforms
         let edges: [SIMD4<Float>]
+        let hull: [SIMD2<Float>]
     }
 
     enum Failure: LocalizedError {
@@ -283,17 +283,16 @@ final class DiamondRenderer: ComputeState {
                 rect: SIMD4(Float(rect.minX), Float(rect.minY), Float(rect.width), Float(rect.height)),
                 uv: source.uv,
                 viewport: SIMD4(uniforms.viewport.x * 0.5, uniforms.viewport.y * 0.5, pixelsPerPoint, Float(edges.count)),
-                parameters: SIMD4(min(1, strength), yaw, radius, source.preservesColors ? 2 : (lightBackground ? 1 : 0)),
-                center: SIMD4(center.x, center.y, 0, 0),
-                tint: source.backgroundColor.map { SIMD4($0, 1) } ?? .zero),
-            edges: edges)
+                parameters: SIMD4(min(1, strength), yaw, radius, lightBackground ? 1 : 0),
+                center: SIMD4(center.x, center.y, source.preservesColors ? 1 : 0, 0)),
+            edges: edges, hull: hull)
     }
 
     private func uniforms(size: CGSize, time: Float, motion: DiamondMotion, style: DiamondStyle,
                           grow: Float, pixelsPerPoint: Float, reduceMotion: Bool, heldProgress: Float, highlightBoost: Float) -> Uniforms {
-        let model = DiamondMath.rotation(x: motion.pitch, y: motion.yaw)
+        let model = DiamondMath.rotation(x: motion.pitch, y: motion.yaw + motion.lean)
         let horizontalScale: Float = style.widthCompensation
-            ? silhouette.horizontalScale(yaw: motion.yaw, pitch: motion.pitch) : 1
+            ? silhouette.horizontalScale(yaw: motion.yaw + motion.lean, pitch: motion.pitch) : 1
         let zoom: Float
         if style.widthPoints > 0 && size.width > 0 && size.height > 0 {
             let aspect = Float(size.width / size.height)
@@ -356,14 +355,23 @@ final class DiamondRenderer: ComputeState {
                         referenceCrownFlash: flashes.0, referencePavilionFlash: flashes.1)
     }
 
-    func encode(encoder: MTLRenderCommandEncoder, size: CGSize, time: Float, starBursts: [DiamondStarBurst], motion: DiamondMotion, style: DiamondStyle, grow: Float, pixelsPerPoint: Float, reduceMotion: Bool, lightBackground: Bool, refractionSource: InteractiveDiamondComponent.RefractionSource?, refractionStrength: Float, highlightBoost: Float, colorPixelFormat: MTLPixelFormat) {
+    func encode(encoder: MTLRenderCommandEncoder, size: CGSize, time: Float, starBursts: [DiamondStarBurst], motion: DiamondMotion, style: DiamondStyle, grow: Float, pixelsPerPoint: Float, reduceMotion: Bool, lightBackground: Bool, refractionSource: InteractiveDiamondComponent.RefractionSource?, refractionStrength: Float, highlightBoost: Float, colorPixelFormat: MTLPixelFormat, refractionUpdated: ((InteractiveDiamondComponent.RefractionGeometry?) -> Void)? = nil) {
         guard let pipelines = colorPixelFormat == .rgba16Float ? self.hdrPipelines : self.sdrPipelines else { return }
         let sparklePipeline = pipelines.sparkle
         let referenceHighlightPipeline = pipelines.referenceHighlight
         var u = uniforms(size: size, time: time, motion: motion, style: style, grow: grow, pixelsPerPoint: pixelsPerPoint,
             reduceMotion: reduceMotion, heldProgress: refractionStrength, highlightBoost: highlightBoost)
-        let lens = self.lens(source: refractionSource, strength: refractionStrength, yaw: motion.yaw,
+        let lens = self.lens(source: refractionSource, strength: refractionStrength, yaw: motion.yaw + motion.lean,
             pipeline: refractionSource == nil ? nil : pipelines.lens, uniforms: u, pixelsPerPoint: pixelsPerPoint, lightBackground: lightBackground)
+        if let refractionUpdated {
+            refractionUpdated(lens.map { lens in
+                InteractiveDiamondComponent.RefractionGeometry(
+                    center: CGPoint(x: CGFloat(lens.uniforms.center.x), y: CGFloat(lens.uniforms.center.y)),
+                    hull: lens.hull.map { CGPoint(x: CGFloat($0.x), y: CGFloat($0.y)) },
+                    strength: CGFloat(refractionStrength), rotation: motion.yaw + motion.lean
+                )
+            })
+        }
         let stonePipeline: MTLRenderPipelineState
         if let lens {
             stonePipeline = lens.pipeline

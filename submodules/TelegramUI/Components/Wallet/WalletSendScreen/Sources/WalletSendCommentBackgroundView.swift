@@ -3,12 +3,13 @@ import Display
 import TelegramPresentationData
 import GlassBackgroundComponent
 
-final class WalletSendCommentBackgroundView: UIView {
+public final class WalletSendCommentBackgroundView: UIView {
     private struct Parameters: Equatable {
         let size: CGSize
         let scale: CGFloat
         let maxCornerRadius: CGFloat
         let minCornerRadius: CGFloat
+        let incoming: Bool
         let backgroundColor: UIColor
         let primaryTextColor: UIColor
         let isDark: Bool
@@ -18,7 +19,7 @@ final class WalletSendCommentBackgroundView: UIView {
     private let glassHighlightRecognizer = GlassHighlightGestureRecognizer(target: nil, action: nil)
     private var parameters: Parameters?
 
-    override var isUserInteractionEnabled: Bool {
+    override public var isUserInteractionEnabled: Bool {
         didSet {
             self.glassHighlightRecognizer.isEnabled = self.isUserInteractionEnabled
             if !self.isUserInteractionEnabled {
@@ -28,7 +29,7 @@ final class WalletSendCommentBackgroundView: UIView {
         }
     }
 
-    override init(frame: CGRect) {
+    override public init(frame: CGRect) {
         super.init(frame: frame)
 
         self.imageView.contentMode = .scaleToFill
@@ -37,11 +38,11 @@ final class WalletSendCommentBackgroundView: UIView {
         self.isUserInteractionEnabled = false
     }
 
-    required init?(coder: NSCoder) {
+    required public init?(coder: NSCoder) {
         preconditionFailure()
     }
 
-    func update(size: CGSize, maxCornerRadius: CGFloat, minCornerRadius: CGFloat, theme: PresentationTheme) {
+    public func update(size: CGSize, maxCornerRadius: CGFloat, minCornerRadius: CGFloat, theme: PresentationTheme, incoming: Bool = false) {
         guard size.width > 0.0, size.height > 0.0 else { return }
         self.imageView.frame = CGRect(origin: .zero, size: size)
         let parameters = Parameters(
@@ -49,6 +50,7 @@ final class WalletSendCommentBackgroundView: UIView {
             scale: self.window?.screen.scale ?? UIScreen.main.scale,
             maxCornerRadius: maxCornerRadius,
             minCornerRadius: minCornerRadius,
+            incoming: incoming,
             backgroundColor: theme.list.modalPlainBackgroundColor,
             primaryTextColor: theme.list.itemPrimaryTextColor,
             isDark: theme.overallDarkAppearance
@@ -66,7 +68,7 @@ final class WalletSendCommentBackgroundView: UIView {
         let bubble = messageBubbleImage(
             maxCornerRadius: parameters.maxCornerRadius,
             minCornerRadius: parameters.minCornerRadius,
-            incoming: false,
+            incoming: parameters.incoming,
             fillColor: .white,
             strokeColor: .clear,
             neighbors: .none,
