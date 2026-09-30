@@ -115,19 +115,34 @@ final class TimeBasedCleanupTests: XCTestCase {
         return (result, visits)
     }
 
-    private func makeCleanup() -> TimeBasedCleanup {
-        return self.makeCleanupWithStorage().cleanup
+    private func makeCleanup(scanDelay: Double = 10.0) -> TimeBasedCleanup {
+        return self.makeCleanupWithStorage(scanDelay: scanDelay).cleanup
     }
 
-    private func makeCleanupWithStorage() -> (cleanup: TimeBasedCleanup, storageBox: StorageBox) {
+    private func makeCleanupWithStorage(scanDelay: Double = 10.0) -> (cleanup: TimeBasedCleanup, storageBox: StorageBox, cacheStorageBox: StorageBox) {
         let storageBox = StorageBox(logger: StorageBox.Logger(impl: { _ in }), basePath: self.basePath + "/storage", isMainProcess: true)
-        let cleanup = TimeBasedCleanup(storageBox: storageBox, generalPaths: [
+        let cacheStorageBox = StorageBox(logger: StorageBox.Logger(impl: { _ in }), basePath: self.basePath + "/cache-storage", isMainProcess: true)
+        let cleanup = TimeBasedCleanup(storageBox: storageBox, cacheStorageBox: cacheStorageBox, generalPaths: [
             self.mediaPath + "/cache",
             self.mediaPath + "/animation-cache"
         ], totalSizeBasedPath: self.mediaPath, shortLivedPaths: [
             self.mediaPath + "/short-cache"
-        ])
-        return (cleanup, storageBox)
+        ], scanDelay: scanDelay)
+        return (cleanup, storageBox, cacheStorageBox)
+    }
+
+    private func scanEvents() -> [(id: String, finished: Bool)] {
+        return self.logLines.with { lines in
+            return lines.compactMap { line -> (id: String, finished: Bool)? in
+                if let range = line.range(of: "TimeBasedCleanup: reset scan id: ") {
+                    return (String(line[range.upperBound...]), false)
+                }
+                if let range = line.range(of: "TimeBasedCleanup: scan id: "), let end = line.range(of: " finished") {
+                    return (String(line[range.upperBound ..< end.lowerBound]), true)
+                }
+                return nil
+            }
+        }
     }
 
     private func storedIds(_ storageBox: StorageBox, _ ids: [String]) -> Set<String> {
@@ -142,25 +157,16 @@ final class TimeBasedCleanupTests: XCTestCase {
         return result
     }
 
-    /// Waits for a scan started by `setMaxStoreTimes` to finish. The scan logs its start,
-    /// works in a TempBox directory and disposes that directory when it is done.
-    private func waitForScan(timeout: Double = 60.0) {
-        let tempBoxPath = self.basePath + "/tempbox/temp/test/temp-1"
+    /// Waits until `count` scans started by `setMaxStoreTimes` have logged that they finished.
+    private func waitForScan(count: Int = 1, timeout: Double = 120.0) {
         let deadline = Date().addingTimeInterval(timeout)
-        var started = false
         while Date() < deadline {
-            if !started {
-                started = self.logLines.with { $0.contains(where: { $0.contains("TimeBasedCleanup: reset scan id") }) }
+            if self.scanEvents().filter({ $0.finished }).count >= count {
+                return
             }
-            if started {
-                let entries = (try? FileManager.default.contentsOfDirectory(atPath: tempBoxPath)) ?? []
-                if entries.isEmpty {
-                    return
-                }
-            }
-            Thread.sleep(forTimeInterval: 0.1)
+            Thread.sleep(forTimeInterval: 0.05)
         }
-        XCTFail("scan did not finish within \(timeout) s; started: \(started)")
+        XCTFail("\(count) scan(s) did not finish within \(timeout) s: \(self.scanEvents())")
     }
 
     // MARK: - Scan accounting
@@ -410,7 +416,7 @@ final class TimeBasedCleanupTests: XCTestCase {
         let middle = self.writeSparseFile("resource-b", megabytes: 900)
         self.setAge(middle, seconds: 3 * 86_400)
 
-        let (cleanup, storageBox) = self.makeCleanupWithStorage()
+        let (cleanup, storageBox, _) = self.makeCleanupWithStorage()
         for id in ["resource-a", "resource-b", "resource-c"] {
             storageBox.add(reference: StorageBox.Reference(peerId: 1, messageNamespace: 0, messageId: 1), to: id.data(using: .utf8)!, contentType: 0)
         }
@@ -443,6 +449,179 @@ final class TimeBasedCleanupTests: XCTestCase {
         XCTAssertFalse(self.exists(shortLived))
         XCTAssertFalse(self.exists(older), "1.8 GB against a 1 GB limit: evicting only the 600 MB short-lived file leaves 1.2 GB")
         XCTAssertTrue(self.exists(newer))
+        withExtendedLifetime(cleanup) {}
+    }
+
+    // MARK: - Size limit with media kept forever
+
+    func testWithMediaKeptForeverTheSizeLimitAlsoTrimsTheCacheDirectories() {
+        let oldCache = self.writeSparseFile("cache/old-representation", megabytes: 700)
+        self.setAge(oldCache, seconds: 3 * 86_400)
+        let resource = self.writeSparseFile("resource", megabytes: 500)
+        self.setAge(resource, seconds: 86_400)
+
+        let cleanup = self.makeCleanup()
+        cleanup.setMaxStoreTimes(general: Int32.max, shortLived: 60 * 60, gigabytesLimit: 1)
+        self.waitForScan()
+
+        XCTAssertFalse(self.exists(oldCache), "1.2 GB against a 1 GB limit: the oldest file is in the cache directory")
+        XCTAssertTrue(self.exists(resource))
+        withExtendedLifetime(cleanup) {}
+    }
+
+    func testWithMediaKeptForeverOldCacheFilesUnderTheLimitAreKept() {
+        let ancientCache = self.writeFile("cache/ancient-representation", bytes: 10)
+        self.setAge(ancientCache, seconds: 400 * 86_400)
+        let ancientAnimation = self.writeFile("animation-cache/ancient-frames", bytes: 10)
+        self.setAge(ancientAnimation, seconds: 400 * 86_400)
+
+        let cleanup = self.makeCleanup()
+        cleanup.setMaxStoreTimes(general: Int32.max, shortLived: 60 * 60, gigabytesLimit: 1)
+        self.waitForScan()
+
+        XCTAssertTrue(self.exists(ancientCache), "keeping media forever must not delete by age")
+        XCTAssertTrue(self.exists(ancientAnimation))
+        withExtendedLifetime(cleanup) {}
+    }
+
+    func testWithoutASizeLimitTheCacheDirectoriesAreOnlyTrimmedByAge() {
+        let oldCache = self.writeSparseFile("cache/old-representation", megabytes: 700)
+        self.setAge(oldCache, seconds: 3 * 86_400)
+        let resource = self.writeSparseFile("resource", megabytes: 900)
+        self.setAge(resource, seconds: 86_400)
+
+        let cleanup = self.makeCleanup()
+        cleanup.setMaxStoreTimes(general: 7 * 86_400, shortLived: 60 * 60, gigabytesLimit: Int32.max)
+        self.waitForScan()
+
+        XCTAssertTrue(self.exists(oldCache))
+        XCTAssertTrue(self.exists(resource))
+        withExtendedLifetime(cleanup) {}
+    }
+
+    // MARK: - Settings changes during a scan
+
+    private func writeManyCacheFiles(_ count: Int) {
+        let directory = self.mediaPath + "/cache/many"
+        try? FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
+        for i in 0 ..< count {
+            let fd = open(directory + "/f\(i)", O_CREAT | O_WRONLY, 0o644)
+            close(fd)
+        }
+    }
+
+    func testChangingTheSettingsStopsARunningScanBeforeItEvictsAnything() {
+        self.writeManyCacheFiles(40_000)
+        let oldest = self.writeSparseFile("oldest", megabytes: 700)
+        self.setAge(oldest, seconds: 3 * 86_400)
+        let newest = self.writeSparseFile("newest", megabytes: 500)
+        self.setAge(newest, seconds: 86_400)
+
+        let cleanup = self.makeCleanup(scanDelay: 0.0)
+        cleanup.setMaxStoreTimes(general: Int32.max, shortLived: 60 * 60, gigabytesLimit: 1)
+        let deadline = Date().addingTimeInterval(20.0)
+        while self.scanEvents().isEmpty, Date() < deadline {
+            Thread.sleep(forTimeInterval: 0.001)
+        }
+        XCTAssertEqual(self.scanEvents().count, 1, "the first scan must be running when the settings change")
+        cleanup.setMaxStoreTimes(general: Int32.max, shortLived: 60 * 60, gigabytesLimit: 100)
+        self.waitForScan(count: 1)
+        let _ = try? FileManager.default.removeItem(atPath: self.mediaPath + "/cache/many")
+        self.waitForScan(count: 2)
+
+        XCTAssertTrue(self.exists(oldest), "a 100 GB limit keeps everything; the stale 1 GB scan must not evict")
+        XCTAssertTrue(self.exists(newest))
+        let events = self.scanEvents()
+        XCTAssertTrue(self.logLines.with { $0.contains(where: { $0.contains("finished (cancelled)") }) }, "\(events)")
+        withExtendedLifetime(cleanup) {}
+    }
+
+    func testScansNeverOverlap() {
+        self.writeManyCacheFiles(20_000)
+
+        let cleanup = self.makeCleanup(scanDelay: 0.0)
+        cleanup.setMaxStoreTimes(general: 30 * 86_400, shortLived: 60 * 60, gigabytesLimit: 1)
+        let deadline = Date().addingTimeInterval(20.0)
+        while self.scanEvents().isEmpty, Date() < deadline {
+            Thread.sleep(forTimeInterval: 0.001)
+        }
+        cleanup.setMaxStoreTimes(general: 31 * 86_400, shortLived: 60 * 60, gigabytesLimit: 1)
+        cleanup.setMaxStoreTimes(general: 32 * 86_400, shortLived: 60 * 60, gigabytesLimit: 2)
+        self.waitForScan(count: 1)
+        let _ = try? FileManager.default.removeItem(atPath: self.mediaPath + "/cache/many")
+        self.waitForScan(count: 2)
+        Thread.sleep(forTimeInterval: 1.0)
+
+        let events = self.scanEvents()
+        var running: String?
+        for event in events {
+            if event.finished {
+                XCTAssertEqual(running, event.id, "\(events)")
+                running = nil
+            } else {
+                XCTAssertNil(running, "a scan started while another was running: \(events)")
+                running = event.id
+            }
+        }
+        XCTAssertNil(running, "\(events)")
+        withExtendedLifetime(cleanup) {}
+    }
+
+    func testReleasingTheCleanupStopsARunningScan() {
+        self.writeManyCacheFiles(40_000)
+        let oldest = self.writeSparseFile("oldest", megabytes: 700)
+        self.setAge(oldest, seconds: 3 * 86_400)
+        let newest = self.writeSparseFile("newest", megabytes: 500)
+        self.setAge(newest, seconds: 86_400)
+
+        var cleanup: TimeBasedCleanup? = self.makeCleanup(scanDelay: 0.0)
+        cleanup?.setMaxStoreTimes(general: Int32.max, shortLived: 60 * 60, gigabytesLimit: 1)
+        let deadline = Date().addingTimeInterval(20.0)
+        while self.scanEvents().isEmpty, Date() < deadline {
+            Thread.sleep(forTimeInterval: 0.001)
+        }
+        cleanup = nil
+        self.waitForScan()
+
+        XCTAssertTrue(self.exists(oldest), "the account's media box is gone, its scan must not keep deleting")
+        XCTAssertTrue(self.logLines.with { $0.contains(where: { $0.contains("finished (cancelled)") }) })
+    }
+
+    // MARK: - Cache index
+
+    func testCacheFilesDeletedByAgeLeaveTheCacheIndex() {
+        let oldCache = self.writeFile("cache/old-representation", bytes: 10)
+        self.setAge(oldCache, seconds: 10 * 86_400)
+        let freshCache = self.writeFile("cache/fresh-representation", bytes: 10)
+
+        let (cleanup, _, cacheStorageBox) = self.makeCleanupWithStorage()
+        cacheStorageBox.update(id: oldCache.data(using: .utf8)!, size: 10)
+        cacheStorageBox.update(id: freshCache.data(using: .utf8)!, size: 10)
+        XCTAssertEqual(self.storedIds(cacheStorageBox, [oldCache, freshCache]), [oldCache, freshCache])
+
+        cleanup.setMaxStoreTimes(general: 7 * 86_400, shortLived: 60 * 60, gigabytesLimit: Int32.max)
+        self.waitForScan()
+
+        XCTAssertFalse(self.exists(oldCache))
+        XCTAssertEqual(self.storedIds(cacheStorageBox, [oldCache, freshCache]), [freshCache])
+        withExtendedLifetime(cleanup) {}
+    }
+
+    func testCacheFilesEvictedForTheSizeLimitLeaveTheCacheIndex() {
+        let oldCache = self.writeSparseFile("cache/old-representation", megabytes: 700)
+        self.setAge(oldCache, seconds: 3 * 86_400)
+        let resource = self.writeSparseFile("resource", megabytes: 500)
+        self.setAge(resource, seconds: 86_400)
+
+        let (cleanup, _, cacheStorageBox) = self.makeCleanupWithStorage()
+        cacheStorageBox.update(id: oldCache.data(using: .utf8)!, size: 700 * TimeBasedCleanupTests.megabyte)
+        XCTAssertEqual(self.storedIds(cacheStorageBox, [oldCache]), [oldCache])
+
+        cleanup.setMaxStoreTimes(general: Int32.max, shortLived: 60 * 60, gigabytesLimit: 1)
+        self.waitForScan()
+
+        XCTAssertFalse(self.exists(oldCache))
+        XCTAssertEqual(self.storedIds(cacheStorageBox, [oldCache]), [])
         withExtendedLifetime(cleanup) {}
     }
 }
