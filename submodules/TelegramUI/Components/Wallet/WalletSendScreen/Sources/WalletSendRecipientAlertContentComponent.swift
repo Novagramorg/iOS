@@ -46,6 +46,7 @@ final class WalletSendRecipientAlertContentComponent: Component {
 
         func update(component: WalletSendRecipientAlertContentComponent, availableSize: CGSize, environment: Environment<AlertComponentEnvironment>, transition: ComponentTransition) -> CGSize {
             let theme = environment[AlertComponentEnvironment.self].theme
+            let strings = environment[AlertComponentEnvironment.self].strings
             let textInset: CGFloat = -6.0
             let addressInset: CGFloat = -14.0
             let textWidth = availableSize.width - textInset * 2.0
@@ -70,17 +71,16 @@ final class WalletSendRecipientAlertContentComponent: Component {
             let text = NSMutableAttributedString()
             let recipientLinkAttribute = NSAttributedString.Key("WalletRecipientPeer")
             if let recipientName = component.recipientName {
-                //TODO:localize
-                text.append(NSAttributedString(string: "This TON Blockchain address is linked to ", font: Font.regular(17.0), textColor: theme.actionSheet.primaryTextColor))
-                let recipientText = NSMutableAttributedString(string: recipientName, font: Font.regular(17.0), textColor: theme.actionSheet.controlAccentColor)
-                if component.openChat != nil {
-                    recipientText.addAttribute(recipientLinkAttribute, value: true, range: NSRange(location: 0, length: recipientText.length))
+                let linkedAddress = strings.Wallet_Recipient_LinkedAddress(recipientName)
+                text.append(NSAttributedString(string: linkedAddress.string, font: Font.regular(17.0), textColor: theme.actionSheet.primaryTextColor))
+                for range in linkedAddress.ranges where range.index == 0 {
+                    text.addAttribute(.foregroundColor, value: theme.actionSheet.controlAccentColor, range: range.range)
+                    if component.openChat != nil {
+                        text.addAttribute(recipientLinkAttribute, value: true, range: range.range)
+                    }
                 }
-                text.append(recipientText)
-                text.append(NSAttributedString(string: " on Telegram.", font: Font.regular(17.0), textColor: theme.actionSheet.primaryTextColor))
             } else {
-                //TODO:localize
-                text.append(NSAttributedString(string: "This TON Blockchain address has no linked Telegram account.", font: Font.regular(17.0), textColor: theme.actionSheet.primaryTextColor))
+                text.append(NSAttributedString(string: strings.Wallet_Recipient_UnlinkedAddress, font: Font.regular(17.0), textColor: theme.actionSheet.primaryTextColor))
             }
             let textSize = self.text.update(
                 transition: transition,

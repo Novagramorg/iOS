@@ -781,13 +781,11 @@ private final class WalletPeerSelectionScreenComponent: Component {
                   let controller = environment.controller() else {
                 return
             }
-            //TODO:localize
-            let text = "An unknown error occurred. Please try again later."
             controller.present(textAlertController(
                 context: component.context,
                 updatedPresentationData: self.currentPresentationData(for: component),
                 title: nil,
-                text: text,
+                text: environment.strings.Wallet_Recipient_Error,
                 actions: [TextAlertAction(type: .defaultAction, title: environment.strings.Common_OK, action: {
                 })]
             ), in: .window(.root))
@@ -799,13 +797,12 @@ private final class WalletPeerSelectionScreenComponent: Component {
                 return
             }
             let presentationData = self.currentPresentationData(for: component).initial
-            //TODO:localize
             controller.present(
                 UndoOverlayController(
                     presentationData: presentationData,
                     content: .info(
                         title: nil,
-                        text: "The pasted text is not a valid TON address.",
+                        text: presentationData.strings.Wallet_Recipient_InvalidAddress,
                         timeout: nil,
                         customUndoText: nil
                     ),
@@ -851,9 +848,8 @@ private final class WalletPeerSelectionScreenComponent: Component {
                   self.resolvingPeerId == nil else {
                 return
             }
-            //TODO:localize
             let scanner = QrCodeScanScreen(context: component.context, subject: .customValidated(
-                info: "Find QR that contains a wallet address",
+                info: self.currentPresentationData(for: component).initial.strings.Wallet_Recipient_ScanQR,
                 validate: { value in
                     return WalletContext.transferAddress(from: value) != nil
                 }
@@ -1511,13 +1507,11 @@ private final class WalletPeerSelectionScreenComponent: Component {
                 let animationSpacing: CGFloat = 8.0
                 let textSpacing: CGFloat = 8.0
 
-                //TODO:localize
-                let title = "No Results"
                 let emptyResultsTitleSize = self.emptyResultsTitle.update(
                     transition: .immediate,
                     component: AnyComponent(MultilineTextComponent(
                         text: .plain(NSAttributedString(
-                            string: title,
+                            string: environment.strings.Wallet_Recipient_NoResults,
                             font: Font.semibold(17.0),
                             textColor: environment.theme.list.itemSecondaryTextColor
                         )),
@@ -1527,13 +1521,11 @@ private final class WalletPeerSelectionScreenComponent: Component {
                     containerSize: availableSize
                 )
 
-                //TODO:localize
-                let text = "There were no results for “\(noResultsQuery)”.\nTry another name or address."
                 let emptyResultsTextSize = self.emptyResultsText.update(
                     transition: .immediate,
                     component: AnyComponent(MultilineTextComponent(
                         text: .plain(NSAttributedString(
-                            string: text,
+                            string: environment.strings.Wallet_Recipient_NoResultsText(noResultsQuery).string,
                             font: Font.regular(15.0),
                             textColor: environment.theme.list.itemSecondaryTextColor
                         )),

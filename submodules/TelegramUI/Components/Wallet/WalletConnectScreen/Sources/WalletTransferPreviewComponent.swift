@@ -433,44 +433,37 @@ final class WalletTransferPreviewComponent: Component {
                 switch item.direction {
                 case .some(.outgoing):
                     title = walletTransferShortAddress(item.address ?? component.request.messages.first?.destination ?? "")
-                    //TODO:localize
-                    subtitle = "Withdraw"
+                    subtitle = environment.strings.Wallet_Transaction_Withdraw
                     iconKind = .outgoing
                 case .some(.incoming):
-                    title = item.address.map(walletTransferShortAddress) ?? "Transfer"
-                    //TODO:localize
-                    subtitle = "Deposit"
+                    title = item.address.map(walletTransferShortAddress) ?? environment.strings.Wallet_Transaction_Transfer
+                    subtitle = environment.strings.Wallet_Transaction_Deposit
                     iconKind = .incoming
                 case nil:
-                    //TODO:localize
-                    title = "Transfer"
+                    title = environment.strings.Wallet_Transaction_Transfer
                     subtitle = item.address.map(walletTransferShortAddress)
                     iconKind = .transfer
                 }
             case .callContract:
-                //TODO:localize
-                title = "Call Contract"
+                title = environment.strings.Wallet_Transaction_CallContract
                 subtitle = nil
                 iconKind = .contract
             case .deployContract:
-                //TODO:localize
-                title = "Deploy Contract"
+                title = environment.strings.Wallet_Transaction_DeployContract
                 subtitle = nil
                 iconKind = .contract
             case .excess:
-                //TODO:localize
-                title = "Excess"
+                title = environment.strings.Wallet_Transaction_Excess
                 subtitle = nil
                 iconKind = .incoming
             case .unknown:
-                //TODO:localize
-                title = "Unknown Operation"
+                title = environment.strings.Wallet_Transaction_UnknownOperation
                 subtitle = nil
                 iconKind = .contract
             }
 
             if !item.succeeded {
-                subtitle = subtitle.map { "\($0) · Failed" } ?? "Failed"
+                subtitle = subtitle.map { environment.strings.Wallet_Transaction_FailedOperation($0).string } ?? environment.strings.Wallet_Transaction_Failed
             }
 
             let comment = item.comment?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -602,7 +595,7 @@ final class WalletTransferPreviewComponent: Component {
             contentHeight += transferSectionSize.height + 28.0
 
             let displayItems = presentation.previewItems
-            let feeText = [presentation.submissionText, presentation.feeText(strings: environment.strings, dateTimeFormat: environment.dateTimeFormat)]
+            let feeText = [presentation.submissionText(strings: environment.strings), presentation.feeText(strings: environment.strings, dateTimeFormat: environment.dateTimeFormat)]
                 .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: "\n\n")
 
             let previewItems = displayItems.map { item in

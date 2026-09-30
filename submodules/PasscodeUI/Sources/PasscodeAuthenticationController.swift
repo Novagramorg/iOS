@@ -92,8 +92,7 @@ public func settingsPasscodeAuthenticationController(
         reference = value
     } catch {
         let strings = context.sharedContext.currentPresentationData.with { $0 }.strings
-        //TODO:localize
-        context.sharedContext.presentGlobalController(textAlertController(context: context, title: nil, text: "Couldn't update the passcode. Unlock again and try once more.", actions: [TextAlertAction(type: .defaultAction, title: strings.Common_OK, action: {})]), nil)
+        context.sharedContext.presentGlobalController(textAlertController(context: context, title: nil, text: strings.PasscodeSettings_UpdateError, actions: [TextAlertAction(type: .defaultAction, title: strings.Common_OK, action: {})]), nil)
         completion(.failure(error as? PasscodeError ?? .unavailable))
         return nil
     }

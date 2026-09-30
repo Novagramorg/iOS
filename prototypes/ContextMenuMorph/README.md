@@ -9,7 +9,7 @@ xcodegen generate --spec prototypes/ContextMenuMorph/project.yml
 open prototypes/ContextMenuMorph/ContextMenuMorph.xcodeproj
 ```
 
-Choose `ContextMenuMorph`, an iOS 26+ simulator, and Run. Tap a shape to open its custom menu; any menu row dismisses. **Run shape + interruption checks** exercises 18 round trips across circle, capsule, square, wide, tall, and asymmetric shapes. Every cycle checks source parent/visibility and menu parent after UIKit cleanup. Twelve cycles request dismissal before presentation completes.
+Choose `ContextMenuMorph`, an iOS 26+ simulator, and Run. Tap a shape to open its custom menu; any menu row dismisses. **Run shape + interruption checks** exercises 18 round trips across circle, capsule, square, wide, tall, and asymmetric shapes. Every cycle checks source parent/visibility and menu parent after UIKit cleanup. Twelve cycles request dismissal before presentation completes; the close takes over the running morph at once, as in Telegram.
 
 Run the `ContextMenuMorph` scheme's tests to check real native round-trip completion, hierarchy/frame restoration, concurrent-request rejection, removal from the window before starting, and cropped/transformed source geometry. The tests also support the Release configuration. Reduced Motion is read from the simulator's actual accessibility setting.
 

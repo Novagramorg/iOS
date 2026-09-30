@@ -234,13 +234,11 @@ private final class WalletConnectSheetContent: CombinedComponent {
                     guard let controller = self.getController() else {
                         return
                     }
-                    //TODO:localize
-                    let errorText = "Unable to connect this app. Please try again."
                     let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
                     controller.present(textAlertController(
                         context: component.context,
                         title: nil,
-                        text: errorText,
+                        text: presentationData.strings.Wallet_Connect_Error,
                         actions: [
                             TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})
                         ]
@@ -331,12 +329,10 @@ private final class WalletConnectSheetContent: CombinedComponent {
             contentHeight += appIconSize.height
             contentHeight += 18.0
 
-            //TODO:localize
-            let titleText = "Connect to \(component.request.applicationName)"
             let title = title.update(
                 component: BalancedTextComponent(
                     text: .plain(NSAttributedString(
-                        string: titleText,
+                        string: environment.strings.Wallet_Connect_Title(component.request.applicationName).string,
                         font: Font.bold(22.0),
                         textColor: primaryTextColor
                     )),
@@ -375,12 +371,10 @@ private final class WalletConnectSheetContent: CombinedComponent {
             contentHeight += 19.0
 
             var permissionTexts: [String] = []
-            //TODO:localize
-            permissionTexts.append("It will be able to view your wallet address, balance and activity.")
+            permissionTexts.append(environment.strings.Wallet_Connect_Permissions)
             for permission in component.request.permissions {
                 if case let .proof(domain) = permission {
-                    //TODO:localize
-                    permissionTexts.append("It will ask you to prove ownership of this wallet to \(domain).")
+                    permissionTexts.append(environment.strings.Wallet_Connect_Proof(domain).string)
                 }
             }
             let permissionText = permissionTexts.joined(separator: "\n\n")
@@ -447,12 +441,10 @@ private final class WalletConnectSheetContent: CombinedComponent {
             contentHeight += card.size.height
             contentHeight += 20.0
 
-            //TODO:localize
-            let disclaimerText = "\(component.request.applicationName) won’t be able to move funds without permission."
             let disclaimer = disclaimer.update(
                 component: BalancedTextComponent(
                     text: .plain(NSAttributedString(
-                        string: disclaimerText,
+                        string: environment.strings.Wallet_Connect_Disclaimer(component.request.applicationName).string,
                         font: Font.regular(13.0),
                         textColor: secondaryTextColor
                     )),
@@ -480,8 +472,6 @@ private final class WalletConnectSheetContent: CombinedComponent {
             let cancelButtonWidth = floorToScreenPixels((buttonsWidth - buttonSpacing) / 2.0)
             let connectButtonWidth = buttonsWidth - buttonSpacing - cancelButtonWidth
 
-            //TODO:localize
-            let cancelTitle = "Cancel"
             let cancelButton = cancelButton.update(
                 component: ButtonComponent(
                     background: ButtonComponent.Background(
@@ -494,7 +484,7 @@ private final class WalletConnectSheetContent: CombinedComponent {
                     content: AnyComponentWithIdentity(
                         id: "cancel",
                         component: AnyComponent(Text(
-                            text: cancelTitle,
+                            text: environment.strings.Common_Cancel,
                             font: Font.semibold(17.0),
                             color: theme.list.itemPrimaryTextColor
                         ))
@@ -512,8 +502,6 @@ private final class WalletConnectSheetContent: CombinedComponent {
                 y: contentHeight + cancelButton.size.height / 2.0
             )))
 
-            //TODO:localize
-            let connectTitle = "Connect"
             let connectButton = connectButton.update(
                 component: ButtonComponent(
                     background: ButtonComponent.Background(
@@ -526,7 +514,7 @@ private final class WalletConnectSheetContent: CombinedComponent {
                     content: AnyComponentWithIdentity(
                         id: "connect",
                         component: AnyComponent(Text(
-                            text: connectTitle,
+                            text: environment.strings.Wallet_Connect_Action,
                             font: Font.semibold(17.0),
                             color: theme.list.itemCheckColors.foregroundColor
                         ))

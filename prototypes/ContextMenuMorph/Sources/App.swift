@@ -27,8 +27,10 @@ final class ProbeController: UIViewController {
     var source: UIButton?
     var sourcePreview: UITargetedPreview?
     var destination: UITargetedPreview?
-    var dismissPending = false
     var isPresented = false
+    var isPresenting = false
+    var isDismissing = false
+    var presentation = 0
     var caseIndex = 0
     var completed = 0
     var autoRun = false
@@ -116,23 +118,32 @@ final class ProbeController: UIViewController {
         sourcePreview = from
         destination = to
         isPresented = true
+        isPresenting = true
+        presentation += 1
+        let currentPresentation = presentation
         status.text = "Presenting \(cases[button.tag].0)"
-        let started = engine.animate(from: from, to: to, attachment: button.center, in: view) { [self] in
+        let started = engine.animate(from: from, to: to, attachment: button.center, in: view, sourceIdentity: button) { [self] in
+            // A dismissal that took over this presentation owns the menu from then on.
+            guard isPresenting, presentation == currentPresentation else { return }
+            isPresenting = false
             assert(menu.superview === view, "Destination parent was not restored")
             assert(button.superview === view, "Source parent was not restored")
             status.text = "Presented \(cases[button.tag].0)"
-            if dismissPending || autoRun { dismissMenu() }
+            if autoRun { dismissMenu() }
         }
         assert(started)
     }
     @objc func dismissMenu() {
-        if engine.isAnimating { dismissPending = true; return }
-        guard isPresented, let source, let from = destination, let to = sourcePreview else { return }
-        dismissPending = false
+        guard isPresented, !isDismissing, let source, let from = destination, let to = sourcePreview else { return }
+        // Dismissing during presentation starts now; UIKit hands the running morph over.
+        let interruptsPresentation = isPresenting
+        isPresenting = false
+        isDismissing = true
         status.text = "Dismissing \(cases[source.tag].0)"
-        let started = engine.animate(from: from, to: to, attachment: source.center, in: view) { [self] in
+        let started = engine.animate(from: from, to: to, attachment: source.center, in: view, sourceIdentity: source, interruptingCurrent: interruptsPresentation) { [self] in
             menu.removeFromSuperview()
             assert(source.superview === view && source.alpha == 1 && !source.isHidden)
+            isDismissing = false
             isPresented = false
             sourcePreview = nil
             destination = nil

@@ -742,13 +742,15 @@ private final class CounterpartyRowComponent: CombinedComponent {
 
 private final class WalletTransactionKeyUpdateHeaderComponent: Component {
     let theme: PresentationTheme
+    let strings: PresentationStrings
 
-    init(theme: PresentationTheme) {
+    init(theme: PresentationTheme, strings: PresentationStrings) {
         self.theme = theme
+        self.strings = strings
     }
 
     static func ==(lhs: WalletTransactionKeyUpdateHeaderComponent, rhs: WalletTransactionKeyUpdateHeaderComponent) -> Bool {
-        return lhs.theme === rhs.theme
+        return lhs.theme === rhs.theme && lhs.strings === rhs.strings
     }
 
     final class View: UIView {
@@ -800,8 +802,7 @@ private final class WalletTransactionKeyUpdateHeaderComponent: Component {
                 transition: transition,
                 component: AnyComponent(MultilineTextComponent(
                     text: .plain(NSAttributedString(
-                        //TODO:localize
-                        string: "Key Update",
+                        string: component.strings.Wallet_Transaction_KeyUpdate,
                         font: Font.semibold(22.0),
                         textColor: component.theme.actionSheet.primaryTextColor,
                         paragraphAlignment: .center
@@ -1055,11 +1056,10 @@ private final class WalletTransactionContentComponent: Component {
             return self.previewCommentEncrypted && self.previewComment != nil && self.previewSource?.collectible == nil
         }
 
-        private var commentPrivacyDescription: String {
-            //TODO:localize
+        private func commentPrivacyDescription(strings: PresentationStrings) -> String {
             return self.previewCommentEncrypted
-                ? "Visible only to you and the recipient."
-                : "The comment is visible to everyone."
+                ? strings.Wallet_Transaction_PrivateComment
+                : strings.Wallet_Transaction_PublicComment
         }
 
         private func configureMode(_ mode: WalletTransactionContentMode, walletContext: WalletContext?) {
@@ -1316,11 +1316,7 @@ private final class WalletTransactionContentComponent: Component {
                   let controller = environment.controller() else {
                 return
             }
-            //TODO:localize
-            let title = "Network fees"
-            //TODO:localize
             let walletConfiguration = WalletConfiguration.with(appConfiguration: component.context.currentAppConfiguration.with { $0 })
-            let transfersText = "\(walletConfiguration.transferGaslessDailyLimit) transfers"
             let feeText: String
             if let fiatState = self.latestWalletState?.fiat, let fiatRate = fiatState.selectedRate {
                 let fiatFee = formatTonFiatValue(
@@ -1334,19 +1330,15 @@ private final class WalletTransactionContentComponent: Component {
             } else {
                 feeText = ""
             }
-            //TODO:localize
-            let text = "Every transfer costs a small network fee\(feeText).\n\nTelegram covers your first \(transfersText) each day."
-            //TODO:localize
-            let actionTitle = "Got it"
             let alertController = textAlertController(
                 context: component.context,
                 updatedPresentationData: self.currentPresentationData(for: component),
-                title: title,
-                text: text,
+                title: environment.strings.Wallet_Transaction_NetworkFeesTitle,
+                text: environment.strings.Wallet_Transaction_NetworkFeesText(feeText, environment.strings.Wallet_Transaction_Transfers(Int32(clamping: walletConfiguration.transferGaslessDailyLimit))).string,
                 actions: [
                     TextAlertAction(
                         type: .defaultAction,
-                        title: actionTitle,
+                        title: environment.strings.Wallet_GotIt,
                         action: {}
                     )
                 ]
@@ -1565,14 +1557,14 @@ private final class WalletTransactionContentComponent: Component {
 
         private func presentCommentDecryptionError(_ error: WalletContext.WalletError) {
             guard let component = self.component, let controller = self.environment?.controller() else { return }
+            let strings = self.currentPresentationData(for: component).initial.strings
             let authorizationMessage = walletAuthorizationErrorMessage(error)
-            //TODO:localize
             controller.present(textAlertController(
                 context: component.context,
                 updatedPresentationData: self.currentPresentationData(for: component),
-                title: authorizationMessage?.title ?? "Couldn't Decrypt Comment",
-                text: authorizationMessage?.text ?? "The comment could not be decrypted.",
-                actions: [TextAlertAction(type: .defaultAction, title: "OK", action: {})]
+                title: authorizationMessage?.title ?? strings.Wallet_Transaction_CommentDecryptionErrorTitle,
+                text: authorizationMessage?.text ?? strings.Wallet_Transaction_CommentDecryptionErrorText,
+                actions: [TextAlertAction(type: .defaultAction, title: strings.Common_OK, action: {})]
             ), in: .window(.root))
         }
 
@@ -1685,7 +1677,7 @@ private final class WalletTransactionContentComponent: Component {
             controller.present(TooltipScreen(
                 account: component.context.account,
                 sharedContext: component.context.sharedContext,
-                text: .plain(text: self.commentPrivacyDescription),
+                text: .plain(text: self.commentPrivacyDescription(strings: self.currentPresentationData(for: component).initial.strings)),
                 location: .point(sourceFrame, .bottom),
                 displayDuration: .default,
                 shouldDismissOnTouch: { _, _ in
@@ -1946,14 +1938,11 @@ private final class WalletTransactionContentComponent: Component {
                 return
             }
             self.didShowSuccess = true
-            //TODO:localize
-            let successPrefix = isCollectible ? "Collectible has been sent to" : "Grams have been sent to"
-            let text = "\(successPrefix) **\(walletTransactionShortAddress(address))**."
             let presentationData = self.currentPresentationData(for: component).initial
             controller.present(
                 UndoOverlayController(
                     presentationData: presentationData,
-                    content: .emoji(name: "Celebrate", text: text),
+                    content: .emoji(name: "Celebrate", text: isCollectible ? presentationData.strings.Wallet_Transfer_CollectibleSuccess(walletTransactionShortAddress(address)).string : presentationData.strings.Wallet_Transfer_Success(walletTransactionShortAddress(address)).string),
                     position: .bottom,
                     action: { _ in
                         return false
@@ -1967,18 +1956,13 @@ private final class WalletTransactionContentComponent: Component {
             guard let component = self.component, let controller = self.environment?.controller() else {
                 return
             }
-            //TODO:localize
-            let title = "Transfer Pending"
-            //TODO:localize
-            let text = "The transfer may have been sent. Don’t send it again while its status is being checked."
-            //TODO:localize
-            let ok = "OK"
+            let strings = self.currentPresentationData(for: component).initial.strings
             controller.present(textAlertController(
                 context: component.context,
                 updatedPresentationData: self.currentPresentationData(for: component),
-                title: title,
-                text: text,
-                actions: [TextAlertAction(type: .defaultAction, title: ok, action: {
+                title: strings.Wallet_Transfer_PendingTitle,
+                text: strings.Wallet_Transfer_PendingText,
+                actions: [TextAlertAction(type: .defaultAction, title: strings.Common_OK, action: {
                 })]
             ), in: .window(.root))
         }
@@ -1988,31 +1972,29 @@ private final class WalletTransactionContentComponent: Component {
             guard let component = self.component, let controller = self.environment?.controller() else {
                 return
             }
-            //TODO:localize
+            let strings = self.currentPresentationData(for: component).initial.strings
             let title: String
             let text: String
             switch error {
             case .commentTooLong:
-                title = "Comment Too Long"
-                text = "The encrypted comment is too long. Shorten it and try again."
+                title = strings.Wallet_Transfer_CommentTooLongTitle
+                text = strings.Wallet_Transfer_CommentTooLongText
             case .commentEncryptionRecipientUnavailable:
-                title = "Couldn't Encrypt Comment"
-                text = "This wallet can't receive encrypted comments now."
+                title = strings.Wallet_Transfer_CommentEncryptionErrorTitle
+                text = strings.Wallet_Transfer_CommentEncryptionUnavailable
             case .commentEncryptionFailed:
-                title = "Couldn't Encrypt Comment"
-                text = "The comment could not be encrypted for this wallet. Check the network connection and try again."
+                title = strings.Wallet_Transfer_CommentEncryptionErrorTitle
+                text = strings.Wallet_Transfer_CommentEncryptionErrorText
             default:
-                title = "Transfer Failed"
-                text = "The transfer could not be prepared or sent. Check the address, balance and network connection, then try again."
+                title = strings.Wallet_Transfer_ErrorTitle
+                text = strings.Wallet_Transfer_ErrorText
             }
-            //TODO:localize
-            let ok = "OK"
             controller.present(textAlertController(
                 context: component.context,
                 updatedPresentationData: self.currentPresentationData(for: component),
                 title: title,
                 text: text,
-                actions: [TextAlertAction(type: .defaultAction, title: ok, action: {
+                actions: [TextAlertAction(type: .defaultAction, title: strings.Common_OK, action: {
                 })]
             ), in: .window(.root))
         }
@@ -2027,12 +2009,11 @@ private final class WalletTransactionContentComponent: Component {
             }
             (controller as? WalletTransactionContentController)?.dismissAllTooltips()
             
-            //TODO:localize
             let presentationData = self.currentPresentationData(for: component).initial
             controller.present(
                 UndoOverlayController(
                     presentationData: presentationData,
-                    content: .copy(text: "TON address copied to clipboard"),
+                    content: .copy(text: presentationData.strings.Wallet_TonAddressCopied),
                     position: .bottom,
                     action: { _ in
                         return false
@@ -2243,13 +2224,11 @@ private final class WalletTransactionContentComponent: Component {
                   let transaction = self.transaction else {
                 return
             }
+            let strings = self.currentPresentationData(for: component).initial.strings
             let configuration = WalletConfiguration.with(appConfiguration: component.context.currentAppConfiguration.with { $0 })
             let explorerUrl = walletTransactionExplorerUrl(explorerUrl: configuration.explorerUrl, id: transaction.transactionHash ?? transaction.id)
-            //TODO:localize
-            let viewInExplorer = "View in Explorer"
-            let whatIsGram = "What is Gram?"
             let item = ContextMenuActionItem(
-                text: viewInExplorer,
+                text: strings.Wallet_ViewInExplorer,
                 icon: { theme in
                     return generateTintedImage(
                         image: UIImage(bundleImageName: "Chat/Context Menu/Search"),
@@ -2267,7 +2246,7 @@ private final class WalletTransactionContentComponent: Component {
             var items: [ContextMenuItem] = [.action(item)]
             if transaction.currency == .ton && transaction.collectible == nil {
                 items.append(.action(ContextMenuActionItem(
-                    text: whatIsGram,
+                    text: strings.Wallet_Transaction_WhatIsGram,
                     icon: { theme in
                         return generateTintedImage(
                             image: UIImage(bundleImageName: "Chat/Context Menu/Help"),
@@ -2440,7 +2419,7 @@ private final class WalletTransactionContentComponent: Component {
             if isKeyChange {
                 let headerSize = self.keyUpdateHeader.update(
                     transition: transition,
-                    component: AnyComponent(WalletTransactionKeyUpdateHeaderComponent(theme: theme)),
+                    component: AnyComponent(WalletTransactionKeyUpdateHeaderComponent(theme: theme, strings: environment.strings)),
                     environment: {},
                     containerSize: CGSize(width: availableSize.width, height: .greatestFiniteMagnitude)
                 )
@@ -2604,13 +2583,11 @@ private final class WalletTransactionContentComponent: Component {
                     environment: {},
                     containerSize: CGSize(width: 20.0, height: 24.0)
                 )
-                //TODO:localize
-                let processingLabel = transaction.status == .failed ? "Failed" : "Processing..."
                 let processingSize = self.processingText.update(
                     transition: transition,
                     component: AnyComponent(MultilineTextComponent(
                         text: .plain(NSAttributedString(
-                            string: processingLabel,
+                            string: transaction.status == .failed ? environment.strings.Wallet_Transaction_Failed : environment.strings.Wallet_Transaction_Processing,
                             font: Font.regular(15.0),
                             textColor: transaction.status == .failed
                                 ? theme.list.itemDestructiveColor
@@ -2770,9 +2747,6 @@ private final class WalletTransactionContentComponent: Component {
                     )
                     if let commentButtonView = self.commentButton.view {
                         if commentButtonView.superview == nil {
-                            //TODO:localize
-                            commentButtonView.accessibilityLabel = "Encrypted comment"
-                            commentButtonView.accessibilityHint = "Double-tap to decrypt."
                             self.commentContainerView.contentView.addSubview(commentButtonView)
                         }
                         commentButtonView.frame = bubbleFrame
@@ -2807,19 +2781,15 @@ private final class WalletTransactionContentComponent: Component {
             let secondaryValueColor = theme.list.itemSecondaryTextColor
             let counterpartyTitle: String
             if self.isPreview && !self.isFinishedPreview {
-                //TODO:localize
-                counterpartyTitle = "Address"
+                counterpartyTitle = environment.strings.Wallet_Transaction_Address
             } else {
                 switch displayedDirection {
                 case .incoming:
-                    //TODO:localize
-                    counterpartyTitle = "Sender"
+                    counterpartyTitle = environment.strings.Wallet_Transaction_Sender
                 case .outgoing:
-                    //TODO:localize
-                    counterpartyTitle = "Recipient"
+                    counterpartyTitle = environment.strings.Wallet_Transaction_Recipient
                 case .unknown:
-                    //TODO:localize
-                    counterpartyTitle = "Address"
+                    counterpartyTitle = environment.strings.Wallet_Transaction_Address
                 }
             }
             let peerDisplayName = transaction.peer.displayName.flatMap { value -> String? in
@@ -2891,9 +2861,8 @@ private final class WalletTransactionContentComponent: Component {
                 counterpartyContent = addressComponent
             } else {
                 counterpartyContentId = .unknown
-                //TODO:localize
                 counterpartyContent = AnyComponent(MultilineTextComponent(
-                    text: .plain(NSAttributedString(string: "Unknown Address", font: valueFont, textColor: valueColor)),
+                    text: .plain(NSAttributedString(string: environment.strings.Wallet_Transaction_UnknownAddress, font: valueFont, textColor: valueColor)),
                     maximumNumberOfLines: 0
                 ))
             }
@@ -2934,8 +2903,7 @@ private final class WalletTransactionContentComponent: Component {
                     counterparty: counterpartyContentComponent,
                     sendButton: AnyComponent(Button(
                         content: AnyComponent(SendButtonContentComponent(
-                            //TODO:localize
-                            text: "send",
+                            text: environment.strings.Wallet_Transaction_Send,
                             color: theme.list.itemAccentColor
                         )),
                         action: { [weak self] in
@@ -2994,10 +2962,7 @@ private final class WalletTransactionContentComponent: Component {
                     )
                 ], spacing: 0.0))
             }
-            //TODO:localize
-            let feeTitle = "Fee"
-            //TODO:localize
-            let dateTitle = "Date"
+            let feeTitle = environment.strings.Wallet_Transaction_Fee
             var tableItems: [TableComponent.Item] = [TableComponent.Item(
                 id: displaysSendButton ? CounterpartyRowId.withSendButton : .content(counterpartyContentId),
                 title: counterpartyTitle,
@@ -3013,10 +2978,9 @@ private final class WalletTransactionContentComponent: Component {
                 displaysSeparateAddress = false
             }
             if displaysSeparateAddress, let addressComponent {
-                //TODO:localize
                 tableItems.append(TableComponent.Item(
                     id: "address",
-                    title: "Address",
+                    title: environment.strings.Wallet_Transaction_Address,
                     component: addressComponent
                 ))
             }
@@ -3042,8 +3006,7 @@ private final class WalletTransactionContentComponent: Component {
                                 ))),
                                 AnyComponentWithIdentity(id: "text", component: AnyComponent(MultilineTextComponent(
                                     text: .plain(NSAttributedString(
-                                        //TODO:localize
-                                        string: "Free (paid by Telegram)",
+                                        string: environment.strings.Wallet_Transaction_FreeFee,
                                         font: valueFont,
                                         textColor: valueColor
                                     )),
@@ -3067,7 +3030,7 @@ private final class WalletTransactionContentComponent: Component {
             }
             tableItems.append(TableComponent.Item(
                 id: "date",
-                title: dateTitle,
+                title: environment.strings.Wallet_Transaction_Date,
                 component: AnyComponent(MultilineTextComponent(
                     text: .plain(NSAttributedString(
                         string: walletTransactionDateText(
@@ -3104,8 +3067,7 @@ private final class WalletTransactionContentComponent: Component {
             let displaysGramInfo = displaysGramHeader && !self.isPreview
             if displaysGramInfo {
                 contentHeight += 4.0
-                //TODO:localize
-                let gramInfoTitle = "What's Gram?"
+                let gramInfoTitle = environment.strings.Wallet_Transaction_GramInfo
                 let gramInfoSize = self.gramInfoButton.update(
                     transition: transition,
                     component: AnyComponent(PlainButtonComponent(
@@ -3161,8 +3123,6 @@ private final class WalletTransactionContentComponent: Component {
                 let inputFieldWidth = displaysCommentEncryption
                     ? max(0.0, inputWidth - commentEncryptionButtonSize.width)
                     : inputWidth
-                //TODO:localize
-                let optionalMessage = "Optional message"
                 self.inputField.parentState = state
                 let fieldSize = self.inputField.update(
                     transition: transition,
@@ -3178,7 +3138,7 @@ private final class WalletTransactionContentComponent: Component {
                         hideKeyboard: false,
                         customInputView: nil,
                         placeholder: NSAttributedString(
-                            string: optionalMessage,
+                            string: environment.strings.Wallet_OptionalMessage,
                             font: Font.regular(17.0),
                             textColor: theme.actionSheet.inputPlaceholderColor
                         ),
@@ -3277,9 +3237,8 @@ private final class WalletTransactionContentComponent: Component {
                         ))
                         transition.setAlpha(view: buttonView, alpha: 1.0)
                         buttonView.isUserInteractionEnabled = self.canEditPreviewComment
-                        //TODO:localize
-                        buttonView.accessibilityLabel = "Comment privacy"
-                        buttonView.accessibilityValue = self.commentPrivacyDescription
+                        buttonView.accessibilityLabel = environment.strings.Wallet_Transaction_CommentPrivacy
+                        buttonView.accessibilityValue = self.commentPrivacyDescription(strings: environment.strings)
 
                         if let displayedCommentEncrypted = self.displayedCommentEncrypted,
                            displayedCommentEncrypted != commentEncrypted,
@@ -3312,24 +3271,19 @@ private final class WalletTransactionContentComponent: Component {
             let actionTitle: String
             if self.isPreview && !self.isFinishedPreview {
                 if transaction.collectible != nil {
-                    //TODO:localize
-                    actionTitle = "Send Collectible"
+                    actionTitle = environment.strings.Wallet_Transaction_SendCollectible
                 } else {
-                    //TODO:localize
-                    let sendPrefix = "Send "
-                    actionTitle = sendPrefix + formatTonAmountText(
+                    actionTitle = environment.strings.Wallet_Send_Amount(formatTonAmountText(
                         transaction.amount,
                         dateTimeFormat: environment.dateTimeFormat,
                         maxDecimalPositions: 9,
                         formatString: environment.strings.Currency_Grams
-                    )
+                    )).string
                 }
             } else if !self.isPreview && component.fromChat {
-                //TODO:localize
-                actionTitle = "Open My Money"
+                actionTitle = environment.strings.Wallet_Transaction_OpenWallet
             } else {
-                //TODO:localize
-                actionTitle = "OK"
+                actionTitle = environment.strings.Common_OK
             }
             let canSign: Bool
             if let latestWalletState = self.latestWalletState, case let .wallet(walletInfo) = latestWalletState.phase {

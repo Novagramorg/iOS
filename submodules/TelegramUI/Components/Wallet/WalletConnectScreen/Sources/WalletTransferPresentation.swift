@@ -14,16 +14,14 @@ struct WalletTransferPresentation {
         case binary
         case message([[SigningField]])
 
-        var explanation: String? {
+        func explanation(strings: PresentationStrings) -> String? {
             switch self {
             case .text:
-                //TODO:localize
-                return "Carefully review the message, and if you agree, sign data."
+                return strings.Wallet_Sign_TextExplanation
             case .binary:
                 return nil
             case .message:
-                //TODO:localize
-                return "Review the message details and sign if you agree."
+                return strings.Wallet_Sign_MessageExplanation
             }
         }
     }
@@ -172,23 +170,23 @@ struct WalletTransferPresentation {
         }
     }
 
-    var submissionText: String? {
+    func submissionText(strings: PresentationStrings) -> String? {
         guard self.request.method == .signMessage else { return nil }
         if let validUntil = self.request.validUntil {
-            //TODO:localize
-            let date = DateFormatter.localizedString(from: Date(timeIntervalSince1970: TimeInterval(validUntil)), dateStyle: .medium, timeStyle: .short)
-            return "The app can submit this transfer until \(date)."
+            let dateFormatter = DateFormatter()
+            dateFormatter.locale = Locale(identifier: strings.baseLanguageCode)
+            dateFormatter.dateStyle = .medium
+            dateFormatter.timeStyle = .short
+            let date = dateFormatter.string(from: Date(timeIntervalSince1970: TimeInterval(validUntil)))
+            return strings.Wallet_Sign_SubmissionUntil(date).string
         }
-        //TODO:localize
-        return "The app will submit this transfer."
+        return strings.Wallet_Sign_Submission
     }
 
     func feeText(strings: PresentationStrings, dateTimeFormat: PresentationDateTimeFormat) -> String {
         var text: String
         if let fee = self.request.feeNanograms {
             let formattedFee = formatTonConnectNanograms(fee, strings: strings, dateTimeFormat: dateTimeFormat)
-            //TODO:localize
-            let prefix = "Fee"
             if let feeValue = Int64(fee), let fiatRate = self.walletState?.fiat.selectedRate {
                 let currency = self.walletState?.fiat.selectedCurrency ?? .usd
                 let fiatValue = Double(feeValue) / 1_000_000_000.0 * fiatRate.unitsPerGram
@@ -199,9 +197,9 @@ struct WalletTransferPresentation {
                     fiatFee = formatTonFiatValue(feeValue, rate: fiatRate.unitsPerGram,
                         currencySymbol: currency.symbol, maxDecimalPositions: 2, dateTimeFormat: dateTimeFormat)
                 }
-                text = "\(prefix): \(formattedFee) (\(fiatFee))."
+                text = strings.Wallet_Sign_FeeWithFiat(formattedFee, fiatFee).string
             } else {
-                text = "\(prefix): \(formattedFee)."
+                text = strings.Wallet_Sign_Fee(formattedFee).string
             }
         } else {
             text = ""

@@ -278,8 +278,7 @@ private func passcodeOptionsControllerEntries(context: AccountContext, presentat
             entries.append(.togglePasscode(presentationData.theme, presentationData.strings.PasscodeSettings_TurnPasscodeOff, true))
             entries.append(.changePasscode(presentationData.theme, presentationData.strings.PasscodeSettings_ChangePasscode))
             entries.append(.settingInfo(presentationData.theme, presentationData.strings.PasscodeSettings_Help))
-            //TODO:localize
-            entries.append(.telegramHeader(presentationData.theme, "Lock Telegram".uppercased()))
+            entries.append(.telegramHeader(presentationData.theme, presentationData.strings.PasscodeSettings_LockTelegram.uppercased()))
             entries.append(.autoLock(presentationData.theme, presentationData.strings.PasscodeSettings_AutoLock, autolockStringForTimeout(strings: presentationData.strings, timeout: passcodeOptionsData.presentationSettings.autolockTimeout)))
             if let biometricAuthentication = LocalAuth.biometricAuthentication {
                 switch biometricAuthentication {
@@ -290,20 +289,15 @@ private func passcodeOptionsControllerEntries(context: AccountContext, presentat
                 }
             }
             if WalletConfiguration.with(appConfiguration: context.currentAppConfiguration.with { $0 }).isAvailable {
-                //TODO:localize
-                entries.append(.walletHeader(presentationData.theme, "Lock Wallet".uppercased()))
+                entries.append(.walletHeader(presentationData.theme, presentationData.strings.PasscodeSettings_LockWallet.uppercased()))
                 let protectionEnabled = state.protection?.enabled == true
 
                 let controlsEnabled = !state.protectionUnavailable
-                //TODO:localize
-                entries.append(.walletPasscode(presentationData.theme, "Confirm with Passcode", protectionEnabled, controlsEnabled))
+                entries.append(.walletPasscode(presentationData.theme, presentationData.strings.PasscodeSettings_WalletConfirmWithPasscode, protectionEnabled, controlsEnabled))
                 if protectionEnabled && (state.canUseBiometrics || state.protection?.biometricsEnabled == true) {
-                    //TODO:localize
-                    let title = state.faceID ? "Confirm with Face ID" : "Confirm with Touch ID"
-                    entries.append(.walletBiometrics(presentationData.theme, title, state.protection?.biometricsEnabled == true, controlsEnabled))
+                    entries.append(.walletBiometrics(presentationData.theme, state.faceID ? presentationData.strings.PasscodeSettings_WalletConfirmWithFaceId : presentationData.strings.PasscodeSettings_WalletConfirmWithTouchId, state.protection?.biometricsEnabled == true, controlsEnabled))
                 }
-                //TODO:localize
-                entries.append(.walletInfo(presentationData.theme, "Required when sending funds or confirming other sensitive Wallet actions."))
+                entries.append(.walletInfo(presentationData.theme, presentationData.strings.PasscodeSettings_WalletProtectionInfo))
             }
     }
     
@@ -343,8 +337,7 @@ public func passcodeOptionsController(context: AccountContext, focusOnItemTag: P
     }
     let presentProtectionError: () -> Void = {
         let strings = context.sharedContext.currentPresentationData.with { $0 }.strings
-        //TODO:localize
-        presentControllerImpl?(textAlertController(context: context, title: nil, text: "Couldn't update wallet protection. Please try again.", actions: [TextAlertAction(type: .defaultAction, title: strings.Common_OK, action: {})]), ViewControllerPresentationArguments(presentationAnimation: .modalSheet))
+        presentControllerImpl?(textAlertController(context: context, title: nil, text: strings.PasscodeSettings_WalletProtectionError, actions: [TextAlertAction(type: .defaultAction, title: strings.Common_OK, action: {})]), ViewControllerPresentationArguments(presentationAnimation: .modalSheet))
     }
     var refreshGeneration: UInt64 = 0
     let refreshProtection: (Bool) -> Void = { reportError in
@@ -404,8 +397,7 @@ public func passcodeOptionsController(context: AccountContext, focusOnItemTag: P
         let perform: (PasscodeSession) -> Void = { session in
             guard sessionState.accepts(operation: operation) else { return }
             let authenticationContext = LAContext()
-            //TODO:localize
-            authenticationContext.localizedReason = "Enable biometrics for your wallets"
+            authenticationContext.localizedReason = context.sharedContext.currentPresentationData.with { $0 }.strings.PasscodeSettings_WalletEnableBiometricsReason
             authenticationContext.localizedFallbackTitle = ""
             authenticationContext.touchIDAuthenticationAllowableReuseDuration = 0
             activeBiometricContext = authenticationContext
@@ -541,11 +533,7 @@ public func passcodeOptionsController(context: AccountContext, focusOnItemTag: P
             return
         }
         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-        //TODO:localize
-        let warning = current.enabled
-            ? "This will also turn off passcode and biometric protection for every wallet on this device."
-            : presentationData.strings.PasscodeSettings_TurnPasscodeOff
-        let alert = textAlertController(context: context, title: presentationData.strings.PasscodeSettings_TurnPasscodeOff, text: warning, actions: [
+        let alert = textAlertController(context: context, title: presentationData.strings.PasscodeSettings_TurnPasscodeOff, text: current.enabled ? presentationData.strings.PasscodeSettings_TurnOffWalletProtectionWarning : presentationData.strings.PasscodeSettings_TurnPasscodeOff, actions: [
             TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {}),
             TextAlertAction(type: .destructiveAction, title: presentationData.strings.PasscodeSettings_TurnPasscodeOff, action: {
                 guard sessionState.accepts(generation: generation), let operation = sessionState.beginOperation() else { return }

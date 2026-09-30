@@ -543,15 +543,13 @@ public final class WalletTransactionItemComponent: Component {
             var amountIconColor: UIColor?
             var avatarPeer: StarsAvatarComponent.Peer?
             if isKeyChange {
-                //TODO:localize
-                subtitleText = "Key Update"
+                subtitleText = component.strings.Wallet_Transaction_KeyUpdate
                 amountValue = -(abs(transaction.amount) + transaction.fee)
                 amountColor = component.theme.list.itemPrimaryTextColor
                 amountIconColor = nil
                 avatarPeer = nil
             } else if isDeployContract {
-                //TODO:localize
-                subtitleText = "Deploy Contract"
+                subtitleText = component.strings.Wallet_Transaction_DeployContract
                 amountValue = 0
                 amountColor = component.theme.list.itemPrimaryTextColor
                 amountIconColor = nil
@@ -560,14 +558,12 @@ public final class WalletTransactionItemComponent: Component {
                 switch displayedDirection {
                 case .incoming:
                     if transaction.collectible != nil {
-                        //TODO:localize
-                        subtitleText = "Incoming collectible"
+                        subtitleText = component.strings.Wallet_Transaction_IncomingCollectible
                     } else {
-                        //TODO:localize
                         if case .user = transaction.peer {
-                            subtitleText = "Incoming transfer"
+                            subtitleText = component.strings.Wallet_Transaction_IncomingTransfer
                         } else {
-                            subtitleText = "Deposit"
+                            subtitleText = component.strings.Wallet_Transaction_Deposit
                         }
                     }
                     amountValue = displayedAmount
@@ -580,14 +576,12 @@ public final class WalletTransactionItemComponent: Component {
                     avatarPeer = .transaction(.incoming)
                 case .outgoing:
                     if transaction.collectible != nil {
-                        //TODO:localize
-                        subtitleText = "Outgoing collectible"
+                        subtitleText = component.strings.Wallet_Transaction_OutgoingCollectible
                     } else {
-                        //TODO:localize
                         if case .user = transaction.peer {
-                            subtitleText = "Outgoing transfer"
+                            subtitleText = component.strings.Wallet_Transaction_OutgoingTransfer
                         } else {
-                            subtitleText = "Withdrawal"
+                            subtitleText = component.strings.Wallet_Transaction_Withdrawal
                         }
                     }
                     amountValue = displayedAmount
@@ -626,8 +620,7 @@ public final class WalletTransactionItemComponent: Component {
                 amountIconColor = component.theme.list.itemSecondaryTextColor
             }
             if transaction.status == .failed {
-                //TODO:localize
-                subtitleText = "Failed"
+                subtitleText = component.strings.Wallet_Transaction_Failed
                 amountColor = component.theme.list.itemDestructiveColor
                 amountIconColor = component.theme.list.itemDestructiveColor
             }
@@ -901,18 +894,17 @@ public final class WalletTransactionItemComponent: Component {
                 if let domain = domain?.trimmingCharacters(in: .whitespacesAndNewlines), !domain.isEmpty {
                     peerTitle = domain
                 } else {
-                    peerTitle = walletTransactionCounterparty(address)
+                    peerTitle = walletTransactionCounterparty(address, strings: component.strings)
                 }
             case let .onramp(_, _, provider):
-                //TODO:localize
                 switch provider {
                 case "MoonPay":
-                    peerTitle = "Card top-up"
+                    peerTitle = component.strings.Wallet_Transaction_CardTopUp
                 default:
-                    peerTitle = "Crypto top-up"
+                    peerTitle = component.strings.Wallet_Transaction_CryptoTopUp
                 }
             case .unsupported:
-                peerTitle = walletTransactionCounterparty(nil)
+                peerTitle = walletTransactionCounterparty(nil, strings: component.strings)
             }
             let titleSize = self.title.update(
                 transition: transition,
@@ -1026,16 +1018,13 @@ public final class WalletTransactionItemComponent: Component {
                 let collectibleTypeText: String
                 switch collectible.kind {
                 case .gift:
-                    //TODO:localize
-                    collectibleTypeText = "Collectible Gift"
+                    collectibleTypeText = component.strings.Wallet_Transaction_CollectibleGift
                 case .username:
-                    //TODO:localize
-                    collectibleTypeText = "Username"
+                    collectibleTypeText = component.strings.Wallet_Transaction_Username
                 case .anonymousNumber:
-                    //TODO:localize
-                    collectibleTypeText = "Anonymous Number"
+                    collectibleTypeText = component.strings.Wallet_Transaction_AnonymousNumber
                 case .other:
-                    collectibleTypeText = "Collectible"
+                    collectibleTypeText = component.strings.Wallet_Transaction_Collectible
                 }
                 let collectibleSubtitleSize = self.collectibleSubtitle.update(
                     transition: transition,
@@ -1208,11 +1197,9 @@ public final class WalletTransactionItemComponent: Component {
     }
 }
 
-private func walletTransactionCounterparty(_ address: String?) -> String {
+private func walletTransactionCounterparty(_ address: String?, strings: PresentationStrings) -> String {
     guard var address, !address.isEmpty else {
-        //TODO:localize
-        let unknownAddress = "Unknown Address"
-        return unknownAddress
+        return strings.Wallet_Transaction_UnknownAddress
     }
     address = WalletContext.transferAddress(from: address) ?? address
     

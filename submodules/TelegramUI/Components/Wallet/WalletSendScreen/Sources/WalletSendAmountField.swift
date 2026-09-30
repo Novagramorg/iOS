@@ -546,7 +546,8 @@ class WalletSendAmountField: UIView, UITextFieldDelegate {
             self.amountTextColor = theme.list.itemPrimaryTextColor
             self.textField.textColor = theme.list.itemPrimaryTextColor
         }
-        self.textField.caretColor = mode == .gram ? theme.list.itemAccentColor : UIColor(rgb: 0x219949)
+        let currencyColor = UIColor(rgb: mode == .gram ? (theme.overallDarkAppearance ? 0x30A1F5 : 0x0088FF) : 0x219949)
+        self.textField.caretColor = currencyColor
         
         self.textField.attributedPlaceholder = NSAttributedString(
             string: "0",
@@ -595,7 +596,7 @@ class WalletSendAmountField: UIView, UITextFieldDelegate {
             transition: currencyTransition,
             component: AnyComponent(AnimatedTextComponent(
                 font: self.fractionalFont,
-                color: UIColor(rgb: mode == .gram ? (theme.overallDarkAppearance ? 0x30A1F5 : 0x0088ff) : 0x219949),
+                color: currencyColor,
                 items: [
                     AnimatedTextComponent.Item(id: "currency", content: .text(suffixText))
                 ],
