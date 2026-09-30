@@ -1502,7 +1502,7 @@ public final class WalletCardComponent: Component {
                 quad: projectedQuad
             )
 
-            if notifyBalanceGeometry && self.balanceTransitionFraction > 0.0 && self.balanceTransitionFraction < 1.0 {
+            if notifyBalanceGeometry {
                 self.balanceGeometryUpdated?()
             }
         }

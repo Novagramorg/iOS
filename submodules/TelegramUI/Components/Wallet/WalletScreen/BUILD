@@ -36,7 +36,6 @@ swift_library(
         "//submodules/QrCodeUI",
         "//submodules/ContextUI",
         "//submodules/SSignalKit/SwiftSignalKit",
-        "//submodules/TooltipUI",
         "//submodules/UndoUI",
         "//submodules/SettingsUI",
         "//submodules/TelegramUI/Components/Wallet/WalletCardComponent",

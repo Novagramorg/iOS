@@ -567,9 +567,17 @@ actor WalletContextImpl {
         refreshIfStreamingUnavailable: Bool = false,
         balanceOverlayRevision: UInt64? = nil
     ) {
+        let operationWalletState: TelegramCore.WalletState?
+        switch self.currentState.activeOperation {
+        case .creating:
+            operationWalletState = self.deferredServerWalletState?.state
+        case .recoveringPhrase:
+            operationWalletState = self.deferredServerWalletState?.state ?? self.serverWalletState
+        default:
+            operationWalletState = nil
+        }
         if !forceActivation,
-           self.currentState.activeOperation == .creating,
-           case let .ready(_, _, _, pendingAddress, pendingPublicKey, _)? = self.deferredServerWalletState?.state,
+           case let .ready(_, _, _, pendingAddress, pendingPublicKey, _)? = operationWalletState,
            case let .ready(_, _, _, address, publicKey, _) = value,
            walletEngineAddressesEqual(pendingAddress, address),
            pendingPublicKey == publicKey {
@@ -613,8 +621,6 @@ actor WalletContextImpl {
            case let .wallet(currentInfo) = self.currentState.phase,
            walletEngineAddressesEqual(currentInfo.address, address),
            currentInfo.publicKey == publicKey.map({ String(format: "%02x", $0) }).joined() {
-            // Request ordering alone does not establish freshness: getState may lag
-            // behind streaming. Keep the displayed balance until the sources agree.
             let overlayChanged = balanceOverlayRevision.map {
                 self.streamingPresentationOverlay.reconcileBalance(serverBalance, through: $0, log: self.logger.log)
             } ?? false
