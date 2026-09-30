@@ -427,7 +427,6 @@ private final class WalletInfoSheetContent: CombinedComponent {
                     let text = NSMutableAttributedString(string: item.text, font: textFont, textColor: itemTextColor)
                     let iconRange = NSRange(range, in: item.text)
                     let placeholderWidth = text.attributedSubstring(from: iconRange).size().width
-                    // Reserve the icon's width without changing the surrounding line height.
                     text.addAttributes([
                         .attachment: image,
                         .kern: image.size.width - placeholderWidth
@@ -452,11 +451,11 @@ private final class WalletInfoSheetContent: CombinedComponent {
 
             let list = list.update(
                 component: List(items),
-                availableSize: CGSize(width: context.availableSize.width - sideInset * 2.0, height: 10000.0),
+                availableSize: CGSize(width: context.availableSize.width - sideInset - 6.0, height: 10000.0),
                 transition: context.transition
             )
             context.add(list
-                .position(CGPoint(x: context.availableSize.width / 2.0, y: contentSize.height + list.size.height / 2.0))
+                .position(CGPoint(x: context.availableSize.width / 2.0 + 12.0, y: contentSize.height + list.size.height / 2.0))
             )
             contentSize.height += list.size.height
             contentSize.height += spacing + 8.0
