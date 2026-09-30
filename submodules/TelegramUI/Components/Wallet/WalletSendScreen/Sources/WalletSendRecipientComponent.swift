@@ -68,8 +68,8 @@ final class WalletSendRecipientComponent: Component {
 
         private static let alphabet = Array("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789")
         private static let flipDuration = 0.14
-        private static let sweepDuration = 0.62
-        private static let settleDuration = 0.78
+        private static let sweepDuration = 0.4
+        private static let settleDuration = 0.546
 
         private let backgroundView = UIView()
         private let avatar = ComponentView<Empty>()
@@ -204,7 +204,7 @@ final class WalletSendRecipientComponent: Component {
             }
             guard force || self.renderedAddress?.isEqual(to: attributedAddress) != true else { return }
             self.renderedAddress = attributedAddress
-            // Only this text component updates on a tick; the recipient and screen keep their layout.
+
             self.addressSize = self.address.update(
                 transition: .immediate,
                 component: AnyComponent(PlainButtonComponent(
@@ -220,7 +220,6 @@ final class WalletSendRecipientComponent: Component {
                 environment: {},
                 containerSize: CGSize(width: self.addressTextWidth, height: .greatestFiniteMagnitude)
             )
-            // Never expose the changing placeholder to VoiceOver, including the text child.
             if let addressView = self.address.view as? PlainButtonComponent.View {
                 addressView.isAccessibilityElement = !component.isLoading && !component.address.isEmpty
                 addressView.accessibilityLabel = component.address
@@ -253,22 +252,27 @@ final class WalletSendRecipientComponent: Component {
             if contextChanged {
                 self.applicationIsActive = false
             }
-            let displaysPlaceholder = component.isLoading || component.address.isEmpty
+            let hasPeer = component.peer != nil
+            let displaysPlaceholder = hasPeer && (component.isLoading || component.address.isEmpty)
             if self.component?.peer?.id != component.peer?.id || self.component?.address != component.address || self.component?.isLoading != component.isLoading {
-                // Keep scrambling without a restart until an address arrives, then reveal it.
                 let continuesLoading = self.component?.peer?.id == component.peer?.id
                     && self.addressPhase == .loading
                 if !continuesLoading {
                     self.animationElapsed = 0
                 }
                 self.revealElapsed = 0
-                self.addressPhase = displaysPlaceholder ? .loading : .revealing
+                if displaysPlaceholder {
+                    self.addressPhase = .loading
+                } else if hasPeer && continuesLoading {
+                    self.addressPhase = .revealing
+                } else {
+                    self.addressPhase = .ready
+                }
             }
             self.component = component
             if UIAccessibility.isReduceMotionEnabled && self.addressPhase == .revealing {
                 self.addressPhase = .ready
             }
-            let hasPeer = component.peer != nil
             let canOpenInfo = !component.isLoading && !component.address.isEmpty
             let textOriginX: CGFloat = 60.0
             let textWidth = max(1.0, availableSize.width - textOriginX - 42.0)
@@ -288,7 +292,7 @@ final class WalletSendRecipientComponent: Component {
                 groupsPerLine -= 1
             }
 
-            let addressText = displaysPlaceholder ? String(repeating: "0", count: 48) : component.address
+            let addressText = displaysPlaceholder ? String(repeating: "0", count: 48) : (component.address.isEmpty ? "—" : component.address)
             self.formattedAddressLines = Self.addressLines(addressText, groupsPerLine: groupsPerLine)
             self.addressAttributes = addressAttributes
             self.addressTextWidth = textWidth
