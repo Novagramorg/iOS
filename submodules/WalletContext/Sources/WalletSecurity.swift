@@ -61,56 +61,8 @@ public struct WalletSecretEnvelope: Codable, Equatable, Sendable {
 }
 
 @available(macOS 10.15, *)
-protocol WalletVaultStorage {
-    func read(service: String, account: String) throws -> Data?
-    func insert(_ data: Data, service: String, account: String) throws
-    func remove(service: String, account: String) throws
-}
-
-@available(macOS 10.15, *)
-struct WalletVaultMigrator {
-    let storage: WalletVaultStorage
-
-    func migrate(namespace: String, account: String, access: () throws -> PasscodeSession) throws {
-        let oldService = WalletVault.legacyPrefix + namespace
-        guard var secret = try self.storage.read(service: oldService, account: account) else { return }
-        defer { secret.resetBytes(in: 0 ..< secret.count) }
-        let access = try access()
-        let newService = WalletVault.service(namespace: namespace)
-        if try self.storage.read(service: newService, account: account) == nil {
-            let envelope = try WalletSecretEnvelope.encrypt(secret, vaultId: namespace, access: access)
-            try self.storage.insert(JSONEncoder().encode(envelope), service: newService, account: account)
-        }
-        guard let saved = try self.storage.read(service: newService, account: account),
-              let envelope = try? JSONDecoder().decode(WalletSecretEnvelope.self, from: saved),
-              try envelope.decrypt(vaultId: namespace, access: access) == secret else { throw PasscodeError.corrupted }
-        try self.storage.remove(service: oldService, account: account)
-    }
-}
-
-@available(macOS 10.15, *)
-private struct WalletVaultKeychain: WalletVaultStorage {
-    func read(service: String, account: String) throws -> Data? { try WalletVault.read(service: service, account: account) }
-
-    func insert(_ data: Data, service: String, account: String) throws {
-        var query = try WalletVault.query(service: service, account: account)
-        query[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
-        query[kSecValueData as String] = data
-        let status = SecItemAdd(query as CFDictionary, nil)
-        guard status == errSecSuccess else { throw PasscodeError.keychain(status) }
-    }
-
-    func remove(service: String, account: String) throws {
-        let status = SecItemDelete(try WalletVault.query(service: service, account: account) as CFDictionary)
-        guard status == errSecSuccess || status == errSecItemNotFound else { throw PasscodeError.keychain(status) }
-    }
-}
-
-@available(macOS 10.15, *)
 enum WalletVault {
-    static let legacyPrefix = "org.telegram.ton-wallet.engine.v2.secret."
     private static let prefix = "org.telegram.ton-wallet.vault.v1.envelope."
-    private static let migrationLock = NSRecursiveLock()
 
     static func service(namespace: String) -> String { self.prefix + namespace }
 
@@ -139,38 +91,6 @@ enum WalletVault {
         let access = try self.access(namespace: namespace)
         guard let envelope = try? JSONDecoder().decode(WalletSecretEnvelope.self, from: data) else { throw PasscodeError.corrupted }
         return try envelope.decrypt(vaultId: namespace, access: access)
-    }
-
-    fileprivate static func query(service: String, account: String) throws -> [String: Any] {
-        var query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
-            kSecAttrAccount as String: account, kSecAttrSynchronizable as String: false]
-        if let group = try self.keychainAccessGroup() {
-            query[kSecAttrAccessGroup as String] = group
-        }
-        return query
-    }
-
-    fileprivate static func read(service: String, account: String) throws -> Data? {
-        var query = try self.query(service: service, account: account)
-        query[kSecReturnData as String] = true
-        query[kSecMatchLimit as String] = kSecMatchLimitOne
-        var value: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &value)
-        if status == errSecItemNotFound { return nil }
-        guard status == errSecSuccess, let data = value as? Data else { throw PasscodeError.keychain(status) }
-        return data
-    }
-
-    static func migrate(namespace: String, account: String) throws {
-        self.migrationLock.lock(); defer { self.migrationLock.unlock() }
-        try WalletVaultMigrator(storage: WalletVaultKeychain()).migrate(namespace: namespace, account: account) {
-            try self.access(namespace: namespace)
-        }
-    }
-
-    static func removeLegacy(namespace: String, account: String) throws {
-        let status = SecItemDelete(try self.query(service: self.legacyPrefix + namespace, account: account) as CFDictionary)
-        guard status == errSecSuccess || status == errSecItemNotFound else { throw PasscodeError.keychain(status) }
     }
 
     static func removeAll(environment: PasscodeEnvironment = .shared) throws {
@@ -204,25 +124,6 @@ enum WalletVault {
             }
             let status = delete(deletion)
             guard status == errSecSuccess || status == errSecItemNotFound else { throw PasscodeError.keychain(status) }
-        }
-    }
-
-    static func migrateAll() throws {
-        self.migrationLock.lock(); defer { self.migrationLock.unlock() }
-        var query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
-            kSecReturnAttributes as String: true, kSecMatchLimit as String: kSecMatchLimitAll,
-            kSecAttrSynchronizable as String: false]
-        if let group = try self.keychainAccessGroup() {
-            query[kSecAttrAccessGroup as String] = group
-        }
-        var value: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &value)
-        if status == errSecItemNotFound { return }
-        guard status == errSecSuccess, let items = value as? [[String: Any]] else { throw PasscodeError.keychain(status) }
-        for item in items {
-            guard let service = item[kSecAttrService as String] as? String, service.hasPrefix(self.legacyPrefix),
-                  let account = item[kSecAttrAccount as String] as? String else { continue }
-            try self.migrate(namespace: String(service.dropFirst(self.legacyPrefix.count)), account: account)
         }
     }
 }
@@ -449,17 +350,11 @@ public func walletProtectionSettings(credentials: PasscodeCredentialStore = .sha
 
 @available(macOS 10.15, *)
 public func setWalletProtectionEnabled(_ enabled: Bool, session: PasscodeSession, credentials: PasscodeCredentialStore = .shared) throws {
-    try setWalletProtectionEnabled(enabled, session: session, credentials: credentials, migrateWallets: WalletVault.migrateAll)
-}
-
-@available(macOS 10.15, *)
-func setWalletProtectionEnabled(_ enabled: Bool, session: PasscodeSession, credentials: PasscodeCredentialStore, migrateWallets: () throws -> Void) throws {
     try credentials.validate(session, scope: .settings)
     guard try credentials.protectionSettings().enabled != enabled else {
         return
     }
     if enabled {
-        try migrateWallets()
         try credentials.resumeCleanup()
     }
     try credentials.setProtectionEnabled(enabled, session: session)

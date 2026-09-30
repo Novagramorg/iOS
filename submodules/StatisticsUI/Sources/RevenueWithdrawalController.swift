@@ -94,7 +94,7 @@ func confirmRevenueWithdrawalController(
             case .limitExceeded:
                 errorTextAndActions = (strings.TwoStepAuth_FloodError, [TextAlertAction(type: .defaultAction, title: strings.Common_OK, action: {})])
             case .amountTooSmall:
-                errorTextAndActions = (strings.Login_UnknownError, [TextAlertAction(type: .defaultAction, title: strings.Common_OK, action: {})])
+                errorTextAndActions = (strings.Monetization_Withdraw_AmountTooSmallError, [TextAlertAction(type: .defaultAction, title: strings.Common_OK, action: {})])
             default:
                 errorTextAndActions = (strings.Login_UnknownError, [TextAlertAction(type: .defaultAction, title: strings.Common_OK, action: {})])
             }

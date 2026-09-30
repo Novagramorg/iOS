@@ -400,9 +400,16 @@ private final class WalletWordsSheetComponent: CombinedComponent {
 
             let dismiss: (Bool) -> Void = { animated in
                 if animated {
-                    animateOut.invoke(Action { _ in
-                        controller()?.dismiss(completion: nil)
-                    })
+                    let animateDismissal = {
+                        animateOut.invoke(Action { _ in
+                            controller()?.dismiss(completion: nil)
+                        })
+                    }
+                    if let controller = controller() as? WalletWordsScreen {
+                        controller.requestDismiss(completion: animateDismissal)
+                    } else {
+                        animateDismissal()
+                    }
                 } else {
                     controller()?.dismiss(completion: nil)
                 }
@@ -518,6 +525,8 @@ public final class WalletWordsScreen: ViewControllerComponentContainer {
     private var pendingAutomaticDismissal = false
     private var automaticDismissalScheduled = false
     private var isVerifying = false
+    private var isDismissingProgrammatically = false
+    private weak var cancelDisableBackupController: ViewController?
 
     public convenience init(context: AccountContext, words: [String], verify: Bool, dismissOnBackgroundOrLock: Bool = false, completion: (() -> Void)?) {
         self.init(
@@ -594,6 +603,31 @@ public final class WalletWordsScreen: ViewControllerComponentContainer {
         }
     }
 
+    fileprivate func requestDismiss(completion: @escaping () -> Void) {
+        guard case .backupDisable = self.mode, !self.isDismissingProgrammatically else {
+            completion()
+            return
+        }
+        guard self.cancelDisableBackupController == nil else {
+            return
+        }
+
+        let strings = self.context.sharedContext.currentPresentationData.with { $0 }.strings
+        let controller = textAlertController(
+            context: self.context,
+            title: strings.Wallet_Backup_CancelDisablingTitle,
+            text: strings.Wallet_Backup_CancelDisablingText,
+            actions: [
+                TextAlertAction(type: .defaultAction, title: strings.Wallet_Backup_CancelDisabling, action: completion),
+                TextAlertAction(type: .genericAction, title: strings.Wallet_Continue, action: {})
+            ],
+            actionLayout: .vertical,
+            dismissOnOutsideTap: false
+        )
+        self.cancelDisableBackupController = controller
+        self.present(controller, in: .window(.root))
+    }
+
     fileprivate func complete() {
         guard !self.pendingAutomaticDismissal, !self.words.isEmpty, !self.isVerifying else {
             return
@@ -658,6 +692,10 @@ public final class WalletWordsScreen: ViewControllerComponentContainer {
     }
 
     public func dismissAnimated() {
+        self.isDismissingProgrammatically = true
+        defer {
+            self.isDismissingProgrammatically = false
+        }
         if let view = self.node.hostView.findTaggedView(
             tag: ResizableSheetComponent<ViewControllerComponentContainer.Environment>.View.Tag()
         ) as? ResizableSheetComponent<ViewControllerComponentContainer.Environment>.View {

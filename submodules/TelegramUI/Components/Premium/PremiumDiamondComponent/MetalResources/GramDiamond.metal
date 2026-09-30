@@ -885,7 +885,11 @@ fragment float4 diamondLensFragment(Raster in [[stage_in]], constant Uniforms &u
     float2 uv = clamp(lens.uv.xy + sourcePosition * lens.uv.zw,
                       lens.uv.xy + halfTexel, lens.uv.xy + lens.uv.zw - halfTexel);
     float4 sampledColor = source.sample(sourceSampler, uv);
-    float coverage = strength * smoothstep(0.0, 1.5, distanceToEdge);
+    // The model is pitch * yaw, so its up axis measures vertical tilt independently of yaw.
+    // Fade only the sampled image into the existing facets, preserving the lens distortion.
+    float verticalTilt = asin(clamp(abs(u.model[1].z), 0.0, 1.0));
+    float lensVisibility = 1.0 - smoothstep(20.0 * M_PI_F / 180.0, M_PI_F / 4.0, verticalTilt);
+    float coverage = strength * smoothstep(0.0, 1.5, distanceToEdge) * lensVisibility;
     if (lens.center.z > 0.5) {
         // The card snapshot contains premultiplied color, including antialiased edges.
         float opacity = 0.7 * coverage;

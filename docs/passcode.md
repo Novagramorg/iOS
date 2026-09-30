@@ -14,8 +14,8 @@ PasscodeCore and wallet security code, rather than identifying a released versio
 | [PasscodeSession / PasscodeCrypto](../submodules/PasscodeCore/Sources/PasscodeCrypto.swift) | Cryptographic primitives, scoped in-memory authorization, key derivation, availability, expiry, and revocation. |
 | [AccountManagerIntegration](../submodules/PasscodeCore/Sources/AccountManagerIntegration.swift) | Factory and conversions connecting the credential store to AccountManager's access-challenge hooks. |
 | [AccountManager](../submodules/TelegramCore/Sources/AccountManager/AccountManagerImpl.swift) | Nonsecret lock metadata, reconciliation with the credential store, and removal of legacy plaintext metadata. |
-| [WalletProtection](../submodules/WalletContext/Sources/Security/WalletProtection.swift) | Wallet protection policy, biometric service name, migration before protection is enabled, and full local-secret reset coordination. |
-| [WalletSecretEnvelope](../submodules/WalletContext/Sources/Security/WalletSecretEnvelope.swift), [WalletVault](../submodules/WalletContext/Sources/Security/WalletVault.swift) | Encrypted secret format, private Keychain access, and legacy secret migration. |
+| [WalletProtection](../submodules/WalletContext/Sources/WalletSecurity.swift) | Wallet protection policy, biometric service name, and full local-secret reset coordination. |
+| [WalletSecretEnvelope / WalletVault](../submodules/WalletContext/Sources/WalletSecurity.swift) | Encrypted secret format and private Keychain access. |
 | [WalletAuthorization](../submodules/WalletContext/Sources/Security/WalletAuthorization.swift), [WalletStorage](../submodules/WalletContext/Sources/WalletStorage.swift), [WalletEngineRuntime](../submodules/WalletContext/Sources/WalletEngineRuntime.swift) | Operation authorization, persistent and temporary secret handling, and propagation into Rust host callbacks. |
 
 PasscodeCore depends on TelegramCore to supply the AccountManager bridge.
@@ -40,7 +40,6 @@ explicitly disabled. Every query specifies an access group.
 | `org.telegram.passcode.v1` / `attempts` | JSON failure count, boot identity, and monotonic cooldown deadline. | Same shared group and accessibility. |
 | `org.telegram.ton-wallet.vault.v1.biometric` / `biometric.<UUID>` | Copy of the stable 32-byte access key, protected by biometric access control. | Main app's private group; `WhenPasscodeSetThisDeviceOnly` plus `biometryCurrentSet`. |
 | `org.telegram.ton-wallet.vault.v1.envelope.<namespace>` / secret reference | JSON encrypted wallet-secret envelope. | Main app's private group; `WhenUnlockedThisDeviceOnly`. |
-| `org.telegram.ton-wallet.engine.v2.secret.<namespace>` / secret reference | Legacy plaintext secret, retained only until its envelope migration succeeds. | Explicitly queried in the main app's private group. |
 | AccountManager `atomic-state` and SQLite access-challenge row | After migration, only `.secured(id:kind:)`, or `.none` when the passcode is disabled. | Existing shared AccountManager files; no passcode or wallet key in the new challenge representation. |
 
 Wallet namespaces are
@@ -366,35 +365,15 @@ add slot binding without redesigning those transitions. The wallet recovery path
 also validates that a recovered phrase matches the wallet's public identity before
 local installation, as described below.
 
-## Wallet secret migration and storage lifecycle
+## Wallet secret storage lifecycle
 
-The legacy-to-envelope migration is per namespace and secret reference:
+Before **enabling wallet protection**, `setWalletProtectionEnabled` validates the
+settings session and checks the current protection state, then resumes biometric
+cleanup before removing the unprotected root key copy in the protection commit.
 
-1. Read the legacy secret. If absent, migration has nothing to do.
-2. Obtain an authorized resource session, or an unprotected resource session when
-   protection is disabled.
-3. If no new envelope exists, encrypt and insert one without overwriting an existing item.
-4. Read the saved envelope back, decode it, authenticate/decrypt it, and compare
-   the recovered bytes with the legacy secret.
-5. Delete the legacy item only after that comparison succeeds.
-
-A corrupt or different existing envelope is an error, not permission to overwrite
-it. Insert, readback, authentication, or legacy-deletion failures retain the old
-record; a retry can reuse and verify the previously inserted ciphertext. Migration
-is serialized by an in-process recursive wallet migration lock.
-
-Before **enabling wallet protection**, `setWalletProtectionEnabled` migrates all
-legacy services in the private group, including every account/environment and
-temporary slot, then resumes biometric cleanup, then removes the unprotected root
-key copy in the protection commit. Enumeration reads attributes first and loads
-only matching legacy secret items. Failure before that commit leaves protection
-disabled, although individual successfully migrated secrets remain migrated.
-
-WalletStorage also finishes per-slot migration during secret reads/writes and
-presence checks. Presence checking only checks for the encrypted item after
-migration; it does not itself prove that an existing envelope decrypts. Secret
-deletion removes both legacy and envelope representations, so replacement and
-rotation cleanup cannot leave a plaintext fallback behind.
+WalletStorage reads, writes, checks for, and deletes secrets only in the encrypted
+envelope service. Presence checking does not itself prove that an existing
+envelope decrypts. Old plaintext wallet records are not read or migrated.
 
 Active signing secrets, replacement candidates, and rotation candidates are
 encrypted envelopes. Rollback storage, candidate promotion, and restoration copy
@@ -505,7 +484,7 @@ rtk proxy swift test --package-path submodules/WalletContext
 | [PasscodeCoreTests](../submodules/PasscodeCore/Tests/PasscodeCoreTests.swift) | Verification, Unicode compatibility, stable derived keys across PIN changes, fresh salts/nonces, cooldown/reboot behavior, corrupt/missing records, scope and authentication-origin checks, expiry/revocation races, cancellation around commit, settings-session retention, biometric journaling/cleanup failures, and reset ordering. |
 | [PasscodeEnvironmentTests](../submodules/PasscodeCore/Tests/PasscodeEnvironmentTests.swift) | Explicit query groups, immutable configuration, deferred private-group resolution, missing service/configuration, and extension restrictions. |
 | [PasscodeInterprocessTests](../submodules/PasscodeCore/Tests/PasscodeInterprocessTests.swift) | Separate processes using production `flock` against injected atomic file storage, preservation of six concurrent wrong attempts and cooldown, reset cleanup holding the lock, and lock-open failures. |
-| [WalletSecurityTests](../submodules/WalletContext/TestsSecurity/WalletSecurityTests.swift), [WalletProtectionTests](../submodules/WalletContext/TestsSecurity/WalletProtectionTests.swift) | Envelope/namespace tampering, legacy migration and interrupted writes, session isolation/lifetimes, protection migration ordering, private cleanup/reset, and fixed pre-refactor credential/envelope compatibility fixtures. |
+| [WalletSecurityTests](../submodules/WalletContext/TestsSecurity/WalletSecurityTests.swift), [WalletProtectionTests](../submodules/WalletContext/TestsSecurity/WalletProtectionTests.swift) | Envelope/namespace tampering, session isolation/lifetimes, private cleanup/reset, and fixed pre-refactor credential/envelope compatibility fixtures. |
 
 PasscodeCore's SwiftPM target excludes `AccountManagerIntegration.swift`.
 WalletContext's standalone package compiles `Sources/Security`, without the full

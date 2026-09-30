@@ -16996,6 +16996,9 @@ Error: %8$@";
 "Wallet.Backup.Disable" = "Disable";
 "Wallet.Backup.DisableWithNewPhraseText" = "Your wallet will switch to the new secret phrase. After the change is confirmed, Telegram will delete the encrypted backup stored across its datacenters.";
 "Wallet.Backup.DisableConfirmationText" = "Telegram will delete the encrypted backup stored across its datacenters. Your secret phrase will be the only way to recover this wallet.";
+"Wallet.Backup.CancelDisablingTitle" = "Cancel Disabling Backup?";
+"Wallet.Backup.CancelDisablingText" = "Your secret phrase will not be updated.";
+"Wallet.Backup.CancelDisabling" = "Cancel Disabling";
 "Wallet.Backup.DisableVerificationErrorText" = "Telegram couldn't verify that you own this wallet. Please try again.";
 "Wallet.Backup.DisableVerificationExpiredText" = "The wallet verification request expired. Tap Disable to try again.";
 "Wallet.Backup.DisablePhraseUpdatePendingText" = "Telegram couldn't confirm the secret phrase change on the blockchain yet. Wait a moment and tap Disable again.";
@@ -17055,3 +17058,5 @@ Error: %8$@";
 
 "Wallet.Authorization.PasswordRetryAfter" = "Try again in %@.";
 "Wallet.Authorization.SessionRetryAfter" = "For your security, try again in %@.";
+
+"Monetization.Withdraw.AmountTooSmallError" = "You cannot withdraw less than 10 Grams.";
