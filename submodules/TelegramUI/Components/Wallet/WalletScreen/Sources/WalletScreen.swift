@@ -35,6 +35,7 @@ import SettingsUI
 import UndoUI
 import WalletAuthorizationUI
 import PasscodeCore
+import Markdown
 
 private let walletSectionOverscan: CGFloat = 100.0
 private let walletTransactionItemHeight: CGFloat = 79.0
@@ -3279,29 +3280,19 @@ private final class WalletScreenComponent: Component {
                 }
                 contentHeight = emptyTransactionsOriginY + emptyTransactionsInfoSize.height
 
-                let termsString = environment.strings.Wallet_TermsText(environment.strings.Wallet_TermsLink)
-                let termsText = NSMutableAttributedString(
-                    string: termsString.string,
-                    attributes: [
-                        .font: Font.regular(13.0),
-                        .foregroundColor: textColor
-                    ]
-                )
-                for range in termsString.ranges where range.index == 0 {
-                    termsText.addAttributes(
-                        [
-                            .foregroundColor: accentColor,
-                            NSAttributedString.Key(rawValue: TelegramTextAttributes.URL): environment.strings.Settings_Terms_URL
-                        ],
-                        range: range.range
-                    )
-                }
-
+                let url = environment.strings.Wallet_TermsText_URL
                 self.emptyTransactionsFooter.parentState = state
                 let emptyTransactionsFooterSize = self.emptyTransactionsFooter.update(
                     transition: transition,
                     component: AnyComponent(MultilineTextComponent(
-                        text: .plain(termsText),
+                        text: .markdown(text: environment.strings.Wallet_TermsText, attributes: MarkdownAttributes(
+                            body: MarkdownAttributeSet(font: Font.regular(13.0), textColor: textColor),
+                            bold: MarkdownAttributeSet(font: Font.semibold(13.0), textColor: textColor),
+                            link: MarkdownAttributeSet(font: Font.regular(13.0), textColor: accentColor),
+                            linkAttribute: { contents in
+                                return (TelegramTextAttributes.URL, contents)
+                            }
+                        )),
                         horizontalAlignment: .center,
                         maximumNumberOfLines: 0,
                         highlightColor: accentColor.withAlphaComponent(0.2),
@@ -3312,10 +3303,7 @@ private final class WalletScreenComponent: Component {
                                 return nil
                             }
                         },
-                        tapAction: { [weak self] attributes, _ in
-                            guard let url = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)] as? String else {
-                                return
-                            }
+                        tapAction: { [weak self] _, _ in
                             self?.openTerms(url: url)
                         }
                     )),

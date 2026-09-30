@@ -517,27 +517,17 @@ private final class WalletInfoSheetContent: CombinedComponent {
             if case .wallet = component.mode {
                 contentSize.height += 24.0
 
-                let termsString = environment.strings.Wallet_TermsText(environment.strings.Wallet_TermsLink)
-                let termsText = NSMutableAttributedString(
-                    string: termsString.string,
-                    attributes: [
-                        .font: Font.regular(13.0),
-                        .foregroundColor: secondaryTextColor
-                    ]
-                )
-                for range in termsString.ranges where range.index == 0 {
-                    termsText.addAttributes(
-                        [
-                            .foregroundColor: theme.list.itemAccentColor,
-                            NSAttributedString.Key(rawValue: TelegramTextAttributes.URL): environment.strings.Settings_Terms_URL
-                        ],
-                        range: range.range
-                    )
-                }
-
+                let url = environment.strings.Wallet_TermsText_URL
                 let terms = terms.update(
                     component: MultilineTextComponent(
-                        text: .plain(termsText),
+                        text: .markdown(text: environment.strings.Wallet_TermsText, attributes: MarkdownAttributes(
+                            body: MarkdownAttributeSet(font: Font.regular(13.0), textColor: secondaryTextColor),
+                            bold: MarkdownAttributeSet(font: Font.semibold(13.0), textColor: secondaryTextColor),
+                            link: MarkdownAttributeSet(font: Font.regular(13.0), textColor: theme.list.itemAccentColor),
+                            linkAttribute: { contents in
+                                return (TelegramTextAttributes.URL, contents)
+                            }
+                        )),
                         horizontalAlignment: .center,
                         maximumNumberOfLines: 0,
                         highlightColor: theme.list.itemAccentColor.withAlphaComponent(0.2),
@@ -548,10 +538,7 @@ private final class WalletInfoSheetContent: CombinedComponent {
                                 return nil
                             }
                         },
-                        tapAction: { [weak state] attributes, _ in
-                            guard let url = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)] as? String else {
-                                return
-                            }
+                        tapAction: { [weak state] _, _ in
                             state?.openTerms(context: component.context, url: url)
                         }
                     ),
