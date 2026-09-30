@@ -1714,9 +1714,10 @@ extension WalletContextImpl {
         operationId: UUID
     ) async throws -> PreparedTransfer {
         return try await self.performOperation(.preparingTransfer, operationId: operationId) {
-            guard case let .wallet(info) = self.currentState.phase,
-                  info.canSign,
-                  let recipient = normalizedMainnetAddress(address),
+            guard case let .wallet(info) = self.currentState.phase, info.canSign else {
+                throw WalletError.unavailable
+            }
+            guard let recipient = normalizedMainnetAddress(address),
                   let nft = normalizedMainnetAddress(collectible.address) else {
                 throw WalletError.invalidAddress
             }

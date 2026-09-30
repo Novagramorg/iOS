@@ -1764,7 +1764,6 @@ private final class WalletScreenComponent: Component {
 
         private func updateScrolling(transition: ComponentTransition) {
             let fraction = self.cardTransitionFraction
-            // Cancel only the downward bounce for the content surrounding the card.
             ComponentTransition.immediate.setPosition(
                 view: self.topContentContainerView,
                 position: CGPoint(
@@ -2419,13 +2418,21 @@ private final class WalletScreenComponent: Component {
             self.componentState?.updated(transition: .easeInOut(duration: 0.25))
         }
 
-        private func updateSuppressedCollectiblesWalletIdentity(_ state: WalletContext.State) {
+        private func updateSuppressedCollectibles(_ state: WalletContext.State) {
             switch state.phase {
             case let .wallet(info):
                 if let currentAddress = self.suppressedCollectiblesWalletAddress, currentAddress != info.address {
                     self.suppressedCollectibleAddresses.removeAll()
                 }
                 self.suppressedCollectiblesWalletAddress = info.address
+                let collectibles = state.collectibles
+                if let previous = self.walletState?.collectibles,
+                   previous.generation == collectibles.generation,
+                   previous.isRefreshing || previous.isLoadingMore,
+                   !collectibles.isRefreshing, !collectibles.isLoadingMore,
+                   collectibles.error == nil, collectibles.nextOffset == nil {
+                    self.suppressedCollectibleAddresses.formIntersection(collectibles.items.map(\.address))
+                }
             case .restoring:
                 break
             case .creating, .empty, .failed:
@@ -2823,7 +2830,7 @@ private final class WalletScreenComponent: Component {
                             self.abandonRestoration()
                         }
                     }
-                    self.updateSuppressedCollectiblesWalletIdentity(walletState)
+                    self.updateSuppressedCollectibles(walletState)
                     self.walletState = walletState
                     if previousPhase != walletState.phase {
                         self.reloadPreviousWallets()
