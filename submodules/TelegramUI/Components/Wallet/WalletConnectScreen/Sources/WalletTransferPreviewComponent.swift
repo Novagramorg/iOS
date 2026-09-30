@@ -433,7 +433,7 @@ final class WalletTransferPreviewComponent: Component {
                 switch item.direction {
                 case .some(.outgoing):
                     title = walletTransferShortAddress(item.address ?? component.request.messages.first?.destination ?? "")
-                    subtitle = environment.strings.Wallet_Transaction_Withdraw
+                    subtitle = environment.strings.Wallet_Transaction_Withdrawal
                     iconKind = .outgoing
                 case .some(.incoming):
                     title = item.address.map(walletTransferShortAddress) ?? environment.strings.Wallet_Transaction_Transfer
@@ -546,13 +546,11 @@ final class WalletTransferPreviewComponent: Component {
             let presentation = WalletTransferPresentation(request: component.request, walletState: component.walletState)
             var contentHeight: CGFloat = 94.0
             let transfers = component.request.messages.map { message in
-                let formattedAmount = formatTonConnectNanograms(message.amountNanograms, strings: environment.strings, dateTimeFormat: environment.dateTimeFormat)
-                let amountTitle = message.amountNanograms == "all" ? formattedAmount : "\(formattedAmount) Grams"
                 let transferContent = WalletTransactionItemComponent.Content(
                     avatar: AnyComponent(WalletTransferPreviewIconComponent(kind: .transfer)),
-                    title: self.text(amountTitle, font: Font.semibold(17.0), color: theme.list.itemPrimaryTextColor, maximumNumberOfLines: 0),
+                    title: self.text(formatTonConnectNanograms(message.amountNanograms, strings: environment.strings, dateTimeFormat: environment.dateTimeFormat), font: Font.semibold(17.0), color: theme.list.itemPrimaryTextColor, maximumNumberOfLines: 0),
                     subtitle: self.text(
-                        "to \(walletTransferShortAddress(WalletContext.transferAddress(from: message.destination) ?? message.destination))",
+                        environment.strings.Wallet_Transfer_ToAddress(walletTransferShortAddress(WalletContext.transferAddress(from: message.destination) ?? message.destination)).string,
                         font: Font.regular(15.0),
                         color: theme.list.itemPrimaryTextColor
                     ),
@@ -571,7 +569,7 @@ final class WalletTransferPreviewComponent: Component {
                 component: AnyComponent(ListSectionComponent(
                     theme: theme,
                     style: .glass,
-                    header: self.text(component.request.messages.count == 1 ? "TRANSFER" : "TRANSFERS", font: Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize), color: sectionTitleColor),
+                    header: self.text(component.request.messages.count == 1 ? environment.strings.Wallet_Transfer_Header : environment.strings.Wallet_Transfer_HeaderMultiple, font: Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize), color: sectionTitleColor),
                     footer: nil,
                     items: transfers
                 )),
@@ -620,7 +618,7 @@ final class WalletTransferPreviewComponent: Component {
                 component: AnyComponent(ListSectionComponent(
                     theme: theme,
                     style: .glass,
-                    header: self.text(component.request.method == .signMessage ? "DETAILS" : "PREVIEW", font: Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize), color: sectionTitleColor),
+                    header: self.text(component.request.method == .signMessage ? environment.strings.Wallet_Transfer_DetailsHeader : environment.strings.Wallet_Transfer_PreviewHeader, font: Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize), color: sectionTitleColor),
                     footer: self.text(
                         feeText,
                         font: Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize),

@@ -436,7 +436,7 @@ private final class WalletAppsScreenComponent: Component {
                         maximumNumberOfLines: 0
                     )),
                     footer: AnyComponent(MultilineTextComponent(
-                        text: .plain(NSAttributedString(string: "Connected apps can see your wallet address, balance and activity. They can't move funds without your approval.", font: Font.regular(13.0), textColor: theme.list.freeTextColor)),
+                        text: .plain(NSAttributedString(string: environment.strings.Wallet_Apps_AllPermissions, font: Font.regular(13.0), textColor: theme.list.freeTextColor)),
                         maximumNumberOfLines: 0
                     )),
                     items: items,

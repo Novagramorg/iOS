@@ -444,7 +444,6 @@ private final class WalletPeerSelectionScreenComponent: Component {
 
             super.init(frame: frame)
 
-            self.recipientSectionTitle.text = "Recipient".uppercased()
             self.addSubview(self.recipientSectionTitle)
 
             self.recipientView.pressed = { [weak self] in
@@ -467,7 +466,6 @@ private final class WalletPeerSelectionScreenComponent: Component {
                 object: nil
             )
 
-            self.scanQrButton.accessibilityLabel = "Scan QR Code"
             self.scanQrButton.accessibilityTraits = .button
             self.scanQrButton.addTarget(self, action: #selector(self.scanQrPressed), for: .touchUpInside)
         }
@@ -994,7 +992,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
                 navigationBackTitle: nil,
                 titleComponent: AnyComponent(MultilineTextComponent(
                     text: .plain(NSAttributedString(
-                        string: "Choose Recipient",
+                        string: strings.Wallet_Recipient_Title,
                         font: Font.semibold(17.0),
                         textColor: theme.rootController.navigationBar.primaryTextColor
                     )),
@@ -1024,7 +1022,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
                     rightInset: insets.right,
                     search: ChatListNavigationBar.Search(
                         isEnabled: true,
-                        placeholder: "Name or wallet address",
+                        placeholder: strings.Wallet_Recipient_Placeholder,
                         displayGlassBackgroundWhenInactive: true,
                         alignPlaceholderToLeftWhenInactive: true
                     ),
@@ -1131,6 +1129,8 @@ private final class WalletPeerSelectionScreenComponent: Component {
             let themeUpdated = self.environment?.theme !== environment.theme
             self.component = component
             self.environment = environment
+            self.recipientSectionTitle.text = environment.strings.Wallet_Transaction_Recipient.uppercased()
+            self.scanQrButton.accessibilityLabel = environment.strings.Contacts_ScanQrCode
             self.state = state
             self.hasSpaceForPasteButton = availableSize.width - environment.safeInsets.left - environment.safeInsets.right >= 390.0
 
@@ -1235,7 +1235,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
                         content: AnyComponentWithIdentity(
                             id: AnyHashable("paste"),
                             component: AnyComponent(Text(
-                                text: "Paste",
+                                text: environment.strings.Common_Paste,
                                 font: Font.semibold(15.0),
                                 color: environment.theme.list.itemAccentColor
                             ))
@@ -1300,7 +1300,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
                         hasOwnGlassContainer: false
                     )
                     searchBarNode.placeholderString = NSAttributedString(
-                        string: "Name or wallet address",
+                        string: environment.strings.Wallet_Recipient_Placeholder,
                         font: Font.regular(17.0),
                         textColor: searchBarTheme.placeholder
                     )
@@ -1651,7 +1651,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
                         id: "title",
                         component: AnyComponent(MultilineTextComponent(
                             text: .plain(NSAttributedString(
-                                string: "Continue",
+                                string: environment.strings.Wallet_Continue,
                                 font: Font.semibold(17.0),
                                 textColor: environment.theme.list.itemCheckColors.foregroundColor
                             )),

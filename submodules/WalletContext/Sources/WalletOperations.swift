@@ -1008,7 +1008,7 @@ extension WalletContextImpl {
                 words = normalizedEngineMnemonic(try await self.runtime.revealRecoveryPhrase())
             }
             defer { words.removeAll(keepingCapacity: false) }
-            guard words.count == 24 else { throw WalletError.invalidMnemonic }
+            guard words.count == 12 || words.count == 24 else { throw WalletError.invalidMnemonic }
             let signingPublicKey = try walletMnemonicSigningPublicKey(words: words)
             let anchorPublicKey = try rotationMnemonicPublicKey(phrase: words.joined(separator: " "))
             try validateAuthorization()

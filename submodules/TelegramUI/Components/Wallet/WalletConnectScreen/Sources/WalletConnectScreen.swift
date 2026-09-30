@@ -780,8 +780,8 @@ public final class WalletConnectScreen: ViewControllerComponentContainer {
                     UndoOverlayController(
                         presentationData: presentationData,
                         content: .actionSucceeded(
-                            title: "Connection Successful",
-                            text: "You are now connected to [\(applicationName)]().",
+                            title: presentationData.strings.Wallet_Connect_SuccessTitle,
+                            text: presentationData.strings.Wallet_Connect_SuccessText(applicationName).string,
                             cancel: nil,
                             destructive: false
                         ),

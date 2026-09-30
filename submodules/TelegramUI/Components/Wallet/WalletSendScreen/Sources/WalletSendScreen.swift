@@ -1494,19 +1494,20 @@ private final class WalletSendScreenComponent: Component {
                   let controller = self.environment?.controller() else {
                 return
             }
-            let message = walletAuthorizationErrorMessage(error)
+            let strings = self.currentPresentationData(for: component).initial.strings
+            let message = walletAuthorizationErrorMessage(error, strings: strings)
             let generation = self.restorationGeneration
             controller.present(textAlertController(
                 context: component.context,
                 updatedPresentationData: self.currentPresentationData(for: component),
-                title: message?.title ?? "Couldn’t Restore Wallet",
-                text: message?.text ?? "Check the network connection and try again.",
+                title: message?.title ?? strings.Wallet_RestoreErrorTitle,
+                text: message?.text ?? strings.Wallet_NetworkError,
                 actions: [
-                    TextAlertAction(type: .genericAction, title: "Cancel", action: { [weak self] in
+                    TextAlertAction(type: .genericAction, title: strings.Common_Cancel, action: { [weak self] in
                         guard let self, self.restorationGeneration == generation else { return }
                         self.abandonRestoration()
                     }),
-                    TextAlertAction(type: .defaultAction, title: "Retry", action: { [weak self] in
+                    TextAlertAction(type: .defaultAction, title: strings.Wallet_Retry, action: { [weak self] in
                         guard let self, self.restorationGeneration == generation else { return }
                         self.send()
                     })
@@ -1552,8 +1553,8 @@ private final class WalletSendScreenComponent: Component {
                 controller?.present(UndoOverlayController(
                     presentationData: presentationData,
                     content: .actionSucceeded(
-                        title: "Wallet Imported",
-                        text: "Your wallet was restored from your secret phrase.",
+                        title: presentationData.strings.Wallet_Settings_WalletImportedTitle,
+                        text: presentationData.strings.Wallet_Settings_WalletImportedText,
                         cancel: nil,
                         destructive: false
                     ),
@@ -2500,7 +2501,7 @@ private final class WalletSendScreenComponent: Component {
                         formatString: environment.strings.Currency_Grams
                     )
                 } else {
-                    feeValue = "0.00000 Grams"
+                    feeValue = environment.strings.Currency_Grams(0).replacingOccurrences(of: "0", with: "0\(environment.dateTimeFormat.decimalSeparator)00000")
                     feeValueColor = .clear
                 }
                 feeValueComponent = AnyComponentWithIdentity(
@@ -2607,7 +2608,7 @@ private final class WalletSendScreenComponent: Component {
                     formatString: environment.strings.Currency_Grams
                 )
             } else {
-                amountTitle = "Grams"
+                amountTitle = environment.strings.Wallet_Send_Grams
             }
 
             let sendTitle: String

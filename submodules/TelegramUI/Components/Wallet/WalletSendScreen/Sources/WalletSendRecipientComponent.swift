@@ -201,7 +201,7 @@ final class WalletSendRecipientComponent: Component {
                 transition: transition,
                 component: AnyComponent(MultilineTextComponent(
                     text: .plain(NSAttributedString(
-                        string: component.peer?.displayTitle(strings: component.strings, displayOrder: component.nameDisplayOrder) ?? "Gram Wallet",
+                        string: component.peer?.displayTitle(strings: component.strings, displayOrder: component.nameDisplayOrder) ?? component.strings.Wallet_Recipient_GramWallet,
                         font: Font.semibold(16.0),
                         textColor: component.theme.list.itemPrimaryTextColor
                     )),

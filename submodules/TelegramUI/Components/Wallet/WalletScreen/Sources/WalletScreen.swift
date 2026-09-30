@@ -1238,8 +1238,8 @@ private final class WalletScreenComponent: Component {
                 UndoOverlayController(
                     presentationData: presentationData,
                     content: .actionSucceeded(
-                        title: "Password set",
-                        text: "Your account is now protected.",
+                        title: presentationData.strings.Wallet_PasswordSetTitle,
+                        text: presentationData.strings.Wallet_PasswordSetText,
                         cancel: nil,
                         destructive: false
                     ),
@@ -1456,10 +1456,11 @@ private final class WalletScreenComponent: Component {
 
                 self.didPresentGramTooltip = true
                 let sourceFrame = cardView.convert(cardView.gramIconFrame, to: nil).offsetBy(dx: 0.0, dy: -4.0)
+                let strings = component.context.sharedContext.currentPresentationData.with { $0 }.strings
                 let tooltipScreen = TooltipScreen(
                     account: component.context.account,
                     sharedContext: component.context.sharedContext,
-                    text: .attributedString(text: NSAttributedString(string: "Gram — Digital currency for Telegram", font: Font.medium(11.0), textColor: .white)),
+                    text: .attributedString(text: NSAttributedString(string: strings.Wallet_GramTooltip, font: Font.medium(11.0), textColor: .white)),
                     style: .gradient(UIColor(rgb: 0x47bafe), UIColor(rgb: 0x44b5ff), -2.0),
                     arrowStyle: .small,
                     location: .point(sourceFrame, .bottom),
@@ -2127,19 +2128,20 @@ private final class WalletScreenComponent: Component {
                   let controller = self.environment?.controller() else {
                 return
             }
-            let message = walletAuthorizationErrorMessage(error)
+            let strings = self.currentPresentationData(for: component).initial.strings
+            let message = walletAuthorizationErrorMessage(error, strings: strings)
             let generation = self.restorationGeneration
             controller.present(textAlertController(
                 context: component.context,
                 updatedPresentationData: self.currentPresentationData(for: component),
-                title: message?.title ?? "Couldn’t Restore Wallet",
-                text: message?.text ?? "Check the network connection and try again.",
+                title: message?.title ?? strings.Wallet_RestoreErrorTitle,
+                text: message?.text ?? strings.Wallet_NetworkError,
                 actions: [
-                    TextAlertAction(type: .genericAction, title: "Cancel", action: { [weak self] in
+                    TextAlertAction(type: .genericAction, title: strings.Common_Cancel, action: { [weak self] in
                         guard let self, self.restorationGeneration == generation else { return }
                         self.abandonRestoration()
                     }),
-                    TextAlertAction(type: .defaultAction, title: "Retry", action: { [weak self] in
+                    TextAlertAction(type: .defaultAction, title: strings.Wallet_Retry, action: { [weak self] in
                         guard let self, self.restorationGeneration == generation else { return }
                         self.openSend(address: address)
                     })
@@ -2175,8 +2177,8 @@ private final class WalletScreenComponent: Component {
                 walletController?.present(UndoOverlayController(
                     presentationData: presentationData,
                     content: .actionSucceeded(
-                        title: "Wallet Imported",
-                        text: "Your wallet was restored from your secret phrase.",
+                        title: presentationData.strings.Wallet_Settings_WalletImportedTitle,
+                        text: presentationData.strings.Wallet_Settings_WalletImportedText,
                         cancel: nil,
                         destructive: false
                     ),
@@ -3121,7 +3123,7 @@ private final class WalletScreenComponent: Component {
                     items: items,
                     footer: AnyComponent(MultilineTextComponent(
                         text: .plain(NSAttributedString(
-                            string: "Transactions under \(formattedMinAmount) are hidden.",
+                            string: environment.strings.Wallet_HiddenTransactions(formattedMinAmount).string,
                             font: Font.regular(13.0),
                             textColor: environment.theme.list.freeTextColor
                         )),

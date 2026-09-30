@@ -26,7 +26,7 @@ import WalletPagerComponent
 import WalletCollectibleHeaderComponent
 import WalletPeerSelectionScreen
 
-private func walletCollectibleRarityText(_ rarity: StarGift.UniqueGift.Attribute.Rarity?) -> String {
+private func walletCollectibleRarityText(_ rarity: StarGift.UniqueGift.Attribute.Rarity?, strings: PresentationStrings) -> String {
     guard let rarity else {
         return "—"
     }
@@ -40,13 +40,13 @@ private func walletCollectibleRarityText(_ rarity: StarGift.UniqueGift.Attribute
             .replacingOccurrences(of: ".0", with: "")
             .replacingOccurrences(of: ",0", with: "") + "%"
     case .rare:
-        return "Rare"
+        return strings.Gift_Attribute_Rare.capitalized
     case .epic:
-        return "Epic"
+        return strings.Gift_Attribute_Epic.capitalized
     case .legendary:
-        return "Legendary"
+        return strings.Gift_Attribute_Legendary.capitalized
     case .uncommon:
-        return "Uncommon"
+        return strings.Gift_Attribute_Uncommon.capitalized
     }
 }
 
@@ -450,7 +450,7 @@ private final class WalletCollectibleContentComponent: Component {
             let configuration = WalletConfiguration.with(appConfiguration: component.context.currentAppConfiguration.with { $0 })
             let explorerUrl = walletCollectibleExplorerUrl(explorerUrl: configuration.explorerUrl, address: component.collectible.address)
             let item = ContextMenuActionItem(
-                text: "View in Explorer",
+                text: environment.strings.Wallet_ViewInExplorer,
                 icon: { theme in
                     return generateTintedImage(
                         image: UIImage(bundleImageName: "Chat/Context Menu/Search"),
@@ -476,17 +476,18 @@ private final class WalletCollectibleContentComponent: Component {
 
         private func giftTrait(
             key: String,
-            collectible: WalletContext.Collectible
+            collectible: WalletContext.Collectible,
+            strings: PresentationStrings
         ) -> (value: String, rarity: String) {
             if let uniqueGift = self.uniqueGift {
                 for attribute in uniqueGift.attributes {
                     switch (key, attribute) {
                     case let ("model", .model(name, _, rarity, _)):
-                        return (name, walletCollectibleRarityText(rarity))
+                        return (name, walletCollectibleRarityText(rarity, strings: strings))
                     case let ("symbol", .pattern(name, _, rarity)):
-                        return (name, walletCollectibleRarityText(rarity))
+                        return (name, walletCollectibleRarityText(rarity, strings: strings))
                     case let ("backdrop", .backdrop(name, _, _, _, _, _, rarity)):
-                        return (name, walletCollectibleRarityText(rarity))
+                        return (name, walletCollectibleRarityText(rarity, strings: strings))
                     default:
                         break
                     }
@@ -511,7 +512,8 @@ private final class WalletCollectibleContentComponent: Component {
 
         private func giftTableItems(
             component: WalletCollectibleContentComponent,
-            theme: PresentationTheme
+            theme: PresentationTheme,
+            strings: PresentationStrings
         ) -> [TableComponent.Item] {
             var ownerItems: [AnyComponentWithIdentity<Empty>] = []
             if let currentPeer = self.currentPeer {
@@ -529,7 +531,7 @@ private final class WalletCollectibleContentComponent: Component {
                 id: "title",
                 component: AnyComponent(MultilineTextComponent(
                     text: .plain(NSAttributedString(
-                        string: "You",
+                        string: strings.DialogList_You,
                         font: Font.regular(15.0),
                         textColor: theme.list.itemAccentColor
                     )),
@@ -537,18 +539,18 @@ private final class WalletCollectibleContentComponent: Component {
                 ))
             ))
 
-            let model = self.giftTrait(key: "model", collectible: component.collectible)
-            let symbol = self.giftTrait(key: "symbol", collectible: component.collectible)
-            let backdrop = self.giftTrait(key: "backdrop", collectible: component.collectible)
+            let model = self.giftTrait(key: "model", collectible: component.collectible, strings: strings)
+            let symbol = self.giftTrait(key: "symbol", collectible: component.collectible, strings: strings)
+            let backdrop = self.giftTrait(key: "backdrop", collectible: component.collectible, strings: strings)
             return [
                 TableComponent.Item(
                     id: "owner",
-                    title: "Owner",
+                    title: strings.Gift_Unique_Owner,
                     component: AnyComponent(HStack(ownerItems, spacing: 6.0))
                 ),
                 TableComponent.Item(
                     id: "model",
-                    title: "Model",
+                    title: strings.Gift_Unique_Model,
                     component: AnyComponent(WalletCollectibleTraitValueComponent(
                         theme: theme,
                         value: model.value,
@@ -557,7 +559,7 @@ private final class WalletCollectibleContentComponent: Component {
                 ),
                 TableComponent.Item(
                     id: "symbol",
-                    title: "Symbol",
+                    title: strings.Gift_Unique_Symbol,
                     component: AnyComponent(WalletCollectibleTraitValueComponent(
                         theme: theme,
                         value: symbol.value,
@@ -566,7 +568,7 @@ private final class WalletCollectibleContentComponent: Component {
                 ),
                 TableComponent.Item(
                     id: "backdrop",
-                    title: "Backdrop",
+                    title: strings.Gift_Unique_Backdrop,
                     component: AnyComponent(WalletCollectibleTraitValueComponent(
                         theme: theme,
                         value: backdrop.value,
@@ -733,7 +735,7 @@ private final class WalletCollectibleContentComponent: Component {
                 transition: transition,
                 component: AnyComponent(WalletCollectibleActionComponent(
                     theme: theme,
-                    title: "transfer",
+                    title: environment.strings.Gift_View_Header_Transfer,
                     iconName: "Premium/Collectible/Transfer",
                     action: {
                         component.openTransfer()
@@ -755,7 +757,7 @@ private final class WalletCollectibleContentComponent: Component {
                     transition: transition,
                     component: AnyComponent(WalletCollectibleActionComponent(
                         theme: theme,
-                        title: "wear",
+                        title: environment.strings.Gift_View_Header_Wear,
                         iconName: "Premium/Collectible/Wear",
                         action: {
                         }
@@ -779,7 +781,7 @@ private final class WalletCollectibleContentComponent: Component {
                 transition: transition,
                 component: AnyComponent(WalletCollectibleActionComponent(
                     theme: theme,
-                    title: "sell",
+                    title: environment.strings.Gift_View_Sell,
                     iconName: "Premium/Collectible/Sell",
                     action: {
                         guard let url = walletCollectibleFragmentUrl(collectible: component.collectible) else {
@@ -805,7 +807,7 @@ private final class WalletCollectibleContentComponent: Component {
                     transition: transition,
                     component: AnyComponent(TableComponent(
                         theme: theme,
-                        items: self.giftTableItems(component: component, theme: theme),
+                        items: self.giftTableItems(component: component, theme: theme, strings: environment.strings),
                         semiTransparent: true,
                         rightColumnBackgroundColor: theme.list.itemModalBlocksBackgroundColor
                     )),
@@ -840,7 +842,7 @@ private final class WalletCollectibleContentComponent: Component {
                         pressedColor: theme.list.itemCheckColors.fillColor.withMultipliedAlpha(0.9)
                     ),
                     content: AnyComponentWithIdentity(id: "OK", component: AnyComponent(Text(
-                        text: "OK",
+                        text: environment.strings.Common_OK,
                         font: Font.semibold(17.0),
                         color: theme.list.itemCheckColors.foregroundColor
                     ))),

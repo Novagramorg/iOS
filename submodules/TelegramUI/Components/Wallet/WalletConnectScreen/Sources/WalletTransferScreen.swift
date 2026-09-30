@@ -542,7 +542,7 @@ private final class WalletTransferSheetContent: Component {
                     fiatRate: fiatRate,
                     dateTimeFormat: environment.dateTimeFormat,
                     amountText: amount == nil ? formatTonConnectNanograms(amountNanograms ?? "", strings: environment.strings, dateTimeFormat: environment.dateTimeFormat) : nil,
-                    recipientTitle: presentation.recipientTitle,
+                    recipientTitle: presentation.recipientTitle(strings: environment.strings),
                     infoPressed: component.infoPressed
                 )),
                 environment: {},

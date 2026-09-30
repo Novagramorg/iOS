@@ -243,6 +243,7 @@ private final class WalletImportScreenComponent: Component {
 
             func update(
                 theme: PresentationTheme,
+                strings: PresentationStrings,
                 isInvalid: Bool,
                 displaysPasteButton: Bool,
                 size: CGSize
@@ -317,7 +318,7 @@ private final class WalletImportScreenComponent: Component {
                             content: AnyComponentWithIdentity(
                                 id: AnyHashable("paste"),
                                 component: AnyComponent(Text(
-                                    text: "Paste",
+                                    text: strings.Common_Paste,
                                     font: Font.semibold(15.0),
                                     color: theme.list.itemAccentColor
                                 ))
@@ -716,7 +717,7 @@ private final class WalletImportScreenComponent: Component {
                 limit: 3
             )
             if suggestions.isEmpty && !component.walletContext.isMnemonicWord(word) {
-                self.wordSuggestions = ["Invalid word"]
+                self.wordSuggestions = []
                 self.hasInvalidWordSuggestion = true
             } else if suggestions.count == 1, suggestions[0] == word {
                 self.wordSuggestions = []
@@ -903,7 +904,7 @@ private final class WalletImportScreenComponent: Component {
                 insertedWords = Array(normalizedWords.prefix(self.words.count - index))
             } else {
                 if normalizedWords.count > 1 {
-                    guard normalizedWords.count == 24 || (!self.isBackupEnableMode && normalizedWords.count == 12) else {
+                    guard normalizedWords.count == 12 || normalizedWords.count == 24 else {
                         self.presentInvalidPhraseLength(count: normalizedWords.count)
                         return true
                     }
@@ -963,7 +964,7 @@ private final class WalletImportScreenComponent: Component {
             guard !words.isEmpty else {
                 return
             }
-            guard words.count == 24 || (!self.isBackupEnableMode && words.count == 12) else {
+            guard words.count == 12 || words.count == 24 else {
                 self.presentInvalidPhraseLength(count: words.count)
                 return
             }
@@ -1178,7 +1179,7 @@ private final class WalletImportScreenComponent: Component {
                 guard let self else { return }
                 self.isImporting = false
                 self.endWalletFlow()
-                self.setupWordInputFields(displayNumbers: Array(1 ... 24), preserving: [])
+                self.setupWordInputFields(displayNumbers: Array(1 ... self.words.count), preserving: [])
                 if let completion = component.completion { completion() } else { self.dismiss() }
             }, error: { [weak self] error in
                 self?.finishBackupEnableWithError(error, expectedAddress: expectedAddress)
@@ -1191,11 +1192,12 @@ private final class WalletImportScreenComponent: Component {
             self.componentState?.updated(transition: .easeInOut(duration: 0.2))
             guard error != .authorizationCancelled,
                   let component = self.component, let controller = self.environment?.controller() else { return }
-            let message = walletBackupEnableErrorMessage(error)
-            var actions = [TextAlertAction(type: .genericAction, title: "Cancel", action: {})]
+            let strings = component.context.sharedContext.currentPresentationData.with { $0 }.strings
+            let message = walletBackupEnableErrorMessage(error, strings: strings)
+            var actions = [TextAlertAction(type: .genericAction, title: strings.Common_Cancel, action: {})]
             switch error {
             case .rotationNotFound, .proofExpired, .network:
-                actions.append(TextAlertAction(type: .defaultAction, title: "Retry", action: { [weak self] in
+                actions.append(TextAlertAction(type: .defaultAction, title: strings.Wallet_Retry, action: { [weak self] in
                     guard let self else { return }
                     self.enableBackup(words: self.words, expectedAddress: expectedAddress)
                 }))
@@ -1204,9 +1206,9 @@ private final class WalletImportScreenComponent: Component {
             }
             switch error {
             case .walletKeyMismatch, .storage(.identityMismatch), .proofInvalid, .invalidMnemonic, .rotationNotFound:
-                actions.append(TextAlertAction(type: .defaultAction, title: "Enter Current Secret Phrase", action: { [weak self] in
+                actions.append(TextAlertAction(type: .defaultAction, title: strings.Wallet_Backup_EnterCurrentPhrase, action: { [weak self] in
                     guard let self else { return }
-                    self.setupWordInputFields(displayNumbers: Array(1 ... 24), preserving: [])
+                    self.setupWordInputFields(displayNumbers: Array(1 ... self.words.count), preserving: [])
                     self.componentState?.updated(transition: .immediate)
                     let _ = self.wordFields.first?.textField.becomeFirstResponder()
                 }))
@@ -1380,6 +1382,7 @@ private final class WalletImportScreenComponent: Component {
             guard let component = self.component, let controller = self.environment?.controller() else {
                 return
             }
+            let strings = component.context.sharedContext.currentPresentationData.with { $0 }.strings
             if error == .recoveryPhraseOutdated {
                 if let prepared = self.activePreparedRecoveryPhraseImport {
                     self.discardPreparedRecoveryPhraseImport(prepared)
@@ -1387,7 +1390,6 @@ private final class WalletImportScreenComponent: Component {
                 self.endWalletFlow()
                 HapticFeedback().error()
                 self.endEditing(true)
-                let strings = component.context.sharedContext.currentPresentationData.with { $0 }.strings
                 let alert = AlertScreen(
                     context: component.context,
                     configuration: AlertScreen.Configuration(allowInputInset: true),
@@ -1415,12 +1417,12 @@ private final class WalletImportScreenComponent: Component {
                 controller.present(alert, in: .window(.root))
                 return
             }
-            let message = walletAuthorizationErrorMessage(error)
+            let message = walletAuthorizationErrorMessage(error, strings: strings)
             controller.present(textAlertController(
                 context: component.context,
-                title: message?.title ?? "Couldn’t Import Wallet",
-                text: message?.text ?? "Check the secret phrase and network connection, then try again.",
-                actions: [TextAlertAction(type: .defaultAction, title: "OK", action: {
+                title: message?.title ?? strings.Wallet_Import_ErrorTitle,
+                text: message?.text ?? strings.Wallet_Import_ErrorText,
+                actions: [TextAlertAction(type: .defaultAction, title: strings.Common_OK, action: {
                 })]
             ), in: .window(.root))
         }
@@ -1556,10 +1558,8 @@ private final class WalletImportScreenComponent: Component {
                 self.didCompleteVerification = false
                 self.isVerificationInProgress = false
                 switch component.mode {
-                case .importWallet, .enterRecoveryPhrase:
+                case .importWallet, .enterRecoveryPhrase, .enableBackup:
                     self.setupWordInputFields(displayNumbers: Array(1 ... 12), preserving: [])
-                case .enableBackup:
-                    self.setupWordInputFields(displayNumbers: Array(1 ... 24), preserving: [])
                 case .verify:
                     self.setupWordInputFields(
                         displayNumbers: component.verificationIndices.map { $0 + 1 },
@@ -1807,7 +1807,7 @@ private final class WalletImportScreenComponent: Component {
             )
             let fieldX = floorToScreenPixels((availableSize.width - fieldWidth) * 0.5)
 
-            if isVerificationMode || self.isBackupEnableMode {
+            if isVerificationMode {
                 self.wordCountControl.view?.removeFromSuperview()
             } else {
                 self.wordCountControl.parentState = state
@@ -1878,6 +1878,7 @@ private final class WalletImportScreenComponent: Component {
                 transition.setFrame(view: field, frame: fieldFrame)
                 field.update(
                     theme: theme,
+                    strings: environment.strings,
                     isInvalid: self.mismatchedWordIndices.contains(index),
                     displaysPasteButton: index == 0 && displaysPasteButton,
                     size: fieldFrame.size
@@ -1940,7 +1941,7 @@ private final class WalletImportScreenComponent: Component {
             }
             contentHeight += buttonSize.height + environment.safeInsets.bottom + 24.0
 
-            if !self.wordSuggestions.isEmpty,
+            if self.hasInvalidWordSuggestion || !self.wordSuggestions.isEmpty,
                let activeWordIndex = self.activeWordIndex,
                self.wordFields.indices.contains(activeWordIndex) {
                 let wordSuggestionView: ComponentHostView<Empty>
@@ -1964,7 +1965,7 @@ private final class WalletImportScreenComponent: Component {
                     component: AnyComponent(WalletWordSuggestionsComponent(
                         fieldIndex: activeWordIndex,
                         query: self.words[activeWordIndex],
-                        words: self.wordSuggestions,
+                        words: self.hasInvalidWordSuggestion ? [environment.strings.Wallet_Import_InvalidWord] : self.wordSuggestions,
                         isInteractive: !self.hasInvalidWordSuggestion,
                         pulseId: self.hasInvalidWordSuggestion ? self.invalidWordSuggestionPulseId : 0,
                         action: { [weak self] word in

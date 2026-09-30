@@ -130,6 +130,7 @@ private final class WalletAuthorizedOperation<Value>: Disposable {
     }
 
     private func presentPasswordPrompt() {
+        let strings = (self.updatedPresentationData?.initial ?? self.context.sharedContext.currentPresentationData.with { $0 }).strings
         let inputState = AlertInputFieldComponent.ExternalState()
         let progress = ValuePromise<Bool>(false)
         let enabled = inputState.valueSignal
@@ -138,19 +139,19 @@ private final class WalletAuthorizedOperation<Value>: Disposable {
         let content: [AnyComponentWithIdentity<AlertComponentEnvironment>] = [
             AnyComponentWithIdentity(
                 id: "title",
-                component: AnyComponent(AlertTitleComponent(title: "Telegram Password"))
+                component: AnyComponent(AlertTitleComponent(title: strings.Wallet_Authorization_PasswordTitle))
             ),
             AnyComponentWithIdentity(
                 id: "text",
                 component: AnyComponent(AlertTextComponent(content: .plain(
-                    "Enter your Telegram 2-Step Verification password to continue."
+                    strings.Wallet_Authorization_PasswordText
                 )))
             ),
             AnyComponentWithIdentity(
                 id: "password",
                 component: AnyComponent(AlertInputFieldComponent(
                     context: self.context,
-                    placeholder: "Password",
+                    placeholder: strings.LoginPassword_PasswordPlaceholder,
                     isSecureTextEntry: true,
                     isInitiallyFocused: true,
                     externalState: inputState,
@@ -162,11 +163,11 @@ private final class WalletAuthorizedOperation<Value>: Disposable {
             configuration: AlertScreen.Configuration(allowInputInset: true),
             content: content,
             actions: [
-                .init(title: "Cancel", action: { [weak self] in
+                .init(title: strings.Common_Cancel, action: { [weak self] in
                     self?.cancel()
                 }),
                 .init(
-                    title: "Continue",
+                    title: strings.Wallet_Continue,
                     type: .default,
                     action: { submit?() },
                     autoDismiss: false,
@@ -209,51 +210,51 @@ public func performWalletAuthorizedOperation<Value>(
     )
 }
 
-public func walletBackupEnableErrorMessage(_ error: WalletContext.WalletError) -> (title: String, text: String) {
+public func walletBackupEnableErrorMessage(_ error: WalletContext.WalletError, strings: PresentationStrings) -> (title: String, text: String) {
     switch error {
     case .walletKeyMismatch, .recoveryPhraseOutdated, .storage(.identityMismatch), .proofInvalid:
-        return ("Couldn't Verify Secret Phrase", "This secret phrase may be outdated for your wallet. Enter the current 24-word secret phrase to enable backup.")
+        return (strings.Wallet_Backup_VerifyPhraseErrorTitle, strings.Wallet_Backup_VerifyPhraseErrorText)
     case .rotationNotFound:
-        return ("Secret Phrase Update Pending", "Telegram couldn't confirm the secret phrase change on the blockchain yet. Wait a moment and retry, or enter the current secret phrase.")
+        return (strings.Wallet_Backup_PhraseUpdatePendingTitle, strings.Wallet_Backup_EnablePhraseUpdatePendingText)
     case .proofExpired:
-        return ("Verification Expired", "The wallet verification request expired. Please try enabling backup again.")
+        return (strings.Wallet_Authorization_VerificationExpiredTitle, strings.Wallet_Backup_EnableVerificationExpiredText)
     case .invalidMnemonic:
-        return ("Invalid Secret Phrase", "Check all 24 words of your current secret phrase and try again.")
+        return (strings.Wallet_Import_InvalidPhraseTitle, strings.Wallet_Backup_InvalidPhraseText)
     case .unavailable:
-        return ("Wallet Changed", "The wallet changed while enabling backup. Open its settings and try again.")
+        return (strings.Wallet_Backup_WalletChangedTitle, strings.Wallet_Backup_EnableWalletChangedText)
     default:
-        return walletAuthorizationErrorMessage(error) ?? ("Couldn't Enable Backup", "Check the network connection and try again.")
+        return walletAuthorizationErrorMessage(error, strings: strings) ?? (strings.Wallet_Backup_EnableErrorTitle, strings.Wallet_NetworkError)
     }
 }
 
-public func walletAuthorizationErrorMessage(_ error: WalletContext.WalletError) -> (title: String, text: String)? {
+public func walletAuthorizationErrorMessage(_ error: WalletContext.WalletError, strings: PresentationStrings) -> (title: String, text: String)? {
     switch error {
     case .recoveryPhraseOutdated:
-        return ("Secret Phrase Has Changed", "The key for this wallet has changed. Enter the current 24-word secret phrase.")
+        return (strings.Wallet_Import_PhraseChangedTitle, strings.Wallet_Import_PhraseChangedText)
     case .twoStepAuthMissing:
-        return ("Two-Step Verification Required", "Set up a Telegram password before changing this wallet.")
+        return (strings.Wallet_Authorization_TwoStepRequiredTitle, strings.Wallet_Authorization_TwoStepRequiredText)
     case let .passwordTooFresh(timeout):
-        return ("Password Is Too New", "Try again in \(timeout) seconds.")
+        return (strings.Wallet_Authorization_PasswordTooNewTitle, strings.Wallet_Authorization_PasswordRetryAfter(timeIntervalString(strings: strings, value: timeout, usage: .afterTime)).string)
     case let .sessionTooFresh(timeout):
-        return ("Session Is Too New", "For your security, try again in \(timeout) seconds.")
+        return (strings.Wallet_Authorization_SessionTooNewTitle, strings.Wallet_Authorization_SessionRetryAfter(timeIntervalString(strings: strings, value: timeout, usage: .afterTime)).string)
     case .backupDisabled:
-        return ("Backup Is Disabled", "Enable encrypted backup before restoring the secret phrase from Telegram.")
+        return (strings.Wallet_Authorization_BackupDisabledTitle, strings.Wallet_Authorization_BackupDisabledText)
     case .backupNotAvailable:
-        return ("Backup Unavailable", "Encrypted backup is not available for this wallet.")
+        return (strings.Wallet_Authorization_BackupUnavailableTitle, strings.Wallet_Authorization_BackupUnavailableText)
     case .keyRotationFailed:
         return (
-            "Couldn't Update Secret Phrase",
-            "The new secret phrase was not activated. Your previous phrase and encrypted backup are still valid."
+            strings.Wallet_Backup_UpdatePhraseErrorTitle,
+            strings.Wallet_Authorization_UpdatePhraseErrorText
         )
     case .proofInvalid:
         return (
-            "Couldn't Verify Wallet",
-            "Telegram couldn't verify that you own this wallet. Please try importing it again."
+            strings.Wallet_Authorization_VerifyWalletErrorTitle,
+            strings.Wallet_Authorization_VerifyWalletErrorText
         )
     case .proofExpired:
         return (
-            "Verification Expired",
-            "The wallet verification request expired. Please try importing it again."
+            strings.Wallet_Authorization_VerificationExpiredTitle,
+            strings.Wallet_Authorization_VerificationExpiredText
         )
     default:
         return nil

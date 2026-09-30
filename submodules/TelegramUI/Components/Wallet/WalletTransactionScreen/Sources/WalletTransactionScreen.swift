@@ -1472,18 +1472,19 @@ private final class WalletTransactionContentComponent: Component {
                 self.resetCommentDecryption()
                 return
             }
-            let message = walletAuthorizationErrorMessage(error)
+            let strings = self.currentPresentationData(for: component).initial.strings
+            let message = walletAuthorizationErrorMessage(error, strings: strings)
             controller.present(textAlertController(
                 context: component.context,
                 updatedPresentationData: self.currentPresentationData(for: component),
-                title: message?.title ?? "Couldn’t Restore Wallet",
-                text: message?.text ?? "Check the network connection and try again.",
+                title: message?.title ?? strings.Wallet_RestoreErrorTitle,
+                text: message?.text ?? strings.Wallet_NetworkError,
                 actions: [
-                    TextAlertAction(type: .genericAction, title: "Cancel", action: { [weak self] in
+                    TextAlertAction(type: .genericAction, title: strings.Common_Cancel, action: { [weak self] in
                         guard let self, self.commentDecryptionRevision == revision else { return }
                         self.resetCommentDecryption()
                     }),
-                    TextAlertAction(type: .defaultAction, title: "Retry", action: { [weak self] in
+                    TextAlertAction(type: .defaultAction, title: strings.Wallet_Retry, action: { [weak self] in
                         guard let self, self.commentDecryptionRevision == revision else { return }
                         self.encryptedCommentPressed()
                     })
@@ -1558,7 +1559,7 @@ private final class WalletTransactionContentComponent: Component {
         private func presentCommentDecryptionError(_ error: WalletContext.WalletError) {
             guard let component = self.component, let controller = self.environment?.controller() else { return }
             let strings = self.currentPresentationData(for: component).initial.strings
-            let authorizationMessage = walletAuthorizationErrorMessage(error)
+            let authorizationMessage = walletAuthorizationErrorMessage(error, strings: strings)
             controller.present(textAlertController(
                 context: component.context,
                 updatedPresentationData: self.currentPresentationData(for: component),

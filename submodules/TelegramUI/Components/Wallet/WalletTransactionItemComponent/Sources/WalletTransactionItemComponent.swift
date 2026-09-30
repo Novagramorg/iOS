@@ -819,7 +819,7 @@ public final class WalletTransactionItemComponent: Component {
             let amountText: String
             let amountIconName: String
             if transaction.collectible != nil {
-                amountText = displayedDirection == .incoming ? "+1 item" : "–1 item"
+                amountText = (displayedDirection == .incoming ? "+" : "–") + component.strings.Wallet_Transaction_ItemCount(1)
                 amountIconName = "Wallet/TransactionCollectible"
             } else if transaction.currency == .ton {
                 amountText = amountPrefix + formatTonAmountText(
