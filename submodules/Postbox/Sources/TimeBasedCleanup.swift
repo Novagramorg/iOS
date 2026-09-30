@@ -185,6 +185,10 @@ final class TempScanDatabase {
     }
 }
 
+func scanTimestamp(_ seconds: Int) -> Int32 {
+    return Int32(clamping: max(0, min(seconds, Int(Int32.max) - 1)))
+}
+
 func scanFiles(at path: String, olderThan minTimestamp: Int32, includeSubdirectories: Bool, performSizeMapping: Bool, tempDatabase: TempScanDatabase, reportMemoryUsageInterval: Int, reportMemoryUsageRemaining: inout Int, seenLinkedInodes: inout Set<FileIdentity>) -> ScanFilesResult {
     var result = ScanFilesResult()
     
@@ -211,10 +215,16 @@ func scanFiles(at path: String, olderThan minTimestamp: Int32, includeSubdirecto
             strncat(pathBuffer, "/", 1024)
             strncat(pathBuffer, &dirp.pointee.d_name.0, 1024)
             
+            var isSymbolicLink = dirp.pointee.d_type == DT_LNK
+            if dirp.pointee.d_type == DT_UNKNOWN {
+                var linkValue = stat()
+                isSymbolicLink = lstat(pathBuffer, &linkValue) == 0 && (linkValue.st_mode & S_IFMT) == S_IFLNK
+            }
+            
             var value = stat()
             if stat(pathBuffer, &value) == 0 {
                 if (((value.st_mode) & S_IFMT) == S_IFDIR) {
-                    if includeSubdirectories {
+                    if includeSubdirectories && !isSymbolicLink {
                         if let subPath = String(data: Data(bytes: pathBuffer, count: strnlen(pathBuffer, 1024)), encoding: .utf8) {
                             subdirectories.append(subPath)
                         }
@@ -223,6 +233,18 @@ func scanFiles(at path: String, olderThan minTimestamp: Int32, includeSubdirecto
                     if value.st_mtimespec.tv_sec < minTimestamp {
                         unlink(pathBuffer)
                         result.unlinkedCount += 1
+                    } else if isSymbolicLink {
+                        var targetIdentity: FileIdentity?
+                        if value.st_nlink > 1 {
+                            targetIdentity = FileIdentity(device: UInt64(UInt32(bitPattern: value.st_dev)), inode: UInt64(value.st_ino))
+                        }
+                        if let targetIdentity = targetIdentity, seenLinkedInodes.contains(targetIdentity) {
+                            if performSizeMapping {
+                                tempDatabase.addLink(pathBuffer: pathBuffer, pathSize: strnlen(pathBuffer, 1024), identity: targetIdentity)
+                            }
+                        } else if performSizeMapping {
+                            tempDatabase.add(pathBuffer: pathBuffer, pathSize: strnlen(pathBuffer, 1024), size: 0, timestamp: scanTimestamp(value.st_mtimespec.tv_sec))
+                        }
                     } else {
                         // A completed download is two directory entries (`<id>` and
                         // `<id>_partial`) hard-linked to one inode. Count that storage
@@ -232,7 +254,7 @@ func scanFiles(at path: String, olderThan minTimestamp: Int32, includeSubdirecto
                         var identity: FileIdentity?
                         var isAdditionalLink = false
                         if value.st_nlink > 1 {
-                            let fileIdentity = FileIdentity(device: UInt64(value.st_dev), inode: UInt64(value.st_ino))
+                            let fileIdentity = FileIdentity(device: UInt64(UInt32(bitPattern: value.st_dev)), inode: UInt64(value.st_ino))
                             identity = fileIdentity
                             isAdditionalLink = !seenLinkedInodes.insert(fileIdentity).inserted
                         }
@@ -244,7 +266,7 @@ func scanFiles(at path: String, olderThan minTimestamp: Int32, includeSubdirecto
                         } else {
                             result.totalSize += UInt64(value.st_size)
                             if performSizeMapping {
-                                tempDatabase.add(pathBuffer: pathBuffer, pathSize: strnlen(pathBuffer, 1024), size: Int64(value.st_size), timestamp: Int32(value.st_mtimespec.tv_sec), identity: identity)
+                                tempDatabase.add(pathBuffer: pathBuffer, pathSize: strnlen(pathBuffer, 1024), size: Int64(value.st_size), timestamp: scanTimestamp(value.st_mtimespec.tv_sec), identity: identity)
                                 
                                 reportMemoryUsageRemaining -= 1
                                 if reportMemoryUsageRemaining <= 0 {
@@ -359,6 +381,7 @@ private final class TimeBasedCleanupImpl {
                 
                 guard let tempDatabase = TempScanDatabase(queue: queue, basePath: tempDirectory.path) else {
                     postboxLog("TimeBasedCleanup: couldn't create temp database at \(tempDirectory.path)")
+                    TempBox.shared.dispose(tempDirectory)
                     subscriber.putCompletion()
                     return
                 }
@@ -366,7 +389,7 @@ private final class TimeBasedCleanupImpl {
                 
                 var removedShortLivedCount: Int = 0
                 var removedGeneralCount: Int = 0
-                let removedGeneralLimitCount: Int = 0
+                var removedGeneralLimitCount: Int = 0
                 
                 let reportMemoryUsageInterval = 100
                 var reportMemoryUsageRemaining: Int = reportMemoryUsageInterval
@@ -376,7 +399,7 @@ private final class TimeBasedCleanupImpl {
                 
                 var paths: [String] = []
                 
-                let timestamp = Int32(Date().timeIntervalSince1970)
+                let timestamp = scanTimestamp(Int(Date().timeIntervalSince1970))
                 
                 /*#if DEBUG
                 let bytesLimit: UInt64 = 10 * 1024 * 1024
@@ -427,15 +450,17 @@ private final class TimeBasedCleanupImpl {
                 
                 let oldestShortLivedTimestamp = timestamp - shortLived
                 let oldestGeneralTimestamp = timestamp - general
+                
+                var totalLimitSize: UInt64 = 0
+                
                 for path in shortLivedPaths {
                     let scanResult = scanFiles(at: path, olderThan: oldestShortLivedTimestamp, includeSubdirectories: true, performSizeMapping: performSizeMapping, tempDatabase: tempDatabase, reportMemoryUsageInterval: reportMemoryUsageInterval, reportMemoryUsageRemaining: &reportMemoryUsageRemaining, seenLinkedInodes: &seenLinkedInodes)
                     if !paths.contains(path) {
                         paths.append(path)
                     }
                     removedShortLivedCount += scanResult.unlinkedCount
+                    totalLimitSize += scanResult.totalSize
                 }
-                
-                var totalLimitSize: UInt64 = 0
                 
                 if general < Int32.max {
                     for path in generalPaths {
@@ -471,10 +496,11 @@ private final class TimeBasedCleanupImpl {
                         // must go for the space to be released.
                         for filePath in filePaths {
                             unlink(filePath)
+                            removedGeneralLimitCount += 1
                             
                             if (filePath as NSString).deletingLastPathComponent == totalSizeBasedPath {
                                 let fileName = (filePath as NSString).lastPathComponent
-                                if let idData = MediaBox.idForFileName(name: fileName).data(using: .utf8), !unlinkedResourceIdSet.contains(idData) {
+                                if !fileName.hasSuffix("_partial.meta"), let idData = MediaBox.idForFileName(name: fileName).data(using: .utf8), !unlinkedResourceIdSet.contains(idData) {
                                     unlinkedResourceIdSet.insert(idData)
                                     unlinkedResourceIds.append(idData)
                                 }
