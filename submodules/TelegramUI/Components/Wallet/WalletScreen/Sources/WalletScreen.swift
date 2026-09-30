@@ -1149,7 +1149,7 @@ private final class WalletScreenComponent: Component {
                     }
                 ))))
             }
-            if let availableEarnings = self.availableEarnings, availableEarnings.currency == .ton, availableEarnings.amount > .zero {
+            if let availableEarnings = self.availableEarnings, availableEarnings.currency == .ton, availableEarnings.amount.value >= 10_000_000_000 {
                 let amount = formatCurrencyAmountText(availableEarnings, dateTimeFormat: environment.dateTimeFormat, maxDecimalPositions: nil)
                 let balanceTitle = environment.strings.Wallet_EarningsBalance("💎\(amount)")
                 let title = NSMutableAttributedString(string: balanceTitle.string, font: font, textColor: textColor)

@@ -151,6 +151,9 @@ func walletTransactions(
             peer: peer,
             comment: transaction.comment,
             commentEncrypted: transaction.commentEncrypted,
+            collectible: transaction.nft.map {
+                WalletContext.Transaction.CollectibleTransfer(collectible: walletCollectible(from: $0))
+            },
             status: status,
             kind: transaction.keyChange ? .keyChange : .transfer
         ))

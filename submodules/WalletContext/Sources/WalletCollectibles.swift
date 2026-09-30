@@ -7,6 +7,33 @@ private let walletTelegramAnonymousNumbersCollection = "0:0e41dc1dc3c9067ed24248
 private let walletTelegramUsernamesCollection = "0:80d78a35f955a14b679faa887ff4cd5bfc0f43b4a4eea2a7e6927f3701b273c2"
 
 @available(macOS 10.15, *)
+public extension WalletContext.Transaction.CollectibleTransfer {
+    init(collectible: WalletContext.Collectible) {
+        let kind: Kind
+        switch collectible.kind {
+        case .gift:
+            kind = .gift
+        case .username:
+            kind = .username
+        case .anonymousNumber:
+            kind = .anonymousNumber
+        case .other:
+            kind = .other
+        }
+        self.init(
+            address: collectible.address,
+            name: collectible.name,
+            image: collectible.image,
+            thumbnail: collectible.thumbnail,
+            lottie: collectible.lottie,
+            collectionName: collectible.collectionName,
+            collectionUrl: collectible.collectionUrl,
+            kind: kind
+        )
+    }
+}
+
+@available(macOS 10.15, *)
 func walletCollectible(from nft: WalletNftItem) -> WalletContext.Collectible {
     let extra = nft.extra.flatMap { $0.data(using: .utf8) }.flatMap {
         (try? JSONSerialization.jsonObject(with: $0)) as? [String: Any]

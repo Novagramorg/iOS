@@ -2384,7 +2384,8 @@ public extension Api {
             public var peer: Api.WalletTransactionPeer
             public var comment: String?
             public var txHash: String?
-            public init(flags: Int32, id: String, amount: Int64, fee: Int64, date: Int32, peer: Api.WalletTransactionPeer, comment: String?, txHash: String?) {
+            public var nft: Api.wallet.NftItem?
+            public init(flags: Int32, id: String, amount: Int64, fee: Int64, date: Int32, peer: Api.WalletTransactionPeer, comment: String?, txHash: String?, nft: Api.wallet.NftItem?) {
                 self.flags = flags
                 self.id = id
                 self.amount = amount
@@ -2393,9 +2394,10 @@ public extension Api {
                 self.peer = peer
                 self.comment = comment
                 self.txHash = txHash
+                self.nft = nft
             }
             public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("walletTransaction", [("flags", ConstructorParameterDescription(self.flags)), ("id", ConstructorParameterDescription(self.id)), ("amount", ConstructorParameterDescription(self.amount)), ("fee", ConstructorParameterDescription(self.fee)), ("date", ConstructorParameterDescription(self.date)), ("peer", ConstructorParameterDescription(self.peer)), ("comment", ConstructorParameterDescription(self.comment)), ("txHash", ConstructorParameterDescription(self.txHash))])
+                return ("walletTransaction", [("flags", ConstructorParameterDescription(self.flags)), ("id", ConstructorParameterDescription(self.id)), ("amount", ConstructorParameterDescription(self.amount)), ("fee", ConstructorParameterDescription(self.fee)), ("date", ConstructorParameterDescription(self.date)), ("peer", ConstructorParameterDescription(self.peer)), ("comment", ConstructorParameterDescription(self.comment)), ("txHash", ConstructorParameterDescription(self.txHash)), ("nft", ConstructorParameterDescription(self.nft))])
             }
         }
         case walletTransaction(Cons_walletTransaction)
@@ -2404,7 +2406,7 @@ public extension Api {
             switch self {
             case .walletTransaction(let _data):
                 if boxed {
-                    buffer.appendInt32(1872332449)
+                    buffer.appendInt32(-1792163517)
                 }
                 serializeInt32(_data.flags, buffer: buffer, boxed: false)
                 serializeString(_data.id, buffer: buffer, boxed: false)
@@ -2418,6 +2420,9 @@ public extension Api {
                 if Int(_data.flags) & Int(1 << 4) != 0 {
                     serializeString(_data.txHash!, buffer: buffer, boxed: false)
                 }
+                if Int(_data.flags) & Int(1 << 7) != 0 {
+                    _data.nft!.serialize(buffer, true)
+                }
                 break
             }
         }
@@ -2425,7 +2430,7 @@ public extension Api {
         public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .walletTransaction(let _data):
-                return ("walletTransaction", [("flags", ConstructorParameterDescription(_data.flags)), ("id", ConstructorParameterDescription(_data.id)), ("amount", ConstructorParameterDescription(_data.amount)), ("fee", ConstructorParameterDescription(_data.fee)), ("date", ConstructorParameterDescription(_data.date)), ("peer", ConstructorParameterDescription(_data.peer)), ("comment", ConstructorParameterDescription(_data.comment)), ("txHash", ConstructorParameterDescription(_data.txHash))])
+                return ("walletTransaction", [("flags", ConstructorParameterDescription(_data.flags)), ("id", ConstructorParameterDescription(_data.id)), ("amount", ConstructorParameterDescription(_data.amount)), ("fee", ConstructorParameterDescription(_data.fee)), ("date", ConstructorParameterDescription(_data.date)), ("peer", ConstructorParameterDescription(_data.peer)), ("comment", ConstructorParameterDescription(_data.comment)), ("txHash", ConstructorParameterDescription(_data.txHash)), ("nft", ConstructorParameterDescription(_data.nft))])
             }
         }
 
@@ -2452,6 +2457,12 @@ public extension Api {
             if Int(_1 ?? 0) & Int(1 << 4) != 0 {
                 _8 = parseString(reader)
             }
+            var _9: Api.wallet.NftItem?
+            if Int(_1 ?? 0) & Int(1 << 7) != 0 {
+                if let signature = reader.readInt32() {
+                    _9 = Api.parse(reader, signature: signature) as? Api.wallet.NftItem
+                }
+            }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
@@ -2460,8 +2471,9 @@ public extension Api {
             let _c6 = _6 != nil
             let _c7 = (Int(_1 ?? 0) & Int(1 << 3) == 0) || _7 != nil
             let _c8 = (Int(_1 ?? 0) & Int(1 << 4) == 0) || _8 != nil
-            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 {
-                return Api.WalletTransaction.walletTransaction(Cons_walletTransaction(flags: _1!, id: _2!, amount: _3!, fee: _4!, date: _5!, peer: _6!, comment: _7, txHash: _8))
+            let _c9 = (Int(_1 ?? 0) & Int(1 << 7) == 0) || _9 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 {
+                return Api.WalletTransaction.walletTransaction(Cons_walletTransaction(flags: _1!, id: _2!, amount: _3!, fee: _4!, date: _5!, peer: _6!, comment: _7, txHash: _8, nft: _9))
             }
             else {
                 return nil

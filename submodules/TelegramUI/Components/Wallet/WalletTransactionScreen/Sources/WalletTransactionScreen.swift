@@ -552,32 +552,6 @@ private final class WalletTransactionFeePlaceholderComponent: Component {
     }
 }
 
-private func walletTransactionCollectible(
-    _ collectible: WalletContext.Collectible
-) -> WalletContext.Transaction.CollectibleTransfer {
-    let kind: WalletContext.Transaction.CollectibleTransfer.Kind
-    switch collectible.kind {
-    case .gift:
-        kind = .gift
-    case .username:
-        kind = .username
-    case .anonymousNumber:
-        kind = .anonymousNumber
-    case .other:
-        kind = .other
-    }
-    return WalletContext.Transaction.CollectibleTransfer(
-        address: collectible.address,
-        name: collectible.name,
-        image: collectible.image,
-        thumbnail: collectible.thumbnail,
-        lottie: collectible.lottie,
-        collectionName: collectible.collectionName,
-        collectionUrl: collectible.collectionUrl,
-        kind: kind
-    )
-}
-
 private final class SendButtonContentComponent: Component {
     let text: String
     let color: UIColor
@@ -1236,7 +1210,7 @@ private final class WalletTransactionContentComponent: Component {
                 gasless: gasless,
                 peer: .address(recipient, domain: nil),
                 comment: self.previewComment,
-                collectible: collectible.map(walletTransactionCollectible)
+                collectible: collectible.map(WalletContext.Transaction.CollectibleTransfer.init(collectible:))
             )
         }
 
