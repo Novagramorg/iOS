@@ -21,7 +21,7 @@ swift_library(
         "//submodules/ComponentFlow",
         "//submodules/Components/ViewControllerComponent",
         "//submodules/Components/SheetComponent",
-        "//submodules/Components/BalancedTextComponent",
+        "//submodules/Components/MultilineTextComponent",
         "//submodules/Components/BundleIconComponent",
         "//submodules/TelegramUI/Components/GlassBarButtonComponent",
         "//submodules/TelegramUI/Components/ButtonComponent",
