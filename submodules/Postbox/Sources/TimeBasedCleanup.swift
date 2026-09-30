@@ -306,7 +306,7 @@ private final class TimeBasedCleanupImpl {
     private let totalSizeBasedPath: String
     private let shortLivedPaths: [String]
     
-    private var scheduledTouches: [String] = []
+    private var scheduledTouches = Set<String>()
     private var scheduledTouchesTimer: SignalKitTimer?
     
     private var generalMaxStoreTime: Int32?
@@ -513,9 +513,7 @@ private final class TimeBasedCleanupImpl {
     
     func touch(paths: [String]) {
         for path in paths {
-            if !self.scheduledTouches.contains(path) {
-                self.scheduledTouches.append(path)
-            }
+            self.scheduledTouches.insert(path)
         }
         self.scheduleTouches()
     }
@@ -537,7 +535,7 @@ private final class TimeBasedCleanupImpl {
     private func processScheduledTouches() {
         let scheduledTouches = self.scheduledTouches
         DispatchQueue.global(qos: .utility).async {
-            for item in Set(scheduledTouches) {
+            for item in scheduledTouches {
                 utime(item, nil)
             }
         }

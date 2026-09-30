@@ -202,33 +202,61 @@ private final class MultiplexedRequestManagerContext {
         }
     }
     
+    private func isTargetSaturated(_ targetKey: MultiplexedRequestTargetKey, maxRequestsPerWorker: Int, maxWorkersPerTarget: Int) -> Bool {
+        guard let contexts = self.targetContexts[targetKey], contexts.count >= maxWorkersPerTarget else {
+            return false
+        }
+        for context in contexts {
+            if context.requests.count < maxRequestsPerWorker {
+                return false
+            }
+        }
+        return true
+    }
+    
     private func updateState() {
         let maxRequestsPerWorker = 3
         let maxWorkersPerTarget = 4
         
-        for request in self.queuedRequests.sorted(by: { lhs, rhs in
-            let lhsPriority = lhs.resourceId.flatMap { id in
-                if let counters = self.priorityContext.resourceCounters[id] {
-                    return counters.copyItems().max() ?? 0
-                } else {
-                    return 0
-                }
-            } ?? 0
-            let rhsPriority = rhs.resourceId.flatMap { id in
-                if let counters = self.priorityContext.resourceCounters[id] {
-                    return counters.copyItems().max() ?? 0
-                } else {
-                    return 0
-                }
-            } ?? 0
-            
-            if lhsPriority != rhsPriority {
-                return lhsPriority > rhsPriority
+        var checkedTargets = Set<MultiplexedRequestTargetKey>()
+        var hasAvailableTarget = false
+        for request in self.queuedRequests {
+            let targetKey = MultiplexedRequestTargetKey(target: request.target, continueInBackground: request.continueInBackground)
+            if checkedTargets.insert(targetKey).inserted, !self.isTargetSaturated(targetKey, maxRequestsPerWorker: maxRequestsPerWorker, maxWorkersPerTarget: maxWorkersPerTarget) {
+                hasAvailableTarget = true
+                break
+            }
+        }
+        if !hasAvailableTarget {
+            self.checkEmptyContexts()
+            return
+        }
+        
+        var resourcePriorities: [String: Int] = [:]
+        let prioritizedRequests = self.queuedRequests.map { request -> (priority: Int, request: RequestData) in
+            guard let resourceId = request.resourceId else {
+                return (0, request)
+            }
+            if let priority = resourcePriorities[resourceId] {
+                return (priority, request)
+            }
+            let priority = self.priorityContext.resourceCounters[resourceId].flatMap { $0.copyItems().max() } ?? 0
+            resourcePriorities[resourceId] = priority
+            return (priority, request)
+        }
+        var saturatedTargets = Set<MultiplexedRequestTargetKey>()
+        
+        for (_, request) in prioritizedRequests.sorted(by: { lhs, rhs in
+            if lhs.priority != rhs.priority {
+                return lhs.priority > rhs.priority
             }
             
-            return lhs.id < rhs.id
+            return lhs.request.id < rhs.request.id
         }) {
             let targetKey = MultiplexedRequestTargetKey(target: request.target, continueInBackground: request.continueInBackground)
+            if saturatedTargets.contains(targetKey) {
+                continue
+            }
             
             if self.targetContexts[targetKey] == nil {
                 self.targetContexts[targetKey] = []
@@ -240,15 +268,19 @@ private final class MultiplexedRequestManagerContext {
                     break
                 }
             }
-            if selectedContext == nil && self.targetContexts[targetKey]!.count < maxWorkersPerTarget {
-                if let worker = self.takeWorker(request.target, request.tag, request.continueInBackground) {
-                    let contextId = self.nextId
-                    self.nextId += 1
-                    let targetContext = RequestTargetContext(id: contextId, worker: worker)
-                    self.targetContexts[targetKey]!.append(targetContext)
-                    selectedContext = targetContext
+            if selectedContext == nil {
+                if self.targetContexts[targetKey]!.count < maxWorkersPerTarget {
+                    if let worker = self.takeWorker(request.target, request.tag, request.continueInBackground) {
+                        let contextId = self.nextId
+                        self.nextId += 1
+                        let targetContext = RequestTargetContext(id: contextId, worker: worker)
+                        self.targetContexts[targetKey]!.append(targetContext)
+                        selectedContext = targetContext
+                    } else {
+                        Logger.shared.log("MultiplexedRequestManager", "couldn't take worker")
+                    }
                 } else {
-                    Logger.shared.log("MultiplexedRequestManager", "couldn't take worker")
+                    saturatedTargets.insert(targetKey)
                 }
             }
             if let selectedContext = selectedContext {
