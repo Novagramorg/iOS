@@ -561,6 +561,8 @@ NSString *suffix = @"";
         return @"iPhone 17 Pro Max";
     if ([platform isEqualToString:@"iPhone18,4"])
         return @"iPhone Air";
+    if ([platform isEqualToString:@"iPhone19,4"])
+        return @"iPhone Duo";
     if ([platform isEqualToString:@"iPhone19,2"])
         return @"iPhone 18 Pro";
     if ([platform isEqualToString:@"iPhone19,3"] || [platform isEqualToString:@"iPhone19,7"])

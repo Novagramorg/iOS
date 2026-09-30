@@ -469,7 +469,6 @@ actor WalletEngineStorage {
     }
 
     func containsProtectedSecret(_ secretRef: ProtectedSecretRef) throws -> Bool {
-        try WalletVault.migrate(namespace: self.namespace, account: secretRef.value)
         var query = try self.baseQuery(service: self.secretService, account: secretRef.value)
         query[kSecReturnAttributes as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
@@ -565,7 +564,6 @@ actor WalletEngineStorage {
     }
 
     private func read(service: String, account: String) throws -> Data? {
-        if service == self.secretService { try WalletVault.migrate(namespace: self.namespace, account: account) }
         var query = try self.baseQuery(service: service, account: account)
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
@@ -581,7 +579,6 @@ actor WalletEngineStorage {
     }
 
     private func write(_ data: Data, service: String, account: String) throws {
-        if service == self.secretService { try WalletVault.migrate(namespace: self.namespace, account: account) }
         let query = try self.baseQuery(service: service, account: account)
         let updateStatus = SecItemUpdate(
             query as CFDictionary,
@@ -603,7 +600,6 @@ actor WalletEngineStorage {
     }
 
     private func remove(service: String, account: String) throws {
-        if service == self.secretService { try WalletVault.removeLegacy(namespace: self.namespace, account: account) }
         let status = SecItemDelete(try self.baseQuery(service: service, account: account) as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else {
             throw WalletEngineStorageError.keychainStatus(status)
