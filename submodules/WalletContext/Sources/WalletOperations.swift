@@ -234,8 +234,9 @@ public extension WalletContext {
         }
     }
 
-    static func transferAddress(from value: String) -> String? {
-        normalizedMainnetAddress(value)
+    /// The default canonical form is for account comparisons. Preserve the flag for display and sending.
+    static func transferAddress(from value: String, preserveBounce: Bool = false) -> String? {
+        normalizedMainnetAddress(value, preserveBounce: preserveBounce)
     }
 
     static func isSelfTransfer(recipient: String, walletAddress: String?) -> Bool {
@@ -249,7 +250,7 @@ public extension WalletContext {
 
     static func transferRecipient(from value: String) -> ResolvedTransferRecipient? {
         let value = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let address = normalizedMainnetAddress(value) else {
+        guard let address = normalizedMainnetAddress(value, preserveBounce: true) else {
             return nil
         }
         return ResolvedTransferRecipient(
@@ -544,8 +545,8 @@ extension WalletContextImpl {
         return try await self.withWalletOwnershipProof(prepare: {
             try await self.runtime.verifyReplacement(recordId: recordId)
         }, sign: { challenge in
-            try await self.runtime.signReplacementProof(
-                recordId: recordId,
+            try await self.runtime.signOwnershipProof(
+                replacementRecordId: recordId,
                 expectedAnchorPublicKey: anchorPublicKey,
                 expectedSigningPublicKey: signingPublicKey,
                 domain: challenge.domain, timestamp: UInt64(challenge.timestamp), payload: challenge.payload
@@ -1068,9 +1069,9 @@ extension WalletContextImpl {
                             try checkDeadline()
                         }, sign: { challenge in
                             _ = try currentState()
-                            return try walletOwnershipProofSignature(
-                                words: words, expectedAnchorPublicKey: anchorPublicKey,
-                                expectedSigningPublicKey: signingPublicKey, address: expectedAddress,
+                            return try await self.runtime.signOwnershipProof(
+                                replacementRecordId: candidate?.recordId, expectedAnchorPublicKey: anchorPublicKey,
+                                expectedSigningPublicKey: signingPublicKey,
                                 domain: challenge.domain, timestamp: UInt64(challenge.timestamp), payload: challenge.payload
                             )
                         }, request: { proof in
@@ -1578,13 +1579,7 @@ extension WalletContextImpl {
                 : .exact(nanograms: String(resolved.amount))
             let intent = SendIntent(
                 expiration: resolved.expiration,
-                messages: [SendMessage(
-                    destination: resolved.address,
-                    amount: sendAmount,
-                    body: body,
-                    bounce: false,
-                    stateInit: nil
-                )]
+                messages: [resolved.destination.message(amount: sendAmount, body: body)]
             )
             try Task.checkCancellation()
             guard !self.isShutdown, self.activationGeneration == activationGeneration else { throw WalletError.unavailable }
@@ -2495,7 +2490,7 @@ extension WalletContextImpl {
 }
 
 @available(macOS 10.15, *)
-private func normalizedMainnetAddress(_ input: String) -> String? {
+private func normalizedMainnetAddress(_ input: String, preserveBounce: Bool = false) -> String? {
     let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
     let address: String
     if trimmed.lowercased().hasPrefix("ton://") {
@@ -2504,8 +2499,10 @@ private func normalizedMainnetAddress(_ input: String) -> String? {
     } else {
         address = trimmed
     }
-    guard let info = try? parseTonAddress(value: address) else { return nil }
-    if case let .userFriendly(_, testnet) = info.format, testnet { return nil }
+    guard let destination = try? WalletTransferDestination(address) else { return nil }
+    if preserveBounce || !destination.bounce {
+        return destination.address
+    }
     return try? convertTonAddress(
         value: address,
         format: .userFriendly(bounceable: false, testnet: false)

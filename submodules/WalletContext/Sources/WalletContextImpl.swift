@@ -613,10 +613,10 @@ actor WalletContextImpl {
            case let .wallet(currentInfo) = self.currentState.phase,
            walletEngineAddressesEqual(currentInfo.address, address),
            currentInfo.publicKey == publicKey.map({ String(format: "%02x", $0) }).joined() {
-            // A request may only replace streaming values received before it started.
-            // Reapplying cached server state does not invalidate a streaming value.
+            // Request ordering alone does not establish freshness: getState may lag
+            // behind streaming. Keep the displayed balance until the sources agree.
             let overlayChanged = balanceOverlayRevision.map {
-                self.streamingPresentationOverlay.clearBalance(through: $0)
+                self.streamingPresentationOverlay.reconcileBalance(serverBalance, through: $0, log: self.logger.log)
             } ?? false
             let previousState = self.currentState
             self.replaceState(
@@ -635,6 +635,10 @@ actor WalletContextImpl {
             )
             if overlayChanged && self.currentState == previousState {
                 self.publishPresentationState()
+            }
+            self.evaluatePollingDemand()
+            if self.streamingPresentationOverlay.hasUnreconciledBalance {
+                self.retryStreamingSynchronizationIfNeeded(scope: [.account, .transactions])
             }
             if refreshIfStreamingUnavailable {
                 self.scheduleWalletStateFallbackRefreshIfNeeded()
@@ -1470,7 +1474,8 @@ actor WalletContextImpl {
               self.hasActiveWalletRefreshDemand,
               WalletStreamingDemand.needsPolling(
                 connection: self.streamingConnectionState,
-                hasPendingTransfer: !self.currentState.pendingTransfers.isEmpty
+                hasPendingTransfer: !self.currentState.pendingTransfers.isEmpty,
+                hasUnreconciledBalance: self.streamingPresentationOverlay.hasUnreconciledBalance
               ),
               case .wallet = self.currentState.phase else {
             return false

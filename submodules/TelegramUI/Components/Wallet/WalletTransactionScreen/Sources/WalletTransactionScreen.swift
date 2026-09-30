@@ -2009,18 +2009,20 @@ private final class WalletTransactionContentComponent: Component {
             let refreshBalanceOnOpen = (controller as? WalletTransactionScreen)?.refreshBalanceOnSend ?? true
             let sendScreen: WalletSendScreen
             switch transactionPeer {
-            case let .user(peer, _, _):
+            case let .user(peer, counterpartyAddress, _):
+                let address = WalletContext.transferAddress(from: counterpartyAddress, preserveBounce: true)
                 sendScreen = WalletSendScreen(
                     context: component.context,
                     peer: peer,
                     walletContext: walletContext,
+                    initialAddress: address ?? "",
                     refreshBalanceOnOpen: refreshBalanceOnOpen
                 )
             case .address:
                 guard let counterpartyAddress = transactionPeer.address else {
                     return
                 }
-                let address = WalletContext.transferAddress(from: counterpartyAddress) ?? counterpartyAddress
+                let address = WalletContext.transferAddress(from: counterpartyAddress, preserveBounce: true) ?? counterpartyAddress
                 sendScreen = WalletSendScreen(
                     context: component.context,
                     walletContext: walletContext,
@@ -2774,7 +2776,7 @@ private final class WalletTransactionContentComponent: Component {
             let counterpartyName = peerDisplayName ?? transaction.peer.domain
             let addressComponent: AnyComponent<Empty>?
             if let counterparty = transaction.peer.address {
-                let address = WalletContext.transferAddress(from: counterparty) ?? counterparty
+                let address = WalletContext.transferAddress(from: counterparty, preserveBounce: true) ?? counterparty
                 addressComponent = AnyComponent(Button(
                     content: AnyComponent(MultilineTextComponent(
                         text: .plain(walletTransactionFormattedAddress(
@@ -4298,7 +4300,7 @@ private func walletTransactionComment(_ value: String?) -> String? {
 }
 
 private func walletTransactionShortAddress(_ address: String) -> String {
-    let address = WalletContext.transferAddress(from: address) ?? address
+    let address = WalletContext.transferAddress(from: address, preserveBounce: true) ?? address
     guard address.count > 8 else {
         return address
     }

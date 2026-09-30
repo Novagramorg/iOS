@@ -986,12 +986,9 @@ private final class WalletSettingsScreenComponent: Component {
                 return
             }
             let strings = self.currentPresentationData(for: component).initial.strings
-            var text = prepared.updateSecretPhrase
+            let text = prepared.updateSecretPhrase
                 ? strings.Wallet_Backup_DisableWithNewPhraseText
                 : strings.Wallet_Backup_DisableConfirmationText
-            if let fee = prepared.networkFeeNanograms {
-                text += "\n\n" + strings.Wallet_Backup_NetworkFee(self.disableBackupFeeText(fee)).string
-            }
             let progress = ValuePromise<Bool>(false, ignoreRepeated: true)
             let actionsEnabled = progress.get() |> map { !$0 }
             let alertController = AlertScreen(

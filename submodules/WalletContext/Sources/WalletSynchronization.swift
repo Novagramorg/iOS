@@ -93,7 +93,9 @@ extension WalletContextImpl {
         guard self.isCurrentSynchronization(taskId, generation: generation) else { return }
         self.synchronizationGate.completedResource(.account)
         self.completedSynchronizationResource(.account, queued: self.synchronizationGate.queuedScope)
-        if case .stale = self.currentState.balance {
+        if self.streamingPresentationOverlay.hasUnreconciledBalance {
+            self.retryStreamingSynchronizationIfNeeded(scope: [.account, .transactions])
+        } else if case .stale = self.currentState.balance {
             self.retryStreamingSynchronizationIfNeeded(scope: .account)
         }
     }
@@ -128,8 +130,13 @@ extension WalletContextImpl {
         var overlayChanged = false
         switch result {
         case let .success(response):
+            let responseTransactions = walletTransactions(from: response.items)
+            overlayChanged = self.streamingPresentationOverlay.reconcileBalanceWithHistory(
+                response.balance, transactions: responseTransactions, through: watermark,
+                updatedAt: currentWalletTimestamp(), log: self.logger.log
+            )
             transactions = self.transactionHistory.applyRefresh(
-                WalletTransactionHistory.Page(items: walletTransactions(from: response.items),
+                WalletTransactionHistory.Page(items: responseTransactions,
                 nextOffset: response.nextOffset),
                 previous: transactions,
                 retaining: transactions.items.filter { !transactionsAtRequest.contains($0) },
@@ -147,7 +154,7 @@ extension WalletContextImpl {
                 presentIn: transactions.items,
                 resolvedTraceIds: reconciliation.resolvedStreamingTraceIds
             )
-            overlayChanged = removedCount != 0
+            overlayChanged = overlayChanged || removedCount != 0
             self.logPendingTransferHistoryReconciliation(reconciliation,
             removedStreamingTraceCount: removedCount)
         case let .failure(error):
@@ -166,7 +173,10 @@ extension WalletContextImpl {
         if overlayChanged && previousState == self.currentState {
             self.publishPresentationState()
         }
-        if transactions.error != nil || self.streamingPresentationOverlay.hasFinalizedTransactions
+        self.evaluatePollingDemand()
+        if self.streamingPresentationOverlay.hasUnreconciledBalance {
+            self.retryStreamingSynchronizationIfNeeded(scope: [.account, .transactions])
+        } else if transactions.error != nil || self.streamingPresentationOverlay.hasFinalizedTransactions
             || pending.contains(where: { $0.sentTransfer != nil }) {
             self.retryStreamingSynchronizationIfNeeded(scope: .transactions)
         }

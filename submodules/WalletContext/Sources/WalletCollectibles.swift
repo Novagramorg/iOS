@@ -46,8 +46,6 @@ func walletCollectible(from nft: WalletNftItem) -> WalletContext.Collectible {
         ?? normalizedFragmentCollectibleUrl(collection["url"] as? String)
     let name = nonEmptyCollectibleString(nft.name) ?? shortenedCollectibleAddress(nft.address)
 
-    // These URLs are inspected only to preserve Fragment presentation. They
-    // must never be resolved or downloaded outside the signed media pipeline.
     let urlKeys = ["uri", "metadata_url", "content_uri", "external_link", "url"]
     let urls = (urlKeys.compactMap { extra[$0] as? String }
         + extra.keys.sorted().filter { !urlKeys.contains($0) }.compactMap { extra[$0] as? String }
@@ -159,7 +157,6 @@ extension WalletContext.CollectiblesState {
     }
 
     func applying(_ page: WalletNfts, offset: String, refresh: Bool) throws -> Self {
-        // A repeated cursor cannot make progress; keep the old page retryable.
         guard page.nextOffset != offset else { throw WalletContext.SynchronizationError.invalidData }
         var items = refresh ? [] : self.items
         var indices: [String: Int] = [:]

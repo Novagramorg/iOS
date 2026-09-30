@@ -50,7 +50,7 @@ extension WalletContextImpl {
     func estimateTransferFee(address: String, comment: WalletContext.TransferFeeComment, operationId: UUID) async throws -> WalletContext.TransferFeeEstimate {
         return try await self.performOperation(.preparingTransfer, operationId: operationId, requiresAuthorization: false) {
             guard case .wallet = self.currentState.phase else { throw WalletContext.WalletError.unavailable }
-            let address = try normalizedWalletTransferAddress(address.trimmingCharacters(in: .whitespacesAndNewlines))
+            let destination = try WalletTransferDestination(address.trimmingCharacters(in: .whitespacesAndNewlines))
             let body: SendMessageBody
             switch comment {
             case .none:
@@ -63,7 +63,7 @@ extension WalletContextImpl {
             }
             let intent = SendIntent(
                 expiration: .engineDefault,
-                messages: [SendMessage(destination: address, amount: .exact(nanograms: "0"), body: body, bounce: false, stateInit: nil)]
+                messages: [destination.message(amount: .exact(nanograms: "0"), body: body)]
             )
             let generation = self.activationGeneration
             let preview: SendPreview

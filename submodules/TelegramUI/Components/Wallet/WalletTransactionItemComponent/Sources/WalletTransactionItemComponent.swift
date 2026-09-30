@@ -1201,7 +1201,7 @@ private func walletTransactionCounterparty(_ address: String?, strings: Presenta
     guard var address, !address.isEmpty else {
         return strings.Wallet_Transaction_UnknownAddress
     }
-    address = WalletContext.transferAddress(from: address) ?? address
+    address = WalletContext.transferAddress(from: address, preserveBounce: true) ?? address
     
     let edgeLength = 4
     guard address.count > edgeLength * 2 else {

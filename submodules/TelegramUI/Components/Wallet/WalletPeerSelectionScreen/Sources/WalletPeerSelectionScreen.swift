@@ -12,6 +12,8 @@ import PresentationDataUtils
 import MergeLists
 import ItemListUI
 import ContactsPeerItem
+import ChatListSearchItemHeader
+import ContextUI
 import ComponentFlow
 import ViewControllerComponent
 import ChatListHeaderComponent
@@ -28,6 +30,26 @@ import WalletSendScreen
 public enum WalletPeerSelectionScreenMode: Equatable {
     case transfer
     case collectible(WalletContext.Collectible)
+}
+
+func walletPeerSelectionIsEligiblePeer(_ peer: EnginePeer, accountPeerId: EnginePeer.Id) -> Bool {
+    guard case let .user(user) = peer else {
+        return false
+    }
+    return user.isGenericUser && !peer.isService && peer.id != accountPeerId
+}
+
+private final class WalletPeerSelectionClearRecentSource: ContextReferenceContentSource {
+    private let sourceNode: ASDisplayNode
+    let keepInPlace: Bool = true
+
+    init(sourceNode: ASDisplayNode) {
+        self.sourceNode = sourceNode
+    }
+
+    func transitionInfo() -> ContextControllerReferenceViewInfo? {
+        return ContextControllerReferenceViewInfo(referenceView: self.sourceNode.view, contentAreaInScreenSpace: UIScreen.main.bounds, actionsPosition: .bottom)
+    }
 }
 
 private struct WalletPeerSelectionResolvedPeer {
@@ -49,7 +71,7 @@ private func walletPeerSelectionResolvePeer(context: AccountContext, address: St
         }
         return context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: userAddress.userId))
         |> map { peer -> WalletPeerSelectionResolvedPeer? in
-            guard let peer, case .user = peer else {
+            guard let peer, walletPeerSelectionIsEligiblePeer(peer, accountPeerId: context.account.peerId) else {
                 return nil
             }
             return WalletPeerSelectionResolvedPeer(peer: peer, address: WalletUserAddress(userId: peer.id, address: address, publicKey: userAddress.publicKey))
@@ -62,6 +84,20 @@ private func walletPeerSelectionShortAddress(_ address: String) -> String {
         return address
     }
     return "\(address.prefix(4))…\(address.suffix(4))"
+}
+
+private func walletPeerSelectionIsAddressQuery(_ query: String) -> Bool {
+    if query.lowercased().hasPrefix("ton://") {
+        return true
+    }
+    if let separator = query.firstIndex(of: ":"), Int(query[..<separator]) != nil {
+        return true
+    }
+    guard !query.hasPrefix("@"), !query.unicodeScalars.contains(where: CharacterSet.whitespacesAndNewlines.contains) else {
+        return false
+    }
+    // Recognize friendly addresses even with an invalid checksum or a missing character.
+    return query.count == 48 || (query.count > 32 && ["EQ", "UQ", "kQ", "0Q", "Ef", "Uf", "kf", "0f"].contains(where: query.hasPrefix))
 }
 
 private final class WalletPeerSelectionRecipientView: UIControl {
@@ -237,23 +273,40 @@ private final class WalletPeerSelectionScreenComponent: Component {
         let presence: EnginePeer.Presence?
     }
 
+    private enum PeerSection {
+        case none
+        case recent
+        case local
+        case global
+    }
+
     private enum ContentEntry: Comparable, Identifiable {
         enum Id: Hashable {
+            case topPeers
             case peer(EnginePeer.Id)
         }
 
         var stableId: Id {
             switch self {
-            case let .peer(peer, _, _):
+            case .topPeers:
+                return .topPeers
+            case let .peer(peer, _, _, _, _):
                 return .peer(peer.id)
             }
         }
 
-        case peer(peer: EnginePeer, presence: EnginePeer.Presence?, sortIndex: Int)
+        case topPeers
+        case peer(peer: EnginePeer, presence: EnginePeer.Presence?, sortIndex: Int, section: PeerSection = .none, query: String? = nil)
 
         static func <(lhs: ContentEntry, rhs: ContentEntry) -> Bool {
             switch (lhs, rhs) {
-            case let (.peer(lhsPeer, _, lhsSortIndex), .peer(rhsPeer, _, rhsSortIndex)):
+            case (.topPeers, .topPeers):
+                return false
+            case (.topPeers, _):
+                return true
+            case (_, .topPeers):
+                return false
+            case let (.peer(lhsPeer, _, lhsSortIndex, _, _), .peer(rhsPeer, _, rhsSortIndex, _, _)):
                 if lhsSortIndex != rhsSortIndex {
                     return lhsSortIndex < rhsSortIndex
                 }
@@ -263,12 +316,36 @@ private final class WalletPeerSelectionScreenComponent: Component {
 
         func item(listNode: ContentListNode) -> ListViewItem {
             switch self {
-            case let .peer(peer, presence, _):
+            case .topPeers:
+                return WalletPeerSelectionTopPeersItem(context: listNode.context, presentationData: listNode.presentationData, peerSelected: { [weak listNode] peer in
+                    listNode?.parentView?.peerSelected(peer: peer)
+                })
+            case let .peer(peer, presence, _, section, query):
                 let status: ContactsPeerItemStatus
-                if let presence {
+                if section == .global {
+                    status = .addressName("")
+                } else if let presence {
                     status = .presence(presence, listNode.presentationData.dateTimeFormat)
                 } else {
                     status = .none
+                }
+
+                let header: ChatListSearchItemHeader?
+                switch section {
+                case .none:
+                    header = nil
+                case .recent:
+                    header = ChatListSearchItemHeader(
+                        type: .recentPeers,
+                        theme: listNode.presentationData.theme,
+                        strings: listNode.presentationData.strings,
+                        actionTitle: query == nil ? listNode.presentationData.strings.WebSearch_RecentSectionClear : nil,
+                        action: query == nil ? { [weak listNode] sourceNode in
+                            listNode?.parentView?.clearRecentSearch(sourceNode: sourceNode)
+                        } : nil
+                    )
+                case .local, .global:
+                    header = ChatListSearchItemHeader(type: section == .local ? .localPeers : .globalPeers, theme: listNode.presentationData.theme, strings: listNode.presentationData.strings)
                 }
 
                 return ContactsPeerItem(
@@ -278,7 +355,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
                     sortOrder: listNode.presentationData.nameSortOrder,
                     displayOrder: listNode.presentationData.nameDisplayOrder,
                     context: listNode.context,
-                    peerMode: .peer,
+                    peerMode: section == .none ? .peer : .generalSearch(isSavedMessages: false),
                     peer: .peer(peer: peer, chatPeer: peer),
                     status: status,
                     badge: nil,
@@ -291,7 +368,8 @@ private final class WalletPeerSelectionScreenComponent: Component {
                     additionalActions: [],
                     actionIcon: .none,
                     index: nil,
-                    header: nil,
+                    header: header,
+                    searchQuery: section == .global ? query : nil,
                     hideBackground: true,
                     action: { [weak listNode] _ in
                         guard let listNode, let parentView = listNode.parentView else {
@@ -309,6 +387,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
         let context: AccountContext
         var presentationData: PresentationData
         private var currentEntries: [ContentEntry] = []
+        private var currentLayout: (size: CGSize, insets: UIEdgeInsets)?
 
         init(parentView: View, context: AccountContext, presentationData: PresentationData) {
             self.parentView = parentView
@@ -319,6 +398,10 @@ private final class WalletPeerSelectionScreenComponent: Component {
         }
 
         func update(size: CGSize, insets: UIEdgeInsets, transition: ComponentTransition) {
+            if let currentLayout = self.currentLayout, currentLayout.size == size, currentLayout.insets == insets {
+                return
+            }
+            self.currentLayout = (size, insets)
             let (listViewDuration, listViewCurve) = listViewAnimationDurationAndCurve(
                 transition: transition.containedViewLayoutTransition
             )
@@ -338,7 +421,10 @@ private final class WalletPeerSelectionScreenComponent: Component {
             )
         }
 
-        func setEntries(_ entries: [ContentEntry], animated: Bool, allUpdated: Bool) {
+        func setEntries(_ entries: [ContentEntry], allUpdated: Bool) {
+            guard allUpdated || self.currentEntries != entries else {
+                return
+            }
             let (deleteIndices, indicesAndItems, updateIndices) = mergeListsStableWithUpdates(
                 leftList: self.currentEntries,
                 rightList: entries,
@@ -366,18 +452,11 @@ private final class WalletPeerSelectionScreenComponent: Component {
                 )
             }
 
-            var options: ListViewDeleteAndInsertOptions = [.Synchronous, .LowLatency]
-            if animated {
-                options.insert(.AnimateInsertion)
-            } else {
-                options.insert(.PreferSynchronousResourceLoading)
-            }
-
             self.transaction(
                 deleteIndices: deletions,
                 insertIndicesAndItems: insertions,
                 updateIndicesAndItems: updates,
-                options: options,
+                options: [.Synchronous, .LowLatency, .PreferSynchronousResourceLoading],
                 scrollToItem: nil,
                 stationaryItemRange: nil,
                 updateOpaqueState: nil,
@@ -389,6 +468,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
 
     final class View: UIView {
         private var contentListNode: ContentListNode?
+        private var suggestionsListNode: ContentListNode?
         private let navigationGlassContainer = GlassBackgroundContainerView()
         private let navigationBarView = ComponentView<Empty>()
         private var navigationHeight: CGFloat?
@@ -412,6 +492,10 @@ private final class WalletPeerSelectionScreenComponent: Component {
         private var walletContext: WalletContext?
         private let walletStateDisposable = MetaDisposable()
         private var chatListDisposable: Disposable?
+        private var recentPeersDisposable: Disposable?
+        private var updatedRecentPeersDisposable: Disposable?
+        private let localPeerSearchDisposable = MetaDisposable()
+        private let remotePeerSearchDisposable = MetaDisposable()
         private let resolveDisposable = MetaDisposable()
         private let peerAddressDisposable = MetaDisposable()
         private var resolveTimer: SwiftSignalKit.Timer?
@@ -419,17 +503,29 @@ private final class WalletPeerSelectionScreenComponent: Component {
         private var resolveGeneration: Int = 0
         private var query: String = ""
         private var peers: [PeerInfo]?
+        private var hasTopPeers = false
+        private var hasLoadedRecentPeers = false
+        private var recentlySearchedPeers: [PeerInfo] = []
+        private var localSearchQuery: String?
+        private var localSearchPeers: [PeerInfo] = []
+        private var remoteLocalSearchPeers: [EnginePeer] = []
+        private var globalSearchPeers: [EnginePeer] = []
+        private var isSearchingLocalPeers = false
+        private var isSearchingRemotePeers = false
+        private var isResolvingRecipient = false
         private var recipient: WalletContext.ResolvedTransferRecipient?
         private var recipientPeer: WalletPeerSelectionResolvedPeer?
-        private var noResultsQuery: String?
-        private var displaysNoResults = false
+        private var displaysEmptyResults = false
         private var resolvingPeerId: EnginePeer.Id?
         private var actionGeneration = 0
         private var hasPasteboardText = UIPasteboard.general.hasStrings
         private var hasSpaceForPasteButton = false
         private var navigationButtonsVisible = true
         private var navigationButtonsFieldAlpha: CGFloat = 1.0
-        private let searchQueryComponentSeparationCharacterSet: CharacterSet
+
+        private var isSearching: Bool {
+            return self.isSearchingLocalPeers || self.isSearchingRemotePeers || self.isResolvingRecipient
+        }
 
         private func currentPresentationData(for component: WalletPeerSelectionScreenComponent) -> (initial: PresentationData, signal: Signal<PresentationData, NoError>) {
             let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
@@ -440,12 +536,12 @@ private final class WalletPeerSelectionScreenComponent: Component {
         }
 
         override init(frame: CGRect) {
-            self.searchQueryComponentSeparationCharacterSet = CharacterSet(charactersIn: " _.:/")
-
             super.init(frame: frame)
 
+            self.recipientSectionTitle.alpha = 0.0
             self.addSubview(self.recipientSectionTitle)
 
+            self.recipientView.alpha = 0.0
             self.recipientView.pressed = { [weak self] in
                 self?.openRecipient()
             }
@@ -479,6 +575,10 @@ private final class WalletPeerSelectionScreenComponent: Component {
             self.resolveTimer?.invalidate()
             self.navigationButtonsRevealTimer?.invalidate()
             self.chatListDisposable?.dispose()
+            self.recentPeersDisposable?.dispose()
+            self.updatedRecentPeersDisposable?.dispose()
+            self.localPeerSearchDisposable.dispose()
+            self.remotePeerSearchDisposable.dispose()
             self.resolveDisposable.dispose()
             self.peerAddressDisposable.dispose()
             self.walletStateDisposable.dispose()
@@ -502,67 +602,125 @@ private final class WalletPeerSelectionScreenComponent: Component {
             self.state?.updated(transition: .easeInOut(duration: 0.2))
         }
 
-        private func clearNoResults() {
-            self.noResultsQuery = nil
-            self.displaysNoResults = false
+        private func clearEmptyResults() {
+            self.displaysEmptyResults = false
             self.emptyResultsAnimation.view?.removeFromSuperview()
             self.emptyResultsTitle.view?.removeFromSuperview()
             self.emptyResultsText.view?.removeFromSuperview()
         }
 
-        private func resetQuery() {
+        private func resetQuery(keepPeerResults: Bool = false) {
+            self.actionGeneration &+= 1
+            self.peerAddressDisposable.set(nil)
+            self.resolvingPeerId = nil
             self.resolveGeneration &+= 1
             self.resolveTimer?.invalidate()
             self.resolveTimer = nil
             self.resolveDisposable.set(nil)
+            self.localPeerSearchDisposable.set(nil)
+            self.remotePeerSearchDisposable.set(nil)
+            if !keepPeerResults {
+                self.localSearchQuery = nil
+                self.localSearchPeers = []
+                self.remoteLocalSearchPeers = []
+                self.globalSearchPeers = []
+            }
+            self.isSearchingLocalPeers = false
+            self.isSearchingRemotePeers = false
+            self.isResolvingRecipient = false
             self.query = ""
             self.recipient = nil
             self.recipientPeer = nil
-            self.clearNoResults()
+            self.clearEmptyResults()
             self.searchBarNode?.activity = false
         }
 
-        private func updateQuery(_ value: String) {
+        private func updateQuery(_ value: String, transition: ComponentTransition = .easeInOut(duration: 0.2)) {
             let query = value.trimmingCharacters(in: .whitespacesAndNewlines)
             guard self.query != query else {
                 return
             }
 
-            self.resolveGeneration &+= 1
+            // Keep the displayed peers until the replacement results arrive, as in chat search.
+            self.resetQuery(keepPeerResults: !self.query.isEmpty && !query.isEmpty)
             let generation = self.resolveGeneration
-            self.resolveTimer?.invalidate()
-            self.resolveTimer = nil
-            self.resolveDisposable.set(nil)
             self.query = query
-            self.recipient = nil
-            self.recipientPeer = nil
-            self.clearNoResults()
-            self.searchBarNode?.activity = false
-            self.state?.updated(transition: .easeInOut(duration: 0.2))
+            self.isSearchingLocalPeers = !query.isEmpty
+            self.isSearchingRemotePeers = !query.isEmpty
+            self.isResolvingRecipient = !query.isEmpty
+            self.searchBarNode?.activity = self.isSearching
+            self.state?.updated(transition: transition)
 
-            guard !query.isEmpty else {
+            guard !query.isEmpty, let component = self.component else {
                 return
             }
+
+            let context = component.context
+            self.localPeerSearchDisposable.set((context.engine.contacts.searchLocalPeers(query: query.lowercased())
+            |> mapToSignal { peers -> Signal<[PeerInfo], NoError> in
+                var peerIds = Set<EnginePeer.Id>()
+                let peers = peers.compactMap { renderedPeer -> EnginePeer? in
+                    guard let peer = renderedPeer.chatMainPeer,
+                          walletPeerSelectionIsEligiblePeer(peer, accountPeerId: context.account.peerId),
+                          peerIds.insert(peer.id).inserted else {
+                        return nil
+                    }
+                    return peer
+                }
+                return context.engine.data.subscribe(EngineDataMap(peers.map { peer in
+                    return TelegramEngine.EngineData.Item.Peer.Presence(id: peer.id)
+                }))
+                |> map { presences -> [PeerInfo] in
+                    return peers.map { peer in
+                        return PeerInfo(peer: peer, presence: presences[peer.id] ?? nil)
+                    }
+                }
+            }
+            |> deliverOnMainQueue).start(next: { [weak self] peers in
+                guard let self, self.resolveGeneration == generation, self.query == query else {
+                    return
+                }
+                self.localSearchQuery = query
+                self.localSearchPeers = peers
+                self.isSearchingLocalPeers = false
+                self.searchResultsUpdated()
+            }))
 
             let timer = SwiftSignalKit.Timer(timeout: 0.4, repeat: false, completion: { [weak self] in
                 guard let self, self.resolveGeneration == generation, self.query == query else {
                     return
                 }
                 self.resolveTimer = nil
+                self.remotePeerSearchDisposable.set((context.engine.contacts.searchRemotePeers(query: query)
+                |> deliverOnMainQueue).start(next: { [weak self] local, global in
+                    guard let self, self.resolveGeneration == generation, self.query == query else {
+                        return
+                    }
+                    self.remoteLocalSearchPeers = local.map(\.peer).filter {
+                        walletPeerSelectionIsEligiblePeer($0, accountPeerId: context.account.peerId)
+                    }
+                    self.globalSearchPeers = global.map(\.peer).filter {
+                        walletPeerSelectionIsEligiblePeer($0, accountPeerId: context.account.peerId)
+                    }
+                    self.isSearchingRemotePeers = false
+                    self.searchResultsUpdated()
+                }))
                 self.resolve(query: query, generation: generation)
             }, queue: Queue.mainQueue())
             self.resolveTimer = timer
             timer.start()
         }
 
+        private func searchResultsUpdated() {
+            self.searchBarNode?.activity = self.isSearching
+            if !self.isUpdating {
+                self.state?.updated(transition: .immediate)
+            }
+        }
+
         private func resolve(query: String, generation: Int) {
             guard let component = self.component else {
                 return
-            }
-            self.searchBarNode?.activity = true
-            self.clearNoResults()
-            if !self.isUpdating {
-                self.state?.updated(transition: .easeInOut(duration: 0.2))
             }
             self.resolveDisposable.set((component.walletContext.resolveTransferRecipient(query)
             |> mapToSignal { recipient -> Signal<(recipient: WalletContext.ResolvedTransferRecipient?, peer: WalletPeerSelectionResolvedPeer?), WalletContext.WalletError> in
@@ -579,24 +737,18 @@ private final class WalletPeerSelectionScreenComponent: Component {
                 guard let self, self.resolveGeneration == generation, self.query == query else {
                     return
                 }
-                self.searchBarNode?.activity = false
+                self.isResolvingRecipient = false
                 self.recipient = result.recipient
                 self.recipientPeer = result.peer
-                self.noResultsQuery = result.recipient == nil ? query : nil
-                if !self.isUpdating {
-                    self.state?.updated(transition: .easeInOut(duration: 0.2))
-                }
+                self.searchResultsUpdated()
             }, error: { [weak self] _ in
                 guard let self, self.resolveGeneration == generation, self.query == query else {
                     return
                 }
-                self.searchBarNode?.activity = false
+                self.isResolvingRecipient = false
                 self.recipient = nil
                 self.recipientPeer = nil
-                self.noResultsQuery = query
-                if !self.isUpdating {
-                    self.state?.updated(transition: .easeInOut(duration: 0.2))
-                }
+                self.searchResultsUpdated()
             }))
         }
 
@@ -678,40 +830,83 @@ private final class WalletPeerSelectionScreenComponent: Component {
             }
         }
 
-        private func peerMatchesQuery(_ peer: EnginePeer, query: String) -> Bool {
-            guard !query.isEmpty else {
-                return true
+        private func subscribeToRecentPeers(context: AccountContext) {
+            guard self.recentPeersDisposable == nil else {
+                return
             }
-
-            let normalizedQuery = query.lowercased()
-            if peer.compactDisplayTitle.lowercased().hasPrefix(normalizedQuery) {
-                return true
-            }
-            for nameComponent in peer.compactDisplayTitle.lowercased().components(
-                separatedBy: self.searchQueryComponentSeparationCharacterSet
-            ) {
-                if nameComponent.hasPrefix(normalizedQuery) {
-                    return true
+            self.recentPeersDisposable = (combineLatest(
+                context.engine.peers.recentPeers(),
+                context.engine.peers.recentlySearchedPeers()
+            )
+            |> deliverOnMainQueue).start(next: { [weak self] topPeers, recentlySearchedPeers in
+                guard let self else {
+                    return
                 }
-            }
+                self.hasLoadedRecentPeers = true
+                switch topPeers {
+                case .disabled:
+                    self.hasTopPeers = false
+                case let .peers(peers):
+                    self.hasTopPeers = peers.contains(where: {
+                        walletPeerSelectionIsEligiblePeer(EnginePeer($0), accountPeerId: context.account.peerId)
+                    })
+                }
 
-            let usernameQuery: String
-            if normalizedQuery.hasPrefix("@") {
-                usernameQuery = String(normalizedQuery.dropFirst())
-            } else {
-                usernameQuery = normalizedQuery
-            }
-            guard !usernameQuery.isEmpty else {
-                return false
-            }
-            if let addressName = peer.addressName,
-               addressName.lowercased().hasPrefix(usernameQuery) {
-                return true
-            }
-            return peer.usernames.contains(where: { username in
-                username.flags.contains(.isActive)
-                    && username.username.lowercased().hasPrefix(usernameQuery)
+                var peerIds = Set<EnginePeer.Id>()
+                self.recentlySearchedPeers = recentlySearchedPeers.compactMap { searchedPeer in
+                    guard let peer = searchedPeer.peer.chatMainPeer else {
+                        return nil
+                    }
+                    let enginePeer = EnginePeer(peer)
+                    guard walletPeerSelectionIsEligiblePeer(enginePeer, accountPeerId: context.account.peerId),
+                          peerIds.insert(enginePeer.id).inserted else {
+                        return nil
+                    }
+                    return PeerInfo(peer: enginePeer, presence: EnginePeer.Presence(searchedPeer.presence ?? TelegramUserPresence(status: .none, lastActivity: 0)))
+                }
+                if !self.isUpdating {
+                    self.state?.updated(transition: .easeInOut(duration: 0.2))
+                }
             })
+            self.updatedRecentPeersDisposable = context.engine.peers.managedUpdatedRecentPeers().start()
+        }
+
+        func clearRecentSearch(sourceNode: ASDisplayNode) {
+            guard let component = self.component, let controller = self.environment?.controller() else {
+                return
+            }
+            let presentationData = self.currentPresentationData(for: component).initial
+            let emptyAction: ((ContextMenuActionItem.Action) -> Void)? = nil
+            let items: [ContextMenuItem] = [
+                .action(ContextMenuActionItem(text: presentationData.strings.ChatList_ClearSearchHistory, textFont: .small, icon: { _ in nil }, action: emptyAction)),
+                .action(ContextMenuActionItem(text: presentationData.strings.ChatList_ClearSearchHistory_Confirm, textColor: .destructive, icon: { _ in nil }, action: { c, _ in
+                    let clear = {
+                        let _ = component.context.engine.peers.clearRecentlySearchedPeers().startStandalone()
+                    }
+                    if let c {
+                        c.dismiss(completion: clear)
+                    } else {
+                        clear()
+                    }
+                }))
+            ]
+            self.searchBarNode?.deactivate(clear: false)
+            controller.present(makeContextController(
+                presentationData: presentationData,
+                source: .reference(WalletPeerSelectionClearRecentSource(sourceNode: sourceNode)),
+                items: .single(ContextController.Items(content: .list(items))),
+                gesture: nil
+            ), in: .window(.root))
+        }
+
+        private func rememberSearchedPeerOnCompletion(_ peer: EnginePeer?) -> (() -> Void)? {
+            guard self.activeSearch != nil, let component = self.component, let peer else {
+                return nil
+            }
+            let context = component.context
+            return {
+                let _ = context.engine.peers.addRecentlySearchedPeer(peerId: peer.id).startStandalone()
+            }
         }
 
         func peerSelected(peer: EnginePeer) {
@@ -721,6 +916,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
             }
 
             self.contentListNode?.clearHighlightAnimated(true)
+            self.suggestionsListNode?.clearHighlightAnimated(true)
             if self.recipientPeer?.peer.id == peer.id {
                 self.openRecipient()
                 return
@@ -759,7 +955,8 @@ private final class WalletPeerSelectionScreenComponent: Component {
                         WalletContext.ResolvedTransferRecipient(
                             address: address,
                             displayName: peer.compactDisplayTitle
-                        )
+                        ),
+                        selectedPeer: peer
                     )
                 } else {
                     self.presentRecipientErrorAlert()
@@ -836,8 +1033,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
 
             self.hideNavigationButtons()
             self.activeSearch = ChatListNavigationBar.ActiveSearch(isExternal: false)
-            self.updateQuery(query)
-            self.state?.updated(transition: .spring(duration: 0.4))
+            self.updateQuery(query, transition: .spring(duration: 0.4))
         }
 
         @objc private func scanQrPressed() {
@@ -893,6 +1089,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
                 return
             }
 
+            let rememberSearchedPeer = self.rememberSearchedPeerOnCompletion(peer)
             self.searchBarNode?.deactivate(clear: false)
             let dismissSelectionScreen: () -> Void = { [weak controller] in
                 if let controller {
@@ -917,6 +1114,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
                     refreshBalanceOnOpen: false,
                     displaySuccessToast: address == nil,
                     completed: { [weak controller] in
+                        rememberSearchedPeer?()
                         let navigationController = controller?.navigationController as? NavigationController
                         dismissSelectionScreen()
                         if address != nil, let navigationController {
@@ -941,7 +1139,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
             controller.push(sendScreen)
         }
 
-        private func openRecipient(_ recipient: WalletContext.ResolvedTransferRecipient, peer: WalletPeerSelectionResolvedPeer? = nil) {
+        private func openRecipient(_ recipient: WalletContext.ResolvedTransferRecipient, peer: WalletPeerSelectionResolvedPeer? = nil, selectedPeer: EnginePeer? = nil) {
             guard let component = self.component,
                   let controller = self.environment?.controller(),
                   self.resolvingPeerId == nil else {
@@ -952,8 +1150,10 @@ private final class WalletPeerSelectionScreenComponent: Component {
             case .transfer:
                 self.openSendScreen(peer: peer?.peer, address: recipient.transferInput, resolvedAddress: peer?.address)
             case let .collectible(collectible):
+                let rememberSearchedPeer = self.rememberSearchedPeerOnCompletion(peer?.peer ?? selectedPeer)
                 self.searchBarNode?.deactivate(clear: false)
                 let dismissSourceScreens: () -> Void = { [weak controller] in
+                    rememberSearchedPeer?()
                     if let controller {
                         if let navigationController = controller.navigationController as? NavigationController {
                             var viewControllers = navigationController.viewControllers
@@ -1134,6 +1334,8 @@ private final class WalletPeerSelectionScreenComponent: Component {
             self.state = state
             self.hasSpaceForPasteButton = availableSize.width - environment.safeInsets.left - environment.safeInsets.right >= 390.0
 
+            self.subscribeToRecentPeers(context: component.context)
+
             transition.setFrame(view: self.navigationGlassContainer, frame: CGRect(origin: .zero, size: availableSize))
             self.navigationGlassContainer.update(size: availableSize, isDark: environment.theme.overallDarkAppearance, transition: transition)
 
@@ -1155,9 +1357,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
                             continue
                         }
                         let peer = EnginePeer.user(user)
-                        guard user.isGenericUser,
-                              !peer.isService,
-                              peer.id != component.context.account.peerId,
+                        guard walletPeerSelectionIsEligiblePeer(peer, accountPeerId: component.context.account.peerId),
                               peerIds.insert(peer.id).inserted else {
                             continue
                         }
@@ -1167,6 +1367,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
                     if !self.isUpdating {
                         self.state?.updated(transition: .immediate)
                     }
+                    self.environment?.controller()?.ready.set(.single(true))
                 })
             }
 
@@ -1184,7 +1385,8 @@ private final class WalletPeerSelectionScreenComponent: Component {
             let isModal = environment.controller()?.navigationPresentation == .modal
             var statusBarHeight = environment.statusBarHeight
             if isModal {
-                statusBarHeight = max(statusBarHeight, 1.0)
+                // ChatListNavigationBar adds 10 pt above the header buttons.
+                statusBarHeight = max(statusBarHeight, self.activeSearch == nil ? 6.0 : 1.0)
             }
 
             let navigationHeight = self.updateNavigationBar(
@@ -1318,14 +1520,9 @@ private final class WalletPeerSelectionScreenComponent: Component {
                         self.openRecipient()
                     }
                     self.searchBarNode = searchBarNode
-                    DispatchQueue.main.async { [weak self, weak searchBarNode] in
-                        guard let self, let searchBarNode, self.searchBarNode === searchBarNode else {
-                            return
-                        }
-                        searchBarNode.activate()
-                    }
                 }
 
+                searchBarNode.activity = self.isSearching
                 let searchBarFrame = CGRect(
                     origin: CGPoint(x: 0.0, y: environment.statusBarHeight + 16.0),
                     size: CGSize(width: availableSize.width, height: 54.0)
@@ -1337,13 +1534,18 @@ private final class WalletPeerSelectionScreenComponent: Component {
                 )
                 searchBarNode.updateLayout(
                     boundingSize: searchBarFrame.size,
-                    leftInset: environment.safeInsets.left + 6.0,
+                    leftInset: environment.safeInsets.left,
                     rightInset: environment.safeInsets.right,
                     transition: searchBarTransition.containedViewLayoutTransition
                 )
                 searchBarTransition.setFrame(view: searchBarNode.view, frame: searchBarFrame)
                 if searchBarNode.view.superview == nil {
                     self.navigationGlassContainer.contentView.addSubview(searchBarNode.view)
+                    // Prepare the editor before the transition, as in chat search.
+                    searchBarNode.layout()
+                    searchBarNode.activate()
+                    searchBarNode.text = self.query
+                    searchBarNode.view.layoutIfNeeded()
                     if case let .curve(duration, curve) = transition.animation,
                        let navigationBarView = self.navigationBarView.view as? ChatListNavigationBar.View,
                        let placeholderNode = navigationBarView.searchContentNode?.placeholderNode {
@@ -1360,9 +1562,6 @@ private final class WalletPeerSelectionScreenComponent: Component {
                         }
                         searchBarNode.animateIn(from: placeholderNode, duration: duration, timingFunction: timingFunction)
                     }
-                    if !self.query.isEmpty {
-                        searchBarNode.text = self.query
-                    }
                 }
             } else if let searchBarNode = self.searchBarNode {
                 searchBarNode.deactivate()
@@ -1376,6 +1575,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
             let contentSideInset = environment.safeInsets.left + 16.0
             let hasRecipient = self.recipient != nil
             let displaysAddressRecipient = hasRecipient && self.recipientPeer == nil
+            let resultVisibilityTransition = ComponentTransition.easeInOut(duration: 0.2)
             let sectionTitleFrame = CGRect(
                 x: contentSideInset,
                 y: navigationHeight + 18.0,
@@ -1383,7 +1583,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
                 height: 24.0
             )
             transition.setFrame(view: self.recipientSectionTitle, frame: sectionTitleFrame)
-            transition.setAlpha(view: self.recipientSectionTitle, alpha: hasRecipient ? 1.0 : 0.0)
+            resultVisibilityTransition.setAlpha(view: self.recipientSectionTitle, alpha: hasRecipient ? 1.0 : 0.0)
 
             let recipientFrame = CGRect(
                 x: environment.safeInsets.left,
@@ -1392,7 +1592,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
                 height: 56.0
             )
             transition.setFrame(view: self.recipientView, frame: recipientFrame)
-            transition.setAlpha(view: self.recipientView, alpha: displaysAddressRecipient ? 1.0 : 0.0)
+            resultVisibilityTransition.setAlpha(view: self.recipientView, alpha: displaysAddressRecipient ? 1.0 : 0.0)
             self.recipientView.isUserInteractionEnabled = displaysAddressRecipient
                 && self.resolvingPeerId == nil
             if displaysAddressRecipient, let recipient = self.recipient {
@@ -1433,6 +1633,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
                 }
                 self.insertSubview(contentListNode.view, at: 0)
             }
+            let listPresentationDataUpdated = contentListNode.presentationData != presentationData
             contentListNode.presentationData = presentationData
             transition.setFrame(
                 view: contentListNode.view,
@@ -1440,26 +1641,47 @@ private final class WalletPeerSelectionScreenComponent: Component {
             )
 
             var entries: [ContentEntry] = []
+            var peerIds = Set<EnginePeer.Id>()
             if let recipientPeer = self.recipientPeer?.peer {
+                peerIds.insert(recipientPeer.id)
                 entries.append(.peer(
                     peer: recipientPeer,
                     presence: self.peers?.first(where: { $0.peer.id == recipientPeer.id })?.presence,
                     sortIndex: entries.count
                 ))
             }
-            if let peers = self.peers {
-                for peerInfo in peers {
-                    if peerInfo.peer.id == self.recipientPeer?.peer.id {
-                        continue
+            func appendPeer(_ peerInfo: PeerInfo, section: PeerSection) {
+                guard peerIds.insert(peerInfo.peer.id).inserted else {
+                    return
+                }
+                entries.append(.peer(
+                    peer: peerInfo.peer,
+                    presence: peerInfo.presence,
+                    sortIndex: entries.count,
+                    section: section,
+                    query: section == .global ? self.query : nil
+                ))
+            }
+            if self.query.isEmpty {
+                for peerInfo in self.peers ?? [] {
+                    appendPeer(peerInfo, section: .none)
+                }
+            } else {
+                if let localSearchQuery = self.localSearchQuery {
+                    for peerInfo in self.recentlySearchedPeers {
+                        if peerInfo.peer._asPeer().indexName.matchesByTokens(localSearchQuery) {
+                            appendPeer(peerInfo, section: .local)
+                        }
                     }
-                    if !self.peerMatchesQuery(peerInfo.peer, query: self.query) {
-                        continue
-                    }
-                    entries.append(.peer(
-                        peer: peerInfo.peer,
-                        presence: peerInfo.presence,
-                        sortIndex: entries.count
-                    ))
+                }
+                for peerInfo in self.localSearchPeers {
+                    appendPeer(peerInfo, section: .local)
+                }
+                for peer in self.remoteLocalSearchPeers {
+                    appendPeer(PeerInfo(peer: peer, presence: nil), section: .local)
+                }
+                for peer in self.globalSearchPeers {
+                    appendPeer(PeerInfo(peer: peer, presence: nil), section: .global)
                 }
             }
 
@@ -1490,42 +1712,100 @@ private final class WalletPeerSelectionScreenComponent: Component {
                 ),
                 transition: transition
             )
-            contentListNode.setEntries(entries, animated: !transition.animation.isImmediate, allUpdated: themeUpdated)
+            contentListNode.setEntries(entries, allUpdated: listPresentationDataUpdated)
+
+            let displaysSuggestions = self.activeSearch != nil && self.query.isEmpty
+            let suggestionsVisibilityTransition: ComponentTransition = transition.animation.isImmediate ? .immediate : .easeInOut(duration: 0.2)
+            let displaysContent = !displaysSuggestions && (self.query.isEmpty || !entries.isEmpty)
+            contentListNode.view.isUserInteractionEnabled = displaysContent
+            contentListNode.view.accessibilityElementsHidden = !displaysContent
+            let contentVisibilityTransition = self.activeSearch != nil ? resultVisibilityTransition : suggestionsVisibilityTransition
+            contentVisibilityTransition.setAlpha(view: contentListNode.view, alpha: displaysContent ? 1.0 : 0.0)
+            let suggestionsListNode: ContentListNode
+            let needsInitialSuggestionsLayout = self.suggestionsListNode == nil
+            let suggestionsLayoutTransition: ComponentTransition = displaysSuggestions && self.suggestionsListNode?.view.alpha == 1.0 ? transition : .immediate
+            if let current = self.suggestionsListNode {
+                suggestionsListNode = current
+            } else {
+                suggestionsListNode = ContentListNode(parentView: self, context: component.context, presentationData: presentationData)
+                self.suggestionsListNode = suggestionsListNode
+                suggestionsListNode.view.alpha = 0.0
+                self.insertSubview(suggestionsListNode.view, aboveSubview: contentListNode.view)
+            }
+            let suggestionsPresentationDataUpdated = suggestionsListNode.presentationData != presentationData
+            suggestionsListNode.presentationData = presentationData
+            suggestionsListNode.backgroundColor = environment.theme.list.modalPlainBackgroundColor
+            if displaysSuggestions || needsInitialSuggestionsLayout {
+                suggestionsLayoutTransition.setFrame(view: suggestionsListNode.view, frame: CGRect(origin: .zero, size: availableSize))
+                suggestionsListNode.update(
+                    size: availableSize,
+                    insets: UIEdgeInsets(top: navigationHeight, left: environment.safeInsets.left, bottom: listBottomInset, right: environment.safeInsets.right),
+                    transition: suggestionsLayoutTransition
+                )
+            }
+            var suggestions: [ContentEntry] = []
+            if self.hasTopPeers {
+                suggestions.append(.topPeers)
+            }
+            for peerInfo in self.recentlySearchedPeers {
+                suggestions.append(.peer(peer: peerInfo.peer, presence: peerInfo.presence, sortIndex: suggestions.count, section: .recent))
+            }
+            suggestionsListNode.setEntries(suggestions, allUpdated: suggestionsPresentationDataUpdated)
+            suggestionsListNode.view.isUserInteractionEnabled = displaysSuggestions
+            suggestionsListNode.view.accessibilityElementsHidden = !displaysSuggestions
+            suggestionsVisibilityTransition.setAlpha(view: suggestionsListNode.view, alpha: displaysSuggestions ? 1.0 : 0.0)
 
             let displayNoResultsQuery: String?
-            if self.peers != nil, entries.isEmpty, self.recipient == nil {
-                displayNoResultsQuery = self.noResultsQuery
+            if !self.query.isEmpty, !self.isSearching, entries.isEmpty, self.recipient == nil {
+                displayNoResultsQuery = self.query
             } else {
                 displayNoResultsQuery = nil
             }
-            self.displaysNoResults = displayNoResultsQuery != nil
+            let displaysEmptyRecentPeers = displaysSuggestions && self.hasLoadedRecentPeers && self.recentlySearchedPeers.isEmpty
+            let emptyResultsText: String?
+            if displaysEmptyRecentPeers {
+                emptyResultsText = environment.strings.Wallet_Recipient_NoRecentRecipients
+            } else if let noResultsQuery = displayNoResultsQuery {
+                emptyResultsText = walletPeerSelectionIsAddressQuery(noResultsQuery)
+                    ? environment.strings.Wallet_Recipient_InvalidAddressText
+                    : environment.strings.Wallet_Recipient_NoResultsText(noResultsQuery).string
+            } else {
+                emptyResultsText = nil
+            }
+            self.displaysEmptyResults = emptyResultsText != nil
 
             let emptyResultsFadeTransition = ComponentTransition.easeInOut(duration: 0.25)
-            if let noResultsQuery = displayNoResultsQuery {
+            if let emptyResultsText {
                 let sideInset: CGFloat = 44.0
-                let animationHeight: CGFloat = 148.0
+                let animationHeight: CGFloat = displaysEmptyRecentPeers ? 120.0 : 148.0
                 let animationSpacing: CGFloat = 8.0
-                let textSpacing: CGFloat = 8.0
+                let textSpacing: CGFloat = displaysEmptyRecentPeers ? 0.0 : 8.0
 
-                let emptyResultsTitleSize = self.emptyResultsTitle.update(
-                    transition: .immediate,
-                    component: AnyComponent(MultilineTextComponent(
-                        text: .plain(NSAttributedString(
-                            string: environment.strings.Wallet_Recipient_NoResults,
-                            font: Font.semibold(17.0),
-                            textColor: environment.theme.list.itemSecondaryTextColor
+                let emptyResultsTitleSize: CGSize
+                if displaysEmptyRecentPeers {
+                    emptyResultsTitleSize = .zero
+                    self.emptyResultsTitle.view?.removeFromSuperview()
+                } else {
+                    emptyResultsTitleSize = self.emptyResultsTitle.update(
+                        transition: .immediate,
+                        component: AnyComponent(MultilineTextComponent(
+                            text: .plain(NSAttributedString(
+                                string: environment.strings.Wallet_Recipient_NoResults,
+                                font: Font.semibold(17.0),
+                                textColor: environment.theme.list.itemSecondaryTextColor
+                            )),
+                            horizontalAlignment: .center
                         )),
-                        horizontalAlignment: .center
-                    )),
-                    environment: {},
-                    containerSize: availableSize
-                )
+                        environment: {},
+                        containerSize: availableSize
+                    )
+                }
 
                 let emptyResultsTextSize = self.emptyResultsText.update(
                     transition: .immediate,
                     component: AnyComponent(MultilineTextComponent(
                         text: .plain(NSAttributedString(
-                            string: environment.strings.Wallet_Recipient_NoResultsText(noResultsQuery).string,
+                            string: emptyResultsText,
                             font: Font.regular(15.0),
                             textColor: environment.theme.list.itemSecondaryTextColor
                         )),
@@ -1542,14 +1822,17 @@ private final class WalletPeerSelectionScreenComponent: Component {
                 let emptyResultsAnimationSize = self.emptyResultsAnimation.update(
                     transition: .immediate,
                     component: AnyComponent(LottieComponent(
-                        content: LottieComponent.AppBundleContent(name: "ChatListNoResults"),
+                        content: LottieComponent.AppBundleContent(name: displaysEmptyRecentPeers ? "Loupe" : "ChatListNoResults"),
+                        startingPosition: .begin,
                         lottieSettings: component.context.lottieRenderingSettings
                     )),
                     environment: {},
                     containerSize: CGSize(width: animationHeight, height: animationHeight)
                 )
 
-                let topInset = environment.safeInsets.top
+                let topInset = displaysEmptyRecentPeers
+                    ? navigationHeight
+                    : environment.safeInsets.top
                 let bottomInset = max(environment.safeInsets.bottom, environment.inputHeight)
                 let emptyResultsHeight = animationHeight
                     + animationSpacing
@@ -1585,10 +1868,11 @@ private final class WalletPeerSelectionScreenComponent: Component {
                         view.playOnce()
                     }
                     emptyResultsFadeTransition.setAlpha(view: view, alpha: 1.0)
+                    view.transform = displaysEmptyRecentPeers ? CGAffineTransform(scaleX: -1.0, y: 1.0) : .identity
                     view.bounds = CGRect(origin: .zero, size: emptyResultsAnimationFrame.size)
                     ComponentTransition.immediate.setPosition(view: view, position: emptyResultsAnimationFrame.center)
                 }
-                if let view = self.emptyResultsTitle.view {
+                if !displaysEmptyRecentPeers, let view = self.emptyResultsTitle.view {
                     if view.superview == nil {
                         view.alpha = 0.0
                         self.addSubview(view)
@@ -1609,7 +1893,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
             } else {
                 if let view = self.emptyResultsAnimation.view {
                     emptyResultsFadeTransition.setAlpha(view: view, alpha: 0.0, completion: { [weak self, weak view] _ in
-                        guard self?.displaysNoResults == false else {
+                        guard self?.displaysEmptyResults == false else {
                             return
                         }
                         view?.removeFromSuperview()
@@ -1617,7 +1901,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
                 }
                 if let view = self.emptyResultsTitle.view {
                     emptyResultsFadeTransition.setAlpha(view: view, alpha: 0.0, completion: { [weak self, weak view] _ in
-                        guard self?.displaysNoResults == false else {
+                        guard self?.displaysEmptyResults == false else {
                             return
                         }
                         view?.removeFromSuperview()
@@ -1625,7 +1909,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
                 }
                 if let view = self.emptyResultsText.view {
                     emptyResultsFadeTransition.setAlpha(view: view, alpha: 0.0, completion: { [weak self, weak view] _ in
-                        guard self?.displaysNoResults == false else {
+                        guard self?.displaysEmptyResults == false else {
                             return
                         }
                         view?.removeFromSuperview()
@@ -1670,6 +1954,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
             )
             if let buttonView = self.continueButton.view {
                 if buttonView.superview == nil {
+                    buttonView.alpha = 0.0
                     self.addSubview(buttonView)
                 }
                 transition.setFrame(
@@ -1681,7 +1966,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
                         height: buttonSize.height
                     )
                 )
-                transition.setAlpha(view: buttonView, alpha: hasRecipient ? 1.0 : 0.0)
+                resultVisibilityTransition.setAlpha(view: buttonView, alpha: hasRecipient ? 1.0 : 0.0)
                 buttonView.isUserInteractionEnabled = hasRecipient
                     && self.resolvingPeerId == nil
             }
@@ -1762,6 +2047,7 @@ public final class WalletPeerSelectionScreen: ViewControllerComponentContainer {
             theme: .default,
             updatedPresentationData: updatedPresentationData
         )
+        self.ready.set(.never())
         self.navigationItem.leftBarButtonItem = UIBarButtonItem(customView: UIView())
     }
 

@@ -256,12 +256,13 @@ enum WalletStreamingParsedEvent: Sendable, Equatable {
     case subscribed
     case disconnected
     case pong
-    case accountStateChanged(balance: Int64, finality: WalletStreamingFinality)
+    case accountStateChanged(balance: Int64, finality: WalletStreamingFinality, stateHash: String? = nil)
     case transactionsChanged(
         traceId: String,
         finality: WalletStreamingFinality,
         transactions: [WalletContext.Transaction],
-        evidence: [WalletStreamingTransferEvidence] = []
+        evidence: [WalletStreamingTransferEvidence] = [],
+        balanceEvidence: [WalletStreamingBalanceEvidence] = []
     )
     case traceInvalidated(traceId: String)
 }
@@ -289,8 +290,8 @@ enum WalletStreamingDemand {
             && (walletScreenCount > 0 || hasPendingTransfer)
     }
 
-    static func needsPolling(connection: WalletStreamingConnectionState, hasPendingTransfer: Bool) -> Bool {
-        connection != .subscribed || hasPendingTransfer
+    static func needsPolling(connection: WalletStreamingConnectionState, hasPendingTransfer: Bool, hasUnreconciledBalance: Bool = false) -> Bool {
+        connection != .subscribed || hasPendingTransfer || hasUnreconciledBalance
     }
 
     static func acceptsEvent(
@@ -334,12 +335,12 @@ struct WalletStreamingRefreshTracker {
 
     mutating func requiresRefresh(_ event: WalletStreamingParsedEvent, knownTrace: Bool = false) -> Bool {
         switch event {
-        case let .accountStateChanged(balance, finality):
+        case let .accountStateChanged(balance, finality, _):
             guard finality == .finalized, balance != self.finalizedBalance else { return false }
             self.finalizedBalance = balance
             self.remainingRetryCount = 2
             return true
-        case let .transactionsChanged(traceId, finality, _, _):
+        case let .transactionsChanged(traceId, finality, _, _, _):
             guard finality == .finalized, self.finalizedTraceIds.insert(traceId).inserted else { return false }
             self.invalidatedTraceIds.remove(traceId)
             self.remember(traceId)
@@ -425,6 +426,7 @@ enum WalletStreamingEventParser {
 
     private struct AccountState: Decodable {
         let balance: String
+        let hash: String?
     }
 
     private struct StreamingMessage: Decodable {
@@ -473,7 +475,12 @@ enum WalletStreamingEventParser {
 
     private struct TransactionsHeader: Decodable {
         struct Transaction: Decodable {
+            struct AccountState: Decodable { let hash: String? }
             let account: String
+            let hash: String?
+            let lt: String?
+            let emulated: Bool?
+            let account_state_after: AccountState?
         }
 
         let finality: String
@@ -528,7 +535,8 @@ enum WalletStreamingEventParser {
                 log?("reason=invalid_balance")
                 return nil
             }
-            return .accountStateChanged(balance: balance, finality: finality)
+            return .accountStateChanged(balance: balance, finality: finality,
+                stateHash: walletStreamingHash(value.state.hash)?.base64EncodedString())
         case "transactions":
             guard let header = self.decode(TransactionsHeader.self, from: data, decoder: decoder, log: log) else {
                 return nil
@@ -549,6 +557,15 @@ enum WalletStreamingEventParser {
             // cannot be represented by the lightweight streaming transaction model.
             let value = self.decode(TransactionsChange.self, from: data, decoder: decoder, log: log)
             let matchingTransactions = value?.transactions.filter { $0.account.lowercased() == expected } ?? []
+            // Balance evidence must survive unsupported transaction presentation (e.g. key changes).
+            let balanceEvidence = header.transactions.compactMap { value -> WalletStreamingBalanceEvidence? in
+                guard finality != .pending, value.account.lowercased() == expected, value.emulated != true,
+                      let stateHash = walletStreamingHash(value.account_state_after?.hash),
+                      let transactionHash = walletStreamingHash(value.hash),
+                      let lt = value.lt, let logicalTime = UInt64(lt), logicalTime > 0 else { return nil }
+                return WalletStreamingBalanceEvidence(stateHash: stateHash.base64EncodedString(),
+                    transactionHash: transactionHash.base64EncodedString(), logicalTime: logicalTime)
+            }
             var transactions: [WalletContext.Transaction] = []
             var evidence: [WalletStreamingTransferEvidence] = []
             for value in matchingTransactions {
@@ -573,7 +590,8 @@ enum WalletStreamingEventParser {
                 traceId: header.traceExternalHashNorm,
                 finality: finality,
                 transactions: transactions,
-                evidence: evidence
+                evidence: evidence,
+                balanceEvidence: balanceEvidence
             )
         case "trace_invalidated":
             guard let value = self.decode(TraceInvalidated.self, from: data, decoder: decoder, log: log) else {
@@ -705,10 +723,7 @@ enum WalletStreamingEventParser {
         } else {
             status = .completed
         }
-        let peerAddress = (try? convertTonAddress(
-            value: candidate.address,
-            format: .userFriendly(bounceable: false, testnet: false)
-        )) ?? candidate.address
+        let peerAddress = WalletContext.transferAddress(from: candidate.address, preserveBounce: true) ?? candidate.address
         return WalletContext.Transaction(
             id: "\(value.lt):\(value.hash):\(candidate.direction == .incoming ? "in" : "out")",
             transactionHash: value.hash,
@@ -733,11 +748,32 @@ enum WalletStreamingEventParser {
 }
 
 @available(macOS 10.15, *)
+struct WalletStreamingBalanceEvidence: Sendable, Equatable {
+    let stateHash: String
+    let transactionHash: String
+    let logicalTime: UInt64
+}
+
+@available(macOS 10.15, *)
 struct WalletStreamingPresentationOverlay {
+    private struct BalanceTransaction {
+        let transactionHash: String
+        let logicalTime: UInt64
+    }
+
     private struct BalanceValue {
         let revision: UInt64
         let value: Int64
         let updatedAt: Int32
+        let stateHash: String?
+        let finality: WalletStreamingFinality
+        var transaction: BalanceTransaction?
+    }
+
+    private struct BalanceEvidenceValue {
+        let traceId: String
+        let finality: WalletStreamingFinality
+        let evidence: WalletStreamingBalanceEvidence
     }
 
     private struct TraceValue {
@@ -748,7 +784,12 @@ struct WalletStreamingPresentationOverlay {
 
     private(set) var revision: UInt64 = 0
     private var balance: BalanceValue?
+    private var balanceEvidence: [String: BalanceEvidenceValue] = [:]
+    private var balanceEvidenceOrder: [String] = []
+    private var reconciledBalanceLogicalTime: UInt64 = 0
     private var traces: [String: TraceValue] = [:]
+
+    var hasUnreconciledBalance: Bool { self.balance != nil }
 
     var isEmpty: Bool {
         self.balance == nil && self.traces.isEmpty
@@ -758,11 +799,28 @@ struct WalletStreamingPresentationOverlay {
         switch event {
         case .connecting, .subscribed, .disconnected, .pong:
             return false
-        case let .accountStateChanged(balance, _):
+        case let .accountStateChanged(balance, finality, stateHash):
+            let transaction = stateHash.flatMap { self.balanceEvidence[$0]?.evidence }.map {
+                BalanceTransaction(transactionHash: $0.transactionHash, logicalTime: $0.logicalTime)
+            }
+            if let transaction, transaction.logicalTime <= self.reconciledBalanceLogicalTime {
+                return false
+            }
+            if let current = self.balance {
+                if let transaction, let currentTransaction = current.transaction,
+                   transaction.logicalTime < currentTransaction.logicalTime {
+                    return false
+                }
+                if let stateHash, stateHash == current.stateHash, finality.rawValue < current.finality.rawValue {
+                    return false
+                }
+            }
             self.revision &+= 1
-            self.balance = BalanceValue(revision: self.revision, value: balance, updatedAt: updatedAt)
+            self.balance = BalanceValue(revision: self.revision, value: balance, updatedAt: updatedAt,
+                stateHash: stateHash, finality: finality, transaction: transaction)
             return true
-        case let .transactionsChanged(traceId, finality, transactions, _):
+        case let .transactionsChanged(traceId, finality, transactions, _, balanceEvidence):
+            self.rememberBalanceTransactions(balanceEvidence, traceId: traceId, finality: finality)
             if let current = self.traces[traceId], current.finality.rawValue > finality.rawValue {
                 return false
             }
@@ -778,8 +836,21 @@ struct WalletStreamingPresentationOverlay {
                 return true
             }
         case let .traceInvalidated(traceId):
+            let invalidatedHashes = Set(self.balanceEvidence.compactMap { hash, value in
+                value.traceId == traceId && value.finality != .finalized ? hash : nil
+            })
+            self.balanceEvidence = self.balanceEvidence.filter { !invalidatedHashes.contains($0.key) }
+            self.balanceEvidenceOrder.removeAll(where: invalidatedHashes.contains)
+            var balanceChanged = false
+            if let balance = self.balance, let stateHash = balance.stateHash,
+               balance.finality != .finalized, invalidatedHashes.contains(stateHash) {
+                // An explicitly invalidated confirmed state is no longer a balance to protect.
+                self.balance = nil
+                balanceChanged = true
+            }
             self.revision &+= 1
-            return self.traces.removeValue(forKey: traceId) != nil
+            let traceChanged = self.traces.removeValue(forKey: traceId) != nil
+            return balanceChanged || traceChanged
         }
     }
 
@@ -787,12 +858,84 @@ struct WalletStreamingPresentationOverlay {
         self.traces.values.contains(where: { $0.finality == .finalized })
     }
 
-    mutating func clearBalance(through revision: UInt64) -> Bool {
-        guard let balance = self.balance, balance.revision <= revision else {
+    mutating func rememberBalanceTransactions(_ evidence: [WalletStreamingBalanceEvidence], traceId: String, finality: WalletStreamingFinality) {
+        guard finality != .pending else { return }
+        for value in evidence {
+            if let current = self.balanceEvidence[value.stateHash], current.finality.rawValue > finality.rawValue {
+                continue
+            }
+            self.balanceEvidence[value.stateHash] = BalanceEvidenceValue(traceId: traceId, finality: finality, evidence: value)
+            self.balanceEvidenceOrder.removeAll(where: { $0 == value.stateHash })
+            self.balanceEvidenceOrder.append(value.stateHash)
+            if self.balance?.stateHash == value.stateHash {
+                self.balance?.transaction = BalanceTransaction(transactionHash: value.transactionHash, logicalTime: value.logicalTime)
+            }
+        }
+        while self.balanceEvidenceOrder.count > 256 {
+            self.balanceEvidence.removeValue(forKey: self.balanceEvidenceOrder.removeFirst())
+        }
+    }
+
+    mutating func reconcileBalance(_ serverBalance: Int64, through revision: UInt64, log: ((String) -> Void)? = nil) -> Bool {
+        guard let balance = self.balance else { return false }
+        guard balance.revision <= revision else {
+            self.logBalanceReconciliation(source: "state", revision: revision, accepted: false, reason: "newer_balance", log: log)
             return false
+        }
+        guard balance.value == serverBalance else {
+            self.logBalanceReconciliation(source: "state", revision: revision, accepted: false, reason: "balance_mismatch", log: log)
+            return false
+        }
+        self.logBalanceReconciliation(source: "state", revision: revision, accepted: true, reason: "balance_matched", log: log)
+        if let transaction = balance.transaction {
+            self.reconciledBalanceLogicalTime = max(self.reconciledBalanceLogicalTime, transaction.logicalTime)
         }
         self.balance = nil
         return true
+    }
+
+    mutating func reconcileBalanceWithHistory(_ serverBalance: Int64, transactions: [WalletContext.Transaction], through revision: UInt64,
+        updatedAt: Int32, log: ((String) -> Void)? = nil) -> Bool {
+        guard let balance = self.balance else { return false }
+        guard balance.revision <= revision else {
+            self.logBalanceReconciliation(source: "history", revision: revision, accepted: false, reason: "newer_balance", log: log)
+            return false
+        }
+        // Only the raw response can prove that its balance includes this account state.
+        // Merged/cached history can contain the transaction even while the server is behind.
+        let confirmedTransactions: [(hash: String, lt: UInt64)] = transactions.compactMap { transaction in
+            guard transaction.status == .completed || transaction.status == .failed,
+                  let hash = walletStreamingHash(transaction.transactionHash),
+                  let lt = UInt64(transaction.logicalTime), lt > 0 else { return nil }
+            return (hash.base64EncodedString(), lt)
+        }
+        guard let anchor = balance.transaction,
+              confirmedTransactions.contains(where: { $0.hash == anchor.transactionHash && $0.lt == anchor.logicalTime }),
+              var latest = confirmedTransactions.max(by: { $0.lt < $1.lt }) else {
+            self.logBalanceReconciliation(source: "history", revision: revision, accepted: false, reason: "transaction_missing", log: log)
+            return false
+        }
+        guard latest.lt > anchor.logicalTime || serverBalance == balance.value else {
+            self.logBalanceReconciliation(source: "history", revision: revision, accepted: false, reason: "balance_mismatch", log: log)
+            return false
+        }
+        if latest.lt == anchor.logicalTime {
+            latest = (anchor.transactionHash, anchor.logicalTime)
+        }
+        self.logBalanceReconciliation(source: "history", revision: revision, accepted: true, reason: "transaction_matched", log: log)
+        self.reconciledBalanceLogicalTime = max(self.reconciledBalanceLogicalTime, latest.lt)
+        guard serverBalance != balance.value || latest.hash != anchor.transactionHash || latest.lt != anchor.logicalTime else { return false }
+        self.revision &+= 1
+        // Keep protecting the history balance until getState catches up too. Otherwise a
+        // concurrently running account refresh could immediately undo this reconciliation.
+        self.balance = BalanceValue(revision: self.revision, value: serverBalance, updatedAt: updatedAt,
+            stateHash: nil, finality: balance.finality,
+            transaction: BalanceTransaction(transactionHash: latest.hash, logicalTime: latest.lt))
+        return true
+    }
+
+    private func logBalanceReconciliation(source: String, revision: UInt64, accepted: Bool, reason: String, log: ((String) -> Void)?) {
+        log?("event=wallet_balance_reconciled source=\(source) request_revision=\(revision) balance_revision=\(self.balance?.revision ?? 0) accepted=\(accepted ? 1 : 0) reason=\(reason)")
     }
 
     mutating func clearTransactions(
@@ -853,12 +996,13 @@ struct WalletStreamingPresentationOverlay {
     }
 
     mutating func removeAll() -> Bool {
-        guard !self.isEmpty else {
-            return false
-        }
+        let changed = !self.isEmpty
         self.balance = nil
+        self.balanceEvidence.removeAll()
+        self.balanceEvidenceOrder.removeAll()
+        self.reconciledBalanceLogicalTime = 0
         self.traces.removeAll()
-        return true
+        return changed
     }
 
     private func transactionsWithPendingDetails(
@@ -1494,7 +1638,7 @@ extension WalletContextImpl {
                 self.streamingConnectionState = .disconnected
             case .pong:
                 break
-            case .accountStateChanged:
+            case let .accountStateChanged(_, finality, _):
                 let changed = self.streamingPresentationOverlay.apply(
                     event,
                     updatedAt: currentWalletTimestamp()
@@ -1502,10 +1646,11 @@ extension WalletContextImpl {
                 if changed {
                     self.publishPresentationState()
                 }
+                self.logger.log("event=wallet_balance_stream source=stream revision=\(self.streamingPresentationOverlay.revision) finality=\(finality.diagnosticName) accepted=\(changed ? 1 : 0) reason=\(changed ? "state_updated" : "obsolete_state")")
                 if self.streamingRefreshTracker.requiresRefresh(event) {
                     self.scheduleStreamingRefresh(generation: generation, rawAddress: rawAddress)
                 }
-            case let .transactionsChanged(traceId, finality, transactions, evidence):
+            case let .transactionsChanged(traceId, finality, transactions, evidence, balanceEvidence):
                 if finality == .pending,
                    self.expiredPendingStreamingTraceIds.contains(traceId) {
                     continue
@@ -1514,6 +1659,7 @@ extension WalletContextImpl {
                     traceId: traceId, finality: finality, evidence: evidence, walletAddress: rawAddress
                 )
                 if self.streamingRefreshTracker.hasFinalizedTrace(traceId) {
+                    self.streamingPresentationOverlay.rememberBalanceTransactions(balanceEvidence, traceId: traceId, finality: finality)
                     let changed = pending != self.currentState.pendingTransfers
                         && self.streamingPresentationOverlay.apply(event, updatedAt: currentWalletTimestamp())
                     self.applyStreamingPendingTransfers(pending, overlayChanged: changed)
@@ -1526,7 +1672,7 @@ extension WalletContextImpl {
                     $0.direction != .incoming || $0.amount >= self.transferMinAmount
                 }
                 let changed = self.streamingPresentationOverlay.apply(
-                    .transactionsChanged(traceId: traceId, finality: finality, transactions: filteredTransactions),
+                    .transactionsChanged(traceId: traceId, finality: finality, transactions: filteredTransactions, balanceEvidence: balanceEvidence),
                     updatedAt: currentWalletTimestamp()
                 )
                 self.applyStreamingPendingTransfers(pending, overlayChanged: changed)

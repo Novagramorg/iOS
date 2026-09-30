@@ -706,7 +706,6 @@ private final class WalletSendScreenComponent: Component {
             let isScheduled = self.pendingUpdateTransition != nil
             self.pendingUpdateTransition = transition
             guard !isScheduled else { return }
-            // deliverOnMainQueue can run inline. The host must finish its update first.
             DispatchQueue.main.async { [weak self] in
                 guard let self, let transition = self.pendingUpdateTransition else { return }
                 self.pendingUpdateTransition = nil
@@ -814,7 +813,7 @@ private final class WalletSendScreenComponent: Component {
                 return
             }
             if let recipient = self.peerAddressResolution.recipient {
-                self.updateRecipient(address: recipient.address, publicKey: recipient.publicKey)
+                self.applyResolvedRecipient(recipient)
                 component.walletContext.rememberWalletPeer(peer, address: recipient.address)
             } else {
                 self.updateRecipient(address: "", publicKey: nil)
@@ -983,6 +982,14 @@ private final class WalletSendScreenComponent: Component {
             }
         }
 
+        private func applyResolvedRecipient(_ recipient: WalletUserAddress) {
+            let address = WalletContext.transferRecipient(from: self.component?.initialAddress ?? "")?.address ?? recipient.address
+            let accountAddress = WalletContext.transferAddress(from: address)
+            let publicKey = accountAddress != nil && accountAddress == WalletContext.transferAddress(from: recipient.address)
+                ? recipient.publicKey : nil
+            self.updateRecipient(address: address, publicKey: publicKey)
+        }
+
         private func applyRecipient(_ value: String) {
             let previousRequest = self.currentFeeRequest
             var address = value.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1002,7 +1009,7 @@ private final class WalletSendScreenComponent: Component {
                 }
             }
             if let resolvedAddress = self.component?.resolvedAddress {
-                self.updateRecipient(address: resolvedAddress.address, publicKey: resolvedAddress.publicKey)
+                self.applyResolvedRecipient(resolvedAddress)
             } else {
                 self.updateRecipient(address: address, publicKey: nil)
             }
@@ -2518,7 +2525,6 @@ private final class WalletSendScreenComponent: Component {
             }
             let feeTextSize: CGSize
             if !showFees, let feeTextView = self.feeText.view {
-                // Keep the value and title together while the row fades out.
                 feeTextSize = feeTextView.bounds.size
             } else {
                 feeTextSize = self.feeText.update(
