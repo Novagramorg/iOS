@@ -31,6 +31,7 @@ import DirectMediaImageCache
 import WalletContext
 import WalletConnectScreen
 import AlertUI
+import MetalEngine
 
 private final class DeviceSpecificContactImportContext {
     let disposable = MetaDisposable()
@@ -437,6 +438,10 @@ public final class AccountContextImpl: AccountContext {
                 appConfiguration: value,
                 experimentalSettings: lottieSharedContext.immediateExperimentalUISettings
             ))
+            
+            // Switches off the on-disk archive of compiled Metal pipelines (now, and on later launches until the key
+            // is removed); pipelines are then compiled on first use as before.
+            MetalEngine.shared.pipelineCache.setArchiveDisabled(value.data?["ios_killswitch_disable_metal_pipeline_cache"] != nil)
             
             guard let data = appConfiguration.data else {
                 return

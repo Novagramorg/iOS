@@ -33,7 +33,7 @@ private final class WalletSendAmountMetal {
               let layerVertex = library.makeFunction(name: "walletAmountLayerVertex"),
               let fragment = library.makeFunction(name: "walletAmountFragment"),
               let blurFunction = library.makeFunction(name: "walletAmountBlur"),
-              let blur = try? device.makeComputePipelineState(function: blurFunction) else { return nil }
+              let blur = MetalEngine.shared.pipelineCache.makeComputePipelineState(function: blurFunction) else { return nil }
         func pipeline(_ format: MTLPixelFormat) -> MTLRenderPipelineState? {
             let descriptor = MTLRenderPipelineDescriptor()
             descriptor.vertexFunction = format == .r16Float ? vertex : layerVertex
@@ -45,7 +45,7 @@ private final class WalletSendAmountMetal {
             attachment.sourceAlphaBlendFactor = .one
             attachment.destinationRGBBlendFactor = .oneMinusSourceAlpha
             attachment.destinationAlphaBlendFactor = .oneMinusSourceAlpha
-            return try? device.makeRenderPipelineState(descriptor: descriptor)
+            return MetalEngine.shared.pipelineCache.makeRenderPipelineState(descriptor: descriptor)
         }
         guard let paint = pipeline(.bgra8Unorm), let maskPaint = pipeline(.r16Float) else { return nil }
         self.device = device
