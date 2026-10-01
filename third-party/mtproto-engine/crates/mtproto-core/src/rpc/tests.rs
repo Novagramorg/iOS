@@ -3,7 +3,7 @@ use crate::auth_key::AuthKey;
 use crate::crypto::XorShiftRandom;
 use crate::session::SessionConfig;
 use crate::test_support::server_peer::*;
-use crate::tl::{ids, Reader, Writer};
+use crate::tl::{Reader, Writer, ids};
 
 const START: f64 = 1_727_000_000.0;
 const CALL: u32 = 0x5566_7788;
@@ -84,15 +84,10 @@ impl Harness {
     fn new(role: SessionRole, stored_hash: Option<&str>) -> Self {
         let mut rng = XorShiftRandom::new(9);
         let now = Now { mono: 10.0, unix: START };
-        let salts = [ServerSalt {
-            salt: 5,
-            valid_since: START - 10.0,
-            valid_until: START + 100_000.0,
-        }, ServerSalt {
-            salt: 6,
-            valid_since: START + 100_000.0,
-            valid_until: START + 200_000.0,
-        }];
+        let salts = [
+            ServerSalt { salt: 5, valid_since: START - 10.0, valid_until: START + 100_000.0 },
+            ServerSalt { salt: 6, valid_since: START + 100_000.0, valid_until: START + 200_000.0 },
+        ];
         let mut session = Session::new(SessionConfig::default(), key(), &salts, 0.0, now, &mut rng);
         session.connection_opened(now);
         let client = RpcClient::new(session, role, Some(environment("h1")), stored_hash.map(str::to_string));
@@ -108,15 +103,8 @@ impl Harness {
     }
 
     fn send(&mut self, tag: u32, flags: RequestFlags) {
-        self.client.send(
-            RpcRequest {
-                id: RequestId(tag as u64),
-                body: call(tag),
-                flags,
-                invoke_after: None,
-            },
-            self.now,
-        );
+        self.client
+            .send(RpcRequest { id: RequestId(tag as u64), body: call(tag), flags, invoke_after: None }, self.now);
     }
 
     fn flush_calls(&mut self) -> Vec<(i64, Vec<u32>, u32)> {
@@ -180,12 +168,7 @@ fn stored_hash_skips_initialization_and_change_reinitializes() {
     let mut h = Harness::new(SessionRole::Main, Some("h1"));
     h.send(1, RequestFlags::default());
     assert_eq!(h.flush_calls()[0].1, Vec::<u32>::new());
-    let noop = RpcRequest {
-        id: RequestId(100),
-        body: call(100),
-        flags: RequestFlags::default(),
-        invoke_after: None,
-    };
+    let noop = RpcRequest { id: RequestId(100), body: call(100), flags: RequestFlags::default(), invoke_after: None };
     h.client.update_environment(environment("h2"), Some(noop), h.now);
     let calls = h.flush_calls();
     assert_eq!(calls.len(), 1);
@@ -208,33 +191,18 @@ fn connection_not_inited_clears_hash_and_retries_wrapped() {
 #[test]
 fn without_updates_wraps_outside_layer() {
     let mut h = Harness::new(SessionRole::Worker { requires_auth_token: false }, None);
-    h.send(
-        1,
-        RequestFlags {
-            without_updates: true,
-            ..Default::default()
-        },
-    );
+    h.send(1, RequestFlags { without_updates: true, ..Default::default() });
     assert_eq!(h.flush_calls()[0].1, vec![ids::INVOKE_WITHOUT_UPDATES, ids::INVOKE_WITH_LAYER, INIT_CONNECTION]);
 }
 
 #[test]
 fn flood_wait_is_waited_out_and_reported() {
     let mut h = Harness::new(SessionRole::Main, Some("h1"));
-    h.send(
-        1,
-        RequestFlags {
-            report_flood_wait: true,
-            ..Default::default()
-        },
-    );
+    h.send(1, RequestFlags { report_flood_wait: true, ..Default::default() });
     let calls = h.flush_calls();
     h.reply(vec![Outgoing::Content(rpc_error(calls[0].0, 420, "FLOOD_WAIT_3"))]);
     let events = h.events();
-    assert!(events.contains(&RpcEvent::FloodWaitReported {
-        id: RequestId(1),
-        message: "FLOOD_WAIT_3".into()
-    }));
+    assert!(events.contains(&RpcEvent::FloodWaitReported { id: RequestId(1), message: "FLOOD_WAIT_3".into() }));
     assert!(!events.iter().any(|e| matches!(e, RpcEvent::Failed { .. })));
     assert!(h.flush_calls().is_empty());
     let deadline = h.client.poll_timeout(h.now).unwrap();
@@ -247,19 +215,10 @@ fn flood_wait_is_waited_out_and_reported() {
 #[test]
 fn flood_wait_surfaces_without_automatic_wait() {
     let mut h = Harness::new(SessionRole::Main, Some("h1"));
-    h.send(
-        1,
-        RequestFlags {
-            automatic_flood_wait: false,
-            ..Default::default()
-        },
-    );
+    h.send(1, RequestFlags { automatic_flood_wait: false, ..Default::default() });
     let calls = h.flush_calls();
     h.reply(vec![Outgoing::Content(rpc_error(calls[0].0, 420, "FLOOD_PREMIUM_WAIT_5"))]);
-    assert!(h
-        .events()
-        .iter()
-        .any(|e| matches!(e, RpcEvent::Failed { id: RequestId(1), code: 420, .. })));
+    assert!(h.events().iter().any(|e| matches!(e, RpcEvent::Failed { id: RequestId(1), code: 420, .. })));
 }
 
 #[test]
@@ -280,13 +239,7 @@ fn unparsable_flood_and_frozen_method_surface() {
 fn server_errors_retry_with_backoff_or_fail() {
     let mut h = Harness::new(SessionRole::Main, Some("h1"));
     h.send(1, RequestFlags::default());
-    h.send(
-        2,
-        RequestFlags {
-            retry_server_errors: false,
-            ..Default::default()
-        },
-    );
+    h.send(2, RequestFlags { retry_server_errors: false, ..Default::default() });
     let calls = h.flush_calls();
     h.reply(vec![
         Outgoing::Content(rpc_error(calls[0].0, 500, "INTERNAL")),
@@ -318,13 +271,7 @@ fn main_session_401_requires_authorization_and_surfaces() {
         Outgoing::Content(rpc_error(calls[1].0, 401, "SESSION_PASSWORD_NEEDED")),
     ]);
     let events = h.events();
-    assert_eq!(
-        events
-            .iter()
-            .filter(|e| matches!(e, RpcEvent::AuthorizationRequired { .. }))
-            .count(),
-        1
-    );
+    assert_eq!(events.iter().filter(|e| matches!(e, RpcEvent::AuthorizationRequired { .. })).count(), 1);
     assert_eq!(events.iter().filter(|e| matches!(e, RpcEvent::Failed { .. })).count(), 2);
 }
 
@@ -389,28 +336,19 @@ fn apns_and_recaptcha_verification_park_until_resolved() {
     }));
     assert!(events.contains(&RpcEvent::VerificationRequired {
         id: RequestId(2),
-        kind: VerificationKind::Recaptcha {
-            method: "auth.sendCode".into(),
-            site_key: "site123".into()
-        }
+        kind: VerificationKind::Recaptcha { method: "auth.sendCode".into(), site_key: "site123".into() }
     }));
     assert!(h.flush_calls().is_empty());
-    h.client.resolve_verification(
-        RequestId(1),
-        Verification::Apns {
-            nonce: "abc".into(),
-            secret: "s".into(),
-        },
-        h.now,
-    );
+    h.client.resolve_verification(RequestId(1), Verification::Apns { nonce: "abc".into(), secret: "s".into() }, h.now);
     let calls = h.flush_calls();
     assert_eq!(calls.len(), 1);
     assert_eq!(calls[0].1, vec![INVOKE_WITH_APNS_SECRET]);
     h.client.fail_request(RequestId(2), 403, "RECAPTCHA_TIMEOUT", h.now);
-    assert!(h
-        .events()
-        .iter()
-        .any(|e| matches!(e, RpcEvent::Failed { id: RequestId(2), message, .. } if message == "RECAPTCHA_TIMEOUT")));
+    assert!(
+        h.events()
+            .iter()
+            .any(|e| matches!(e, RpcEvent::Failed { id: RequestId(2), message, .. } if message == "RECAPTCHA_TIMEOUT"))
+    );
 }
 
 #[test]
@@ -430,10 +368,11 @@ fn migrate_errors_surface_verbatim() {
     h.send(1, RequestFlags::default());
     let calls = h.flush_calls();
     h.reply(vec![Outgoing::Content(rpc_error(calls[0].0, 303, "PHONE_MIGRATE_4"))]);
-    assert!(h
-        .events()
-        .iter()
-        .any(|e| matches!(e, RpcEvent::Failed { code: 303, message, .. } if message == "PHONE_MIGRATE_4")));
+    assert!(
+        h.events()
+            .iter()
+            .any(|e| matches!(e, RpcEvent::Failed { code: 303, message, .. } if message == "PHONE_MIGRATE_4"))
+    );
 }
 
 #[test]
@@ -465,13 +404,7 @@ fn dependency_ordering_and_msg_wait_timeout() {
 #[test]
 fn quick_ack_events_only_for_requests_that_asked() {
     let mut h = Harness::new(SessionRole::Main, Some("h1"));
-    h.send(
-        1,
-        RequestFlags {
-            quick_ack: true,
-            ..Default::default()
-        },
-    );
+    h.send(1, RequestFlags { quick_ack: true, ..Default::default() });
     h.advance(0.01);
     let transmit = h.client.poll_transmit(h.now, &mut h.rng).unwrap();
     h.client.handle_quick_ack(transmit.quick_ack_token.unwrap(), h.now);
@@ -481,13 +414,7 @@ fn quick_ack_events_only_for_requests_that_asked() {
 #[test]
 fn cancelling_large_in_flight_request_drops_answer_and_resets_connection() {
     let mut h = Harness::new(SessionRole::Worker { requires_auth_token: false }, Some("h1"));
-    h.send(
-        1,
-        RequestFlags {
-            expected_response_size: 1024 * 1024,
-            ..Default::default()
-        },
-    );
+    h.send(1, RequestFlags { expected_response_size: 1024 * 1024, ..Default::default() });
     let calls = h.flush_calls();
     assert!(h.client.cancel(RequestId(1), h.now));
     assert!(h.events().contains(&RpcEvent::ConnectionShouldReset));
@@ -503,10 +430,7 @@ fn updates_too_long_and_session_resets_emit_updates_reset() {
     let mut h = Harness::new(SessionRole::Main, Some("h1"));
     h.send(1, RequestFlags::default());
     let calls = h.flush_calls();
-    h.reply(vec![
-        Outgoing::Content(update(0xe317af7e, &[])),
-        Outgoing::Content(new_session_created(calls[0].0, 1, 5)),
-    ]);
+    h.reply(vec![Outgoing::Content(update(0xe317af7e, &[])), Outgoing::Content(new_session_created(calls[0].0, 1, 5))]);
     let resets = h.events().into_iter().filter(|e| *e == RpcEvent::UpdatesReset).count();
     assert_eq!(resets, 2);
 }
@@ -514,10 +438,7 @@ fn updates_too_long_and_session_resets_emit_updates_reset() {
 #[test]
 fn delegated_retry_decisions_for_flood_and_server_errors() {
     let mut h = Harness::new(SessionRole::Main, Some("h1"));
-    let flags = RequestFlags {
-        delegate_retry_decisions: true,
-        ..Default::default()
-    };
+    let flags = RequestFlags { delegate_retry_decisions: true, ..Default::default() };
     h.send(1, flags);
     h.send(2, flags);
     let calls = h.flush_calls();
@@ -620,7 +541,9 @@ fn protocol_errors_after_repeated_rejections_are_terminal() {
 
 #[test]
 fn msg_wait_errors_wait_for_the_dependency_with_any_code() {
-    for (code, message) in [(400, "MSG_WAIT_FAILED"), (500, "MSG_WAIT_FAILED"), (-503, "MSG_WAIT_TIMEOUT"), (400, "MSG_WAIT_TIMEOUT")] {
+    for (code, message) in
+        [(400, "MSG_WAIT_FAILED"), (500, "MSG_WAIT_FAILED"), (-503, "MSG_WAIT_TIMEOUT"), (400, "MSG_WAIT_TIMEOUT")]
+    {
         let mut h = Harness::new(SessionRole::Main, Some("h1"));
         h.send(1, RequestFlags::default());
         h.client.send(
@@ -647,7 +570,18 @@ fn msg_wait_errors_wait_for_the_dependency_with_any_code() {
 
 #[test]
 fn negative_and_normalized_codes_are_retried_as_server_errors() {
-    for (code, message) in [(-500, "SOMETHING"), (-503, "Timeout"), (-1, "X"), (0, "ZERO_CODE"), (12345, "HUGE"), (500, "INTERDC_2_CALL_ERROR"), (500, "WORKER_BUSY_TOO_LONG_RETRY"), (500, "RANDOM_ID_DUPLICATE"), (500, "TL_PARSING_ERROR"), (500, "AUTH_KEY_UNSYNCHRONIZED")] {
+    for (code, message) in [
+        (-500, "SOMETHING"),
+        (-503, "Timeout"),
+        (-1, "X"),
+        (0, "ZERO_CODE"),
+        (12345, "HUGE"),
+        (500, "INTERDC_2_CALL_ERROR"),
+        (500, "WORKER_BUSY_TOO_LONG_RETRY"),
+        (500, "RANDOM_ID_DUPLICATE"),
+        (500, "TL_PARSING_ERROR"),
+        (500, "AUTH_KEY_UNSYNCHRONIZED"),
+    ] {
         let mut h = Harness::new(SessionRole::Main, Some("h1"));
         h.send(1, RequestFlags::default());
         let calls = h.flush_calls();
@@ -696,7 +630,11 @@ fn every_migrate_error_surfaces_verbatim() {
     ] {
         let events = h.single_error(SessionRole::Main, code, message);
         assert_eq!(failed_with(&events, 1), Some((code, message.to_string())));
-        assert!(!events.iter().any(|e| matches!(e, RpcEvent::AuthorizationRequired { .. } | RpcEvent::SoftAuthReset { .. })));
+        assert!(
+            !events
+                .iter()
+                .any(|e| matches!(e, RpcEvent::AuthorizationRequired { .. } | RpcEvent::SoftAuthReset { .. }))
+        );
     }
 }
 
@@ -745,7 +683,9 @@ fn plain_workers_and_cdn_never_log_out() {
         let mut h = Harness::new(role, Some("h1"));
         let events = h.single_error(role, 401, "AUTH_KEY_UNREGISTERED");
         assert_eq!(failed_with(&events, 1), Some((401, "AUTH_KEY_UNREGISTERED".into())));
-        assert!(!events.iter().any(|e| matches!(e, RpcEvent::AuthorizationRequired { .. } | RpcEvent::AuthTokenRequired)));
+        assert!(
+            !events.iter().any(|e| matches!(e, RpcEvent::AuthorizationRequired { .. } | RpcEvent::AuthTokenRequired))
+        );
         let events = h.single_error(role, 406, "AUTH_KEY_DUPLICATED");
         assert_eq!(failed_with(&events, 1), Some((406, "AUTH_KEY_DUPLICATED".into())));
         assert!(!events.iter().any(|e| matches!(e, RpcEvent::SoftAuthReset { .. })));

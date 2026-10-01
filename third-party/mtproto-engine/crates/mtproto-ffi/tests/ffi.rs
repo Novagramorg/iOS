@@ -21,7 +21,9 @@ unsafe extern "C" fn on_event(context: *mut c_void, session: u64, event: *const 
     let payload = if event.payload.is_null() {
         Vec::new()
     } else {
-        let data = unsafe { std::slice::from_raw_parts(mt_buffer_data(event.payload), mt_buffer_length(event.payload)) }.to_vec();
+        let data =
+            unsafe { std::slice::from_raw_parts(mt_buffer_data(event.payload), mt_buffer_length(event.payload)) }
+                .to_vec();
         unsafe { mt_buffer_free(event.payload) };
         data
     };
@@ -30,25 +32,16 @@ unsafe extern "C" fn on_event(context: *mut c_void, session: u64, event: *const 
     } else {
         String::from_utf8_lossy(unsafe { std::slice::from_raw_parts(event.text.data, event.text.length) }).into_owned()
     };
-    sink.events
-        .lock()
-        .unwrap()
-        .push((session, event.kind, event.request_id, event.code, payload, text));
+    sink.events.lock().unwrap().push((session, event.kind, event.request_id, event.code, payload, text));
     sink.condvar.notify_all();
 }
 
 fn bytes(data: &[u8]) -> MTBytes {
-    MTBytes {
-        data: data.as_ptr(),
-        length: data.len(),
-    }
+    MTBytes { data: data.as_ptr(), length: data.len() }
 }
 
 fn string(text: &str) -> MTString {
-    MTString {
-        data: text.as_ptr(),
-        length: text.len(),
-    }
+    MTString { data: text.as_ptr(), length: text.len() }
 }
 
 #[test]
@@ -60,17 +53,9 @@ fn c_abi_end_to_end() {
     assert!(!engine.is_null());
     assert_eq!(mt_engine_abi_version(), 1);
     let host = server.address.ip().to_string();
-    let address = MTAddress {
-        host: string(&host),
-        port: server.address.port(),
-        secret: bytes(&[]),
-    };
+    let address = MTAddress { host: string(&host), port: server.address.port(), secret: bytes(&[]) };
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs_f64();
-    let salt = MTSaltEntry {
-        salt: SERVER_SALT,
-        valid_since: now - 60.0,
-        valid_until: now + 3600.0,
-    };
+    let salt = MTSaltEntry { salt: SERVER_SALT, valid_since: now - 60.0, valid_until: now + 3600.0 };
     let environment = MTEnvironment {
         layer: 230,
         api_id: 9,
@@ -126,13 +111,8 @@ fn c_abi_end_to_end() {
     for tag in 1..=10u32 {
         let id = unsafe { mt_engine_next_request_id(engine) };
         let body = call(tag, &[tag as u8; 3]);
-        let request = MTRequest {
-            id,
-            body: bytes(&body),
-            flags: 1 | 4 | 8,
-            expected_response_size: 0,
-            invoke_after: 0,
-        };
+        let request =
+            MTRequest { id, body: bytes(&body), flags: 1 | 4 | 8, expected_response_size: 0, invoke_after: 0 };
         unsafe { mt_session_send(engine, session, &request) };
         expected.push((id, tag));
     }

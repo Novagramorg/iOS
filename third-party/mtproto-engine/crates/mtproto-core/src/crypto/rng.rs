@@ -58,9 +58,7 @@ impl XorShiftRandom {
         z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
         z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
         z ^= z >> 31;
-        Self {
-            state: if z == 0 { 0x2545_f491_4f6c_dd1d } else { z },
-        }
+        Self { state: if z == 0 { 0x2545_f491_4f6c_dd1d } else { z } }
     }
 
     fn step(&mut self) -> u64 {
@@ -91,11 +89,7 @@ pub struct SequenceRandom {
 
 impl SequenceRandom {
     pub fn new(data: Vec<u8>) -> Self {
-        Self {
-            data,
-            position: 0,
-            fallback: XorShiftRandom::new(0),
-        }
+        Self { data, position: 0, fallback: XorShiftRandom::new(0) }
     }
 
     pub fn remaining(&self) -> usize {
@@ -145,7 +139,8 @@ mod tests {
         assert_eq!(a.next_u64(), b.next_u64());
         let mut c = XorShiftRandom::new(43);
         assert_ne!(a.next_u64(), c.next_u64());
-        let firsts: std::collections::HashSet<u64> = (0..1000).map(|seed| XorShiftRandom::new(seed).next_u64()).collect();
+        let firsts: std::collections::HashSet<u64> =
+            (0..1000).map(|seed| XorShiftRandom::new(seed).next_u64()).collect();
         assert_eq!(firsts.len(), 1000);
     }
 }

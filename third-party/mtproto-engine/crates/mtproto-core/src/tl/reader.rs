@@ -1,4 +1,4 @@
-use super::{ids, TlError, TlResult};
+use super::{TlError, TlResult, ids};
 
 #[derive(Debug, Clone)]
 pub struct Reader<'a> {
@@ -36,10 +36,7 @@ impl<'a> Reader<'a> {
 
     pub fn read_raw(&mut self, length: usize) -> TlResult<&'a [u8]> {
         if self.remaining() < length {
-            return Err(TlError::UnexpectedEof {
-                offset: self.position,
-                needed: length,
-            });
+            return Err(TlError::UnexpectedEof { offset: self.position, needed: length });
         }
         let slice = &self.data[self.position..self.position + length];
         self.position += length;
@@ -98,19 +95,12 @@ impl<'a> Reader<'a> {
     pub fn expect_constructor(&mut self, expected: u32) -> TlResult<()> {
         let offset = self.position;
         let found = self.read_u32()?;
-        if found == expected {
-            Ok(())
-        } else {
-            Err(TlError::UnexpectedConstructor { offset, found })
-        }
+        if found == expected { Ok(()) } else { Err(TlError::UnexpectedConstructor { offset, found }) }
     }
 
     pub fn read_bytes(&mut self) -> TlResult<&'a [u8]> {
         let start = self.position;
-        let first = *self.data.get(self.position).ok_or(TlError::UnexpectedEof {
-            offset: start,
-            needed: 1,
-        })?;
+        let first = *self.data.get(self.position).ok_or(TlError::UnexpectedEof { offset: start, needed: 1 })?;
         let (header, length) = if first < 254 {
             self.position += 1;
             (1usize, first as usize)
@@ -118,18 +108,12 @@ impl<'a> Reader<'a> {
             let raw = self.read_array::<4>()?;
             (4usize, u32::from_le_bytes([raw[1], raw[2], raw[3], 0]) as usize)
         } else {
-            return Err(TlError::InvalidLength {
-                offset: start,
-                length: first as i64,
-            });
+            return Err(TlError::InvalidLength { offset: start, length: first as i64 });
         };
         let total = (header + length).div_ceil(4) * 4;
         if self.data.len() - start < total {
             self.position = start;
-            return Err(TlError::UnexpectedEof {
-                offset: start,
-                needed: total,
-            });
+            return Err(TlError::UnexpectedEof { offset: start, needed: total });
         }
         let value = &self.data[start + header..start + header + length];
         self.position = start + total;
@@ -145,10 +129,7 @@ impl<'a> Reader<'a> {
         let offset = self.position;
         let count = self.read_i32()?;
         if count < 0 || count as usize > max_count {
-            return Err(TlError::InvalidLength {
-                offset,
-                length: count as i64,
-            });
+            return Err(TlError::InvalidLength { offset, length: count as i64 });
         }
         Ok(count as usize)
     }
@@ -156,10 +137,7 @@ impl<'a> Reader<'a> {
     pub fn read_i64_vector(&mut self, max_count: usize) -> TlResult<Vec<i64>> {
         let count = self.read_vector_header(max_count)?;
         if self.remaining() < count * 8 {
-            return Err(TlError::UnexpectedEof {
-                offset: self.position,
-                needed: count * 8,
-            });
+            return Err(TlError::UnexpectedEof { offset: self.position, needed: count * 8 });
         }
         (0..count).map(|_| self.read_i64()).collect()
     }

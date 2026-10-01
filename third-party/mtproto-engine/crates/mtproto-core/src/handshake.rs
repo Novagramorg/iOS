@@ -3,10 +3,10 @@ use zeroize::Zeroize;
 
 use crate::auth_key::AuthKey;
 use crate::crypto::{
-    aes_ige_decrypt, aes_ige_encrypt, check_dh_params, check_g_a_or_b, factorize_pq, handshake_tmp_aes, is_probable_prime, sha1,
-    sha1_parts, to_fixed_be, DhError, DhPrimeCache, RsaPublicKey, SecureRandom,
+    DhError, DhPrimeCache, RsaPublicKey, SecureRandom, aes_ige_decrypt, aes_ige_encrypt, check_dh_params,
+    check_g_a_or_b, factorize_pq, handshake_tmp_aes, is_probable_prime, sha1, sha1_parts, to_fixed_be,
 };
-use crate::message::{decode_plain_message, encode_plain_message, MessageError};
+use crate::message::{MessageError, decode_plain_message, encode_plain_message};
 use crate::msg_id::MsgIdGenerator;
 use crate::tl::mtproto::{
     ClientDhInnerData, DhGenKind, PqInnerData, ReqDhParams, ReqPqMulti, ResPq, ServerDhInnerData, ServerDhParams,
@@ -104,11 +104,7 @@ pub enum HandshakeStep {
 impl Handshake {
     pub fn start(config: HandshakeConfig, server_now: f64, rng: &mut impl SecureRandom) -> (Self, Vec<u8>) {
         let nonce: [u8; 16] = rng.array();
-        let mut handshake = Self {
-            config,
-            state: State::WaitResPq { nonce },
-            msg_ids: MsgIdGenerator::new(),
-        };
+        let mut handshake = Self { config, state: State::WaitResPq { nonce }, msg_ids: MsgIdGenerator::new() };
         let packet = handshake.plain(server_now, &ReqPqMulti { nonce });
         (handshake, packet)
     }
@@ -144,7 +140,9 @@ impl Handshake {
                 let key = res_pq
                     .fingerprints
                     .iter()
-                    .find_map(|fingerprint| self.config.public_keys.iter().find(|key| key.fingerprint() == *fingerprint))
+                    .find_map(|fingerprint| {
+                        self.config.public_keys.iter().find(|key| key.fingerprint() == *fingerprint)
+                    })
                     .cloned()
                     .ok_or_else(|| HandshakeError::UnknownFingerprints(res_pq.fingerprints.clone()))?;
                 if res_pq.pq.is_empty() || res_pq.pq.len() > 8 {
@@ -180,18 +178,10 @@ impl Handshake {
                     encrypted_data: &encrypted,
                 };
                 let packet = self.plain(local_unix_now, &request);
-                self.state = State::WaitDhParams {
-                    nonce,
-                    server_nonce: res_pq.server_nonce,
-                    new_nonce,
-                };
+                self.state = State::WaitDhParams { nonce, server_nonce: res_pq.server_nonce, new_nonce };
                 Ok(HandshakeStep::Send(packet))
             }
-            State::WaitDhParams {
-                nonce,
-                server_nonce,
-                new_nonce,
-            } => {
+            State::WaitDhParams { nonce, server_nonce, new_nonce } => {
                 let params = ServerDhParams::read_from(&mut Reader::new(message.body))?;
                 let encrypted_answer = match params {
                     ServerDhParams::Ok {
@@ -282,10 +272,8 @@ impl Handshake {
                         for i in 0..8 {
                             salt_bytes[i] = new_nonce[i] ^ server_nonce[i];
                         }
-                        let expires_at = self
-                            .config
-                            .temp_key_expires_in
-                            .map(|expires_in| server_time.saturating_add(expires_in));
+                        let expires_at =
+                            self.config.temp_key_expires_in.map(|expires_in| server_time.saturating_add(expires_in));
                         self.state = State::Done;
                         Ok(HandshakeStep::Done(HandshakeResult {
                             auth_key,
@@ -355,12 +343,7 @@ impl Handshake {
         let key_bytes = to_fixed_be::<256>(&key_number).expect("key fits 2048 bits");
         let auth_key = AuthKey::new(key_bytes);
 
-        let inner = ClientDhInnerData {
-            nonce,
-            server_nonce,
-            retry_id,
-            g_b: g_b.to_bytes_be(),
-        };
+        let inner = ClientDhInnerData { nonce, server_nonce, retry_id, g_b: g_b.to_bytes_be() };
         let inner_bytes = inner.to_bytes();
         let mut data = Vec::with_capacity(20 + inner_bytes.len() + 16);
         data.extend_from_slice(&sha1(&inner_bytes));
@@ -370,11 +353,7 @@ impl Handshake {
         rng.fill(&mut data[unpadded..]);
         let tmp = handshake_tmp_aes(&new_nonce, &server_nonce);
         aes_ige_encrypt(&tmp.key, &tmp.iv, &mut data).expect("aligned");
-        let request = SetClientDhParams {
-            nonce,
-            server_nonce,
-            encrypted_data: &data,
-        };
+        let request = SetClientDhParams { nonce, server_nonce, encrypted_data: &data };
         let packet = self.plain(server_now, &request);
         self.state = State::WaitDhGen {
             nonce,

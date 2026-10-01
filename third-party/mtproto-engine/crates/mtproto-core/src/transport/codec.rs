@@ -1,5 +1,5 @@
-use super::buffer::InputBuffer;
 use super::TransportError;
+use super::buffer::InputBuffer;
 use crate::crypto::SecureRandom;
 
 pub const MAX_FRAME_LEN: usize = 16 * 1024 * 1024;
@@ -84,10 +84,7 @@ pub struct FrameDecoder {
 
 impl FrameDecoder {
     pub fn new(framing: Framing) -> Self {
-        Self {
-            framing,
-            max_len: MAX_FRAME_LEN,
-        }
+        Self { framing, max_len: MAX_FRAME_LEN }
     }
 
     pub fn with_max_len(framing: Framing, max_len: usize) -> Self {
@@ -119,11 +116,7 @@ impl FrameDecoder {
                     return None;
                 }
                 let word = u32::from_le_bytes(data[..4].try_into().expect("4"));
-                if word & QUICK_ACK_BIT != 0 {
-                    None
-                } else {
-                    Some((4, word as usize))
-                }
+                if word & QUICK_ACK_BIT != 0 { None } else { Some((4, word as usize)) }
             }
         }
     }
@@ -149,11 +142,7 @@ impl FrameDecoder {
                     return None;
                 }
                 let word = u32::from_le_bytes(data[..4].try_into().expect("4"));
-                if word & QUICK_ACK_BIT != 0 {
-                    Some(4)
-                } else {
-                    Some(4 + word as usize)
-                }
+                if word & QUICK_ACK_BIT != 0 { Some(4) } else { Some(4 + word as usize) }
             }
         }
     }

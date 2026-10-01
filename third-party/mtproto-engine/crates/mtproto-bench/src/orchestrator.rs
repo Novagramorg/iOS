@@ -4,9 +4,9 @@ use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 use mtproto_netsim::{NetSim, Profile};
-use mtproto_testserver::{random_key, ServerOptions, TestServer, SERVER_SALT};
+use mtproto_testserver::{SERVER_SALT, ServerOptions, TestServer, random_key};
 
-use crate::args::{hex, ClientArgs};
+use crate::args::{ClientArgs, hex};
 use crate::report::ClientReport;
 
 #[derive(Debug, Clone)]
@@ -42,21 +42,11 @@ pub struct RunResult {
 }
 
 fn base(workload: &str) -> ClientArgs {
-    ClientArgs {
-        workload: workload.into(),
-        ..ClientArgs::default()
-    }
+    ClientArgs { workload: workload.into(), ..ClientArgs::default() }
 }
 
 fn scenario(name: &str, args: ClientArgs, profile: &str) -> Scenario {
-    Scenario {
-        name: name.into(),
-        args,
-        profile: profile.into(),
-        secret: None,
-        outage: None,
-        real_address: None,
-    }
+    Scenario { name: name.into(), args, profile: profile.into(), secret: None, outage: None, real_address: None }
 }
 
 const FAKE_TLS_SECRET: &str = "ee3131313131313131313131313131313177772e6578616d706c652e636f6d";
@@ -68,44 +58,27 @@ pub fn suite(name: &str, include_real: bool) -> Vec<Scenario> {
 
     scenarios.push(scenario(
         "latency/perfect",
-        ClientArgs {
-            requests: scale(1000, 200) as usize,
-            ..base("latency")
-        },
+        ClientArgs { requests: scale(1000, 200) as usize, ..base("latency") },
         "perfect",
     ));
     scenarios.push(scenario(
         "small-pipelined/perfect",
-        ClientArgs {
-            requests: scale(20_000, 3000) as usize,
-            concurrency: 128,
-            ..base("small")
-        },
+        ClientArgs { requests: scale(20_000, 3000) as usize, concurrency: 128, ..base("small") },
         "perfect",
     ));
     scenarios.push(scenario(
         "media/perfect",
-        ClientArgs {
-            total_bytes: scale(512, 128) * 1024 * 1024,
-            ..base("media")
-        },
+        ClientArgs { total_bytes: scale(512, 128) * 1024 * 1024, ..base("media") },
         "perfect",
     ));
     scenarios.push(scenario(
         "mixed/perfect",
-        ClientArgs {
-            total_bytes: scale(256, 96) * 1024 * 1024,
-            rate: 20.0,
-            ..base("mixed")
-        },
+        ClientArgs { total_bytes: scale(256, 96) * 1024 * 1024, rate: 20.0, ..base("mixed") },
         "perfect",
     ));
     scenarios.push(scenario(
         "media/broadband",
-        ClientArgs {
-            total_bytes: scale(48, 16) * 1024 * 1024,
-            ..base("media")
-        },
+        ClientArgs { total_bytes: scale(48, 16) * 1024 * 1024, ..base("media") },
         "broadband",
     ));
     scenarios.push(scenario(
@@ -132,63 +105,36 @@ pub fn suite(name: &str, include_real: bool) -> Vec<Scenario> {
     ));
     scenarios.push(scenario(
         "steady/flaky",
-        ClientArgs {
-            rate: 10.0,
-            duration: scale(30, 15) as f64,
-            deadline: 120.0,
-            ..base("steady")
-        },
+        ClientArgs { rate: 10.0, duration: scale(30, 15) as f64, deadline: 120.0, ..base("steady") },
         "flaky",
     ));
     scenarios.push(scenario(
         "media/flaky",
-        ClientArgs {
-            total_bytes: scale(32, 12) * 1024 * 1024,
-            deadline: 180.0,
-            ..base("media")
-        },
+        ClientArgs { total_bytes: scale(32, 12) * 1024 * 1024, deadline: 180.0, ..base("media") },
         "flaky",
     ));
     scenarios.push(scenario(
         "steady/blackholes",
-        ClientArgs {
-            rate: 10.0,
-            duration: scale(30, 15) as f64,
-            deadline: 180.0,
-            ..base("steady")
-        },
+        ClientArgs { rate: 10.0, duration: scale(30, 15) as f64, deadline: 180.0, ..base("steady") },
         "blackholes",
     ));
     let mut outage = scenario(
         "steady/outage-8s",
-        ClientArgs {
-            rate: 10.0,
-            duration: 20.0,
-            deadline: 90.0,
-            ..base("steady")
-        },
+        ClientArgs { rate: 10.0, duration: 20.0, deadline: 90.0, ..base("steady") },
         "perfect",
     );
     outage.outage = Some((5.0, 8.0));
     scenarios.push(outage);
     let mut proxy_media = scenario(
         "media/fake-tls-proxy",
-        ClientArgs {
-            total_bytes: scale(256, 64) * 1024 * 1024,
-            ..base("media")
-        },
+        ClientArgs { total_bytes: scale(256, 64) * 1024 * 1024, ..base("media") },
         "perfect",
     );
     proxy_media.secret = Some(FAKE_TLS_SECRET.into());
     scenarios.push(proxy_media);
     let mut proxy_flaky = scenario(
         "steady/fake-tls-proxy-flaky",
-        ClientArgs {
-            rate: 10.0,
-            duration: scale(30, 15) as f64,
-            deadline: 120.0,
-            ..base("steady")
-        },
+        ClientArgs { rate: 10.0, duration: scale(30, 15) as f64, deadline: 120.0, ..base("steady") },
         "flaky",
     );
     proxy_flaky.secret = Some(FAKE_TLS_SECRET.into());
@@ -198,13 +144,7 @@ pub fn suite(name: &str, include_real: bool) -> Vec<Scenario> {
         for profile in ["perfect", "3g"] {
             let mut real = scenario(
                 &format!("real-config/{profile}"),
-                ClientArgs {
-                    mode: "real".into(),
-                    requests: 12,
-                    concurrency: 2,
-                    deadline: 90.0,
-                    ..base("real-config")
-                },
+                ClientArgs { mode: "real".into(), requests: 12, concurrency: 2, deadline: 90.0, ..base("real-config") },
                 profile,
             );
             real.real_address = Some("149.154.167.51:443".into());
@@ -231,10 +171,7 @@ pub fn run(scenario: &Scenario, engine: &EngineBinary, seed: u64) -> RunResult {
     let server = if scenario.real_address.is_none() {
         Some(TestServer::start(
             vec![key.clone()],
-            ServerOptions {
-                secret: scenario.secret.as_deref().map(crate::args::unhex),
-                ..ServerOptions::default()
-            },
+            ServerOptions { secret: scenario.secret.as_deref().map(crate::args::unhex), ..ServerOptions::default() },
         ))
     } else {
         None
@@ -297,10 +234,8 @@ pub fn run(scenario: &Scenario, engine: &EngineBinary, seed: u64) -> RunResult {
     let report = output.lines().rev().find(|line| line.starts_with('{')).and_then(ClientReport::from_json);
     let server_executions = server.as_ref().map(|server| server.with_stats(|stats| stats.executions.values().sum()));
     let issued = report.as_ref().map(|report| report.requests.len()).unwrap_or(0);
-    let (recovery, longest_gap) = report
-        .as_ref()
-        .map(|report| recovery_metrics(report, scenario.outage))
-        .unwrap_or((None, 0.0));
+    let (recovery, longest_gap) =
+        report.as_ref().map(|report| recovery_metrics(report, scenario.outage)).unwrap_or((None, 0.0));
     RunResult {
         scenario: scenario.name.clone(),
         engine: engine.label.clone(),

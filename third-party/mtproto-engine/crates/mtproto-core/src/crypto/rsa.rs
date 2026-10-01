@@ -47,14 +47,10 @@ impl RsaPublicKey {
     }
 
     pub fn from_pem(pem: &str) -> Result<Self, RsaError> {
-        let body: String = pem
-            .lines()
-            .map(str::trim)
-            .filter(|line| !line.is_empty() && !line.starts_with("-----"))
-            .collect();
-        let der = base64::engine::general_purpose::STANDARD
-            .decode(body.as_bytes())
-            .map_err(|_| RsaError::InvalidPem)?;
+        let body: String =
+            pem.lines().map(str::trim).filter(|line| !line.is_empty() && !line.starts_with("-----")).collect();
+        let der =
+            base64::engine::general_purpose::STANDARD.decode(body.as_bytes()).map_err(|_| RsaError::InvalidPem)?;
         let (n, e) = if pem.contains("BEGIN RSA PUBLIC KEY") {
             parse_pkcs1(&der)?
         } else if pem.contains("BEGIN PUBLIC KEY") {
@@ -220,7 +216,10 @@ t6N/byY9Nw9p21Og3AoXSL2q/2IJ1WRUhebgAdGVMlV1fkuOQoEzR7EdpqtQD9Cs\n\
         let pkcs1 = RsaPublicKey::from_pem(PRODUCTION_KEY).unwrap();
         let body: String = PRODUCTION_KEY.lines().filter(|l| !l.starts_with("-----")).collect();
         let der = base64::engine::general_purpose::STANDARD.decode(body).unwrap();
-        let mut spki = vec![0x30, 0x82, 0x01, 0x22, 0x30, 0x0d, 0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01, 0x05, 0x00, 0x03, 0x82, 0x01, 0x0f, 0x00];
+        let mut spki = vec![
+            0x30, 0x82, 0x01, 0x22, 0x30, 0x0d, 0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01, 0x05,
+            0x00, 0x03, 0x82, 0x01, 0x0f, 0x00,
+        ];
         spki.extend_from_slice(&der);
         let pem = format!(
             "-----BEGIN PUBLIC KEY-----\n{}\n-----END PUBLIC KEY-----",
@@ -251,7 +250,7 @@ t6N/byY9Nw9p21Og3AoXSL2q/2IJ1WRUhebgAdGVMlV1fkuOQoEzR7EdpqtQD9Cs\n\
 #[cfg(test)]
 mod pad_tests {
     use super::*;
-    use crate::crypto::{aes_ige_decrypt, XorShiftRandom};
+    use crate::crypto::{XorShiftRandom, aes_ige_decrypt};
     use crate::test_support::test_rsa_key_pair;
     use proptest::prelude::*;
 

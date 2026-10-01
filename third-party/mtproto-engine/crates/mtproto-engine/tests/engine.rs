@@ -7,8 +7,8 @@ use mtproto_engine::mtproto_core::rpc::{RequestFlags, RequestId, RpcEvent, RpcRe
 use mtproto_engine::mtproto_core::session::ServerSalt;
 use mtproto_engine::mtproto_core::test_support::{ServerHandshake, ServerHandshakeBehavior};
 use mtproto_engine::{
-    unix_seconds, AuthKeyMaterial, DcAddress, Engine, EngineCallbacks, EngineConfig, EngineEvent, KeyGeneration, ProxyConfig,
-    SessionHandle, SessionSetup,
+    AuthKeyMaterial, DcAddress, Engine, EngineCallbacks, EngineConfig, EngineEvent, KeyGeneration, ProxyConfig,
+    SessionHandle, SessionSetup, unix_seconds,
 };
 use mtproto_testserver::*;
 
@@ -78,28 +78,16 @@ fn completions(events: &[(SessionHandle, EngineEvent)], session: SessionHandle) 
 
 fn salts() -> Vec<ServerSalt> {
     let now = unix_seconds();
-    vec![ServerSalt {
-        salt: SERVER_SALT,
-        valid_since: now - 60.0,
-        valid_until: now + 3600.0,
-    }]
+    vec![ServerSalt { salt: SERVER_SALT, valid_since: now - 60.0, valid_until: now + 3600.0 }]
 }
 
 fn setup(server: &TestServer, key: &AuthKey, role: SessionRole) -> SessionSetup {
     let mut setup = SessionSetup::new(
         2,
         role,
-        vec![DcAddress {
-            host: server.address.ip().to_string(),
-            port: server.address.port(),
-            secret: None,
-        }],
+        vec![DcAddress { host: server.address.ip().to_string(), port: server.address.port(), secret: None }],
     );
-    setup.auth_key = Some(AuthKeyMaterial {
-        key: key.clone(),
-        salts: salts(),
-        init_hash: None,
-    });
+    setup.auth_key = Some(AuthKeyMaterial { key: key.clone(), salts: salts(), init_hash: None });
     setup
 }
 
@@ -113,14 +101,7 @@ fn request(id: u64, tag: u32) -> RpcRequest {
 }
 
 fn engine(collector: &Arc<Collector>, workers: usize) -> Engine {
-    Engine::new(
-        EngineConfig {
-            worker_threads: workers,
-            ..EngineConfig::default()
-        },
-        collector.clone(),
-    )
-    .unwrap()
+    Engine::new(EngineConfig { worker_threads: workers, ..EngineConfig::default() }, collector.clone()).unwrap()
 }
 
 const WAIT: Duration = Duration::from_secs(10);
@@ -171,9 +152,11 @@ fn many_sessions_run_on_separate_threads_concurrently() {
     for thread in threads {
         thread.join().unwrap();
     }
-    assert!(collector.wait(Duration::from_secs(20), |events| sessions
-        .iter()
-        .all(|session| completions(events, *session) == 200)));
+    assert!(
+        collector.wait(Duration::from_secs(20), |events| sessions
+            .iter()
+            .all(|session| completions(events, *session) == 200))
+    );
     let names = collector.threads.lock().unwrap().clone();
     assert!(names.contains("mtproto-main"));
     assert!(names.iter().filter(|name| name.starts_with("mtproto-worker")).count() >= 2, "{names:?}");
@@ -286,10 +269,7 @@ fn generates_auth_key_with_handshake_then_serves_requests() {
     let server = TestServer::start(
         vec![],
         ServerOptions {
-            handshake: ServerHandshakeBehavior {
-                server_time: unix_seconds() as i32,
-                ..Default::default()
-            },
+            handshake: ServerHandshakeBehavior { server_time: unix_seconds() as i32, ..Default::default() },
             ..Default::default()
         },
     );
@@ -298,11 +278,7 @@ fn generates_auth_key_with_handshake_then_serves_requests() {
     let mut generated = SessionSetup::new(
         2,
         SessionRole::Main,
-        vec![DcAddress {
-            host: "127.0.0.1".into(),
-            port: server.address.port(),
-            secret: None,
-        }],
+        vec![DcAddress { host: "127.0.0.1".into(), port: server.address.port(), secret: None }],
     );
     generated.key_generation = Some(KeyGeneration {
         public_keys: vec![ServerHandshake::new(ServerHandshakeBehavior::default()).public_key()],
@@ -344,17 +320,12 @@ fn run_proxy_case(options: ServerOptions, proxy: Option<ProxyConfig>, address_se
     config.addresses[0].secret = address_secret;
     if let Some(proxy) = proxy {
         config.proxy = Some(match proxy {
-            ProxyConfig::Socks5 { username, password, .. } => ProxyConfig::Socks5 {
-                host: "127.0.0.1".into(),
-                port: server.address.port(),
-                username,
-                password,
-            },
-            ProxyConfig::MtProxy { secret, .. } => ProxyConfig::MtProxy {
-                host: "localhost".into(),
-                port: server.address.port(),
-                secret,
-            },
+            ProxyConfig::Socks5 { username, password, .. } => {
+                ProxyConfig::Socks5 { host: "127.0.0.1".into(), port: server.address.port(), username, password }
+            }
+            ProxyConfig::MtProxy { secret, .. } => {
+                ProxyConfig::MtProxy { host: "localhost".into(), port: server.address.port(), secret }
+            }
         });
         config.addresses[0].host = "149.154.167.51".into();
         config.addresses[0].port = 443;
@@ -370,23 +341,12 @@ fn run_proxy_case(options: ServerOptions, proxy: Option<ProxyConfig>, address_se
 #[test]
 fn socks5_proxy_without_and_with_credentials() {
     run_proxy_case(
-        ServerOptions {
-            socks5: true,
-            ..Default::default()
-        },
-        Some(ProxyConfig::Socks5 {
-            host: String::new(),
-            port: 0,
-            username: None,
-            password: None,
-        }),
+        ServerOptions { socks5: true, ..Default::default() },
+        Some(ProxyConfig::Socks5 { host: String::new(), port: 0, username: None, password: None }),
         None,
     );
     run_proxy_case(
-        ServerOptions {
-            socks5: true,
-            ..Default::default()
-        },
+        ServerOptions { socks5: true, ..Default::default() },
         Some(ProxyConfig::Socks5 {
             host: String::new(),
             port: 0,
@@ -407,25 +367,11 @@ fn mtproxy_simple_padded_and_fake_tls() {
     fake_tls.extend_from_slice(b"www.example.com");
     for secret in [simple, padded, fake_tls] {
         run_proxy_case(
-            ServerOptions {
-                secret: Some(secret.clone()),
-                ..Default::default()
-            },
-            Some(ProxyConfig::MtProxy {
-                host: String::new(),
-                port: 0,
-                secret: secret.clone(),
-            }),
+            ServerOptions { secret: Some(secret.clone()), ..Default::default() },
+            Some(ProxyConfig::MtProxy { host: String::new(), port: 0, secret: secret.clone() }),
             None,
         );
-        run_proxy_case(
-            ServerOptions {
-                secret: Some(secret.clone()),
-                ..Default::default()
-            },
-            None,
-            Some(secret),
-        );
+        run_proxy_case(ServerOptions { secret: Some(secret.clone()), ..Default::default() }, None, Some(secret));
     }
 }
 
@@ -438,20 +384,16 @@ fn unknown_key_reports_invalid_and_recovers_with_new_key() {
     let engine = engine(&collector, 2);
     let session = engine.create_session(setup(&server, &old, SessionRole::Main));
     engine.send(session, request(1, 1));
-    assert!(collector.wait(WAIT, |events| events.iter().any(|(_, e)| matches!(e, EngineEvent::AuthKeyInvalid { code: -404 }))));
+    assert!(
+        collector
+            .wait(WAIT, |events| events.iter().any(|(_, e)| matches!(e, EngineEvent::AuthKeyInvalid { code: -404 })))
+    );
     assert_eq!(
         collector.count(|event| matches!(event, EngineEvent::AddressResult { success: false, .. })),
         0,
         "a routine -404 does not mark the address as broken"
     );
-    engine.set_auth_key(
-        session,
-        Some(AuthKeyMaterial {
-            key: new,
-            salts: salts(),
-            init_hash: None,
-        }),
-    );
+    engine.set_auth_key(session, Some(AuthKeyMaterial { key: new, salts: salts(), init_hash: None }));
     assert!(collector.wait(WAIT, |events| completions(events, session) == 1));
     engine.shutdown();
 }
@@ -493,9 +435,9 @@ fn main_session_401_requests_authorization() {
     let engine = engine(&collector, 2);
     let session = engine.create_session(setup(&server, &key, SessionRole::Main));
     engine.send(session, request(1, TAG_UNAUTHORIZED));
-    assert!(collector.wait(WAIT, |events| events
-        .iter()
-        .any(|(_, e)| matches!(e, EngineEvent::Rpc(RpcEvent::Failed { code: 401, .. })))));
+    assert!(collector.wait(WAIT, |events| {
+        events.iter().any(|(_, e)| matches!(e, EngineEvent::Rpc(RpcEvent::Failed { code: 401, .. })))
+    }));
     assert_eq!(collector.count(|event| matches!(event, EngineEvent::Rpc(RpcEvent::AuthorizationRequired { .. }))), 1);
     engine.shutdown();
 }
@@ -547,9 +489,9 @@ fn destroyed_sessions_report_closed_and_reject_requests() {
     engine.destroy_session(session);
     assert!(collector.wait(WAIT, |events| events.iter().any(|(_, e)| matches!(e, EngineEvent::Closed))));
     engine.send(session, request(2, 2));
-    assert!(collector.wait(WAIT, |events| events
-        .iter()
-        .any(|(_, e)| matches!(e, EngineEvent::Rpc(RpcEvent::Failed { id: RequestId(2), .. })))));
+    assert!(collector.wait(WAIT, |events| {
+        events.iter().any(|(_, e)| matches!(e, EngineEvent::Rpc(RpcEvent::Failed { id: RequestId(2), .. })))
+    }));
     engine.shutdown();
 }
 
@@ -565,15 +507,8 @@ fn connection_state_reports_connected_main_session() {
     engine.shutdown();
 }
 
-
-
 fn raw_request(id: u64, body: Vec<u8>) -> RpcRequest {
-    RpcRequest {
-        id: RequestId(id),
-        body,
-        flags: RequestFlags::default(),
-        invoke_after: None,
-    }
+    RpcRequest { id: RequestId(id), body, flags: RequestFlags::default(), invoke_after: None }
 }
 
 fn completed_ids(collector: &Collector, session: SessionHandle) -> Vec<u64> {
@@ -613,7 +548,11 @@ fn other_transport_errors_reconnect_quickly() {
         assert!(server.with_stats(|stats| stats.connections) >= 2);
         assert_eq!(collector.count(|event| matches!(event, EngineEvent::TransportFlood)), 0);
         assert_eq!(collector.count(|event| matches!(event, EngineEvent::AuthKeyInvalid { .. })), 0);
-        assert_eq!(collector.count(|event| matches!(event, EngineEvent::AddressResult { success: false, .. })), 0, "code {code}");
+        assert_eq!(
+            collector.count(|event| matches!(event, EngineEvent::AddressResult { success: false, .. })),
+            0,
+            "code {code}"
+        );
         engine.shutdown();
     }
 }
@@ -622,11 +561,7 @@ fn generating_setup(server: &TestServer) -> SessionSetup {
     let mut generated = SessionSetup::new(
         2,
         SessionRole::Main,
-        vec![DcAddress {
-            host: "127.0.0.1".into(),
-            port: server.address.port(),
-            secret: None,
-        }],
+        vec![DcAddress { host: "127.0.0.1".into(), port: server.address.port(), secret: None }],
     );
     generated.key_generation = Some(KeyGeneration {
         public_keys: vec![ServerHandshake::new(ServerHandshakeBehavior::default()).public_key()],
@@ -639,10 +574,7 @@ fn handshake_server(faults: Vec<HandshakeFault>) -> TestServer {
     TestServer::start(
         vec![],
         ServerOptions {
-            handshake: ServerHandshakeBehavior {
-                server_time: unix_seconds() as i32,
-                ..Default::default()
-            },
+            handshake: ServerHandshakeBehavior { server_time: unix_seconds() as i32, ..Default::default() },
             handshake_faults: faults,
             ..Default::default()
         },
@@ -666,7 +598,9 @@ fn handshake_transport_error_restarts_key_generation_without_key_invalid() {
     assert_eq!(collector.count(|event| matches!(event, EngineEvent::AuthKeyInvalid { .. })), 0);
     assert_eq!(collector.count(|event| matches!(event, EngineEvent::TransportFlood)), 1);
     assert_eq!(
-        collector.count(|event| matches!(event, EngineEvent::AuthKeyCreationFailed { reason } if reason.contains("transport error"))),
+        collector.count(
+            |event| matches!(event, EngineEvent::AuthKeyCreationFailed { reason } if reason.contains("transport error"))
+        ),
         3
     );
     assert_eq!(collector.count(|event| matches!(event, EngineEvent::AuthKeyCreated { .. })), 1);
@@ -682,7 +616,9 @@ fn stalled_handshake_times_out_and_retries() {
     engine.send(session, request(1, 9));
     assert!(collector.wait(Duration::from_secs(25), |events| completions(events, session) == 1));
     assert_eq!(
-        collector.count(|event| matches!(event, EngineEvent::AuthKeyCreationFailed { reason } if reason == "handshake timeout")),
+        collector.count(
+            |event| matches!(event, EngineEvent::AuthKeyCreationFailed { reason } if reason == "handshake timeout")
+        ),
         1
     );
     engine.shutdown();
@@ -743,7 +679,17 @@ fn copied_gzipped_and_noisy_answers_complete_on_one_connection() {
 
 #[test]
 fn bad_msg_notifications_are_recovered_end_to_end() {
-    for (code, container) in [(16, false), (20, false), (32, false), (33, false), (34, false), (48, false), (64, true), (19, true), (99, false)] {
+    for (code, container) in [
+        (16, false),
+        (20, false),
+        (32, false),
+        (33, false),
+        (34, false),
+        (48, false),
+        (64, true),
+        (19, true),
+        (99, false),
+    ] {
         let key = random_key(35);
         let server = TestServer::start(vec![key.clone()], ServerOptions::default());
         let collector = Arc::new(Collector::default());
@@ -765,11 +711,7 @@ fn clock_skew_in_either_direction_is_corrected() {
         let key = random_key(36);
         let server = TestServer::start(
             vec![key.clone()],
-            ServerOptions {
-                clock_offset: offset,
-                validate_msg_id_time: true,
-                ..Default::default()
-            },
+            ServerOptions { clock_offset: offset, validate_msg_id_time: true, ..Default::default() },
         );
         let collector = Arc::new(Collector::default());
         let engine = engine(&collector, 2);
@@ -792,4 +734,101 @@ fn clock_skew_in_either_direction_is_corrected() {
         assert!((last - offset).abs() < 2.0, "offset {offset}: {differences:?}");
         engine.shutdown();
     }
+}
+
+#[test]
+fn token_gate_survives_key_replacement() {
+    let old = random_key(40);
+    let new = random_key(41);
+    let server = TestServer::start(vec![new.clone()], ServerOptions::default());
+    let collector = Arc::new(Collector::default());
+    let engine = engine(&collector, 2);
+    let session = engine.create_session(setup(&server, &old, SessionRole::Worker { requires_auth_token: true }));
+    engine.set_auth_token_ready(session, false);
+    engine.send(session, request(1, 1));
+    std::thread::sleep(Duration::from_millis(300));
+    engine.set_auth_key(session, Some(AuthKeyMaterial { key: new, salts: salts(), init_hash: None }));
+    std::thread::sleep(Duration::from_millis(500));
+    assert_eq!(server.executions(1), 0, "requests must wait for the token after a key swap");
+    engine.set_auth_token_ready(session, true);
+    assert!(collector.wait(WAIT, |events| completions(events, session) == 1));
+    engine.shutdown();
+}
+
+#[test]
+fn removing_the_key_keeps_pending_requests() {
+    let key = random_key(42);
+    let server = TestServer::start(vec![key.clone()], ServerOptions::default());
+    let collector = Arc::new(Collector::default());
+    let engine = engine(&collector, 2);
+    let mut paused = setup(&server, &key, SessionRole::Main);
+    paused.paused = true;
+    let session = engine.create_session(paused);
+    engine.send(session, request(1, 1));
+    engine.send(session, request(2, 2));
+    engine.set_auth_key(session, None);
+    assert!(collector.wait(WAIT, |events| events.iter().any(|(_, e)| matches!(e, EngineEvent::AuthKeyRequired))));
+    engine.set_auth_key(session, Some(AuthKeyMaterial { key, salts: salts(), init_hash: None }));
+    engine.set_paused(session, false);
+    assert!(collector.wait(WAIT, |events| completions(events, session) == 2));
+    engine.shutdown();
+}
+
+#[test]
+fn obfuscation_dc_id_can_change_on_a_live_session() {
+    let key = random_key(43);
+    let server = TestServer::start(vec![key.clone()], ServerOptions::default());
+    let collector = Arc::new(Collector::default());
+    let engine = engine(&collector, 2);
+    let session = engine.create_session(setup(&server, &key, SessionRole::Main));
+    engine.send(session, request(1, 1));
+    assert!(collector.wait(WAIT, |events| completions(events, session) == 1));
+    engine.set_obfuscation_dc_id(session, -2);
+    engine.send(session, request(2, 2));
+    assert!(collector.wait(WAIT, |events| completions(events, session) == 2));
+    let ids = server.with_stats(|stats| stats.obfuscation_dc_ids.clone());
+    assert_eq!(ids.first(), Some(&2));
+    assert_eq!(ids.last(), Some(&-2));
+    engine.shutdown();
+}
+
+#[test]
+fn connect_timeouts_report_failed_addresses() {
+    let collector = Arc::new(Collector::default());
+    let engine = Engine::new(
+        EngineConfig { worker_threads: 2, connect_timeout: 0.5, ..EngineConfig::default() },
+        collector.clone(),
+    )
+    .unwrap();
+    let key = random_key(44);
+    let mut config =
+        SessionSetup::new(2, SessionRole::Main, vec![DcAddress { host: "192.0.2.1".into(), port: 443, secret: None }]);
+    config.auth_key = Some(AuthKeyMaterial { key, salts: salts(), init_hash: None });
+    let session = engine.create_session(config);
+    assert!(collector.wait(WAIT, |events| {
+        events
+            .iter()
+            .any(|(handle, e)| *handle == session && matches!(e, EngineEvent::AddressResult { success: false, .. }))
+    }));
+    engine.shutdown();
+}
+
+#[test]
+fn network_usage_reports_interface_kind() {
+    let key = random_key(45);
+    let server = TestServer::start(vec![key.clone()], ServerOptions::default());
+    let collector = Arc::new(Collector::default());
+    let engine = Engine::new(
+        EngineConfig { worker_threads: 2, usage_report_interval: 0.1, ..EngineConfig::default() },
+        collector.clone(),
+    )
+    .unwrap();
+    let session = engine.create_session(setup(&server, &key, SessionRole::Main));
+    engine.send(session, request(1, 1));
+    assert!(collector.wait(WAIT, |events| {
+        events
+            .iter()
+            .any(|(_, e)| matches!(e, EngineEvent::NetworkUsage { incoming, cellular: false, .. } if *incoming > 0))
+    }));
+    engine.shutdown();
 }

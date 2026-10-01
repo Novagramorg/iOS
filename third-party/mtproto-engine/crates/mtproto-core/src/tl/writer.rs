@@ -11,9 +11,7 @@ impl Writer {
     }
 
     pub fn with_capacity(capacity: usize) -> Self {
-        Self {
-            buffer: Vec::with_capacity(capacity),
-        }
+        Self { buffer: Vec::with_capacity(capacity) }
     }
 
     pub fn from_vec(buffer: Vec<u8>) -> Self {

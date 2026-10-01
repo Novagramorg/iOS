@@ -4,7 +4,11 @@ use mtproto_core::test_support::{ServerHandshake, ServerHandshakeBehavior};
 
 const NOW: f64 = 1_727_000_000.0;
 
-fn run(behavior: ServerHandshakeBehavior, temp: Option<i32>, keys: Option<Vec<RsaPublicKey>>) -> Result<(mtproto_core::handshake::HandshakeResult, ServerHandshake), HandshakeError> {
+fn run(
+    behavior: ServerHandshakeBehavior,
+    temp: Option<i32>,
+    keys: Option<Vec<RsaPublicKey>>,
+) -> Result<(mtproto_core::handshake::HandshakeResult, ServerHandshake), HandshakeError> {
     let mut rng = XorShiftRandom::new(99);
     let mut server = ServerHandshake::new(behavior);
     let config = HandshakeConfig {
@@ -24,10 +28,7 @@ fn run(behavior: ServerHandshakeBehavior, temp: Option<i32>, keys: Option<Vec<Rs
 }
 
 fn behavior() -> ServerHandshakeBehavior {
-    ServerHandshakeBehavior {
-        server_time: NOW as i32 + 1000,
-        ..Default::default()
-    }
+    ServerHandshakeBehavior { server_time: NOW as i32 + 1000, ..Default::default() }
 }
 
 #[test]
@@ -65,17 +66,38 @@ fn too_many_retries_fail() {
 
 #[test]
 fn server_failures_are_reported() {
-    assert_eq!(run(ServerHandshakeBehavior { fail_dh_gen: true, ..behavior() }, None, None).unwrap_err(), HandshakeError::DhGenFail);
-    assert_eq!(run(ServerHandshakeBehavior { fail_dh_params: true, ..behavior() }, None, None).unwrap_err(), HandshakeError::ServerDhParamsFail);
+    assert_eq!(
+        run(ServerHandshakeBehavior { fail_dh_gen: true, ..behavior() }, None, None).unwrap_err(),
+        HandshakeError::DhGenFail
+    );
+    assert_eq!(
+        run(ServerHandshakeBehavior { fail_dh_params: true, ..behavior() }, None, None).unwrap_err(),
+        HandshakeError::ServerDhParamsFail
+    );
 }
 
 #[test]
 fn tampering_is_rejected() {
-    assert_eq!(run(ServerHandshakeBehavior { wrong_nonce_in_res_pq: true, ..behavior() }, None, None).unwrap_err(), HandshakeError::NonceMismatch);
-    assert_eq!(run(ServerHandshakeBehavior { corrupt_answer_hash: true, ..behavior() }, None, None).unwrap_err(), HandshakeError::BadEncryptedAnswer);
-    assert!(matches!(run(ServerHandshakeBehavior { foreign_fingerprint: true, ..behavior() }, None, None).unwrap_err(), HandshakeError::UnknownFingerprints(_)));
-    assert!(matches!(run(ServerHandshakeBehavior { bad_g: Some(9), ..behavior() }, None, None).unwrap_err(), HandshakeError::Dh(_)));
-    assert!(matches!(run(ServerHandshakeBehavior { small_g_a: true, ..behavior() }, None, None).unwrap_err(), HandshakeError::Dh(_)));
+    assert_eq!(
+        run(ServerHandshakeBehavior { wrong_nonce_in_res_pq: true, ..behavior() }, None, None).unwrap_err(),
+        HandshakeError::NonceMismatch
+    );
+    assert_eq!(
+        run(ServerHandshakeBehavior { corrupt_answer_hash: true, ..behavior() }, None, None).unwrap_err(),
+        HandshakeError::BadEncryptedAnswer
+    );
+    assert!(matches!(
+        run(ServerHandshakeBehavior { foreign_fingerprint: true, ..behavior() }, None, None).unwrap_err(),
+        HandshakeError::UnknownFingerprints(_)
+    ));
+    assert!(matches!(
+        run(ServerHandshakeBehavior { bad_g: Some(9), ..behavior() }, None, None).unwrap_err(),
+        HandshakeError::Dh(_)
+    ));
+    assert!(matches!(
+        run(ServerHandshakeBehavior { small_g_a: true, ..behavior() }, None, None).unwrap_err(),
+        HandshakeError::Dh(_)
+    ));
 }
 
 #[test]
@@ -84,13 +106,17 @@ fn unknown_server_key_is_rejected() {
         "-----BEGIN RSA PUBLIC KEY-----\nMIIBCgKCAQEA6LszBcC1LGzyr992NzE0ieY+BSaOW622Aa9Bd4ZHLl+TuFQ4lo4g\n5nKaMBwK/BIb9xUfg0Q29/2mgIR6Zr9krM7HjuIcCzFvDtr+L0GQjae9H0pRB2OO\n62cECs5HKhT5DZ98K33vmWiLowc621dQuwKWSQKjWf50XYFw42h21P2KXUGyp2y/\n+aEyZ+uVgLLQbRA1dEjSDZ2iGRy12Mk5gpYc397aYp438fsJoHIgJ2lgMv5h7WY9\nt6N/byY9Nw9p21Og3AoXSL2q/2IJ1WRUhebgAdGVMlV1fkuOQoEzR7EdpqtQD9Cs\n5+bfo3Nhmcyvk5ftB0WkJ9z6bNZ7yxrP8wIDAQAB\n-----END RSA PUBLIC KEY-----",
     )
     .unwrap();
-    assert!(matches!(run(behavior(), None, Some(vec![production])).unwrap_err(), HandshakeError::UnknownFingerprints(_)));
+    assert!(matches!(
+        run(behavior(), None, Some(vec![production])).unwrap_err(),
+        HandshakeError::UnknownFingerprints(_)
+    ));
 }
 
 #[test]
 fn server_dh_params_fail_with_bad_hash_is_reported_as_hash_mismatch() {
     assert_eq!(
-        run(ServerHandshakeBehavior { fail_dh_params: true, corrupt_fail_hash: true, ..behavior() }, None, None).unwrap_err(),
+        run(ServerHandshakeBehavior { fail_dh_params: true, corrupt_fail_hash: true, ..behavior() }, None, None)
+            .unwrap_err(),
         HandshakeError::NewNonceHashMismatch
     );
 }
@@ -134,8 +160,17 @@ fn encrypted_answer_shape_is_validated() {
 #[test]
 fn hostile_pq_values_fail_fast_without_hanging() {
     let started = std::time::Instant::now();
-    for pq in [vec![], vec![0], vec![1], vec![3], vec![0x7f; 9], 0xffff_ffff_ffff_ffc5u64.to_be_bytes().to_vec(), 2_305_843_009_213_693_951u64.to_be_bytes().to_vec()] {
-        let error = run(ServerHandshakeBehavior { pq_override: Some(pq.clone()), ..behavior() }, None, None).unwrap_err();
+    for pq in [
+        vec![],
+        vec![0],
+        vec![1],
+        vec![3],
+        vec![0x7f; 9],
+        0xffff_ffff_ffff_ffc5u64.to_be_bytes().to_vec(),
+        2_305_843_009_213_693_951u64.to_be_bytes().to_vec(),
+    ] {
+        let error =
+            run(ServerHandshakeBehavior { pq_override: Some(pq.clone()), ..behavior() }, None, None).unwrap_err();
         assert!(matches!(error, HandshakeError::BadPq(_) | HandshakeError::FactorizationFailed), "{pq:?}: {error:?}");
     }
     assert!(started.elapsed() < std::time::Duration::from_secs(5));
@@ -158,9 +193,16 @@ fn non_safe_or_short_primes_are_rejected() {
             }
         })
         .unwrap();
-    let error = run(ServerHandshakeBehavior { dh_prime_override: Some(composite.to_vec()), bad_g: Some(g), ..behavior() }, None, None).unwrap_err();
+    let error = run(
+        ServerHandshakeBehavior { dh_prime_override: Some(composite.to_vec()), bad_g: Some(g), ..behavior() },
+        None,
+        None,
+    )
+    .unwrap_err();
     assert!(matches!(error, HandshakeError::Dh(_)), "{error:?}");
-    let error = run(ServerHandshakeBehavior { dh_prime_override: Some(composite[1..].to_vec()), ..behavior() }, None, None).unwrap_err();
+    let error =
+        run(ServerHandshakeBehavior { dh_prime_override: Some(composite[1..].to_vec()), ..behavior() }, None, None)
+            .unwrap_err();
     assert!(matches!(error, HandshakeError::Dh(_)), "{error:?}");
 }
 
@@ -188,11 +230,7 @@ fn handshake_never_panics_on_garbage() {
     let mut rng = XorShiftRandom::new(5);
     let server = ServerHandshake::new(behavior());
     for seed in 0..300u64 {
-        let config = HandshakeConfig {
-            dc_id: 2,
-            temp_key_expires_in: None,
-            public_keys: vec![server.public_key()],
-        };
+        let config = HandshakeConfig { dc_id: 2, temp_key_expires_in: None, public_keys: vec![server.public_key()] };
         let (mut client, _) = Handshake::start(config, NOW, &mut rng);
         let mut garbage = XorShiftRandom::new(seed);
         let length = (seed as usize * 7) % 700;

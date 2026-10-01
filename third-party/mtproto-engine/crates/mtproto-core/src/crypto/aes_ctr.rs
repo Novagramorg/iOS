@@ -1,5 +1,5 @@
-use aes::cipher::{generic_array::GenericArray, BlockEncrypt, KeyInit};
 use aes::Aes256;
+use aes::cipher::{BlockEncrypt, KeyInit, generic_array::GenericArray};
 use zeroize::Zeroize;
 
 const PARALLEL_BLOCKS: usize = 8;

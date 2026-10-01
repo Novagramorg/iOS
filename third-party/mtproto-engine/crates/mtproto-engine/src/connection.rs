@@ -55,6 +55,7 @@ pub struct Connection {
     pub established_at: Option<f64>,
     pub last_read_at: f64,
     pub received_packet: bool,
+    pub cellular: bool,
     pub bytes_in: u64,
     pub bytes_out: u64,
 }
@@ -88,6 +89,7 @@ impl Connection {
             established_at: None,
             last_read_at: now,
             received_packet: false,
+            cellular: false,
             bytes_in: 0,
             bytes_out: 0,
         })
@@ -118,6 +120,12 @@ impl Connection {
                 Err(error) => return Err(ConnectionError::Io(error)),
             }
             let _ = self.socket.set_nodelay(true);
+            self.cellular = self
+                .socket
+                .local_addr()
+                .ok()
+                .and_then(|address| crate::interface::interface_name_for(address.ip()))
+                .is_some_and(|name| crate::interface::is_cellular_interface(&name));
             match self.pending_socks.take() {
                 Some((target, auth)) => {
                     let (handshake, greeting) = Socks5Handshake::new(target, auth).map_err(ConnectionError::Socks)?;
@@ -149,7 +157,13 @@ impl Connection {
         }
     }
 
-    pub fn send_packet(&mut self, registry: &Registry, payload: &[u8], quick_ack: bool, rng: &mut impl SecureRandom) -> Result<(), ConnectionError> {
+    pub fn send_packet(
+        &mut self,
+        registry: &Registry,
+        payload: &[u8],
+        quick_ack: bool,
+        rng: &mut impl SecureRandom,
+    ) -> Result<(), ConnectionError> {
         self.transport.send_packet(payload, quick_ack, rng);
         if matches!(self.phase, Phase::Ready) {
             self.move_transport_output();
@@ -168,7 +182,9 @@ impl Connection {
                 }
                 Err(error) if error.kind() == ErrorKind::WouldBlock => break,
                 Err(error) if error.kind() == ErrorKind::Interrupted => continue,
-                Err(error) if error.kind() == ErrorKind::NotConnected && matches!(self.phase, Phase::Connecting) => break,
+                Err(error) if error.kind() == ErrorKind::NotConnected && matches!(self.phase, Phase::Connecting) => {
+                    break;
+                }
                 Err(error) => return Err(ConnectionError::Io(error)),
             }
         }
@@ -181,18 +197,19 @@ impl Connection {
         }
         let needs_writable = self.write_offset < self.write_buffer.len() || matches!(self.phase, Phase::Connecting);
         if needs_writable != self.writable_interest {
-            let interest = if needs_writable {
-                Interest::READABLE | Interest::WRITABLE
-            } else {
-                Interest::READABLE
-            };
+            let interest = if needs_writable { Interest::READABLE | Interest::WRITABLE } else { Interest::READABLE };
             registry.reregister(&mut self.socket, self.token, interest).map_err(ConnectionError::Io)?;
             self.writable_interest = needs_writable;
         }
         Ok(())
     }
 
-    pub fn read_chunk(&mut self, registry: &Registry, scratch: &mut [u8], now: f64) -> Result<ChunkStatus, ConnectionError> {
+    pub fn read_chunk(
+        &mut self,
+        registry: &Registry,
+        scratch: &mut [u8],
+        now: f64,
+    ) -> Result<ChunkStatus, ConnectionError> {
         let read = loop {
             match self.socket.read(scratch) {
                 Ok(0) => return Ok(ChunkStatus::Eof),

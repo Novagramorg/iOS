@@ -4,10 +4,10 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use mtproto_core::crypto::{OsRandom, RsaPublicKey, Side};
 use mtproto_core::handshake::{Handshake, HandshakeConfig, HandshakeStep};
-use mtproto_core::message::{decrypt_message, encrypt_message, MessageHeader, PaddingPolicy};
+use mtproto_core::message::{MessageHeader, PaddingPolicy, decrypt_message, encrypt_message};
 use mtproto_core::msg_id::{MsgIdGenerator, SeqNoGenerator};
-use mtproto_core::tl::mtproto::{write_ping, ServiceMessage};
 use mtproto_core::tl::Writer;
+use mtproto_core::tl::mtproto::{ServiceMessage, write_ping};
 use mtproto_core::transport::{Framing, Incoming, TransportConfig, TransportStream};
 
 const TEST_KEY: &str = "-----BEGIN RSA PUBLIC KEY-----\nMIIBCgKCAQEAyMEdY1aR+sCR3ZSJrtztKTKqigvO/vBfqACJLZtS7QMgCGXJ6XIR\nyy7mx66W0/sOFa7/1mAZtEoIokDP3ShoqF4fVNb6XeqgQfaUHd8wJpDWHcR2OFwv\nplUUI1PLTktZ9uW2WE23b+ixNwJjJGwBDJPQEQFBE+vfmH0JP503wr5INS1poWg/\nj25sIWeYPHYeOrFp/eXaqhISP6G+q2IeTaWTXpwZj4LzXq5YOpk4bYEQ6mvRq7D1\naHWfYmlEGepfaYR8Q0YqvvhYtMte3ITnuSJs171+GDqpdKcSwHnd6FudwGO4pcCO\nj4WcDuXc2CTHgH8gFTNhp/Y8/SpDOhvn9QIDAQAB\n-----END RSA PUBLIC KEY-----";
@@ -33,7 +33,15 @@ fn read_packet(socket: &mut TcpStream, stream: &mut TransportStream) -> Vec<u8> 
     }
 }
 
-fn probe(label: &str, address: &str, dc_id: i32, obfuscation_dc: i16, key_pem: &str, temp: Option<i32>, framing: Framing) {
+fn probe(
+    label: &str,
+    address: &str,
+    dc_id: i32,
+    obfuscation_dc: i16,
+    key_pem: &str,
+    temp: Option<i32>,
+    framing: Framing,
+) {
     println!("== {label} ({address}, dc {dc_id}, temp={temp:?}, {framing:?})");
     let started = Instant::now();
     let mut rng = OsRandom;
@@ -41,12 +49,7 @@ fn probe(label: &str, address: &str, dc_id: i32, obfuscation_dc: i16, key_pem: &
     socket.set_read_timeout(Some(Duration::from_secs(15))).unwrap();
     socket.set_nodelay(true).unwrap();
     let mut stream = TransportStream::new(
-        &TransportConfig {
-            framing,
-            dc_id: obfuscation_dc,
-            secret: None,
-            unix_time: unix_now() as i32,
-        },
+        &TransportConfig { framing, dc_id: obfuscation_dc, secret: None, unix_time: unix_now() as i32 },
         &mut rng,
     );
     let config = HandshakeConfig {
@@ -81,13 +84,9 @@ fn probe(label: &str, address: &str, dc_id: i32, obfuscation_dc: i16, key_pem: &
     let mut body = Writer::new();
     write_ping(&mut body, ping_id);
     let msg_id = msg_ids.next(unix_now() + result.time_difference);
-    let header = MessageHeader {
-        salt: result.server_salt,
-        session_id,
-        msg_id,
-        seq_no: seq.next(true),
-    };
-    let encrypted = encrypt_message(&result.auth_key, &header, body.as_slice(), Side::Client, PaddingPolicy::default(), &mut rng);
+    let header = MessageHeader { salt: result.server_salt, session_id, msg_id, seq_no: seq.next(true) };
+    let encrypted =
+        encrypt_message(&result.auth_key, &header, body.as_slice(), Side::Client, PaddingPolicy::default(), &mut rng);
     let ping_started = Instant::now();
     stream.send_packet(&encrypted.data, true, &mut rng);
     socket.write_all(&stream.take_outgoing()).unwrap();
@@ -97,7 +96,9 @@ fn probe(label: &str, address: &str, dc_id: i32, obfuscation_dc: i16, key_pem: &
         assert_eq!(decrypted.header.session_id, session_id);
         assert_eq!(decrypted.header.msg_id & 1, 1, "server msg_id must be odd");
         let messages = match ServiceMessage::parse(decrypted.body()).expect("parse") {
-            ServiceMessage::Container(items) => items.iter().map(|m| ServiceMessage::parse(m.body).unwrap().clone_shape()).collect(),
+            ServiceMessage::Container(items) => {
+                items.iter().map(|m| ServiceMessage::parse(m.body).unwrap().clone_shape()).collect()
+            }
             other => vec![other.clone_shape()],
         };
         for message in &messages {

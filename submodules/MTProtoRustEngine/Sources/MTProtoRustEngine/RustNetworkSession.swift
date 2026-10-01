@@ -100,6 +100,7 @@ final class RustNetworkSession: NetworkEngineSession {
     private var lastEventKind: RustEngineEventKind?
     private var lastConnectionFlags: RustEngineConnectionFlags?
     private var lastEngineProxyAddress: String?
+    private var lastNetworkIsCellular = false
     private var lastReportedState: NetworkEngineConnectionState?
     private var connectionWatchdog: SwiftSignalKit.Timer?
     private var connectionProblemsReported = false
@@ -467,12 +468,14 @@ final class RustNetworkSession: NetworkEngineSession {
             self.updateConnectionWatchdog()
             self.reportConnectionState()
         case .networkUsage:
+            self.lastNetworkIsCellular = (event.flags & UInt32(MTNetworkUsageCellular)) != 0
             if let usageManager = self.usageManager {
+                let interface = self.lastNetworkIsCellular ? MTNetworkUsageManagerInterfaceWWAN : MTNetworkUsageManagerInterfaceOther
                 if event.integer1 > 0 {
-                    usageManager.addIncomingBytes(UInt(clamping: event.integer1), interface: MTNetworkUsageManagerInterfaceOther)
+                    usageManager.addIncomingBytes(UInt(clamping: event.integer1), interface: interface)
                 }
                 if event.integer2 > 0 {
-                    usageManager.addOutgoingBytes(UInt(clamping: event.integer2), interface: MTNetworkUsageManagerInterfaceOther)
+                    usageManager.addOutgoingBytes(UInt(clamping: event.integer2), interface: interface)
                 }
             }
         case .addressResult:
@@ -497,7 +500,7 @@ final class RustNetworkSession: NetworkEngineSession {
     }
 
     private func responseInfo(_ event: RustEngineEvent) -> NetworkEngineResponseInfo {
-        return NetworkEngineResponseInfo(timestamp: event.value1, networkType: 0, duration: event.value2)
+        return NetworkEngineResponseInfo(timestamp: event.value1, networkType: self.lastNetworkIsCellular ? 1 : 0, duration: event.value2)
     }
 
     private func handleCompleted(_ event: RustEngineEvent) {

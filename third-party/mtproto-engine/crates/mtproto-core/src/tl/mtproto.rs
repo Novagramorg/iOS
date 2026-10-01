@@ -1,9 +1,9 @@
 use std::io::{Read, Write};
 
-use flate2::read::ZlibDecoder;
-use flate2::read::GzDecoder;
-use flate2::write::GzEncoder;
 use flate2::Compression;
+use flate2::read::GzDecoder;
+use flate2::read::ZlibDecoder;
+use flate2::write::GzEncoder;
 
 use super::ids;
 use super::{Reader, TlError, TlRead, TlResult, TlWrite, Writer};
@@ -58,11 +58,7 @@ pub struct PqInnerData {
 
 impl TlWrite for PqInnerData {
     fn write_to(&self, writer: &mut Writer) {
-        writer.write_u32(if self.expires_in.is_some() {
-            ids::P_Q_INNER_DATA_TEMP_DC
-        } else {
-            ids::P_Q_INNER_DATA_DC
-        });
+        writer.write_u32(if self.expires_in.is_some() { ids::P_Q_INNER_DATA_TEMP_DC } else { ids::P_Q_INNER_DATA_DC });
         writer.write_bytes(&self.pq);
         writer.write_bytes(&self.p);
         writer.write_bytes(&self.q);
@@ -100,16 +96,8 @@ impl<'a> TlRead<'a> for PqInnerData {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ServerDhParams {
-    Ok {
-        nonce: [u8; 16],
-        server_nonce: [u8; 16],
-        encrypted_answer: Vec<u8>,
-    },
-    Fail {
-        nonce: [u8; 16],
-        server_nonce: [u8; 16],
-        new_nonce_hash: [u8; 16],
-    },
+    Ok { nonce: [u8; 16], server_nonce: [u8; 16], encrypted_answer: Vec<u8> },
+    Fail { nonce: [u8; 16], server_nonce: [u8; 16], new_nonce_hash: [u8; 16] },
 }
 
 impl<'a> TlRead<'a> for ServerDhParams {
@@ -134,21 +122,13 @@ impl<'a> TlRead<'a> for ServerDhParams {
 impl TlWrite for ServerDhParams {
     fn write_to(&self, writer: &mut Writer) {
         match self {
-            Self::Ok {
-                nonce,
-                server_nonce,
-                encrypted_answer,
-            } => {
+            Self::Ok { nonce, server_nonce, encrypted_answer } => {
                 writer.write_u32(ids::SERVER_DH_PARAMS_OK);
                 writer.write_int128(nonce);
                 writer.write_int128(server_nonce);
                 writer.write_bytes(encrypted_answer);
             }
-            Self::Fail {
-                nonce,
-                server_nonce,
-                new_nonce_hash,
-            } => {
+            Self::Fail { nonce, server_nonce, new_nonce_hash } => {
                 writer.write_u32(ids::SERVER_DH_PARAMS_FAIL);
                 writer.write_int128(nonce);
                 writer.write_int128(server_nonce);
@@ -375,10 +355,7 @@ impl RpcError {
 
     pub fn normalized(self) -> Self {
         let valid = self.code != 0 && (-MAX_VALID_ERROR_CODE..=MAX_VALID_ERROR_CODE).contains(&self.code);
-        Self {
-            code: if valid { self.code } else { 500 },
-            message: self.message,
-        }
+        Self { code: if valid { self.code } else { 500 }, message: self.message }
     }
 }
 
@@ -492,16 +469,10 @@ impl<'a> ServiceMessage<'a> {
         let mut reader = Reader::new(body);
         let constructor = reader.read_u32()?;
         let message = match constructor {
-            ids::RPC_RESULT => Self::RpcResult {
-                req_msg_id: reader.read_i64()?,
-                result: take_rest(&mut reader),
-            },
+            ids::RPC_RESULT => Self::RpcResult { req_msg_id: reader.read_i64()?, result: take_rest(&mut reader) },
             ids::MSG_CONTAINER => Self::Container(parse_container_body(&mut reader)?),
             ids::GZIP_PACKED => Self::GzipPacked(reader.read_bytes()?),
-            ids::PONG => Self::Pong {
-                msg_id: reader.read_i64()?,
-                ping_id: reader.read_i64()?,
-            },
+            ids::PONG => Self::Pong { msg_id: reader.read_i64()?, ping_id: reader.read_i64()? },
             ids::BAD_MSG_NOTIFICATION => Self::BadMsgNotification {
                 bad_msg_id: reader.read_i64()?,
                 bad_msg_seqno: reader.read_i32()?,
@@ -532,9 +503,7 @@ impl<'a> ServiceMessage<'a> {
             },
             ids::MSG_RESEND_REQ => Self::MsgResendReq(reader.read_i64_vector(MAX_VECTOR_ITEMS)?),
             ids::MSG_RESEND_ANS_REQ => Self::MsgResendAnsReq(reader.read_i64_vector(MAX_VECTOR_ITEMS)?),
-            ids::PING | ids::PING_DELAY_DISCONNECT => Self::Ping {
-                ping_id: reader.read_i64()?,
-            },
+            ids::PING | ids::PING_DELAY_DISCONNECT => Self::Ping { ping_id: reader.read_i64()? },
             ids::MSG_COPY => Self::MsgCopy(parse_copied_message(&mut reader)?),
             ids::HTTP_WAIT => Self::HttpWait {
                 max_delay: reader.read_i32()?,
@@ -542,14 +511,10 @@ impl<'a> ServiceMessage<'a> {
                 max_wait: reader.read_i32()?,
             },
             ids::MSGS_STATE_REQ => Self::MsgsStateReq(reader.read_i64_vector(MAX_VECTOR_ITEMS)?),
-            ids::MSGS_STATE_INFO => Self::MsgsStateInfo {
-                req_msg_id: reader.read_i64()?,
-                info: reader.read_bytes()?,
-            },
-            ids::MSGS_ALL_INFO => Self::MsgsAllInfo {
-                msg_ids: reader.read_i64_vector(MAX_VECTOR_ITEMS)?,
-                info: reader.read_bytes()?,
-            },
+            ids::MSGS_STATE_INFO => Self::MsgsStateInfo { req_msg_id: reader.read_i64()?, info: reader.read_bytes()? },
+            ids::MSGS_ALL_INFO => {
+                Self::MsgsAllInfo { msg_ids: reader.read_i64_vector(MAX_VECTOR_ITEMS)?, info: reader.read_bytes()? }
+            }
             ids::FUTURE_SALTS => {
                 let req_msg_id = reader.read_i64()?;
                 let now = reader.read_i32()?;
@@ -567,21 +532,14 @@ impl<'a> ServiceMessage<'a> {
                 }
                 Self::FutureSalts { req_msg_id, now, salts }
             }
-            ids::DESTROY_SESSION_OK => Self::DestroySessionOk {
-                session_id: reader.read_i64()?,
-            },
-            ids::DESTROY_SESSION_NONE => Self::DestroySessionNone {
-                session_id: reader.read_i64()?,
-            },
+            ids::DESTROY_SESSION_OK => Self::DestroySessionOk { session_id: reader.read_i64()? },
+            ids::DESTROY_SESSION_NONE => Self::DestroySessionNone { session_id: reader.read_i64()? },
             ids::DESTROY_AUTH_KEY_OK => Self::DestroyAuthKeyOk,
             ids::DESTROY_AUTH_KEY_NONE => Self::DestroyAuthKeyNone,
             ids::DESTROY_AUTH_KEY_FAIL => Self::DestroyAuthKeyFail,
             other if is_mtproto_constructor(other) => Self::Ignored { constructor: other },
             _ => {
-                return Ok(Self::Other {
-                    constructor,
-                    body,
-                });
+                return Ok(Self::Other { constructor, body });
             }
         };
         Ok(message)
@@ -597,10 +555,7 @@ fn parse_copied_message<'a>(reader: &mut Reader<'a>) -> TlResult<ContainerMessag
     let offset = reader.position();
     let length = reader.read_i32()?;
     if length < 0 || length % 4 != 0 || length as usize > reader.remaining() {
-        return Err(TlError::InvalidLength {
-            offset,
-            length: length as i64,
-        });
+        return Err(TlError::InvalidLength { offset, length: length as i64 });
     }
     let body = reader.read_raw(length as usize)?;
     Ok(ContainerMessage { msg_id, seqno, body })
@@ -608,11 +563,7 @@ fn parse_copied_message<'a>(reader: &mut Reader<'a>) -> TlResult<ContainerMessag
 
 impl Reader<'_> {
     fn read_vector_header_or_bare(&mut self, max_count: usize) -> TlResult<usize> {
-        if self.peek_u32()? == ids::VECTOR {
-            self.read_vector_header(max_count)
-        } else {
-            self.read_count(max_count)
-        }
+        if self.peek_u32()? == ids::VECTOR { self.read_vector_header(max_count) } else { self.read_count(max_count) }
     }
 }
 
@@ -631,10 +582,7 @@ fn parse_container_body<'a>(reader: &mut Reader<'a>) -> TlResult<Vec<ContainerMe
         let offset = reader.position();
         let length = reader.read_i32()?;
         if length < 0 || length % 4 != 0 || length as usize > reader.remaining() {
-            return Err(TlError::InvalidLength {
-                offset,
-                length: length as i64,
-            });
+            return Err(TlError::InvalidLength { offset, length: length as i64 });
         }
         let body = reader.read_raw(length as usize)?;
         messages.push(ContainerMessage { msg_id, seqno, body });
@@ -1024,7 +972,15 @@ mod tests {
 
     #[test]
     fn mtproto_constructors_are_never_updates() {
-        for constructor in [ids::RPC_ERROR, ids::RES_PQ, ids::DH_GEN_FAIL, ids::VECTOR, ids::MESSAGE, ids::DESTROY_SESSIONS_RES, ids::RPC_DROP_ANSWER] {
+        for constructor in [
+            ids::RPC_ERROR,
+            ids::RES_PQ,
+            ids::DH_GEN_FAIL,
+            ids::VECTOR,
+            ids::MESSAGE,
+            ids::DESTROY_SESSIONS_RES,
+            ids::RPC_DROP_ANSWER,
+        ] {
             let body = constructor.to_le_bytes();
             assert_eq!(ServiceMessage::parse(&body).unwrap(), ServiceMessage::Ignored { constructor });
         }
@@ -1046,7 +1002,9 @@ mod tests {
             }
             other => panic!("{other:?}"),
         }
-        for (code, normalized) in [(0, 500), (10000, 500), (-10000, 500), (9999, 9999), (-9999, -9999), (420, 420), (-503, -503)] {
+        for (code, normalized) in
+            [(0, 500), (10000, 500), (-10000, 500), (9999, 9999), (-9999, -9999), (420, 420), (-503, -503)]
+        {
             assert_eq!(RpcError { code, message: String::new() }.normalized().code, normalized);
         }
     }
@@ -1059,11 +1017,18 @@ mod tests {
         assert_eq!(budget, 500);
         assert!(gunzip_within(&packed, &mut budget).is_err());
         assert_eq!(budget, 500);
-        assert_eq!(parse_rpc_result_limited(&{
-            let mut writer = Writer::new();
-            write_gzip_packed(&mut writer, &packed);
-            writer.into_inner()
-        }, 999).map(|_| ()), Err(TlError::Gzip("unpacked size exceeds 999 bytes".into())));
+        assert_eq!(
+            parse_rpc_result_limited(
+                &{
+                    let mut writer = Writer::new();
+                    write_gzip_packed(&mut writer, &packed);
+                    writer.into_inner()
+                },
+                999
+            )
+            .map(|_| ()),
+            Err(TlError::Gzip("unpacked size exceeds 999 bytes".into()))
+        );
     }
 
     proptest! {

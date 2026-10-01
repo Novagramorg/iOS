@@ -13,18 +13,11 @@ pub struct DuplicateChecker {
 
 impl DuplicateChecker {
     pub fn new(capacity: usize) -> Self {
-        Self {
-            ids: Vec::with_capacity(capacity * 2),
-            capacity,
-        }
+        Self { ids: Vec::with_capacity(capacity * 2), capacity }
     }
 
     pub fn peek(&self, id: i64) -> DuplicateCheck {
-        let retained = if self.ids.len() == self.capacity * 2 {
-            &self.ids[self.capacity..]
-        } else {
-            &self.ids[..]
-        };
+        let retained = if self.ids.len() == self.capacity * 2 { &self.ids[self.capacity..] } else { &self.ids[..] };
         match retained.last() {
             None => return DuplicateCheck::New,
             Some(&last) if id > last => return DuplicateCheck::New,
@@ -33,11 +26,7 @@ impl DuplicateChecker {
         if retained.len() >= self.capacity && id < retained[0] {
             return DuplicateCheck::TooOld;
         }
-        if retained.binary_search(&id).is_ok() {
-            DuplicateCheck::Duplicate
-        } else {
-            DuplicateCheck::New
-        }
+        if retained.binary_search(&id).is_ok() { DuplicateCheck::Duplicate } else { DuplicateCheck::New }
     }
 
     pub fn len(&self) -> usize {

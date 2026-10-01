@@ -1,8 +1,8 @@
 use std::time::Instant;
 
 use mtproto_core::auth_key::AuthKey;
-use mtproto_core::crypto::{aes_ige_decrypt, sha256, OsRandom, Side};
-use mtproto_core::message::{decrypt_message, encrypt_message, MessageHeader, PaddingPolicy};
+use mtproto_core::crypto::{OsRandom, Side, aes_ige_decrypt, sha256};
+use mtproto_core::message::{MessageHeader, PaddingPolicy, decrypt_message, encrypt_message};
 
 fn main() {
     let size = 64 * 1024 * 1024;
@@ -26,5 +26,8 @@ fn main() {
         assert_eq!(message.body().len(), body.len());
     }
     let message_rate = (rounds * body.len()) as f64 / started.elapsed().as_secs_f64() / 1e6;
-    println!("aes-ige {aes:.0} MB/s, sha256 {sha:.0} MB/s, decrypt_message(512KB) {message_rate:.0} MB/s [{:x}]", digest[0]);
+    println!(
+        "aes-ige {aes:.0} MB/s, sha256 {sha:.0} MB/s, decrypt_message(512KB) {message_rate:.0} MB/s [{:x}]",
+        digest[0]
+    );
 }

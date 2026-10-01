@@ -1,5 +1,5 @@
-use aes::cipher::{generic_array::GenericArray, BlockDecrypt, BlockEncrypt, KeyInit};
 use aes::Aes256;
+use aes::cipher::{BlockDecrypt, BlockEncrypt, KeyInit, generic_array::GenericArray};
 use zeroize::Zeroize;
 
 use super::CryptoError;
@@ -11,10 +11,7 @@ pub struct AesIge {
 
 impl AesIge {
     pub fn new(key: &[u8; 32], iv: &[u8; 32]) -> Self {
-        Self {
-            cipher: Aes256::new(GenericArray::from_slice(key)),
-            iv: *iv,
-        }
+        Self { cipher: Aes256::new(GenericArray::from_slice(key)), iv: *iv }
     }
 
     pub fn iv(&self) -> &[u8; 32] {
@@ -113,14 +110,8 @@ mod tests {
     #[test]
     fn rejects_unaligned_input() {
         let mut data = [0u8; 15];
-        assert_eq!(
-            aes_ige_encrypt(&[0; 32], &[0; 32], &mut data),
-            Err(CryptoError::UnalignedLength(15))
-        );
-        assert_eq!(
-            aes_ige_decrypt(&[0; 32], &[0; 32], &mut data),
-            Err(CryptoError::UnalignedLength(15))
-        );
+        assert_eq!(aes_ige_encrypt(&[0; 32], &[0; 32], &mut data), Err(CryptoError::UnalignedLength(15)));
+        assert_eq!(aes_ige_decrypt(&[0; 32], &[0; 32], &mut data), Err(CryptoError::UnalignedLength(15)));
     }
 
     #[test]

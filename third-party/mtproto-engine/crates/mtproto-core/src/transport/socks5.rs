@@ -62,22 +62,17 @@ pub struct Socks5Handshake {
 impl Socks5Handshake {
     pub fn new(target: Socks5Target, auth: Option<Socks5Auth>) -> Result<(Self, Vec<u8>), Socks5Error> {
         if let Some(auth) = &auth
-            && (auth.username.len() > 255 || auth.password.len() > 255) {
-                return Err(Socks5Error::CredentialsTooLong);
-            }
+            && (auth.username.len() > 255 || auth.password.len() > 255)
+        {
+            return Err(Socks5Error::CredentialsTooLong);
+        }
         if let Socks5Target::Domain(domain, _) = &target
-            && domain.len() > 255 {
-                return Err(Socks5Error::DomainTooLong);
-            }
+            && domain.len() > 255
+        {
+            return Err(Socks5Error::DomainTooLong);
+        }
         let greeting = if auth.is_some() { vec![5, 2, 0, 2] } else { vec![5, 1, 0] };
-        Ok((
-            Self {
-                target,
-                auth,
-                state: State::Greeting,
-            },
-            greeting,
-        ))
+        Ok((Self { target, auth, state: State::Greeting }, greeting))
     }
 
     pub fn is_done(&self) -> bool {
@@ -194,7 +189,8 @@ mod tests {
 
     #[test]
     fn no_auth_ipv4() {
-        let (mut handshake, greeting) = Socks5Handshake::new(Socks5Target::Ipv4([149, 154, 167, 51], 443), None).unwrap();
+        let (mut handshake, greeting) =
+            Socks5Handshake::new(Socks5Target::Ipv4([149, 154, 167, 51], 443), None).unwrap();
         assert_eq!(greeting, vec![5, 1, 0]);
         assert_eq!(
             feed_all(&mut handshake, &[5, 0]).unwrap(),
@@ -206,12 +202,8 @@ mod tests {
 
     #[test]
     fn password_auth_ipv6_and_domain_reply() {
-        let auth = Socks5Auth {
-            username: "user".into(),
-            password: "pw".into(),
-        };
-        let (mut handshake, greeting) =
-            Socks5Handshake::new(Socks5Target::Ipv6([0x20; 16], 80), Some(auth)).unwrap();
+        let auth = Socks5Auth { username: "user".into(), password: "pw".into() };
+        let (mut handshake, greeting) = Socks5Handshake::new(Socks5Target::Ipv6([0x20; 16], 80), Some(auth)).unwrap();
         assert_eq!(greeting, vec![5, 2, 0, 2]);
         assert_eq!(
             feed_all(&mut handshake, &[5, 2]).unwrap(),
@@ -240,10 +232,7 @@ mod tests {
         let (mut handshake, _) = Socks5Handshake::new(Socks5Target::Ipv4([1, 2, 3, 4], 1), None).unwrap();
         feed_all(&mut handshake, &[5, 0]).unwrap();
         assert_eq!(feed_all(&mut handshake, &[5, 5, 0, 1, 0]), Err(Socks5Error::ConnectFailed(5)));
-        let auth = Socks5Auth {
-            username: "u".into(),
-            password: "p".into(),
-        };
+        let auth = Socks5Auth { username: "u".into(), password: "p".into() };
         let (mut handshake, _) = Socks5Handshake::new(Socks5Target::Ipv4([1, 2, 3, 4], 1), Some(auth)).unwrap();
         feed_all(&mut handshake, &[5, 2]).unwrap();
         assert_eq!(feed_all(&mut handshake, &[1, 1]), Err(Socks5Error::AuthenticationFailed));

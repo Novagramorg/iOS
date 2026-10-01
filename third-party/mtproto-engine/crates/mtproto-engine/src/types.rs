@@ -16,17 +16,8 @@ pub struct DcAddress {
 
 #[derive(Clone, PartialEq, Eq)]
 pub enum ProxyConfig {
-    Socks5 {
-        host: String,
-        port: u16,
-        username: Option<String>,
-        password: Option<String>,
-    },
-    MtProxy {
-        host: String,
-        port: u16,
-        secret: Vec<u8>,
-    },
+    Socks5 { host: String, port: u16, username: Option<String>, password: Option<String> },
+    MtProxy { host: String, port: u16, secret: Vec<u8> },
 }
 
 impl core::fmt::Debug for ProxyConfig {
@@ -41,7 +32,9 @@ impl core::fmt::Debug for ProxyConfig {
 impl ProxyConfig {
     pub fn display_address(&self) -> String {
         match self {
-            ProxyConfig::Socks5 { host, port, .. } | ProxyConfig::MtProxy { host, port, .. } => format!("{host}:{port}"),
+            ProxyConfig::Socks5 { host, port, .. } | ProxyConfig::MtProxy { host, port, .. } => {
+                format!("{host}:{port}")
+            }
         }
     }
 }
@@ -55,10 +48,7 @@ pub struct AuthKeyMaterial {
 
 impl core::fmt::Debug for AuthKeyMaterial {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("AuthKeyMaterial")
-            .field("key", &self.key)
-            .field("salts", &self.salts.len())
-            .finish()
+        f.debug_struct("AuthKeyMaterial").field("key", &self.key).field("salts", &self.salts.len()).finish()
     }
 }
 
@@ -115,10 +105,7 @@ impl SessionSetup {
         match &self.proxy {
             Some(ProxyConfig::MtProxy { secret, .. }) => ProxySecret::from_binary(secret, true).ok(),
             Some(ProxyConfig::Socks5 { .. }) => None,
-            None => address
-                .secret
-                .as_ref()
-                .and_then(|secret| ProxySecret::from_binary(secret, true).ok()),
+            None => address.secret.as_ref().and_then(|secret| ProxySecret::from_binary(secret, true).ok()),
         }
     }
 }
@@ -142,7 +129,7 @@ pub enum EngineEvent {
     AuthKeyCreated { key: Vec<u8>, salt: i64, time_difference: f64, expires_at: Option<i32> },
     AuthKeyCreationFailed { reason: String },
     TransportFlood,
-    NetworkUsage { incoming: u64, outgoing: u64 },
+    NetworkUsage { incoming: u64, outgoing: u64, cellular: bool },
     AddressResult { index: usize, success: bool },
     Closed,
 }

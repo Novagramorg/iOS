@@ -1,17 +1,17 @@
 use num_bigint::BigUint;
 
-use super::{test_rsa_key_pair, TestRsaKeyPair};
+use super::{TestRsaKeyPair, test_rsa_key_pair};
 use crate::auth_key::AuthKey;
 use crate::crypto::{
-    aes_ige_decrypt, aes_ige_encrypt, handshake_tmp_aes, sha1, sha1_parts, sha256, sha256_parts, to_fixed_be, SecureRandom,
-    KNOWN_DH_PRIME,
+    KNOWN_DH_PRIME, SecureRandom, aes_ige_decrypt, aes_ige_encrypt, handshake_tmp_aes, sha1, sha1_parts, sha256,
+    sha256_parts, to_fixed_be,
 };
 use crate::message::{decode_plain_message, encode_plain_message};
 use crate::msg_id::MsgIdGenerator;
 use crate::tl::mtproto::{
     ClientDhInnerData, DhGenKind, PqInnerData, ResPq, ServerDhInnerData, ServerDhParams, SetClientDhParamsAnswer,
 };
-use crate::tl::{ids, Reader, TlRead, TlWrite};
+use crate::tl::{Reader, TlRead, TlWrite, ids};
 
 #[derive(Debug, Clone, Default)]
 pub struct ServerHandshakeBehavior {
@@ -213,12 +213,7 @@ impl ServerHandshake {
                 if self.behavior.unaligned_encrypted_answer {
                     answer.truncate(answer.len() - 4);
                 }
-                let body = ServerDhParams::Ok {
-                    nonce: self.nonce,
-                    server_nonce,
-                    encrypted_answer: answer,
-                }
-                .to_bytes();
+                let body = ServerDhParams::Ok { nonce: self.nonce, server_nonce, encrypted_answer: answer }.to_bytes();
                 Some(self.reply(body))
             }
             ids::SET_CLIENT_DH_PARAMS => {

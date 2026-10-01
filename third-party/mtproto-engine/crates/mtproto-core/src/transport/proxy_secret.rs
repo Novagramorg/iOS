@@ -53,11 +53,7 @@ impl ProxySecret {
         if valid {
             return Ok(Self { raw: raw.to_vec() });
         }
-        if raw.len() < 16 {
-            Err(ProxySecretError::Wrong)
-        } else {
-            Err(ProxySecretError::Unsupported)
-        }
+        if raw.len() < 16 { Err(ProxySecretError::Wrong) } else { Err(ProxySecretError::Unsupported) }
     }
 
     pub fn raw(&self) -> &[u8] {
@@ -86,10 +82,7 @@ fn decode_hex(text: &str) -> Option<Vec<u8>> {
     if !text.len().is_multiple_of(2) || text.is_empty() {
         return None;
     }
-    (0..text.len())
-        .step_by(2)
-        .map(|i| u8::from_str_radix(text.get(i..i + 2)?, 16).ok())
-        .collect()
+    (0..text.len()).step_by(2).map(|i| u8::from_str_radix(text.get(i..i + 2)?, 16).ok()).collect()
 }
 
 #[cfg(test)]

@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
-use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Arc;
+use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
 
 use mio::{Events, Poll, Token, Waker};
@@ -10,7 +10,9 @@ use mtproto_core::rpc::{ApiEnvironment, RequestId, RpcRequest, Verification};
 use crate::clock;
 use crate::resolver::resolve_blocking;
 use crate::session_runtime::{Resolution, Resolve, SessionRuntime};
-use crate::types::{AuthKeyMaterial, DcAddress, EngineCallbacks, EngineConfig, EngineEvent, ProxyConfig, SessionHandle, SessionSetup};
+use crate::types::{
+    AuthKeyMaterial, DcAddress, EngineCallbacks, EngineConfig, EngineEvent, ProxyConfig, SessionHandle, SessionSetup,
+};
 
 pub const WAKER_TOKEN: Token = Token(usize::MAX);
 const MAX_POLL_WAIT: f64 = 60.0;
@@ -25,6 +27,7 @@ pub enum Command {
     SetOnline(SessionHandle, bool),
     SetAuthKey(SessionHandle, Option<AuthKeyMaterial>),
     SetAddresses(SessionHandle, Vec<DcAddress>),
+    SetObfuscationDcId(SessionHandle, i16),
     SetProxy(SessionHandle, Option<ProxyConfig>),
     UpdateEnvironment(SessionHandle, Box<ApiEnvironment>, Option<RpcRequest>),
     SetAuthTokenReady(SessionHandle, bool),
@@ -55,18 +58,11 @@ impl Resolve for ThreadResolver {
         let sender = self.sender.clone();
         let waker = self.waker.clone();
         let host = host.to_string();
-        let spawned = std::thread::Builder::new()
-            .name("mtproto-resolver".into())
-            .spawn(move || {
-                let addresses = resolve_blocking(&host, port);
-                let _ = sender.send(Command::Resolved {
-                    handle: session,
-                    host,
-                    port,
-                    addresses,
-                });
-                let _ = waker.wake();
-            });
+        let spawned = std::thread::Builder::new().name("mtproto-resolver".into()).spawn(move || {
+            let addresses = resolve_blocking(&host, port);
+            let _ = sender.send(Command::Resolved { handle: session, host, port, addresses });
+            let _ = waker.wake();
+        });
         if spawned.is_err() {
             return Resolution::Resolved(Vec::new());
         }
@@ -101,11 +97,7 @@ impl Worker {
         Self {
             poll,
             receiver,
-            resolver: ThreadResolver {
-                sender,
-                waker,
-                in_flight: HashSet::new(),
-            },
+            resolver: ThreadResolver { sender, waker, in_flight: HashSet::new() },
             sessions: HashMap::new(),
             tokens: HashMap::new(),
             next_token: 1,
@@ -130,11 +122,11 @@ impl Worker {
             }
             let wait = (deadline - now.mono).clamp(0.0, MAX_POLL_WAIT);
             if let Err(error) = self.poll.poll(&mut events, Some(Duration::from_secs_f64(wait)))
-                && error.kind() != std::io::ErrorKind::Interrupted {
-                    self.callbacks
-                        .on_log(crate::types::LogLevel::Error, &format!("[MTProtoEngine] poll failed: {error}"));
-                    std::thread::sleep(Duration::from_millis(50));
-                }
+                && error.kind() != std::io::ErrorKind::Interrupted
+            {
+                self.callbacks.on_log(crate::types::LogLevel::Error, &format!("[MTProtoEngine] poll failed: {error}"));
+                std::thread::sleep(Duration::from_millis(50));
+            }
             let now = clock::now();
             for event in events.iter() {
                 if event.token() == WAKER_TOKEN {
@@ -253,6 +245,11 @@ impl Worker {
                         session.set_addresses(addresses, now, self.poll.registry());
                     }
                 }
+                Command::SetObfuscationDcId(handle, dc_id) => {
+                    if let Some(session) = self.sessions.get_mut(&handle) {
+                        session.set_obfuscation_dc_id(dc_id, now, self.poll.registry());
+                    }
+                }
                 Command::SetProxy(handle, proxy) => {
                     if let Some(session) = self.sessions.get_mut(&handle) {
                         session.set_proxy(proxy, now, self.poll.registry());
@@ -304,12 +301,7 @@ impl Worker {
                         session.reset_connection(now, self.poll.registry());
                     }
                 }
-                Command::Resolved {
-                    handle,
-                    host,
-                    port,
-                    addresses,
-                } => {
+                Command::Resolved { handle, host, port, addresses } => {
                     self.resolver.in_flight.remove(&(handle, host.clone(), port));
                     if let Some(session) = self.sessions.get_mut(&handle) {
                         session.on_resolved(host, port, addresses, now);

@@ -1,6 +1,6 @@
 use crate::auth_key::AuthKey;
 use crate::crypto::{
-    aes_ige_decrypt, aes_ige_encrypt, message_key_v1, message_key_v2, msg_key_v1, sha256_parts, SecureRandom, Side,
+    SecureRandom, Side, aes_ige_decrypt, aes_ige_encrypt, message_key_v1, message_key_v2, msg_key_v1, sha256_parts,
 };
 
 pub const ENCRYPTED_HEADER_LEN: usize = 24;
@@ -58,12 +58,10 @@ impl DecryptedMessage {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct PaddingPolicy {
     pub extra_random_blocks: usize,
 }
-
 
 impl PaddingPolicy {
     pub fn padding_len(&self, unpadded: usize, rng: &mut impl SecureRandom) -> usize {
@@ -136,10 +134,7 @@ pub fn decrypt_message(auth_key: &AuthKey, packet: &[u8], side: Side) -> Result<
     }
     let found = read_auth_key_id(packet).expect("length checked");
     if found != auth_key.id() {
-        return Err(MessageError::AuthKeyMismatch {
-            expected: auth_key.id(),
-            found,
-        });
+        return Err(MessageError::AuthKeyMismatch { expected: auth_key.id(), found });
     }
     let msg_key: [u8; 16] = packet[8..24].try_into().expect("16 bytes");
     let material = message_key_v2(auth_key.bytes(), &msg_key, side);
@@ -162,10 +157,7 @@ pub fn decrypt_message(auth_key: &AuthKey, packet: &[u8], side: Side) -> Result<
         return Err(MessageError::MsgKeyMismatch);
     }
     if !length_ok {
-        return Err(MessageError::InvalidLength {
-            length,
-            available: max_body,
-        });
+        return Err(MessageError::InvalidLength { length, available: max_body });
     }
     if !padding_ok {
         return Err(MessageError::InvalidPadding(padding));
@@ -177,11 +169,7 @@ pub fn decrypt_message(auth_key: &AuthKey, packet: &[u8], side: Side) -> Result<
         seq_no: i32::from_le_bytes(plaintext[24..28].try_into().expect("4")),
     };
     let body_range = INNER_HEADER_LEN..INNER_HEADER_LEN + length as usize;
-    Ok(DecryptedMessage {
-        header,
-        plaintext,
-        body_range,
-    })
+    Ok(DecryptedMessage { header, plaintext, body_range })
 }
 
 pub fn encrypt_message_v1(
@@ -220,10 +208,7 @@ pub fn decrypt_message_v1(auth_key: &AuthKey, packet: &[u8], side: Side) -> Resu
     }
     let found = read_auth_key_id(packet).expect("length checked");
     if found != auth_key.id() {
-        return Err(MessageError::AuthKeyMismatch {
-            expected: auth_key.id(),
-            found,
-        });
+        return Err(MessageError::AuthKeyMismatch { expected: auth_key.id(), found });
     }
     let msg_key: [u8; 16] = packet[8..24].try_into().expect("16 bytes");
     let material = message_key_v1(auth_key.bytes(), &msg_key, side);
@@ -232,10 +217,7 @@ pub fn decrypt_message_v1(auth_key: &AuthKey, packet: &[u8], side: Side) -> Resu
     let length = i32::from_le_bytes(plaintext[28..32].try_into().expect("4 bytes")) as i64;
     let max_body = plaintext.len() - INNER_HEADER_LEN;
     if length < 0 || length as usize > max_body || max_body - length as usize > 15 {
-        return Err(MessageError::InvalidLength {
-            length,
-            available: max_body,
-        });
+        return Err(MessageError::InvalidLength { length, available: max_body });
     }
     let end = INNER_HEADER_LEN + length as usize;
     if !constant_time_eq(&msg_key_v1(&plaintext[..end]), &msg_key) {
@@ -247,11 +229,7 @@ pub fn decrypt_message_v1(auth_key: &AuthKey, packet: &[u8], side: Side) -> Resu
         msg_id: i64::from_le_bytes(plaintext[16..24].try_into().expect("8")),
         seq_no: i32::from_le_bytes(plaintext[24..28].try_into().expect("4")),
     };
-    Ok(DecryptedMessage {
-        header,
-        plaintext,
-        body_range: INNER_HEADER_LEN..end,
-    })
+    Ok(DecryptedMessage { header, plaintext, body_range: INNER_HEADER_LEN..end })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -279,15 +257,9 @@ pub fn decode_plain_message(packet: &[u8]) -> Result<PlainMessage<'_>, MessageEr
     let msg_id = i64::from_le_bytes(packet[8..16].try_into().expect("8"));
     let length = i32::from_le_bytes(packet[16..20].try_into().expect("4")) as i64;
     if length < 0 || length as usize > packet.len() - 20 {
-        return Err(MessageError::InvalidLength {
-            length,
-            available: packet.len() - 20,
-        });
+        return Err(MessageError::InvalidLength { length, available: packet.len() - 20 });
     }
-    Ok(PlainMessage {
-        msg_id,
-        body: &packet[20..20 + length as usize],
-    })
+    Ok(PlainMessage { msg_id, body: &packet[20..20 + length as usize] })
 }
 
 fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
@@ -305,12 +277,7 @@ mod tests {
     }
 
     fn header() -> MessageHeader {
-        MessageHeader {
-            salt: 0x1122334455667788,
-            session_id: -42,
-            msg_id: 0x51e57ac42770964a,
-            seq_no: 7,
-        }
+        MessageHeader { salt: 0x1122334455667788, session_id: -42, msg_id: 0x51e57ac42770964a, seq_no: 7 }
     }
 
     #[test]
@@ -363,7 +330,8 @@ mod tests {
     fn trailing_transport_junk_is_ignored_like_tdlib() {
         let mut rng = XorShiftRandom::new(11);
         let body = [7u8; 40];
-        let mut packet = encrypt_message(&key(1), &header(), &body, Side::Server, PaddingPolicy::default(), &mut rng).data;
+        let mut packet =
+            encrypt_message(&key(1), &header(), &body, Side::Server, PaddingPolicy::default(), &mut rng).data;
         for junk in 1..16 {
             let mut padded = packet.clone();
             padded.extend(std::iter::repeat_n(0xa5u8, junk));
@@ -397,7 +365,10 @@ mod tests {
     fn padding_bounds_are_enforced_after_authentication() {
         let auth_key = key(5);
         let mut rng = XorShiftRandom::new(12);
-        assert_eq!(decrypt_message(&auth_key, &forge(&auth_key, 24, 32, &mut rng), Side::Server), Err(MessageError::InvalidPadding(8)));
+        assert_eq!(
+            decrypt_message(&auth_key, &forge(&auth_key, 24, 32, &mut rng), Side::Server),
+            Err(MessageError::InvalidPadding(8))
+        );
         assert!(decrypt_message(&auth_key, &forge(&auth_key, 20, 32, &mut rng), Side::Server).is_ok());
         assert_eq!(
             decrypt_message(&auth_key, &forge(&auth_key, 4, 1056, &mut rng), Side::Server),

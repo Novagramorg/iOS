@@ -3,15 +3,15 @@ mod wrap;
 use std::collections::{HashMap, VecDeque};
 
 pub use wrap::{
-    flood_wait_seconds, wrap_request, ApiEnvironment, ClientProxy, Verification, INIT_CONNECTION, INPUT_CLIENT_PROXY,
-    INVOKE_WITH_APNS_SECRET, INVOKE_WITH_RECAPTCHA,
+    ApiEnvironment, ClientProxy, INIT_CONNECTION, INPUT_CLIENT_PROXY, INVOKE_WITH_APNS_SECRET, INVOKE_WITH_RECAPTCHA,
+    Verification, flood_wait_seconds, wrap_request,
 };
 
 use crate::crypto::SecureRandom;
 use crate::msg_id::msg_id_time;
 use crate::session::{
-    CancelOutcome, Now, QueryId, QueryOptions, ServerSalt, Session, SessionError, SessionEvent, Transmit, PROTOCOL_ERROR_PREFIX,
-    RESPONSE_UNPACK_FAILED,
+    CancelOutcome, Now, PROTOCOL_ERROR_PREFIX, QueryId, QueryOptions, RESPONSE_UNPACK_FAILED, ServerSalt, Session,
+    SessionError, SessionEvent, Transmit,
 };
 
 pub const SERVER_ERROR_RETRY_DELAY: f64 = 2.0;
@@ -84,22 +84,55 @@ pub enum VerificationKind {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum RpcEvent {
-    Completed { id: RequestId, body: Vec<u8>, response_time: f64, duration: f64 },
-    Failed { id: RequestId, code: i32, message: String, response_time: f64, duration: f64 },
-    Acknowledged { id: RequestId },
-    FloodWaitReported { id: RequestId, message: String },
-    AuthorizationRequired { message: String },
-    SoftAuthReset { message: String },
+    Completed {
+        id: RequestId,
+        body: Vec<u8>,
+        response_time: f64,
+        duration: f64,
+    },
+    Failed {
+        id: RequestId,
+        code: i32,
+        message: String,
+        response_time: f64,
+        duration: f64,
+    },
+    Acknowledged {
+        id: RequestId,
+    },
+    FloodWaitReported {
+        id: RequestId,
+        message: String,
+    },
+    AuthorizationRequired {
+        message: String,
+    },
+    SoftAuthReset {
+        message: String,
+    },
     AuthTokenRequired,
     TemporaryKeyRejected,
-    InitHashStored { hash: String },
+    InitHashStored {
+        hash: String,
+    },
     InitHashCleared,
-    VerificationRequired { id: RequestId, kind: VerificationKind },
+    VerificationRequired {
+        id: RequestId,
+        kind: VerificationKind,
+    },
     UpdatesReset,
-    Update { body: Vec<u8> },
-    TimeDifferenceUpdated { difference: f64 },
-    SaltsUpdated { salts: Vec<ServerSalt> },
-    Pong { rtt: f64 },
+    Update {
+        body: Vec<u8>,
+    },
+    TimeDifferenceUpdated {
+        difference: f64,
+    },
+    SaltsUpdated {
+        salts: Vec<ServerSalt>,
+    },
+    Pong {
+        rtt: f64,
+    },
     ConnectionShouldReset,
     RetryDecisionRequired {
         id: RequestId,
@@ -159,7 +192,12 @@ pub struct RpcClient {
 }
 
 impl RpcClient {
-    pub fn new(session: Session, role: SessionRole, environment: Option<ApiEnvironment>, stored_init_hash: Option<String>) -> Self {
+    pub fn new(
+        session: Session,
+        role: SessionRole,
+        environment: Option<ApiEnvironment>,
+        stored_init_hash: Option<String>,
+    ) -> Self {
         Self {
             session,
             role,
@@ -202,9 +240,7 @@ impl RpcClient {
     }
 
     pub fn has_timeout_timer_requests(&self) -> bool {
-        self.requests
-            .values()
-            .any(|state| state.request.flags.timeout_timer && state.in_session)
+        self.requests.values().any(|state| state.request.flags.timeout_timer && state.in_session)
     }
 
     pub fn needs_initialization(&self) -> bool {
@@ -219,23 +255,19 @@ impl RpcClient {
     }
 
     pub fn update_environment(&mut self, environment: ApiEnvironment, noop_request: Option<RpcRequest>, now: Now) {
-        let changed = self.environment.as_ref().map(|current| current.init_hash.as_str()) != Some(environment.init_hash.as_str());
+        let changed =
+            self.environment.as_ref().map(|current| current.init_hash.as_str()) != Some(environment.init_hash.as_str());
         self.environment = Some(environment);
-        if changed
-            && let Some(noop) = noop_request {
-                self.send(noop, now);
-            }
+        if changed && let Some(noop) = noop_request {
+            self.send(noop, now);
+        }
     }
 
     pub fn set_auth_token_ready(&mut self, ready: bool, now: Now) {
         self.auth_token_ready = ready;
         if ready {
-            let waiting: Vec<RequestId> = self
-                .requests
-                .iter()
-                .filter(|(_, state)| state.waiting_for_token)
-                .map(|(id, _)| *id)
-                .collect();
+            let waiting: Vec<RequestId> =
+                self.requests.iter().filter(|(_, state)| state.waiting_for_token).map(|(id, _)| *id).collect();
             for id in waiting {
                 if let Some(state) = self.requests.get_mut(&id) {
                     state.waiting_for_token = false;
@@ -300,10 +332,11 @@ impl RpcClient {
         self.order.retain(|other| *other != id);
         if state.in_session
             && let CancelOutcome::RemovedInFlight { msg_id } = self.session.cancel(id.into())
-                && state.request.flags.expected_response_size >= LARGE_RESPONSE_THRESHOLD {
-                    self.session.drop_answer(msg_id, now);
-                    self.events.push_back(RpcEvent::ConnectionShouldReset);
-                }
+            && state.request.flags.expected_response_size >= LARGE_RESPONSE_THRESHOLD
+        {
+            self.session.drop_answer(msg_id, now);
+            self.events.push_back(RpcEvent::ConnectionShouldReset);
+        }
         self.dispatch_ready(now);
         true
     }
@@ -340,7 +373,8 @@ impl RpcClient {
     }
 
     fn is_ready(&self, state: &RequestState, now: Now) -> bool {
-        if state.in_session || state.waiting_for_token || state.pending_verification || state.pending_decision.is_some() {
+        if state.in_session || state.waiting_for_token || state.pending_verification || state.pending_decision.is_some()
+        {
             return false;
         }
         let key_replaced = state.rejected_key.is_some_and(|key| key != self.session.auth_key_id());
@@ -348,9 +382,10 @@ impl RpcClient {
             return false;
         }
         if let Some(dependency) = state.waiting_for_dependency
-            && self.requests.contains_key(&dependency) {
-                return false;
-            }
+            && self.requests.contains_key(&dependency)
+        {
+            return false;
+        }
         if matches!(self.role, SessionRole::Worker { requires_auth_token: true }) && !self.auth_token_ready {
             return false;
         }
@@ -385,10 +420,7 @@ impl RpcClient {
             state.in_session = true;
             state.rejected_key = None;
             state.sent_at_unix = now.unix;
-            let options = QueryOptions {
-                quick_ack: state.request.flags.quick_ack,
-                invoke_after,
-            };
+            let options = QueryOptions { quick_ack: state.request.flags.quick_ack, invoke_after };
             self.session.send(id.into(), body, options, now);
         }
     }
@@ -408,19 +440,16 @@ impl RpcClient {
 
     fn handle_session_event(&mut self, event: SessionEvent, now: Now) {
         match event {
-            SessionEvent::Result {
-                id, body, response_msg_id, ..
-            } => {
+            SessionEvent::Result { id, body, response_msg_id, .. } => {
                 let id = RequestId::from(id);
                 if let Some(state) = self.finish(id) {
                     if state.wrapped_with_init
                         && let Some(environment) = &self.environment
-                            && self.stored_init_hash.as_deref() != Some(environment.init_hash.as_str()) {
-                                self.stored_init_hash = Some(environment.init_hash.clone());
-                                self.events.push_back(RpcEvent::InitHashStored {
-                                    hash: environment.init_hash.clone(),
-                                });
-                            }
+                        && self.stored_init_hash.as_deref() != Some(environment.init_hash.as_str())
+                    {
+                        self.stored_init_hash = Some(environment.init_hash.clone());
+                        self.events.push_back(RpcEvent::InitHashStored { hash: environment.init_hash.clone() });
+                    }
                     self.events.push_back(RpcEvent::Completed {
                         id,
                         body,
@@ -429,12 +458,9 @@ impl RpcClient {
                     });
                 }
             }
-            SessionEvent::Error {
-                id,
-                code,
-                message,
-                response_msg_id,
-            } => self.handle_error(RequestId::from(id), code, message, msg_id_time(response_msg_id), now),
+            SessionEvent::Error { id, code, message, response_msg_id } => {
+                self.handle_error(RequestId::from(id), code, message, msg_id_time(response_msg_id), now)
+            }
             SessionEvent::Acknowledged { id } => {
                 let id = RequestId::from(id);
                 if self.requests.get(&id).is_some_and(|state| state.request.flags.quick_ack) {
@@ -447,7 +473,9 @@ impl RpcClient {
                 }
                 self.events.push_back(RpcEvent::Update { body });
             }
-            SessionEvent::ServerSessionReset { .. } | SessionEvent::LocalSessionReset { .. } | SessionEvent::UpdatesLost => {
+            SessionEvent::ServerSessionReset { .. }
+            | SessionEvent::LocalSessionReset { .. }
+            | SessionEvent::UpdatesLost => {
                 self.events.push_back(RpcEvent::UpdatesReset);
             }
             SessionEvent::TimeDifferenceUpdated { difference, .. } => {
@@ -480,7 +508,9 @@ impl RpcClient {
         }
         if code == 401 && !message.contains("SESSION_PASSWORD_NEEDED") {
             match self.role {
-                SessionRole::Main => self.events.push_back(RpcEvent::AuthorizationRequired { message: message.clone() }),
+                SessionRole::Main => {
+                    self.events.push_back(RpcEvent::AuthorizationRequired { message: message.clone() })
+                }
                 SessionRole::Worker { requires_auth_token: true } => {
                     self.events.push_back(RpcEvent::AuthTokenRequired);
                     if message.contains("SESSION_REVOKED") || message.contains("AUTH_KEY_UNREGISTERED") {
@@ -536,42 +566,33 @@ impl RpcClient {
         let is_flood = (code == 420 && !message.contains("FROZEN_METHOD_INVALID"))
             || message.contains("FLOOD_WAIT_")
             || message.contains("FLOOD_PREMIUM_WAIT_");
-        if is_flood
-            && let Some(seconds) = flood_wait_seconds(&message) {
-                let delay = seconds.clamp(MIN_FLOOD_WAIT_SECONDS, MAX_FLOOD_WAIT_SECONDS) as f64;
-                if flags.delegate_retry_decisions {
-                    let state = self.requests.get_mut(&id).expect("request exists");
-                    state.flood_wait_seconds = seconds;
-                    state.flood_wait_text = Some(message.clone());
-                    state.in_session = false;
-                    state.pending_decision = Some(PendingDecision {
-                        code,
-                        message: message.clone(),
-                        delay,
-                        response_time,
-                    });
-                    let server_errors = state.server_errors;
-                    self.events.push_back(RpcEvent::RetryDecisionRequired {
-                        id,
-                        code,
-                        message: message.clone(),
-                        flood_wait_seconds: seconds,
-                        flood_wait_text: Some(message),
-                        server_errors,
-                    });
-                    return;
-                }
-                if flags.report_flood_wait {
-                    self.events.push_back(RpcEvent::FloodWaitReported {
-                        id,
-                        message: message.clone(),
-                    });
-                }
-                if flags.automatic_flood_wait {
-                    self.requeue(id, delay, now);
-                    return;
-                }
+        if is_flood && let Some(seconds) = flood_wait_seconds(&message) {
+            let delay = seconds.clamp(MIN_FLOOD_WAIT_SECONDS, MAX_FLOOD_WAIT_SECONDS) as f64;
+            if flags.delegate_retry_decisions {
+                let state = self.requests.get_mut(&id).expect("request exists");
+                state.flood_wait_seconds = seconds;
+                state.flood_wait_text = Some(message.clone());
+                state.in_session = false;
+                state.pending_decision = Some(PendingDecision { code, message: message.clone(), delay, response_time });
+                let server_errors = state.server_errors;
+                self.events.push_back(RpcEvent::RetryDecisionRequired {
+                    id,
+                    code,
+                    message: message.clone(),
+                    flood_wait_seconds: seconds,
+                    flood_wait_text: Some(message),
+                    server_errors,
+                });
+                return;
             }
+            if flags.report_flood_wait {
+                self.events.push_back(RpcEvent::FloodWaitReported { id, message: message.clone() });
+            }
+            if flags.automatic_flood_wait {
+                self.requeue(id, delay, now);
+                return;
+            }
+        }
         if code == 400 && (message.contains("CONNECTION_NOT_INITED") || message.contains("CONNECTION_LAYER_INVALID")) {
             let state = self.requests.get_mut(&id).expect("request exists");
             state.not_inited_retries += 1;
@@ -588,14 +609,12 @@ impl RpcClient {
                 return;
             }
             if let Some(rest) = message.strip_prefix("RECAPTCHA_CHECK_")
-                && let Some((method, site_key)) = rest.split_once("__") {
-                    let kind = VerificationKind::Recaptcha {
-                        method: method.to_string(),
-                        site_key: site_key.to_string(),
-                    };
-                    self.park_for_verification(id, kind, now);
-                    return;
-                }
+                && let Some((method, site_key)) = rest.split_once("__")
+            {
+                let kind = VerificationKind::Recaptcha { method: method.to_string(), site_key: site_key.to_string() };
+                self.park_for_verification(id, kind, now);
+                return;
+            }
         }
         if code == 406 && is_main {
             self.events.push_back(RpcEvent::SoftAuthReset { message: message.clone() });
@@ -718,10 +737,7 @@ impl RpcClient {
 
     pub fn progress_target(&self, head: &[u8]) -> Option<RequestId> {
         let id = RequestId::from(self.session.progress_target(head)?);
-        self.requests
-            .get(&id)
-            .is_some_and(|state| state.request.flags.progress)
-            .then_some(id)
+        self.requests.get(&id).is_some_and(|state| state.request.flags.progress).then_some(id)
     }
 
     pub fn poll_event(&mut self) -> Option<RpcEvent> {

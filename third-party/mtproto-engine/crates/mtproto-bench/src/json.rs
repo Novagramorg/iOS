@@ -39,10 +39,7 @@ impl Value {
 }
 
 pub fn parse(text: &str) -> Option<Value> {
-    let mut parser = Parser {
-        data: text.as_bytes(),
-        position: 0,
-    };
+    let mut parser = Parser { data: text.as_bytes(), position: 0 };
     let value = parser.value()?;
     parser.whitespace();
     Some(value)

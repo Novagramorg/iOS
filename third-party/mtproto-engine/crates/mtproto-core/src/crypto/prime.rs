@@ -5,9 +5,9 @@ use num_traits::{One, Zero};
 use super::rng::SecureRandom;
 
 const SMALL_PRIMES: [u32; 54] = [
-    2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97,
-    101, 103, 107, 109, 113, 127, 131, 137, 139, 149, 151, 157, 163, 167, 173, 179, 181, 191, 193,
-    197, 199, 211, 223, 227, 229, 233, 239, 241, 251,
+    2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97, 101, 103, 107, 109,
+    113, 127, 131, 137, 139, 149, 151, 157, 163, 167, 173, 179, 181, 191, 193, 197, 199, 211, 223, 227, 229, 233, 239,
+    241, 251,
 ];
 
 pub fn is_probable_prime(n: &BigUint, rounds: usize, rng: &mut impl SecureRandom) -> bool {
@@ -66,12 +66,9 @@ mod tests {
     #[test]
     fn small_numbers() {
         let mut rng = XorShiftRandom::new(1);
-        let primes: Vec<u32> = (0..300u32)
-            .filter(|&n| is_probable_prime(&BigUint::from(n), 16, &mut rng))
-            .collect();
-        let expected: Vec<u32> = (0..300u32)
-            .filter(|&n| n >= 2 && (2..n).take_while(|d| d * d <= n).all(|d| n % d != 0))
-            .collect();
+        let primes: Vec<u32> = (0..300u32).filter(|&n| is_probable_prime(&BigUint::from(n), 16, &mut rng)).collect();
+        let expected: Vec<u32> =
+            (0..300u32).filter(|&n| n >= 2 && (2..n).take_while(|d| d * d <= n).all(|d| n % d != 0)).collect();
         assert_eq!(primes, expected);
     }
 

@@ -4,14 +4,14 @@ mod salts;
 use std::collections::{HashMap, VecDeque};
 
 pub use dedupe::{DuplicateCheck, DuplicateChecker};
-pub use salts::{SaltState, ServerSalt, SALT_SAFETY_MARGIN, SINGLE_SALT_LIFETIME};
+pub use salts::{SALT_SAFETY_MARGIN, SINGLE_SALT_LIFETIME, SaltState, ServerSalt};
 
 use crate::auth_key::AuthKey;
-use crate::crypto::{aes_ige_decrypt, message_key_v2, SecureRandom, Side};
-use crate::message::{decrypt_message, encrypt_message, read_auth_key_id, MessageError, MessageHeader, PaddingPolicy};
-use crate::msg_id::{msg_id_for_time, msg_id_time, MSG_ID_MAX_FUTURE_SECONDS, MSG_ID_MAX_PAST_SECONDS};
+use crate::crypto::{SecureRandom, Side, aes_ige_decrypt, message_key_v2};
+use crate::message::{MessageError, MessageHeader, PaddingPolicy, decrypt_message, encrypt_message, read_auth_key_id};
+use crate::msg_id::{MSG_ID_MAX_FUTURE_SECONDS, MSG_ID_MAX_PAST_SECONDS, msg_id_for_time, msg_id_time};
 use crate::tl::mtproto::{self as tlm, ContainerMessage, FutureSalt, RpcResultBody, ServiceMessage};
-use crate::tl::{ids, Reader, TlError, Writer};
+use crate::tl::{Reader, TlError, Writer, ids};
 
 pub const ACK_DELAY: f64 = 30.0;
 pub const MAX_PENDING_ACKS: usize = 100;
@@ -475,35 +475,19 @@ impl Session {
     }
 
     pub fn read_disconnect_delay(&self) -> f64 {
-        if self.uses_fast_liveness() {
-            self.rtt_estimate() * 3.5
-        } else {
-            135.0 + self.random_delay
-        }
+        if self.uses_fast_liveness() { self.rtt_estimate() * 3.5 } else { 135.0 + self.random_delay }
     }
 
     pub fn ping_disconnect_delay(&self) -> f64 {
-        if self.online && self.config.is_main {
-            self.rtt_estimate() * 2.5
-        } else {
-            135.0 + self.random_delay
-        }
+        if self.online && self.config.is_main { self.rtt_estimate() * 2.5 } else { 135.0 + self.random_delay }
     }
 
     fn ping_may_delay(&self) -> f64 {
-        if self.uses_fast_liveness() {
-            self.rtt_estimate() * 0.5
-        } else {
-            30.0 + self.random_delay
-        }
+        if self.uses_fast_liveness() { self.rtt_estimate() * 0.5 } else { 30.0 + self.random_delay }
     }
 
     fn ping_must_delay(&self) -> f64 {
-        if self.uses_fast_liveness() {
-            self.rtt_estimate()
-        } else {
-            60.0 + self.random_delay
-        }
+        if self.uses_fast_liveness() { self.rtt_estimate() } else { 60.0 + self.random_delay }
     }
 
     fn liveness_at(&self) -> f64 {
@@ -669,7 +653,9 @@ impl Session {
         let mut rejected: Vec<(i64, QueryId)> = self
             .queries
             .iter()
-            .filter(|(_, query)| query.state == QueryState::Sent && !query.acknowledged && query.connection_epoch == epoch)
+            .filter(|(_, query)| {
+                query.state == QueryState::Sent && !query.acknowledged && query.connection_epoch == epoch
+            })
             .map(|(id, query)| (query.msg_id, *id))
             .collect();
         rejected.sort_unstable();
@@ -758,7 +744,8 @@ impl Session {
     }
 
     fn resend_query(&mut self, id: QueryId, now: Now) {
-        let Some(msg_id) = self.queries.get(&id).filter(|query| query.state != QueryState::Pending).map(|query| query.msg_id)
+        let Some(msg_id) =
+            self.queries.get(&id).filter(|query| query.state != QueryState::Pending).map(|query| query.msg_id)
         else {
             return;
         };
@@ -987,7 +974,12 @@ impl Session {
         self.finish_packet(context, now, rng)
     }
 
-    fn finish_packet(&mut self, context: PacketContext, now: Now, rng: &mut impl SecureRandom) -> Result<(), SessionError> {
+    fn finish_packet(
+        &mut self,
+        context: PacketContext,
+        now: Now,
+        rng: &mut impl SecureRandom,
+    ) -> Result<(), SessionError> {
         if context.updates_lost {
             self.events.push_back(SessionEvent::UpdatesLost);
         }
@@ -1028,9 +1020,9 @@ impl Session {
             return false;
         }
         match ServiceMessage::parse(body) {
-            Ok(ServiceMessage::Container(children)) => children
-                .iter()
-                .any(|child| self.has_freshness_proof(child.body, depth + 1, budget)),
+            Ok(ServiceMessage::Container(children)) => {
+                children.iter().any(|child| self.has_freshness_proof(child.body, depth + 1, budget))
+            }
             Ok(ServiceMessage::GzipPacked(packed)) => tlm::gunzip_within(packed, budget)
                 .map(|unpacked| self.has_freshness_proof(&unpacked, depth + 1, budget))
                 .unwrap_or(false),
@@ -1039,9 +1031,8 @@ impl Session {
             Ok(ServiceMessage::Pong { msg_id, ping_id }) => {
                 self.pending_pings.contains_key(&msg_id) || self.pending_pings.contains_key(&ping_id)
             }
-            Ok(ServiceMessage::BadMsgNotification { bad_msg_id, .. }) | Ok(ServiceMessage::BadServerSalt { bad_msg_id, .. }) => {
-                self.was_sent(bad_msg_id)
-            }
+            Ok(ServiceMessage::BadMsgNotification { bad_msg_id, .. })
+            | Ok(ServiceMessage::BadServerSalt { bad_msg_id, .. }) => self.was_sent(bad_msg_id),
             Ok(ServiceMessage::MsgsStateInfo { req_msg_id, .. }) => self.service_requests.contains_key(&req_msg_id),
             Ok(ServiceMessage::FutureSalts { req_msg_id, .. }) => self.future_salts_requests.contains(&req_msg_id),
             Ok(ServiceMessage::MsgDetailedInfo { msg_id, .. }) => self.by_msg_id.contains_key(&msg_id),
@@ -1057,10 +1048,8 @@ impl Session {
             self.time_synchronized = true;
             self.server_offset = offset;
             self.time_difference = seconds - now.unix;
-            self.events.push_back(SessionEvent::TimeDifferenceUpdated {
-                difference: self.time_difference,
-                forced: false,
-            });
+            self.events
+                .push_back(SessionEvent::TimeDifferenceUpdated { difference: self.time_difference, forced: false });
         }
     }
 
@@ -1069,10 +1058,7 @@ impl Session {
         self.time_synchronized = false;
         self.server_offset = seconds - now.mono;
         self.time_difference = seconds - now.unix;
-        self.events.push_back(SessionEvent::TimeDifferenceUpdated {
-            difference: self.time_difference,
-            forced: true,
-        });
+        self.events.push_back(SessionEvent::TimeDifferenceUpdated { difference: self.time_difference, forced: true });
     }
 
     fn note_awaited_answer(&mut self, msg_id: i64) {
@@ -1094,7 +1080,15 @@ impl Session {
         }
     }
 
-    fn process_message(&mut self, context: &mut PacketContext, msg_id: i64, seq_no: i32, body: &[u8], depth: usize, now: Now) {
+    fn process_message(
+        &mut self,
+        context: &mut PacketContext,
+        msg_id: i64,
+        seq_no: i32,
+        body: &[u8],
+        depth: usize,
+        now: Now,
+    ) {
         if seq_no & 1 == 1 {
             self.schedule_ack(msg_id, now);
         }
@@ -1159,11 +1153,7 @@ impl Session {
                 }
                 self.send_before(now.mono);
             }
-            ServiceMessage::BadServerSalt {
-                bad_msg_id,
-                new_server_salt,
-                ..
-            } => {
+            ServiceMessage::BadServerSalt { bad_msg_id, new_server_salt, .. } => {
                 if !self.was_sent(bad_msg_id) {
                     return;
                 }
@@ -1173,25 +1163,18 @@ impl Session {
                 self.last_future_salts_at = None;
                 self.message_failed(bad_msg_id, now);
             }
-            ServiceMessage::BadMsgNotification {
-                bad_msg_id, error_code, ..
-            } => self.on_bad_msg_notification(msg_id, bad_msg_id, error_code, now),
-            ServiceMessage::NewSessionCreated {
-                first_msg_id,
-                unique_id,
-                server_salt,
-            } => self.on_new_session_created(context, unique_id, first_msg_id, server_salt, now),
+            ServiceMessage::BadMsgNotification { bad_msg_id, error_code, .. } => {
+                self.on_bad_msg_notification(msg_id, bad_msg_id, error_code, now)
+            }
+            ServiceMessage::NewSessionCreated { first_msg_id, unique_id, server_salt } => {
+                self.on_new_session_created(context, unique_id, first_msg_id, server_salt, now)
+            }
             ServiceMessage::MsgsAck(msg_ids) => {
                 for acked in msg_ids {
                     self.acknowledge(acked);
                 }
             }
-            ServiceMessage::MsgDetailedInfo {
-                msg_id: query_msg_id,
-                answer_msg_id,
-                status,
-                ..
-            } => {
+            ServiceMessage::MsgDetailedInfo { msg_id: query_msg_id, answer_msg_id, status, .. } => {
                 self.on_message_info(Some(query_msg_id), status, Some(answer_msg_id).filter(|id| *id != 0), now);
             }
             ServiceMessage::MsgNewDetailedInfo { answer_msg_id, .. } => {
@@ -1230,10 +1213,7 @@ impl Session {
                     return;
                 }
                 match self.updates.check(msg_id) {
-                    DuplicateCheck::New => self.events.push_back(SessionEvent::Update {
-                        body: body.to_vec(),
-                        msg_id,
-                    }),
+                    DuplicateCheck::New => self.events.push_back(SessionEvent::Update { body: body.to_vec(), msg_id }),
                     DuplicateCheck::Duplicate => {}
                     DuplicateCheck::TooOld => context.updates_lost = true,
                 }
@@ -1359,7 +1339,15 @@ impl Session {
         }
     }
 
-    fn on_rpc_result(&mut self, context: &mut PacketContext, msg_id: i64, req_msg_id: i64, result: &[u8], size: usize, now: Now) {
+    fn on_rpc_result(
+        &mut self,
+        context: &mut PacketContext,
+        msg_id: i64,
+        req_msg_id: i64,
+        result: &[u8],
+        size: usize,
+        now: Now,
+    ) {
         let Some(id) = self.by_msg_id.get(&req_msg_id).copied() else {
             if size > DROPPED_ANSWER_COUNTED_SIZE {
                 self.dropped_answer_bytes += size;
@@ -1377,27 +1365,14 @@ impl Session {
         let event = match tlm::parse_rpc_result_limited(result, context.budget.min(tlm::MAX_UNPACKED_SIZE)) {
             Ok(RpcResultBody::Error(error)) => {
                 let error = error.normalized();
-                SessionEvent::Error {
-                    id,
-                    code: error.code,
-                    message: error.message,
-                    response_msg_id: msg_id,
-                }
+                SessionEvent::Error { id, code: error.code, message: error.message, response_msg_id: msg_id }
             }
-            Ok(RpcResultBody::Value(value)) => SessionEvent::Result {
-                id,
-                body: value.to_vec(),
-                response_msg_id: msg_id,
-                original_size: size,
-            },
+            Ok(RpcResultBody::Value(value)) => {
+                SessionEvent::Result { id, body: value.to_vec(), response_msg_id: msg_id, original_size: size }
+            }
             Ok(RpcResultBody::PackedValue(value)) => {
                 context.budget = context.budget.saturating_sub(value.len());
-                SessionEvent::Result {
-                    id,
-                    body: value,
-                    response_msg_id: msg_id,
-                    original_size: size,
-                }
+                SessionEvent::Result { id, body: value, response_msg_id: msg_id, original_size: size }
             }
             Ok(RpcResultBody::DropAnswer(_)) => return,
             Err(error) => SessionEvent::Error {
@@ -1421,7 +1396,14 @@ impl Session {
         self.refresh_unknown_tracking();
     }
 
-    fn on_new_session_created(&mut self, context: &mut PacketContext, unique_id: i64, first_msg_id: i64, server_salt: i64, now: Now) {
+    fn on_new_session_created(
+        &mut self,
+        context: &mut PacketContext,
+        unique_id: i64,
+        first_msg_id: i64,
+        server_salt: i64,
+        now: Now,
+    ) {
         if context.mode == Mode::Replay || self.recent_unique_ids.contains(&unique_id) {
             return;
         }
@@ -1453,10 +1435,7 @@ impl Session {
             .collect();
         resend.sort_unstable();
         context.deferred_resends.extend(resend.into_iter().map(|(msg_id, id)| (id, msg_id)));
-        self.events.push_back(SessionEvent::ServerSessionReset {
-            unique_id,
-            first_msg_id,
-        });
+        self.events.push_back(SessionEvent::ServerSessionReset { unique_id, first_msg_id });
     }
 
     fn on_message_info(&mut self, query_msg_id: Option<i64>, status: i32, answer_msg_id: Option<i64>, now: Now) {
@@ -1669,7 +1648,9 @@ impl Session {
             .service_requests
             .iter()
             .filter_map(|(request_id, request)| match request {
-                ServiceRequest::StateRequest { sent_at, .. } if sent_at + STATE_REQUEST_RETRY < now.mono => Some(*request_id),
+                ServiceRequest::StateRequest { sent_at, .. } if sent_at + STATE_REQUEST_RETRY < now.mono => {
+                    Some(*request_id)
+                }
                 _ => None,
             })
             .collect();
@@ -1695,7 +1676,9 @@ impl Session {
             .service_requests
             .iter()
             .filter_map(|(request_id, request)| match request {
-                ServiceRequest::ResendRequest { sent_at, .. } if sent_at + STATE_REQUEST_RETRY < now.mono => Some(*request_id),
+                ServiceRequest::ResendRequest { sent_at, .. } if sent_at + STATE_REQUEST_RETRY < now.mono => {
+                    Some(*request_id)
+                }
                 _ => None,
             })
             .collect();
@@ -1742,7 +1725,13 @@ impl Session {
         writer.into_inner()
     }
 
-    fn push_service(&mut self, messages: &mut Vec<OutgoingMessage>, body: Vec<u8>, now: Now, rng: &mut impl SecureRandom) -> i64 {
+    fn push_service(
+        &mut self,
+        messages: &mut Vec<OutgoingMessage>,
+        body: Vec<u8>,
+        now: Now,
+        rng: &mut impl SecureRandom,
+    ) -> i64 {
         let msg_id = self.next_msg_id(now, rng);
         let seq_no = self.next_seq_no(false);
         messages.push(OutgoingMessage { msg_id, seq_no, body });
@@ -1766,11 +1755,7 @@ impl Session {
                 let body = Self::query_wire_body(query);
                 wants_quick_ack |= query.options.quick_ack;
                 query_messages.push((id, messages.len()));
-                messages.push(OutgoingMessage {
-                    msg_id: query.msg_id,
-                    seq_no: query.seq_no,
-                    body,
-                });
+                messages.push(OutgoingMessage { msg_id: query.msg_id, seq_no: query.seq_no, body });
                 force_container = true;
             }
         }
@@ -1782,7 +1767,9 @@ impl Session {
                 if query_messages.len() >= self.config.max_container_queries {
                     break;
                 }
-                let Some((body_len, invoke_after)) = self.queries.get(&id).map(|query| (query.body.len(), query.options.invoke_after)) else {
+                let Some((body_len, invoke_after)) =
+                    self.queries.get(&id).map(|query| (query.body.len(), query.options.invoke_after))
+                else {
                     self.pending.pop_front();
                     continue;
                 };
@@ -1790,8 +1777,9 @@ impl Session {
                     break;
                 }
                 self.pending.pop_front();
-                let dependency =
-                    invoke_after.and_then(|dependency| sent_now.get(&dependency).copied().or_else(|| self.query_msg_id(dependency)));
+                let dependency = invoke_after.and_then(|dependency| {
+                    sent_now.get(&dependency).copied().or_else(|| self.query_msg_id(dependency))
+                });
                 let msg_id = self.next_msg_id(now, rng);
                 let seq_no = self.next_seq_no(true);
                 let epoch = self.connection_epoch;
@@ -1831,11 +1819,7 @@ impl Session {
                 self.pending_pings.remove(&oldest);
             }
             ping_msg_id = msg_id;
-            messages.push(OutgoingMessage {
-                msg_id,
-                seq_no,
-                body: writer.into_inner(),
-            });
+            messages.push(OutgoingMessage { msg_id, seq_no, body: writer.into_inner() });
         }
 
         if self.salts.needs_future_salts(server_time)
@@ -1929,11 +1913,7 @@ impl Session {
             let seq_no = self.next_seq_no(false);
             let refs: Vec<ContainerMessage<'_>> = messages
                 .iter()
-                .map(|message| ContainerMessage {
-                    msg_id: message.msg_id,
-                    seqno: message.seq_no,
-                    body: &message.body,
-                })
+                .map(|message| ContainerMessage { msg_id: message.msg_id, seqno: message.seq_no, body: &message.body })
                 .collect();
             let total: usize = messages.iter().map(|message| 16 + message.body.len()).sum();
             let mut writer = Writer::with_capacity(8 + total);
@@ -1981,22 +1961,10 @@ impl Session {
             self.last_ping_msg_id = ping_msg_id;
         }
         if let Some((msg_id, ids)) = state_request {
-            self.service_requests.insert(
-                msg_id,
-                ServiceRequest::StateRequest {
-                    msg_ids: ids,
-                    sent_at: now.mono,
-                },
-            );
+            self.service_requests.insert(msg_id, ServiceRequest::StateRequest { msg_ids: ids, sent_at: now.mono });
         }
         if let Some((msg_id, ids)) = resend_request {
-            self.service_requests.insert(
-                msg_id,
-                ServiceRequest::ResendRequest {
-                    msg_ids: ids,
-                    sent_at: now.mono,
-                },
-            );
+            self.service_requests.insert(msg_id, ServiceRequest::ResendRequest { msg_ids: ids, sent_at: now.mono });
         }
 
         let header = MessageHeader {

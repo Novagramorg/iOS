@@ -4,7 +4,7 @@ use std::io::{ErrorKind, Read, Write};
 use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream};
 use std::os::fd::AsRawFd;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
+use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, channel};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -165,11 +165,7 @@ impl Bucket {
         self.last = now;
         self.available = (self.available + elapsed * rate).min(rate * 0.05);
         self.available -= bytes as f64;
-        if self.available >= 0.0 {
-            Duration::ZERO
-        } else {
-            Duration::from_secs_f64(-self.available / rate)
-        }
+        if self.available >= 0.0 { Duration::ZERO } else { Duration::from_secs_f64(-self.available / rate) }
     }
 }
 
@@ -258,16 +254,8 @@ impl NetSim {
         let rate = profile.bandwidth.map(|value| value as f64);
         let shared = Arc::new(Shared {
             profile: Mutex::new(profile),
-            up: Mutex::new(Bucket {
-                rate,
-                available: 0.0,
-                last: Instant::now(),
-            }),
-            down: Mutex::new(Bucket {
-                rate,
-                available: 0.0,
-                last: Instant::now(),
-            }),
+            up: Mutex::new(Bucket { rate, available: 0.0, last: Instant::now() }),
+            down: Mutex::new(Bucket { rate, available: 0.0, last: Instant::now() }),
             stop: AtomicBool::new(false),
             outage_until: Mutex::new(None),
             live: Mutex::new(Vec::new()),
@@ -288,17 +276,15 @@ impl NetSim {
                             let shared = shared.clone();
                             std::thread::spawn(move || handle_connection(client, upstream, shared));
                         }
-                        Err(error) if error.kind() == ErrorKind::WouldBlock => std::thread::sleep(Duration::from_millis(2)),
+                        Err(error) if error.kind() == ErrorKind::WouldBlock => {
+                            std::thread::sleep(Duration::from_millis(2))
+                        }
                         Err(_) => break,
                     }
                 }
             })?
         };
-        Ok(Self {
-            address,
-            shared,
-            thread: Some(thread),
-        })
+        Ok(Self { address, shared, thread: Some(thread) })
     }
 
     pub fn set_profile(&self, profile: Profile) {
@@ -504,9 +490,10 @@ fn deliver(
         }
         if control.blackholed.load(Ordering::SeqCst) {
             if let Some(Some((_, data))) = item
-                && !control.dead.load(Ordering::SeqCst) {
-                    held.push(data);
-                }
+                && !control.dead.load(Ordering::SeqCst)
+            {
+                held.push(data);
+            }
             continue;
         }
         for data in held.drain(..) {
@@ -646,6 +633,9 @@ mod tests {
         stream.write_all(b"lost").unwrap();
         let mut buffer = [0u8; 4];
         let result = stream.read(&mut buffer);
-        assert!(matches!(result, Err(ref e) if e.kind() == ErrorKind::WouldBlock || e.kind() == ErrorKind::TimedOut), "{result:?}");
+        assert!(
+            matches!(result, Err(ref e) if e.kind() == ErrorKind::WouldBlock || e.kind() == ErrorKind::TimedOut),
+            "{result:?}"
+        );
     }
 }

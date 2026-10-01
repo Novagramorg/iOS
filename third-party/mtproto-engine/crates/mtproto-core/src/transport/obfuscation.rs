@@ -1,11 +1,10 @@
 use super::codec::Framing;
-use crate::crypto::{sha256_parts, AesCtr, SecureRandom};
+use crate::crypto::{AesCtr, SecureRandom, sha256_parts};
 
 pub const OBFUSCATED_HEADER_LEN: usize = 64;
 
-const FORBIDDEN_FIRST_WORDS: [u32; 7] = [
-    0x44414548, 0x54534f50, 0x20544547, 0x4954504f, 0xdddddddd, 0xeeeeeeee, 0x02010316,
-];
+const FORBIDDEN_FIRST_WORDS: [u32; 7] =
+    [0x44414548, 0x54534f50, 0x20544547, 0x4954504f, 0xdddddddd, 0xeeeeeeee, 0x02010316];
 
 pub struct ObfuscatedInit {
     pub header: [u8; OBFUSCATED_HEADER_LEN],
@@ -60,11 +59,7 @@ pub fn obfuscated_init(
     let mut encrypted = header;
     encryptor.apply(&mut encrypted);
     header[56..].copy_from_slice(&encrypted[56..]);
-    ObfuscatedInit {
-        header,
-        encryptor,
-        decryptor,
-    }
+    ObfuscatedInit { header, encryptor, decryptor }
 }
 
 pub struct ServerObfuscation {
@@ -74,7 +69,10 @@ pub struct ServerObfuscation {
     pub encryptor: AesCtr,
 }
 
-pub fn accept_obfuscated_header(header: &[u8; OBFUSCATED_HEADER_LEN], proxy_secret: Option<&[u8; 16]>) -> Option<ServerObfuscation> {
+pub fn accept_obfuscated_header(
+    header: &[u8; OBFUSCATED_HEADER_LEN],
+    proxy_secret: Option<&[u8; 16]>,
+) -> Option<ServerObfuscation> {
     let mut reversed = *header;
     reversed.reverse();
     let derive = |key: &[u8]| -> [u8; 32] {

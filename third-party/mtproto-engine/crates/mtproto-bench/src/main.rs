@@ -34,30 +34,34 @@ fn main() {
                     other => panic!("unknown argument {other}"),
                 }
             }
-            let mut engines = vec![EngineBinary {
-                label: "rust".into(),
-                path: arguments[0].clone(),
-                prefix: vec!["client".into()],
-            }];
+            let mut engines =
+                vec![EngineBinary { label: "rust".into(), path: arguments[0].clone(), prefix: vec!["client".into()] }];
             if let Some(path) = mtprotokit {
-                engines.push(EngineBinary {
-                    label: "mtprotokit".into(),
-                    path,
-                    prefix: Vec::new(),
-                });
+                engines.push(EngineBinary { label: "mtprotokit".into(), path, prefix: Vec::new() });
             }
             let mut results = Vec::new();
             let scenarios = orchestrator::suite(&suite_name, include_real);
             for (index, scenario) in scenarios.iter().enumerate() {
                 if let Some(filter) = &only
-                    && !scenario.name.contains(filter.as_str()) {
-                        continue;
-                    }
+                    && !scenario.name.contains(filter.as_str())
+                {
+                    continue;
+                }
                 for round in 0..repeat {
                     for engine in &engines {
-                        eprintln!("[{}/{}] {} — {} (round {})", index + 1, scenarios.len(), scenario.name, engine.label, round + 1);
+                        eprintln!(
+                            "[{}/{}] {} — {} (round {})",
+                            index + 1,
+                            scenarios.len(),
+                            scenario.name,
+                            engine.label,
+                            round + 1
+                        );
                         let result = orchestrator::run(scenario, engine, 1000 + index as u64 * 7 + round as u64);
-                        eprintln!("{}", orchestrator::markdown(std::slice::from_ref(&result)).lines().nth(2).unwrap_or(""));
+                        eprintln!(
+                            "{}",
+                            orchestrator::markdown(std::slice::from_ref(&result)).lines().nth(2).unwrap_or("")
+                        );
                         results.push(result);
                     }
                 }
@@ -70,7 +74,9 @@ fn main() {
             }
         }
         _ => {
-            eprintln!("usage: mtproto-bench client <args> | mtproto-bench run [--mtprotokit PATH] [--suite quick|full] [--real] [--only NAME] [--repeat N] [--out PREFIX]");
+            eprintln!(
+                "usage: mtproto-bench client <args> | mtproto-bench run [--mtprotokit PATH] [--suite quick|full] [--real] [--only NAME] [--repeat N] [--out PREFIX]"
+            );
             std::process::exit(2);
         }
     }

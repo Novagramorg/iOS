@@ -13,10 +13,10 @@ use mtproto_core::msg_id::msg_id_time;
 use mtproto_core::rpc::{INIT_CONNECTION, INPUT_CLIENT_PROXY, INVOKE_WITH_APNS_SECRET, INVOKE_WITH_RECAPTCHA};
 use mtproto_core::test_support::server_peer::{self as sp, ServerPeer};
 use mtproto_core::test_support::{ServerHandshake, ServerHandshakeBehavior};
-use mtproto_core::tl::{ids, Reader, Writer};
+use mtproto_core::tl::{Reader, Writer, ids};
 use mtproto_core::transport::{
-    accept_obfuscated_header, encode_frame, server_hello_for_tests, verify_client_hello_for_tests, FrameDecoder, Framing,
-    InputBuffer, ProxySecret, ServerObfuscation, TlsRecordReader, TlsRecordWriter, CLIENT_HELLO_LEN,
+    CLIENT_HELLO_LEN, FrameDecoder, Framing, InputBuffer, ProxySecret, ServerObfuscation, TlsRecordReader,
+    TlsRecordWriter, accept_obfuscated_header, encode_frame, server_hello_for_tests, verify_client_hello_for_tests,
 };
 
 pub const CALL: u32 = 0x7e57_0001;
@@ -95,6 +95,7 @@ pub struct ServerOptions {
 #[derive(Debug, Default)]
 pub struct Stats {
     pub connections: usize,
+    pub obfuscation_dc_ids: Vec<i16>,
     pub executions: HashMap<u32, usize>,
     pub init_connections: usize,
     pub without_updates: usize,
@@ -170,19 +171,15 @@ impl TestServer {
                                 let _ = serve_connection(stream, shared, stop, options, seed);
                             });
                         }
-                        Err(error) if error.kind() == ErrorKind::WouldBlock => std::thread::sleep(Duration::from_millis(5)),
+                        Err(error) if error.kind() == ErrorKind::WouldBlock => {
+                            std::thread::sleep(Duration::from_millis(5))
+                        }
                         Err(_) => break,
                     }
                 }
             })
         };
-        Self {
-            address,
-            shared,
-            stop,
-            thread: Some(thread),
-            options,
-        }
+        Self { address, shared, stop, thread: Some(thread), options }
     }
 
     pub fn options(&self) -> &ServerOptions {
@@ -248,7 +245,9 @@ impl Wire {
                     self.raw.extend(&buffer[..read]);
                     return Ok(true);
                 }
-                Err(error) if error.kind() == ErrorKind::WouldBlock || error.kind() == ErrorKind::TimedOut => return Ok(true),
+                Err(error) if error.kind() == ErrorKind::WouldBlock || error.kind() == ErrorKind::TimedOut => {
+                    return Ok(true);
+                }
                 Err(error) if error.kind() == ErrorKind::Interrupted => continue,
                 Err(error) => return Err(error),
             }
@@ -302,7 +301,12 @@ impl Wire {
     }
 }
 
-fn read_exact_raw(stream: &mut TcpStream, buffer: &mut InputBuffer, count: usize, stop: &AtomicBool) -> std::io::Result<Vec<u8>> {
+fn read_exact_raw(
+    stream: &mut TcpStream,
+    buffer: &mut InputBuffer,
+    count: usize,
+    stop: &AtomicBool,
+) -> std::io::Result<Vec<u8>> {
     let mut chunk = [0u8; 4096];
     while buffer.len() < count {
         if stop.load(Ordering::Relaxed) {
@@ -422,6 +426,7 @@ fn serve_connection(
     let Some(obfuscation) = accept_obfuscated_header(&header, proxy_key.as_ref()) else {
         return Ok(());
     };
+    shared.lock().unwrap().stats.obfuscation_dc_ids.push(obfuscation.dc_id);
     let framing = obfuscation.framing;
     let mut wire = Wire {
         stream,
@@ -448,7 +453,12 @@ fn server_now(offset: f64) -> f64 {
     unix_now() + offset
 }
 
-fn serve_frames(mut wire: Wire, shared: Arc<Mutex<Shared>>, stop: Arc<AtomicBool>, options: ServerOptions) -> std::io::Result<()> {
+fn serve_frames(
+    mut wire: Wire,
+    shared: Arc<Mutex<Shared>>,
+    stop: Arc<AtomicBool>,
+    options: ServerOptions,
+) -> std::io::Result<()> {
     let decoder = FrameDecoder::new(wire.framing);
     let mut handshake: Option<ServerHandshake> = None;
     let mut handshake_stalled = false;
@@ -616,10 +626,8 @@ fn serve_frames(mut wire: Wire, shared: Arc<Mutex<Shared>>, stop: Arc<AtomicBool
                         ids::MSGS_STATE_REQ => {
                             stats.state_requests += 1;
                             let asked = sp::read_vector_after_constructor(&message.body);
-                            let info: Vec<u8> = asked
-                                .iter()
-                                .map(|id| if session.received.contains(id) { 4 } else { 2 })
-                                .collect();
+                            let info: Vec<u8> =
+                                asked.iter().map(|id| if session.received.contains(id) { 4 } else { 2 }).collect();
                             outgoing.push((sp::msgs_state_info(message.msg_id, &info), true));
                         }
                         ids::MSG_RESEND_REQ | ids::MSG_RESEND_ANS_REQ => {
@@ -643,7 +651,10 @@ fn serve_frames(mut wire: Wire, shared: Arc<Mutex<Shared>>, stop: Arc<AtomicBool
                                 shared_ref.bad_salt_sent = true;
                                 shared_ref.salt = salt.wrapping_add(1);
                                 session.received.remove(&message.msg_id);
-                                outgoing.push((sp::bad_server_salt(message.msg_id, message.seq_no, shared_ref.salt), false));
+                                outgoing.push((
+                                    sp::bad_server_salt(message.msg_id, message.seq_no, shared_ref.salt),
+                                    false,
+                                ));
                                 continue;
                             }
                             let count = {
@@ -672,7 +683,10 @@ fn serve_frames(mut wire: Wire, shared: Arc<Mutex<Shared>>, stop: Arc<AtomicBool
                                     };
                                     session.received.remove(&message.msg_id);
                                     stats.bad_msgs_sent += 1;
-                                    outgoing.push((sp::bad_msg_notification(target, message.seq_no, payload_word(0)), false));
+                                    outgoing.push((
+                                        sp::bad_msg_notification(target, message.seq_no, payload_word(0)),
+                                        false,
+                                    ));
                                 }
                                 TAG_SERVER_PING => {
                                     outgoing.push((sp::server_ping(SERVER_PING_ID), false));
@@ -708,16 +722,24 @@ fn serve_frames(mut wire: Wire, shared: Arc<Mutex<Shared>>, stop: Arc<AtomicBool
                                     let second = session.peer.next_msg_id(true);
                                     let body = sp::container(&[
                                         (first, 1, sp::gzip_packed(&sp::update(0x74ae4240, &tag.to_le_bytes()))),
-                                        (second, 1, sp::rpc_result_gzipped(message.msg_id, &result_body(tag, &payload))),
+                                        (
+                                            second,
+                                            1,
+                                            sp::rpc_result_gzipped(message.msg_id, &result_body(tag, &payload)),
+                                        ),
                                     ]);
                                     outgoing.push((sp::gzip_packed(&body), false));
                                 }
                                 TAG_KEY_UNKNOWN => transport_error = Some(-404),
-                                TAG_FLOOD_ONCE if count == 1 => outgoing.push((sp::rpc_error(message.msg_id, 420, "FLOOD_WAIT_1"), true)),
+                                TAG_FLOOD_ONCE if count == 1 => {
+                                    outgoing.push((sp::rpc_error(message.msg_id, 420, "FLOOD_WAIT_1"), true))
+                                }
                                 TAG_SERVER_ERROR_ONCE if count == 1 => {
                                     outgoing.push((sp::rpc_error(message.msg_id, 500, "INTERNAL_SERVER_ERROR"), true))
                                 }
-                                TAG_UNAUTHORIZED => outgoing.push((sp::rpc_error(message.msg_id, 401, "AUTH_KEY_UNREGISTERED"), true)),
+                                TAG_UNAUTHORIZED => {
+                                    outgoing.push((sp::rpc_error(message.msg_id, 401, "AUTH_KEY_UNREGISTERED"), true))
+                                }
                                 TAG_DROP_CONNECTION_ONCE if count == 1 => {
                                     session.peer.server_time = server_now(session.clock_offset);
                                     let msg_id = session.peer.next_msg_id(true);
@@ -767,7 +789,8 @@ fn serve_frames(mut wire: Wire, shared: Arc<Mutex<Shared>>, stop: Arc<AtomicBool
         let packets: Vec<Vec<u8>> = {
             let mut guard = shared.lock().unwrap();
             let session = guard.sessions.get_mut(&session_id).unwrap();
-            let mut packets: Vec<Vec<u8>> = resend.iter().map(|(msg_id, seq, body)| session.peer.seal(*msg_id, *seq, body)).collect();
+            let mut packets: Vec<Vec<u8>> =
+                resend.iter().map(|(msg_id, seq, body)| session.peer.seal(*msg_id, *seq, body)).collect();
             for (body, content) in &outgoing {
                 packets.push(seal_tracked(session, body, *content));
             }

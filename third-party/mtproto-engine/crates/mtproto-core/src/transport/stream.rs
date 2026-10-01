@@ -1,9 +1,9 @@
+use super::TransportError;
 use super::buffer::InputBuffer;
-use super::codec::{encode_frame, FrameDecoder, Framing, Incoming};
+use super::codec::{FrameDecoder, Framing, Incoming, encode_frame};
 use super::obfuscation::obfuscated_init;
 use super::proxy_secret::ProxySecret;
-use super::tls::{client_hello, verify_server_hello, TlsRecordReader, TlsRecordWriter};
-use super::TransportError;
+use super::tls::{TlsRecordReader, TlsRecordWriter, client_hello, verify_server_hello};
 use crate::crypto::{AesCtr, SecureRandom};
 
 #[derive(Debug, Clone)]
@@ -58,10 +58,7 @@ impl TransportStream {
             let hello = client_hello(secret.domain().unwrap_or_default(), &key, config.unix_time, rng);
             let client_random: [u8; 32] = hello[11..43].try_into().expect("32");
             outgoing.extend_from_slice(&hello);
-            TlsState::WaitingForServerHello {
-                client_random,
-                secret: key,
-            }
+            TlsState::WaitingForServerHello { client_random, secret: key }
         } else {
             TlsState::Disabled
         };
@@ -289,22 +286,12 @@ mod tests {
 
     #[test]
     fn plain_obfuscated_abridged() {
-        server_roundtrip(TransportConfig {
-            framing: Framing::Abridged,
-            dc_id: 2,
-            secret: None,
-            unix_time: 0,
-        });
+        server_roundtrip(TransportConfig { framing: Framing::Abridged, dc_id: 2, secret: None, unix_time: 0 });
     }
 
     #[test]
     fn plain_obfuscated_intermediate_media_dc() {
-        server_roundtrip(TransportConfig {
-            framing: Framing::Intermediate,
-            dc_id: -4,
-            secret: None,
-            unix_time: 0,
-        });
+        server_roundtrip(TransportConfig { framing: Framing::Intermediate, dc_id: -4, secret: None, unix_time: 0 });
     }
 
     #[test]

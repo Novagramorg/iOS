@@ -2,6 +2,7 @@
 
 mod clock;
 mod connection;
+mod interface;
 mod resolver;
 mod session_runtime;
 mod types;
@@ -9,7 +10,7 @@ mod worker;
 
 use std::io;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
-use std::sync::mpsc::{channel, Sender};
+use std::sync::mpsc::{Sender, channel};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 
@@ -22,7 +23,7 @@ pub use types::{
     AuthKeyMaterial, ConnectionState, DcAddress, EngineCallbacks, EngineConfig, EngineEvent, KeyGeneration, LogLevel,
     ProxyConfig, SessionHandle, SessionSetup,
 };
-use worker::{Command, Worker, WAKER_TOKEN};
+use worker::{Command, WAKER_TOKEN, Worker};
 
 struct WorkerHandle {
     sender: Mutex<Sender<Command>>,
@@ -57,11 +58,7 @@ impl Engine {
                 .name(if index == 0 { "mtproto-main".into() } else { format!("mtproto-worker-{index}") })
                 .stack_size(512 * 1024)
                 .spawn(move || worker.run())?;
-            workers.push(WorkerHandle {
-                sender: Mutex::new(sender),
-                waker,
-                thread: Mutex::new(Some(thread)),
-            });
+            workers.push(WorkerHandle { sender: Mutex::new(sender), waker, thread: Mutex::new(Some(thread)) });
         }
         Ok(Self {
             inner: Arc::new(EngineInner {
@@ -89,17 +86,19 @@ impl Engine {
     fn post(&self, handle: SessionHandle, command: Command) {
         let worker = self.worker_for(handle);
         if let Ok(sender) = worker.sender.lock()
-            && sender.send(command).is_ok() {
-                let _ = worker.waker.wake();
-            }
+            && sender.send(command).is_ok()
+        {
+            let _ = worker.waker.wake();
+        }
     }
 
     fn broadcast(&self, make: impl Fn() -> Command) {
         for worker in &self.inner.workers {
             if let Ok(sender) = worker.sender.lock()
-                && sender.send(make()).is_ok() {
-                    let _ = worker.waker.wake();
-                }
+                && sender.send(make()).is_ok()
+            {
+                let _ = worker.waker.wake();
+            }
         }
     }
 
@@ -112,13 +111,7 @@ impl Engine {
         };
         let serial = self.inner.next_session.fetch_add(1, Ordering::Relaxed);
         let handle = SessionHandle((serial << WORKER_BITS) | worker as u64);
-        self.post(
-            handle,
-            Command::Create {
-                handle,
-                setup: Box::new(setup),
-            },
-        );
+        self.post(handle, Command::Create { handle, setup: Box::new(setup) });
         handle
     }
 
@@ -174,6 +167,10 @@ impl Engine {
         self.post(handle, Command::DecideRetry(handle, id, retry));
     }
 
+    pub fn set_obfuscation_dc_id(&self, handle: SessionHandle, dc_id: i16) {
+        self.post(handle, Command::SetObfuscationDcId(handle, dc_id));
+    }
+
     pub fn invalidate_initialization(&self, handle: SessionHandle) {
         self.post(handle, Command::InvalidateInitialization(handle));
     }
@@ -195,9 +192,10 @@ impl Engine {
         for worker in &self.inner.workers {
             if let Ok(mut thread) = worker.thread.lock()
                 && let Some(thread) = thread.take()
-                    && thread.thread().id() != std::thread::current().id() {
-                        let _ = thread.join();
-                    }
+                && thread.thread().id() != std::thread::current().id()
+            {
+                let _ = thread.join();
+            }
         }
     }
 }
@@ -213,9 +211,10 @@ impl Drop for EngineInner {
         for worker in &self.workers {
             if let Ok(mut thread) = worker.thread.lock()
                 && let Some(thread) = thread.take()
-                    && thread.thread().id() != std::thread::current().id() {
-                        let _ = thread.join();
-                    }
+                && thread.thread().id() != std::thread::current().id()
+            {
+                let _ = thread.join();
+            }
         }
     }
 }

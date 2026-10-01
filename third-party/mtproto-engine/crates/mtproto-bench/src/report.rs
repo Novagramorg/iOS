@@ -13,12 +13,7 @@ impl Latency {
         }
         samples.sort_by(f64::total_cmp);
         let at = |q: f64| samples[((samples.len() as f64 - 1.0) * q).round() as usize];
-        Self {
-            p50: at(0.50),
-            p95: at(0.95),
-            p99: at(0.99),
-            max: *samples.last().expect("non-empty"),
-        }
+        Self { p50: at(0.50), p95: at(0.95), p99: at(0.99), max: *samples.last().expect("non-empty") }
     }
 }
 

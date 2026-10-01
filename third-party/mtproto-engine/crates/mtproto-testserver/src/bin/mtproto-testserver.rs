@@ -1,17 +1,14 @@
 use std::io::BufRead;
 
 use mtproto_core::auth_key::AuthKey;
-use mtproto_testserver::{random_key, ServerOptions, TestServer, SERVER_SALT};
+use mtproto_testserver::{SERVER_SALT, ServerOptions, TestServer, random_key};
 
 fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
 fn unhex(text: &str) -> Vec<u8> {
-    (0..text.len())
-        .step_by(2)
-        .map(|i| u8::from_str_radix(&text[i..i + 2], 16).expect("hex"))
-        .collect()
+    (0..text.len()).step_by(2).map(|i| u8::from_str_radix(&text[i..i + 2], 16).expect("hex")).collect()
 }
 
 fn main() {
@@ -28,12 +25,7 @@ fn main() {
     }
     let key = key.unwrap_or_else(|| random_key(std::process::id() as u64));
     let server = TestServer::start(vec![key.clone()], options);
-    println!(
-        "{{\"address\":\"{}\",\"key_hex\":\"{}\",\"salt\":{}}}",
-        server.address,
-        hex(key.bytes()),
-        SERVER_SALT
-    );
+    println!("{{\"address\":\"{}\",\"key_hex\":\"{}\",\"salt\":{}}}", server.address, hex(key.bytes()), SERVER_SALT);
     for line in std::io::stdin().lock().lines() {
         let Ok(line) = line else { break };
         match line.trim() {

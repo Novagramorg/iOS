@@ -36,16 +36,8 @@ fn query_tag(body: &[u8]) -> Option<u32> {
 impl Harness {
     fn new() -> Self {
         Self::with_salts(vec![
-            ServerSalt {
-                salt: 101,
-                valid_since: START - 100.0,
-                valid_until: START + 1800.0,
-            },
-            ServerSalt {
-                salt: 102,
-                valid_since: START + 1800.0,
-                valid_until: START + 3600.0,
-            },
+            ServerSalt { salt: 101, valid_since: START - 100.0, valid_until: START + 1800.0 },
+            ServerSalt { salt: 102, valid_since: START + 1800.0, valid_until: START + 3600.0 },
         ])
     }
 
@@ -106,7 +98,9 @@ impl Harness {
             .messages
             .iter()
             .filter(|message| message.constructor() == ids::PING_DELAY_DISCONNECT || message.constructor() == ids::PING)
-            .map(|message| Outgoing::Service(pong(message.msg_id, i64::from_le_bytes(message.body[4..12].try_into().unwrap()))))
+            .map(|message| {
+                Outgoing::Service(pong(message.msg_id, i64::from_le_bytes(message.body[4..12].try_into().unwrap())))
+            })
             .collect();
         if !pongs.is_empty() {
             self.deliver(pongs).unwrap();
@@ -279,9 +273,7 @@ fn new_session_created_resends_older_queries_and_reports_reset() {
     let second = h.sent_query(&second_packet, 2);
     h.deliver(vec![Outgoing::Content(new_session_created(second, 42, 101))]).unwrap();
     let events = h.events();
-    assert!(events
-        .iter()
-        .any(|e| matches!(e, SessionEvent::ServerSessionReset { unique_id: 42, .. })));
+    assert!(events.iter().any(|e| matches!(e, SessionEvent::ServerSessionReset { unique_id: 42, .. })));
     let packet = h.flush().unwrap();
     let tags: Vec<u32> = packet.messages.iter().filter_map(|m| query_tag(&m.body)).collect();
     assert_eq!(tags, vec![1]);
@@ -309,10 +301,8 @@ fn reconnect_without_ack_asks_state_and_resends_only_unreceived() {
     let mut asked = read_vector_after_constructor(&state_request.body);
     asked.sort_unstable();
     assert_eq!(asked, vec![first, second]);
-    let info: Vec<u8> = read_vector_after_constructor(&state_request.body)
-        .iter()
-        .map(|id| if *id == first { 4 } else { 2 })
-        .collect();
+    let info: Vec<u8> =
+        read_vector_after_constructor(&state_request.body).iter().map(|id| if *id == first { 4 } else { 2 }).collect();
     h.deliver(vec![Outgoing::Content(msgs_state_info(state_request.msg_id, &info))]).unwrap();
     let events = h.events();
     assert!(events.iter().any(|e| matches!(e, SessionEvent::Acknowledged { id: QueryId(1) })));
@@ -370,15 +360,7 @@ fn unanswered_state_request_is_retried() {
 #[test]
 fn quick_ack_marks_query_acknowledged() {
     let mut h = Harness::new();
-    h.session.send(
-        QueryId(7),
-        query_body(7),
-        QueryOptions {
-            quick_ack: true,
-            invoke_after: None,
-        },
-        h.now,
-    );
+    h.session.send(QueryId(7), query_body(7), QueryOptions { quick_ack: true, invoke_after: None }, h.now);
     h.advance(0.01);
     let transmit = h.session.poll_transmit(h.now, &mut h.rng).unwrap();
     let token = transmit.quick_ack_token.expect("quick ack requested");
@@ -395,11 +377,8 @@ fn msgs_ack_on_container_acknowledges_children_once() {
     h.session.send(QueryId(2), query_body(2), QueryOptions::default(), h.now);
     let packet = h.flush().unwrap();
     h.deliver(vec![Outgoing::Service(msgs_ack(&[packet.header.msg_id, packet.header.msg_id]))]).unwrap();
-    let acks: Vec<SessionEvent> = h
-        .events()
-        .into_iter()
-        .filter(|e| matches!(e, SessionEvent::Acknowledged { .. }))
-        .collect();
+    let acks: Vec<SessionEvent> =
+        h.events().into_iter().filter(|e| matches!(e, SessionEvent::Acknowledged { .. })).collect();
     assert_eq!(acks.len(), 2);
 }
 
@@ -428,7 +407,9 @@ fn gzip_rpc_errors_and_duplicates() {
         }
         _ => unreachable!(),
     }
-    assert!(events.iter().any(|e| matches!(e, SessionEvent::Error { id: QueryId(2), code: 420, message, .. } if message == "FLOOD_WAIT_7")));
+    assert!(events.iter().any(
+        |e| matches!(e, SessionEvent::Error { id: QueryId(2), code: 420, message, .. } if message == "FLOOD_WAIT_7")
+    ));
 }
 
 #[test]
@@ -440,17 +421,14 @@ fn updates_are_delivered_once_and_unknown_constructors_do_not_break_containers()
     let update_msg_id = h.server.next_msg_id(false);
     let updates = update(0x74ae4240, &[1, 2, 3, 4]);
     let packet = h.server.encode(vec![
-        Outgoing::Raw {
-            body: updates.clone(),
-            seq_no: 1,
-            msg_id: Some(update_msg_id),
-        },
+        Outgoing::Raw { body: updates.clone(), seq_no: 1, msg_id: Some(update_msg_id) },
         Outgoing::Content(update(0xdeadbeef, &[0; 8])),
         Outgoing::Content(rpc_result(first, &[3, 3, 3, 3])),
     ]);
     h.session.handle_packet(&packet, h.now, &mut h.rng).unwrap();
     let events = h.events();
-    let update_events: Vec<&SessionEvent> = events.iter().filter(|e| matches!(e, SessionEvent::Update { .. })).collect();
+    let update_events: Vec<&SessionEvent> =
+        events.iter().filter(|e| matches!(e, SessionEvent::Update { .. })).collect();
     assert_eq!(update_events.len(), 2);
     assert!(events.iter().any(|e| matches!(e, SessionEvent::Result { id: QueryId(1), .. })));
     let resent = h.server.seal(update_msg_id, 1, &updates);
@@ -517,15 +495,7 @@ fn msg_new_detailed_info_for_received_message_is_only_acked() {
 fn dependencies_wrap_invoke_after_msg() {
     let mut h = Harness::new();
     h.session.send(QueryId(1), query_body(1), QueryOptions::default(), h.now);
-    h.session.send(
-        QueryId(2),
-        query_body(2),
-        QueryOptions {
-            quick_ack: false,
-            invoke_after: Some(QueryId(1)),
-        },
-        h.now,
-    );
+    h.session.send(QueryId(2), query_body(2), QueryOptions { quick_ack: false, invoke_after: Some(QueryId(1)) }, h.now);
     let packet = h.flush().unwrap();
     let first = h.sent_query(&packet, 1);
     let dependent = packet.messages.iter().find(|m| query_tag(&m.body) == Some(2)).unwrap();
@@ -534,15 +504,7 @@ fn dependencies_wrap_invoke_after_msg() {
     assert_eq!(reader.read_i64().unwrap(), first);
 
     h.deliver(vec![Outgoing::Content(rpc_result(first, &[0; 4]))]).unwrap();
-    h.session.send(
-        QueryId(3),
-        query_body(3),
-        QueryOptions {
-            quick_ack: false,
-            invoke_after: Some(QueryId(1)),
-        },
-        h.now,
-    );
+    h.session.send(QueryId(3), query_body(3), QueryOptions { quick_ack: false, invoke_after: Some(QueryId(1)) }, h.now);
     let packet = h.flush().unwrap();
     let third = packet.messages.iter().find(|m| query_tag(&m.body) == Some(3)).unwrap();
     assert_eq!(u32::from_le_bytes(third.body[..4].try_into().unwrap()), QUERY_CONSTRUCTOR);
@@ -643,10 +605,8 @@ fn progress_target_identifies_large_result() {
     let big = vec![9u8; 4096];
     let response = h.server.encode(vec![Outgoing::Content(rpc_result(msg_id, &big))]);
     assert_eq!(h.session.progress_target(&response[..128]), Some(QueryId(77)));
-    let container = h.server.encode(vec![
-        Outgoing::Content(rpc_result(msg_id, &big)),
-        Outgoing::Content(update(1, &[0; 4])),
-    ]);
+    let container =
+        h.server.encode(vec![Outgoing::Content(rpc_result(msg_id, &big)), Outgoing::Content(update(1, &[0; 4]))]);
     assert_eq!(h.session.progress_target(&container[..128]), Some(QueryId(77)));
     assert_eq!(h.session.progress_target(&response[..40]), None);
 }
@@ -699,9 +659,7 @@ fn ack_ids(packets: &[DecodedPacket]) -> Vec<i64> {
 }
 
 fn has_forced_time_update(events: &[SessionEvent]) -> bool {
-    events
-        .iter()
-        .any(|event| matches!(event, SessionEvent::TimeDifferenceUpdated { forced: true, .. }))
+    events.iter().any(|event| matches!(event, SessionEvent::TimeDifferenceUpdated { forced: true, .. }))
 }
 
 fn updates_of(events: &[SessionEvent]) -> Vec<u32> {
@@ -744,10 +702,7 @@ fn even_server_msg_id_is_ignored() {
     let mut h = Harness::new();
     h.flush();
     let even = h.server.next_msg_id(true) & !3;
-    assert_eq!(
-        h.deliver_sealed(even, 1, &update(0x1234_5678, &[0; 4])),
-        Err(SessionError::EvenServerMsgId(even))
-    );
+    assert_eq!(h.deliver_sealed(even, 1, &update(0x1234_5678, &[0; 4])), Err(SessionError::EvenServerMsgId(even)));
     assert!(h.events().is_empty());
     assert!(h.acks_after_delay().is_empty());
 }
@@ -759,7 +714,8 @@ fn duplicate_container_reacks_every_content_child() {
     let result_id = h.server.next_msg_id(true);
     let update_id = h.server.next_msg_id(false);
     let outer = h.server.next_msg_id(false);
-    let body = container(&[(result_id, 1, rpc_result(query, &[1, 0, 0, 0])), (update_id, 3, update(0x1111_2222, &[0; 4]))]);
+    let body =
+        container(&[(result_id, 1, rpc_result(query, &[1, 0, 0, 0])), (update_id, 3, update(0x1111_2222, &[0; 4]))]);
     let packet = h.server.seal(outer, 0, &body);
     h.session.handle_packet(&packet, h.now, &mut h.rng).unwrap();
     let events = h.events();
@@ -789,10 +745,14 @@ fn too_old_messages_are_acked_and_replayed_safely() {
     h.advance(ACK_DELAY + 1.0);
     h.flush_all();
     let outer = h.server.next_msg_id(false);
-    let body = container(&[(old_result, 1, rpc_result(query, &[7, 0, 0, 0])), (old_update, 3, update(0x0202_0202, &[0; 4]))]);
+    let body =
+        container(&[(old_result, 1, rpc_result(query, &[7, 0, 0, 0])), (old_update, 3, update(0x0202_0202, &[0; 4]))]);
     h.deliver_sealed(outer, 0, &body).unwrap();
     let events = h.events();
-    assert!(events.iter().any(|event| matches!(event, SessionEvent::Result { id: QueryId(1), .. })), "pending query completes");
+    assert!(
+        events.iter().any(|event| matches!(event, SessionEvent::Result { id: QueryId(1), .. })),
+        "pending query completes"
+    );
     assert!(updates_of(&events).is_empty(), "an unverifiable update is not delivered twice");
     assert!(events.contains(&SessionEvent::UpdatesLost), "the host is told to fetch the difference");
     let acked = h.acks_after_delay();
@@ -819,7 +779,10 @@ fn future_msg_id_glitch_is_recovered_through_a_freshness_proof() {
     h.deliver_sealed(normal, 1, &update(2, &[0; 4])).unwrap();
     assert!(updates_of(&h.events()).is_empty(), "looks 1000 s old after the glitch and has no proof");
     let proof = msg_id_for_time(h.server.server_time + 0.01) | 1;
-    let body = container(&[(proof + 4, 0, pong(ping.msg_id, ping_id_of(&ping).unwrap())), (proof + 8, 1, rpc_result(query, &[3, 0, 0, 0]))]);
+    let body = container(&[
+        (proof + 4, 0, pong(ping.msg_id, ping_id_of(&ping).unwrap())),
+        (proof + 8, 1, rpc_result(query, &[3, 0, 0, 0])),
+    ]);
     h.deliver_sealed(proof + 12, 0, &body).unwrap();
     let events = h.events();
     assert!(has_forced_time_update(&events));
@@ -855,7 +818,8 @@ fn server_pings_are_answered_with_pongs() {
     let ping_msg = h.server.next_msg_id(false);
     let delayed_ping_msg = h.server.next_msg_id(false);
     let outer = h.server.next_msg_id(false);
-    let body = container(&[(ping_msg, 0, server_ping(77)), (delayed_ping_msg, 0, server_ping_delay_disconnect(78, 75))]);
+    let body =
+        container(&[(ping_msg, 0, server_ping(77)), (delayed_ping_msg, 0, server_ping_delay_disconnect(78, 75))]);
     h.deliver_sealed(outer, 0, &body).unwrap();
     assert!(h.events().is_empty(), "server pings are not updates");
     let packet = h.flush().expect("pong reply");
@@ -945,8 +909,12 @@ fn every_bad_msg_notification_code_recovers_the_message() {
             let packet = h.flush().unwrap();
             assert_eq!(packet.constructors(), vec![ids::GET_FUTURE_SALTS], "queries wait for a valid salt");
             let now = h.server.server_time as i32;
-            h.deliver(vec![Outgoing::Content(future_salts(packet.messages[0].msg_id, now, &[(now - 10, now + 1800, 555)]))])
-                .unwrap();
+            h.deliver(vec![Outgoing::Content(future_salts(
+                packet.messages[0].msg_id,
+                now,
+                &[(now - 10, now + 1800, 555)],
+            ))])
+            .unwrap();
         }
         let packet = h.flush().unwrap();
         let second = h.sent_query(&packet, 1);
@@ -1145,10 +1113,7 @@ fn broken_container_structure_is_reported() {
 fn unpacking_is_bounded_per_packet_and_by_depth() {
     let mut h = Harness::new();
     h.session = Session::new(
-        SessionConfig {
-            max_unpacked_bytes: 64 * 1024,
-            ..SessionConfig::default()
-        },
+        SessionConfig { max_unpacked_bytes: 64 * 1024, ..SessionConfig::default() },
         key(),
         &h.session.salts(),
         0.0,
@@ -1250,8 +1215,12 @@ fn future_salts_must_answer_our_request() {
     let request = packet.messages[0].msg_id;
     let now = h.server.server_time as i32;
     h.deliver(vec![Outgoing::Service(bad_server_salt(request, 0, 900))]).unwrap();
-    h.deliver(vec![Outgoing::Content(future_salts(request + 400, now, &[(now - 10, now + 1800, 1), (now + 1800, now + 3600, 2)]))])
-        .unwrap();
+    h.deliver(vec![Outgoing::Content(future_salts(
+        request + 400,
+        now,
+        &[(now - 10, now + 1800, 1), (now + 1800, now + 3600, 2)],
+    ))])
+    .unwrap();
     assert_eq!(h.session.salts().iter().map(|salt| salt.salt).collect::<Vec<_>>(), vec![900]);
     h.deliver(vec![Outgoing::Content(future_salts(
         request,
@@ -1660,7 +1629,12 @@ mod fuzz {
     }
 
     fn packet() -> impl Strategy<Value = Packet> {
-        (any::<u8>(), any::<i32>(), item(), any::<u8>()).prop_map(|(outer, seq, item, advance)| Packet { outer, seq, item, advance })
+        (any::<u8>(), any::<i32>(), item(), any::<u8>()).prop_map(|(outer, seq, item, advance)| Packet {
+            outer,
+            seq,
+            item,
+            advance,
+        })
     }
 
     struct Pools {
@@ -1670,11 +1644,7 @@ mod fuzz {
 
     impl Pools {
         fn pick(list: &[i64], index: usize, fallback: i64) -> i64 {
-            if list.is_empty() {
-                fallback
-            } else {
-                list[index % list.len()]
-            }
+            if list.is_empty() { fallback } else { list[index % list.len()] }
         }
 
         fn ours(&self, index: usize) -> i64 {
@@ -1710,7 +1680,10 @@ mod fuzz {
                 future_salts(ours, now, &[(now - small, now + small * 10, value), (now + 5, now - 5, value + 1)])
             }
             15 => server_ping(value),
-            16 => update([ids::DESTROY_AUTH_KEY_OK, ids::DESTROY_SESSION_OK, ids::HTTP_WAIT, ids::RPC_ANSWER_UNKNOWN][b % 4], &[0; 12]),
+            16 => update(
+                [ids::DESTROY_AUTH_KEY_OK, ids::DESTROY_SESSION_OK, ids::HTTP_WAIT, ids::RPC_ANSWER_UNKNOWN][b % 4],
+                &[0; 12],
+            ),
             17 => update(0x74ae_4240, &value.to_le_bytes()),
             18 => rpc_answer(ours, ids::GZIP_PACKED, &value.to_le_bytes()),
             _ => update(value as u32, &[]),
@@ -1856,7 +1829,11 @@ fn incoming_salt_is_not_validated() {
     h.deliver(vec![Outgoing::Content(update(0x3141_5926, &[0; 4]))]).unwrap();
     assert_eq!(updates_of(&h.events()), vec![0x3141_5926]);
     h.session.send(QueryId(1), query_body(1), QueryOptions::default(), h.now);
-    assert_eq!(h.flush().unwrap().header.salt, 101, "only bad_server_salt, future_salts and new_session_created change our salt");
+    assert_eq!(
+        h.flush().unwrap().header.salt,
+        101,
+        "only bad_server_salt, future_salts and new_session_created change our salt"
+    );
 }
 
 #[test]

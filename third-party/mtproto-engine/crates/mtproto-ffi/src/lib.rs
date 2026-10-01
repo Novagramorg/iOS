@@ -7,13 +7,14 @@ use std::sync::Arc;
 use mtproto_engine::mtproto_core::auth_key::AuthKey;
 use mtproto_engine::mtproto_core::crypto::RsaPublicKey;
 use mtproto_engine::mtproto_core::rpc::{
-    ApiEnvironment, ClientProxy, RequestFlags, RequestId, RpcEvent, RpcRequest, SessionRole, Verification, VerificationKind,
+    ApiEnvironment, ClientProxy, RequestFlags, RequestId, RpcEvent, RpcRequest, SessionRole, Verification,
+    VerificationKind,
 };
 use mtproto_engine::mtproto_core::session::ServerSalt;
 use mtproto_engine::mtproto_core::transport::Framing;
 use mtproto_engine::{
-    AuthKeyMaterial, DcAddress, Engine, EngineCallbacks, EngineConfig, EngineEvent, KeyGeneration, LogLevel, ProxyConfig,
-    SessionHandle, SessionSetup,
+    AuthKeyMaterial, DcAddress, Engine, EngineCallbacks, EngineConfig, EngineEvent, KeyGeneration, LogLevel,
+    ProxyConfig, SessionHandle, SessionSetup,
 };
 
 pub const ABI_VERSION: u32 = 1;
@@ -155,16 +156,10 @@ struct Bridge {
     on_log: MTLogCallback,
 }
 
-const EMPTY_STRING: MTString = MTString {
-    data: std::ptr::null(),
-    length: 0,
-};
+const EMPTY_STRING: MTString = MTString { data: std::ptr::null(), length: 0 };
 
 fn string_ref(text: &str) -> MTString {
-    MTString {
-        data: text.as_ptr(),
-        length: text.len(),
-    }
+    MTString { data: text.as_ptr(), length: text.len() }
 }
 
 fn buffer(data: Vec<u8>) -> *mut MTBuffer {
@@ -205,11 +200,7 @@ impl EngineCallbacks for Bridge {
     fn on_event(&self, session: SessionHandle, event: EngineEvent) {
         match event {
             EngineEvent::Rpc(event) => self.on_rpc_event(session, event),
-            EngineEvent::Progress {
-                id,
-                progress,
-                packet_length,
-            } => {
+            EngineEvent::Progress { id, progress, packet_length } => {
                 let mut event = blank(4);
                 event.request_id = id.0;
                 event.value1 = progress as f64;
@@ -245,12 +236,7 @@ impl EngineCallbacks for Bridge {
                 event.code = code;
                 self.emit(session, event, None);
             }
-            EngineEvent::AuthKeyCreated {
-                key,
-                salt,
-                time_difference,
-                expires_at,
-            } => {
+            EngineEvent::AuthKeyCreated { key, salt, time_difference, expires_at } => {
                 let mut event = blank(21);
                 event.integer1 = salt;
                 event.integer2 = expires_at.map(i64::from).unwrap_or(0);
@@ -263,8 +249,9 @@ impl EngineCallbacks for Bridge {
                 self.emit(session, event, None);
             }
             EngineEvent::TransportFlood => self.emit(session, blank(23), None),
-            EngineEvent::NetworkUsage { incoming, outgoing } => {
+            EngineEvent::NetworkUsage { incoming, outgoing, cellular } => {
                 let mut event = blank(24);
+                event.flags = u32::from(cellular);
                 event.integer1 = incoming as i64;
                 event.integer2 = outgoing as i64;
                 self.emit(session, event, None);
@@ -295,25 +282,14 @@ impl EngineCallbacks for Bridge {
 impl Bridge {
     fn on_rpc_event(&self, session: SessionHandle, event: RpcEvent) {
         match event {
-            RpcEvent::Completed {
-                id,
-                body,
-                response_time,
-                duration,
-            } => {
+            RpcEvent::Completed { id, body, response_time, duration } => {
                 let mut event = blank(1);
                 event.request_id = id.0;
                 event.value1 = response_time;
                 event.value2 = duration;
                 self.emit(session, event, Some(body));
             }
-            RpcEvent::Failed {
-                id,
-                code,
-                message,
-                response_time,
-                duration,
-            } => {
+            RpcEvent::Failed { id, code, message, response_time, duration } => {
                 let mut event = blank(2);
                 event.request_id = id.0;
                 event.code = code;
@@ -441,11 +417,7 @@ unsafe fn slice<'a, T>(pointer: *const T, count: usize) -> &'a [T] {
 unsafe fn salts(pointer: *const MTSaltEntry, count: usize) -> Vec<ServerSalt> {
     unsafe { slice(pointer, count) }
         .iter()
-        .map(|entry| ServerSalt {
-            salt: entry.salt,
-            valid_since: entry.valid_since,
-            valid_until: entry.valid_until,
-        })
+        .map(|entry| ServerSalt { salt: entry.salt, valid_since: entry.valid_since, valid_until: entry.valid_until })
         .collect()
 }
 
@@ -495,10 +467,8 @@ unsafe fn environment(value: &MTEnvironment) -> ApiEnvironment {
             system_lang_code: text(value.system_lang_code),
             lang_pack: text(value.lang_pack),
             lang_code: text(value.lang_code),
-            proxy: (value.has_proxy != 0).then(|| ClientProxy {
-                address: text(value.proxy_address),
-                port: value.proxy_port,
-            }),
+            proxy: (value.has_proxy != 0)
+                .then(|| ClientProxy { address: text(value.proxy_address), port: value.proxy_port }),
             params: (value.has_params != 0).then(|| bytes(value.params)),
             init_hash: text(value.init_hash),
             disable_updates: value.disable_updates != 0,
@@ -527,11 +497,7 @@ unsafe fn request(value: &MTRequest) -> RpcRequest {
 }
 
 unsafe fn engine<'a>(pointer: *mut MTEngine) -> Option<&'a Engine> {
-    if pointer.is_null() {
-        None
-    } else {
-        Some(unsafe { &(*pointer).engine })
-    }
+    if pointer.is_null() { None } else { Some(unsafe { &(*pointer).engine }) }
 }
 
 #[unsafe(no_mangle)]
@@ -550,11 +516,7 @@ pub unsafe extern "C" fn mt_engine_create(
     if worker_threads > 0 {
         config.worker_threads = worker_threads as usize;
     }
-    let bridge = Arc::new(Bridge {
-        context: ContextPointer(context),
-        on_event,
-        on_log,
-    });
+    let bridge = Arc::new(Bridge { context: ContextPointer(context), on_event, on_log });
     match Engine::new(config, bridge) {
         Ok(engine) => Box::into_raw(Box::new(MTEngine { engine })),
         Err(_) => std::ptr::null_mut(),
@@ -597,15 +559,12 @@ pub unsafe extern "C" fn mt_session_create(pointer: *mut MTEngine, setup: *const
     let setup = unsafe { &*setup };
     let role = match setup.role {
         0 => SessionRole::Main,
-        2 => SessionRole::Worker {
-            requires_auth_token: true,
-        },
+        2 => SessionRole::Worker { requires_auth_token: true },
         3 => SessionRole::Cdn,
-        _ => SessionRole::Worker {
-            requires_auth_token: false,
-        },
+        _ => SessionRole::Worker { requires_auth_token: false },
     };
-    let mut config = SessionSetup::new(setup.datacenter_id, role, unsafe { addresses(setup.addresses, setup.address_count) });
+    let mut config =
+        SessionSetup::new(setup.datacenter_id, role, unsafe { addresses(setup.addresses, setup.address_count) });
     config.obfuscation_dc_id = setup.obfuscation_dc_id;
     config.framing = match setup.framing {
         1 => Framing::Intermediate,
@@ -703,9 +662,21 @@ pub unsafe extern "C" fn mt_session_set_auth_key(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn mt_session_set_addresses(pointer: *mut MTEngine, session: u64, values: *const MTAddress, count: usize) {
+pub unsafe extern "C" fn mt_session_set_addresses(
+    pointer: *mut MTEngine,
+    session: u64,
+    values: *const MTAddress,
+    count: usize,
+) {
     if let Some(engine) = unsafe { engine(pointer) } {
         engine.set_addresses(SessionHandle(session), unsafe { addresses(values, count) });
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mt_session_set_obfuscation_dc_id(pointer: *mut MTEngine, session: u64, dc_id: i16) {
+    if let Some(engine) = unsafe { engine(pointer) } {
+        engine.set_obfuscation_dc_id(SessionHandle(session), dc_id);
     }
 }
 
@@ -738,12 +709,15 @@ pub unsafe extern "C" fn mt_session_set_auth_token_ready(pointer: *mut MTEngine,
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn mt_session_resolve_apns(pointer: *mut MTEngine, session: u64, id: u64, nonce: MTString, secret: MTString) {
+pub unsafe extern "C" fn mt_session_resolve_apns(
+    pointer: *mut MTEngine,
+    session: u64,
+    id: u64,
+    nonce: MTString,
+    secret: MTString,
+) {
     if let Some(engine) = unsafe { engine(pointer) } {
-        let verification = Verification::Apns {
-            nonce: unsafe { text(nonce) },
-            secret: unsafe { text(secret) },
-        };
+        let verification = Verification::Apns { nonce: unsafe { text(nonce) }, secret: unsafe { text(secret) } };
         engine.resolve_verification(SessionHandle(session), RequestId(id), verification);
     }
 }
@@ -751,15 +725,19 @@ pub unsafe extern "C" fn mt_session_resolve_apns(pointer: *mut MTEngine, session
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mt_session_resolve_recaptcha(pointer: *mut MTEngine, session: u64, id: u64, token: MTString) {
     if let Some(engine) = unsafe { engine(pointer) } {
-        let verification = Verification::Recaptcha {
-            token: unsafe { text(token) },
-        };
+        let verification = Verification::Recaptcha { token: unsafe { text(token) } };
         engine.resolve_verification(SessionHandle(session), RequestId(id), verification);
     }
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn mt_session_fail_request(pointer: *mut MTEngine, session: u64, id: u64, code: i32, message: MTString) {
+pub unsafe extern "C" fn mt_session_fail_request(
+    pointer: *mut MTEngine,
+    session: u64,
+    id: u64,
+    code: i32,
+    message: MTString,
+) {
     if let Some(engine) = unsafe { engine(pointer) } {
         engine.fail_request(SessionHandle(session), RequestId(id), code, unsafe { text(message) });
     }

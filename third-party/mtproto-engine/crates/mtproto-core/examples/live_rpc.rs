@@ -78,12 +78,16 @@ fn main() {
     println!("auth key {:?} after {:?}", result.auth_key, start.elapsed());
     let current = now(start);
     let server_time = current.unix + result.time_difference;
-    let salts = [ServerSalt {
-        salt: result.server_salt,
-        valid_since: server_time - 10.0,
-        valid_until: server_time + 600.0,
-    }];
-    let mut session = Session::new(SessionConfig::default(), result.auth_key.clone(), &salts, result.time_difference, current, &mut rng);
+    let salts =
+        [ServerSalt { salt: result.server_salt, valid_since: server_time - 10.0, valid_until: server_time + 600.0 }];
+    let mut session = Session::new(
+        SessionConfig::default(),
+        result.auth_key.clone(),
+        &salts,
+        result.time_difference,
+        current,
+        &mut rng,
+    );
     session.connection_opened(current);
     let environment = ApiEnvironment {
         layer: 230,
@@ -109,10 +113,7 @@ fn main() {
             RpcRequest {
                 id: RequestId(id),
                 body: writer.into_inner(),
-                flags: RequestFlags {
-                    quick_ack: true,
-                    ..Default::default()
-                },
+                flags: RequestFlags { quick_ack: true, ..Default::default() },
                 invoke_after: None,
             },
             now(start),

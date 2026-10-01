@@ -1,9 +1,9 @@
 use crate::auth_key::AuthKey;
 use crate::crypto::{SecureRandom, Side, XorShiftRandom};
-use crate::message::{decrypt_message, encrypt_message, MessageHeader, PaddingPolicy};
+use crate::message::{MessageHeader, PaddingPolicy, decrypt_message, encrypt_message};
 use crate::msg_id::msg_id_for_time;
-use crate::tl::mtproto::{gzip, write_container, ContainerMessage, ServiceMessage};
-use crate::tl::{ids, Writer};
+use crate::tl::mtproto::{ContainerMessage, ServiceMessage, gzip, write_container};
+use crate::tl::{Writer, ids};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClientMessage {
@@ -60,15 +60,7 @@ pub enum Outgoing {
 
 impl ServerPeer {
     pub fn new(auth_key: AuthKey, server_time: f64) -> Self {
-        Self {
-            auth_key,
-            session_id: 0,
-            salt: 0,
-            server_time,
-            last_msg_id: 0,
-            seq_no: 0,
-            rng: XorShiftRandom::new(777),
-        }
+        Self { auth_key, session_id: 0, salt: 0, server_time, last_msg_id: 0, seq_no: 0, rng: XorShiftRandom::new(777) }
     }
 
     pub fn decode(&mut self, packet: &[u8]) -> DecodedPacket {
@@ -88,12 +80,9 @@ impl ServerPeer {
                     });
                 }
             }
-            _ => messages.push(ClientMessage {
-                msg_id: header.msg_id,
-                seq_no: header.seq_no,
-                body,
-                container_id: None,
-            }),
+            _ => {
+                messages.push(ClientMessage { msg_id: header.msg_id, seq_no: header.seq_no, body, container_id: None })
+            }
         }
         DecodedPacket { header, messages }
     }
@@ -140,11 +129,7 @@ impl ServerPeer {
         } else {
             let refs: Vec<ContainerMessage<'_>> = messages
                 .iter()
-                .map(|(msg_id, seq_no, body)| ContainerMessage {
-                    msg_id: *msg_id,
-                    seqno: *seq_no,
-                    body,
-                })
+                .map(|(msg_id, seq_no, body)| ContainerMessage { msg_id: *msg_id, seqno: *seq_no, body })
                 .collect();
             let mut writer = Writer::new();
             write_container(&mut writer, &refs);
@@ -156,12 +141,7 @@ impl ServerPeer {
     }
 
     pub fn seal(&mut self, msg_id: i64, seq_no: i32, body: &[u8]) -> Vec<u8> {
-        let header = MessageHeader {
-            salt: self.salt,
-            session_id: self.session_id,
-            msg_id,
-            seq_no,
-        };
+        let header = MessageHeader { salt: self.salt, session_id: self.session_id, msg_id, seq_no };
         let mut rng = self.rng.clone();
         let packet = encrypt_message(&self.auth_key, &header, body, Side::Server, PaddingPolicy::default(), &mut rng);
         self.rng.next_u64();
@@ -351,11 +331,7 @@ pub fn msg_detailed_info_status(msg_id: i64, answer_msg_id: i64, bytes: i32, sta
 pub fn container(messages: &[(i64, i32, Vec<u8>)]) -> Vec<u8> {
     let refs: Vec<ContainerMessage<'_>> = messages
         .iter()
-        .map(|(msg_id, seqno, body)| ContainerMessage {
-            msg_id: *msg_id,
-            seqno: *seqno,
-            body,
-        })
+        .map(|(msg_id, seqno, body)| ContainerMessage { msg_id: *msg_id, seqno: *seqno, body })
         .collect();
     let mut writer = Writer::new();
     write_container(&mut writer, &refs);

@@ -13,17 +13,11 @@ pub fn monotonic_seconds() -> f64 {
 }
 
 pub fn unix_seconds() -> f64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_secs_f64())
-        .unwrap_or(0.0)
+    SystemTime::now().duration_since(UNIX_EPOCH).map(|duration| duration.as_secs_f64()).unwrap_or(0.0)
 }
 
 pub fn now() -> Now {
-    Now {
-        mono: monotonic_seconds(),
-        unix: unix_seconds(),
-    }
+    Now { mono: monotonic_seconds(), unix: unix_seconds() }
 }
 
 #[cfg(test)]

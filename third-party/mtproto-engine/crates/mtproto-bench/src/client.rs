@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
+use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, channel};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -9,12 +9,12 @@ use mtproto_engine::mtproto_core::rpc::{ApiEnvironment, RequestFlags, RequestId,
 use mtproto_engine::mtproto_core::session::ServerSalt;
 use mtproto_engine::mtproto_core::tl::Writer;
 use mtproto_engine::{
-    unix_seconds, AuthKeyMaterial, DcAddress, Engine, EngineCallbacks, EngineConfig, EngineEvent, KeyGeneration, ProxyConfig,
-    SessionHandle, SessionSetup,
+    AuthKeyMaterial, DcAddress, Engine, EngineCallbacks, EngineConfig, EngineEvent, KeyGeneration, ProxyConfig,
+    SessionHandle, SessionSetup, unix_seconds,
 };
-use mtproto_testserver::{call, parse_result, sized_call, TAG_SIZED};
+use mtproto_testserver::{TAG_SIZED, call, parse_result, sized_call};
 
-use crate::args::{unhex, ClientArgs};
+use crate::args::{ClientArgs, unhex};
 use crate::report::{ClientReport, Latency};
 
 pub const PRODUCTION_KEY: &str = "-----BEGIN RSA PUBLIC KEY-----\nMIIBCgKCAQEA6LszBcC1LGzyr992NzE0ieY+BSaOW622Aa9Bd4ZHLl+TuFQ4lo4g\n5nKaMBwK/BIb9xUfg0Q29/2mgIR6Zr9krM7HjuIcCzFvDtr+L0GQjae9H0pRB2OO\n62cECs5HKhT5DZ98K33vmWiLowc621dQuwKWSQKjWf50XYFw42h21P2KXUGyp2y/\n+aEyZ+uVgLLQbRA1dEjSDZ2iGRy12Mk5gpYc397aYp438fsJoHIgJ2lgMv5h7WY9\nt6N/byY9Nw9p21Og3AoXSL2q/2IJ1WRUhebgAdGVMlV1fkuOQoEzR7EdpqtQD9Cs\n5+bfo3Nhmcyvk5ftB0WkJ9z6bNZ7yxrP8wIDAQAB\n-----END RSA PUBLIC KEY-----";
@@ -86,15 +86,7 @@ impl Driver {
         }
         self.pending.insert(id, Pending { index, kind, session });
         *self.outstanding.entry(session).or_insert(0) += 1;
-        self.engine.send(
-            session,
-            RpcRequest {
-                id,
-                body,
-                flags,
-                invoke_after: None,
-            },
-        );
+        self.engine.send(session, RpcRequest { id, body, flags, invoke_after: None });
     }
 
     fn outstanding(&self, session: SessionHandle) -> usize {
@@ -123,9 +115,8 @@ impl Driver {
                 *self.outstanding.entry(pending.session).or_insert(1) -= 1;
                 let valid = match pending.kind {
                     Kind::Small { tag } => parse_result(&body).is_some_and(|(result, _)| result == tag),
-                    Kind::Sized { size } => {
-                        parse_result(&body).is_some_and(|(result, payload)| result == TAG_SIZED && payload.len() == size as usize)
-                    }
+                    Kind::Sized { size } => parse_result(&body)
+                        .is_some_and(|(result, payload)| result == TAG_SIZED && payload.len() == size as usize),
                     Kind::Real => body.len() >= 4,
                 };
                 if valid {
@@ -149,11 +140,8 @@ impl Driver {
     }
 
     fn report(&self, args: &ClientArgs, elapsed: f64) -> ClientReport {
-        let latency_indices: Vec<usize> = if args.workload == "mixed" {
-            self.probes.clone()
-        } else {
-            (0..self.records.len()).collect()
-        };
+        let latency_indices: Vec<usize> =
+            if args.workload == "mixed" { self.probes.clone() } else { (0..self.records.len()).collect() };
         let samples: Vec<f64> = latency_indices
             .iter()
             .filter_map(|index| {
@@ -195,26 +183,10 @@ fn environment() -> ApiEnvironment {
 fn setup(args: &ClientArgs, role: SessionRole) -> SessionSetup {
     let (host, port) = args.address.rsplit_once(':').expect("host:port");
     let port: u16 = port.parse().expect("port");
-    let mut setup = SessionSetup::new(
-        args.dc,
-        role,
-        vec![DcAddress {
-            host: host.to_string(),
-            port,
-            secret: None,
-        }],
-    );
+    let mut setup = SessionSetup::new(args.dc, role, vec![DcAddress { host: host.to_string(), port, secret: None }]);
     if let Some(secret) = &args.secret {
-        setup.proxy = Some(ProxyConfig::MtProxy {
-            host: host.to_string(),
-            port,
-            secret: unhex(secret),
-        });
-        setup.addresses = vec![DcAddress {
-            host: "149.154.167.51".into(),
-            port: 443,
-            secret: None,
-        }];
+        setup.proxy = Some(ProxyConfig::MtProxy { host: host.to_string(), port, secret: unhex(secret) });
+        setup.addresses = vec![DcAddress { host: "149.154.167.51".into(), port: 443, secret: None }];
     }
     setup.environment = Some(environment());
     setup.keep_connected = true;
@@ -229,11 +201,7 @@ fn setup(args: &ClientArgs, role: SessionRole) -> SessionSetup {
         let now = unix_seconds();
         setup.auth_key = Some(AuthKeyMaterial {
             key,
-            salts: vec![ServerSalt {
-                salt: args.salt,
-                valid_since: now - 86_400.0,
-                valid_until: now + 86_400.0,
-            }],
+            salts: vec![ServerSalt { salt: args.salt, valid_since: now - 86_400.0, valid_until: now + 86_400.0 }],
             init_hash: None,
         });
     }
@@ -242,13 +210,8 @@ fn setup(args: &ClientArgs, role: SessionRole) -> SessionSetup {
 
 pub fn run(args: ClientArgs) -> ClientReport {
     let (sender, receiver) = channel();
-    let engine = Engine::new(
-        EngineConfig::default(),
-        Arc::new(Forwarder {
-            sender: Mutex::new(sender),
-        }),
-    )
-    .expect("engine");
+    let engine =
+        Engine::new(EngineConfig::default(), Arc::new(Forwarder { sender: Mutex::new(sender) })).expect("engine");
     let mut driver = Driver {
         engine: engine.clone(),
         events: receiver,
@@ -264,11 +227,7 @@ pub fn run(args: ClientArgs) -> ClientReport {
     let deadline = Instant::now() + Duration::from_secs_f64(args.deadline);
     let main = engine.create_session(setup(&args, SessionRole::Main));
     let small_flags = RequestFlags::default();
-    let media_flags = RequestFlags {
-        timeout_timer: true,
-        without_updates: true,
-        ..RequestFlags::default()
-    };
+    let media_flags = RequestFlags { timeout_timer: true, without_updates: true, ..RequestFlags::default() };
     driver.start = Instant::now();
     let tag = |index: usize| 1 + (index % 900) as u32;
 
@@ -298,14 +257,7 @@ pub fn run(args: ClientArgs) -> ClientReport {
         }
         "media" | "mixed" => {
             let workers: Vec<SessionHandle> = (0..args.sessions)
-                .map(|_| {
-                    engine.create_session(setup(
-                        &args,
-                        SessionRole::Worker {
-                            requires_auth_token: false,
-                        },
-                    ))
-                })
+                .map(|_| engine.create_session(setup(&args, SessionRole::Worker { requires_auth_token: false })))
                 .collect();
             let parts = args.total_bytes.div_ceil(args.part_size as u64) as usize;
             let mut issued = 0;

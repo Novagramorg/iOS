@@ -8,7 +8,7 @@ use mtproto_core::handshake::{Handshake, HandshakeConfig, HandshakeStep};
 use mtproto_core::rpc::{ApiEnvironment, RequestId, RpcClient, RpcEvent, RpcRequest, SessionRole, Verification};
 use mtproto_core::session::{Now, ServerSalt, Session, SessionConfig, SessionError};
 use mtproto_core::transport::{
-    reconnect_delay, transport_flood_delay, Incoming, Socks5Auth, Socks5Target, TransportConfig, TransportErrorKind,
+    Incoming, Socks5Auth, Socks5Target, TransportConfig, TransportErrorKind, reconnect_delay, transport_flood_delay,
 };
 
 use crate::connection::{ChunkStatus, Connection, ConnectionError};
@@ -67,6 +67,8 @@ pub struct SessionRuntime {
     last_usage_report: f64,
     resolved: Option<(String, Vec<SocketAddr>)>,
     closed: bool,
+    auth_token_ready: bool,
+    cellular: bool,
     close_reason: Option<CloseReason>,
     transport_floods: u32,
     handshake_started_at: Option<f64>,
@@ -97,6 +99,8 @@ impl SessionRuntime {
             last_usage_report: now.mono,
             resolved: None,
             closed: false,
+            auth_token_ready: true,
+            cellular: false,
             close_reason: None,
             transport_floods: 0,
             handshake_started_at: None,
@@ -114,10 +118,7 @@ impl SessionRuntime {
     }
 
     fn session_config(&self) -> SessionConfig {
-        SessionConfig {
-            is_main: self.setup.role == SessionRole::Main,
-            ..SessionConfig::default()
-        }
+        SessionConfig { is_main: self.setup.role == SessionRole::Main, ..SessionConfig::default() }
     }
 
     fn install_key(&mut self, material: AuthKeyMaterial, now: Now, rng: &mut OsRandom) {
@@ -141,7 +142,11 @@ impl SessionRuntime {
                     rng,
                 );
                 session.set_online(self.setup.online, now);
-                let mut rpc = RpcClient::new(session, self.setup.role, self.setup.environment.clone(), material.init_hash);
+                let mut rpc =
+                    RpcClient::new(session, self.setup.role, self.setup.environment.clone(), material.init_hash);
+                if !self.auth_token_ready {
+                    rpc.set_auth_token_ready(false, now);
+                }
                 if self.connection.as_ref().is_some_and(Connection::is_established) && self.handshake.is_none() {
                     rpc.connection_opened(now);
                 }
@@ -213,7 +218,13 @@ impl SessionRuntime {
         }
     }
 
-    pub fn set_auth_key(&mut self, material: Option<AuthKeyMaterial>, now: Now, registry: &Registry, rng: &mut OsRandom) {
+    pub fn set_auth_key(
+        &mut self,
+        material: Option<AuthKeyMaterial>,
+        now: Now,
+        registry: &Registry,
+        rng: &mut OsRandom,
+    ) {
         match material {
             Some(material) => {
                 let changed = self.rpc.as_ref().is_some_and(|rpc| rpc.session().auth_key_id() != material.key.id());
@@ -224,10 +235,13 @@ impl SessionRuntime {
                 }
             }
             None => {
-                if let Some(rpc) = self.rpc.take() {
-                    let _ = rpc;
-                }
                 self.close_connection(registry, now, false);
+                if let Some(rpc) = self.rpc.take() {
+                    let mut requests = rpc.into_requests();
+                    requests.extend(self.queued.drain(..));
+                    self.queued = requests.into();
+                }
+                self.reported_key_required = false;
             }
         }
     }
@@ -240,6 +254,14 @@ impl SessionRuntime {
             self.close_connection(registry, now, false);
             self.next_attempt_at = now.mono;
             self.failures = 0;
+        }
+    }
+
+    pub fn set_obfuscation_dc_id(&mut self, dc_id: i16, now: Now, registry: &Registry) {
+        if self.setup.obfuscation_dc_id != dc_id {
+            self.setup.obfuscation_dc_id = dc_id;
+            self.close_connection(registry, now, false);
+            self.next_attempt_at = now.mono;
         }
     }
 
@@ -261,6 +283,7 @@ impl SessionRuntime {
     }
 
     pub fn set_auth_token_ready(&mut self, ready: bool, now: Now) {
+        self.auth_token_ready = ready;
         if let Some(rpc) = &mut self.rpc {
             rpc.set_auth_token_ready(ready, now);
         }
@@ -363,7 +386,9 @@ impl SessionRuntime {
         let index = self.address_cursor % count;
         let address = self.setup.addresses[index].clone();
         let (host, port) = match &self.setup.proxy {
-            Some(ProxyConfig::Socks5 { host, port, .. }) | Some(ProxyConfig::MtProxy { host, port, .. }) => (host.clone(), *port),
+            Some(ProxyConfig::Socks5 { host, port, .. }) | Some(ProxyConfig::MtProxy { host, port, .. }) => {
+                (host.clone(), *port)
+            }
             None => (address.host.clone(), address.port),
         };
         let socket_address = match parse_literal(&host, port) {
@@ -394,7 +419,14 @@ impl SessionRuntime {
         self.next_attempt_at = now.mono;
     }
 
-    fn start_connection(&mut self, registry: &Registry, now: Now, resolver: &mut dyn Resolve, config: &EngineConfig, rng: &mut OsRandom) {
+    fn start_connection(
+        &mut self,
+        registry: &Registry,
+        now: Now,
+        resolver: &mut dyn Resolve,
+        config: &EngineConfig,
+        rng: &mut OsRandom,
+    ) {
         let Some((index, socket_address, address)) = self.pick_address(resolver) else {
             return;
         };
@@ -406,10 +438,9 @@ impl SessionRuntime {
                     None => Socks5Target::Domain(address.host.clone(), address.port),
                 };
                 let auth = match (username, password) {
-                    (Some(username), Some(password)) if !username.is_empty() => Some(Socks5Auth {
-                        username: username.clone(),
-                        password: password.clone(),
-                    }),
+                    (Some(username), Some(password)) if !username.is_empty() => {
+                        Some(Socks5Auth { username: username.clone(), password: password.clone() })
+                    }
                     _ => None,
                 };
                 Some((target, auth))
@@ -437,10 +468,7 @@ impl SessionRuntime {
     }
 
     fn time_difference(&self) -> f64 {
-        self.rpc
-            .as_ref()
-            .map(|rpc| rpc.session().time_difference())
-            .unwrap_or(self.setup.time_difference)
+        self.rpc.as_ref().map(|rpc| rpc.session().time_difference()).unwrap_or(self.setup.time_difference)
     }
 
     fn on_established(&mut self, now: Now, callbacks: &Arc<dyn EngineCallbacks>, rng: &mut OsRandom) {
@@ -521,9 +549,10 @@ impl SessionRuntime {
                 failure = Some(error);
             }
         } else if matches!(failure, Some(ConnectionError::Closed) | Some(ConnectionError::Io(_)))
-            && let Err(error) = self.process_incoming(registry, now, callbacks, rng) {
-                failure = Some(error);
-            }
+            && let Err(error) = self.process_incoming(registry, now, callbacks, rng)
+        {
+            failure = Some(error);
+        }
         if let Some(error) = failure {
             if self.connection.is_none() {
                 return;
@@ -609,9 +638,7 @@ impl SessionRuntime {
                             Err(error) => {
                                 callbacks.on_event(
                                     self.handle,
-                                    EngineEvent::AuthKeyCreationFailed {
-                                        reason: error.to_string(),
-                                    },
+                                    EngineEvent::AuthKeyCreationFailed { reason: error.to_string() },
                                 );
                                 self.close_reason = Some(CloseReason::HandshakeFailed);
                                 return Err(ConnectionError::Closed);
@@ -626,20 +653,20 @@ impl SessionRuntime {
                         Ok(()) => {
                             self.transport_floods = 0;
                             if let Some(connection) = &mut self.connection
-                                && !connection.received_packet {
-                                    connection.received_packet = true;
-                                    self.failures = 0;
-                                    callbacks.on_event(
-                                        self.handle,
-                                        EngineEvent::AddressResult {
-                                            index: connection.address_index,
-                                            success: true,
-                                        },
-                                    );
-                                }
+                                && !connection.received_packet
+                            {
+                                connection.received_packet = true;
+                                self.failures = 0;
+                                callbacks.on_event(
+                                    self.handle,
+                                    EngineEvent::AddressResult { index: connection.address_index, success: true },
+                                );
+                            }
                             self.timeout_fired = false;
                         }
-                        Err(SessionError::ForeignSession) | Err(SessionError::TooOld) | Err(SessionError::EvenServerMsgId(_)) => {}
+                        Err(SessionError::ForeignSession)
+                        | Err(SessionError::TooOld)
+                        | Err(SessionError::EvenServerMsgId(_)) => {}
                         Err(error) => {
                             self.log(callbacks, LogLevel::Warning, &format!("session error: {error}"));
                             self.pump_rpc_events(now, registry, callbacks);
@@ -671,14 +698,13 @@ impl SessionRuntime {
         if self.handshake.is_some() {
             callbacks.on_event(
                 self.handle,
-                EngineEvent::AuthKeyCreationFailed {
-                    reason: format!("transport error {code}"),
-                },
+                EngineEvent::AuthKeyCreationFailed { reason: format!("transport error {code}") },
             );
             if kind == TransportErrorKind::Flood {
                 self.transport_floods += 1;
                 callbacks.on_event(self.handle, EngineEvent::TransportFlood);
-                self.next_attempt_at = self.next_attempt_at.max(now.mono + transport_flood_delay(self.transport_floods));
+                self.next_attempt_at =
+                    self.next_attempt_at.max(now.mono + transport_flood_delay(self.transport_floods));
             }
             self.close_reason = Some(CloseReason::HandshakeFailed);
             return;
@@ -699,7 +725,8 @@ impl SessionRuntime {
                 if let Some(rpc) = &mut self.rpc {
                     rpc.connection_rejected(now);
                 }
-                self.next_attempt_at = self.next_attempt_at.max(now.mono + transport_flood_delay(self.transport_floods));
+                self.next_attempt_at =
+                    self.next_attempt_at.max(now.mono + transport_flood_delay(self.transport_floods));
                 self.close_reason = Some(CloseReason::TransportFlood);
             }
             TransportErrorKind::InvalidDc => {
@@ -728,11 +755,7 @@ impl SessionRuntime {
         let is_tracked = matches!(&self.progress, Some(tracking) if tracking.frame_length == length);
         if !is_tracked {
             let target = rpc.progress_target(&available[..PROGRESS_HEAD.min(available.len())]);
-            self.progress = Some(ProgressTracking {
-                frame_length: length,
-                target,
-                last_reported: 0,
-            });
+            self.progress = Some(ProgressTracking { frame_length: length, target, last_reported: 0 });
         }
         let tracking = self.progress.as_mut().expect("tracking exists");
         let Some(target) = tracking.target else {
@@ -743,11 +766,7 @@ impl SessionRuntime {
             tracking.last_reported = received;
             callbacks.on_event(
                 self.handle,
-                EngineEvent::Progress {
-                    id: target,
-                    progress: received as f32 / length as f32,
-                    packet_length: length,
-                },
+                EngineEvent::Progress { id: target, progress: received as f32 / length as f32, packet_length: length },
             );
         }
     }
@@ -762,6 +781,7 @@ impl SessionRuntime {
                         continue;
                     }
                     RpcEvent::TimeDifferenceUpdated { difference } => self.setup.time_difference = *difference,
+                    RpcEvent::AuthTokenRequired => self.auth_token_ready = false,
                     RpcEvent::Completed { .. } | RpcEvent::Failed { .. } => self.last_activity_at = now.mono,
                     _ => {}
                 }
@@ -802,39 +822,41 @@ impl SessionRuntime {
 
         let mut failure = None;
         if let Some(connection) = &self.connection
-            && !connection.is_established() && now.mono - connection.started_at > config.connect_timeout {
-                failure = Some("connect timeout");
-            }
-        if failure.is_none() && self.handshake_started_at.is_some_and(|started| now.mono - started > HANDSHAKE_TIMEOUT) {
-            callbacks.on_event(
-                self.handle,
-                EngineEvent::AuthKeyCreationFailed {
-                    reason: "handshake timeout".into(),
-                },
-            );
+            && !connection.is_established()
+            && now.mono - connection.started_at > config.connect_timeout
+        {
+            callbacks
+                .on_event(self.handle, EngineEvent::AddressResult { index: connection.address_index, success: false });
+            failure = Some("connect timeout");
+        }
+        if failure.is_none() && self.handshake_started_at.is_some_and(|started| now.mono - started > HANDSHAKE_TIMEOUT)
+        {
+            callbacks.on_event(self.handle, EngineEvent::AuthKeyCreationFailed { reason: "handshake timeout".into() });
             self.log(callbacks, LogLevel::Info, "handshake timeout");
             self.close_connection(registry, now, true);
         }
         if failure.is_none()
             && let Some(rpc) = &mut self.rpc
-                && self.connection.as_ref().is_some_and(Connection::is_established) && self.handshake.is_none()
-                    && let Err(error) = rpc.handle_timeout(now) {
-                        failure = Some(match error {
-                            SessionError::PingTimeout => "ping timeout",
-                            SessionError::ReadTimeout => "read timeout",
-                            _ => "session timeout",
-                        });
-                    }
+            && self.connection.as_ref().is_some_and(Connection::is_established)
+            && self.handshake.is_none()
+            && let Err(error) = rpc.handle_timeout(now)
+        {
+            failure = Some(match error {
+                SessionError::PingTimeout => "ping timeout",
+                SessionError::ReadTimeout => "read timeout",
+                _ => "session timeout",
+            });
+        }
         if failure.is_none()
             && let (Some(connection), Some(rpc)) = (&self.connection, &self.rpc)
-                && connection.is_established()
-                    && !self.timeout_fired
-                    && rpc.has_timeout_timer_requests()
-                    && now.mono - connection.last_read_at > self.setup.request_timeout
-                {
-                    self.timeout_fired = true;
-                    failure = Some("request timeout");
-                }
+            && connection.is_established()
+            && !self.timeout_fired
+            && rpc.has_timeout_timer_requests()
+            && now.mono - connection.last_read_at > self.setup.request_timeout
+        {
+            self.timeout_fired = true;
+            failure = Some("request timeout");
+        }
         self.pump_rpc_events(now, registry, callbacks);
         if let Some(reason) = failure {
             self.log(callbacks, LogLevel::Info, reason);
@@ -850,7 +872,13 @@ impl SessionRuntime {
         self.report_usage(now, config, callbacks);
     }
 
-    fn flush_output(&mut self, registry: &Registry, now: Now, callbacks: &Arc<dyn EngineCallbacks>, rng: &mut OsRandom) {
+    fn flush_output(
+        &mut self,
+        registry: &Registry,
+        now: Now,
+        callbacks: &Arc<dyn EngineCallbacks>,
+        rng: &mut OsRandom,
+    ) {
         let Some(connection) = &mut self.connection else {
             return;
         };
@@ -864,20 +892,25 @@ impl SessionRuntime {
                 break;
             }
         }
-        if failed.is_none() && self.handshake.is_none()
-            && let Some(rpc) = &mut self.rpc
-                && connection.is_established() {
-                    while let Some(transmit) = rpc.poll_transmit(now, rng) {
-                        if let Err(error) = connection.send_packet(registry, &transmit.data, transmit.quick_ack_token.is_some(), rng) {
-                            failed = Some(error);
-                            break;
-                        }
-                    }
-                }
         if failed.is_none()
-            && let Err(error) = connection.flush(registry) {
-                failed = Some(error);
+            && self.handshake.is_none()
+            && let Some(rpc) = &mut self.rpc
+            && connection.is_established()
+        {
+            while let Some(transmit) = rpc.poll_transmit(now, rng) {
+                if let Err(error) =
+                    connection.send_packet(registry, &transmit.data, transmit.quick_ack_token.is_some(), rng)
+                {
+                    failed = Some(error);
+                    break;
+                }
             }
+        }
+        if failed.is_none()
+            && let Err(error) = connection.flush(registry)
+        {
+            failed = Some(error);
+        }
         self.pump_rpc_events(now, registry, callbacks);
         if let Some(error) = failed {
             self.log(callbacks, LogLevel::Info, &format!("write failed: {error}"));
@@ -893,10 +926,7 @@ impl SessionRuntime {
             connected,
             updating_connection_context: connected && !received,
             performing_service_tasks: connected
-                && self
-                    .rpc
-                    .as_ref()
-                    .is_some_and(|rpc| rpc.session().is_performing_service_tasks()),
+                && self.rpc.as_ref().is_some_and(|rpc| rpc.session().is_performing_service_tasks()),
             proxy_has_connection_issues: self.setup.proxy.is_some() && !connected && self.failures >= 3,
         };
         (state, self.setup.proxy.as_ref().map(ProxyConfig::display_address))
@@ -906,13 +936,8 @@ impl SessionRuntime {
         let current = self.connection_state();
         if self.last_state.as_ref() != Some(&current) {
             self.last_state = Some(current.clone());
-            callbacks.on_event(
-                self.handle,
-                EngineEvent::ConnectionState {
-                    state: current.0,
-                    proxy_address: current.1,
-                },
-            );
+            callbacks
+                .on_event(self.handle, EngineEvent::ConnectionState { state: current.0, proxy_address: current.1 });
         }
     }
 
@@ -923,6 +948,7 @@ impl SessionRuntime {
         self.last_usage_report = now.mono;
         let (mut incoming, mut outgoing) = (self.reported_in, self.reported_out);
         if let Some(connection) = &mut self.connection {
+            self.cellular = connection.cellular;
             incoming += connection.bytes_in;
             outgoing += connection.bytes_out;
             connection.bytes_in = 0;
@@ -931,7 +957,7 @@ impl SessionRuntime {
         self.reported_in = 0;
         self.reported_out = 0;
         if incoming > 0 || outgoing > 0 {
-            callbacks.on_event(self.handle, EngineEvent::NetworkUsage { incoming, outgoing });
+            callbacks.on_event(self.handle, EngineEvent::NetworkUsage { incoming, outgoing, cellular: self.cellular });
         }
     }
 
@@ -949,22 +975,26 @@ impl SessionRuntime {
                 deadline = deadline.min(connection.started_at + 12.0);
             }
             if let Some(rpc) = &mut self.rpc
-                && connection.is_established() {
-                    if let Some(at) = rpc.poll_timeout(now) {
-                        deadline = deadline.min(at);
-                    }
-                    if rpc.has_timeout_timer_requests() && !self.timeout_fired {
-                        deadline = deadline.min(connection.last_read_at + self.setup.request_timeout);
-                    }
+                && connection.is_established()
+            {
+                if let Some(at) = rpc.poll_timeout(now) {
+                    deadline = deadline.min(at);
                 }
+                if rpc.has_timeout_timer_requests() && !self.timeout_fired {
+                    deadline = deadline.min(connection.last_read_at + self.setup.request_timeout);
+                }
+            }
         } else if let Some(rpc) = &mut self.rpc
-            && let Some(at) = rpc.poll_timeout(now) {
-                deadline = deadline.min(at.max(now.mono + 0.5));
-            }
+            && let Some(at) = rpc.poll_timeout(now)
+        {
+            deadline = deadline.min(at.max(now.mono + 0.5));
+        }
         if let (Some(idle), Some(_)) = (self.setup.idle_disconnect_after, &self.connection)
-            && !self.setup.keep_connected && !self.has_work() {
-                deadline = deadline.min(self.last_activity_at + idle);
-            }
+            && !self.setup.keep_connected
+            && !self.has_work()
+        {
+            deadline = deadline.min(self.last_activity_at + idle);
+        }
         if self.reported_in > 0 || self.reported_out > 0 || self.connection.is_some() {
             deadline = deadline.min(self.last_usage_report + 2.0);
         }

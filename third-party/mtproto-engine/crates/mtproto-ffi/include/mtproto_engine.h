@@ -165,6 +165,10 @@ enum {
 };
 
 enum {
+    MTNetworkUsageCellular = 1 << 0,
+};
+
+enum {
     MTVerificationKindApns = 1,
     MTVerificationKindRecaptcha = 2,
 };
@@ -202,6 +206,7 @@ void mt_session_set_paused(MTEngine *engine, MTSessionHandle session, uint8_t pa
 void mt_session_set_online(MTEngine *engine, MTSessionHandle session, uint8_t online);
 void mt_session_set_auth_key(MTEngine *engine, MTSessionHandle session, MTBytes key, const MTSaltEntry *salts, size_t salt_count, uint8_t has_init_hash, MTString init_hash);
 void mt_session_set_addresses(MTEngine *engine, MTSessionHandle session, const MTAddress *addresses, size_t count);
+void mt_session_set_obfuscation_dc_id(MTEngine *engine, MTSessionHandle session, int16_t dc_id);
 void mt_session_set_proxy(MTEngine *engine, MTSessionHandle session, const MTProxy *proxy);
 void mt_session_update_environment(MTEngine *engine, MTSessionHandle session, const MTEnvironment *environment, const MTRequest *noop);
 void mt_session_set_auth_token_ready(MTEngine *engine, MTSessionHandle session, uint8_t ready);

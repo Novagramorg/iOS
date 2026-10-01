@@ -119,10 +119,7 @@ impl ClientArgs {
 }
 
 pub fn unhex(text: &str) -> Vec<u8> {
-    (0..text.len())
-        .step_by(2)
-        .map(|i| u8::from_str_radix(&text[i..i + 2], 16).expect("hex"))
-        .collect()
+    (0..text.len()).step_by(2).map(|i| u8::from_str_radix(&text[i..i + 2], 16).expect("hex")).collect()
 }
 
 pub fn hex(bytes: &[u8]) -> String {

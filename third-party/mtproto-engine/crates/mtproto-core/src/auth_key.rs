@@ -13,11 +13,7 @@ impl AuthKey {
     pub fn new(key: [u8; 256]) -> Self {
         let id = auth_key_id(&key);
         let aux_hash = auth_key_aux_hash(&key);
-        Self {
-            key: Box::new(key),
-            id,
-            aux_hash,
-        }
+        Self { key: Box::new(key), id, aux_hash }
     }
 
     pub fn from_slice(key: &[u8]) -> Option<Self> {

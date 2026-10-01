@@ -17,11 +17,7 @@ pub const SINGLE_SALT_LIFETIME: f64 = 600.0;
 impl SaltState {
     pub fn empty() -> Self {
         Self {
-            current: ServerSalt {
-                salt: 0,
-                valid_since: f64::NEG_INFINITY,
-                valid_until: f64::NEG_INFINITY,
-            },
+            current: ServerSalt { salt: 0, valid_since: f64::NEG_INFINITY, valid_until: f64::NEG_INFINITY },
             future: Vec::new(),
         }
     }
@@ -42,11 +38,7 @@ impl SaltState {
     }
 
     pub fn set_server_salt(&mut self, salt: i64, server_time: f64) {
-        self.current = ServerSalt {
-            salt,
-            valid_since: server_time,
-            valid_until: server_time + SINGLE_SALT_LIFETIME,
-        };
+        self.current = ServerSalt { salt, valid_since: server_time, valid_until: server_time + SINGLE_SALT_LIFETIME };
         self.future.clear();
     }
 
@@ -61,7 +53,9 @@ impl SaltState {
     pub fn set_future(&mut self, salts: Vec<ServerSalt>, server_time: f64) {
         let mut salts: Vec<ServerSalt> = salts
             .into_iter()
-            .filter(|salt| salt.valid_since.is_finite() && salt.valid_until.is_finite() && salt.valid_until > salt.valid_since)
+            .filter(|salt| {
+                salt.valid_since.is_finite() && salt.valid_until.is_finite() && salt.valid_until > salt.valid_since
+            })
             .collect();
         if salts.is_empty() {
             return;
@@ -119,11 +113,7 @@ mod tests {
     use super::*;
 
     fn salt(salt: i64, since: f64, until: f64) -> ServerSalt {
-        ServerSalt {
-            salt,
-            valid_since: since,
-            valid_until: until,
-        }
+        ServerSalt { salt, valid_since: since, valid_until: until }
     }
 
     #[test]

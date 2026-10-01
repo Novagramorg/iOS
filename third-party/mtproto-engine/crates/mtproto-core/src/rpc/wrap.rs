@@ -1,4 +1,4 @@
-use crate::tl::{ids, Writer};
+use crate::tl::{Writer, ids};
 
 pub const INIT_CONNECTION: u32 = 0xc1cd5ea9;
 pub const INPUT_CLIENT_PROXY: u32 = 0x75588b3f;
@@ -90,10 +90,8 @@ pub fn wrap_request(
 pub fn flood_wait_seconds(message: &str) -> Option<i64> {
     for marker in ["FLOOD_PREMIUM_WAIT_", "FLOOD_WAIT_"] {
         if let Some(position) = message.find(marker) {
-            let digits: String = message[position + marker.len()..]
-                .chars()
-                .take_while(|c| c.is_ascii_digit())
-                .collect();
+            let digits: String =
+                message[position + marker.len()..].chars().take_while(|c| c.is_ascii_digit()).collect();
             return digits.parse::<i64>().ok();
         }
     }
@@ -130,10 +128,7 @@ mod tests {
     #[test]
     fn init_connection_layout() {
         let mut env = environment();
-        env.proxy = Some(ClientProxy {
-            address: "1.2.3.4".into(),
-            port: 443,
-        });
+        env.proxy = Some(ClientProxy { address: "1.2.3.4".into(), port: 443 });
         env.params = Some(vec![0xaa, 0xbb, 0xcc, 0xdd]);
         let wrapped = wrap_request(&[9, 9, 9, 9], Some(&env), true, None);
         let mut reader = Reader::new(&wrapped);
@@ -163,10 +158,7 @@ mod tests {
             &[1, 1, 1, 1],
             None,
             true,
-            Some(&Verification::Apns {
-                nonce: "n".into(),
-                secret: "s".into(),
-            }),
+            Some(&Verification::Apns { nonce: "n".into(), secret: "s".into() }),
         );
         let mut reader = Reader::new(&apns);
         assert_eq!(reader.read_u32().unwrap(), INVOKE_WITH_APNS_SECRET);
