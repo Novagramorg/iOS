@@ -2221,7 +2221,6 @@ private final class WalletSendScreenComponent: Component {
                 fiatCurrency: self.currentFiatCurrency,
                 dateTimeFormat: environment.dateTimeFormat,
                 theme: theme,
-                lottieSettings: component.context.lottieRenderingSettings,
                 isVisible: environment.isVisible,
                 transition: transition
             )

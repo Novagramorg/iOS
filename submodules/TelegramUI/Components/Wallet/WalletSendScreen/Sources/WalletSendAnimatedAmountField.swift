@@ -2,7 +2,6 @@ import Foundation
 import UIKit
 import Display
 import ComponentFlow
-import LottieSettings
 import PremiumDiamondComponent
 import TelegramPresentationData
 import WalletContext
@@ -229,7 +228,7 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
     override func update(
         mode: WalletSendInputMode, amount: Int64, rate: Double?, fiatCurrency: WalletContext.FiatCurrency,
         dateTimeFormat: PresentationDateTimeFormat, theme: PresentationTheme,
-        lottieSettings: LottieRenderingSettings, isVisible: Bool, transition: ComponentTransition
+        isVisible: Bool, transition: ComponentTransition
     ) {
         self.updating = true
         defer { self.updating = false }
@@ -242,7 +241,7 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
         if !isVisible { self.stopSymbolAnimations() }
         self.canvas.prepareGlyphs(separators: dateTimeFormat.decimalSeparator + dateTimeFormat.groupingSeparator, currencyCode: fiatCurrency.code)
         self.canvas.isRenderingEnabled = isVisible && self.applicationIsActive
-        super.update(mode: mode, amount: amount, rate: rate, fiatCurrency: fiatCurrency, dateTimeFormat: dateTimeFormat, theme: theme, lottieSettings: lottieSettings, isVisible: isVisible, transition: .immediate)
+        super.update(mode: mode, amount: amount, rate: rate, fiatCurrency: fiatCurrency, dateTimeFormat: dateTimeFormat, theme: theme, isVisible: isVisible, transition: .immediate)
         self.placeholder = self.textField.attributedPlaceholder
         self.layoutIfNeeded()
         if modeChanged, isVisible, self.window != nil, let previousCaretColor, let timing = self.motionTiming {
@@ -258,7 +257,7 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
         }
     }
 
-    override func updateGramIcon(theme: PresentationTheme, lottieSettings: LottieRenderingSettings, isVisible: Bool, transition: ComponentTransition) {
+    override func updateGramIcon(theme: PresentationTheme, isVisible: Bool, transition: ComponentTransition) {
         guard !self.hasTransferredDiamond else { return }
         let _ = self.gramIcon.update(
             transition: .immediate,

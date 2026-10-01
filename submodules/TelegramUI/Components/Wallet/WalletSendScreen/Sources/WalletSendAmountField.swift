@@ -4,8 +4,6 @@ import CoreText
 import Display
 import ComponentFlow
 import AnimatedTextComponent
-import LottieComponent
-import LottieSettings
 import MultilineTextComponent
 import TelegramPresentationData
 import PresentationDataUtils
@@ -525,7 +523,6 @@ class WalletSendAmountField: UIView, UITextFieldDelegate {
         fiatCurrency: WalletContext.FiatCurrency,
         dateTimeFormat: PresentationDateTimeFormat,
         theme: PresentationTheme,
-        lottieSettings: LottieRenderingSettings,
         isVisible: Bool,
         transition: ComponentTransition
     ) {
@@ -565,7 +562,7 @@ class WalletSendAmountField: UIView, UITextFieldDelegate {
 
         let currencyTransition: ComponentTransition = self.gramIcon.view == nil ? .immediate : transition
         let iconBlurRadius: CGFloat = 6.0
-        self.updateGramIcon(theme: theme, lottieSettings: lottieSettings, isVisible: isVisible, transition: currencyTransition)
+        self.updateGramIcon(theme: theme, isVisible: isVisible, transition: currencyTransition)
 
         let currencySymbol = fiatCurrency.symbol
         self.fiatSymbolInkBounds = WalletSendAmountGlyphMetrics.inkBounds(currencySymbol, font: self.fiatSymbolFont)
@@ -637,29 +634,7 @@ class WalletSendAmountField: UIView, UITextFieldDelegate {
         self.setNeedsLayout()
     }
 
-    func updateGramIcon(theme: PresentationTheme, lottieSettings: LottieRenderingSettings, isVisible: Bool, transition: ComponentTransition) {
-        let _ = self.gramIcon.update(
-            transition: transition,
-            component: AnyComponent(LottieComponent(
-                content: LottieComponent.AppBundleContent(name: "GramDiamond"),
-                startingPosition: .begin,
-                size: self.gramAnimationSize,
-                loop: false,
-                lottieSettings: lottieSettings
-            )),
-            environment: {},
-            containerSize: self.gramAnimationSize
-        )
-        if let view = self.gramIcon.view as? LottieComponent.View {
-            view.externalShouldPlay = self.mode == .gram && isVisible
-            if view.superview == nil {
-                view.isUserInteractionEnabled = false
-                self.contentView.addSubview(view)
-                view.playOnce()
-            }
-            transition.setAlpha(view: view, alpha: self.mode == .gram ? 1.0 : 0.0)
-            transition.setBlur(layer: view.layer, radius: self.mode == .gram ? 0.0 : 6.0)
-        }
+    func updateGramIcon(theme: PresentationTheme, isVisible: Bool, transition: ComponentTransition) {
     }
 
     override func layoutSubviews() {
