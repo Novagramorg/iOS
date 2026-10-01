@@ -60,6 +60,8 @@ fn salts() -> Vec<ServerSalt> {
     vec![ServerSalt { salt: 0x5a17, valid_since: now - 60.0, valid_until: now + 86_400.0 }]
 }
 
+type Outstanding = HashMap<u64, (Instant, u64)>;
+
 struct Slot {
     handle: SessionHandle,
     role: SessionRole,
@@ -164,7 +166,7 @@ pub fn run(minutes: f64, out: Option<String>) {
     let mut next_network_flap = started + Duration::from_secs(30);
     let mut next_reset = started + Duration::from_secs(45);
     let mut next_churn = started + Duration::from_secs(60);
-    let mut retired: Vec<(SessionHandle, HashMap<u64, (Instant, u64)>)> = Vec::new();
+    let mut retired: Vec<(SessionHandle, Outstanding)> = Vec::new();
     let mut cursor = 0usize;
     while Instant::now() < end {
         for slot in slots.iter_mut() {

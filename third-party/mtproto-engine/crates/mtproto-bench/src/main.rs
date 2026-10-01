@@ -112,7 +112,7 @@ fn main() {
                     sim.outage(std::time::Duration::from_secs_f64(outage_for));
                     next_outage = outage_every.map(|every| at + std::time::Duration::from_secs_f64(every));
                 }
-                if started.elapsed().as_secs() % 10 == 0 {
+                if started.elapsed().as_secs().is_multiple_of(10) {
                     let stats = sim.stats();
                     eprintln!(
                         "{:6.0} s  conns {}  refused {}  resets {}  up {} KB  down {} KB",
