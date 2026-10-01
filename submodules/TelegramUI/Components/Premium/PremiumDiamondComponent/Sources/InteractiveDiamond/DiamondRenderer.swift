@@ -229,7 +229,10 @@ final class DiamondRenderer: ComputeState {
             attachment.sourceAlphaBlendFactor = .one
             attachment.destinationAlphaBlendFactor = .oneMinusSourceAlpha
         }
-        return try device.makeRenderPipelineState(descriptor: descriptor)
+        guard let pipelineState = MetalEngine.shared.pipelineCache.makeRenderPipelineState(descriptor: descriptor) else {
+            throw Failure.resource("pipeline \(vertex) / \(fragment)")
+        }
+        return pipelineState
     }
 
     private func lens(source: InteractiveDiamondComponent.RefractionSource?, strength: Float, yaw: Float, pipeline: MTLRenderPipelineState?,

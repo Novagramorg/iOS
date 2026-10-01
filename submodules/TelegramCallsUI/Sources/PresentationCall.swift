@@ -198,6 +198,8 @@ public final class PresentationCallImpl: PresentationCall {
         enableTCP: Bool,
         preferredVideoCodec: String?
     ) {
+        prewarmCallStatusBarWaves()
+        
         self.context = context
         self.audioSession = audioSession
         self.callSessionManager = callSessionManager

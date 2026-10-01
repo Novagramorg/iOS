@@ -63,7 +63,7 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
         private lazy var hdrPipelineState: MTLRenderPipelineState? = {
             let descriptor = self.descriptor.copy() as! MTLRenderPipelineDescriptor
             descriptor.colorAttachments[0].pixelFormat = .rgba16Float
-            return try? self.device.makeRenderPipelineState(descriptor: descriptor)
+            return MetalEngine.shared.pipelineCache.makeRenderPipelineState(descriptor: descriptor)
         }()
 
         func pipelineState(for pixelFormat: RenderLayerSpec.PixelFormat) -> MTLRenderPipelineState? {
@@ -85,7 +85,7 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
             descriptor.colorAttachments[0].sourceAlphaBlendFactor = .one
             descriptor.colorAttachments[0].destinationRGBBlendFactor = .oneMinusSourceAlpha
             descriptor.colorAttachments[0].destinationAlphaBlendFactor = .oneMinusSourceAlpha
-            guard let pipelineState = try? device.makeRenderPipelineState(descriptor: descriptor) else {
+            guard let pipelineState = MetalEngine.shared.pipelineCache.makeRenderPipelineState(descriptor: descriptor) else {
                 return nil
             }
             self.pipelineState = pipelineState

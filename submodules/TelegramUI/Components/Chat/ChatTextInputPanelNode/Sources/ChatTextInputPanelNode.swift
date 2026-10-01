@@ -2473,7 +2473,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         self.mediaActionButtons.micButton.updateMode(mode: interfaceState.interfaceState.mediaRecordingMode, animated: transition.isAnimated)
         
-        self.updateActionButtons(hasText: inputHasText, transition: transition)
+        // The layout below reserves the send slot and scales the send button in on exactly this condition.
+        let sendButtonIsLaidOut = inputHasText || hasMediaDraft || hasForward || isEditingMedia
+        self.updateActionButtons(hasText: inputHasText, sendButtonIsLaidOut: sendButtonIsLaidOut, transition: transition)
         
         var mediaActionButtonsSize = CGSize(width: 40.0, height: 40.0)
         var sendActionButtonsSize = CGSize(width: 40.0, height: 40.0)
@@ -4566,7 +4568,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         self.updateTextHeight(animated: animated)
     }
     
-    private func updateActionButtons(hasText: Bool, transition: ContainedViewLayoutTransition) {
+    private func updateActionButtons(hasText: Bool, sendButtonIsLaidOut: Bool, transition: ContainedViewLayoutTransition) {
         let alphaTransition: ContainedViewLayoutTransition = transition.isAnimated ? .animated(duration: 0.2, curve: .easeInOut) : .immediate
         let blurTransitionIn: ComponentTransition = transition.isAnimated ? .easeInOut(duration: 0.18) : .immediate
         let blurTransitionOut: ComponentTransition = transition.isAnimated ? .easeInOut(duration: 0.18) : .immediate
@@ -4656,7 +4658,11 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 }
             }
             
-            if (hasText || keepSendButtonEnabled && !mediaInputIsActive && !hasSlowModeButton) {
+            // With the media input open and no text, show the send button only when the layout has put it on
+            // screen (a pending forward, a media draft, a media edit): the mic/expand button is moved off screen
+            // then, so it is the only way to send. Otherwise the button is laid out at scale 0.001, and making it
+            // opaque would only let a hardware Return send through a button the user cannot see.
+            if hasText || (keepSendButtonEnabled && (sendButtonIsLaidOut || !mediaInputIsActive) && !hasSlowModeButton) {
                 if self.sendActionButtons.sendContainerNode.alpha.isZero && self.rightSlowModeInset.isZero {
                     alphaTransition.updateAlpha(node: self.sendActionButtons.sendContainerNode, alpha: 1.0)
                     blurTransitionIn.setBlur(layer: self.sendActionButtons.sendContainerNode.layer, radius: 0.0)

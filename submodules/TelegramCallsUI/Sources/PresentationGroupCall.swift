@@ -864,6 +864,8 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
         sharedAudioContext: SharedCallAudioContext?,
         unmuteByDefault: Bool? = nil
     ) {
+        prewarmCallStatusBarWaves()
+        
         self.account = accountContext.account
         self.accountContext = accountContext
         self.audioSession = audioSession
