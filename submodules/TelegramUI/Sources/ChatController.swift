@@ -548,6 +548,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     
     var chatLocationContextHolder: Atomic<ChatLocationContextHolder?>
     
+    var walletTransferAnimation: ChatWalletTransferAnimation?
     weak var attachmentController: AttachmentController?
     
     weak var currentImportMessageTooltip: UndoOverlayController?
@@ -6030,6 +6031,15 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         controllerInteraction.enableFullTranslucency = context.sharedContext.energyUsageSettings.fullTranslucency
         
         self.controllerInteraction = controllerInteraction
+        controllerInteraction.requestWalletTransferArrival = { [weak self] message in
+            self?.walletTransferAnimationCoordinator().requestArrival(message)
+        }
+        controllerInteraction.walletTransferArrivalState = { [weak self] id in
+            self?.walletTransferAnimation?.arrivalState(id)
+        }
+        controllerInteraction.cancelWalletTransferArrival = { [weak self] id in
+            self?.walletTransferAnimation?.cancelArrival(id)
+        }
         
         self.navigationBar?.allowsCustomTransition = { [weak self] in
             guard let strongSelf = self else {
@@ -8294,6 +8304,8 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         if let _ = self.currentPaidMessageUndoController, let peerId = self.chatLocation.peerId {
             self.context.engine.messages.forceSendPostponedPaidMessage(peerId: peerId)
         }
+        
+        self.walletTransferAnimation?.cancelAll()
     }
     
     func saveInterfaceState(includeScrollState: Bool = true) {

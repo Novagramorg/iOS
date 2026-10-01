@@ -4098,6 +4098,30 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
         }
         self.hasActiveTransition = true
         let transition = self.enqueuedHistoryViewTransitions.removeFirst()
+
+        // Record live arrivals before creating their content nodes. Loading another history
+        // window (including a reply jump) must never look like a newly received transfer.
+        if case .InteractiveChanges = transition.reason,
+           !transition.insertItems.isEmpty,
+           self.controllerInteraction.canReadHistory,
+           let previous = self.historyView,
+           previous.id == transition.historyView.id,
+           !previous.originalView.isLoading, previous.originalView.laterId == nil,
+           transition.historyView.originalView.laterId == nil {
+            let previousIds = Set(previous.originalView.entries.map { $0.message.id })
+            let previousLastIndex = previous.originalView.entries.map { $0.message.index }.max()
+            for entry in transition.historyView.originalView.entries {
+                let message = entry.message
+                guard message.flags.contains(.Incoming), !previousIds.contains(message.id),
+                      previousLastIndex.map({ message.index > $0 }) ?? true,
+                      message.media.contains(where: { media in
+                          guard let action = media as? TelegramMediaAction else { return false }
+                          if case .gramTransfer = action.action { return true }
+                          return false
+                      }) else { continue }
+                self.controllerInteraction.freshWalletTransferMessageIds.insert(message.id)
+            }
+        }
         
         var expiredMessageStableIds = Set<UInt32>()
         if let previousHistoryView = self.historyView, transition.options.contains(.AnimateInsertion) {

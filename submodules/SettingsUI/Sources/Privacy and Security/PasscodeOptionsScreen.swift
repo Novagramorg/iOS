@@ -200,8 +200,7 @@ private final class PasscodeOptionsScreenModel {
             return
         }
         let strings = self.presentationData.strings
-        //TODO:localize
-        self.controller?.present(textAlertController(context: self.context, updatedPresentationData: self.updatedPresentationData, title: nil, text: "Couldn't update wallet protection. Please try again.", actions: [TextAlertAction(type: .defaultAction, title: strings.Common_OK, action: {})]), in: .window(.root), with: ViewControllerPresentationArguments(presentationAnimation: .modalSheet))
+        self.controller?.present(textAlertController(context: self.context, updatedPresentationData: self.updatedPresentationData, title: nil, text: strings.PasscodeSettings_WalletProtectionError, actions: [TextAlertAction(type: .defaultAction, title: strings.Common_OK, action: {})]), in: .window(.root), with: ViewControllerPresentationArguments(presentationAnimation: .modalSheet))
     }
 
     private func reportInitialErrorIfNeeded() {
@@ -362,11 +361,7 @@ private final class PasscodeOptionsScreenModel {
     private func confirmDisablePasscode(protectionEnabled: Bool) {
         let generation = self.sessionState.generation
         let presentationData = self.presentationData
-        //TODO:localize
-        let warning = protectionEnabled
-            ? "This will also turn off passcode and biometric protection for every wallet on this device."
-            : presentationData.strings.PasscodeSettings_TurnPasscodeOff
-        let alert = textAlertController(context: self.context, updatedPresentationData: self.updatedPresentationData, title: presentationData.strings.PasscodeSettings_TurnPasscodeOff, text: warning, actions: [
+        let alert = textAlertController(context: self.context, updatedPresentationData: self.updatedPresentationData, title: presentationData.strings.PasscodeSettings_TurnPasscodeOff, text: protectionEnabled ? presentationData.strings.PasscodeSettings_TurnOffWalletProtectionWarning : presentationData.strings.PasscodeSettings_TurnPasscodeOff, actions: [
             TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {}),
             TextAlertAction(type: .destructiveAction, title: presentationData.strings.PasscodeSettings_TurnPasscodeOff, action: { [weak self] in
                 guard let self, self.isControllerOnTop, self.sessionState.accepts(generation: generation), let operation = self.sessionState.beginOperation() else {
@@ -483,8 +478,7 @@ private final class PasscodeOptionsScreenModel {
                 let _ = navigation.popViewController(animated: true)
             }
             let authenticationContext = LAContext()
-            //TODO:localize
-            authenticationContext.localizedReason = "Enable biometrics for your wallets"
+            authenticationContext.localizedReason = self.presentationData.strings.PasscodeSettings_WalletEnableBiometricsReason
             authenticationContext.localizedFallbackTitle = ""
             authenticationContext.touchIDAuthenticationAllowableReuseDuration = 0
             self.activeBiometricContext = authenticationContext
@@ -866,21 +860,19 @@ private final class PasscodeOptionsScreenComponent: Component {
                             action: nil
                         ))))
                     }
-                    //TODO:localize
-                    updateSection(self.telegramSection, header: "Lock Telegram".uppercased(), footer: nil, items: telegramItems)
+                    updateSection(self.telegramSection, header: strings.PasscodeSettings_LockTelegram.uppercased(), footer: nil, items: telegramItems)
 
                     if WalletConfiguration.with(appConfiguration: component.model.context.currentAppConfiguration.with { $0 }).isAvailable {
                         let protectionEnabled = screenState.protection?.enabled == true
                         let controlsEnabled = !screenState.protectionUnavailable && !screenState.isUpdating
                         let walletTextColor = controlsEnabled ? theme.list.itemPrimaryTextColor : theme.list.itemDisabledTextColor
                         var walletItems: [AnyComponentWithIdentity<Empty>] = []
-                        //TODO:localize
                         walletItems.append(AnyComponentWithIdentity(id: "walletPasscode", component: AnyComponent(ListActionItemComponent(
                             theme: theme,
                             style: .glass,
                             title: AnyComponent(MultilineTextComponent(
                                 text: .plain(NSAttributedString(
-                                    string: "Confirm with Passcode",
+                                    string: strings.PasscodeSettings_WalletConfirmWithPasscode,
                                     font: actionFont,
                                     textColor: walletTextColor
                                 )),
@@ -895,13 +887,12 @@ private final class PasscodeOptionsScreenComponent: Component {
                             } : nil
                         ))))
                         if protectionEnabled && (screenState.canUseBiometrics || screenState.protection?.biometricsEnabled == true) {
-                            //TODO:localize
                             walletItems.append(AnyComponentWithIdentity(id: "walletBiometrics", component: AnyComponent(ListActionItemComponent(
                                 theme: theme,
                                 style: .glass,
                                 title: AnyComponent(MultilineTextComponent(
                                     text: .plain(NSAttributedString(
-                                        string: screenState.faceID ? "Confirm with Face ID" : "Confirm with Touch ID",
+                                        string: screenState.faceID ? strings.PasscodeSettings_WalletConfirmWithFaceId : strings.PasscodeSettings_WalletConfirmWithTouchId,
                                         font: actionFont,
                                         textColor: walletTextColor
                                     )),
@@ -916,8 +907,7 @@ private final class PasscodeOptionsScreenComponent: Component {
                                 } : nil
                             ))))
                         }
-                        //TODO:localize
-                        updateSection(self.walletSection, header: "Lock Wallet".uppercased(), footer: "Required when sending funds or confirming other sensitive Wallet actions.", items: walletItems)
+                        updateSection(self.walletSection, header: strings.PasscodeSettings_LockWallet.uppercased(), footer: strings.PasscodeSettings_WalletProtectionInfo, items: walletItems)
                     } else {
                         self.walletSection.view?.removeFromSuperview()
                     }

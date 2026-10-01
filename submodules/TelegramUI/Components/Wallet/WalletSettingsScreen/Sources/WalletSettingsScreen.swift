@@ -437,18 +437,19 @@ private final class WalletSettingsScreenComponent: Component {
             }
             guard let component = self.component, let controller = self.environment?.controller() else { return }
             let generation = self.backupAccessGeneration
-            let message = walletAuthorizationErrorMessage(error)
+            let strings = self.currentPresentationData(for: component).initial.strings
+            let message = walletAuthorizationErrorMessage(error, strings: strings)
             controller.present(textAlertController(
                 context: component.context,
                 updatedPresentationData: self.currentPresentationData(for: component),
-                title: message?.title ?? "Couldn’t Restore Wallet",
-                text: message?.text ?? "Check the network connection and try again.",
+                title: message?.title ?? strings.Wallet_RestoreErrorTitle,
+                text: message?.text ?? strings.Wallet_NetworkError,
                 actions: [
-                    TextAlertAction(type: .genericAction, title: "Cancel", action: { [weak self] in
+                    TextAlertAction(type: .genericAction, title: strings.Common_Cancel, action: { [weak self] in
                         guard let self, self.backupAccessGeneration == generation else { return }
                         self.abandonBackupAccess()
                     }),
-                    TextAlertAction(type: .defaultAction, title: "Retry", action: { [weak self] in
+                    TextAlertAction(type: .defaultAction, title: strings.Wallet_Retry, action: { [weak self] in
                         guard let self, self.backupAccessGeneration == generation else { return }
                         self.resolveBackupAccess()
                     })
@@ -501,13 +502,14 @@ private final class WalletSettingsScreenComponent: Component {
             guard let component = self.component, let controller = self.environment?.controller() else {
                 return
             }
-            let message = walletAuthorizationErrorMessage(error)
+            let strings = self.currentPresentationData(for: component).initial.strings
+            let message = walletAuthorizationErrorMessage(error, strings: strings)
             controller.present(textAlertController(
                 context: component.context,
                 updatedPresentationData: self.currentPresentationData(for: component),
-                title: message?.title ?? "Couldn’t Show Secret Phrase",
-                text: message?.text ?? "Check the network connection and try again.",
-                actions: [TextAlertAction(type: .defaultAction, title: "OK", action: {
+                title: message?.title ?? strings.Wallet_Settings_ShowPhraseErrorTitle,
+                text: message?.text ?? strings.Wallet_NetworkError,
+                actions: [TextAlertAction(type: .defaultAction, title: strings.Common_OK, action: {
                 })]
             ), in: .window(.root))
         }
@@ -552,8 +554,8 @@ private final class WalletSettingsScreenComponent: Component {
                 settingsController?.present(UndoOverlayController(
                     presentationData: presentationData,
                     content: .actionSucceeded(
-                        title: "Wallet Imported",
-                        text: "Your wallet was restored from your secret phrase.",
+                        title: component.context.sharedContext.currentPresentationData.with { $0 }.strings.Wallet_Settings_WalletImportedTitle,
+                        text: component.context.sharedContext.currentPresentationData.with { $0 }.strings.Wallet_Settings_WalletImportedText,
                         cancel: nil,
                         destructive: false
                     ),
@@ -682,7 +684,7 @@ private final class WalletSettingsScreenComponent: Component {
                     dateTimeFormat: presentationData.dateTimeFormat
                 )
                 if fiatText.hasSuffix("0\(presentationData.dateTimeFormat.decimalSeparator)00") {
-                    text += " (<\(fiat.selectedCurrency.symbol)0.01)"
+                    text += " (<\(fiat.selectedCurrency.symbol)0\(presentationData.dateTimeFormat.decimalSeparator)01)"
                 } else {
                     text += " (~\(fiatText))"
                 }
@@ -691,27 +693,29 @@ private final class WalletSettingsScreenComponent: Component {
         }
 
         private func updateDisableBackupPreparationContent() {
-            guard let content = self.disableBackupPreparationContent,
+            guard let component = self.component,
+                  let content = self.disableBackupPreparationContent,
                   let actions = self.disableBackupPreparationActions,
                   let progress = self.disableBackupPreparationProgress,
                   let checkState = self.disableBackupCheckState else {
                 return
             }
+            let strings = self.currentPresentationData(for: component).initial.strings
             var items: [AnyComponentWithIdentity<AlertComponentEnvironment>] = [
                 AnyComponentWithIdentity(
                     id: "title",
-                    component: AnyComponent(AlertTitleComponent(title: "Disable Backup?"))
+                    component: AnyComponent(AlertTitleComponent(title: strings.Wallet_Backup_DisableTitle))
                 ),
                 AnyComponentWithIdentity(
                     id: "text",
                     component: AnyComponent(AlertTextComponent(content: .plain(
-                        "The only way to recover your funds will be to manually enter your secret phrase."
+                        strings.Wallet_Backup_DisableText
                     )))
                 ),
                 AnyComponentWithIdentity(
                     id: "updateSecretPhrase",
                     component: AnyComponent(AlertCheckComponent(
-                        title: "Update Secret Phrase",
+                        title: strings.Wallet_Backup_UpdatePhrase,
                         alignment: .default,
                         initialValue: self.disableBackupUpdateSecretPhrase,
                         externalState: checkState
@@ -722,7 +726,7 @@ private final class WalletSettingsScreenComponent: Component {
                 items.append(AnyComponentWithIdentity(
                     id: "topUpInfo",
                     component: AnyComponent(AlertTextComponent(
-                        content: .plain("You need a non-zero balance to update your secret phrase."),
+                        content: .plain(strings.Wallet_Backup_UpdatePhraseTopUpText),
                         alignment: .center,
                         color: .primary,
                         style: .background(.small),
@@ -730,9 +734,9 @@ private final class WalletSettingsScreenComponent: Component {
                     ))
                 ))
             } else if self.disableBackupUpdateSecretPhrase, let prepared = self.preparedBackupDisable {
-                var text = "You'll get a new phrase to write down. Address and balance stay the same."
+                var text = strings.Wallet_Backup_NewPhraseText
                 if let fee = prepared.networkFeeNanograms {
-                    text += "\n\nNetwork fee: \(self.disableBackupFeeText(fee))."
+                    text += "\n\n" + strings.Wallet_Backup_NetworkFee(self.disableBackupFeeText(fee)).string
                 }
                 items.append(AnyComponentWithIdentity(
                     id: "rotationInfo",
@@ -745,11 +749,11 @@ private final class WalletSettingsScreenComponent: Component {
                 ))
             }
             if !self.disableBackupRequiresTopUp, let error = self.disableBackupPreparationError {
-                let message = self.disableBackupErrorMessage(error)
+                let message = self.disableBackupErrorMessage(error, strings: strings)
                 items.append(AnyComponentWithIdentity(
                     id: "preparationError",
                     component: AnyComponent(AlertTextComponent(
-                        content: .plain(message.text + "\n\nTap Disable to try again."),
+                        content: .plain(strings.Wallet_Backup_DisableRetryText(message.text).string),
                         color: .destructive,
                         style: .plain(.small),
                         insets: UIEdgeInsets(top: 8.0, left: 0.0, bottom: 0.0, right: 0.0)
@@ -758,12 +762,12 @@ private final class WalletSettingsScreenComponent: Component {
             }
             content.set(.single(items))
             actions.set(.single([
-                AlertScreen.Action(title: "Cancel", action: { [weak self] in
+                AlertScreen.Action(title: strings.Common_Cancel, action: { [weak self] in
                     self?.abandonWalletFlow()
                 }),
                 AlertScreen.Action(
                     id: "primary",
-                    title: self.disableBackupRequiresTopUp ? "Top Up" : "Disable",
+                    title: self.disableBackupRequiresTopUp ? strings.Wallet_Backup_TopUp : strings.Wallet_Backup_Disable,
                     type: self.disableBackupRequiresTopUp ? .default : .destructive,
                     action: { [weak self] in
                         guard let self else {
@@ -981,12 +985,10 @@ private final class WalletSettingsScreenComponent: Component {
                 }))
                 return
             }
-            var text = prepared.updateSecretPhrase
-                ? "Your wallet will switch to the new secret phrase. After the change is confirmed, Telegram will delete the encrypted backup stored across its datacenters."
-                : "Telegram will delete the encrypted backup stored across its datacenters. Your secret phrase will be the only way to recover this wallet."
-            if let fee = prepared.networkFeeNanograms {
-                text += "\n\nNetwork fee: \(self.disableBackupFeeText(fee))."
-            }
+            let strings = self.currentPresentationData(for: component).initial.strings
+            let text = prepared.updateSecretPhrase
+                ? strings.Wallet_Backup_DisableWithNewPhraseText
+                : strings.Wallet_Backup_DisableConfirmationText
             let progress = ValuePromise<Bool>(false, ignoreRepeated: true)
             let actionsEnabled = progress.get() |> map { !$0 }
             let alertController = AlertScreen(
@@ -994,7 +996,7 @@ private final class WalletSettingsScreenComponent: Component {
                 content: [
                     AnyComponentWithIdentity(
                         id: "title",
-                        component: AnyComponent(AlertTitleComponent(title: "Disable Backup?"))
+                        component: AnyComponent(AlertTitleComponent(title: strings.Wallet_Backup_DisableTitle))
                     ),
                     AnyComponentWithIdentity(
                         id: "text",
@@ -1002,11 +1004,11 @@ private final class WalletSettingsScreenComponent: Component {
                     )
                 ],
                 actions: [
-                    AlertScreen.Action(title: "Cancel", action: { [weak self] in
+                    AlertScreen.Action(title: strings.Common_Cancel, action: { [weak self] in
                         self?.dismissBackupWordsFlow()
                     }, isEnabled: actionsEnabled),
                     AlertScreen.Action(
-                        title: "Disable",
+                        title: strings.Wallet_Backup_Disable,
                         type: .destructive,
                         action: { [weak self] in
                             self?.submitDisableBackup(prepared: prepared)
@@ -1125,27 +1127,27 @@ private final class WalletSettingsScreenComponent: Component {
             }
         }
 
-        private func disableBackupErrorMessage(_ error: WalletContext.WalletError?) -> (title: String, text: String) {
+        private func disableBackupErrorMessage(_ error: WalletContext.WalletError?, strings: PresentationStrings) -> (title: String, text: String) {
             switch error {
             case .proofInvalid?:
-                return ("Couldn't Verify Wallet", "Telegram couldn't verify that you own this wallet. Please try again.")
+                return (strings.Wallet_Authorization_VerifyWalletErrorTitle, strings.Wallet_Backup_DisableVerificationErrorText)
             case .proofExpired?:
-                return ("Verification Expired", "The wallet verification request expired. Tap Disable to try again.")
+                return (strings.Wallet_Authorization_VerificationExpiredTitle, strings.Wallet_Backup_DisableVerificationExpiredText)
             case .rotationNotFound?:
                 return (
-                    "Secret Phrase Update Pending",
-                    "Telegram couldn't confirm the secret phrase change on the blockchain yet. Wait a moment and tap Disable again."
+                    strings.Wallet_Backup_PhraseUpdatePendingTitle,
+                    strings.Wallet_Backup_DisablePhraseUpdatePendingText
                 )
             case .keyRotationFailed?:
-                return ("Couldn't Update Secret Phrase", "The secret phrase change could not be completed. Check your wallet state and try again.")
+                return (strings.Wallet_Backup_UpdatePhraseErrorTitle, strings.Wallet_Backup_DisablePhraseUpdateErrorText)
             case let .insufficientBalance(required)?:
                 return (
-                    "Not Enough Grams",
-                    "You need \(self.disableBackupFeeText(required)) to update your secret phrase. Add funds and try again."
+                    strings.Wallet_Backup_InsufficientFundsTitle,
+                    strings.Wallet_Backup_RequiredBalanceText(self.disableBackupFeeText(required)).string
                 )
             default:
-                return error.flatMap(walletAuthorizationErrorMessage)
-                    ?? ("Couldn't Disable Backup", "Couldn't confirm that backup was disabled. Check the network connection and try again.")
+                return error.flatMap { walletAuthorizationErrorMessage($0, strings: strings) }
+                    ?? (strings.Wallet_Backup_DisableErrorTitle, strings.Wallet_Backup_DisableErrorText)
             }
         }
 
@@ -1156,13 +1158,14 @@ private final class WalletSettingsScreenComponent: Component {
                     ?? self.environment?.controller() else {
                 return
             }
-            let message = self.disableBackupErrorMessage(error)
+            let strings = self.currentPresentationData(for: component).initial.strings
+            let message = self.disableBackupErrorMessage(error, strings: strings)
             controller.present(textAlertController(
                 context: component.context,
                 updatedPresentationData: self.currentPresentationData(for: component),
                 title: message.title,
                 text: message.text,
-                actions: [TextAlertAction(type: .defaultAction, title: "OK", action: {})]
+                actions: [TextAlertAction(type: .defaultAction, title: strings.Common_OK, action: {})]
             ), in: .window(.root))
         }
 
@@ -1207,12 +1210,13 @@ private final class WalletSettingsScreenComponent: Component {
             guard let component = self.component, let controller = self.environment?.controller() else {
                 return
             }
+            let strings = self.currentPresentationData(for: component).initial.strings
             controller.present(textAlertController(
                 context: component.context,
                 updatedPresentationData: self.currentPresentationData(for: component),
-                title: "Wallet Changed",
-                text: "The wallet's secret phrase changed while you were updating backup settings. Restore access using the current secret phrase and try again.",
-                actions: [TextAlertAction(type: .defaultAction, title: "OK", action: {})]
+                title: strings.Wallet_Backup_WalletChangedTitle,
+                text: strings.Wallet_Backup_DisableWalletChangedText,
+                actions: [TextAlertAction(type: .defaultAction, title: strings.Common_OK, action: {})]
             ), in: .window(.root))
         }
 
@@ -1224,8 +1228,8 @@ private final class WalletSettingsScreenComponent: Component {
             controller.present(UndoOverlayController(
                 presentationData: presentationData,
                 content: .actionSucceeded(
-                    title: "Backup Disabled",
-                    text: "Your secret phrase is now the only way to restore your wallet.",
+                    title: presentationData.strings.Wallet_Backup_DisabledTitle,
+                    text: presentationData.strings.Wallet_Backup_DisabledText,
                     cancel: nil,
                     destructive: false
                 ),
@@ -1277,11 +1281,12 @@ private final class WalletSettingsScreenComponent: Component {
         private func presentEnableBackupError(_ error: WalletContext.WalletError, expectedAddress: String) {
             guard error != .authorizationCancelled,
                   let component = self.component, let controller = self.environment?.controller() else { return }
-            let message = walletBackupEnableErrorMessage(error)
-            var actions = [TextAlertAction(type: .genericAction, title: "Cancel", action: {})]
+            let strings = self.currentPresentationData(for: component).initial.strings
+            let message = walletBackupEnableErrorMessage(error, strings: strings)
+            var actions = [TextAlertAction(type: .genericAction, title: strings.Common_Cancel, action: {})]
             switch error {
             case .rotationNotFound, .proofExpired, .network:
-                actions.append(TextAlertAction(type: .defaultAction, title: "Retry", action: { [weak self] in
+                actions.append(TextAlertAction(type: .defaultAction, title: strings.Wallet_Retry, action: { [weak self] in
                     guard case let .wallet(info)? = self?.component?.walletContext.stateValue.phase,
                           info.address == expectedAddress else { return }
                     self?.enableBackup()
@@ -1291,7 +1296,7 @@ private final class WalletSettingsScreenComponent: Component {
             }
             switch error {
             case .walletKeyMismatch, .storage(.identityMismatch), .proofInvalid, .invalidMnemonic, .rotationNotFound:
-                actions.append(TextAlertAction(type: .defaultAction, title: "Enter Current Secret Phrase", action: { [weak self] in
+                actions.append(TextAlertAction(type: .defaultAction, title: strings.Wallet_Backup_EnterCurrentPhrase, action: { [weak self] in
                     self?.openBackupPhraseInput(expectedAddress: expectedAddress)
                 }))
             default:
@@ -1311,8 +1316,8 @@ private final class WalletSettingsScreenComponent: Component {
             controller.present(UndoOverlayController(
                 presentationData: presentationData,
                 content: .actionSucceeded(
-                    title: "Backup Enabled",
-                    text: "Your keys are now stored encrypted across Telegram's datacenters.",
+                    title: presentationData.strings.Wallet_Backup_EnabledTitle,
+                    text: presentationData.strings.Wallet_Backup_EnabledText,
                     cancel: nil,
                     destructive: false
                 ),
@@ -1326,13 +1331,14 @@ private final class WalletSettingsScreenComponent: Component {
             guard let component = self.component, let controller = self.environment?.controller() else {
                 return
             }
-            let message = walletAuthorizationErrorMessage(error)
+            let strings = self.currentPresentationData(for: component).initial.strings
+            let message = walletAuthorizationErrorMessage(error, strings: strings)
             controller.present(textAlertController(
                 context: component.context,
                 updatedPresentationData: self.currentPresentationData(for: component),
-                title: message?.title ?? "Couldn’t Update Backup",
-                text: message?.text ?? "Check the network connection and try again.",
-                actions: [TextAlertAction(type: .defaultAction, title: "OK", action: {})]
+                title: message?.title ?? strings.Wallet_Backup_UpdateErrorTitle,
+                text: message?.text ?? strings.Wallet_NetworkError,
+                actions: [TextAlertAction(type: .defaultAction, title: strings.Common_OK, action: {})]
             ), in: .window(.root))
         }
 
@@ -1341,18 +1347,19 @@ private final class WalletSettingsScreenComponent: Component {
             guard let component = self.component, let controller = self.environment?.controller() else {
                 return
             }
+            let strings = self.currentPresentationData(for: component).initial.strings
             controller.present(textAlertController(
                 context: component.context,
                 updatedPresentationData: self.currentPresentationData(for: component),
-                title: "Delete Wallet?",
-                text: "You'll lose access to your funds unless you've saved your secret phrase.",
+                title: strings.Wallet_Settings_DeleteWalletTitle,
+                text: strings.Wallet_Settings_DeleteWalletText,
                 actions: [
-                    TextAlertAction(type: .destructiveAction, title: "Delete Anyway", action: { [weak self] in
+                    TextAlertAction(type: .destructiveAction, title: strings.Wallet_Settings_DeleteAnyway, action: { [weak self] in
                         Queue.mainQueue().after(0.25) { [weak self] in
                             self?.presentWalletReplacementOptionsAlert()
                         }
                     }),
-                    TextAlertAction(type: .genericAction, title: "Cancel", action: {})
+                    TextAlertAction(type: .genericAction, title: strings.Common_Cancel, action: {})
                 ],
                 actionLayout: .vertical
             ), in: .window(.root))
@@ -1362,6 +1369,7 @@ private final class WalletSettingsScreenComponent: Component {
             guard let component = self.component, let controller = self.environment?.controller() else {
                 return
             }
+            let strings = self.currentPresentationData(for: component).initial.strings
             let creationProgress = ValuePromise<Bool>(false, ignoreRepeated: true)
             let actionsEnabled = creationProgress.get()
             |> map { !$0 }
@@ -1374,13 +1382,13 @@ private final class WalletSettingsScreenComponent: Component {
                     AnyComponentWithIdentity(
                         id: "title",
                         component: AnyComponent(AlertTitleComponent(
-                            title: "How do you want to replace the old wallet?"
+                            title: strings.Wallet_Settings_ReplaceWalletTitle
                         ))
                     )
                 ],
                 actions: [
                     AlertScreen.Action(
-                        title: "Create a New Wallet",
+                        title: strings.Wallet_Settings_CreateWallet,
                         action: { [weak self] in
                             self?.createReplacementWallet()
                         },
@@ -1389,7 +1397,7 @@ private final class WalletSettingsScreenComponent: Component {
                         progress: creationProgress.get()
                     ),
                     AlertScreen.Action(
-                        title: "Import an Existing Wallet",
+                        title: strings.Wallet_Settings_ImportWallet,
                         action: { [weak self] in
                             self?.openReplacementImport()
                         },
@@ -1427,8 +1435,8 @@ private final class WalletSettingsScreenComponent: Component {
                     mode: .importWallet,
                     completion: { [weak self] in
                         self?.completeWalletReplacement(
-                            toastTitle: "Wallet Imported",
-                            toastText: "Your wallet was restored from your secret phrase."
+                            toastTitle: component.context.sharedContext.currentPresentationData.with { $0 }.strings.Wallet_Settings_WalletImportedTitle,
+                            toastText: component.context.sharedContext.currentPresentationData.with { $0 }.strings.Wallet_Settings_WalletImportedText
                         )
                     }
                 ))
@@ -1462,7 +1470,6 @@ private final class WalletSettingsScreenComponent: Component {
                     guard let walletController else {
                         return
                     }
-                    //TODO:localize
                     walletController.present(UndoOverlayController(
                         presentationData: presentationData,
                         content: .actionSucceeded(
@@ -1519,8 +1526,8 @@ private final class WalletSettingsScreenComponent: Component {
                     self?.endWalletFlow()
                     let complete: () -> Void = { [weak self] in
                         self?.completeWalletReplacement(
-                            toastTitle: "Wallet Created",
-                            toastText: "Your new wallet is ready to use."
+                            toastTitle: component.context.sharedContext.currentPresentationData.with { $0 }.strings.Wallet_Settings_WalletCreatedTitle,
+                            toastText: component.context.sharedContext.currentPresentationData.with { $0 }.strings.Wallet_Settings_WalletCreatedText
                         )
                     }
                     if let alertController {
@@ -1546,13 +1553,14 @@ private final class WalletSettingsScreenComponent: Component {
             guard let component = self.component, let controller = self.environment?.controller() else {
                 return
             }
-            let message = walletAuthorizationErrorMessage(error)
+            let strings = self.currentPresentationData(for: component).initial.strings
+            let message = walletAuthorizationErrorMessage(error, strings: strings)
             controller.present(textAlertController(
                 context: component.context,
                 updatedPresentationData: self.currentPresentationData(for: component),
-                title: message?.title ?? "Couldn’t Replace Wallet",
-                text: message?.text ?? "Check the network connection and try again.",
-                actions: [TextAlertAction(type: .defaultAction, title: "OK", action: {})]
+                title: message?.title ?? strings.Wallet_Settings_ReplaceWalletErrorTitle,
+                text: message?.text ?? strings.Wallet_NetworkError,
+                actions: [TextAlertAction(type: .defaultAction, title: strings.Common_OK, action: {})]
             ), in: .window(.root))
         }
 
@@ -1651,18 +1659,6 @@ private final class WalletSettingsScreenComponent: Component {
             let theme = environment.theme
             self.backgroundColor = theme.list.blocksBackgroundColor
 
-            //TODO:localize
-            let recoveryHeader = "Secret Phrase"
-            //TODO:localize
-            //TODO:localize
-            let backupHeader = "Encrypted Backup"
-            //TODO:localize
-            let enableBackupAction = "Enable Backup"
-            //TODO:localize
-            let disableBackupAction = "Disable Backup"
-            //TODO:localize
-            let deleteWalletAction = "Delete Wallet"
-
             let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
             let headerFont = Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize)
             let footerFont = Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize)
@@ -1689,16 +1685,6 @@ private final class WalletSettingsScreenComponent: Component {
                 canEnterRecoveryPhrase = false
                 backupEnabled = false
             }
-            //TODO:localize
-            let recoveryAction = canEnterRecoveryPhrase ? "Enter Secret Phrase" : "Show Secret Phrase"
-            //TODO:localize
-            let recoveryFooter = canEnterRecoveryPhrase
-                ? "Enter your secret phrase to restore access to this wallet."
-                : "You can transfer your wallet to another device by copying your 12- or 24-word secret phrase."
-            //TODO:localize
-            let backupFooter = backupEnabled
-                ? "Your encrypted key backup is split into three parts and stored across three continents.\n\nIt can only be reassembled on your devices, so no one — not even Telegram — can access your key."
-                : "Your encrypted key backup will be split into three parts and stored across three continents.\n\nIt can only be reassembled on your devices, so no one — not even Telegram — can access your key."
 
             self.recoverySection.parentState = self.state
             let recoverySectionSize = self.recoverySection.update(
@@ -1708,7 +1694,7 @@ private final class WalletSettingsScreenComponent: Component {
                     style: .glass,
                     header: AnyComponent(MultilineTextComponent(
                         text: .plain(NSAttributedString(
-                            string: recoveryHeader.uppercased(),
+                            string: environment.strings.Wallet_SecretPhrase.uppercased(),
                             font: headerFont,
                             textColor: theme.list.freeTextColor
                         )),
@@ -1716,7 +1702,7 @@ private final class WalletSettingsScreenComponent: Component {
                     )),
                     footer: AnyComponent(MultilineTextComponent(
                         text: .plain(NSAttributedString(
-                            string: recoveryFooter,
+                            string: canEnterRecoveryPhrase ? environment.strings.Wallet_Settings_EnterSecretPhraseInfo : environment.strings.Wallet_Settings_SecretPhraseInfo,
                             font: footerFont,
                             textColor: theme.list.freeTextColor
                         )),
@@ -1728,7 +1714,7 @@ private final class WalletSettingsScreenComponent: Component {
                             style: .glass,
                             title: AnyComponent(MultilineTextComponent(
                                 text: .plain(NSAttributedString(
-                                    string: recoveryAction,
+                                    string: canEnterRecoveryPhrase ? environment.strings.Wallet_Settings_EnterSecretPhrase : environment.strings.Wallet_ShowSecretPhrase,
                                     font: actionFont,
                                     textColor: theme.list.itemAccentColor
                                 )),
@@ -1772,7 +1758,7 @@ private final class WalletSettingsScreenComponent: Component {
                     style: .glass,
                     title: AnyComponent(MultilineTextComponent(
                         text: .plain(NSAttributedString(
-                            string: enableBackupAction,
+                            string: environment.strings.Wallet_Settings_EnableBackup,
                             font: actionFont,
                             textColor: theme.list.itemAccentColor
                         )),
@@ -1790,7 +1776,7 @@ private final class WalletSettingsScreenComponent: Component {
                     style: .glass,
                     title: AnyComponent(MultilineTextComponent(
                         text: .plain(NSAttributedString(
-                            string: disableBackupAction,
+                            string: environment.strings.Wallet_Settings_DisableBackup,
                             font: actionFont,
                             textColor: theme.list.itemDestructiveColor
                         )),
@@ -1811,7 +1797,7 @@ private final class WalletSettingsScreenComponent: Component {
                         style: .glass,
                         header: AnyComponent(MultilineTextComponent(
                             text: .plain(NSAttributedString(
-                                string: backupHeader.uppercased(),
+                                string: environment.strings.Wallet_Settings_Backup.uppercased(),
                                 font: headerFont,
                                 textColor: theme.list.freeTextColor
                             )),
@@ -1819,7 +1805,7 @@ private final class WalletSettingsScreenComponent: Component {
                         )),
                         footer: AnyComponent(MultilineTextComponent(
                             text: .plain(NSAttributedString(
-                                string: backupFooter,
+                                string: backupEnabled ? environment.strings.Wallet_Settings_BackupEnabledInfo : environment.strings.Wallet_Settings_BackupDisabledInfo,
                                 font: footerFont,
                                 textColor: theme.list.freeTextColor
                             )),
@@ -1862,7 +1848,7 @@ private final class WalletSettingsScreenComponent: Component {
                             style: .glass,
                             title: AnyComponent(MultilineTextComponent(
                                 text: .plain(NSAttributedString(
-                                    string: deleteWalletAction,
+                                    string: environment.strings.Wallet_Settings_DeleteWallet,
                                     font: actionFont,
                                     textColor: theme.list.itemDestructiveColor
                                 )),
@@ -1897,10 +1883,9 @@ private final class WalletSettingsScreenComponent: Component {
                 let subtitleFont = Font.regular(presentationData.listsFontSize.baseDisplaySize * 14.0 / 17.0)
                 let calendar = Calendar.current
                 let dateFormatter = DateFormatter()
-                //TODO:localize
-                dateFormatter.locale = Locale(identifier: "en_US_POSIX")
+                dateFormatter.locale = Locale(identifier: environment.strings.baseLanguageCode)
                 dateFormatter.timeZone = calendar.timeZone
-                dateFormatter.dateFormat = "d MMM yyyy"
+                dateFormatter.setLocalizedDateFormatFromTemplate("d MMM yyyy")
 
                 let previousWalletItems: [AnyComponentWithIdentity<Empty>] = self.previousWallets.map { wallet in
                     let text = NSMutableAttributedString(string: "")
@@ -1938,17 +1923,14 @@ private final class WalletSettingsScreenComponent: Component {
                     let lastUsedDate = Date(timeIntervalSince1970: Double(wallet.lastUsedAt))
                     let lastUsedText: String
                     if calendar.isDateInToday(lastUsedDate) {
-                        //TODO:localize
-                        lastUsedText = "today"
+                        lastUsedText = environment.strings.Weekday_Today.lowercased()
                     } else if calendar.isDateInYesterday(lastUsedDate) {
-                        //TODO:localize
-                        lastUsedText = "yesterday"
+                        lastUsedText = environment.strings.Weekday_Yesterday.lowercased()
                     } else {
                         lastUsedText = dateFormatter.string(from: lastUsedDate)
                     }
-                    //TODO:localize
                     text.append(NSAttributedString(
-                        string: "\n\(balanceText) — last used \(lastUsedText)",
+                        string: environment.strings.Wallet_Settings_LastUsed(balanceText, lastUsedText).string,
                         font: subtitleFont,
                         textColor: theme.list.itemSecondaryTextColor
                     ))
@@ -1981,8 +1963,7 @@ private final class WalletSettingsScreenComponent: Component {
                         style: .glass,
                         header: AnyComponent(MultilineTextComponent(
                             text: .plain(NSAttributedString(
-                                //TODO:localize
-                                string: "Previous Wallets".uppercased(),
+                                string: environment.strings.Wallet_Settings_PreviousWallets.uppercased(),
                                 font: headerFont,
                                 textColor: theme.list.freeTextColor
                             )),
@@ -1990,8 +1971,7 @@ private final class WalletSettingsScreenComponent: Component {
                         )),
                         footer: AnyComponent(MultilineTextComponent(
                             text: .plain(NSAttributedString(
-                                //TODO:localize
-                                string: "Wallets you used before on this device. Save their secret phrases — they'll be removed if you log out or reinstall the app.",
+                                string: environment.strings.Wallet_Settings_PreviousWalletsInfo,
                                 font: footerFont,
                                 textColor: theme.list.freeTextColor
                             )),
@@ -2115,9 +2095,6 @@ private final class WalletSettingsScreenComponent: Component {
 
 public final class WalletSettingsScreen: ViewControllerComponentContainer {
     public init(context: AccountContext, walletContext: WalletContext) {
-        //TODO:localize
-        let title = "Keys & Backup"
-
         let updatedPresentationData = presentationDataWithDefaultAccent((
             initial: context.sharedContext.currentPresentationData.with { $0 },
             signal: context.sharedContext.presentationData
@@ -2130,7 +2107,7 @@ public final class WalletSettingsScreen: ViewControllerComponentContainer {
             updatedPresentationData: updatedPresentationData
         )
 
-        self.title = title
+        self.title = updatedPresentationData.initial.strings.Wallet_KeysAndBackup
         self.scrollToTop = { [weak self] in
             guard let self, let componentView = self.node.hostView.componentView as? WalletSettingsScreenComponent.View else {
                 return

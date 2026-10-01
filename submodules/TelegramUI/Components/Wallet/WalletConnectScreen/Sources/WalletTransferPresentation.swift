@@ -14,16 +14,14 @@ struct WalletTransferPresentation {
         case binary
         case message([[SigningField]])
 
-        var explanation: String? {
+        func explanation(strings: PresentationStrings) -> String? {
             switch self {
             case .text:
-                //TODO:localize
-                return "Carefully review the message, and if you agree, sign data."
+                return strings.Wallet_Sign_TextExplanation
             case .binary:
                 return nil
             case .message:
-                //TODO:localize
-                return "Review the message details and sign if you agree."
+                return strings.Wallet_Sign_MessageExplanation
             }
         }
     }
@@ -63,29 +61,25 @@ struct WalletTransferPresentation {
         case .signMessage:
             var groups: [[SigningField]] = []
             if let validUntil = self.request.validUntil {
-                groups.append([SigningField(name: "valid_until", value: String(validUntil))])
+                groups.append([SigningField(name: strings.Wallet_Sign_FieldValidUntil, value: String(validUntil))])
             }
             for (index, message) in self.request.messages.enumerated() {
                 var fields: [SigningField] = []
                 if self.request.messages.count > 1 {
-                    fields.append(SigningField(name: "message", value: String(index + 1)))
+                    fields.append(SigningField(name: strings.Wallet_Sign_FieldMessage, value: String(index + 1)))
                 }
-                fields.append(SigningField(name: "address", value: message.destination))
-                var amount = formatTonConnectNanograms(message.amountNanograms, strings: strings, dateTimeFormat: dateTimeFormat)
-                if let digits = normalizedTonConnectNanograms(message.amountNanograms), Int64(digits) == nil {
-                    amount = strings.Currency_Grams(100).replacingOccurrences(of: "100", with: amount)
-                }
-                fields.append(SigningField(name: "amount", value: amount))
+                fields.append(SigningField(name: strings.Wallet_Sign_FieldAddress, value: message.destination))
+                fields.append(SigningField(name: strings.Wallet_Sign_FieldAmount, value: formatTonConnectNanograms(message.amountNanograms, strings: strings, dateTimeFormat: dateTimeFormat)))
                 switch message.payload {
                 case .empty:
                     break
                 case let .comment(text):
-                    fields.append(SigningField(name: "comment", value: text))
+                    fields.append(SigningField(name: strings.Wallet_Sign_FieldComment, value: text))
                 case let .raw(boc):
-                    fields.append(SigningField(name: "payload (BOC/Base64)", value: boc))
+                    fields.append(SigningField(name: strings.Wallet_Sign_FieldPayload, value: boc))
                 }
                 if let stateInit = message.stateInit {
-                    fields.append(SigningField(name: "stateInit (BOC/Base64)", value: stateInit))
+                    fields.append(SigningField(name: strings.Wallet_Sign_FieldStateInit, value: stateInit))
                 }
                 groups.append(fields)
             }
@@ -120,10 +114,10 @@ struct WalletTransferPresentation {
         return WalletContext.transferAddress(from: message.destination) ?? message.destination
     }
 
-    var recipientTitle: String? {
+    func recipientTitle(strings: PresentationStrings) -> String? {
         guard self.request.messages.count > 1 else { return nil }
         let recipients = Set(self.request.messages.map { WalletContext.transferAddress(from: $0.destination) ?? $0.destination })
-        return recipients.count == 1 ? nil : "\(recipients.count) recipients"
+        return recipients.count == 1 ? nil : strings.Wallet_Transfer_RecipientCount(Int32(clamping: recipients.count))
     }
 
     var previewItems: [PreviewItem] {
@@ -172,23 +166,23 @@ struct WalletTransferPresentation {
         }
     }
 
-    var submissionText: String? {
+    func submissionText(strings: PresentationStrings) -> String? {
         guard self.request.method == .signMessage else { return nil }
         if let validUntil = self.request.validUntil {
-            //TODO:localize
-            let date = DateFormatter.localizedString(from: Date(timeIntervalSince1970: TimeInterval(validUntil)), dateStyle: .medium, timeStyle: .short)
-            return "The app can submit this transfer until \(date)."
+            let dateFormatter = DateFormatter()
+            dateFormatter.locale = Locale(identifier: strings.baseLanguageCode)
+            dateFormatter.dateStyle = .medium
+            dateFormatter.timeStyle = .short
+            let date = dateFormatter.string(from: Date(timeIntervalSince1970: TimeInterval(validUntil)))
+            return strings.Wallet_Sign_SubmissionUntil(date).string
         }
-        //TODO:localize
-        return "The app will submit this transfer."
+        return strings.Wallet_Sign_Submission
     }
 
     func feeText(strings: PresentationStrings, dateTimeFormat: PresentationDateTimeFormat) -> String {
         var text: String
         if let fee = self.request.feeNanograms {
             let formattedFee = formatTonConnectNanograms(fee, strings: strings, dateTimeFormat: dateTimeFormat)
-            //TODO:localize
-            let prefix = "Fee"
             if let feeValue = Int64(fee), let fiatRate = self.walletState?.fiat.selectedRate {
                 let currency = self.walletState?.fiat.selectedCurrency ?? .usd
                 let fiatValue = Double(feeValue) / 1_000_000_000.0 * fiatRate.unitsPerGram
@@ -199,9 +193,9 @@ struct WalletTransferPresentation {
                     fiatFee = formatTonFiatValue(feeValue, rate: fiatRate.unitsPerGram,
                         currencySymbol: currency.symbol, maxDecimalPositions: 2, dateTimeFormat: dateTimeFormat)
                 }
-                text = "\(prefix): \(formattedFee) (\(fiatFee))."
+                text = strings.Wallet_Sign_FeeWithFiat(formattedFee, fiatFee).string
             } else {
-                text = "\(prefix): \(formattedFee)."
+                text = strings.Wallet_Sign_Fee(formattedFee).string
             }
         } else {
             text = ""
@@ -218,14 +212,15 @@ private func normalizedTonConnectNanograms(_ value: String) -> String? {
 
 func formatTonConnectNanograms(_ value: String, strings: PresentationStrings, dateTimeFormat: PresentationDateTimeFormat) -> String {
     if value == "all" {
-        return "All Balance"
+        return strings.Wallet_Transfer_AllBalance
     }
-    guard let digits = normalizedTonConnectNanograms(value) else { return "Unavailable" }
+    guard let digits = normalizedTonConnectNanograms(value) else { return strings.Wallet_Transfer_Unavailable }
     if let value = Int64(digits) {
         return formatTonAmountText(value, dateTimeFormat: dateTimeFormat, maxDecimalPositions: 9, formatString: strings.Currency_Grams)
     }
     let split = digits.index(digits.endIndex, offsetBy: -9)
     let integer = digits[..<split]
     let fraction = String(digits[split...].reversed().drop(while: { $0 == "0" }).reversed())
-    return fraction.isEmpty ? String(integer) : "\(integer)\(dateTimeFormat.decimalSeparator)\(fraction)"
+    let amount = fraction.isEmpty ? String(integer) : "\(integer)\(dateTimeFormat.decimalSeparator)\(fraction)"
+    return strings.Currency_Grams(100).replacingOccurrences(of: "100", with: amount)
 }

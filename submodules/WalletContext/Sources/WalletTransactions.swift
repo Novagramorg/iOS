@@ -13,7 +13,8 @@ struct WalletPeerAddressMapping: @unchecked Sendable {
 
 @available(macOS 10.15, *)
 struct ResolvedTransferInput {
-    let address: String
+    let destination: WalletTransferDestination
+    var address: String { self.destination.address }
     let amount: Int64
     let hasLinkAmount: Bool
     let body: SendMessageBody
@@ -22,15 +23,33 @@ struct ResolvedTransferInput {
 }
 
 @available(macOS 10.15, *)
-func normalizedWalletTransferAddress(_ address: String) throws -> String {
-    guard let info = try? parseTonAddress(value: address), !isTestnetAddress(info.format),
-          let normalized = try? convertTonAddress(
+struct WalletTransferDestination {
+    let address: String
+    let bounce: Bool
+
+    init(_ address: String) throws {
+        guard let info = try? parseTonAddress(value: address), !isTestnetAddress(info.format) else {
+            throw WalletContext.WalletError.invalidAddress
+        }
+        // Friendly-address flags are part of the sender's intent, even for an uninitialized account.
+        switch info.format {
+        case .raw:
+            self.bounce = false
+        case let .userFriendly(bounceable, _):
+            self.bounce = bounceable
+        }
+        guard let normalized = try? convertTonAddress(
             value: address,
-            format: .userFriendly(bounceable: false, testnet: false)
-          ) else {
-        throw WalletContext.WalletError.invalidAddress
+            format: .userFriendly(bounceable: self.bounce, testnet: false)
+        ) else {
+            throw WalletContext.WalletError.invalidAddress
+        }
+        self.address = normalized
     }
-    return normalized
+
+    func message(amount: SendAmount, body: SendMessageBody) -> SendMessage {
+        return SendMessage(destination: self.address, amount: amount, body: body, bounce: self.bounce, stateInit: nil)
+    }
 }
 
 @available(macOS 10.15, *)
@@ -48,7 +67,7 @@ func resolveTransferInput(address: String, amount: Int64, comment: String?) thro
     }
 
     let recipient = link?.recipient ?? trimmed
-    let normalized = try normalizedWalletTransferAddress(recipient)
+    let destination = try WalletTransferDestination(recipient)
 
     if let link {
         guard case .gram = link.asset else {
@@ -94,7 +113,7 @@ func resolveTransferInput(address: String, amount: Int64, comment: String?) thro
         body = linkBody
     }
     return ResolvedTransferInput(
-        address: normalized,
+        destination: destination,
         amount: resolvedAmount,
         hasLinkAmount: link?.amount != nil,
         body: body,
@@ -151,6 +170,9 @@ func walletTransactions(
             peer: peer,
             comment: transaction.comment,
             commentEncrypted: transaction.commentEncrypted,
+            collectible: transaction.nft.map {
+                WalletContext.Transaction.CollectibleTransfer(collectible: walletCollectible(from: $0))
+            },
             status: status,
             kind: transaction.keyChange ? .keyChange : .transfer
         ))

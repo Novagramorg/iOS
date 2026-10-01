@@ -1296,6 +1296,7 @@ public class SearchBarNode: ASDisplayNode, UITextFieldDelegate {
         if let inlineSearchPlaceholderContentsView  = self.inlineSearchPlaceholderContentsView {
             inlineSearchPlaceholderContentsView.removeFromSuperview()
         }
+        self.updateIsEmpty()
         
         let sourceFrame = node.view.convert(node.bounds, to: self.view)
         let targetFrame = CGRect(origin: CGPoint(x: leftInset + 16.0, y: 0.0), size: CGSize(width: max(0.0, boundingSize.width - 16.0 * 2.0 - leftInset - rightInset), height: 44.0))
@@ -1305,6 +1306,7 @@ public class SearchBarNode: ASDisplayNode, UITextFieldDelegate {
         let sourceBackgroundFrame = backgroundView.convert(backgroundView.bounds, to: self.view)
         transition.updateFrame(view: takenSearchPlaceholderContentView, frame: targetFrame)
         takenSearchPlaceholderContentView.update(size: targetFrame.size, isActive: true, additionalPlaceholderInset: self.textField.tokensInsetWidth, transition: transition)
+        takenSearchPlaceholderContentView.updateSearchIconVisibility(isVisible: !self.activity)
         let targetBackgroundFrame = backgroundView.convert(backgroundView.bounds, to: self.view)
         let verticalOffset = sourceBackgroundFrame.midY - targetBackgroundFrame.midY
 
@@ -1313,6 +1315,12 @@ public class SearchBarNode: ASDisplayNode, UITextFieldDelegate {
             x: sourceBackgroundFrame.minX - targetBackgroundFrame.minX,
             y: verticalOffset
         ))
+        if let activityIndicator = self.activityIndicator {
+            transition.animatePositionAdditive(layer: activityIndicator.layer, offset: CGPoint(
+                x: sourceBackgroundFrame.minX - targetBackgroundFrame.minX,
+                y: verticalOffset
+            ))
+        }
         transition.animatePositionAdditive(layer: self.clearButton.layer, offset: CGPoint(
             x: sourceBackgroundFrame.maxX - targetBackgroundFrame.maxX,
             y: verticalOffset

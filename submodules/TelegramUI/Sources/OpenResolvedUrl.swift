@@ -1162,7 +1162,6 @@ func openResolvedUrlImpl(
                         walletContext: walletContext,
                         resolvedAddress: resolvedAddress,
                         initialAmountNanograms: transfer.amountNanograms,
-                        displaySuccessToast: false,
                         completed: { [weak navigationController] in
                             guard let navigationController else {
                                 return

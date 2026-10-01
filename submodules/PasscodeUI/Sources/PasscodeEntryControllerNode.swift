@@ -374,8 +374,7 @@ final class PasscodeEntryControllerNode: ASDisplayNode {
         if self.shouldWaitBeforeNextAttempt() {
             text = self.strings.PasscodeSettings_TryAgainIn1Minute
         } else if self.hasCredentialError {
-            //TODO:localize
-            text = "Couldn't verify the passcode. Please try again."
+            text = self.strings.PasscodeSettings_VerificationError
         } else {
             text = ""
         }

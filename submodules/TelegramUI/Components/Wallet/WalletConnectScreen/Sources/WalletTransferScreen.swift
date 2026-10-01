@@ -208,11 +208,10 @@ private final class WalletTransferSigningCardComponent: Component {
                     transition.setFrame(view: iconView, frame: CGRect(origin: CGPoint(x: 16.0, y: 18.0), size: iconSize))
                 }
                 self.warningTitle.parentState = state
-                //TODO:localize
                 let titleSize = self.warningTitle.update(
                     transition: transition,
                     component: AnyComponent(MultilineTextComponent(
-                        text: .plain(NSAttributedString(string: "Binary content", font: Font.regular(17.0), textColor: component.theme.list.itemPrimaryTextColor)),
+                        text: .plain(NSAttributedString(string: component.strings.Wallet_Sign_BinaryContent, font: Font.regular(17.0), textColor: component.theme.list.itemPrimaryTextColor)),
                         maximumNumberOfLines: 0
                     )),
                     environment: {},
@@ -223,11 +222,10 @@ private final class WalletTransferSigningCardComponent: Component {
                     transition.setFrame(view: titleView, frame: CGRect(origin: CGPoint(x: 38.0, y: 14.0), size: titleSize))
                 }
                 self.warningText.parentState = state
-                //TODO:localize
                 let textSize = self.warningText.update(
                     transition: transition,
                     component: AnyComponent(MultilineTextComponent(
-                        text: .plain(NSAttributedString(string: "You are signing blindly. Sign only from trusted sources.", font: Font.regular(17.0), textColor: component.theme.list.itemPrimaryTextColor)),
+                        text: .plain(NSAttributedString(string: component.strings.Wallet_Sign_BinaryWarning, font: Font.regular(17.0), textColor: component.theme.list.itemPrimaryTextColor)),
                         maximumNumberOfLines: 0
                     )),
                     environment: {},
@@ -401,8 +399,7 @@ private final class WalletTransferSheetContent: Component {
                     }
                     contentHeight += size.height
                 }
-                //TODO:localize
-                addText("Data", view: self.dataTitle, font: Font.semibold(17.0), topInset: 0.0)
+                addText(environment.strings.Wallet_Sign_Data, view: self.dataTitle, font: Font.semibold(17.0), topInset: 0.0)
                 contentHeight += 12.0
                 self.signingCard.parentState = state
                 let cardSize = self.signingCard.update(
@@ -422,8 +419,8 @@ private final class WalletTransferSheetContent: Component {
                     transition.setFrame(view: cardView, frame: CGRect(origin: CGPoint(x: cardX, y: contentHeight), size: cardSize))
                 }
                 contentHeight += cardSize.height
-                addText(signingContent.explanation ?? "", view: self.signingExplanation, font: Font.regular(14.0), topInset: 10.0)
-                addText(presentation.submissionText ?? "", view: self.signingSubmission, font: Font.regular(14.0), topInset: 16.0)
+                addText(signingContent.explanation(strings: environment.strings) ?? "", view: self.signingExplanation, font: Font.regular(14.0), topInset: 10.0)
+                addText(presentation.submissionText(strings: environment.strings) ?? "", view: self.signingSubmission, font: Font.regular(14.0), topInset: 16.0)
                 addText(presentation.feeText(strings: environment.strings, dateTimeFormat: environment.dateTimeFormat), view: self.fee, font: Font.regular(14.0), topInset: 20.0)
                 return CGSize(width: availableSize.width, height: contentHeight + 16.0 + component.bottomInset)
             }
@@ -469,14 +466,12 @@ private final class WalletTransferSheetContent: Component {
             contentHeight += appIconSize.height
             contentHeight += 18.0
 
-            //TODO:localize
-            let titleText = "Confirm Action"
             self.title.parentState = state
             let titleSize = self.title.update(
                 transition: .immediate,
                 component: AnyComponent(BalancedTextComponent(
                     text: .plain(NSAttributedString(
-                        string: titleText,
+                        string: environment.strings.Wallet_Sign_ConfirmAction,
                         font: Font.bold(22.0),
                         textColor: primaryTextColor
                     )),
@@ -547,7 +542,7 @@ private final class WalletTransferSheetContent: Component {
                     fiatRate: fiatRate,
                     dateTimeFormat: environment.dateTimeFormat,
                     amountText: amount == nil ? formatTonConnectNanograms(amountNanograms ?? "", strings: environment.strings, dateTimeFormat: environment.dateTimeFormat) : nil,
-                    recipientTitle: presentation.recipientTitle,
+                    recipientTitle: presentation.recipientTitle(strings: environment.strings),
                     infoPressed: component.infoPressed
                 )),
                 environment: {},
@@ -628,6 +623,7 @@ private final class WalletTransferSheetContent: Component {
 
 private final class WalletTransferActionsComponent: Component {
     let theme: PresentationTheme
+    let strings: PresentationStrings
     let confirmTitle: String
     let isBusy: Bool
     let isConfirming: Bool
@@ -636,6 +632,7 @@ private final class WalletTransferActionsComponent: Component {
 
     init(
         theme: PresentationTheme,
+        strings: PresentationStrings,
         confirmTitle: String,
         isBusy: Bool,
         isConfirming: Bool,
@@ -643,6 +640,7 @@ private final class WalletTransferActionsComponent: Component {
         confirm: @escaping () -> Void
     ) {
         self.theme = theme
+        self.strings = strings
         self.confirmTitle = confirmTitle
         self.isBusy = isBusy
         self.isConfirming = isConfirming
@@ -652,6 +650,7 @@ private final class WalletTransferActionsComponent: Component {
 
     static func ==(lhs: WalletTransferActionsComponent, rhs: WalletTransferActionsComponent) -> Bool {
         return lhs.theme == rhs.theme
+            && lhs.strings === rhs.strings
             && lhs.confirmTitle == rhs.confirmTitle
             && lhs.isBusy == rhs.isBusy
             && lhs.isConfirming == rhs.isConfirming
@@ -683,8 +682,6 @@ private final class WalletTransferActionsComponent: Component {
             let cancelButtonWidth = floorToScreenPixels((availableSize.width - buttonSpacing) / 2.0)
             let confirmButtonWidth = availableSize.width - buttonSpacing - cancelButtonWidth
 
-            //TODO:localize
-            let cancelTitle = "Cancel"
             let cancelSize = self.cancelButton.update(
                 transition: transition,
                 component: AnyComponent(ButtonComponent(
@@ -698,7 +695,7 @@ private final class WalletTransferActionsComponent: Component {
                     content: AnyComponentWithIdentity(
                         id: "cancel",
                         component: AnyComponent(Text(
-                            text: cancelTitle,
+                            text: component.strings.Common_Cancel,
                             font: Font.semibold(17.0),
                             color: component.theme.list.itemPrimaryTextColor
                         ))
@@ -883,13 +880,11 @@ private final class WalletTransferSheetComponent: CombinedComponent {
                         guard let controller = getController() else {
                             return
                         }
-                        //TODO:localize
-                        let errorText = "Unable to complete this request. Please try again."
                         let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
                         controller.present(textAlertController(
                             context: component.context,
                             title: nil,
-                            text: errorText,
+                            text: presentationData.strings.Wallet_Sign_Error,
                             actions: [
                                 TextAlertAction(
                                     type: .defaultAction,
@@ -984,8 +979,7 @@ private final class WalletTransferSheetComponent: CombinedComponent {
                     AnyComponentWithIdentity(
                         id: "title",
                         component: AnyComponent(Text(
-                            //TODO:localize
-                            text: isSigning ? "Sign Data" : "Confirm Action",
+                            text: isSigning ? environment.strings.Wallet_Sign_SignData : environment.strings.Wallet_Sign_ConfirmAction,
                             font: Font.semibold(17.0),
                             color: theme.actionSheet.primaryTextColor
                         ))
@@ -1044,8 +1038,8 @@ private final class WalletTransferSheetComponent: CombinedComponent {
                     hasTopEdgeEffect: false,
                     bottomItem: AnyComponent(WalletTransferActionsComponent(
                         theme: theme,
-                        //TODO:localize
-                        confirmTitle: isSigning ? "Sign" : "Confirm",
+                        strings: environment.strings,
+                        confirmTitle: isSigning ? environment.strings.Wallet_Sign_Sign : environment.strings.Wallet_Sign_Confirm,
                         isBusy: componentState.isBusy,
                         isConfirming: componentState.isConfirming,
                         cancel: {

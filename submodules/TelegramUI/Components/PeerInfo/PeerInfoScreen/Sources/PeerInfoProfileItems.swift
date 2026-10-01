@@ -130,7 +130,7 @@ func infoItems(
         let ItemCommunity = 10000
         
         if let cachedUserData = data.cachedData as? CachedUserData, cachedUserData.flags.contains(.unofficialSecurityRisk) {
-            items[.unofficial]!.append(PeerInfoScreenInfoItem(id: 0, title: "", text: .markdown(presentationData.strings.PeerInfo_UnofficialSecurityRisk(EnginePeer(user).compactDisplayTitle).string), style: .compact, linkAction: nil))
+            items[.unofficial]!.append(PeerInfoScreenInfoItem(id: 0, title: "", text: .plain(presentationData.strings.PeerInfo_UnofficialSecurityRisk(EnginePeer(user).compactDisplayTitle).string), style: .compact, linkAction: nil))
         }
         
         if !callMessages.isEmpty {

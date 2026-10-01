@@ -14,7 +14,6 @@ struct TonConnectMessageKey: Hashable {
     let msgId: Int32
 }
 
-/// Actor-owned state; `valid` is also read by the runtime signing guard.
 @available(macOS 10.15, *)
 final class TonConnectPendingInteraction {
     enum Source {
@@ -400,7 +399,6 @@ extension WalletContextImpl {
                 self.invalidateTonConnect(active, failure: .unavailable)
             } else if session.isActive, case .connect = active.source,
                       active.lifecycle.phase == .pending, active.publication == nil {
-                // Own success can clear publication before this update arrives.
                 self.invalidateTonConnect(active, failure: .handledElsewhere)
             }
         }
@@ -545,7 +543,6 @@ extension WalletContextImpl {
                 self.logTonConnect("session_created", active)
                 try self.checkTonConnect(active)
                 if active.session?.isActive == true { throw TonConnectFailure.handledElsewhere }
-                // A stalled getPending must not extend the manifest deadline.
                 let deadline = Date().addingTimeInterval(30)
                 let reconcile = Task { [weak self] in await self?.reconcileTonConnectSession(session.id) }
                 defer { reconcile.cancel() }
@@ -827,7 +824,6 @@ extension WalletContextImpl {
                 try await self.storeTonConnect(active, phase: .received, approved: approve)
             }
             if approve, let request = active.request, request.consumesWalletSequenceNumber {
-                // Wait for API transfers before taking the wallet operation slot.
                 guard case let .wallet(info) = self.currentState.phase else { throw WalletError.unavailable }
                 _ = try await self.waitForPreviousWalletTransfer(wallet: info, generation: self.activationGeneration,
                     operationId: operationId, expiresAt: Int32(clamping: request.validUntil ?? UInt64(max(0, self.tonConnectNow + 300))))
@@ -844,7 +840,6 @@ extension WalletContextImpl {
             return try await self.performOperation(.tonConnect, operationId: operationId, session: active.authorization) {
                 try self.checkTonConnect(active)
                 if approve, active.request?.consumesWalletSequenceNumber == true {
-                    // A native transfer may have started during authorization.
                     try await self.runtime.ensureApiTransferAllowsSigning()
                 }
                 let generation = try self.authorization.operationGeneration()
@@ -938,7 +933,6 @@ extension WalletContextImpl {
                             default: throw TonConnectFailure.unavailable
                             }
                         } catch {
-                            // The FFI may wrap expiry errors; recheck MTProto time.
                             try self.checkTonConnect(active)
                             self.logger.error("ton_connect_execution_failed", error)
                             active.failure = error as? TonConnectFailure ?? .unavailable
@@ -947,7 +941,7 @@ extension WalletContextImpl {
                     }
                     active.publication = .response(msgId: envelope.msgId, body: body, traceId: envelope.traceId)
                 }
-                active.approved = approve
+                active.approved = approve && active.validationError == nil
                 active.lifecycle.prepared()
                 return try await self.publishTonConnect(active, showErrors: showErrors)
             }
@@ -1001,7 +995,7 @@ extension WalletContextImpl {
             do {
                 let claimed = try await WalletSignalRequestContext<Bool>().run(self.engine.wallet.tonConnectClaimRequest(
                     sessionId: session.id, msgId: envelope.msgId, appRequestId: record.appRequestId.rawValue,
-                    challengeAnswer: answer, declined: !approve))
+                    challengeAnswer: answer, declined: !approve || active.validationError != nil))
                 guard claimed else { throw TonConnectFailure.handledElsewhere }
                 guard active.lifecycle.claimSucceeded() else { throw TonConnectFailure.outcomeUnknown }
             } catch {
@@ -1071,7 +1065,6 @@ extension WalletContextImpl {
             }
             throw error
         }
-        // RPC acceptance is not an acknowledgement from the dApp.
         self.logTonConnect("publish_result", active, body: packet, outcome: accepted ? "server_accepted" : "server_rejected")
         guard !self.isShutdown, self.tonConnectActive === active, active.status != .invalidated else { throw CancellationError() }
         guard accepted else { throw TonConnectFailure.bridgeUnavailable }
@@ -1088,7 +1081,6 @@ extension WalletContextImpl {
             if isError { self.removeTonConnectSession(session.id) }
             else {
                 self.tonConnectProvenSessions.insert(session.id)
-                // The authoritative active-session update may have arrived first.
                 if self.tonConnectSessions[session.id]?.isPending == true {
                     self.mergeTonConnectSession(WalletTonConnectSession(flags: session.flags & ~1,
                         id: session.id, dappClientId: session.dappClientId, clientId: session.clientId,
@@ -1114,7 +1106,7 @@ extension WalletContextImpl {
                 let accepted = try await WalletSignalRequestContext<Bool>().run(self.engine.wallet.tonConnectCloseSession(sessionId: record.session.id, body: nil))
                 guard accepted else { throw TonConnectFailure.bridgeUnavailable }
             } catch WalletTonConnectError.rpc(_, "TONCONNECT_SESSION_NOT_FOUND") {
-                // A previous close may have succeeded before the connection was lost.
+
             } catch {
                 self.logTonConnect("close_failed", active, error: error)
                 throw error
@@ -1268,4 +1260,488 @@ extension WalletContextImpl {
         )
     }
 
+}
+
+@available(macOS 10.15, *)
+public struct TonConnectLink: Equatable, Sendable {
+    public let peerId: String
+    public let request: String?
+    public let returnTarget: TonConnectReturnTarget
+    public let traceId: String?
+
+    /// Malformed TonConnect links must not fall through to payment routing.
+    public static func matches(_ value: String) -> Bool {
+        guard let url = URLComponents(string: value) else { return false }
+        let scheme = url.scheme?.lowercased()
+        let host = url.host?.lowercased()
+        let telegramScheme = scheme == "tg" || scheme == "telegram"
+        if scheme == "tc" || (telegramScheme && host == "ton-connect") { return true }
+        let items = url.queryItems ?? []
+        let carriesStart = items.contains { $0.name == "startapp" && $0.value?.hasPrefix("tonconnect-") == true }
+        let walletLink = (scheme == "https" && host == "t.me" && ["/sendgrams", "/sendgrams/"].contains(url.path.lowercased()))
+            || (telegramScheme && host == "sendgrams")
+        if walletLink {
+            return carriesStart || items.contains { ["id", "v", "r"].contains($0.name) }
+        }
+        // The same request also arrives addressed to the wallet by name.
+        let resolvesWallet = telegramScheme && host == "resolve"
+            && items.contains { $0.name == "domain" && $0.value?.lowercased() == "sendgrams" }
+        return resolvesWallet && carriesStart
+    }
+
+    public init(_ value: String) throws {
+        guard value.utf8.count <= 256 * 1024, Self.matches(value),
+              var url = URLComponents(string: value), url.user == nil,
+              url.password == nil, url.fragment == nil else { throw TonConnectFailure.invalidLink }
+        let starts = (url.queryItems ?? []).filter { $0.name == "startapp" }
+        if starts.contains(where: { $0.value?.hasPrefix("tonconnect-") == true }) {
+            guard starts.count == 1, let start = starts.first?.value,
+                  !(url.queryItems ?? []).contains(where: { ["id", "v", "r"].contains($0.name) }) else {
+                throw TonConnectFailure.invalidLink
+            }
+            let query = String(start.dropFirst("tonconnect-".count))
+                .replacingOccurrences(of: "--", with: "%")
+                .replacingOccurrences(of: "__", with: "=")
+                .replacingOccurrences(of: "-", with: "&")
+            guard let decoded = URLComponents(string: "tc://?" + query) else { throw TonConnectFailure.invalidLink }
+            url = decoded
+        }
+        url.percentEncodedQuery = url.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%20")
+        var fields: [String: String] = [:]
+        for item in url.queryItems ?? [] where ["id", "v", "r", "ret", "trace_id"].contains(item.name) {
+            guard fields[item.name] == nil, let value = item.value else { throw TonConnectFailure.invalidLink }
+            fields[item.name] = value
+        }
+        guard let peer = fields["id"], peer.utf8.count == 64,
+              peer.utf8.allSatisfy({ (48...57).contains($0) || (65...70).contains($0) || (97...102).contains($0) }),
+              fields["v"] == nil || fields["v"] == "2",
+              (fields["trace_id"]?.count ?? 0) <= 100 else { throw TonConnectFailure.invalidLink }
+        if let request = fields["r"] {
+            guard !request.isEmpty, fields["v"] == "2" else { throw TonConnectFailure.invalidLink }
+        }
+        switch fields["ret"] {
+        case nil, "back": self.returnTarget = .back
+        case "none": self.returnTarget = .none
+        case let .some(target):
+            guard let parsed = URLComponents(string: target), let scheme = parsed.scheme?.lowercased(),
+                  !["file", "data", "javascript"].contains(scheme), parsed.user == nil, parsed.password == nil else {
+                throw TonConnectFailure.invalidLink
+            }
+            self.returnTarget = .url(target)
+        }
+        self.peerId = peer.lowercased()
+        self.request = fields["r"]
+        self.traceId = fields["trace_id"]
+    }
+}
+
+@available(macOS 10.15, *)
+public struct TonConnectSignDataPayload: Equatable, Sendable {
+    public enum Content: Equatable, Sendable {
+        case text(String)
+        case binary(Data)
+        case cell(schema: String, boc: Data)
+    }
+
+    public let content: Content
+    let engineRequest: WalletEngineFFI.TonConnectSignDataRequest
+
+    init(_ request: WalletEngineFFI.TonConnectSignDataRequest) throws {
+        self.engineRequest = request
+        switch request.payload {
+        case let .text(text):
+            self.content = .text(text)
+        case let .binary(bytes):
+            self.content = .binary(try Self.decodeBase64(bytes))
+        case let .cell(schema, cell):
+            self.content = .cell(schema: schema, boc: try Self.decodeBase64(cell))
+        }
+    }
+
+    private static func decodeBase64(_ value: String) throws -> Data {
+        var padded = value.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+        padded += String(repeating: "=", count: (4 - padded.utf8.count % 4) % 4)
+        guard let data = Data(base64Encoded: padded) else { throw TonConnectWireFailure(code: .badRequest) }
+        return data
+    }
+}
+
+@available(macOS 10.15, *)
+public struct TonConnectWalletIdentity: Equatable, Codable, Sendable {
+    public let recordId: String
+    public let address: String
+    public let network: String
+    public let publicKey: Data
+
+    public init(recordId: String, address: String, network: String, publicKey: Data) {
+        self.recordId = recordId
+        self.address = address
+        self.network = network
+        self.publicKey = publicKey
+    }
+}
+
+@available(macOS 10.15, *)
+public enum TonConnectFailure: Error, Equatable, Sendable {
+    case unavailable, invalidLink, conflictingLink
+    case invalidManifest, wrongNetwork
+    case bridgeUnavailable, outcomeUnknown
+    case keyMismatch, expired, handledElsewhere
+
+    public var message: String {
+        switch self {
+        case .unavailable: return "This TON Connect request is no longer available."
+        case .invalidLink: return "This TON Connect link is invalid."
+        case .conflictingLink: return "This app is already using a different connection request. Reconnect from the app."
+        case .invalidManifest: return "Unable to load a valid manifest for this app."
+        case .wrongNetwork: return "This app requested a different wallet network."
+        case .bridgeUnavailable: return "The TON Connect response is waiting for network delivery."
+        case .outcomeUnknown: return "This operation may already have been signed or sent. It will not be signed again. Check the wallet history."
+        case .keyMismatch: return "This connection belongs to a different wallet key."
+        case .expired: return "This TON Connect request has expired."
+        case .handledElsewhere: return "This request was handled on another device."
+        }
+    }
+}
+
+@available(macOS 10.15, *)
+public struct TonConnectManifestInfo: Equatable, Sendable {
+    public let url: String
+    public let name: String
+    public let icon: WalletTonConnectIcon?
+    public let domain: String
+
+    init(_ value: WalletTonConnectManifest) {
+        self.url = value.url
+        self.name = value.name
+        self.icon = value.icon
+        if let url = URLComponents(string: value.url), let host = url.url?.host?.lowercased() {
+            let defaultPort: Int? = url.scheme?.lowercased() == "https" ? 443 : (url.scheme?.lowercased() == "http" ? 80 : nil)
+            if let port = url.port, port != defaultPort {
+                self.domain = "\(host):\(port)"
+            } else {
+                self.domain = host
+            }
+        } else {
+            self.domain = ""
+        }
+    }
+}
+
+@available(macOS 10.15, *)
+public enum TonConnectReturnTarget: Equatable, Codable, Sendable {
+    case back, none, url(String)
+}
+
+@available(macOS 10.15, *)
+public struct TonConnectDecision: Equatable, Sendable {
+    public let approved: Bool
+    public let failure: TonConnectFailure?
+    public let returnTarget: TonConnectReturnTarget
+}
+
+@available(macOS 10.15, *)
+public struct TonConnectSessionInfo: Equatable, Sendable {
+    public enum Status: Equatable, Sendable {
+        case connecting, connected, disconnecting
+    }
+    public let id: Int64
+    public let manifest: TonConnectManifestInfo?
+    public let status: Status
+    public let error: TonConnectFailure?
+}
+
+@available(macOS 10.15, *)
+public enum TonConnectRequestStatus: Equatable, Sendable {
+    case ready, processing, completed(TonConnectDecision), invalidated
+}
+
+@available(macOS 10.15, *)
+public struct TonConnectDiagnostic: Equatable, Sendable {
+    public let id: UUID
+    public let failure: TonConnectFailure
+    public let requestId: String?
+    public init(id: UUID, failure: TonConnectFailure, requestId: String? = nil) {
+        self.id = id
+        self.failure = failure
+        self.requestId = requestId
+    }
+}
+
+@available(macOS 10.15, *)
+enum TonConnectJSONValue: Decodable {
+    case object([String: TonConnectJSONValue]), array([TonConnectJSONValue]), string(String)
+    case integer(Int64), unsigned(UInt64), decimal(Double), bool(Bool), null
+
+    init(from decoder: Decoder) throws {
+        let value = try decoder.singleValueContainer()
+        if value.decodeNil() { self = .null }
+        else if let v = try? value.decode(Bool.self) { self = .bool(v) }
+        else if let v = try? value.decode(String.self) { self = .string(v) }
+        else if let v = try? value.decode(Int64.self) { self = .integer(v) }
+        else if let v = try? value.decode(UInt64.self) { self = .unsigned(v) }
+        else if let v = try? value.decode(Double.self) { self = .decimal(v) }
+        else if let v = try? value.decode([String: Self].self) { self = .object(v) }
+        else { self = .array(try value.decode([Self].self)) }
+    }
+
+    var object: [String: Self]? { if case let .object(v) = self { return v }; return nil }
+    var string: String? { if case let .string(v) = self { return v }; return nil }
+    var array: [Self]? { if case let .array(v) = self { return v }; return nil }
+}
+
+@available(macOS 10.15, *)
+public struct TonConnectRequestId: Equatable, Hashable, Codable, Sendable {
+    public let rawValue: String
+
+    public init(_ value: String) throws {
+        guard (1 ... 100).contains(value.utf8.count), value.utf8.allSatisfy({ (0x20 ... 0x7e).contains($0) }) else { throw TonConnectWireFailure(code: .badRequest) }
+        self.rawValue = value
+    }
+
+    public init(from decoder: Decoder) throws { try self.init(decoder.singleValueContainer().decode(String.self)) }
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(self.rawValue)
+    }
+}
+
+@available(macOS 10.15, *)
+public enum TonConnectWireErrorCode: Int, Codable, Sendable {
+    case unknown = 0, badRequest = 1, manifestNotFound = 2, invalidManifest = 3, unknownApp = 100, userDeclined = 300, methodNotSupported = 400
+
+    init(_ code: TonConnectRpcErrorCode) {
+        switch code {
+        case .unknown: self = .unknown
+        case .badRequest: self = .badRequest
+        case .unknownApp: self = .unknownApp
+        case .userDeclined: self = .userDeclined
+        case .methodNotSupported: self = .methodNotSupported
+        }
+    }
+
+    var engineCode: TonConnectRpcErrorCode {
+        get throws {
+            switch self {
+            case .unknown: return .unknown
+            case .badRequest: return .badRequest
+            case .unknownApp: return .unknownApp
+            case .userDeclined: return .userDeclined
+            case .methodNotSupported: return .methodNotSupported
+            case .manifestNotFound, .invalidManifest: throw TonConnectFailure.invalidLink
+            }
+        }
+    }
+
+    public var message: String {
+        switch self {
+        case .unknown: return "Unknown error"
+        case .badRequest: return "Bad request"
+        case .manifestNotFound: return "Manifest not found"
+        case .invalidManifest: return "Invalid manifest"
+        case .unknownApp: return "Unknown app"
+        case .userDeclined: return "User declined the request"
+        case .methodNotSupported: return "Method not supported"
+        }
+    }
+}
+
+@available(macOS 10.15, *)
+public struct TonConnectWireFailure: Error, Equatable, Sendable {
+    public let requestId: TonConnectRequestId?
+    public let code: TonConnectWireErrorCode
+    public let message: String
+
+    public init(requestId: TonConnectRequestId? = nil, code: TonConnectWireErrorCode, message: String? = nil) {
+        self.requestId = requestId
+        self.code = code
+        self.message = message ?? code.message
+    }
+}
+
+@available(macOS 10.15, *)
+public enum TonConnectWireRequest: Sendable {
+    case sendTransaction(id: TonConnectRequestId, request: SendRequest)
+    case signData(id: TonConnectRequestId, payload: TonConnectSignDataPayload)
+    case disconnect(id: TonConnectRequestId)
+
+    public var id: TonConnectRequestId {
+        switch self {
+        case let .sendTransaction(id, _), let .signData(id, _), let .disconnect(id): return id
+        }
+    }
+
+    public var validUntil: UInt64? {
+        let expiration: SendExpiration
+        switch self {
+        case let .sendTransaction(_, request): expiration = request.intent.expiration
+        default: return nil
+        }
+        if case let .exact(value) = expiration { return value }
+        return nil
+    }
+
+    var consumesWalletSequenceNumber: Bool {
+        switch self {
+        case .sendTransaction: return true
+        default: return false
+        }
+    }
+}
+
+@available(macOS 10.15, *)
+public struct TonConnectConnectRequest: Equatable, Sendable {
+    public let prompt: TonConnectConnectPrompt
+    public let itemNames: [String]
+
+    public init(_ data: Data) throws {
+        let object = try TonConnectWireCodec.object(data)
+        try TonConnectWireCodec.keys(object, allowed: ["manifestUrl", "items"])
+        guard let manifest = object["manifestUrl"]?.string, let url = URLComponents(string: manifest),
+              url.scheme?.lowercased() == "https", url.host?.isEmpty == false,
+              url.user == nil, url.password == nil, url.fragment == nil,
+              let items = object["items"]?.array, !items.isEmpty else { throw TonConnectWireFailure(code: .badRequest) }
+        var network: String?
+        var proof: String?
+        var names: [String] = []
+        for item in items {
+            guard let item = item.object, let name = item["name"]?.string, !name.isEmpty,
+                  !names.contains(name) else { throw TonConnectWireFailure(code: .badRequest) }
+            names.append(name)
+            switch name {
+            case "ton_addr":
+                try TonConnectWireCodec.keys(item, allowed: ["name", "network"])
+                network = try TonConnectWireCodec.optionalString(item, "network")
+                if let network { try TonConnectWireCodec.validateNetwork(network) }
+            case "ton_proof":
+                try TonConnectWireCodec.keys(item, allowed: ["name", "payload"])
+                guard let payload = item["payload"]?.string else { throw TonConnectWireFailure(code: .badRequest) }
+                proof = payload
+            default: throw TonConnectFailure.invalidLink
+            }
+        }
+        guard names.contains("ton_addr") else { throw TonConnectWireFailure(code: .badRequest) }
+        if proof != nil { _ = try TonConnectWireCodec.proofDomain(manifestUrl: manifest) }
+        self.prompt = TonConnectConnectPrompt(manifestUrl: manifest, requestedNetwork: network, proofPayload: proof)
+        self.itemNames = names
+    }
+}
+
+@available(macOS 10.15, *)
+public enum TonConnectWireCodec {
+    public static let maximumPacketBytes = 1024 * 1024
+
+    static func proofDomain(manifestUrl: String) throws -> String {
+        guard let url = URLComponents(string: manifestUrl), url.scheme?.lowercased() == "https",
+              let host = url.url?.host?.lowercased(), !host.isEmpty,
+              url.user == nil, url.password == nil, url.fragment == nil else { throw TonConnectFailure.invalidLink }
+        let domain = host.replacingOccurrences(of: "\\.+$", with: "", options: .regularExpression)
+        guard !domain.isEmpty, domain != "telegram.org" else { throw TonConnectFailure.invalidLink }
+        return domain
+    }
+
+    static func object(_ data: Data) throws -> [String: TonConnectJSONValue] {
+        guard !data.isEmpty, data.count <= self.maximumPacketBytes else { throw TonConnectWireFailure(code: .badRequest) }
+        var structure = TonConnectJSONStructure(data)
+        try structure.validate()
+        guard
+              let value = try? JSONDecoder().decode(TonConnectJSONValue.self, from: data), let object = value.object else {
+            throw TonConnectWireFailure(code: .badRequest)
+        }
+        return object
+    }
+
+    static func keys(_ object: [String: TonConnectJSONValue], allowed: Set<String>) throws {
+        guard Set(object.keys).isSubset(of: allowed) else { throw TonConnectWireFailure(code: .badRequest) }
+    }
+
+    static func optionalString(_ object: [String: TonConnectJSONValue], _ key: String) throws -> String? {
+        guard let value = object[key] else { return nil }
+        guard let string = value.string else { throw TonConnectWireFailure(code: .badRequest) }
+        return string
+    }
+
+    static func validateNetwork(_ value: String) throws {
+        guard let network = Int32(value), String(network) == value else { throw TonConnectWireFailure(code: .badRequest) }
+    }
+}
+
+/// Reject duplicate keys (including escaped aliases) before JSONDecoder discards them.
+@available(macOS 10.15, *)
+private struct TonConnectJSONStructure {
+    private let bytes: [UInt8]
+    private var offset = 0
+
+    init(_ data: Data) { self.bytes = Array(data) }
+
+    mutating func validate() throws {
+        try self.value(depth: 0)
+        self.whitespace()
+        guard self.offset == self.bytes.count else { throw TonConnectWireFailure(code: .badRequest) }
+    }
+
+    private mutating func value(depth: Int) throws {
+        self.whitespace()
+        guard depth <= 64, self.offset < self.bytes.count else { throw TonConnectWireFailure(code: .badRequest) }
+        switch self.bytes[self.offset] {
+        case 123: // object
+            self.offset += 1
+            self.whitespace()
+            if self.consume(125) { return }
+            var keys = Set<String>()
+            while true {
+                self.whitespace()
+                let key = try self.string()
+                guard keys.insert(key).inserted else { throw TonConnectWireFailure(code: .badRequest) }
+                self.whitespace()
+                guard self.consume(58) else { throw TonConnectWireFailure(code: .badRequest) }
+                try self.value(depth: depth + 1)
+                self.whitespace()
+                if self.consume(125) { return }
+                guard self.consume(44) else { throw TonConnectWireFailure(code: .badRequest) }
+            }
+        case 91: // array
+            self.offset += 1
+            self.whitespace()
+            if self.consume(93) { return }
+            while true {
+                try self.value(depth: depth + 1)
+                self.whitespace()
+                if self.consume(93) { return }
+                guard self.consume(44) else { throw TonConnectWireFailure(code: .badRequest) }
+            }
+        case 34: _ = try self.string()
+        default:
+            let start = self.offset
+            while self.offset < self.bytes.count, ![9, 10, 13, 32, 44, 93, 125].contains(self.bytes[self.offset]) { self.offset += 1 }
+            guard self.offset > start else { throw TonConnectWireFailure(code: .badRequest) }
+        }
+    }
+
+    private mutating func string() throws -> String {
+        let start = self.offset
+        guard self.consume(34) else { throw TonConnectWireFailure(code: .badRequest) }
+        while self.offset < self.bytes.count {
+            let byte = self.bytes[self.offset]
+            self.offset += 1
+            if byte == 92 {
+                guard self.offset < self.bytes.count else { throw TonConnectWireFailure(code: .badRequest) }
+                self.offset += 1
+            } else if byte == 34 {
+                guard let value = try? JSONDecoder().decode(String.self, from: Data(self.bytes[start ..< self.offset])) else { throw TonConnectWireFailure(code: .badRequest) }
+                return value
+            }
+        }
+        throw TonConnectWireFailure(code: .badRequest)
+    }
+
+    private mutating func whitespace() {
+        while self.offset < self.bytes.count, [9, 10, 13, 32].contains(self.bytes[self.offset]) { self.offset += 1 }
+    }
+
+    private mutating func consume(_ byte: UInt8) -> Bool {
+        guard self.offset < self.bytes.count, self.bytes[self.offset] == byte else { return false }
+        self.offset += 1
+        return true
+    }
 }

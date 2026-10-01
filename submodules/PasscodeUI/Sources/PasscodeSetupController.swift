@@ -173,8 +173,7 @@ public final class PasscodeSetupController: ViewController {
                     }
                     if error != .cancelled {
                         let strings = self.presentationData.strings
-                        //TODO:localize
-                        self.context.sharedContext.presentGlobalController(textAlertController(context: self.context, title: nil, text: "Couldn't update the passcode. Unlock again and try once more.", actions: [TextAlertAction(type: .defaultAction, title: strings.Common_OK, action: {})]), nil)
+                        self.context.sharedContext.presentGlobalController(textAlertController(context: self.context, title: nil, text: strings.PasscodeSettings_UpdateError, actions: [TextAlertAction(type: .defaultAction, title: strings.Common_OK, action: {})]), nil)
                     }
                 }
                 self.authenticationCompleted?(result)
@@ -419,8 +418,7 @@ public func applicationPasscodeSetupController(
                     controller?.updateSetupInputEnabled(true)
                     guard (error as? PasscodeError) != .cancelled else { return }
                     let strings = context.sharedContext.currentPresentationData.with { $0 }.strings
-                    //TODO:localize
-                    controller?.present(textAlertController(context: context, title: nil, text: "Couldn't update the passcode. Unlock again and try once more.", actions: [TextAlertAction(type: .defaultAction, title: strings.Common_OK, action: {})]), in: .window(.root))
+                    controller?.present(textAlertController(context: context, title: nil, text: strings.PasscodeSettings_UpdateError, actions: [TextAlertAction(type: .defaultAction, title: strings.Common_OK, action: {})]), in: .window(.root))
                 }
             }
         }

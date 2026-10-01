@@ -110,6 +110,31 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
     }
 
     override var usesAnimatedPresentation: Bool { return true }
+    private var hasTransferredDiamond = false
+    private var transferSpinStartedAt: CFTimeInterval?
+
+    func spinForTransfer() {
+        guard !self.hasTransferredDiamond, self.applicationIsActive,
+              let diamond = self.gramIcon.view as? InteractiveDiamondComponent.View,
+              diamond.window != nil else { return }
+        self.transferSpinStartedAt = CACurrentMediaTime()
+        Haptics.hit(0.95)
+        diamond.spin(-10.0, decay: 0.9)
+    }
+
+    func takeTransferDiamond() -> WalletSendTransferAnimationSource? {
+        guard !self.hasTransferredDiamond, self.mode == .gram,
+              let diamond = self.gramIcon.view as? InteractiveDiamondComponent.View,
+              let source = WalletSendTransferAnimationSource.capture(diamond: diamond, width: 34.0, spinStartedAt: self.transferSpinStartedAt) else { return nil }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+        self.stopSymbolAnimations()
+        self.hasTransferredDiamond = true
+        self.gramIcon = ComponentView<Empty>()
+        diamond.prepareForWalletTransfer()
+        return source
+    }
     override var gramAnimationSize: CGSize { return CGSize(width: 96.0, height: 96.0) }
     override var fiatSymbolFont: UIFont { return Font.with(size: 34.0, design: .round, weight: .bold, traits: [.alternateDollarSign]) }
 
@@ -234,6 +259,7 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
     }
 
     override func updateGramIcon(theme: PresentationTheme, lottieSettings: LottieRenderingSettings, isVisible: Bool, transition: ComponentTransition) {
+        guard !self.hasTransferredDiamond else { return }
         let _ = self.gramIcon.update(
             transition: .immediate,
             component: AnyComponent(InteractiveDiamondComponent(

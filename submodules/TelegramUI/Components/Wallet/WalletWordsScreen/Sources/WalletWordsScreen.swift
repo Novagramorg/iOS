@@ -109,15 +109,11 @@ private final class WalletWordsScreenComponent: Component {
             let bodyText: String
             switch component.mode {
             case .view, .verify, .backupDisable(updateSecretPhrase: false):
-                //TODO:localize
-                titleText = "Your Secret Phrase"
-                //TODO:localize
-                bodyText = "Your Secret Phrase is the key to\u{00a0}back up your wallet. Keep it secret and\u{00a0}secure at all times."
+                titleText = environment.strings.Wallet_Words_Title
+                bodyText = environment.strings.Wallet_SecretPhraseInfo
             case .replacement, .backupDisable(updateSecretPhrase: true):
-                //TODO:localize
-                titleText = "New Secret Phrase"
-                //TODO:localize
-                bodyText = "A new secret phrase for your wallet has been generated. Write it down and keep it secret."
+                titleText = environment.strings.Wallet_Words_NewTitle
+                bodyText = environment.strings.Wallet_Words_NewText
             }
             let sideInset = 30.0 + max(environment.safeInsets.left, environment.safeInsets.right)
             let contentWidth = max(0.0, min(430.0, availableSize.width - sideInset * 2.0))
@@ -404,9 +400,16 @@ private final class WalletWordsSheetComponent: CombinedComponent {
 
             let dismiss: (Bool) -> Void = { animated in
                 if animated {
-                    animateOut.invoke(Action { _ in
-                        controller()?.dismiss(completion: nil)
-                    })
+                    let animateDismissal = {
+                        animateOut.invoke(Action { _ in
+                            controller()?.dismiss(completion: nil)
+                        })
+                    }
+                    if let controller = controller() as? WalletWordsScreen {
+                        controller.requestDismiss(completion: animateDismissal)
+                    } else {
+                        animateDismissal()
+                    }
                 } else {
                     controller()?.dismiss(completion: nil)
                 }
@@ -423,13 +426,11 @@ private final class WalletWordsSheetComponent: CombinedComponent {
             let buttonTitle: String
             switch context.component.mode {
             case .view, .verify:
-                //TODO:localize
-                buttonTitle = "Done"
+                buttonTitle = environment.strings.Common_Done
             case .replacement:
-                //TODO:localize
-                buttonTitle = "Continue"
+                buttonTitle = environment.strings.Wallet_Continue
             case .backupDisable:
-                buttonTitle = "Continue"
+                buttonTitle = environment.strings.Wallet_Continue
             }
             let sheetComponent = sheet.update(
                 component: ResizableSheetComponent<EnvironmentType>(
@@ -524,6 +525,8 @@ public final class WalletWordsScreen: ViewControllerComponentContainer {
     private var pendingAutomaticDismissal = false
     private var automaticDismissalScheduled = false
     private var isVerifying = false
+    private var isDismissingProgrammatically = false
+    private weak var cancelDisableBackupController: ViewController?
 
     public convenience init(context: AccountContext, words: [String], verify: Bool, dismissOnBackgroundOrLock: Bool = false, completion: (() -> Void)?) {
         self.init(
@@ -600,17 +603,41 @@ public final class WalletWordsScreen: ViewControllerComponentContainer {
         }
     }
 
+    fileprivate func requestDismiss(completion: @escaping () -> Void) {
+        guard case .backupDisable = self.mode, !self.isDismissingProgrammatically else {
+            completion()
+            return
+        }
+        guard self.cancelDisableBackupController == nil else {
+            return
+        }
+
+        let strings = self.context.sharedContext.currentPresentationData.with { $0 }.strings
+        let controller = textAlertController(
+            context: self.context,
+            title: strings.Wallet_Backup_CancelDisablingTitle,
+            text: strings.Wallet_Backup_CancelDisablingText,
+            actions: [
+                TextAlertAction(type: .defaultAction, title: strings.Wallet_Backup_CancelDisabling, action: completion),
+                TextAlertAction(type: .genericAction, title: strings.Wallet_Continue, action: {})
+            ],
+            actionLayout: .vertical,
+            dismissOnOutsideTap: false
+        )
+        self.cancelDisableBackupController = controller
+        self.present(controller, in: .window(.root))
+    }
+
     fileprivate func complete() {
         guard !self.pendingAutomaticDismissal, !self.words.isEmpty, !self.isVerifying else {
             return
         }
         if self.mode.retainsVerificationScreens, Date().timeIntervalSince(self.displayedAt) < 10.0 {
-            //TODO:localize
             self.present(textAlertController(
                 context: self.context,
-                title: "Sure done?",
-                text: "You didn't have enough time to write these words down.",
-                actions: [TextAlertAction(type: .genericAction, title: "OK, sorry", action: {
+                title: self.context.sharedContext.currentPresentationData.with { $0 }.strings.Wallet_Words_TooFastTitle,
+                text: self.context.sharedContext.currentPresentationData.with { $0 }.strings.Wallet_Words_TooFastText,
+                actions: [TextAlertAction(type: .genericAction, title: self.context.sharedContext.currentPresentationData.with { $0 }.strings.Wallet_Words_TooFastAction, action: {
                 })]
             ), in: .window(.root))
             return
@@ -665,6 +692,10 @@ public final class WalletWordsScreen: ViewControllerComponentContainer {
     }
 
     public func dismissAnimated() {
+        self.isDismissingProgrammatically = true
+        defer {
+            self.isDismissingProgrammatically = false
+        }
         if let view = self.node.hostView.findTaggedView(
             tag: ResizableSheetComponent<ViewControllerComponentContainer.Environment>.View.Tag()
         ) as? ResizableSheetComponent<ViewControllerComponentContainer.Environment>.View {

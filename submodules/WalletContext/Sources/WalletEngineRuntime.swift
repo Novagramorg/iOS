@@ -318,8 +318,8 @@ actor WalletEngineRuntime {
         }
     }
 
-    func signReplacementProof(
-        recordId: String,
+    func signOwnershipProof(
+        replacementRecordId: String? = nil,
         expectedAnchorPublicKey: Data,
         expectedSigningPublicKey: Data,
         domain: String,
@@ -328,13 +328,24 @@ actor WalletEngineRuntime {
     ) async throws -> Data {
         try await self.withFfi {
             let descriptor: WalletDescriptor?
-            if let transient = self.transientReplacementDescriptor, transient.recordId == recordId {
-                descriptor = transient
+            if let replacementRecordId {
+                guard try await self.storage.loadKeyRotation() == nil else {
+                    throw WalletContext.WalletError.operationInProgress
+                }
+                if let transient = self.transientReplacementDescriptor, transient.recordId == replacementRecordId {
+                    descriptor = transient
+                } else {
+                    descriptor = try await self.storage.loadReplacementCandidate()?.descriptor
+                }
+                guard descriptor?.recordId == replacementRecordId else {
+                    throw WalletContext.WalletError.storage(.identityMismatch)
+                }
             } else {
-                descriptor = try await self.storage.loadReplacementCandidate()?.descriptor
+                try await self.ensureKeyRotationAllowsSigning()
+                descriptor = self.descriptor
             }
             guard expectedAnchorPublicKey.count == 32, expectedSigningPublicKey.count == 32, let descriptor,
-                  descriptor.recordId == recordId, descriptor.publicKey == expectedAnchorPublicKey else {
+                  descriptor.publicKey == expectedAnchorPublicKey else {
                 throw WalletContext.WalletError.storage(.identityMismatch)
             }
             let proof = try await self.lifecycle.signTonConnectProof(request: TonConnectProofSignRequest(
@@ -348,6 +359,14 @@ actor WalletEngineRuntime {
             }
             guard proof.signature.count == 64 else {
                 throw WalletContext.WalletError.proofInvalid
+            }
+            if replacementRecordId == nil {
+                guard let serverIdentity = self.serverWalletIdentity,
+                      walletEngineAddressesEqual(serverIdentity.address, descriptor.address),
+                      serverIdentity.publicKey == expectedSigningPublicKey,
+                      self.descriptor == descriptor else {
+                    throw WalletContext.WalletError.storage(.identityMismatch)
+                }
             }
             return proof.signature
         }
@@ -900,7 +919,6 @@ actor WalletEngineRuntime {
                   expectedPublicKey.count == 32 else {
                 throw WalletContext.WalletError.storage(.identityMismatch)
             }
-            var words: [String]
             let allowedServerPublicKeys: [Data]
             if let rotationOperationId {
                 guard let rotation = try await self.storage.loadKeyRotation(),
@@ -908,35 +926,41 @@ actor WalletEngineRuntime {
                       rotation.recordId == descriptor.recordId,
                       walletEngineAddressesEqual(rotation.walletAddress, expectedAddress),
                       rotation.walletPublicKey == descriptor.publicKey,
+                      rotation.activeSecretRef == descriptor.secretRef.value,
                       rotation.newPublicKey == expectedPublicKey,
                       rotation.phase == .chainApplied || rotation.phase == .backupDisabled else {
                     throw WalletContext.WalletError.storage(.identityMismatch)
                 }
-                words = try await self.keyRotationRecoveryPhrase(operationId: rotationOperationId)
+                // markKeyRotationChainApplied has already promoted the new
+                // mnemonic to descriptor.secretRef, so the engine signs with it.
                 // The chain may already use the new signing key while the server
                 // still reports the previous one until disableBackup completes.
                 allowedServerPublicKeys = [rotation.previousPublicKey, rotation.newPublicKey]
             } else {
                 try await self.ensureKeyRotationAllowsSigning()
-                let phrase = try await self.lifecycle.revealRecoveryPhrase(descriptor: descriptor)
-                words = normalizedEngineMnemonic(phrase.phrase.split(whereSeparator: { $0.isWhitespace }).map(String.init))
                 allowedServerPublicKeys = [expectedPublicKey]
             }
-            defer { words.removeAll(keepingCapacity: false) }
-            guard let serverIdentity = self.serverWalletIdentity,
-                  walletEngineAddressesEqual(serverIdentity.address, expectedAddress),
-                  allowedServerPublicKeys.contains(serverIdentity.publicKey),
-                  self.descriptor?.recordId == descriptor.recordId,
-                  self.descriptor?.publicKey == descriptor.publicKey,
-                  self.descriptor?.secretRef == descriptor.secretRef else {
+            func validateIdentity() throws {
+                guard let serverIdentity = self.serverWalletIdentity,
+                      walletEngineAddressesEqual(serverIdentity.address, expectedAddress),
+                      allowedServerPublicKeys.contains(serverIdentity.publicKey),
+                      self.descriptor == descriptor else {
+                    throw WalletContext.WalletError.storage(.identityMismatch)
+                }
+            }
+            try validateIdentity()
+            try Task.checkCancellation()
+            let proof = try await self.lifecycle.signTonConnectProof(request: TonConnectProofSignRequest(
+                descriptor: descriptor, domain: domain, timestamp: timestamp, payload: payload
+            ))
+            try validateIdentity()
+            guard proof.publicKey == expectedPublicKey else {
                 throw WalletContext.WalletError.storage(.identityMismatch)
             }
-            try Task.checkCancellation()
-            return try walletOwnershipProofSignature(
-                words: words, expectedAnchorPublicKey: descriptor.publicKey,
-                expectedSigningPublicKey: expectedPublicKey, address: expectedAddress,
-                domain: domain, timestamp: timestamp, payload: payload
-            )
+            guard proof.signature.count == 64 else {
+                throw WalletContext.WalletError.proofInvalid
+            }
+            return proof.signature
         }
     }
 

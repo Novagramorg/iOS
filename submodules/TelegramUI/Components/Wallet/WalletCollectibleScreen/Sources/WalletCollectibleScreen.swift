@@ -25,8 +25,10 @@ import WalletContext
 import WalletPagerComponent
 import WalletCollectibleHeaderComponent
 import WalletPeerSelectionScreen
+import WalletAuthorizationUI
+import PasscodeCore
 
-private func walletCollectibleRarityText(_ rarity: StarGift.UniqueGift.Attribute.Rarity?) -> String {
+private func walletCollectibleRarityText(_ rarity: StarGift.UniqueGift.Attribute.Rarity?, strings: PresentationStrings) -> String {
     guard let rarity else {
         return "—"
     }
@@ -40,13 +42,13 @@ private func walletCollectibleRarityText(_ rarity: StarGift.UniqueGift.Attribute
             .replacingOccurrences(of: ".0", with: "")
             .replacingOccurrences(of: ",0", with: "") + "%"
     case .rare:
-        return "Rare"
+        return strings.Gift_Attribute_Rare.capitalized
     case .epic:
-        return "Epic"
+        return strings.Gift_Attribute_Epic.capitalized
     case .legendary:
-        return "Legendary"
+        return strings.Gift_Attribute_Legendary.capitalized
     case .uncommon:
-        return "Uncommon"
+        return strings.Gift_Attribute_Uncommon.capitalized
     }
 }
 
@@ -450,7 +452,7 @@ private final class WalletCollectibleContentComponent: Component {
             let configuration = WalletConfiguration.with(appConfiguration: component.context.currentAppConfiguration.with { $0 })
             let explorerUrl = walletCollectibleExplorerUrl(explorerUrl: configuration.explorerUrl, address: component.collectible.address)
             let item = ContextMenuActionItem(
-                text: "View in Explorer",
+                text: environment.strings.Wallet_ViewInExplorer,
                 icon: { theme in
                     return generateTintedImage(
                         image: UIImage(bundleImageName: "Chat/Context Menu/Search"),
@@ -476,17 +478,18 @@ private final class WalletCollectibleContentComponent: Component {
 
         private func giftTrait(
             key: String,
-            collectible: WalletContext.Collectible
+            collectible: WalletContext.Collectible,
+            strings: PresentationStrings
         ) -> (value: String, rarity: String) {
             if let uniqueGift = self.uniqueGift {
                 for attribute in uniqueGift.attributes {
                     switch (key, attribute) {
                     case let ("model", .model(name, _, rarity, _)):
-                        return (name, walletCollectibleRarityText(rarity))
+                        return (name, walletCollectibleRarityText(rarity, strings: strings))
                     case let ("symbol", .pattern(name, _, rarity)):
-                        return (name, walletCollectibleRarityText(rarity))
+                        return (name, walletCollectibleRarityText(rarity, strings: strings))
                     case let ("backdrop", .backdrop(name, _, _, _, _, _, rarity)):
-                        return (name, walletCollectibleRarityText(rarity))
+                        return (name, walletCollectibleRarityText(rarity, strings: strings))
                     default:
                         break
                     }
@@ -511,7 +514,8 @@ private final class WalletCollectibleContentComponent: Component {
 
         private func giftTableItems(
             component: WalletCollectibleContentComponent,
-            theme: PresentationTheme
+            theme: PresentationTheme,
+            strings: PresentationStrings
         ) -> [TableComponent.Item] {
             var ownerItems: [AnyComponentWithIdentity<Empty>] = []
             if let currentPeer = self.currentPeer {
@@ -529,7 +533,7 @@ private final class WalletCollectibleContentComponent: Component {
                 id: "title",
                 component: AnyComponent(MultilineTextComponent(
                     text: .plain(NSAttributedString(
-                        string: "You",
+                        string: strings.DialogList_You,
                         font: Font.regular(15.0),
                         textColor: theme.list.itemAccentColor
                     )),
@@ -537,18 +541,18 @@ private final class WalletCollectibleContentComponent: Component {
                 ))
             ))
 
-            let model = self.giftTrait(key: "model", collectible: component.collectible)
-            let symbol = self.giftTrait(key: "symbol", collectible: component.collectible)
-            let backdrop = self.giftTrait(key: "backdrop", collectible: component.collectible)
+            let model = self.giftTrait(key: "model", collectible: component.collectible, strings: strings)
+            let symbol = self.giftTrait(key: "symbol", collectible: component.collectible, strings: strings)
+            let backdrop = self.giftTrait(key: "backdrop", collectible: component.collectible, strings: strings)
             return [
                 TableComponent.Item(
                     id: "owner",
-                    title: "Owner",
+                    title: strings.Gift_Unique_Owner,
                     component: AnyComponent(HStack(ownerItems, spacing: 6.0))
                 ),
                 TableComponent.Item(
                     id: "model",
-                    title: "Model",
+                    title: strings.Gift_Unique_Model,
                     component: AnyComponent(WalletCollectibleTraitValueComponent(
                         theme: theme,
                         value: model.value,
@@ -557,7 +561,7 @@ private final class WalletCollectibleContentComponent: Component {
                 ),
                 TableComponent.Item(
                     id: "symbol",
-                    title: "Symbol",
+                    title: strings.Gift_Unique_Symbol,
                     component: AnyComponent(WalletCollectibleTraitValueComponent(
                         theme: theme,
                         value: symbol.value,
@@ -566,7 +570,7 @@ private final class WalletCollectibleContentComponent: Component {
                 ),
                 TableComponent.Item(
                     id: "backdrop",
-                    title: "Backdrop",
+                    title: strings.Gift_Unique_Backdrop,
                     component: AnyComponent(WalletCollectibleTraitValueComponent(
                         theme: theme,
                         value: backdrop.value,
@@ -733,7 +737,7 @@ private final class WalletCollectibleContentComponent: Component {
                 transition: transition,
                 component: AnyComponent(WalletCollectibleActionComponent(
                     theme: theme,
-                    title: "transfer",
+                    title: environment.strings.Gift_View_Header_Transfer,
                     iconName: "Premium/Collectible/Transfer",
                     action: {
                         component.openTransfer()
@@ -755,7 +759,7 @@ private final class WalletCollectibleContentComponent: Component {
                     transition: transition,
                     component: AnyComponent(WalletCollectibleActionComponent(
                         theme: theme,
-                        title: "wear",
+                        title: environment.strings.Gift_View_Header_Wear,
                         iconName: "Premium/Collectible/Wear",
                         action: {
                         }
@@ -779,7 +783,7 @@ private final class WalletCollectibleContentComponent: Component {
                 transition: transition,
                 component: AnyComponent(WalletCollectibleActionComponent(
                     theme: theme,
-                    title: "sell",
+                    title: environment.strings.Gift_View_Sell,
                     iconName: "Premium/Collectible/Sell",
                     action: {
                         guard let url = walletCollectibleFragmentUrl(collectible: component.collectible) else {
@@ -805,7 +809,7 @@ private final class WalletCollectibleContentComponent: Component {
                     transition: transition,
                     component: AnyComponent(TableComponent(
                         theme: theme,
-                        items: self.giftTableItems(component: component, theme: theme),
+                        items: self.giftTableItems(component: component, theme: theme, strings: environment.strings),
                         semiTransparent: true,
                         rightColumnBackgroundColor: theme.list.itemModalBlocksBackgroundColor
                     )),
@@ -840,7 +844,7 @@ private final class WalletCollectibleContentComponent: Component {
                         pressedColor: theme.list.itemCheckColors.fillColor.withMultipliedAlpha(0.9)
                     ),
                     content: AnyComponentWithIdentity(id: "OK", component: AnyComponent(Text(
-                        text: "OK",
+                        text: environment.strings.Common_OK,
                         font: Font.semibold(17.0),
                         color: theme.list.itemCheckColors.foregroundColor
                     ))),
@@ -1096,9 +1100,17 @@ public final class WalletCollectibleScreen: ViewControllerComponentContainer {
     private let walletContext: WalletContext
     private let openExternalUrl: (String, PresentationTheme) -> Void
     private let collectibleSent: (String) -> Void
+    private let walletPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)
     private let stateDisposable = MetaDisposable()
     private let loadMoreDisposable = MetaDisposable()
     private var screenUpdatesDisposable: Disposable?
+    private let signingAccessDisposable = MetaDisposable()
+    private var restorationSession: PasscodeSession?
+    private var restorationGeneration = 0
+    private var pendingSigningTransfer: (collectible: WalletContext.Collectible, wallet: WalletContext.WalletInfo)?
+    private var signingAccessRestored = false
+    private weak var recoveryPhraseImportController: ViewController?
+    private var isScreenVisible = false
 
     private var collectiblesState: WalletContext.CollectiblesState
     private var collectibles: [WalletContext.Collectible]
@@ -1139,6 +1151,7 @@ public final class WalletCollectibleScreen: ViewControllerComponentContainer {
         self.walletContext = walletContext
         self.openExternalUrl = openExternalUrl
         self.collectibleSent = collectibleSent
+        self.walletPresentationData = updatedPresentationData
         self.collectiblesState = initialState
         self.collectibles = initialCollectibles
         self.currentAddress = collectible.address
@@ -1184,7 +1197,16 @@ public final class WalletCollectibleScreen: ViewControllerComponentContainer {
 
         self.stateDisposable.set((walletContext.state
         |> deliverOnMainQueue).start(next: { [weak self] state in
-            self?.collectiblesStateUpdated(state.collectibles)
+            guard let self else { return }
+            if let pending = self.pendingSigningTransfer {
+                if case let .wallet(info) = state.phase,
+                   info.address == pending.wallet.address, info.publicKey == pending.wallet.publicKey {
+                    self.resumeTransferAfterSigningAccess()
+                } else {
+                    self.abandonRestoration()
+                }
+            }
+            self.collectiblesStateUpdated(state.collectibles)
         }))
         self.requestLoadMoreIfNeeded(index: initialIndex)
     }
@@ -1194,6 +1216,8 @@ public final class WalletCollectibleScreen: ViewControllerComponentContainer {
     }
 
     deinit {
+        self.signingAccessDisposable.dispose()
+        self.restorationSession?.invalidate()
         self.screenUpdatesDisposable?.dispose()
         self.stateDisposable.dispose()
         self.loadMoreDisposable.dispose()
@@ -1206,6 +1230,7 @@ public final class WalletCollectibleScreen: ViewControllerComponentContainer {
 
     public override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        self.isScreenVisible = true
         if self.screenUpdatesDisposable == nil {
             self.screenUpdatesDisposable = self.walletContext.beginCollectiblesScreenUpdates()
         }
@@ -1219,6 +1244,8 @@ public final class WalletCollectibleScreen: ViewControllerComponentContainer {
 
     public override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        self.isScreenVisible = false
+        self.abandonRestoration()
         self.dismissAllTooltips()
     }
 
@@ -1289,6 +1316,121 @@ public final class WalletCollectibleScreen: ViewControllerComponentContainer {
     }
 
     private func openTransfer(_ collectible: WalletContext.Collectible) {
+        guard self.isScreenVisible, self.pendingSigningTransfer == nil,
+              self.recoveryPhraseImportController == nil else { return }
+        guard case let .wallet(info) = self.walletContext.stateValue.phase else { return }
+        if info.canSign {
+            self.routeToTransfer(collectible)
+        } else if info.canExportPhrase {
+            self.pendingSigningTransfer = (collectible, info)
+            let generation = self.restorationGeneration
+            self.signingAccessDisposable.set(performWalletAuthorizedOperation(
+                context: self.accountContext,
+                updatedPresentationData: self.walletPresentationData,
+                present: { [weak self] alert in
+                    self?.present(alert, in: .window(.root))
+                },
+                operation: { [weak self] password -> Signal<[String], WalletContext.WalletError> in
+                    guard let self, self.restorationGeneration == generation,
+                          self.signingWalletMatches(info) else { return .fail(.authorizationCancelled) }
+                    return self.restorationAuthorization()
+                    |> mapToSignal { [weak self] session in
+                        guard let self, self.restorationGeneration == generation,
+                              self.signingWalletMatches(info) else { return .fail(.authorizationCancelled) }
+                        return self.walletContext.recoveryPhrase(password: password, session: session)
+                    }
+                },
+                next: { [weak self] _ in
+                    guard let self, self.restorationGeneration == generation else { return }
+                    self.signingAccessRestored = true
+                    self.resumeTransferAfterSigningAccess()
+                },
+                failed: { [weak self] error in
+                    guard let self, self.restorationGeneration == generation else { return }
+                    self.finishRestoration(error: error, collectible: collectible, wallet: info)
+                }
+            ))
+        } else {
+            let importController = self.accountContext.sharedContext.makeWalletImportScreen(
+                context: self.accountContext,
+                mode: .enterRecoveryPhrase,
+                completion: { [weak self] in
+                    self?.recoveryPhraseImportController?.dismiss(animated: true)
+                    self?.recoveryPhraseImportController = nil
+                }
+            )
+            self.recoveryPhraseImportController = importController
+            self.push(importController)
+        }
+    }
+
+    private func signingWalletMatches(_ expected: WalletContext.WalletInfo) -> Bool {
+        guard case let .wallet(info) = self.walletContext.stateValue.phase else { return false }
+        return info.address == expected.address && info.publicKey == expected.publicKey
+    }
+
+    private func restorationAuthorization() -> Signal<PasscodeSession, WalletContext.WalletError> {
+        if let session = self.restorationSession, session.isValid { return .single(session) }
+        let generation = self.restorationGeneration
+        return self.walletContext.beginWalletFlow(reason: "Restore wallet")
+        |> deliverOnMainQueue
+        |> mapToSignal { [weak self] session -> Signal<PasscodeSession, WalletContext.WalletError> in
+            guard let self, self.restorationGeneration == generation else {
+                session.invalidate()
+                return .fail(.authorizationCancelled)
+            }
+            self.restorationSession?.invalidate()
+            self.restorationSession = session
+            return .single(session)
+        }
+    }
+
+    private func resumeTransferAfterSigningAccess() {
+        guard self.signingAccessRestored, self.pendingSigningTransfer != nil else { return }
+        let generation = self.restorationGeneration
+        Queue.mainQueue().justDispatch { [weak self] in
+            guard let self, self.restorationGeneration == generation, self.isScreenVisible,
+                  let pending = self.pendingSigningTransfer,
+                  self.signingWalletMatches(pending.wallet),
+                  case let .wallet(info) = self.walletContext.stateValue.phase,
+                  info.canSign, self.walletContext.stateValue.activeOperation == nil else { return }
+            self.abandonRestoration()
+            self.routeToTransfer(pending.collectible)
+        }
+    }
+
+    private func abandonRestoration() {
+        self.restorationGeneration &+= 1
+        self.pendingSigningTransfer = nil
+        self.signingAccessRestored = false
+        self.signingAccessDisposable.set(nil)
+        self.restorationSession?.invalidate()
+        self.restorationSession = nil
+    }
+
+    private func finishRestoration(error: WalletContext.WalletError, collectible: WalletContext.Collectible, wallet: WalletContext.WalletInfo) {
+        self.abandonRestoration()
+        guard error != .authorizationCancelled, self.isScreenVisible, self.signingWalletMatches(wallet) else { return }
+        let strings = self.walletPresentationData.initial.strings
+        let message = walletAuthorizationErrorMessage(error, strings: strings)
+        let generation = self.restorationGeneration
+        self.present(textAlertController(
+            context: self.accountContext,
+            updatedPresentationData: self.walletPresentationData,
+            title: message?.title ?? strings.Wallet_RestoreErrorTitle,
+            text: message?.text ?? strings.Wallet_NetworkError,
+            actions: [
+                TextAlertAction(type: .genericAction, title: strings.Common_Cancel, action: {}),
+                TextAlertAction(type: .defaultAction, title: strings.Wallet_Retry, action: { [weak self] in
+                    guard let self, self.restorationGeneration == generation, self.signingWalletMatches(wallet) else { return }
+                    self.openTransfer(collectible)
+                })
+            ],
+            dismissOnOutsideTap: false
+        ), in: .window(.root))
+    }
+
+    private func routeToTransfer(_ collectible: WalletContext.Collectible) {
         let peerSelectionScreen = WalletPeerSelectionScreen(
             context: self.accountContext,
             walletContext: self.walletContext,

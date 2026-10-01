@@ -109,11 +109,9 @@ private final class WalletAppInfoContentComponent: CombinedComponent {
             context.add(domain.position(CGPoint(x: centerX, y: contentHeight + domain.size.height / 2.0)))
             contentHeight += domain.size.height + 5.0
 
-            //TODO:localize
-            let descriptionText = "This app can see your wallet address, balance and activity. It can't move funds without your approval."
             let description = description.update(
                 component: BalancedTextComponent(
-                    text: .plain(NSAttributedString(string: descriptionText, font: Font.regular(15.0), textColor: theme.actionSheet.primaryTextColor)),
+                    text: .plain(NSAttributedString(string: environment.strings.Wallet_Apps_Permissions, font: Font.regular(15.0), textColor: theme.actionSheet.primaryTextColor)),
                     horizontalAlignment: .center,
                     maximumNumberOfLines: 0,
                     lineSpacing: 0.2
@@ -125,8 +123,6 @@ private final class WalletAppInfoContentComponent: CombinedComponent {
             contentHeight += description.size.height + 25.0
 
             let buttonInsets = ContainerViewLayout.concentricInsets(bottomInset: environment.safeInsets.bottom, innerDiameter: 52.0, sideInset: 30.0)
-            //TODO:localize
-            let disconnectTitle = "Disconnect"
             let disconnectButton = disconnectButton.update(
                 component: ButtonComponent(
                     background: ButtonComponent.Background(
@@ -137,7 +133,7 @@ private final class WalletAppInfoContentComponent: CombinedComponent {
                         cornerRadius: 26.0
                     ),
                     content: AnyComponentWithIdentity(id: "disconnect", component: AnyComponent(Text(
-                        text: disconnectTitle,
+                        text: environment.strings.Wallet_Apps_Disconnect,
                         font: Font.semibold(17.0),
                         color: theme.list.itemCheckColors.foregroundColor
                     ))),

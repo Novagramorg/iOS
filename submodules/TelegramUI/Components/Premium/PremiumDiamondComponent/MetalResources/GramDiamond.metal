@@ -29,7 +29,7 @@ struct StarUniforms {
     float4x4 projection;
     float4 animation; // burst age, transport time, burst enabled, light background
     float4 layout; // viewport pixels, steady instance count, burst seed
-    float4 appearance; // palette identifier, reserved
+    float4 appearance; // x: palette identifier, w: rightward fan
     float4 tint; // y: star opacity, z: emission radius, w: burst fade-in seconds
 };
 struct BackgroundStarRaster {
@@ -71,13 +71,20 @@ vertex BackgroundStarRaster backgroundStarVertex(uint vertexIndex [[vertex_id]],
     float fadeIn = burst ? smoothstep(0.0,u.tint.w,u.animation.x) : smoothstep(0,0.10,progress);
     float fade = fadeIn * (1-smoothstep(0.62,1.0,progress)) * alive * u.tint.y;
     float depth = mix(0.60,1.0,starRandom(seed+3));
-    float sector = starRandom(seed+4);
     float spread = starRandom(seed+14);
     const float verticalSpread = 0.78;
-    float lowerFanAngle = atan(tan(-M_PI_F/6.0)/verticalSpread);
-    float elevation = sector < 0.85 ? mix(lowerFanAngle,0.34,spread) : mix(0.52,1.40,spread);
-    float side = starRandom(seed+15) < 0.5 ? -1.0 : 1.0;
-    float2 direction = float2(side*cos(elevation),sin(elevation));
+    float2 direction;
+    if (u.appearance.w > 0.5) {
+        // A single continuous fan to the right, with no separate vertical lobes.
+        float elevation = mix(-M_PI_F/3.0,M_PI_F/3.0,spread);
+        direction = float2(cos(elevation),sin(elevation));
+    } else {
+        float sector = starRandom(seed+4);
+        float lowerFanAngle = atan(tan(-M_PI_F/6.0)/verticalSpread);
+        float elevation = sector < 0.85 ? mix(lowerFanAngle,0.34,spread) : mix(0.52,1.40,spread);
+        float side = starRandom(seed+15) < 0.5 ? -1.0 : 1.0;
+        direction = float2(side*cos(elevation),sin(elevation));
+    }
     float distance;
     if (burst) {
         float travelTime = max(age,0.0);
@@ -878,7 +885,11 @@ fragment float4 diamondLensFragment(Raster in [[stage_in]], constant Uniforms &u
     float2 uv = clamp(lens.uv.xy + sourcePosition * lens.uv.zw,
                       lens.uv.xy + halfTexel, lens.uv.xy + lens.uv.zw - halfTexel);
     float4 sampledColor = source.sample(sourceSampler, uv);
-    float coverage = strength * smoothstep(0.0, 1.5, distanceToEdge);
+    // The model is pitch * yaw, so its up axis measures vertical tilt independently of yaw.
+    // Fade only the sampled image into the existing facets, preserving the lens distortion.
+    float verticalTilt = asin(clamp(abs(u.model[1].z), 0.0, 1.0));
+    float lensVisibility = 1.0 - smoothstep(20.0 * M_PI_F / 180.0, M_PI_F / 4.0, verticalTilt);
+    float coverage = strength * smoothstep(0.0, 1.5, distanceToEdge) * lensVisibility;
     if (lens.center.z > 0.5) {
         // The card snapshot contains premultiplied color, including antialiased edges.
         float opacity = 0.7 * coverage;

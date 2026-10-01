@@ -190,8 +190,12 @@ public final class InfoParagraphComponent: CombinedComponent {
                 textOriginY = textTopInset + titleSize.height + spacing
                 iconCenterY = textTopInset + 18.0
             } else {
-                textOriginY = textTopInset
                 iconCenterY = textTopInset + 14.0
+                if text.size.height <= 20.0 {
+                    textOriginY = iconCenterY - text.size.height / 2.0 + 1.0
+                } else {
+                    textOriginY = textTopInset
+                }
             }
 
             context.add(text

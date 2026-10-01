@@ -102,6 +102,7 @@ public struct WalletTransaction: Equatable, Sendable {
     public let comment: String?
     public let commentEncrypted: Bool
     public let txHash: String?
+    public let nft: WalletNftItem?
 
     public init(
         incoming: Bool,
@@ -115,7 +116,8 @@ public struct WalletTransaction: Equatable, Sendable {
         peer: WalletTransactionPeer,
         comment: String?,
         commentEncrypted: Bool = false,
-        txHash: String?
+        txHash: String?,
+        nft: WalletNftItem? = nil
     ) {
         self.incoming = incoming
         self.gasless = gasless
@@ -129,6 +131,7 @@ public struct WalletTransaction: Equatable, Sendable {
         self.comment = comment
         self.commentEncrypted = commentEncrypted
         self.txHash = txHash
+        self.nft = nft
     }
 }
 
@@ -349,7 +352,8 @@ extension WalletTransaction {
                 peer: WalletTransactionPeer(apiPeer: walletTransaction.peer, transaction: transaction),
                 comment: walletTransaction.comment,
                 commentEncrypted: (walletTransaction.flags & (1 << 6)) != 0,
-                txHash: walletTransaction.txHash
+                txHash: walletTransaction.txHash,
+                nft: walletTransaction.nft.map(WalletNftItem.init(apiItem:))
             )
         }
     }

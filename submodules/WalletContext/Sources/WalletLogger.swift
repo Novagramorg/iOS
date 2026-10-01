@@ -1,5 +1,6 @@
 import PasscodeCore
 import Foundation
+import CryptoKit
 import TelegramCore
 import WalletEngineFFI
 
@@ -258,7 +259,7 @@ extension WalletLogger {
         if let eventId { fields.append("event_id=\(eventId)") }
         if let body {
             fields.append("body_bytes=\(body.count)")
-            fields.append("body_sha256=\(TonConnectCryptoPrimitives.sha256(body).map { String(format: "%02x", $0) }.joined())")
+            fields.append("body_sha256=\(SHA256.hash(data: body).map { String(format: "%02x", $0) }.joined())")
         }
         if let outcome { fields.append("outcome=\(quoted(outcome))") }
         if let error = error as? WalletTonConnectError, case let .rpc(code, _) = error {
@@ -287,13 +288,6 @@ func tonConnectErrorKind(_ error: Error) -> String? {
         case .keyMismatch: return "ton_connect_key_mismatch"
         case .expired: return "ton_connect_expired"
         case .handledElsewhere: return "ton_connect_handled_elsewhere"
-        }
-    }
-    if let error = error as? TonConnectCryptoError {
-        switch error {
-        case .invalidMnemonic: return "ton_connect_crypto_invalid_mnemonic"
-        case .identityMismatch: return "ton_connect_crypto_identity_mismatch"
-        case .invalidDerivation: return "ton_connect_crypto_invalid_derivation"
         }
     }
     if error is TonConnectSessionError { return "ton_connect_session_failed" }

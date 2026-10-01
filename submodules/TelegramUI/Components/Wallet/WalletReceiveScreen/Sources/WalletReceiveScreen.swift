@@ -10,7 +10,7 @@ import PresentationDataUtils
 import ComponentFlow
 import ViewControllerComponent
 import SheetComponent
-import BalancedTextComponent
+import MultilineTextComponent
 import BundleIconComponent
 import GlassBarButtonComponent
 import ButtonComponent
@@ -866,8 +866,6 @@ private final class WalletReceiveSheetContent: Component {
                 keyPath: "transform.scale",
                 timingFunction: timingFunction
             )
-            // Keep the destination live: a snapshot with afterScreenUpdates: false
-            // may still contain the previous frame immediately after updating it.
             for (index, contentView) in [previousSnapshot, self.cardView].enumerated() {
                 let faceView = UIView(frame: flipView.bounds)
                 faceView.clipsToBounds = true
@@ -1024,12 +1022,10 @@ private final class WalletReceiveSheetContent: Component {
             let copyButtonContent: AnyComponentWithIdentity<Empty>
             let copyButtonAction: () -> Void
             if self.displaysAddress {
-                //TODO:localize
-                let showQrTitle = "Show my QR"
                 copyButtonContent = AnyComponentWithIdentity(
                     id: "showQr",
                     component: AnyComponent(Text(
-                        text: showQrTitle,
+                        text: environment.strings.Wallet_Receive_ShowQR,
                         font: Font.semibold(14.0),
                         color: UIColor(rgb: 0x087cff)
                     ))
@@ -1038,8 +1034,6 @@ private final class WalletReceiveSheetContent: Component {
                     self?.showQrCode()
                 }
             } else {
-                //TODO:localize
-                let copyTitle = "Copy my address"
                 copyButtonContent = AnyComponentWithIdentity(
                     id: "copy",
                     component: AnyComponent(HStack<Empty>([
@@ -1053,7 +1047,7 @@ private final class WalletReceiveSheetContent: Component {
                         AnyComponentWithIdentity(
                             id: "title",
                             component: AnyComponent(Text(
-                                text: copyTitle,
+                                text: environment.strings.Wallet_Receive_CopyAddress,
                                 font: Font.semibold(14.0),
                                 color: UIColor(rgb: 0x087cff)
                             ))
@@ -1086,13 +1080,11 @@ private final class WalletReceiveSheetContent: Component {
                 containerSize: CGSize(width: 44.0, height: 44.0)
             )
 
-            //TODO:localize
-            let explanationText = "Share your address or this\nQR code to receive GRAM."
             let explanationSize = self.explanation.update(
                 transition: .immediate,
-                component: AnyComponent(BalancedTextComponent(
+                component: AnyComponent(MultilineTextComponent(
                     text: .plain(NSAttributedString(
-                        string: explanationText,
+                        string: environment.strings.Wallet_Receive_Text,
                         font: Font.regular(15.0),
                         textColor: .white
                     )),
@@ -1108,8 +1100,6 @@ private final class WalletReceiveSheetContent: Component {
             )
             let explanationTop = ringFrame.maxY + (cardWidth < 230.0 ? 12.0 : 20.0)
 
-            //TODO:localize
-            let buyTitle = "Buy with cash or crypto"
             let buyContent = HStack<Empty>([
                 AnyComponentWithIdentity(
                     id: "icon",
@@ -1118,7 +1108,7 @@ private final class WalletReceiveSheetContent: Component {
                 AnyComponentWithIdentity(
                     id: "title",
                     component: AnyComponent(Text(
-                        text: buyTitle,
+                        text: environment.strings.Wallet_Receive_Buy,
                         font: Font.semibold(17.0),
                         color: UIColor(rgb: 0x087cff)
                     ))
@@ -1204,8 +1194,6 @@ private final class WalletReceiveSheetContent: Component {
                 }
             }
             let updateCardContents = {
-                //TODO:localize
-                let copiedTitle = "Address copied"
                 let copiedStatusSize = self.copiedStatus.update(
                     transition: .immediate,
                     component: AnyComponent(HStack<Empty>([
@@ -1220,7 +1208,7 @@ private final class WalletReceiveSheetContent: Component {
                         AnyComponentWithIdentity(
                             id: "title",
                             component: AnyComponent(Text(
-                                text: copiedTitle,
+                                text: environment.strings.Wallet_AddressCopied,
                                 font: Font.semibold(14.0),
                                 color: UIColor(rgb: 0x087cff)
                             ))
@@ -1489,10 +1477,9 @@ private final class WalletReceiveSheetComponent: CombinedComponent {
                 return
             }
             guard self.isWalletAvailable else {
-                //TODO:localize
                 self.presentPurchaseAlert(
-                    title: "Purchase Unavailable",
-                    text: "Purchasing is currently unavailable. Please try again later.",
+                    title: self.context.sharedContext.currentPresentationData.with { $0 }.strings.Wallet_Receive_PurchaseUnavailableTitle,
+                    text: self.context.sharedContext.currentPresentationData.with { $0 }.strings.Wallet_Receive_PurchaseUnavailableText,
                     getController: getController
                 )
                 return
@@ -1575,10 +1562,9 @@ private final class WalletReceiveSheetComponent: CombinedComponent {
             self.isOpeningPurchase = false
             self.updated(transition: .easeInOut(duration: 0.2))
 
-            //TODO:localize
             self.presentPurchaseAlert(
-                title: "Purchase Failed",
-                text: "The purchase couldn't be started. Please try again.",
+                title: self.context.sharedContext.currentPresentationData.with { $0 }.strings.Wallet_Receive_PurchaseFailedTitle,
+                text: self.context.sharedContext.currentPresentationData.with { $0 }.strings.Wallet_Receive_PurchaseFailedText,
                 getController: getController
             )
         }

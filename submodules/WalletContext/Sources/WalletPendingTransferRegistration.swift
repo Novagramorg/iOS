@@ -69,8 +69,6 @@ extension WalletContextImpl {
         let createdAt = self.transferSubmissionClock.now()
         let pendingMessage: WalletPendingTransferMessageReference?
         if WalletContext.useWalletTransferApi {
-            // Finish the local transaction even if its caller is cancelled, so we
-            // always obtain the reference needed to remove a just-created message.
             let creation = Task { [engine = self.engine] in
                 try await WalletSignalRequestContext<WalletPendingTransferMessageReference?>().run(
                     engine.wallet.createPendingTransferMessage(

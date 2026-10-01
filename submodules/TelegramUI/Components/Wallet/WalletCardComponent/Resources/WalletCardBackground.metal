@@ -81,13 +81,6 @@ static inline float3 walletCardApplySaturation(float3 value) {
     return clamp(mix(float3(luminance), value, 1.6), float3(0.0), float3(1.0));
 }
 
-static inline float3 walletCardMatchButtonColor(float3 value) {
-    // Calibrated against the rendered #3b86f7 wallet action button so the
-    // material's lower-left reference area has the same perceived color.
-    const float3 buttonColorGain = float3(1.05933, 0.912212, 0.968627);
-    return clamp(value * buttonColorGain, float3(0.0), float3(1.0));
-}
-
 vertex WalletCardVertexOutput walletCardBackgroundVertex(
     constant float4 &rect [[buffer(0)]],
     constant WalletCardVertexUniforms &uniforms [[buffer(1)]],
@@ -177,9 +170,11 @@ fragment float4 walletCardBackgroundFragment(
 
     float colorBlend = clamp(0.30 + uv.y * 0.50 + uv.x * 0.18, 0.0, 1.0);
     colorBlend = colorBlend * colorBlend * (3.0 - 2.0 * colorBlend);
+    // Match Wallet/CardChatGradient's deep blue base and brighter azure reflections.
+    // These linear values are encoded and saturated below before presentation.
     float3 gradient = mix(
-        float3(0.033, 0.205, 0.885),
-        float3(0.057, 0.275, 0.955),
+        float3(0.025, 0.140, 0.885),
+        float3(0.038, 0.180, 0.955),
         colorBlend
     );
 
@@ -258,7 +253,7 @@ fragment float4 walletCardBackgroundFragment(
         1.30
     );
     float studioReflection = radialWedge * lobeBalance * ringReflection;
-    constexpr float3 cyanReflection = float3(0.016, 0.565, 0.965);
+    constexpr float3 cyanReflection = float3(0.090, 0.565, 0.965);
     gradient += cyanReflection * studioReflection * 0.32;
 
     float2 normalizedSurfaceTilt = clamp(
@@ -308,10 +303,8 @@ fragment float4 walletCardBackgroundFragment(
 
     // MetalEngine renders into a bgra8Unorm IOSurface. The reference renderer
     // used an sRGB drawable, so encode the linear material color explicitly.
-    const float3 outputColor = walletCardMatchButtonColor(
-        walletCardApplySaturation(
-            walletCardLinearToSrgb(gradient + spark)
-        )
+    const float3 outputColor = walletCardApplySaturation(
+        walletCardLinearToSrgb(gradient + spark)
     );
     return float4(outputColor * coverage, coverage);
 }

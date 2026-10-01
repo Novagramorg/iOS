@@ -423,6 +423,8 @@ swift_library(
         "//submodules/TelegramUI/Components/Chat/ChatMessageDisableCopyProtectionBubbleContentNode",
         "//submodules/TelegramUI/Components/Chat/ChatMessageGiveawayBubbleContentNode",
         "//submodules/TelegramUI/Components/Chat/ChatMessageBubbleItemNode",
+        "//submodules/TelegramUI/Components/Chat/ChatMessageTransferBubbleContentNode",
+        "//submodules/TelegramUI/Components/Premium/PremiumDiamondComponent",
         "//submodules/TelegramUI/Components/Chat/ChatRecentActionsController",
         "//submodules/TelegramUI/Components/Chat/ChatNavigationButton",
         "//submodules/TelegramUI/Components/Chat/ChatLoadingNode",

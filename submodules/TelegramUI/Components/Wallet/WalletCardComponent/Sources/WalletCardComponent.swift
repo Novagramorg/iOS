@@ -618,10 +618,10 @@ public final class WalletCardComponent: Component {
                 transition: .immediate,
                 component: AnyComponent(InteractiveDiamondComponent(
                     size: diamondSize,
-                    diamondWidth: 26.0 * 1.09 * scale,
+                    diamondWidth: 26.0 * 1.09 * 0.8 * scale,
                     isVisible: self.isDiamondRenderingEnabled,
                     theme: component.theme,
-                    appearance: .cool,
+                    appearance: .white,
                     expansionStyle: .wallet,
                     tapToSpin: true
                 )),
@@ -1081,7 +1081,6 @@ public final class WalletCardComponent: Component {
             self.balanceCollapseFraction = collapseFraction
             self.balanceScrollTransform = scrollTransform
             self.updateBalanceTransitionGeometry()
-            self.updateBalanceContent(target: primaryContentTarget, fraction: contentFraction)
 
             self.updateBalanceContainer(
                 self.primaryBalanceCollapseContainerView,
@@ -1128,6 +1127,7 @@ public final class WalletCardComponent: Component {
                     )
                 )
             }
+            self.updateBalanceContent(target: primaryContentTarget, fraction: contentFraction)
             self.updateCardScrollAppearance()
             self.updateProjectedBalanceFrames()
         }
@@ -1172,16 +1172,61 @@ public final class WalletCardComponent: Component {
                     layout.icon.insetBy(dx: layout.icon.width * 0.095, dy: layout.icon.height * 0.095)
                 }
                 let iconFrame = contentFrame(self.gramIconContentFrame, targetFrame: targetIconFrame)
-                ComponentTransition.immediate.setTransform(view: diamondView, transform: CATransform3DMakeScale(
-                    iconFrame.width / self.gramIconContentFrame.width,
-                    iconFrame.height / self.gramIconContentFrame.height,
-                    1.0
-                ))
-                ComponentTransition.immediate.setPosition(view: diamondView, position: CGPoint(
+                let center = CGPoint(
                     x: self.primaryBalanceBaseFrame.minX + iconFrame.midX,
                     y: self.primaryBalanceBaseFrame.minY + iconFrame.midY
+                )
+                ComponentTransition.immediate.setPosition(view: diamondView, position: center)
+                ComponentTransition.immediate.setTransform(view: diamondView, transform: self.diamondScrollTransform(
+                    center: center,
+                    scaleX: iconFrame.width / self.gramIconContentFrame.width,
+                    scaleY: iconFrame.height / self.gramIconContentFrame.height
                 ))
             }
+        }
+
+        private func diamondScrollTransform(center: CGPoint, scaleX: CGFloat, scaleY: CGFloat) -> CATransform3D {
+            let contentTransform = CATransform3DMakeScale(scaleX, scaleY, 1.0)
+            guard self.balanceTransitionContainer != nil, self.balanceTransitionFraction > 0.0 else {
+                return contentTransform
+            }
+
+            let origin = self.diamondClipView.convert(center, to: self.balanceTransitionView)
+            let right = self.diamondClipView.convert(CGPoint(x: center.x + 1.0, y: center.y), to: self.balanceTransitionView)
+            let bottom = self.diamondClipView.convert(CGPoint(x: center.x, y: center.y + 1.0), to: self.balanceTransitionView)
+            let bounds = self.balanceTransitionView.bounds
+            let anchor = self.balanceTransitionView.layer.anchorPoint
+            var localTransform = CATransform3DIdentity
+            localTransform.m11 = right.x - origin.x
+            localTransform.m12 = right.y - origin.y
+            localTransform.m21 = bottom.x - origin.x
+            localTransform.m22 = bottom.y - origin.y
+            localTransform.m41 = origin.x - bounds.minX - bounds.width * anchor.x
+            localTransform.m42 = origin.y - bounds.minY - bounds.height * anchor.y
+
+            // Invert the projected plane, since the clipping view flattens its children in 2D.
+            // A counter-rotation in 3D would still leave the gem compressed by the card's pitch.
+            var projection = CATransform3DConcat(localTransform, self.balanceTransitionView.layer.transform)
+            projection.m13 = 0.0
+            projection.m23 = 0.0
+            projection.m31 = 0.0
+            projection.m32 = 0.0
+            projection.m33 = 1.0
+            projection.m34 = 0.0
+            projection.m43 = 0.0
+            let w = projection.m44
+            guard abs(w) > 0.0001 else {
+                return contentTransform
+            }
+
+            // Retain the projected center and horizontal scale, with a square, front-facing image.
+            let horizontalX = (projection.m11 * w - projection.m41 * projection.m14) / (w * w)
+            let horizontalY = (projection.m12 * w - projection.m42 * projection.m14) / (w * w)
+            let scale = hypot(horizontalX, horizontalY) * scaleX
+            var targetTransform = CATransform3DMakeScale(scale, scale, 1.0)
+            targetTransform.m41 = projection.m41 / w
+            targetTransform.m42 = projection.m42 / w
+            return CATransform3DConcat(targetTransform, CATransform3DInvert(projection))
         }
 
         private func updateCardScrollAppearance() {
@@ -1426,10 +1471,21 @@ public final class WalletCardComponent: Component {
             if let diamond = self.gramDiamond.view as? InteractiveDiamondComponent.View {
                 let scale = self.currentSize.width / 370.0
                 let tilt = self.panTilt * self.panTilt * (3.0 - 2.0 * self.panTilt)
+                let diamondCenter = CGPoint(
+                    x: self.primaryBalanceBaseFrame.minX + self.gramIconContentFrame.midX,
+                    y: self.primaryBalanceBaseFrame.minY + self.gramIconContentFrame.midY
+                )
+                let followsCardTilt = CATransform3DIsIdentity(self.scrollTransform)
                 diamond.updateWalletTilt(
-                    pitch: CGFloat(cardPitch), roll: CGFloat(self.currentCardY),
+                    pitch: followsCardTilt ? CGFloat(cardPitch) : 0.0,
+                    roll: followsCardTilt ? CGFloat(self.currentCardY) : 0.0,
                     scale: 1.0 + 0.16 * CGFloat(tilt),
-                    leftInset: self.primaryBalanceBaseFrame.minX + self.gramIconContentFrame.midX - 14.0 * scale
+                    leftInset: diamondCenter.x - 14.0 * scale,
+                    // The canvas stays centered on the gem; cover all four card edges with padding.
+                    starCanvasSize: CGSize(
+                        width: 2.0 * (max(diamondCenter.x, self.currentSize.width - diamondCenter.x) + 2.0),
+                        height: 2.0 * (max(diamondCenter.y, self.currentSize.height - diamondCenter.y) + 2.0)
+                    )
                 )
             }
 
@@ -1446,7 +1502,7 @@ public final class WalletCardComponent: Component {
                 quad: projectedQuad
             )
 
-            if notifyBalanceGeometry && self.balanceTransitionFraction > 0.0 && self.balanceTransitionFraction < 1.0 {
+            if notifyBalanceGeometry {
                 self.balanceGeometryUpdated?()
             }
         }

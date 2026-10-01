@@ -234,8 +234,9 @@ public extension WalletContext {
         }
     }
 
-    static func transferAddress(from value: String) -> String? {
-        normalizedMainnetAddress(value)
+    /// The default canonical form is for account comparisons. Preserve the flag for display and sending.
+    static func transferAddress(from value: String, preserveBounce: Bool = false) -> String? {
+        normalizedMainnetAddress(value, preserveBounce: preserveBounce)
     }
 
     static func isSelfTransfer(recipient: String, walletAddress: String?) -> Bool {
@@ -249,7 +250,7 @@ public extension WalletContext {
 
     static func transferRecipient(from value: String) -> ResolvedTransferRecipient? {
         let value = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let address = normalizedMainnetAddress(value) else {
+        guard let address = normalizedMainnetAddress(value, preserveBounce: true) else {
             return nil
         }
         return ResolvedTransferRecipient(
@@ -544,8 +545,8 @@ extension WalletContextImpl {
         return try await self.withWalletOwnershipProof(prepare: {
             try await self.runtime.verifyReplacement(recordId: recordId)
         }, sign: { challenge in
-            try await self.runtime.signReplacementProof(
-                recordId: recordId,
+            try await self.runtime.signOwnershipProof(
+                replacementRecordId: recordId,
                 expectedAnchorPublicKey: anchorPublicKey,
                 expectedSigningPublicKey: signingPublicKey,
                 domain: challenge.domain, timestamp: UInt64(challenge.timestamp), payload: challenge.payload
@@ -773,7 +774,10 @@ extension WalletContextImpl {
 
     func previousWalletRecoveryPhrase(id: String, session: PasscodeSession? = nil, operationId: UUID) async throws -> [String] {
         return try await self.performOperation(.recoveringPhrase, operationId: operationId, session: session) {
-            try await self.runtime.revealArchivedRecoveryPhrase(recordId: id)
+            let serverStateRevision = self.serverStateMutationRevision
+            let words = try await self.runtime.revealArchivedRecoveryPhrase(recordId: id)
+            guard self.serverStateMutationRevision == serverStateRevision else { throw CancellationError() }
+            return words
         }
     }
 
@@ -786,14 +790,16 @@ extension WalletContextImpl {
                 guard walletEngineAddressesEqual(info.address, expectedWallet.address),
                       info.publicKey == expectedWallet.publicKey else { throw WalletError.storage(.identityMismatch) }
             }
+            let serverStateRevision = self.serverStateMutationRevision
             if info.canSign {
-                return try await self.runtime.revealRecoveryPhrase()
+                let words = try await self.runtime.revealRecoveryPhrase()
+                guard self.serverStateMutationRevision == serverStateRevision else { throw CancellationError() }
+                return words
             }
             guard info.canExportPhrase,
                   case let .ready(_, _, _, address, publicKey, _) = self.serverWalletState else {
                 throw WalletError.unavailable
             }
-            let serverStateRevision = self.serverStateMutationRevision
             let words = try await exportWalletSecretPhrase(
                 engine: self.engine,
                 password: password,
@@ -809,28 +815,29 @@ extension WalletContextImpl {
                 await self.discardReplacementForCleanup(recordId: prepared.recordId)
                 throw WalletError.storage(.identityMismatch)
             }
-            let generation = await self.prepareForRuntimeIdentityChange(
-                preserveCurrentWalletState: true
-            )
-            let activation: WalletEngineActivation
             do {
-                activation = try await self.runtime.commitReplacement(
+                guard self.serverStateMutationRevision == serverStateRevision else { throw CancellationError() }
+                let generation = await self.prepareForRuntimeIdentityChange(
+                    preserveCurrentWalletState: true
+                )
+                let activation = try await self.runtime.commitReplacement(
                     recordId: prepared.recordId,
                     serverAddress: address,
                     serverPublicKey: publicKey,
                     serverStateRevision: serverStateRevision
                 )
+                guard self.serverStateMutationRevision == serverStateRevision else { throw CancellationError() }
+                if let state = self.serverWalletState {
+                    _ = self.installRuntimeActivation(
+                        state: state,
+                        activation: activation,
+                        generation: generation,
+                        preserveCurrentWalletState: true
+                    )
+                }
             } catch {
                 await self.discardReplacementForCleanup(recordId: prepared.recordId)
                 throw error
-            }
-            if let state = self.serverWalletState {
-                _ = self.installRuntimeActivation(
-                    state: state,
-                    activation: activation,
-                    generation: generation,
-                    preserveCurrentWalletState: true
-                )
             }
             return words
         }
@@ -1008,7 +1015,7 @@ extension WalletContextImpl {
                 words = normalizedEngineMnemonic(try await self.runtime.revealRecoveryPhrase())
             }
             defer { words.removeAll(keepingCapacity: false) }
-            guard words.count == 24 else { throw WalletError.invalidMnemonic }
+            guard words.count == 12 || words.count == 24 else { throw WalletError.invalidMnemonic }
             let signingPublicKey = try walletMnemonicSigningPublicKey(words: words)
             let anchorPublicKey = try rotationMnemonicPublicKey(phrase: words.joined(separator: " "))
             try validateAuthorization()
@@ -1068,9 +1075,9 @@ extension WalletContextImpl {
                             try checkDeadline()
                         }, sign: { challenge in
                             _ = try currentState()
-                            return try walletOwnershipProofSignature(
-                                words: words, expectedAnchorPublicKey: anchorPublicKey,
-                                expectedSigningPublicKey: signingPublicKey, address: expectedAddress,
+                            return try await self.runtime.signOwnershipProof(
+                                replacementRecordId: candidate?.recordId, expectedAnchorPublicKey: anchorPublicKey,
+                                expectedSigningPublicKey: signingPublicKey,
                                 domain: challenge.domain, timestamp: UInt64(challenge.timestamp), payload: challenge.payload
                             )
                         }, request: { proof in
@@ -1578,13 +1585,7 @@ extension WalletContextImpl {
                 : .exact(nanograms: String(resolved.amount))
             let intent = SendIntent(
                 expiration: resolved.expiration,
-                messages: [SendMessage(
-                    destination: resolved.address,
-                    amount: sendAmount,
-                    body: body,
-                    bounce: false,
-                    stateInit: nil
-                )]
+                messages: [resolved.destination.message(amount: sendAmount, body: body)]
             )
             try Task.checkCancellation()
             guard !self.isShutdown, self.activationGeneration == activationGeneration else { throw WalletError.unavailable }
@@ -1713,9 +1714,10 @@ extension WalletContextImpl {
         operationId: UUID
     ) async throws -> PreparedTransfer {
         return try await self.performOperation(.preparingTransfer, operationId: operationId) {
-            guard case let .wallet(info) = self.currentState.phase,
-                  info.canSign,
-                  let recipient = normalizedMainnetAddress(address),
+            guard case let .wallet(info) = self.currentState.phase, info.canSign else {
+                throw WalletError.unavailable
+            }
+            guard let recipient = normalizedMainnetAddress(address),
                   let nft = normalizedMainnetAddress(collectible.address) else {
                 throw WalletError.invalidAddress
             }
@@ -2387,7 +2389,7 @@ extension WalletContextImpl {
                     activeOperation: nil
                 )
                 if activeOperation.defersServerWalletState {
-                    if (activeOperation == .disablingBackup || !operationCompleted),
+                    if (activeOperation == .disablingBackup || activeOperation == .recoveringPhrase || !operationCompleted),
                        let deferred = self.deferredServerWalletState {
                         self.applyServerWalletState(deferred.state, refreshIfStreamingUnavailable: deferred.refreshIfStreamingUnavailable,
                             balanceOverlayRevision: deferred.balanceOverlayRevision)
@@ -2495,7 +2497,7 @@ extension WalletContextImpl {
 }
 
 @available(macOS 10.15, *)
-private func normalizedMainnetAddress(_ input: String) -> String? {
+private func normalizedMainnetAddress(_ input: String, preserveBounce: Bool = false) -> String? {
     let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
     let address: String
     if trimmed.lowercased().hasPrefix("ton://") {
@@ -2504,8 +2506,10 @@ private func normalizedMainnetAddress(_ input: String) -> String? {
     } else {
         address = trimmed
     }
-    guard let info = try? parseTonAddress(value: address) else { return nil }
-    if case let .userFriendly(_, testnet) = info.format, testnet { return nil }
+    guard let destination = try? WalletTransferDestination(address) else { return nil }
+    if preserveBounce || !destination.bounce {
+        return destination.address
+    }
     return try? convertTonAddress(
         value: address,
         format: .userFriendly(bounceable: false, testnet: false)

@@ -249,8 +249,7 @@ private final class AttachButtonComponent: CombinedComponent {
                 animationName = "TabFile"
                 imageName = ""
             case .money:
-                //TODO:localize
-                name = "Money"
+                name = strings.Attachment_Money
                 animationName = "TabMoney"
                 imageName = ""
             case .location:
@@ -2251,8 +2250,7 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate, ASGestureRecog
             case .file:
                 accessibilityTitle = self.presentationData.strings.Attachment_File
             case .money:
-                //TODO:localize
-                accessibilityTitle = "Money"
+                accessibilityTitle = self.presentationData.strings.Attachment_Money
             case .location:
                 accessibilityTitle = self.presentationData.strings.Attachment_Location
             case .todo:

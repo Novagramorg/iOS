@@ -1059,6 +1059,7 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
     let patternImageLayer: EffectImageLayer
     private let dimLayer: SimpleLayer
     private var isGeneratingPatternImage: Bool = false
+    private var patternImageGeneration: UInt64 = 0
 
     private var validLayout: (CGSize, WallpaperDisplayMode)?
     private var wallpaper: TelegramWallpaper?
@@ -1095,6 +1096,7 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
     private struct ValidPatternGeneratedImage: Equatable {
         let wallpaper: TelegramWallpaper
         let size: CGSize
+        let displayMode: WallpaperDisplayMode
         let patternColor: UInt32
         let backgroundColor: UInt32
         let invertPattern: Bool
@@ -1106,6 +1108,9 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
                 return false
             }
             if lhs.size != rhs.size {
+                return false
+            }
+            if lhs.displayMode != rhs.displayMode {
                 return false
             }
             if lhs.patternColor != rhs.patternColor {
@@ -1292,6 +1297,7 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
         if self.wallpaper == wallpaper && self.starGift == starGift {
             return
         }
+        self.invalidatePatternImageGeneration()
         let previousWallpaper = self.wallpaper
         let previousStarGift = self.starGift
         
@@ -1484,6 +1490,12 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
         self.isSettingUpWallpaper = true
     }
 
+    private func invalidatePatternImageGeneration() {
+        self.patternImageGeneration &+= 1
+        self.validPatternGeneratedImage = nil
+        self.isGeneratingPatternImage = false
+    }
+
     private func updatePatternPresentation() {
         guard let wallpaper = self.wallpaper else {
             return
@@ -1536,6 +1548,7 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
         default:
             self.patternImageDisposable.set(nil)
             self.symbolImageDisposable.set(nil)
+            self.invalidatePatternImageGeneration()
             self.validPatternImage = nil
             self.patternImageLayer.isHidden = true
             self.patternImageLayer.fillWithColorUntilLoaded = nil
@@ -1591,7 +1604,7 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
             }
 
             if updated {
-                self.validPatternGeneratedImage = nil
+                self.invalidatePatternImageGeneration()
                 self.validPatternImage = nil
 
                 if let cachedValidPatternImage = WallpaperBackgroundNodeImpl.cachedValidPatternImage, cachedValidPatternImage.generated.wallpaper == wallpaper && cachedValidPatternImage.generated.invertPattern == invertPattern && cachedValidPatternImage.starGift == starGift && cachedValidPatternImage.modelRectIndex == modelRectIndex {
@@ -1627,8 +1640,8 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
                             return
                         }
                         if let (generator, rects) = generator {
+                            self.invalidatePatternImageGeneration()
                             self.validPatternImage = ValidPatternImage(wallpaper: wallpaper, invertPattern: invertPattern, rects: rects, starGift: starGift, symbolImage: symbolImage, modelRectIndex: modelRectIndex, generate: generator)
-                            self.validPatternGeneratedImage = nil
                             if let (size, displayMode) = self.validLayout {
                                 self.loadPatternForSizeIfNeeded(size: size, displayMode: displayMode, transition: .immediate)
                             } else {
@@ -1660,9 +1673,11 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
                 self.patternImageLayer.backgroundColor = nil
             }
 
-            let updatedGeneratedImage = ValidPatternGeneratedImage(wallpaper: validPatternImage.wallpaper, size: size, patternColor: patternColor.rgb, backgroundColor: patternBackgroundColor.rgb, invertPattern: invertPattern, starGift: starGift, modelRectIndex: modelRectIndex)
+            let updatedGeneratedImage = ValidPatternGeneratedImage(wallpaper: validPatternImage.wallpaper, size: size, displayMode: displayMode, patternColor: patternColor.rgb, backgroundColor: patternBackgroundColor.rgb, invertPattern: invertPattern, starGift: starGift, modelRectIndex: modelRectIndex)
             
             if self.validPatternGeneratedImage != updatedGeneratedImage {
+                // Cached and synchronous replacements must also reject pending renders for an older layout.
+                self.invalidatePatternImageGeneration()
                 self.validPatternGeneratedImage = updatedGeneratedImage
                 if let cachedValidPatternImage = WallpaperBackgroundNodeImpl.cachedValidPatternImage, cachedValidPatternImage.generated == updatedGeneratedImage {
                     self.patternImageLayer.suspendCompositionUpdates = true
@@ -1691,11 +1706,12 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
                             self.updatePatternPresentation()
                         }
                     } else {
+                        let generation = self.patternImageGeneration
                         self.isGeneratingPatternImage = true
                         DispatchQueue.global(qos: .userInteractive).async { [weak self] in
                             let image = validPatternImage.generate(patternArguments)?.generateImage()
                             Queue.mainQueue().async {
-                                guard let strongSelf = self else {
+                                guard let strongSelf = self, strongSelf.patternImageGeneration == generation else {
                                     return
                                 }
                                 strongSelf.isGeneratingPatternImage = false

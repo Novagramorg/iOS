@@ -71,6 +71,7 @@ public final class SearchBarPlaceholderContentView: UIView {
     private var close: (background: GlassBackgroundView, icon: UIImageView)?
     
     private(set) var placeholderString: NSAttributedString?
+    var maximumPlaceholderWidth: CGFloat?
     
     private var params: Params?
     
@@ -198,8 +199,12 @@ public final class SearchBarPlaceholderContentView: UIView {
             placeholderString = params.placeholderString
         }
         
-        let (labelLayoutResult, labelApply) = labelLayout(TextNodeLayoutArguments(attributedString: placeholderString, backgroundColor: .clear, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: params.constrainedSize, alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
-        let (_, plainLabelApply) = plainLabelLayout(TextNodeLayoutArguments(attributedString: placeholderString, backgroundColor: .clear, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: params.constrainedSize, alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
+        var labelConstrainedSize = params.constrainedSize
+        if !params.isActive, let maximumPlaceholderWidth = self.maximumPlaceholderWidth {
+            labelConstrainedSize.width = max(0.0, min(labelConstrainedSize.width, maximumPlaceholderWidth))
+        }
+        let (labelLayoutResult, labelApply) = labelLayout(TextNodeLayoutArguments(attributedString: placeholderString, backgroundColor: .clear, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: labelConstrainedSize, alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
+        let (_, plainLabelApply) = plainLabelLayout(TextNodeLayoutArguments(attributedString: placeholderString, backgroundColor: .clear, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: labelConstrainedSize, alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
         
         var updatedColor: UIColor?
         var updatedIconImage: UIImage?
@@ -496,6 +501,21 @@ public class SearchBarPlaceholderNode: ASDisplayNode {
     
     public var placeholderString: NSAttributedString? {
         return self.contentView.placeholderString
+    }
+
+    public var maximumPlaceholderWidth: CGFloat? {
+        get {
+            return self.contentView.maximumPlaceholderWidth
+        }
+        set {
+            guard self.contentView.maximumPlaceholderWidth != newValue else {
+                return
+            }
+            self.contentView.maximumPlaceholderWidth = newValue
+            if !self.isTakenOut, let params = self.params {
+                let _ = self.update(params: params, transition: .immediate)
+            }
+        }
     }
     
     private(set) var accessoryComponentContainer: UIView?

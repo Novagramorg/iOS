@@ -679,9 +679,7 @@ public final class AccountContextImpl: AccountContext {
                 } else {
                     authenticateBiometrics = nil
                 }
-                //TODO:localize
-                let reason = "Confirm access to your wallet"
-                return try await requestPasscodeAuthentication(context: self, scope: .resource(namespace: request.namespace), lifetime: request.lifetime, biometricReason: reason, authenticateBiometrics: authenticateBiometrics)
+                return try await requestPasscodeAuthentication(context: self, scope: .resource(namespace: request.namespace), lifetime: request.lifetime, biometricReason: self.sharedContext.currentPresentationData.with { $0 }.strings.Wallet_AuthenticationReason, authenticateBiometrics: authenticateBiometrics)
             }
         }
     }

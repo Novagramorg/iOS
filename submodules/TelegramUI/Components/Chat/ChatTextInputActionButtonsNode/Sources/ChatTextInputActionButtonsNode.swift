@@ -580,8 +580,7 @@ public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessag
     public func updateAccessibility() {
         self.accessibilityTraits = .button
         if !self.stopButtonIcon.alpha.isZero {
-            //TODO:localize
-            self.accessibilityLabel = "Stop"
+            self.accessibilityLabel = self.strings.VoiceOver_Chat_Stop
             self.accessibilityHint = nil
         } else if !self.micButton.alpha.isZero {
             switch self.micButton.mode {

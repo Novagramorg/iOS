@@ -45,58 +45,38 @@ private struct WalletInfoContent: Equatable {
 private func walletInfoContent(
     mode: WalletInfoScreenMode,
     fiatState: WalletContext.FiatState?,
+    strings: PresentationStrings,
     dateTimeFormat: PresentationDateTimeFormat
 ) -> WalletInfoContent {
     switch mode {
     case .wallet:
-        //TODO:localize
-        let title = "How It Works"
-        //TODO:localize
-        let text = "Only you control your funds —\nno one else has access."
-        //TODO:localize
-        let instantTransfersTitle = "Instant Transfers"
-        //TODO:localize
-        let instantTransfersText = "Send Grams in any chat, just like\nsharing a photo."
-        //TODO:localize
-        let zeroFeesTitle = "Zero Fees"
-        //TODO:localize
-        let zeroFeesText = "First 5 transfers each day are free, the\u{00a0}rest cost almost nothing."
-        //TODO:localize
-        let blockchainVerifiedTitle = "Blockchain Verified"
-        //TODO:localize
-        let blockchainVerifiedText = "All transactions are recorded\nand verifiable on a public ledger."
-        //TODO:localize
-        let buttonTitle = "Got it"
-
         return WalletInfoContent(
             logo: WalletInfoLogo(name: "GramDiamond", loop: true),
-            title: title,
-            text: text,
+            title: strings.Wallet_Info_Title,
+            text: strings.Wallet_Info_Text,
             items: [
                 WalletInfoItem(
                     id: "instantTransfers",
-                    title: instantTransfersTitle,
-                    text: instantTransfersText,
+                    title: strings.Wallet_Info_InstantTransfersTitle,
+                    text: strings.Wallet_Info_InstantTransfersText,
                     iconName: "Wallet/InfoFast"
                 ),
                 WalletInfoItem(
                     id: "zeroFees",
-                    title: zeroFeesTitle,
-                    text: zeroFeesText,
+                    title: strings.Wallet_Info_ZeroFeesTitle,
+                    text: strings.Wallet_Info_ZeroFeesText,
                     iconName: "Wallet/InfoCheap"
                 ),
                 WalletInfoItem(
                     id: "blockchainVerified",
-                    title: blockchainVerifiedTitle,
-                    text: blockchainVerifiedText,
+                    title: strings.Wallet_Info_BlockchainVerifiedTitle,
+                    text: strings.Wallet_Info_BlockchainVerifiedText,
                     iconName: "Wallet/InfoVerified"
                 )
             ],
-            buttonTitle: buttonTitle
+            buttonTitle: strings.Wallet_GotIt
         )
     case .gram:
-        //TODO:localize
-        let title = "Gram"
         let text: String
         if let fiatState, let fiatRate = fiatState.selectedRate, fiatRate.unitsPerGram.isFinite, fiatRate.unitsPerGram > 0.0 {
             let fiatRateText = formatFiatValue(
@@ -104,56 +84,38 @@ private func walletInfoContent(
                 currencySymbol: fiatState.selectedCurrency.symbol,
                 dateTimeFormat: dateTimeFormat
             )
-            //TODO:localize
-            text = "The native currency of the TON blockchain. **1 Gram** currently equals **\(fiatRateText)**."
+            text = strings.Wallet_Info_GramRateText(fiatRateText).string
         } else {
-            //TODO:localize
-            text = "The native currency of the TON blockchain."
+            text = strings.Wallet_Info_GramText
         }
-        //TODO:localize
-        let fastTitle = "Fast"
-        //TODO:localize
-        let fastText = "Transfers confirm in seconds, anywhere in the world."
-        //TODO:localize
-        let cheapTitle = "Cheap"
-        //TODO:localize
-        let cheapText = "Fees are nearly zero, even on large transfers."
-        //TODO:localize
-        let usefulTitle = "Useful"
-        //TODO:localize
-        let usefulText = "Pay for apps, services, and fees across the TON ecosystem."
-        //TODO:localize
-        let buttonTitle = "Got it"
 
         return WalletInfoContent(
             logo: WalletInfoLogo(name: "GramDiamond", loop: true),
-            title: title,
+            title: strings.Wallet_Info_GramTitle,
             text: text,
             items: [
                 WalletInfoItem(
                     id: "fast",
-                    title: fastTitle,
-                    text: fastText,
+                    title: strings.Wallet_Info_FastTitle,
+                    text: strings.Wallet_Info_FastText,
                     iconName: "Wallet/InfoFast"
                 ),
                 WalletInfoItem(
                     id: "cheap",
-                    title: cheapTitle,
-                    text: cheapText,
+                    title: strings.Wallet_Info_CheapTitle,
+                    text: strings.Wallet_Info_CheapText,
                     iconName: "Wallet/InfoCheap"
                 ),
                 WalletInfoItem(
                     id: "useful",
-                    title: usefulTitle,
-                    text: usefulText,
+                    title: strings.Wallet_Info_UsefulTitle,
+                    text: strings.Wallet_Info_UsefulText,
                     iconName: "Wallet/InfoUseful"
                 )
             ],
-            buttonTitle: buttonTitle
+            buttonTitle: strings.Wallet_GotIt
         )
     case .firstGrams:
-        //TODO:localize
-        let title = "Your first Grams!"
         let text: String
         if let fiatState, let fiatRate = fiatState.selectedRate, fiatRate.unitsPerGram.isFinite, fiatRate.unitsPerGram > 0.0 {
             let fiatRateText = formatFiatValue(
@@ -161,94 +123,65 @@ private func walletInfoContent(
                 currencySymbol: fiatState.selectedCurrency.symbol,
                 dateTimeFormat: dateTimeFormat
             )
-            //TODO:localize
-            text = "**1 Gram** currently equals **\(fiatRateText)**.\nYou can:"
+            text = strings.Wallet_Info_FirstGramsRateText(fiatRateText).string
         } else {
-            //TODO:localize
-            text = "You can:"
+            text = strings.Wallet_Info_FirstGramsText
         }
-        //TODO:localize
-        let sendTitle = "Send"
-        //TODO:localize
-        let sendText = "Transfer Grams to anyone.\nTap  # → Money in chats."
-        //TODO:localize
-        let tradeTitle = "Trade"
-        //TODO:localize
-        let tradeText = "Convert Grams to cash or crypto on exchanges."
-        //TODO:localize
-        let storeTitle = "Store"
-        //TODO:localize
-        let storeText = "Keep your Grams in Telegram (#→ Money) or other wallets."
-        //TODO:localize
-        let buttonTitle = "Got it"
 
         return WalletInfoContent(
             logo: WalletInfoLogo(name: "GramDiamond", loop: true),
-            title: title,
+            title: strings.Wallet_Info_FirstGramsTitle,
             text: text,
             items: [
                 WalletInfoItem(
                     id: "send",
-                    title: sendTitle,
-                    text: sendText,
+                    title: strings.Wallet_Send,
+                    text: strings.Wallet_Info_SendText,
                     iconName: "Wallet/InfoSend",
                     textIconName: "Wallet/InfoAttach"
                 ),
                 WalletInfoItem(
                     id: "trade",
-                    title: tradeTitle,
-                    text: tradeText,
+                    title: strings.Wallet_Info_TradeTitle,
+                    text: strings.Wallet_Info_TradeText,
                     iconName: "Wallet/InfoTrade"
                 ),
                 WalletInfoItem(
                     id: "store",
-                    title: storeTitle,
-                    text: storeText,
+                    title: strings.Wallet_Info_StoreTitle,
+                    text: strings.Wallet_Info_StoreText,
                     iconName: "Wallet/InfoStore",
                     textIconName: "Wallet/InfoSettings"
                 )
             ],
-            buttonTitle: buttonTitle
+            buttonTitle: strings.Wallet_GotIt
         )
     case .recovery:
-        //TODO:localize
-        let title = "Secret Phrase"
-        //TODO:localize
-        let text = "Your Secret Phrase is the key to\u{00a0}back up your wallet. Keep it secret and\u{00a0}secure at all times."
-        //TODO:localize
-        let neverShareText = "**Never share** your Secret Phrase with anyone."
-        //TODO:localize
-        let canStealText = "If someone has your Secret Phrase they **can steal your funds**."
-        //TODO:localize
-        let supportText = "Telegram Support **will never ask you** for your Secret Phrase."
-        //TODO:localize
-        let buttonTitle = "Show Secret Phrase"
-
         return WalletInfoContent(
             logo: WalletInfoLogo(name: "WalletWordList", loop: false),
-            title: title,
-            text: text,
+            title: strings.Wallet_SecretPhrase,
+            text: strings.Wallet_SecretPhraseInfo,
             items: [
                 WalletInfoItem(
                     id: "neverShare",
                     title: nil,
-                    text: neverShareText,
+                    text: strings.Wallet_Info_NeverSharePhrase,
                     iconName: "Wallet/InfoHidden"
                 ),
                 WalletInfoItem(
                     id: "canSteal",
                     title: nil,
-                    text: canStealText,
+                    text: strings.Wallet_Info_PhraseTheftWarning,
                     iconName: "Wallet/InfoWarning"
                 ),
                 WalletInfoItem(
                     id: "support",
                     title: nil,
-                    text: supportText,
+                    text: strings.Wallet_Info_PhraseSupportWarning,
                     iconName: "Wallet/InfoShield"
                 )
             ],
-            buttonTitle: buttonTitle
+            buttonTitle: strings.Wallet_ShowSecretPhrase
         )
     }
 }
@@ -389,6 +322,7 @@ private final class WalletInfoSheetContent: CombinedComponent {
             let content = walletInfoContent(
                 mode: component.mode,
                 fiatState: state.fiatState,
+                strings: environment.strings,
                 dateTimeFormat: environment.dateTimeFormat
             )
 
@@ -493,7 +427,6 @@ private final class WalletInfoSheetContent: CombinedComponent {
                     let text = NSMutableAttributedString(string: item.text, font: textFont, textColor: itemTextColor)
                     let iconRange = NSRange(range, in: item.text)
                     let placeholderWidth = text.attributedSubstring(from: iconRange).size().width
-                    // Reserve the icon's width without changing the surrounding line height.
                     text.addAttributes([
                         .attachment: image,
                         .kern: image.size.width - placeholderWidth
@@ -518,11 +451,11 @@ private final class WalletInfoSheetContent: CombinedComponent {
 
             let list = list.update(
                 component: List(items),
-                availableSize: CGSize(width: context.availableSize.width - sideInset * 2.0, height: 10000.0),
+                availableSize: CGSize(width: context.availableSize.width - sideInset - 6.0, height: 10000.0),
                 transition: context.transition
             )
             context.add(list
-                .position(CGPoint(x: context.availableSize.width / 2.0, y: contentSize.height + list.size.height / 2.0))
+                .position(CGPoint(x: context.availableSize.width / 2.0 + 12.0, y: contentSize.height + list.size.height / 2.0))
             )
             contentSize.height += list.size.height
             contentSize.height += spacing + 8.0
@@ -583,28 +516,17 @@ private final class WalletInfoSheetContent: CombinedComponent {
             if case .wallet = component.mode {
                 contentSize.height += 24.0
 
-                //TODO:localize
-                let termsString = "By using Wallet you agree to Terms of Service."
-                let termsLink = "Terms of Service"
-                let termsText = NSMutableAttributedString(
-                    string: termsString,
-                    attributes: [
-                        .font: Font.regular(13.0),
-                        .foregroundColor: secondaryTextColor
-                    ]
-                )
-                let termsLinkRange = (termsString as NSString).range(of: termsLink)
-                termsText.addAttributes(
-                    [
-                        .foregroundColor: theme.list.itemAccentColor,
-                        NSAttributedString.Key(rawValue: TelegramTextAttributes.URL): environment.strings.Settings_Terms_URL
-                    ],
-                    range: termsLinkRange
-                )
-
+                let url = environment.strings.Wallet_TermsText_URL
                 let terms = terms.update(
                     component: MultilineTextComponent(
-                        text: .plain(termsText),
+                        text: .markdown(text: environment.strings.Wallet_TermsText, attributes: MarkdownAttributes(
+                            body: MarkdownAttributeSet(font: Font.regular(13.0), textColor: secondaryTextColor),
+                            bold: MarkdownAttributeSet(font: Font.semibold(13.0), textColor: secondaryTextColor),
+                            link: MarkdownAttributeSet(font: Font.regular(13.0), textColor: theme.list.itemAccentColor),
+                            linkAttribute: { contents in
+                                return (TelegramTextAttributes.URL, contents)
+                            }
+                        )),
                         horizontalAlignment: .center,
                         maximumNumberOfLines: 0,
                         highlightColor: theme.list.itemAccentColor.withAlphaComponent(0.2),
@@ -615,10 +537,7 @@ private final class WalletInfoSheetContent: CombinedComponent {
                                 return nil
                             }
                         },
-                        tapAction: { [weak state] attributes, _ in
-                            guard let url = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)] as? String else {
-                                return
-                            }
+                        tapAction: { [weak state] _, _ in
                             state?.openTerms(context: component.context, url: url)
                         }
                     ),
