@@ -623,6 +623,7 @@ extension ChatControllerImpl {
                         guard let walletContext = strongSelf.context.walletContext else {
                             return true
                         }
+                        var acceptedTransferAnimation = false
                         let controller = WalletSendScreen(
                             context: strongSelf.context,
                             updatedPresentationData: strongSelf.updatedPresentationData,
@@ -630,11 +631,21 @@ extension ChatControllerImpl {
                             peer: peer,
                             walletContext: walletContext,
                             allowOpenRecipientChat: false,
+                            transferAnimation: { [weak self] id, source in
+                                guard let self else { return false }
+                                acceptedTransferAnimation = self.walletTransferAnimationCoordinator().receive(id: id, source: source)
+                                return acceptedTransferAnimation
+                            },
                             completed: { [weak self, weak attachmentController] in
                                 attachmentController?.attachmentButton = nil
-                                self?.scrollToEndOfHistory()
+                                if !acceptedTransferAnimation {
+                                    self?.scrollToEndOfHistory()
+                                }
                             }
                         )
+                        controller.transferAnimationWillStart = { [weak self] id in
+                            self?.walletTransferAnimationCoordinator().prepare(id: id)
+                        }
                         completion(controller, controller.mediaPickerContext)
                         strongSelf.controllerNavigationDisposable.set(nil)
                         return true

@@ -101,8 +101,9 @@ final class WalletPendingTransferAnimation {
         for (index, specification) in [(150.0, 0.07, 0.0), (60.0, 0.07, 0.0), (120.0, 0.22, 5.0), (90.0, 0.85, 1.2)].enumerated() {
             let band = CAGradientLayer()
             let color = index % 2 == 0 ? UIColor(rgb: 0x5cccff) : UIColor(rgb: 0x30a1f5)
-            let peak = specification.1
-            band.colors = [0.0, peak * 0.35, peak, peak * 0.35, 0.0].map { color.withAlphaComponent($0).cgColor }
+            let peak = CGFloat(specification.1)
+            let alphas: [CGFloat] = [0.0, peak * 0.35, peak, peak * 0.35, 0.0]
+            band.colors = alphas.map { color.withAlphaComponent($0).cgColor }
             band.locations = [0.0, 0.3, 0.5, 0.7, 1.0]
             let mask = CAShapeLayer()
             mask.lineWidth = specification.2

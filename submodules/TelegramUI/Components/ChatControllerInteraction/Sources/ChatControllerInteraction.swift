@@ -357,6 +357,7 @@ public final class ChatControllerInteraction: ChatControllerInteractionProtocol 
     public var summarizedMessageIds: Set<EngineMessage.Id> = Set()
     public var focusedTextInputIsMedia: Bool = false
     public var focusedPollAddOptionMessageId: EngineMessage.Id?
+    public var isAwaitingWalletTransferFlight: ((EngineRawMessage) -> Bool)?
     
     private var isOpeningMediaValue: Bool = false
     public var isOpeningMedia: Bool {

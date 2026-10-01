@@ -5,7 +5,6 @@ import Metal
 import MetalEngine
 import AsyncDisplayKit
 import Display
-import ComponentFlow
 import PremiumDiamondComponent
 import SwiftSignalKit
 import TelegramCore
@@ -307,7 +306,8 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
     private var cardBackgroundMotion: (rotation: CGFloat, time: CFTimeInterval)?
     private var cardBackgroundDeviceMotion: Disposable?
     private var cardBackgroundRotationAnimation: BackgroundRotationAnimation?
-    private var cardIcon = ComponentView<Empty>()
+    private var cardIcon: InteractiveDiamondComponent.View?
+    private var isAwaitingTransferFlight = false
     private let amountNode: TextNode
     private let nameNode: TextNode
     private let addressNode: TextNode
@@ -361,7 +361,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
 
     public var scrollTiltProvider: ((CFTimeInterval) -> Float)? {
         didSet {
-            (self.cardIcon.view as? InteractiveDiamondComponent.View)?.scrollTiltProvider = self.scrollTiltProvider
+            self.cardIcon?.scrollTiltProvider = self.scrollTiltProvider
         }
     }
 
@@ -372,8 +372,9 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
     override public var visibility: ListViewItemNodeVisibility {
         didSet {
             if (oldValue != .none) != (self.visibility != .none) {
-                (self.cardIcon.view as? InteractiveDiamondComponent.View)?.isRenderingEnabled = self.visibility != .none
+                self.cardIcon?.isRenderingEnabled = self.visibility != .none && !self.isAwaitingTransferFlight
                 if self.visibility == .none {
+                    self.mediaContainerNode.layer.removeAnimation(forKey: "transferFlightLanding")
                     self.stopCardBackgroundMotion()
                     self.finishCompletionAnimation()
                     self.isPlayingHighlightShimmer = false
@@ -505,7 +506,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
     private func updateCardBackgroundRotation(_ state: InteractiveDiamondComponent.MotionState?) {
         guard let state, self.visibility != .none,
               UIApplication.shared.applicationState == .active, !UIAccessibility.isReduceMotionEnabled,
-              let window = self.cardIcon.view?.window else {
+              !self.isAwaitingTransferFlight, let window = self.cardIcon?.window else {
             self.stopCardBackgroundMotion()
             return
         }
@@ -560,8 +561,126 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
         CATransaction.commit()
     }
 
+    private func updateDiamond() {
+        guard let item = self.item else { return }
+        let size = CGSize(width: 64.0, height: 64.0)
+        let component = InteractiveDiamondComponent(
+            size: size, diamondWidth: 38.0,
+            isVisible: self.visibility != .none && !self.isAwaitingTransferFlight,
+            theme: item.presentationData.theme.theme, appearance: .cool,
+            expansionStyle: .downward, tapToSpin: true
+        )
+        let diamond = self.cardIcon ?? component.makeView()
+        self.cardIcon = diamond
+        diamond.update(component: component)
+        diamond.isHidden = self.isAwaitingTransferFlight
+        diamond.isUserInteractionEnabled = !self.isAwaitingTransferFlight && !self.isSendingTransfer
+        diamond.scrollTiltProvider = self.scrollTiltProvider
+        diamond.onExpansionChanged = { [weak self] isExpanded in
+            guard let self else { return }
+            if isExpanded {
+                if self.cardBackgroundRotationAnimation != nil {
+                    self.cardBackgroundRotationAnimation = BackgroundRotationAnimation(duration: 0.22, turns: 0.0)
+                }
+                self.cardBackgroundMotion = nil
+            }
+            self.updateDiamondRefraction()
+        }
+        diamond.onMotionUpdated = { [weak self] state in
+            guard let self else { return }
+            if state == nil {
+                self.mediaContainerNode.layer.removeAnimation(forKey: "sublayerTransform.scale")
+            }
+            if UIAccessibility.isReduceMotionEnabled {
+                self.mediaContainerNode.layer.removeAnimation(forKey: "transferFlightLanding")
+            }
+            self.updateCardBackgroundRotation(state)
+        }
+        diamond.onLanding = { [weak self] power in
+            self?.animateDiamondLandingBump(power: power)
+        }
+        if diamond.superview !== self.cardNode.view {
+            self.cardNode.view.addSubview(diamond)
+        }
+        diamond.bounds = CGRect(origin: .zero, size: size)
+        diamond.center = CGPoint(x: floorToScreenPixels((self.cardNode.bounds.width - 38.0) * 0.5) + 19.0, y: 35.0)
+    }
+
+    public func transferDiamondTarget(in view: UIView) -> (center: CGPoint, width: CGFloat)? {
+        guard self.visibility != .none, self.cardNode.isNodeLoaded,
+              let window = self.cardNode.view.window, window === view.window,
+              self.cardNode.bounds.width > 0.0 else { return nil }
+        let layer = self.cardNode.layer.presentation() ?? self.cardNode.layer
+        let targetLayer = view.layer.presentation() ?? view.layer
+        let center = CGPoint(x: floorToScreenPixels((self.cardNode.bounds.width - 38.0) * 0.5) + 19.0, y: 35.0)
+        let point = layer.convert(center, to: targetLayer)
+        let left = layer.convert(CGPoint(x: center.x - 19.0, y: center.y), to: targetLayer)
+        let right = layer.convert(CGPoint(x: center.x + 19.0, y: center.y), to: targetLayer)
+        return (point, hypot(right.x - left.x, right.y - left.y))
+    }
+
+    public func setAwaitingTransferFlight(_ awaiting: Bool, animated: Bool = false) {
+        guard self.isAwaitingTransferFlight != awaiting else { return }
+        self.isAwaitingTransferFlight = awaiting
+        self.stopCardBackgroundMotion()
+        self.cardIcon?.isHidden = awaiting
+        self.cardIcon?.isRenderingEnabled = !awaiting && self.visibility != .none
+        self.cardIcon?.isUserInteractionEnabled = !awaiting && !self.isSendingTransfer
+        if awaiting {
+            self.mediaContainerNode.layer.removeAnimation(forKey: "transferFlightLanding")
+            self.cardIcon?.updateTransferState(isSending: false, animateCompletion: false)
+        }
+        self.updateTransferAppearance(previousStatus: nil, animated: false)
+        if !awaiting && animated {
+            self.cardIcon?.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.15)
+            let statusNode = self.isSendingTransfer ? self.sendingClockNode : self.ribbonBackgroundNode
+            statusNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.15)
+            if !self.isSendingTransfer {
+                self.ribbonTextContainerNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.15)
+            }
+        }
+    }
+
+    public func acceptTransferDiamond(_ diamond: InteractiveDiamondComponent.View) {
+        self.cardIcon?.onMotionUpdated = nil
+        self.cardIcon?.isRenderingEnabled = false
+        self.cardIcon?.removeFromSuperview()
+        self.cardIcon = diamond
+        self.isAwaitingTransferFlight = false
+        diamond.transform = .identity
+        diamond.alpha = 1.0
+        self.updateDiamond()
+        diamond.updateTransferState(isSending: true, animateCompletion: false)
+        diamond.spin(4.5, decay: 0.7)
+        self.finishCompletionAnimation()
+        self.updateTransferAppearance(previousStatus: .pending, animated: true)
+        self.animateTransferFlightLanding()
+    }
+
+    private func animateTransferFlightLanding() {
+        guard !UIAccessibility.isReduceMotionEnabled else { return }
+        let duration = 1.2
+        let count = Int(duration * 120.0)
+        let impact = (0 ... count).map { index -> Double in
+            let time = duration * Double(index) / Double(count)
+            return index == count ? 0.0 : sin(2.0 * .pi * 2.2 * time) * exp(-time / 0.2)
+        }
+        let scale = CAKeyframeAnimation(keyPath: "sublayerTransform.scale")
+        scale.values = impact.map { 1.0 - 0.025 * $0 }
+        let offset = CAKeyframeAnimation(keyPath: "sublayerTransform.translation.y")
+        offset.values = impact.map { 4.0 * $0 }
+        for animation in [scale, offset] {
+            animation.duration = duration
+            animation.calculationMode = .linear
+        }
+        let group = CAAnimationGroup()
+        group.animations = [scale, offset]
+        group.duration = duration
+        self.mediaContainerNode.layer.add(group, forKey: "transferFlightLanding")
+    }
+
     private func updateDiamondRefraction() {
-        guard let diamond = self.cardIcon.view as? InteractiveDiamondComponent.View else { return }
+        guard let diamond = self.cardIcon else { return }
         guard diamond.isExpanded else {
             diamond.updateRefractionSource(nil)
             return
@@ -701,12 +820,17 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
 
     private func updateTransferAppearance(previousStatus: TransferCardStatus?, animated: Bool) {
         let status = self.displayedTransferStatus
+        if self.isAwaitingTransferFlight {
+            self.finishCompletionAnimation()
+            self.updateShimmer(animated: false)
+            return
+        }
         if self.isSendingTransfer {
             self.cardBackgroundRotationAnimation = nil
         }
-        (self.cardIcon.view as? InteractiveDiamondComponent.View)?.isUserInteractionEnabled = !self.isSendingTransfer
+        self.cardIcon?.isUserInteractionEnabled = !self.isSendingTransfer
         if previousStatus == status {
-            (self.cardIcon.view as? InteractiveDiamondComponent.View)?.updateTransferState(isSending: self.isSendingTransfer, animateCompletion: false)
+            self.cardIcon?.updateTransferState(isSending: self.isSendingTransfer, animateCompletion: false)
             if status == .pending {
                 self.updateShimmer(animated: false)
             }
@@ -721,7 +845,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                 turns: animateCompletion ? 2.0 : 0.0
             )
         }
-        (self.cardIcon.view as? InteractiveDiamondComponent.View)?.updateTransferState(isSending: self.isSendingTransfer, animateCompletion: animateCompletion)
+        self.cardIcon?.updateTransferState(isSending: self.isSendingTransfer, animateCompletion: animateCompletion)
         if animateCompletion {
             self.playCompletionHaptics()
             self.animateCompletion()
@@ -729,7 +853,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
     }
 
     private func updateSendingClockAnimation() {
-        let shouldAnimate = self.isSendingTransfer && self.visibility != .none
+        let shouldAnimate = self.isSendingTransfer && !self.isAwaitingTransferFlight && self.visibility != .none
         for (node, duration) in [(self.clockFrameNode, 6.0), (self.clockMinNode, 1.0)] {
             let key = "transferClockRotation"
             if shouldAnimate {
@@ -752,7 +876,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
     }
 
     private func updateShimmer(animated: Bool) {
-        let displayShimmer = (self.displayedTransferStatus == .pending || self.isPlayingHighlightShimmer) && self.visibility != .none
+        let displayShimmer = !self.isAwaitingTransferFlight && (self.displayedTransferStatus == .pending || self.isPlayingHighlightShimmer) && self.visibility != .none
         if displayShimmer {
             let repeatAnimation = !self.isPlayingHighlightShimmer
             let shimmerView: TransferCardShimmerView
@@ -776,7 +900,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                     }
                 }
             }
-            if let iconView = self.cardIcon.view, iconView.superview === self.cardNode.view {
+            if let iconView = self.cardIcon, iconView.superview === self.cardNode.view {
                 self.cardNode.view.bringSubviewToFront(iconView)
             }
             shimmerView.layer.removeAnimation(forKey: "opacity")
@@ -851,7 +975,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
             guard let self, let shimmerView, self.shimmerView === shimmerView, self.visibility != .none else {
                 return
             }
-            (self.cardIcon.view as? InteractiveDiamondComponent.View)?.pushFromBelow(strength: 1.5)
+            self.cardIcon?.pushFromBelow(strength: 1.5)
         })
     }
 
@@ -880,9 +1004,9 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
         self.sendingClockNode.layer.removeAnimation(forKey: "transform.scale")
         self.mediaContainerNode.layer.removeAnimation(forKey: "transform.scale")
         let sending = self.isSendingTransfer
-        self.sendingClockNode.alpha = sending ? 1.0 : 0.0
-        self.ribbonBackgroundNode.alpha = sending ? 0.0 : 1.0
-        self.ribbonTextContainerNode.alpha = sending ? 0.0 : 1.0
+        self.sendingClockNode.alpha = sending && !self.isAwaitingTransferFlight ? 1.0 : 0.0
+        self.ribbonBackgroundNode.alpha = sending || self.isAwaitingTransferFlight ? 0.0 : 1.0
+        self.ribbonTextContainerNode.alpha = sending || self.isAwaitingTransferFlight ? 0.0 : 1.0
         self.ribbonTextNode.alpha = 1.0
         ContainedViewLayoutTransition.immediate.updateTintColor(
             layer: self.ribbonBackgroundNode.layer,
@@ -1408,16 +1532,20 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                             && self.item?.message.id.peerId == item.message.id.peerId
                             && self.item?.message.stableId == item.message.stableId
                         if !isSameMessage {
+                            self.mediaContainerNode.layer.removeAnimation(forKey: "transferFlightLanding")
                             self.stopCardBackgroundMotion()
-                            (self.cardIcon.view as? InteractiveDiamondComponent.View)?.isRenderingEnabled = false
-                            self.cardIcon.view?.removeFromSuperview()
-                            self.cardIcon = ComponentView<Empty>()
+                            self.cardIcon?.isRenderingEnabled = false
+                            self.cardIcon?.removeFromSuperview()
+                            self.cardIcon = nil
                             self.cardBackgroundRotation = 0.0
                             self.cardBackgroundMotion = nil
                             self.cardBackgroundNode.transform = CATransform3DIdentity
                         }
                         self.item = item
                         self.isIncomingTransfer = isIncoming
+                        let wasAwaitingTransferFlight = self.isAwaitingTransferFlight
+                        self.isAwaitingTransferFlight = !isIncoming
+                            && item.controllerInteraction.isAwaitingWalletTransferFlight?(item.message) == true
 
                         let refractionContentChanged = self.amountNode.cachedLayout !== amountLayout
                         let _ = labelApply()
@@ -1469,58 +1597,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                             self.clockMinNode.image = generateTintedImage(image: graphics.clockMediaMinImage, color: clockColor)
                         }
 
-                        let iconSize = CGSize(width: 38.0, height: 38.0)
-                        let iconFrame = CGRect(
-                            origin: CGPoint(x: floorToScreenPixels((cardSize.width - iconSize.width) * 0.5), y: 16.0),
-                            size: iconSize
-                        )
-                        let animationSize = CGSize(width: 64.0, height: 64.0)
-                        let _ = self.cardIcon.update(
-                            transition: .immediate,
-                            component: AnyComponent(InteractiveDiamondComponent(
-                                size: animationSize,
-                                diamondWidth: iconSize.width,
-                                isVisible: self.visibility != .none,
-                                theme: item.presentationData.theme.theme,
-                                appearance: .cool,
-                                expansionStyle: .downward,
-                                tapToSpin: true
-                            )),
-                            environment: {},
-                            containerSize: animationSize
-                        )
-                        if let iconView = self.cardIcon.view as? InteractiveDiamondComponent.View {
-                            iconView.scrollTiltProvider = self.scrollTiltProvider
-                            if iconView.superview == nil {
-                                self.cardNode.view.addSubview(iconView)
-                                iconView.onExpansionChanged = { [weak self] isExpanded in
-                                    guard let self else { return }
-                                    if isExpanded {
-                                        if self.cardBackgroundRotationAnimation != nil {
-                                            self.cardBackgroundRotationAnimation = BackgroundRotationAnimation(duration: 0.22, turns: 0.0)
-                                        }
-                                        self.cardBackgroundMotion = nil
-                                    }
-                                    self.updateDiamondRefraction()
-                                }
-                                iconView.onMotionUpdated = { [weak self] state in
-                                    guard let self else { return }
-                                    if state == nil {
-                                        self.mediaContainerNode.layer.removeAnimation(forKey: "sublayerTransform.scale")
-                                    }
-                                    self.updateCardBackgroundRotation(state)
-                                }
-                                iconView.onLanding = { [weak self] power in
-                                    self?.animateDiamondLandingBump(power: power)
-                                }
-                            }
-                            iconView.frame = CGRect(
-                                x: iconFrame.midX - animationSize.width * 0.5,
-                                y: iconFrame.midY - animationSize.height * 0.5,
-                                width: animationSize.width,
-                                height: animationSize.height
-                            )
-                        }
+                        self.updateDiamond()
                         self.amountNode.frame = CGRect(
                             origin: CGPoint(x: floorToScreenPixels((cardSize.width - amountLayout.size.width) * 0.5), y: 62.0),
                             size: amountLayout.size
@@ -1529,7 +1606,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                             origin: CGPoint(x: floorToScreenPixels((cardSize.width - nameLayout.size.width) * 0.5), y: 97.0),
                             size: nameLayout.size
                         )
-                        if refractionContentChanged, (self.cardIcon.view as? InteractiveDiamondComponent.View)?.isExpanded == true {
+                        if refractionContentChanged, self.cardIcon?.isExpanded == true {
                             self.updateDiamondRefraction()
                         }
                         self.addressNode.frame = CGRect(
@@ -1648,6 +1725,9 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                             self.updateAbsoluteRect(rect, within: size)
                         }
                         self.updateWalletSubscription(item: item, isIncoming: isIncoming, transactionId: transactionId, fiatState: fiatState, isSameMessage: isSameMessage)
+                        if wasAwaitingTransferFlight != self.isAwaitingTransferFlight {
+                            self.updateTransferAppearance(previousStatus: nil, animated: false)
+                        }
                         self.shimmerView?.update(size: cardSize, addressFrame: self.addressNode.frame)
                     })
                 })
@@ -1725,7 +1805,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
     }
 
     override public func tapActionAtPoint(_ point: CGPoint, gesture: TapLongTapOrDoubleTapGesture, isEstimating: Bool) -> ChatMessageBubbleContentTapAction {
-        if let iconView = self.cardIcon.view as? InteractiveDiamondComponent.View,
+        if let iconView = self.cardIcon,
            iconView.isUserInteractionEnabled,
            iconView.point(inside: iconView.convert(point, from: self.view), with: nil) {
             return ChatMessageBubbleContentTapAction(content: .ignore)

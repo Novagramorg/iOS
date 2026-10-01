@@ -110,10 +110,9 @@ public final class WalletSendTransferAnimationSource {
     }
 }
 
-/// Returns true when the destination accepts the transfer animation.
+
 public typealias WalletSendTransferAnimation = (String, WalletSendTransferAnimationSource?) -> Bool
 
-// Allows the send form to configure the preview returned by SharedAccountContext without a module cycle.
 public protocol WalletSendTransferAnimationController: AnyObject {
     var transferAnimation: WalletSendTransferAnimation? { get set }
 }
@@ -1715,6 +1714,7 @@ private final class WalletSendScreenComponent: Component {
                 close()
                 return
             }
+            controller.transferAnimationWillStart?("pending:\(transferId)")
             let revision = self.sendRevision
             let launch: () -> Void = { [weak self, weak controller] in
                 guard let self, self.isVisible, self.sendRevision == revision,
@@ -1741,7 +1741,6 @@ private final class WalletSendScreenComponent: Component {
             }
             let switchedFromFiat = self.inputMode == .fiat
             if switchedFromFiat {
-                // Presentation only: never use toggleInputMode here, which rounds the amount.
                 self.inputMode = .gram
                 self.requestUpdate(transition: .easeInOut(duration: 0.25))
             }
@@ -2803,6 +2802,8 @@ public final class WalletSendScreen: ViewControllerComponentContainer, Attachmen
     private var gaslessInfoDisposable: Disposable?
     private var refreshBalanceOnOpen: Bool
     fileprivate var peerTransferSubmission: WalletPeerTransferSubmission?
+    
+    public var transferAnimationWillStart: ((String) -> Void)?
 
     public var requestAttachmentMenuExpansion: () -> Void = {
     }

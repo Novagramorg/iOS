@@ -505,12 +505,12 @@ public final class InteractiveDiamondComponent: Component {
             self.applyExpansion()
         }
 
-        public func updateWalletTransfer(width: CGFloat, rotationSpeed: Float, completion: Bool, isDark: Bool) {
+        public func updateWalletTransfer(width: CGFloat, rotationSpeed: Float, completion: Bool, isDark: Bool, appearance: Appearance = .blue) {
             self.diamondLayer.lightBackground = !isDark
             var style = self.diamondLayer.diamondStyle
             let startsCompletion = completion && !style.backgroundStars
             style.animationMode = .continuous
-            style.appearance = .blue
+            style.appearance = appearance
             style.widthPoints = Float(width)
             style.rotationSpeed = rotationSpeed
             style.swayScale = 2.4
@@ -560,7 +560,10 @@ public final class InteractiveDiamondComponent: Component {
             )
         }
 
-        fileprivate func update(component: InteractiveDiamondComponent) -> CGSize {
+        @discardableResult
+        public func update(component: InteractiveDiamondComponent) -> CGSize {
+            let returningFromFlight = self.isWalletTransfer
+            self.isWalletTransfer = false
             if self.animationMode != component.animationMode {
                 self.cancelInteraction()
                 self.animationMode = component.animationMode
@@ -578,6 +581,16 @@ public final class InteractiveDiamondComponent: Component {
             self.diamondWidth = component.diamondWidth
             self.expandedCenter = component.expandedCenter
             var style = self.diamondLayer.diamondStyle
+            if returningFromFlight {
+                style.rotationSpeed = 2.0 * .pi / 26.0
+                let defaults = DiamondStyle()
+                style.backgroundStars = false
+                style.steadyStars = defaults.steadyStars
+                style.starZoom = defaults.starZoom
+                style.starEmission = defaults.starEmission
+                style.burstSize = defaults.burstSize
+                style.burstFadeInDuration = defaults.burstFadeInDuration
+            }
             style.animateOnAppear = component.animateOnAppear
             switch component.animationMode {
             case .continuous:
