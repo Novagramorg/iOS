@@ -172,6 +172,10 @@ impl Engine {
         self.post(handle, Command::FailRequest(handle, id, code, message));
     }
 
+    pub fn decide_retry(&self, handle: SessionHandle, id: RequestId, retry: bool) {
+        self.post(handle, Command::DecideRetry(handle, id, retry));
+    }
+
     pub fn invalidate_initialization(&self, handle: SessionHandle) {
         self.post(handle, Command::InvalidateInitialization(handle));
     }

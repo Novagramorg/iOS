@@ -495,3 +495,57 @@ fn updates_too_long_and_session_resets_emit_updates_reset() {
     let resets = h.events().into_iter().filter(|e| *e == RpcEvent::UpdatesReset).count();
     assert_eq!(resets, 2);
 }
+
+#[test]
+fn delegated_retry_decisions_for_flood_and_server_errors() {
+    let mut h = Harness::new(SessionRole::Main, Some("h1"));
+    let flags = RequestFlags {
+        delegate_retry_decisions: true,
+        ..Default::default()
+    };
+    h.send(1, flags);
+    h.send(2, flags);
+    let calls = h.flush_calls();
+    h.reply(vec![
+        Outgoing::Content(rpc_error(calls[0].0, 420, "FLOOD_WAIT_2")),
+        Outgoing::Content(rpc_error(calls[1].0, 500, "INTERNAL")),
+    ]);
+    let events = h.events();
+    assert!(events.contains(&RpcEvent::RetryDecisionRequired {
+        id: RequestId(1),
+        code: 420,
+        message: "FLOOD_WAIT_2".into(),
+        flood_wait_seconds: 2,
+        flood_wait_text: Some("FLOOD_WAIT_2".into()),
+        server_errors: 0,
+    }));
+    assert!(events.contains(&RpcEvent::RetryDecisionRequired {
+        id: RequestId(2),
+        code: 500,
+        message: "INTERNAL".into(),
+        flood_wait_seconds: 0,
+        flood_wait_text: None,
+        server_errors: 1,
+    }));
+    h.advance(10.0);
+    assert!(h.flush_calls().is_empty(), "parked until decided");
+    h.client.decide_retry(RequestId(1), true, h.now);
+    h.client.decide_retry(RequestId(2), false, h.now);
+    let events = h.events();
+    assert!(events.iter().any(|e| matches!(e, RpcEvent::Failed { id: RequestId(2), code: 500, .. })));
+    assert!(h.flush_calls().is_empty(), "flood delay still applies");
+    h.advance(2.1);
+    let calls = h.flush_calls();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].2, 1);
+    h.reply(vec![Outgoing::Content(rpc_error(calls[0].0, 500, "INTERNAL"))]);
+    assert!(h.events().contains(&RpcEvent::RetryDecisionRequired {
+        id: RequestId(1),
+        code: 500,
+        message: "INTERNAL".into(),
+        flood_wait_seconds: 2,
+        flood_wait_text: Some("FLOOD_WAIT_2".into()),
+        server_errors: 1,
+    }));
+    h.client.decide_retry(RequestId(77), true, h.now);
+}

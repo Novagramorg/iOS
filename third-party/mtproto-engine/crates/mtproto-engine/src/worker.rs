@@ -30,6 +30,7 @@ pub enum Command {
     SetAuthTokenReady(SessionHandle, bool),
     ResolveVerification(SessionHandle, RequestId, Verification),
     FailRequest(SessionHandle, RequestId, i32, String),
+    DecideRetry(SessionHandle, RequestId, bool),
     InvalidateInitialization(SessionHandle),
     SetTimeDifference(SessionHandle, f64),
     SetNetworkAvailable(bool),
@@ -280,6 +281,11 @@ impl Worker {
                 Command::FailRequest(handle, id, code, message) => {
                     if let Some(session) = self.sessions.get_mut(&handle) {
                         session.fail_request(id, code, &message, now);
+                    }
+                }
+                Command::DecideRetry(handle, id, retry) => {
+                    if let Some(session) = self.sessions.get_mut(&handle) {
+                        session.decide_retry(id, retry, now);
                     }
                 }
                 Command::InvalidateInitialization(handle) => {

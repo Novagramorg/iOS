@@ -41,6 +41,7 @@ pub struct RequestFlags {
     pub timeout_timer: bool,
     pub expected_response_size: u32,
     pub without_updates: bool,
+    pub delegate_retry_decisions: bool,
 }
 
 impl Default for RequestFlags {
@@ -54,6 +55,7 @@ impl Default for RequestFlags {
             timeout_timer: false,
             expected_response_size: 0,
             without_updates: false,
+            delegate_retry_decisions: false,
         }
     }
 }
@@ -91,6 +93,14 @@ pub enum RpcEvent {
     SaltsUpdated { salts: Vec<ServerSalt> },
     Pong { rtt: f64 },
     ConnectionShouldReset,
+    RetryDecisionRequired {
+        id: RequestId,
+        code: i32,
+        message: String,
+        flood_wait_seconds: i64,
+        flood_wait_text: Option<String>,
+        server_errors: u32,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -113,6 +123,17 @@ struct RequestState {
     verification: Option<Verification>,
     pending_verification: bool,
     sent_at_unix: f64,
+    flood_wait_seconds: i64,
+    flood_wait_text: Option<String>,
+    pending_decision: Option<PendingDecision>,
+}
+
+#[derive(Debug, Clone)]
+struct PendingDecision {
+    code: i32,
+    message: String,
+    delay: f64,
+    response_time: f64,
 }
 
 pub struct RpcClient {
@@ -232,10 +253,31 @@ impl RpcClient {
                 verification: None,
                 pending_verification: false,
                 sent_at_unix: now.unix,
+                flood_wait_seconds: 0,
+                flood_wait_text: None,
+                pending_decision: None,
             },
         );
         self.order.push_back(id);
         self.dispatch_ready(now);
+    }
+
+    pub fn decide_retry(&mut self, id: RequestId, retry: bool, now: Now) {
+        let Some(decision) = self.requests.get_mut(&id).and_then(|state| state.pending_decision.take()) else {
+            return;
+        };
+        if retry {
+            self.requeue(id, decision.delay, now);
+            self.dispatch_ready(now);
+        } else if let Some(state) = self.finish(id) {
+            self.events.push_back(RpcEvent::Failed {
+                id,
+                code: decision.code,
+                message: decision.message,
+                response_time: decision.response_time,
+                duration: (now.unix - state.sent_at_unix).max(0.0),
+            });
+        }
     }
 
     pub fn cancel(&mut self, id: RequestId, now: Now) -> bool {
@@ -287,7 +329,7 @@ impl RpcClient {
     }
 
     fn is_ready(&self, state: &RequestState, now: Now) -> bool {
-        if state.in_session || state.waiting_for_token || state.pending_verification {
+        if state.in_session || state.waiting_for_token || state.pending_verification || state.pending_decision.is_some() {
             return false;
         }
         if state.not_before > now.mono {
@@ -442,6 +484,27 @@ impl RpcClient {
         if code == 500 || code == -500 || code == -503 {
             let state = self.requests.get_mut(&id).expect("request exists");
             state.server_errors += 1;
+            if flags.delegate_retry_decisions && message != "MSG_WAIT_FAILED" {
+                let server_errors = state.server_errors;
+                let flood_wait_seconds = state.flood_wait_seconds;
+                let flood_wait_text = state.flood_wait_text.clone();
+                state.in_session = false;
+                state.pending_decision = Some(PendingDecision {
+                    code,
+                    message: message.clone(),
+                    delay: SERVER_ERROR_RETRY_DELAY,
+                    response_time,
+                });
+                self.events.push_back(RpcEvent::RetryDecisionRequired {
+                    id,
+                    code,
+                    message,
+                    flood_wait_seconds,
+                    flood_wait_text,
+                    server_errors,
+                });
+                return;
+            }
             if flags.retry_server_errors && message != "MSG_WAIT_FAILED" {
                 let delay = (SERVER_ERROR_RETRY_DELAY * f64::from(1u32 << (state.server_errors - 1).min(3)))
                     .min(SERVER_ERROR_MAX_RETRY_DELAY);
@@ -469,6 +532,28 @@ impl RpcClient {
             || message.contains("FLOOD_PREMIUM_WAIT_");
         if is_flood {
             if let Some(seconds) = flood_wait_seconds(&message) {
+                if flags.delegate_retry_decisions {
+                    let state = self.requests.get_mut(&id).expect("request exists");
+                    state.flood_wait_seconds = seconds;
+                    state.flood_wait_text = Some(message.clone());
+                    state.in_session = false;
+                    state.pending_decision = Some(PendingDecision {
+                        code,
+                        message: message.clone(),
+                        delay: seconds as f64,
+                        response_time,
+                    });
+                    let server_errors = state.server_errors;
+                    self.events.push_back(RpcEvent::RetryDecisionRequired {
+                        id,
+                        code,
+                        message: message.clone(),
+                        flood_wait_seconds: seconds,
+                        flood_wait_text: Some(message),
+                        server_errors,
+                    });
+                    return;
+                }
                 if flags.report_flood_wait {
                     self.events.push_back(RpcEvent::FloodWaitReported {
                         id,
@@ -573,7 +658,12 @@ impl RpcClient {
     pub fn poll_timeout(&mut self, now: Now) -> Option<f64> {
         let mut deadline = self.session.poll_timeout(now).unwrap_or(f64::INFINITY);
         for state in self.requests.values() {
-            if !state.in_session && state.not_before > now.mono && !state.waiting_for_token && !state.pending_verification {
+            if !state.in_session
+                && state.not_before > now.mono
+                && !state.waiting_for_token
+                && !state.pending_verification
+                && state.pending_decision.is_none()
+            {
                 deadline = deadline.min(state.not_before);
             }
         }

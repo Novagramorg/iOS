@@ -277,6 +277,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "mtproto-ffi"
+version = "0.1.0"
+dependencies = [
+ "mtproto-engine",
+ "mtproto-testserver",
+]
+
+[[package]]
 name = "mtproto-testserver"
 version = "0.1.0"
 dependencies = [

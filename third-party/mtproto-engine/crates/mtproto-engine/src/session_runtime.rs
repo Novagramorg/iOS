@@ -255,6 +255,12 @@ impl SessionRuntime {
         }
     }
 
+    pub fn decide_retry(&mut self, id: RequestId, retry: bool, now: Now) {
+        if let Some(rpc) = &mut self.rpc {
+            rpc.decide_retry(id, retry, now);
+        }
+    }
+
     pub fn fail_request(&mut self, id: RequestId, code: i32, message: &str, now: Now) {
         if let Some(rpc) = &mut self.rpc {
             rpc.fail_request(id, code, message, now);
