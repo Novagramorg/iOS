@@ -49,6 +49,9 @@ pub const DROPPED_ANSWER_LIMIT: usize = 8 * 1024 * 1024;
 pub const DROPPED_ANSWER_WINDOW: f64 = 10.0;
 pub const RESPONSE_UNPACK_FAILED: &str = "RESPONSE_UNPACK_FAILED";
 pub const PROTOCOL_ERROR_PREFIX: &str = "PROTOCOL_ERROR_BAD_MSG_";
+pub const PROTOCOL_REJECTED: &str = "PROTOCOL_ERROR_REJECTED";
+pub const MAX_QUERY_REJECTIONS: u32 = 12;
+pub const MAX_SERVER_RESENDS: u32 = 8;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Now {
@@ -173,6 +176,8 @@ struct Query {
     sent_at: f64,
     connection_epoch: u64,
     protocol_strikes: u32,
+    rejections: u32,
+    server_resends: u32,
     may_have_arrived: bool,
     retransmit_refused: bool,
 }
@@ -645,6 +650,8 @@ impl Session {
                 sent_at: 0.0,
                 connection_epoch: 0,
                 protocol_strikes: 0,
+                rejections: 0,
+                server_resends: 0,
                 may_have_arrived: false,
                 retransmit_refused: false,
             },
@@ -908,6 +915,18 @@ impl Session {
         let Some(query) = self.queries.get_mut(&id).filter(|query| query.state != QueryState::Pending) else {
             return;
         };
+        query.rejections += 1;
+        if query.rejections > MAX_QUERY_REJECTIONS {
+            let msg_id = query.msg_id;
+            self.complete_query(id, msg_id);
+            self.events.push_back(SessionEvent::Error {
+                id,
+                code: 500,
+                message: PROTOCOL_REJECTED.to_string(),
+                response_msg_id: 0,
+            });
+            return;
+        }
         if !query.may_have_arrived {
             self.resend_query(id, now);
             return;
@@ -1017,6 +1036,7 @@ impl Session {
                 query.state = QueryState::Sent;
             }
             query.acknowledged = true;
+            query.rejections = 0;
             if !query.ack_reported {
                 query.ack_reported = true;
                 self.events.push_back(SessionEvent::Acknowledged { id });
@@ -1445,7 +1465,11 @@ impl Session {
                 .filter(|id| self.queries.get(id).is_some_and(|query| query.state != QueryState::Pending));
             match known {
                 Some(id) => {
-                    if !self.to_retransmit.contains(&id) {
+                    let allowed = self.queries.get_mut(&id).is_some_and(|query| {
+                        query.server_resends += 1;
+                        query.server_resends <= MAX_SERVER_RESENDS
+                    });
+                    if allowed && !self.to_retransmit.contains(&id) {
                         self.to_retransmit.push(id);
                     }
                     info.push(4);

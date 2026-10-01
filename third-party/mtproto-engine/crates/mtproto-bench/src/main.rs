@@ -83,6 +83,7 @@ fn main() {
             let mut out: Option<String> = None;
             let mut only: Option<String> = None;
             let mut repeat = 1usize;
+            let mut hostile = false;
             let mut engines = vec!["rust".to_string(), "mtprotokit".to_string()];
             let mut iter = arguments[2..].iter();
             while let Some(flag) = iter.next() {
@@ -90,9 +91,10 @@ fn main() {
                     "--telegramcore" => binary = iter.next().cloned(),
                     "--suite" => {
                         let name = iter.next().cloned().unwrap_or_default();
-                        torture = name.starts_with("torture");
+                        hostile = name.starts_with("hostile");
+                        torture = name.starts_with("torture") || hostile;
                         resilience = name == "resilience";
-                        quick = if torture { name == "torture-quick" } else { !name.ends_with("full") };
+                        quick = if torture { name.ends_with("quick") } else { !name.ends_with("full") };
                     }
                     "--jobs" => jobs = iter.next().and_then(|v| v.parse().ok()).expect("jobs"),
                     "--out" => out = iter.next().cloned(),
@@ -107,6 +109,8 @@ fn main() {
             let binary = binary.expect("--telegramcore PATH");
             let scenarios = if resilience {
                 cluster::resilience_suite()
+            } else if hostile {
+                cluster::hostile_suite(quick)
             } else if torture {
                 cluster::torture_suite(quick)
             } else {

@@ -1057,3 +1057,92 @@ fn hostile_server_faults_never_break_exactly_once_delivery() {
     let failures: Vec<String> = handles.into_iter().filter_map(|handle| handle.join().unwrap().err()).collect();
     assert!(failures.is_empty(), "{failures:#?}");
 }
+
+fn count_connections_in(
+    listener: std::net::TcpListener,
+    window: Duration,
+    relay_to: Option<std::net::SocketAddr>,
+) -> usize {
+    use std::io::{Read, Write};
+    listener.set_nonblocking(true).unwrap();
+    let deadline = Instant::now() + window;
+    let mut accepted = 0;
+    while Instant::now() < deadline {
+        match listener.accept() {
+            Ok((mut client, _)) => {
+                accepted += 1;
+                if let Some(target) = relay_to {
+                    std::thread::spawn(move || {
+                        let Ok(mut upstream) = std::net::TcpStream::connect(target) else {
+                            return;
+                        };
+                        client.set_nonblocking(false).unwrap();
+                        let mut client_reader = client.try_clone().unwrap();
+                        let mut upstream_writer = upstream.try_clone().unwrap();
+                        std::thread::spawn(move || {
+                            let mut buffer = [0u8; 65536];
+                            while let Ok(read) = client_reader.read(&mut buffer) {
+                                if read == 0 || upstream_writer.write_all(&buffer[..read]).is_err() {
+                                    break;
+                                }
+                            }
+                        });
+                        let mut buffer = [0u8; 65536];
+                        if let Ok(read) = upstream.read(&mut buffer)
+                            && read > 0
+                        {
+                            let _ = client.write_all(&buffer[..read]);
+                        }
+                        std::thread::sleep(Duration::from_millis(20));
+                        let _ = client.shutdown(std::net::Shutdown::Both);
+                        let _ = upstream.shutdown(std::net::Shutdown::Both);
+                    });
+                }
+            }
+            Err(_) => std::thread::sleep(Duration::from_millis(2)),
+        }
+    }
+    accepted
+}
+
+#[test]
+fn a_server_that_closes_every_connection_is_retried_at_a_bounded_rate() {
+    let key = random_key(51);
+    let server = TestServer::start(vec![key.clone()], ServerOptions::default());
+    let collector = Arc::new(Collector::default());
+    let engine = engine(&collector, 1);
+    let rejecting = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let rejecting_address = rejecting.local_addr().unwrap();
+    let mut config = setup(&server, &key, SessionRole::Main);
+    config.addresses =
+        vec![DcAddress { host: rejecting_address.ip().to_string(), port: rejecting_address.port(), secret: None }];
+    config.keep_connected = true;
+    let session = engine.create_session(config);
+    engine.send(session, request(1, 1));
+    let connections = count_connections_in(rejecting, Duration::from_secs(10), None);
+    engine.shutdown();
+    assert!((3..=20).contains(&connections), "{connections} connections in 10 s to a server that drops them all");
+}
+
+#[test]
+fn a_path_that_cuts_every_connection_after_the_first_answer_does_not_cause_a_reconnect_storm() {
+    let key = random_key(52);
+    let server = TestServer::start(vec![key.clone()], ServerOptions::default());
+    let collector = Arc::new(Collector::default());
+    let engine = engine(&collector, 1);
+    let cutting = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let cutting_address = cutting.local_addr().unwrap();
+    let mut config = setup(&server, &key, SessionRole::Main);
+    config.addresses =
+        vec![DcAddress { host: cutting_address.ip().to_string(), port: cutting_address.port(), secret: None }];
+    config.keep_connected = true;
+    let session = engine.create_session(config);
+    for id in 1..=3 {
+        engine.send(session, request(id, id as u32));
+    }
+    let connections = count_connections_in(cutting, Duration::from_secs(15), Some(server.address));
+    let completed = collector.completed(session).len();
+    engine.shutdown();
+    assert!(completed >= 1, "requests still get through a cutting path");
+    assert!(connections <= 25, "{connections} connections in 15 s through a path that cuts each one");
+}

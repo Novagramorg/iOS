@@ -12,8 +12,8 @@ use mtproto_core::session::{Now, ServerSalt, Session, SessionConfig, SessionErro
 use mtproto_core::tl::mtproto::ReqPqMulti;
 use mtproto_core::tl::{TlWrite, Writer, ids};
 use mtproto_core::transport::{
-    Incoming, Socks5Auth, Socks5Target, TransportConfig, TransportErrorKind, reconnect_delay, transport_flood_delay,
-    urgent_reconnect_delay,
+    Incoming, STABLE_CONNECTION_AFTER, Socks5Auth, Socks5Target, TransportConfig, TransportErrorKind, flap_delay,
+    reconnect_delay, transport_flood_delay, urgent_reconnect_delay,
 };
 
 use crate::connection::{ChunkStatus, Connection, ConnectionError};
@@ -102,6 +102,9 @@ pub struct SessionRuntime {
     racer_check: Option<RacerCheck>,
     racer_failures: u32,
     racer_retry_at: f64,
+    flaps: u32,
+    deliveries: u64,
+    deliveries_at_open: u64,
     address_health: HashMap<(String, u16), AddressHealth>,
     token: Token,
     next_attempt_at: f64,
@@ -139,6 +142,9 @@ impl SessionRuntime {
             racer_check: None,
             racer_failures: 0,
             racer_retry_at: 0.0,
+            flaps: 0,
+            deliveries: 0,
+            deliveries_at_open: 0,
             address_health: HashMap::new(),
             token,
             next_attempt_at: now.mono,
@@ -277,6 +283,7 @@ impl SessionRuntime {
         } else {
             self.next_attempt_at = now.mono;
             self.failures = 0;
+            self.flaps = 0;
         }
     }
 
@@ -323,6 +330,7 @@ impl SessionRuntime {
             self.close_connection(registry, now, false);
             self.next_attempt_at = now.mono;
             self.failures = 0;
+            self.flaps = 0;
         }
     }
 
@@ -341,6 +349,7 @@ impl SessionRuntime {
             self.close_connection(registry, now, false);
             self.next_attempt_at = now.mono;
             self.failures = 0;
+            self.flaps = 0;
         }
     }
 
@@ -396,6 +405,7 @@ impl SessionRuntime {
                 self.close_connection(registry, now, false);
             } else {
                 self.failures = 0;
+                self.flaps = 0;
                 self.next_attempt_at = now.mono;
             }
         }
@@ -404,6 +414,7 @@ impl SessionRuntime {
     pub fn reset_connection(&mut self, now: Now, registry: &Registry) {
         self.close_connection(registry, now, false);
         self.failures = 0;
+        self.flaps = 0;
         self.next_attempt_at = now.mono;
     }
 
@@ -492,8 +503,9 @@ impl SessionRuntime {
             connection.deregister(registry);
             let index = connection.address_index;
             if failed {
-                self.failures += 1;
-                let delay = self.reconnect_delay();
+                self.failures = self.failures.saturating_add(1);
+                let jitter = self.next_jitter();
+                let delay = self.reconnect_delay().max(flap_delay(self.flaps, jitter));
                 self.next_attempt_at = self.next_attempt_at.max(now.mono + delay);
                 self.address_cursor = index + 1;
             }
@@ -505,6 +517,19 @@ impl SessionRuntime {
             self.pending_plain.clear();
             self.progress = None;
         }
+    }
+
+    fn close_dropped_connection(&mut self, registry: &Registry, now: Now, failed: bool) {
+        if let Some(connection) = &self.connection
+            && connection.received_packet
+        {
+            let lived = connection.established_at.map_or(0.0, |at| now.mono - at);
+            let productive = self.deliveries != self.deliveries_at_open;
+            self.flaps = if lived < STABLE_CONNECTION_AFTER && !productive { self.flaps.saturating_add(1) } else { 0 };
+        }
+        self.close_connection(registry, now, failed);
+        let jitter = self.next_jitter();
+        self.next_attempt_at = self.next_attempt_at.max(now.mono + flap_delay(self.flaps, jitter));
     }
 
     fn account_usage(&mut self, connection: &Connection) {
@@ -784,6 +809,7 @@ impl SessionRuntime {
             Some(connection) => connection.last_read_at = now.mono,
             None => return,
         }
+        self.deliveries_at_open = self.deliveries;
         if self.rpc.is_some() {
             if let Some(rpc) = &mut self.rpc {
                 rpc.connection_opened(now);
@@ -901,7 +927,7 @@ impl SessionRuntime {
                 Some(CloseReason::TransportFlood) => false,
                 None => !established || !received,
             };
-            self.close_connection(registry, now, failed);
+            self.close_dropped_connection(registry, now, failed);
             return false;
         }
         more_readable
@@ -1102,7 +1128,11 @@ impl SessionRuntime {
                     }
                     RpcEvent::TimeDifferenceUpdated { difference } => self.setup.time_difference = *difference,
                     RpcEvent::AuthTokenRequired => self.auth_token_ready = false,
-                    RpcEvent::Completed { .. } | RpcEvent::Failed { .. } => self.last_activity_at = now.mono,
+                    RpcEvent::Completed { .. } | RpcEvent::Failed { .. } => {
+                        self.last_activity_at = now.mono;
+                        self.deliveries = self.deliveries.wrapping_add(1);
+                    }
+                    RpcEvent::Update { .. } => self.deliveries = self.deliveries.wrapping_add(1),
                     _ => {}
                 }
                 callbacks.on_event(self.handle, EngineEvent::Rpc(event));
@@ -1207,10 +1237,10 @@ impl SessionRuntime {
             if !received && let Some(index) = self.connection.as_ref().map(|connection| connection.address_index) {
                 self.report_address(index, false, now, callbacks);
             }
-            self.close_connection(registry, now, !received);
             if received {
                 self.next_attempt_at = now.mono;
             }
+            self.close_dropped_connection(registry, now, !received);
         }
 
         self.flush_output(registry, now, callbacks, rng);
@@ -1266,7 +1296,7 @@ impl SessionRuntime {
         self.pump_rpc_events(now, registry, callbacks);
         if let Some(error) = failed {
             self.log(callbacks, LogLevel::Info, &format!("write failed: {error}"));
-            self.close_connection(registry, now, true);
+            self.close_dropped_connection(registry, now, true);
         }
     }
 

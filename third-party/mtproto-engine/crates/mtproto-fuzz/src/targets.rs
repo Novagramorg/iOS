@@ -63,6 +63,11 @@ pub const TARGETS: &[Target] = &[
         about: "RPC layer (wrapping, errors, flood waits, migrations) under a hostile server",
         run: rpc_case,
     },
+    Target {
+        name: "soak",
+        about: "30-90 simulated days: sleep, clock changes, salt rotation, drops; exactly-once, no growth",
+        run: crate::soak::soak_case,
+    },
 ];
 
 pub fn find(name: &str) -> Option<&'static Target> {
@@ -333,6 +338,7 @@ fn stream_case(seed: u64) -> CaseResult {
     let effective = client.framing();
     client.send_packet(&g.bytes(32), g.one_in(2), &mut rng);
     let mut from_server = Vec::new();
+    let mut received = 0;
     let header_stream = if emulate_tls {
         let hello = client.take_outgoing();
         let server_hello = server_hello_for_tests(&hello, proxy_key.as_ref().expect("key"), &mut rng);
@@ -340,6 +346,7 @@ fn stream_case(seed: u64) -> CaseResult {
         if g.one_in(5) {
             g.mutate(&mut prefix);
         }
+        received += prefix.len();
         if client.receive(&prefix).is_err() || !client.is_ready() {
             return Ok(());
         }
@@ -360,7 +367,6 @@ fn stream_case(seed: u64) -> CaseResult {
     if g.one_in(4) {
         g.mutate(&mut wire);
     }
-    let mut received = 0;
     for chunk in g.split(&wire) {
         received += chunk.len();
         if client.receive(chunk).is_err() {

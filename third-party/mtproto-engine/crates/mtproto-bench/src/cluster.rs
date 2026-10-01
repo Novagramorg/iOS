@@ -211,6 +211,31 @@ pub fn torture_suite(quick: bool) -> Vec<ClusterScenario> {
     scenarios
 }
 
+pub fn hostile_suite(quick: bool) -> Vec<ClusterScenario> {
+    let scale = |full: usize, quick_value: usize| if quick { quick_value } else { full };
+    let hostile = |name: String, requests: usize, chaos: ChaosConfig| {
+        let mut scenario = scenario(&name, "tc-torture", "perfect", Vec::new(), 64);
+        scenario.requests = requests;
+        scenario.deadline = if quick { 120.0 } else { 600.0 };
+        scenario.stall_exit = if quick { 15.0 } else { 60.0 };
+        scenario.chaos = Some(chaos);
+        scenario
+    };
+    let mut scenarios: Vec<ClusterScenario> = Fault::HOSTILE
+        .into_iter()
+        .enumerate()
+        .map(|(index, fault)| {
+            hostile(
+                format!("hostile/{}", fault.name()),
+                scale(20_000, 2_000),
+                ChaosConfig::only(41 + index as u64, fault, 0.005),
+            )
+        })
+        .collect();
+    scenarios.push(hostile("hostile/all".into(), scale(100_000, 10_000), ChaosConfig::hostile(97, 0.0005)));
+    scenarios
+}
+
 pub fn suite(quick: bool) -> Vec<ClusterScenario> {
     let scale = |full: usize, quick_value: usize| if quick { quick_value } else { full };
     let photos = |seed: u64, count: usize| files(seed, count, MAIN_DC, 40_000, 400_000, false, 1_000);

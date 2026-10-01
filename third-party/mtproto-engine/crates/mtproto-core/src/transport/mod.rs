@@ -64,7 +64,20 @@ impl TransportErrorKind {
 pub const TRANSPORT_FLOOD_DELAY: f64 = 1.0;
 pub const TRANSPORT_FLOOD_MAX_DELAY: f64 = 30.0;
 pub const RECONNECT_DELAYS: [f64; 5] = [0.0, 0.3, 1.0, 2.0, 4.0];
-pub const URGENT_RECONNECT_DELAYS: [f64; 4] = [0.0, 0.05, 0.1, 0.25];
+pub const URGENT_RECONNECT_DELAYS: [f64; 6] = [0.0, 0.05, 0.1, 0.25, 0.5, 1.0];
+pub const STABLE_CONNECTION_AFTER: f64 = 10.0;
+pub const FLAPS_BEFORE_BACKOFF: u32 = 3;
+pub const FLAP_MAX_DELAY: f64 = 16.0;
+
+pub fn flap_delay(flaps: u32, random: u32) -> f64 {
+    if flaps <= FLAPS_BEFORE_BACKOFF {
+        return 0.0;
+    }
+    let exponent = (flaps - FLAPS_BEFORE_BACKOFF - 1).min(16);
+    let base = (0.5 * f64::from(1u32 << exponent)).min(FLAP_MAX_DELAY);
+    let unit = f64::from(random) / f64::from(u32::MAX);
+    base * (1.0 + RECONNECT_JITTER * (2.0 * unit - 1.0))
+}
 pub const RECONNECT_JITTER: f64 = 0.2;
 
 pub fn transport_flood_delay(consecutive: u32) -> f64 {
@@ -118,13 +131,24 @@ mod policy_tests {
     }
 
     #[test]
-    fn urgent_ladder_retries_four_times_a_second_at_most() {
+    fn urgent_ladder_is_fast_first_then_settles_at_one_attempt_a_second() {
         assert_eq!(urgent_reconnect_delay(0, 0), 0.0);
         assert_eq!(urgent_reconnect_delay(1, u32::MAX / 2), 0.0);
-        for failures in 4..40 {
+        let first_four: f64 = (1..=4).map(|failures| urgent_reconnect_delay(failures, u32::MAX / 2)).sum();
+        assert!(first_four < 0.5, "{first_four}");
+        for failures in 6..400 {
             let delay = urgent_reconnect_delay(failures, u32::MAX);
-            assert!((0.2..=0.3).contains(&delay), "{failures}: {delay}");
+            assert!((0.8..=1.2).contains(&delay), "{failures}: {delay}");
         }
+    }
+
+    #[test]
+    fn flapping_paths_back_off_after_a_few_short_connections() {
+        assert_eq!(flap_delay(FLAPS_BEFORE_BACKOFF, u32::MAX), 0.0);
+        let delays: Vec<f64> =
+            (FLAPS_BEFORE_BACKOFF + 1..FLAPS_BEFORE_BACKOFF + 8).map(|flaps| flap_delay(flaps, u32::MAX / 2)).collect();
+        assert!(delays.windows(2).all(|pair| pair[1] >= pair[0]), "{delays:?}");
+        assert!(flap_delay(u32::MAX, u32::MAX) <= FLAP_MAX_DELAY * (1.0 + RECONNECT_JITTER));
     }
 
     #[test]

@@ -2254,7 +2254,7 @@ fn hostile_detailed_info_fan_out_stays_bounded() {
 }
 
 #[test]
-fn failed_gzip_unpacks_spend_the_packet_budget() {
+fn gzip_bombs_are_refused_without_unpacking_them() {
     let mut h = Harness::new();
     h.session = Session::new(
         SessionConfig { max_unpacked_bytes: 1 << 20, ..SessionConfig::default() },
@@ -2266,14 +2266,22 @@ fn failed_gzip_unpacks_spend_the_packet_budget() {
     );
     h.session.connection_opened(h.now);
     h.flush();
-    let bomb = gzip_packed(&vec![0u8; 2 << 20]);
-    let mut children: Vec<(i64, i32, Vec<u8>)> =
-        (0..400).map(|_| (h.server.next_msg_id(false), 1, bomb.clone())).collect();
+    let mut lying = crate::tl::mtproto::gzip(&vec![0u8; 2 << 20]);
+    let trailer = lying.len() - 4;
+    lying[trailer..].copy_from_slice(&64u32.to_le_bytes());
+    let mut writer = Writer::new();
+    writer.write_u32(ids::GZIP_PACKED);
+    writer.write_bytes(&lying);
+    let bomb = writer.into_inner();
+    let honest = gzip_packed(&vec![0u8; 2 << 20]);
+    let mut children: Vec<(i64, i32, Vec<u8>)> = (0..400)
+        .map(|index| (h.server.next_msg_id(false), 1, if index % 2 == 0 { bomb.clone() } else { honest.clone() }))
+        .collect();
     children.push((h.server.next_msg_id(false), 1, gzip_packed(&update(0x4242_4242, &[0; 64]))));
     let started = std::time::Instant::now();
     h.deliver(vec![Outgoing::Service(container(&children))]).unwrap();
-    assert!(started.elapsed() < std::time::Duration::from_millis(1500), "{:?}", started.elapsed());
-    assert!(updates_of(&h.events()).is_empty(), "the failed unpacks spent the packet's budget");
+    assert!(started.elapsed() < std::time::Duration::from_millis(300), "{:?}", started.elapsed());
+    assert_eq!(updates_of(&h.events()), vec![0x4242_4242], "bombs are refused without unpacking them");
 }
 
 #[test]
@@ -2325,4 +2333,65 @@ fn an_answer_redelivered_with_an_evicted_msg_id_still_completes_its_query() {
     flood_newer_messages(&mut h, 1100);
     h.deliver_sealed(answer_id, 1, &rpc_result(query, &[9, 0, 0, 0])).unwrap();
     assert_eq!(h.results(), vec![(QueryId(1), vec![9, 0, 0, 0])]);
+}
+
+#[test]
+fn a_server_rejecting_every_send_cannot_hold_a_query_in_a_resend_loop() {
+    let mut h = Harness::new();
+    h.sync();
+    h.session.send(QueryId(1), query_body(1), QueryOptions::default(), h.now);
+    let mut sends = 0;
+    let mut salt = 500;
+    for _ in 0..200 {
+        h.advance(0.01);
+        let packets = h.flush_all();
+        let sent: Vec<i64> = packets
+            .iter()
+            .flat_map(|packet| packet.messages.iter())
+            .filter(|message| query_tag(&message.body) == Some(1))
+            .map(|message| message.msg_id)
+            .collect();
+        sends += sent.len();
+        for msg_id in sent {
+            salt += 1;
+            h.server.salt = salt - 1;
+            h.deliver(vec![Outgoing::Service(bad_server_salt(msg_id, 1, salt))]).unwrap();
+        }
+        let failed = h.events().into_iter().any(|event| {
+            matches!(event, SessionEvent::Error { id: QueryId(1), code: 500, ref message, .. } if message == PROTOCOL_REJECTED)
+        });
+        if failed {
+            assert!(sends as u32 <= MAX_QUERY_REJECTIONS + 1, "{sends} sends before giving up");
+            return;
+        }
+    }
+    panic!("the query was resent {sends} times without ever failing");
+}
+
+#[test]
+fn a_server_cannot_make_the_client_upload_a_query_forever() {
+    let mut h = Harness::new();
+    h.sync();
+    let big = {
+        let mut body = query_body(1);
+        body.extend(std::iter::repeat_n(0x5a, 256 * 1024));
+        body
+    };
+    h.session.send(QueryId(1), big, QueryOptions::default(), h.now);
+    let mut uploads = 0;
+    for _ in 0..100 {
+        h.advance(0.05);
+        let packets = h.flush_all();
+        let sent: Vec<i64> = packets
+            .iter()
+            .flat_map(|packet| packet.messages.iter())
+            .filter(|message| query_tag(&message.body) == Some(1))
+            .map(|message| message.msg_id)
+            .collect();
+        uploads += sent.len();
+        for msg_id in sent {
+            h.deliver(vec![Outgoing::Service(msg_resend_req(&[msg_id]))]).unwrap();
+        }
+    }
+    assert!(uploads as u32 <= MAX_SERVER_RESENDS + 1, "{uploads} uploads of the same query");
 }

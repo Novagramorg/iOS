@@ -10,7 +10,7 @@ use super::{Reader, TlError, TlRead, TlResult, TlWrite, Writer};
 
 pub const MAX_CONTAINER_MESSAGES: usize = 1024;
 pub const MAX_VECTOR_ITEMS: usize = 1 << 16;
-pub const MAX_UNPACKED_SIZE: usize = 64 * 1024 * 1024;
+pub const MAX_UNPACKED_SIZE: usize = 32 * 1024 * 1024;
 pub const INVALID_UTF8_ERROR_MESSAGE: &str = "INVALID_UTF8_ERROR_MESSAGE";
 pub const MAX_VALID_ERROR_CODE: i32 = 9999;
 
@@ -632,17 +632,46 @@ pub fn parse_rpc_result_limited(result: &[u8], unpack_limit: usize) -> TlResult<
     }
 }
 
+const INFLATE_CHUNK: usize = 16 * 1024;
+
+fn gzip_declared_size(data: &[u8]) -> Option<usize> {
+    let is_gzip = data.len() >= 18 && data[0] == 0x1f && data[1] == 0x8b;
+    is_gzip.then(|| u32::from_le_bytes(data[data.len() - 4..].try_into().expect("4 bytes")) as usize)
+}
+
+fn read_bounded(mut reader: impl Read, capacity_hint: usize, limit: usize, output: &mut Vec<u8>) -> TlResult<()> {
+    output.reserve_exact(capacity_hint.min(limit));
+    let mut chunk = [0u8; INFLATE_CHUNK];
+    loop {
+        let read = match reader.read(&mut chunk) {
+            Ok(read) => read,
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(error) => return Err(TlError::Gzip(error.to_string())),
+        };
+        if read == 0 {
+            return Ok(());
+        }
+        if output.len() + read > limit {
+            output.extend_from_slice(&chunk[..(limit - output.len()).min(read)]);
+            return Err(TlError::Gzip(format!("unpacked size exceeds {limit} bytes")));
+        }
+        if output.capacity() - output.len() < read {
+            let target = (output.capacity() * 2).clamp(output.len() + read, limit);
+            output.reserve_exact(target - output.len());
+        }
+        output.extend_from_slice(&chunk[..read]);
+    }
+}
+
 fn inflate(data: &[u8], limit: usize) -> (TlResult<()>, Vec<u8>) {
-    let mut output = Vec::with_capacity((data.len() * 4).min(limit));
-    let read = if data.len() >= 2 && data[0] == 0x1f && data[1] == 0x8b {
-        GzDecoder::new(data).take(limit as u64 + 1).read_to_end(&mut output)
-    } else {
-        ZlibDecoder::new(data).take(limit as u64 + 1).read_to_end(&mut output)
-    };
-    let result = match read {
-        Err(error) => Err(TlError::Gzip(error.to_string())),
-        Ok(_) if output.len() > limit => Err(TlError::Gzip(format!("unpacked size exceeds {limit} bytes"))),
-        Ok(_) => Ok(()),
+    let mut output = Vec::new();
+    let result = match gzip_declared_size(data) {
+        Some(declared) if declared > limit => {
+            Err(TlError::Gzip(format!("declared unpacked size {declared} exceeds {limit} bytes")))
+        }
+        Some(declared) => read_bounded(GzDecoder::new(data), declared, declared, &mut output)
+            .map_err(|_| TlError::Gzip(format!("unpacked data does not match its declared size {declared}"))),
+        None => read_bounded(ZlibDecoder::new(data), (data.len() * 4).min(INFLATE_CHUNK * 4), limit, &mut output),
     };
     (result, output)
 }
@@ -1017,13 +1046,36 @@ mod tests {
     }
 
     #[test]
+    fn declared_sizes_bound_allocation() {
+        let packed = gzip(&vec![7u8; 100_000]);
+        let unpacked = gunzip(&packed, 1 << 20).unwrap();
+        assert_eq!(unpacked.len(), 100_000);
+        assert_eq!(unpacked.capacity(), 100_000, "an honest stream is unpacked into one exact allocation");
+        assert!(gunzip(&packed, 99_999).is_err(), "a stream declaring more than the limit is refused");
+        let mut lying = gzip(&vec![0u8; 5 << 20]);
+        let trailer = lying.len() - 4;
+        lying[trailer..].copy_from_slice(&64u32.to_le_bytes());
+        assert!(gunzip(&lying, 1 << 20).is_err());
+        let mut short = gzip(&vec![1u8; 1000]);
+        let trailer = short.len() - 4;
+        short[trailer..].copy_from_slice(&5000u32.to_le_bytes());
+        assert!(gunzip(&short, 1 << 20).is_err(), "the gzip trailer is verified");
+    }
+
+    #[test]
     fn gunzip_budget_is_shared() {
         let packed = gzip(&[0u8; 1000]);
         let mut budget = 1500;
         assert_eq!(gunzip_within(&packed, &mut budget).unwrap().len(), 1000);
         assert_eq!(budget, 500);
         assert!(gunzip_within(&packed, &mut budget).is_err());
-        assert_eq!(budget, 0, "a failed unpack is charged for what it inflated");
+        assert!(budget < 500, "a refused unpack is still charged");
+        let mut lying = gzip(&[0u8; 4000]);
+        let trailer = lying.len() - 4;
+        lying[trailer..].copy_from_slice(&10u32.to_le_bytes());
+        let mut budget = 1000;
+        assert!(gunzip_within(&lying, &mut budget).is_err());
+        assert!(budget >= 900, "a stream longer than it declares is cut off at its declared size: {budget}");
         assert_eq!(
             parse_rpc_result_limited(
                 &{
@@ -1034,7 +1086,7 @@ mod tests {
                 999
             )
             .map(|_| ()),
-            Err(TlError::Gzip("unpacked size exceeds 999 bytes".into()))
+            Err(TlError::Gzip("declared unpacked size 1000 exceeds 999 bytes".into()))
         );
     }
 
