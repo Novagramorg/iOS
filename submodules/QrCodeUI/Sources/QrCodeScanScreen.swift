@@ -400,11 +400,7 @@ private final class QrCodeScanScreenNode: ViewControllerTracingNode, ASScrollVie
     
     private let previewView: CameraSimplePreviewView
     private let fadeNode: ASDisplayNode
-    private let topDimNode: ASDisplayNode
-    private let bottomDimNode: ASDisplayNode
-    private let leftDimNode: ASDisplayNode
-    private let rightDimNode: ASDisplayNode
-    private let centerDimNode: ASDisplayNode
+    private let dimLayer: SimpleShapeLayer
     private let frameNode: FrameNode
     private let galleryButtonNode: GlassButtonNode
     private let torchButtonNode: GlassButtonNode
@@ -453,27 +449,10 @@ private final class QrCodeScanScreenNode: ViewControllerTracingNode, ASScrollVie
         self.fadeNode.alpha = 0.0
         self.fadeNode.backgroundColor = .black
         
-        let dimColor = UIColor(rgb: 0x000000, alpha: 0.8)
-        
-        self.topDimNode = ASDisplayNode()
-        self.topDimNode.alpha = 0.625
-        self.topDimNode.backgroundColor = dimColor
-        
-        self.bottomDimNode = ASDisplayNode()
-        self.bottomDimNode.alpha = 0.625
-        self.bottomDimNode.backgroundColor = dimColor
-        
-        self.leftDimNode = ASDisplayNode()
-        self.leftDimNode.alpha = 0.625
-        self.leftDimNode.backgroundColor = dimColor
-        
-        self.rightDimNode = ASDisplayNode()
-        self.rightDimNode.alpha = 0.625
-        self.rightDimNode.backgroundColor = dimColor
-        
-        self.centerDimNode = ASDisplayNode()
-        self.centerDimNode.alpha = 0.0
-        self.centerDimNode.backgroundColor = dimColor
+        self.dimLayer = SimpleShapeLayer()
+        self.dimLayer.fillRule = .evenOdd
+        self.dimLayer.fillColor = UIColor(rgb: 0x000000, alpha: 0.8).cgColor
+        self.dimLayer.opacity = 0.625
         
         self.frameNode = FrameNode()
         
@@ -537,7 +516,7 @@ private final class QrCodeScanScreenNode: ViewControllerTracingNode, ASScrollVie
         
         super.init()
         
-        self.backgroundColor = self.presentationData.theme.list.plainBackgroundColor
+        self.backgroundColor = .black
         
         self.torchDisposable = (self.camera.hasTorch
         |> deliverOnMainQueue).start(next: { [weak self] hasTorch in
@@ -547,11 +526,6 @@ private final class QrCodeScanScreenNode: ViewControllerTracingNode, ASScrollVie
         })
         
         self.addSubnode(self.fadeNode)
-        self.addSubnode(self.topDimNode)
-        self.addSubnode(self.bottomDimNode)
-        self.addSubnode(self.leftDimNode)
-        self.addSubnode(self.rightDimNode)
-        self.addSubnode(self.centerDimNode)
         self.addSubnode(self.frameNode)
         if case .peer = subject {
             self.addSubnode(self.galleryButtonNode)
@@ -603,6 +577,7 @@ private final class QrCodeScanScreenNode: ViewControllerTracingNode, ASScrollVie
         super.didLoad()
         
         self.view.insertSubview(self.previewView, at: 0)
+        self.layer.insertSublayer(self.dimLayer, above: self.fadeNode.layer)
         self.camera.startCapture()
         
         var detectedCodes = self.camera.detectedCodes
@@ -706,6 +681,34 @@ private final class QrCodeScanScreenNode: ViewControllerTracingNode, ASScrollVie
         self.focusedRect = rect
         if let (layout, navigationHeight) = self.validLayout {
             self.containerLayoutUpdated(layout: layout, navigationHeight: navigationHeight, transition: .animated(duration: 0.4, curve: .spring))
+        }
+    }
+
+    private func updateDimPath(bounds: CGRect, cutoutRect: CGRect, transition: ContainedViewLayoutTransition, delay: Double, completion: @escaping () -> Void) {
+        let path = CGMutablePath()
+        path.addRect(bounds)
+        path.addRect(cutoutRect)
+
+        guard self.dimLayer.path != path else {
+            completion()
+            return
+        }
+
+        let previousPath: CGPath?
+        if self.dimLayer.animation(forKey: "path") != nil {
+            previousPath = self.dimLayer.presentation()?.path ?? self.dimLayer.path
+        } else {
+            previousPath = self.dimLayer.path
+        }
+        self.dimLayer.path = path
+
+        if case let .animated(duration, curve) = transition, let previousPath {
+            self.dimLayer.animate(from: previousPath, to: path, keyPath: "path", timingFunction: curve.timingFunction, duration: duration, delay: delay, mediaTimingFunction: curve.mediaTimingFunction, completion: { _ in
+                completion()
+            })
+        } else {
+            self.dimLayer.removeAnimation(forKey: "path")
+            completion()
         }
     }
     
@@ -816,7 +819,6 @@ private final class QrCodeScanScreenNode: ViewControllerTracingNode, ASScrollVie
         let dimRect: CGRect
         let frameRect: CGRect
         let controlsAlpha: CGFloat
-        let centerDimAlpha: CGFloat = 0.0
         let frameAlpha: CGFloat = 1.0
         if let focusedRect = self.focusedRect {
             controlsAlpha = 0.0
@@ -832,11 +834,7 @@ private final class QrCodeScanScreenNode: ViewControllerTracingNode, ASScrollVie
             frameRect = CGRect(x: dimInset, y: dimHeight, width: layout.size.width - dimInset * 2.0, height: layout.size.height - dimHeight * 2.0)
         }
     
-        transition.updateAlpha(node: self.topDimNode, alpha: dimAlpha)
-        transition.updateAlpha(node: self.bottomDimNode, alpha: dimAlpha)
-        transition.updateAlpha(node: self.leftDimNode, alpha: dimAlpha)
-        transition.updateAlpha(node: self.rightDimNode, alpha: dimAlpha)
-        transition.updateAlpha(node: self.centerDimNode, alpha: centerDimAlpha)
+        transition.updateAlpha(layer: self.dimLayer, alpha: dimAlpha)
         transition.updateAlpha(node: self.frameNode, alpha: frameAlpha)
         
         if !self.animatingIn {
@@ -845,15 +843,13 @@ private final class QrCodeScanScreenNode: ViewControllerTracingNode, ASScrollVie
                 self.animatingIn = true
                 delay = 0.1
             }
-            transition.updateFrame(node: self.topDimNode, frame: CGRect(x: 0.0, y: 0.0, width: layout.size.width, height: dimRect.minY), delay: delay, completion: { _ in
-                self.animatingIn = false
+            let dimTransition: ContainedViewLayoutTransition = self.dimLayer.path == nil ? .immediate : transition
+            dimTransition.updateFrame(layer: self.dimLayer, frame: bounds, delay: delay)
+            self.updateDimPath(bounds: bounds, cutoutRect: dimRect, transition: dimTransition, delay: delay, completion: { [weak self] in
+                self?.animatingIn = false
             })
-            transition.updateFrame(node: self.bottomDimNode, frame: CGRect(x: 0.0, y: dimRect.maxY, width: layout.size.width, height: max(0.0, layout.size.height - dimRect.maxY)), delay: delay)
-            transition.updateFrame(node: self.leftDimNode, frame: CGRect(x: 0.0, y: dimRect.minY, width: max(0.0, dimRect.minX), height: dimRect.height), delay: delay)
-            transition.updateFrame(node: self.rightDimNode, frame: CGRect(x: dimRect.maxX, y: dimRect.minY, width: max(0.0, layout.size.width - dimRect.maxX), height: dimRect.height), delay: delay)
-            transition.updateFrame(node: self.frameNode, frame: frameRect)
+            transition.updateFrame(node: self.frameNode, frame: frameRect, beginWithCurrentState: true)
             self.frameNode.updateLayout(size: frameRect.size)
-            transition.updateFrame(node: self.centerDimNode, frame: frameRect)
             if animateIn {
                 transition.animateTransformScale(node: self.frameNode, from: CGPoint(x: animateInScale, y: animateInScale), delay: delay)
             }

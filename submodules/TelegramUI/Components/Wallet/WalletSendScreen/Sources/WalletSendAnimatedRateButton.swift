@@ -8,8 +8,8 @@ import TelegramPresentationData
 
 final class WalletSendAnimatedRateButton: UIControl {
     private let contentView = UIView()
-    private let glassBackgroundView: GlassBackgroundView?
-    private let glassButton: UIButton?
+    private let backgroundView = WalletSendCommentBackgroundView(frame: .zero)
+    private let glassHighlightRecognizer = GlassHighlightGestureRecognizer(target: nil, action: nil)
     private let title = ComponentView<Empty>()
     private var titleSize = CGSize.zero
     private let gramIcon = UIImageView()
@@ -31,34 +31,21 @@ final class WalletSendAnimatedRateButton: UIControl {
     private var gramTo: CGFloat = 0.0
     private var currentGram: CGFloat = 0.0
     private var visible = false
-    private var isDark = false
+    private var theme: PresentationTheme?
     var action: (() -> Void)?
 
     override init(frame: CGRect) {
-        if #available(iOS 27.0, *) {
-            self.glassBackgroundView = GlassBackgroundView()
-            self.glassButton = UIButton(type: .custom)
-        } else {
-            self.glassBackgroundView = nil
-            self.glassButton = nil
-        }
         super.init(frame: frame)
         self.isExclusiveTouch = true
         self.isAccessibilityElement = true
         self.accessibilityTraits = .button
+        self.addGestureRecognizer(self.glassHighlightRecognizer)
+        self.glassHighlightRecognizer.isEnabled = false
         self.contentView.isUserInteractionEnabled = false
         self.contentView.clipsToBounds = true
         self.contentView.layer.cornerRadius = 13.0
-        if let glassBackgroundView = self.glassBackgroundView, let glassButton = self.glassButton {
-            self.addSubview(glassBackgroundView)
-            glassBackgroundView.contentView.addSubview(self.contentView)
-            glassBackgroundView.contentView.addSubview(glassButton)
-            glassButton.isExclusiveTouch = true
-            glassButton.isAccessibilityElement = false
-            glassButton.addTarget(self, action: #selector(self.pressed), for: .touchUpInside)
-        } else {
-            self.addSubview(self.contentView)
-        }
+        self.addSubview(self.contentView)
+        self.contentView.addSubview(self.backgroundView)
         self.gramIcon.image = UIImage(bundleImageName: "Wallet/TopGram")
         self.gramIcon.contentMode = .scaleAspectFit
         self.contentView.addSubview(self.gramIcon)
@@ -75,7 +62,7 @@ final class WalletSendAnimatedRateButton: UIControl {
         }
         self.addTarget(self, action: #selector(self.pressed), for: .touchUpInside)
         NotificationCenter.default.addObserver(self, selector: #selector(self.stopAnimations), name: UIApplication.willResignActiveNotification, object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(self.stopAnimations), name: UIAccessibility.reduceMotionStatusDidChangeNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(self.reduceMotionStatusChanged), name: UIAccessibility.reduceMotionStatusDidChangeNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(self.resumePresentation), name: UIApplication.didBecomeActiveNotification, object: nil)
     }
 
@@ -85,23 +72,41 @@ final class WalletSendAnimatedRateButton: UIControl {
         NotificationCenter.default.removeObserver(self)
     }
 
-    @objc private func stopAnimations() { self.finishMotion() }
-    @objc private func resumePresentation() { self.setNeedsLayout() }
+    @objc private func stopAnimations() {
+        self.updateTouchEffect(isActive: false)
+        self.finishMotion()
+    }
+
+    @objc private func resumePresentation() {
+        self.updateTouchEffect()
+        self.setNeedsLayout()
+    }
+
+    @objc private func reduceMotionStatusChanged() {
+        self.updateTouchEffect()
+        self.finishMotion()
+    }
 
     @objc private func pressed() { self.action?() }
 
-    override var isHighlighted: Bool {
+    override var isEnabled: Bool {
         didSet {
-            guard self.glassBackgroundView == nil else { return }
-            let scale: CGFloat = self.isHighlighted && !UIAccessibility.isReduceMotionEnabled ? 0.94 : 1.0
-            UIView.animate(withDuration: UIAccessibility.isReduceMotionEnabled ? 0.15 : 0.28, delay: 0.0, usingSpringWithDamping: 0.7, initialSpringVelocity: 0.0, options: [.beginFromCurrentState, .allowUserInteraction], animations: {
-                self.contentView.transform = CGAffineTransform(scaleX: scale, y: scale)
-            })
+            self.updateTouchEffect()
+        }
+    }
+
+    private func updateTouchEffect(isActive: Bool = true) {
+        let isEnabled = isActive && self.window != nil && self.visible && self.isEnabled && !UIAccessibility.isReduceMotionEnabled
+        self.glassHighlightRecognizer.isEnabled = isEnabled
+        if !isEnabled {
+            self.layer.removeAnimation(forKey: "sublayerTransform")
+            self.layer.sublayerTransform = CATransform3DIdentity
         }
     }
 
     override func didMoveToWindow() {
         super.didMoveToWindow()
+        self.updateTouchEffect()
         if self.window == nil { self.finishMotion() }
     }
 
@@ -114,10 +119,8 @@ final class WalletSendAnimatedRateButton: UIControl {
         let wasVisible = self.visible
         self.visible = isVisible
         self.isEnabled = isEnabled
-        self.glassButton?.isEnabled = isEnabled
-        self.isDark = theme.overallDarkAppearance
+        self.theme = theme
         self.accessibilityLabel = displaysGramIcon ? "GRAM " + text : text
-        self.contentView.backgroundColor = self.glassBackgroundView == nil ? theme.list.itemInputField.backgroundColor : .clear
         for arrow in self.arrows { arrow.tintColor = theme.list.itemSecondaryTextColor }
         let now = CACurrentMediaTime()
         let switched = self.previousMode != nil && self.previousMode != mode
@@ -151,7 +154,7 @@ final class WalletSendAnimatedRateButton: UIControl {
             if titleView.superview == nil {
                 titleView.isUserInteractionEnabled = false
                 titleView.accessibilityElementsHidden = true
-                self.contentView.insertSubview(titleView, at: 0)
+                self.contentView.insertSubview(titleView, aboveSubview: self.backgroundView)
             }
         }
         if text != self.previousText || self.widthTo != width || self.gramTo != (displaysGramIcon ? 1.0 : 0.0) {
@@ -199,21 +202,16 @@ final class WalletSendAnimatedRateButton: UIControl {
         self.currentWidth = self.widthFrom + (self.widthTo - self.widthFrom) * p + ((self.title.view as? WalletSendAnimatedTextComponent.View)?.widthAdjustment(at: now) ?? 0.0)
         self.currentGram = self.gramFrom + (self.gramTo - self.gramFrom) * p
         self.contentView.bounds = CGRect(x: 0.0, y: 0.0, width: self.currentWidth, height: 26.0)
-        if let glassBackgroundView = self.glassBackgroundView {
-            glassBackgroundView.bounds = self.contentView.bounds
-            glassBackgroundView.center = CGPoint(x: self.bounds.midX, y: self.bounds.midY)
-            glassBackgroundView.update(
+        self.contentView.center = CGPoint(x: self.bounds.midX, y: self.bounds.midY)
+        self.backgroundView.frame = self.contentView.bounds
+        if let theme = self.theme {
+            self.backgroundView.update(
                 size: self.contentView.bounds.size,
-                cornerRadius: 13.0,
-                isDark: self.isDark,
-                tintColor: .init(kind: .panel),
-                isInteractive: self.isEnabled,
-                transition: .immediate
+                maxCornerRadius: 13.0,
+                minCornerRadius: 13.0,
+                theme: theme,
+                hasTail: false
             )
-            self.contentView.center = CGPoint(x: self.currentWidth * 0.5, y: 13.0)
-            self.glassButton?.frame = self.contentView.bounds
-        } else {
-            self.contentView.center = CGPoint(x: self.bounds.midX, y: self.bounds.midY)
         }
         self.title.view?.frame = CGRect(
             x: 8.0 + 19.0 * self.currentGram,

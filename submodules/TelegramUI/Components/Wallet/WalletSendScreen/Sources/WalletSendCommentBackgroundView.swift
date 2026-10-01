@@ -10,6 +10,7 @@ public final class WalletSendCommentBackgroundView: UIView {
         let maxCornerRadius: CGFloat
         let minCornerRadius: CGFloat
         let incoming: Bool
+        let hasTail: Bool
         let backgroundColor: UIColor
         let primaryTextColor: UIColor
         let isDark: Bool
@@ -42,15 +43,19 @@ public final class WalletSendCommentBackgroundView: UIView {
         preconditionFailure()
     }
 
-    public func update(size: CGSize, maxCornerRadius: CGFloat, minCornerRadius: CGFloat, theme: PresentationTheme, incoming: Bool = false) {
+    public func update(size: CGSize, maxCornerRadius: CGFloat, minCornerRadius: CGFloat, theme: PresentationTheme, incoming: Bool = false, hasTail: Bool = true) {
         guard size.width > 0.0, size.height > 0.0 else { return }
         self.imageView.frame = CGRect(origin: .zero, size: size)
+        // Keep the rounded ends and their glow fixed while the center stretches.
+        let glowPadding = ceil(min(10.0, size.height * 0.24) * 2.0)
+        let imageSize = CGSize(width: hasTail ? size.width : min(size.width, maxCornerRadius * 2.0 + glowPadding * 2.0 + 1.0), height: size.height)
         let parameters = Parameters(
-            size: size,
+            size: imageSize,
             scale: self.window?.screen.scale ?? UIScreen.main.scale,
             maxCornerRadius: maxCornerRadius,
             minCornerRadius: minCornerRadius,
             incoming: incoming,
+            hasTail: hasTail,
             backgroundColor: theme.list.modalPlainBackgroundColor,
             primaryTextColor: theme.list.itemPrimaryTextColor,
             isDark: theme.overallDarkAppearance
@@ -58,33 +63,56 @@ public final class WalletSendCommentBackgroundView: UIView {
         guard self.parameters != parameters else { return }
         if let image = Self.generateImage(parameters: parameters) {
             self.parameters = parameters
-            self.imageView.image = image
+            if hasTail {
+                self.imageView.image = image
+            } else {
+                let capWidth = max(0.0, (imageSize.width - 1.0) * 0.5)
+                self.imageView.image = image.resizableImage(withCapInsets: UIEdgeInsets(top: 0.0, left: capWidth, bottom: 0.0, right: capWidth), resizingMode: .stretch)
+            }
         }
     }
 
     private static func generateImage(parameters: Parameters) -> UIImage? {
         let size = parameters.size
         let bounds = CGRect(origin: .zero, size: size)
-        let bubble = messageBubbleImage(
-            maxCornerRadius: parameters.maxCornerRadius,
-            minCornerRadius: parameters.minCornerRadius,
-            incoming: parameters.incoming,
-            fillColor: .white,
-            strokeColor: .clear,
-            neighbors: .none,
-            shadow: nil,
-            wallpaper: .color(0),
-            knockout: false,
-            mask: true
-        )
-        guard let mask = Display.generateImage(size, scale: parameters.scale, rotatedContext: { _, context in
-            context.clear(bounds)
-            UIGraphicsPushContext(context)
-            bubble.draw(in: bounds)
-            UIGraphicsPopContext()
-        }) else { return nil }
+        func roundedRectMask(inset: CGFloat) -> UIImage? {
+            return Display.generateImage(size, scale: parameters.scale, rotatedContext: { _, context in
+                context.clear(bounds)
+                let cornerRadius = max(0.0, min(parameters.maxCornerRadius, min(size.width, size.height) * 0.5) - inset)
+                context.addPath(CGPath(roundedRect: bounds.insetBy(dx: inset, dy: inset), cornerWidth: cornerRadius, cornerHeight: cornerRadius, transform: nil))
+                context.setFillColor(UIColor.white.cgColor)
+                context.fillPath()
+            })
+        }
+        let shapeMask: UIImage?
+        if parameters.hasTail {
+            let bubble = messageBubbleImage(
+                maxCornerRadius: parameters.maxCornerRadius,
+                minCornerRadius: parameters.minCornerRadius,
+                incoming: parameters.incoming,
+                fillColor: .white,
+                strokeColor: .clear,
+                neighbors: .none,
+                shadow: nil,
+                wallpaper: .color(0),
+                knockout: false,
+                mask: true
+            )
+            shapeMask = Display.generateImage(size, scale: parameters.scale, rotatedContext: { _, context in
+                context.clear(bounds)
+                UIGraphicsPushContext(context)
+                bubble.draw(in: bounds)
+                UIGraphicsPopContext()
+            })
+        } else {
+            shapeMask = roundedRectMask(inset: 0.0)
+        }
+        guard let mask = shapeMask else { return nil }
 
         func insetMask(by inset: CGFloat) -> UIImage? {
+            if !parameters.hasTail {
+                return roundedRectMask(inset: inset)
+            }
             return Display.generateImage(size, scale: parameters.scale, rotatedContext: { _, context in
                 context.clear(bounds)
                 UIGraphicsPushContext(context)
@@ -150,7 +178,7 @@ public final class WalletSendCommentBackgroundView: UIView {
         guard let highlightGradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: highlightColors as CFArray, locations: borderLocations) else { return nil }
 
         return Display.generateImage(size, scale: parameters.scale, rotatedContext: { _, context in
-            let fillInset = min(2.0, size.height * 0.1)
+            let fillInset = parameters.hasTail ? min(2.0, size.height * 0.1) : 0.0
             context.drawLinearGradient(
                 fillGradient,
                 start: CGPoint(x: 0.0, y: fillInset),
