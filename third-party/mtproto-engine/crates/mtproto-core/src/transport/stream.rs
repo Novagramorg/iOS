@@ -185,6 +185,16 @@ impl TransportStream {
         self.decoder.pending_frame_len(&self.decrypted_input)
     }
 
+    pub fn pending_frame_head(&self) -> Option<(usize, &[u8])> {
+        let (header, payload) = self.decoder.pending_frame(&self.decrypted_input)?;
+        let data = self.decrypted_input.as_slice();
+        if data.len() < header {
+            return None;
+        }
+        let available = &data[header..data.len().min(header + payload)];
+        Some((payload, available))
+    }
+
     pub fn shrink_buffers(&mut self) {
         self.raw_input.shrink_if_idle(16 * 1024);
         self.decrypted_input.shrink_if_idle(16 * 1024);

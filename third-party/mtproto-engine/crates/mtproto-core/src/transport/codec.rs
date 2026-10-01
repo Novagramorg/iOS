@@ -98,6 +98,36 @@ impl FrameDecoder {
         self.framing
     }
 
+    pub fn pending_frame(&self, buffer: &InputBuffer) -> Option<(usize, usize)> {
+        let data = buffer.as_slice();
+        match self.framing {
+            Framing::Abridged => {
+                let first = *data.first()?;
+                if first & 0x80 != 0 {
+                    return None;
+                }
+                if first < 0x7f {
+                    Some((1, first as usize * 4))
+                } else if data.len() >= 4 {
+                    Some((4, u32::from_le_bytes([data[1], data[2], data[3], 0]) as usize * 4))
+                } else {
+                    None
+                }
+            }
+            Framing::Intermediate | Framing::PaddedIntermediate => {
+                if data.len() < 4 {
+                    return None;
+                }
+                let word = u32::from_le_bytes(data[..4].try_into().expect("4"));
+                if word & QUICK_ACK_BIT != 0 {
+                    None
+                } else {
+                    Some((4, word as usize))
+                }
+            }
+        }
+    }
+
     pub fn pending_frame_len(&self, buffer: &InputBuffer) -> Option<usize> {
         let data = buffer.as_slice();
         match self.framing {

@@ -599,6 +599,16 @@ impl RpcClient {
         self.events.pop_front()
     }
 
+    pub fn into_requests(mut self) -> Vec<RpcRequest> {
+        let mut requests = Vec::with_capacity(self.order.len());
+        for id in self.order.drain(..) {
+            if let Some(state) = self.requests.remove(&id) {
+                requests.push(state.request);
+            }
+        }
+        requests
+    }
+
     pub fn drain_events(&mut self) -> Vec<RpcEvent> {
         self.events.drain(..).collect()
     }

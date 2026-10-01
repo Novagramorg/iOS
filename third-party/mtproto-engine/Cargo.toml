@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/mtproto-core"]
+members = ["crates/mtproto-core", "crates/mtproto-engine", "crates/mtproto-testserver"]
 resolver = "3"
 
 [workspace.package]
