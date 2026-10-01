@@ -30,6 +30,7 @@ pub struct ClusterScenario {
     pub cancel_fraction: f64,
     pub outage: Option<(f64, f64)>,
     pub chaos: Option<ChaosConfig>,
+    pub stall_exit: f64,
 }
 
 #[derive(Debug, Clone)]
@@ -56,6 +57,7 @@ pub struct ClusterResult {
     pub double_completions: usize,
     pub duplicate_executions: usize,
     pub chaos_injected: usize,
+    pub stalled: bool,
     pub exit: String,
     pub error: Option<String>,
 }
@@ -86,6 +88,7 @@ fn scenario(name: &str, workload: &str, profile: &str, files: Vec<FileSpec>, con
         cancel_fraction: 0.0,
         outage: None,
         chaos: None,
+        stall_exit: 0.0,
     }
 }
 
@@ -94,13 +97,14 @@ pub fn torture_suite(quick: bool) -> Vec<ClusterScenario> {
     let torture = |name: &str, profile: &str, requests: usize, chaos: Option<ChaosConfig>| {
         let mut scenario = scenario(name, "tc-torture", profile, Vec::new(), 256);
         scenario.requests = requests;
-        scenario.deadline = 900.0;
+        scenario.deadline = if quick { 120.0 } else { 900.0 };
+        scenario.stall_exit = if quick { 10.0 } else { 120.0 };
         scenario.chaos = chaos;
         scenario
     };
     let mut scenarios = Vec::new();
     for fault in Fault::ALL {
-        let requests = if fault == Fault::ExpireSalt { scale(500_000, 200_000) } else { scale(50_000, 20_000) };
+        let requests = if fault == Fault::ExpireSalt { scale(500_000, 30_000) } else { scale(50_000, 3_000) };
         scenarios.push(torture(
             &format!("torture/{}", fault.name()),
             "perfect",
@@ -111,16 +115,18 @@ pub fn torture_suite(quick: bool) -> Vec<ClusterScenario> {
     scenarios.push(torture(
         "torture/all-faults",
         "perfect",
-        scale(1_000_000, 200_000),
+        scale(1_000_000, 30_000),
         Some(ChaosConfig::mixed(23, 0.0005)),
     ));
     scenarios.push(torture(
         "torture/all-faults-flaky",
         "flaky",
-        scale(100_000, 20_000),
+        scale(100_000, 5_000),
         Some(ChaosConfig::mixed(29, 0.0005)),
     ));
-    scenarios.push(torture("torture/million-clean", "perfect", 1_000_000, None));
+    if !quick {
+        scenarios.push(torture("torture/million-clean", "perfect", 1_000_000, None));
+    }
     scenarios
 }
 
@@ -291,6 +297,8 @@ pub fn run(scenario: &ClusterScenario, binary: &str, engine: &str, seed: u64) ->
             &seed.to_string(),
             "--trickle",
             &std::env::var("TC_BENCH_TRICKLE").unwrap_or_else(|_| "0".into()),
+            "--stall-exit",
+            &scenario.stall_exit.to_string(),
         ])
         .stdout(Stdio::piped())
         .stderr(if std::env::var_os("TC_BENCH_STDERR").is_some() { Stdio::inherit() } else { Stdio::null() })
@@ -318,6 +326,7 @@ pub fn run(scenario: &ClusterScenario, binary: &str, engine: &str, seed: u64) ->
         double_completions: 0,
         duplicate_executions: 0,
         chaos_injected: 0,
+        stalled: false,
         exit: String::new(),
         error: None,
     };
@@ -357,6 +366,7 @@ pub fn run(scenario: &ClusterScenario, binary: &str, engine: &str, seed: u64) ->
     result.verify_failures = extra_number(line, "verify_failures");
     result.cancellations = extra_number(line, "cancellations");
     result.double_completions = extra_number(line, "double_completions");
+    result.stalled = extra_number(line, "stalled") == 1;
     result.issued = extra_number(line, "issued");
     main_server.with_stats(|stats| {
         result.duplicate_executions = stats.duplicate_executions;
@@ -478,7 +488,7 @@ pub fn torture_markdown(results: &[ClusterResult]) -> String {
             result.cpu_seconds,
             result.max_rss_mb,
             result.connections,
-            result.exit,
+            if result.stalled { format!("{} (stalled)", result.exit) } else { result.exit.clone() },
         ));
     }
     out

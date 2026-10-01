@@ -27,6 +27,7 @@ struct Arguments {
     var deadline = 120.0
     var cancelFraction = 0.5
     var trickle = 0.0
+    var stallExit = 0.0
     var seed: UInt64 = 1
 
     static func parse() -> Arguments {
@@ -48,6 +49,7 @@ struct Arguments {
             case "--cancel-fraction": result.cancelFraction = Double(value) ?? result.cancelFraction
             case "--seed": result.seed = UInt64(value) ?? result.seed
             case "--trickle": result.trickle = Double(value) ?? result.trickle
+            case "--stall-exit": result.stallExit = Double(value) ?? result.stallExit
             default: fail("unknown argument \(argument)")
             }
         }
@@ -343,6 +345,8 @@ final class Recorder {
     var cancellations = 0
     var doubleCompletions = 0
     var compact = false
+    private(set) var lastProgressAt = 0.0
+    var stalled = false
 
     func elapsed() -> Double {
         return Double(DispatchTime.now().uptimeNanoseconds &- self.start) / 1e9
@@ -352,6 +356,9 @@ final class Recorder {
         self.lock.lock()
         defer { self.lock.unlock() }
         let index = self.sent.count
+        if self.sent.count == self.completed + self.failed {
+            self.lastProgressAt = self.elapsed()
+        }
         self.sent.append(self.elapsed())
         self.done.append(nil)
         if probe {
@@ -369,6 +376,7 @@ final class Recorder {
                 self.done[index] = at
                 self.completed += 1
                 self.bytes += bytes
+                self.lastProgressAt = at
             } else {
                 self.doubleCompletions += 1
             }
@@ -406,7 +414,7 @@ final class Recorder {
         let throughput = elapsed > 0 ? Double(self.bytes) / 1e6 / elapsed : 0
         var output = "{\"engine\":\"\(engine)\",\"workload\":\"\(workload)\",\"completed\":\(self.completed),\"failed\":\(failed),\"elapsed\":\(formatNumber(elapsed)),"
         output += "\"latency_ms\":{\"p50\":\(formatNumber(latency.p50)),\"p95\":\(formatNumber(latency.p95)),\"p99\":\(formatNumber(latency.p99)),\"max\":\(formatNumber(latency.max))},"
-        output += "\"bytes\":\(self.bytes),\"throughput_mbps\":\(formatNumber(throughput)),\"verify_failures\":\(self.verifyFailures),\"cancellations\":\(self.cancellations),\"double_completions\":\(self.doubleCompletions),\"issued\":\(self.sent.count),\"requests\":["
+        output += "\"bytes\":\(self.bytes),\"throughput_mbps\":\(formatNumber(throughput)),\"verify_failures\":\(self.verifyFailures),\"cancellations\":\(self.cancellations),\"double_completions\":\(self.doubleCompletions),\"stalled\":\(self.stalled ? 1 : 0),\"issued\":\(self.sent.count),\"requests\":["
         if !self.compact {
             output += zip(self.sent, self.done).map { "[\(formatNumber($0)),\($1.map(formatNumber) ?? "null")]" }.joined(separator: ",")
         }
@@ -621,6 +629,11 @@ final class Bench {
 
     private func poll(deadline: Date, done: DispatchSemaphore, condition: @escaping (Bench) -> Bool) {
         if condition(self) || Date() >= deadline {
+            done.signal()
+            return
+        }
+        if self.arguments.stallExit > 0 && self.recorder.pendingCount > 0 && self.recorder.elapsed() - self.recorder.lastProgressAt > self.arguments.stallExit {
+            self.recorder.stalled = true
             done.signal()
             return
         }

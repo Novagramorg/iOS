@@ -78,6 +78,7 @@ fn main() {
             let mut binary: Option<String> = None;
             let mut quick = true;
             let mut torture = false;
+            let mut jobs = 1usize;
             let mut out: Option<String> = None;
             let mut only: Option<String> = None;
             let mut repeat = 1usize;
@@ -88,9 +89,10 @@ fn main() {
                     "--telegramcore" => binary = iter.next().cloned(),
                     "--suite" => {
                         let name = iter.next().cloned().unwrap_or_default();
-                        quick = !name.ends_with("full");
                         torture = name.starts_with("torture");
+                        quick = if torture { name == "torture-quick" } else { !name.ends_with("full") };
                     }
+                    "--jobs" => jobs = iter.next().and_then(|v| v.parse().ok()).expect("jobs"),
                     "--out" => out = iter.next().cloned(),
                     "--only" => only = iter.next().cloned(),
                     "--repeat" => repeat = iter.next().and_then(|v| v.parse().ok()).expect("repeat"),
@@ -102,7 +104,7 @@ fn main() {
             }
             let binary = binary.expect("--telegramcore PATH");
             let scenarios = if torture { cluster::torture_suite(quick) } else { cluster::suite(quick) };
-            let mut results = Vec::new();
+            let mut work = Vec::new();
             for (index, scenario) in scenarios.iter().enumerate() {
                 if let Some(filter) = &only
                     && !scenario.name.contains(filter.as_str())
@@ -111,25 +113,37 @@ fn main() {
                 }
                 for round in 0..repeat {
                     for engine in &engines {
-                        eprintln!(
-                            "[{}/{}] {} — tc-{} (round {})",
-                            index + 1,
-                            scenarios.len(),
-                            scenario.name,
-                            engine,
-                            round + 1
-                        );
-                        let result = cluster::run(scenario, &binary, engine, 5000 + index as u64 * 11 + round as u64);
-                        let row = if torture {
-                            cluster::torture_markdown(std::slice::from_ref(&result))
-                        } else {
-                            cluster::markdown(std::slice::from_ref(&result))
-                        };
-                        eprintln!("{}", row.lines().nth(2).unwrap_or(""));
-                        results.push(result);
+                        work.push((work.len(), index, round, scenario.clone(), engine.clone()));
                     }
                 }
             }
+            let total = scenarios.len();
+            let queue = std::sync::Mutex::new(work.into_iter());
+            let collected = std::sync::Mutex::new(Vec::new());
+            std::thread::scope(|scope| {
+                for _ in 0..jobs.max(1) {
+                    scope.spawn(|| {
+                        loop {
+                            let next = queue.lock().unwrap().next();
+                            let Some((order, index, round, scenario, engine)) = next else {
+                                break;
+                            };
+                            eprintln!("[{}/{}] {} — tc-{} (round {})", index + 1, total, scenario.name, engine, round + 1);
+                            let result = cluster::run(&scenario, &binary, &engine, 5000 + index as u64 * 11 + round as u64);
+                            let row = if torture {
+                                cluster::torture_markdown(std::slice::from_ref(&result))
+                            } else {
+                                cluster::markdown(std::slice::from_ref(&result))
+                            };
+                            eprintln!("{}", row.lines().nth(2).unwrap_or(""));
+                            collected.lock().unwrap().push((order, result));
+                        }
+                    });
+                }
+            });
+            let mut collected = collected.into_inner().unwrap();
+            collected.sort_by_key(|(order, _)| *order);
+            let results: Vec<cluster::ClusterResult> = collected.into_iter().map(|(_, result)| result).collect();
             let table = if torture { cluster::torture_markdown(&results) } else { cluster::markdown(&results) };
             println!("{table}");
             if let Some(path) = out {

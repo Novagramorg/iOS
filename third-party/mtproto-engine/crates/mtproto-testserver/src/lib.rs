@@ -142,6 +142,7 @@ struct Shared {
     salt: i64,
     previous_salt: Option<(i64, Instant)>,
     last_salt_change: Option<Instant>,
+    last_transport_flood: Option<Instant>,
     bad_salt_sent: bool,
     handshake_faults: VecDeque<HandshakeFault>,
 }
@@ -166,6 +167,7 @@ impl TestServer {
             salt: SERVER_SALT,
             previous_salt: None,
             last_salt_change: None,
+            last_transport_flood: None,
             bad_salt_sent: false,
             handshake_faults: options.handshake_faults.iter().copied().collect(),
         }));
@@ -477,15 +479,32 @@ fn server_now(offset: f64) -> f64 {
 }
 
 fn serve_frames(
-    mut wire: Wire,
+    wire: Wire,
     shared: Arc<Mutex<Shared>>,
     stop: Arc<AtomicBool>,
     options: ServerOptions,
 ) -> std::io::Result<()> {
+    let mut delayed: Vec<Delayed> = Vec::new();
+    let result = serve_frames_inner(wire, shared.clone(), stop, options, &mut delayed);
+    let mut guard = shared.lock().unwrap();
+    for item in delayed {
+        if let Some(session) = guard.sessions.get_mut(&item.session_id) {
+            seal_tracked(session, &item.body, true);
+        }
+    }
+    result
+}
+
+fn serve_frames_inner(
+    mut wire: Wire,
+    shared: Arc<Mutex<Shared>>,
+    stop: Arc<AtomicBool>,
+    options: ServerOptions,
+    delayed: &mut Vec<Delayed>,
+) -> std::io::Result<()> {
     let decoder = FrameDecoder::new(wire.framing);
     let mut handshake: Option<ServerHandshake> = None;
     let mut handshake_stalled = false;
-    let mut delayed: Vec<Delayed> = Vec::new();
     let mut resent_for: HashSet<i64> = HashSet::new();
     let mut chaos_rng = XorShiftRandom::new(options.chaos.as_ref().map_or(1, |chaos| chaos.seed) ^ wire.rng.next_u64());
     loop {
@@ -494,7 +513,7 @@ fn serve_frames(
         }
         let now = Instant::now();
         let (due, later): (Vec<Delayed>, Vec<Delayed>) = delayed.drain(..).partition(|item| item.at <= now);
-        delayed = later;
+        *delayed = later;
         for item in due {
             let packet = {
                 let mut guard = shared.lock().unwrap();
@@ -576,6 +595,7 @@ fn serve_frames(
         let mut close_after = false;
         let mut transport_error: Option<i32> = None;
         let mut stall: Option<Duration> = None;
+        let mut sealed_extra: Vec<Vec<u8>> = Vec::new();
         let mut resend: Vec<(i64, i32, Vec<u8>)> = Vec::new();
         {
             let mut guard = shared.lock().unwrap();
@@ -742,7 +762,12 @@ fn serve_frames(
                                             .push((sp::rpc_error(message.msg_id, 500, "INTERNAL_SERVER_ERROR"), true));
                                         continue;
                                     }
-                                    chaos::Fault::TransportFlood => {
+                                    chaos::Fault::TransportFlood
+                                        if shared_ref
+                                            .last_transport_flood
+                                            .is_none_or(|at| at.elapsed() > Duration::from_secs(30)) =>
+                                    {
+                                        shared_ref.last_transport_flood = Some(Instant::now());
                                         session.received.remove(&message.msg_id);
                                         transport_error = Some(-429);
                                         continue;
@@ -793,6 +818,7 @@ fn serve_frames(
                                     chaos::Fault::UnknownSibling => {
                                         let first = session.peer.next_msg_id(true);
                                         let second = session.peer.next_msg_id(true);
+                                        track_answer(session, second, &reply);
                                         outgoing.push((
                                             sp::container(&[
                                                 (first, 1, sp::update(0x0bad_f00d, &[1, 2, 3, 4])),
@@ -810,12 +836,16 @@ fn serve_frames(
                                         outgoing.push((reply.clone(), true));
                                         outgoing.push((reply, true));
                                     }
-                                    chaos::Fault::GzipAnswer => outgoing.push((
-                                        sp::rpc_result_gzipped(message.msg_id, &result_body(tag, &payload)),
-                                        true,
-                                    )),
+                                    chaos::Fault::GzipAnswer => {
+                                        let msg_id = session.peer.next_msg_id(true);
+                                        track_answer(session, msg_id, &reply);
+                                        let body = sp::rpc_result_gzipped(message.msg_id, &result_body(tag, &payload));
+                                        let packet = session.peer.seal(msg_id, 1, &body);
+                                        sealed_extra.push(packet);
+                                    }
                                     chaos::Fault::MsgCopy => {
                                         let inner = session.peer.next_msg_id(true);
+                                        track_answer(session, inner, &reply);
                                         outgoing.push((sp::msg_copy(inner, 1, &reply), false));
                                     }
                                     chaos::Fault::ServerPing => {
@@ -970,6 +1000,13 @@ fn serve_frames(
             std::thread::sleep(duration);
         }
         if let Some(code) = transport_error {
+            let mut guard = shared.lock().unwrap();
+            if let Some(session) = guard.sessions.get_mut(&session_id) {
+                for (body, content) in &outgoing {
+                    seal_tracked(session, body, *content);
+                }
+            }
+            drop(guard);
             wire.send_frame(&code.to_le_bytes())?;
             let _ = wire.stream.shutdown(Shutdown::Both);
             return Ok(());
@@ -982,6 +1019,7 @@ fn serve_frames(
             for (body, content) in &outgoing {
                 packets.push(seal_tracked(session, body, *content));
             }
+            packets.extend(sealed_extra);
             packets
         };
         for packet in packets {
@@ -992,6 +1030,12 @@ fn serve_frames(
             return Ok(());
         }
     }
+}
+
+fn track_answer(session: &mut SessionState, msg_id: i64, reply: &[u8]) {
+    session.unacked.push((msg_id, 1, reply.to_vec()));
+    let req_msg_id = i64::from_le_bytes(reply[4..12].try_into().unwrap());
+    session.answer_ids.insert(req_msg_id, msg_id);
 }
 
 fn seal_tracked(session: &mut SessionState, body: &[u8], content: bool) -> Vec<u8> {

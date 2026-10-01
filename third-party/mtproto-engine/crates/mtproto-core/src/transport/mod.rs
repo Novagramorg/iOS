@@ -59,8 +59,8 @@ impl TransportErrorKind {
     }
 }
 
-pub const TRANSPORT_FLOOD_DELAY: f64 = 5.0;
-pub const TRANSPORT_FLOOD_MAX_DELAY: f64 = 60.0;
+pub const TRANSPORT_FLOOD_DELAY: f64 = 1.0;
+pub const TRANSPORT_FLOOD_MAX_DELAY: f64 = 30.0;
 pub const RECONNECT_DELAYS: [f64; 5] = [0.0, 0.3, 1.0, 2.0, 4.0];
 pub const RECONNECT_JITTER: f64 = 0.2;
 
@@ -100,9 +100,9 @@ mod policy_tests {
     #[test]
     fn flood_delay_grows_and_caps() {
         let delays: Vec<f64> = (1..=7).map(transport_flood_delay).collect();
-        assert_eq!(delays, vec![5.0, 10.0, 20.0, 40.0, 60.0, 60.0, 60.0]);
-        assert_eq!(transport_flood_delay(0), 5.0);
-        assert_eq!(transport_flood_delay(u32::MAX), 60.0);
+        assert_eq!(delays, vec![1.0, 2.0, 4.0, 8.0, 16.0, 30.0, 30.0]);
+        assert_eq!(transport_flood_delay(0), 1.0);
+        assert_eq!(transport_flood_delay(u32::MAX), 30.0);
     }
 
     #[test]

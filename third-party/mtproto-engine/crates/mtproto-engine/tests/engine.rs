@@ -517,7 +517,7 @@ fn completed_ids(collector: &Collector, session: SessionHandle) -> Vec<u64> {
 }
 
 #[test]
-fn transport_flood_backs_off_and_resends_rejected_queries() {
+fn transport_flood_backs_off_and_retransmits_without_reexecution() {
     let key = random_key(30);
     let server = TestServer::start(vec![key.clone()], ServerOptions::default());
     let collector = Arc::new(Collector::default());
@@ -526,11 +526,12 @@ fn transport_flood_backs_off_and_resends_rejected_queries() {
     let started = Instant::now();
     engine.send(session, raw_request(1, transport_error_call(-429)));
     assert!(collector.wait(Duration::from_secs(20), |events| completions(events, session) == 1));
-    assert!(started.elapsed() >= Duration::from_millis(4900), "waited {:?}", started.elapsed());
+    assert!(started.elapsed() >= Duration::from_millis(900), "waited {:?}", started.elapsed());
+    assert!(started.elapsed() < Duration::from_secs(4), "waited {:?}", started.elapsed());
     assert_eq!(collector.count(|event| matches!(event, EngineEvent::TransportFlood)), 1);
     assert_eq!(collector.count(|event| matches!(event, EngineEvent::AuthKeyInvalid { .. })), 0);
     assert_eq!(server.executions(TAG_TRANSPORT_ERROR_ONCE), 2);
-    assert_eq!(server.with_stats(|stats| stats.state_requests), 0, "rejected queries are resent, not left unknown");
+    assert_eq!(server.with_stats(|stats| stats.state_requests), 0, "retransmitted under the same msg_id, no state round trip");
     engine.shutdown();
 }
 
@@ -595,7 +596,7 @@ fn handshake_transport_error_restarts_key_generation_without_key_invalid() {
     let started = Instant::now();
     engine.send(session, request(1, 9));
     assert!(collector.wait(Duration::from_secs(25), |events| completions(events, session) == 1));
-    assert!(started.elapsed() >= Duration::from_millis(4900), "the handshake flood delay applies");
+    assert!(started.elapsed() >= Duration::from_millis(900), "the handshake flood delay applies");
     assert_eq!(collector.count(|event| matches!(event, EngineEvent::AuthKeyInvalid { .. })), 0);
     assert_eq!(collector.count(|event| matches!(event, EngineEvent::TransportFlood)), 1);
     assert_eq!(

@@ -844,17 +844,11 @@ impl SessionRuntime {
             TransportErrorKind::Flood => {
                 self.transport_floods += 1;
                 callbacks.on_event(self.handle, EngineEvent::TransportFlood);
-                if let Some(rpc) = &mut self.rpc {
-                    rpc.connection_rejected(now);
-                }
                 self.next_attempt_at =
                     self.next_attempt_at.max(now.mono + transport_flood_delay(self.transport_floods));
                 self.close_reason = Some(CloseReason::TransportFlood);
             }
             TransportErrorKind::InvalidDc => {
-                if let Some(rpc) = &mut self.rpc {
-                    rpc.connection_rejected(now);
-                }
                 self.close_reason = Some(CloseReason::ServerRejected);
             }
             TransportErrorKind::Forbidden | TransportErrorKind::Other => {
