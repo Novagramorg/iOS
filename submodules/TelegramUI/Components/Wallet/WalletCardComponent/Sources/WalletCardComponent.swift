@@ -618,10 +618,10 @@ public final class WalletCardComponent: Component {
                 transition: .immediate,
                 component: AnyComponent(InteractiveDiamondComponent(
                     size: diamondSize,
-                    diamondWidth: 26.0 * 1.09 * scale,
+                    diamondWidth: 26.0 * 1.09 * 0.8 * scale,
                     isVisible: self.isDiamondRenderingEnabled,
                     theme: component.theme,
-                    appearance: .cool,
+                    appearance: .white,
                     expansionStyle: .wallet,
                     tapToSpin: true
                 )),

@@ -162,7 +162,6 @@ private final class LazySectionView: UIView {
             guard let view = self.contentView.itemViews[id], view.superview != nil else { continue }
             if view.superview !== self {
                 self.liftedItems[id] = LiftedItem(view: view)
-                // Same coordinates as the section's content container, but outside its rounded clip.
                 self.addSubview(view)
             }
         }
@@ -752,6 +751,8 @@ private final class WalletScreenComponent: Component {
         private let cardBalanceMaskLayer = CAShapeLayer()
         private let navigationBalanceMaskLayer = CAShapeLayer()
         private let additionalBalancesSection = ComponentView<Empty>()
+        private var additionalBalancesIsVisible = false
+        private var additionalBalancesVisibilityGeneration: UInt64 = 0
         private let earningsIcon = UIImage(bundleImageName: "Wallet/TransactionGram")?.withRenderingMode(.alwaysOriginal)
         private let card = ComponentView<Empty>()
         private var gramTooltip: ComponentView<Empty>?
@@ -995,6 +996,13 @@ private final class WalletScreenComponent: Component {
             component.context.twoStepAuthData.set(updatedData)
         }
 
+        private var additionalBalancesTransition: ComponentTransition {
+            if self.environment?.isVisible == true && self.window != nil {
+                return .easeInOut(duration: 0.25)
+            }
+            return .immediate
+        }
+
         private func loadExistingWaltBalance() {
             guard let component = self.component,
                   self.accountContext === component.context,
@@ -1009,7 +1017,6 @@ private final class WalletScreenComponent: Component {
                 guard let self, self.accountContext === context else {
                     return
                 }
-                let hadValue = self.existingWaltBalance != nil
                 let balanceChanged = self.existingWaltBalance != balance
                 self.existingWaltBalance = balance
 
@@ -1023,8 +1030,7 @@ private final class WalletScreenComponent: Component {
                 }
 
                 if balanceChanged && !self.isUpdating {
-                    let transition: ComponentTransition = hadValue ? .easeInOut(duration: 0.25) : .immediate
-                    self.componentState?.updated(transition: transition)
+                    self.componentState?.updated(transition: self.additionalBalancesTransition)
                 }
             }, completed: { [weak self] in
                 guard let self, self.accountContext === context else {
@@ -1058,7 +1064,7 @@ private final class WalletScreenComponent: Component {
                 if self.previousWalletsBalance != balance {
                     self.previousWalletsBalance = balance
                     if !self.isUpdating {
-                        self.componentState?.updated(transition: .immediate) //.easeInOut(duration: 0.25))
+                        self.componentState?.updated(transition: self.additionalBalancesTransition)
                     }
                 }
             }))
@@ -1267,12 +1273,26 @@ private final class WalletScreenComponent: Component {
                     self?.openWalletSettings()
                 })
             }
-            guard !items.isEmpty else {
-                if let sectionView = self.additionalBalancesSection.view {
+            let isVisible = !items.isEmpty
+            let visibilityChanged = self.additionalBalancesIsVisible != isVisible
+            if visibilityChanged {
+                self.additionalBalancesIsVisible = isVisible
+                self.additionalBalancesVisibilityGeneration &+= 1
+            }
+            guard isVisible else {
+                if let sectionView = self.additionalBalancesSection.view, sectionView.superview != nil {
                     if transition.animation.isImmediate {
+                        self.additionalBalancesVisibilityGeneration &+= 1
+                        sectionView.layer.removeAnimation(forKey: "opacity")
                         sectionView.removeFromSuperview()
-                    } else {
-                        transition.setAlpha(view: sectionView, alpha: 0.0, completion: { _ in
+                    } else if visibilityChanged {
+                        let generation = self.additionalBalancesVisibilityGeneration
+                        transition.setAlpha(view: sectionView, alpha: 0.0, completion: { [weak self, weak sectionView] completed in
+                            guard completed, let self, let sectionView,
+                                  self.additionalBalancesVisibilityGeneration == generation,
+                                  !self.additionalBalancesIsVisible else {
+                                return
+                            }
                             sectionView.removeFromSuperview()
                         })
                     }
@@ -1298,12 +1318,18 @@ private final class WalletScreenComponent: Component {
             )
             if let sectionView = self.additionalBalancesSection.view {
                 if sectionView.superview == nil {
+                    sectionView.layer.removeAnimation(forKey: "opacity")
                     sectionView.alpha = 1.0
                     self.topContentContainerView.addSubview(sectionView)
                 }
                 sectionTransition.setFrame(view: sectionView, frame: CGRect(origin: origin, size: sectionSize))
                 if !wasVisible && !transition.animation.isImmediate {
                     transition.animateAlpha(view: sectionView, from: 0.0, to: 1.0)
+                } else {
+                    transition.setAlpha(view: sectionView, alpha: 1.0)
+                    if transition.animation.isImmediate {
+                        sectionView.layer.removeAnimation(forKey: "opacity")
+                    }
                 }
             }
             return sectionSize.height + 10.0
@@ -3104,8 +3130,7 @@ private final class WalletScreenComponent: Component {
                     if self.availableEarnings != availableEarningsBalance {
                         self.availableEarnings = availableEarningsBalance
                         if !self.isUpdating {
-                            let transition: ComponentTransition = self.existingWaltBalance != nil || availableEarningsBalance != nil ? .immediate : .easeInOut(duration: 0.25)
-                            self.componentState?.updated(transition: transition)
+                            self.componentState?.updated(transition: self.additionalBalancesTransition)
                         }
                     }
                 }))
