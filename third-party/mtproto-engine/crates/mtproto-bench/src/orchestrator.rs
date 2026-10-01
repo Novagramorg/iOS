@@ -140,6 +140,25 @@ pub fn suite(name: &str, include_real: bool) -> Vec<Scenario> {
     proxy_flaky.secret = Some(FAKE_TLS_SECRET.into());
     scenarios.push(proxy_flaky);
 
+    if !quick {
+        scenarios.push(scenario(
+            "media/many-sessions",
+            ClientArgs {
+                total_bytes: 64 * 1024 * 1024,
+                part_size: 64 * 1024,
+                sessions: 32,
+                session_concurrency: 2,
+                ..base("media")
+            },
+            "perfect",
+        ));
+        scenarios.push(scenario(
+            "soak/flaky-120s",
+            ClientArgs { rate: 20.0, duration: 120.0, deadline: 240.0, ..base("steady") },
+            "flaky",
+        ));
+    }
+
     if include_real {
         for profile in ["perfect", "3g"] {
             let mut real = scenario(

@@ -282,7 +282,7 @@ pub fn server_hello_for_tests(client_hello: &[u8], secret: &[u8; 16], rng: &mut 
 }
 
 pub fn verify_client_hello_for_tests(hello: &[u8], secret: &[u8; 16]) -> Option<i32> {
-    if hello.len() != CLIENT_HELLO_LEN {
+    if hello.len() < 43 || hello.len() > 16 * 1024 {
         return None;
     }
     let mut zeroed = hello.to_vec();

@@ -15,8 +15,8 @@ use mtproto_core::test_support::server_peer::{self as sp, ServerPeer};
 use mtproto_core::test_support::{ServerHandshake, ServerHandshakeBehavior};
 use mtproto_core::tl::{Reader, Writer, ids};
 use mtproto_core::transport::{
-    CLIENT_HELLO_LEN, FrameDecoder, Framing, InputBuffer, ProxySecret, ServerObfuscation, TlsRecordReader,
-    TlsRecordWriter, accept_obfuscated_header, encode_frame, server_hello_for_tests, verify_client_hello_for_tests,
+    FrameDecoder, Framing, InputBuffer, ProxySecret, ServerObfuscation, TlsRecordReader, TlsRecordWriter,
+    accept_obfuscated_header, encode_frame, server_hello_for_tests, verify_client_hello_for_tests,
 };
 
 pub const CALL: u32 = 0x7e57_0001;
@@ -372,7 +372,13 @@ fn serve_connection(
     let header: [u8; 64];
     let mut tls_reader = TlsRecordReader::new();
     if tls {
-        let hello = read_exact_raw(&mut stream, &mut raw, CLIENT_HELLO_LEN, &stop)?;
+        let record_header = read_exact_raw(&mut stream, &mut raw, 5, &stop)?;
+        if record_header[0] != 0x16 {
+            return Ok(());
+        }
+        let record_length = ((record_header[3] as usize) << 8) | record_header[4] as usize;
+        let mut hello = record_header;
+        hello.extend(read_exact_raw(&mut stream, &mut raw, record_length, &stop)?);
         if verify_client_hello_for_tests(&hello, proxy_key.as_ref().unwrap()).is_none() {
             return Ok(());
         }

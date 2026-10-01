@@ -15,7 +15,7 @@ use crate::tl::{Reader, TlError, Writer, ids};
 
 pub const ACK_DELAY: f64 = 30.0;
 pub const MAX_PENDING_ACKS: usize = 100;
-pub const QUERY_DELAY: f64 = 0.001;
+pub const QUERY_DELAY: f64 = 0.0;
 pub const FUTURE_SALTS_RETRY: f64 = 60.0;
 pub const FUTURE_SALTS_COUNT: i32 = 64;
 pub const MAX_IDS_PER_SERVICE_MESSAGE: usize = 8192;
