@@ -1,5 +1,6 @@
 mod args;
 mod client;
+mod cluster;
 mod json;
 mod orchestrator;
 mod report;
@@ -73,9 +74,71 @@ fn main() {
                 std::fs::write(format!("{path}.json"), orchestrator::json(&results)).expect("write json");
             }
         }
+        Some("tc") => {
+            let mut binary: Option<String> = None;
+            let mut quick = true;
+            let mut torture = false;
+            let mut out: Option<String> = None;
+            let mut only: Option<String> = None;
+            let mut repeat = 1usize;
+            let mut engines = vec!["rust".to_string(), "mtprotokit".to_string()];
+            let mut iter = arguments[2..].iter();
+            while let Some(flag) = iter.next() {
+                match flag.as_str() {
+                    "--telegramcore" => binary = iter.next().cloned(),
+                    "--suite" => {
+                        let name = iter.next().cloned().unwrap_or_default();
+                        quick = !name.ends_with("full");
+                        torture = name.starts_with("torture");
+                    }
+                    "--out" => out = iter.next().cloned(),
+                    "--only" => only = iter.next().cloned(),
+                    "--repeat" => repeat = iter.next().and_then(|v| v.parse().ok()).expect("repeat"),
+                    "--engines" => {
+                        engines = iter.next().expect("engines").split(',').map(str::to_string).collect();
+                    }
+                    other => panic!("unknown argument {other}"),
+                }
+            }
+            let binary = binary.expect("--telegramcore PATH");
+            let scenarios = if torture { cluster::torture_suite(quick) } else { cluster::suite(quick) };
+            let mut results = Vec::new();
+            for (index, scenario) in scenarios.iter().enumerate() {
+                if let Some(filter) = &only
+                    && !scenario.name.contains(filter.as_str())
+                {
+                    continue;
+                }
+                for round in 0..repeat {
+                    for engine in &engines {
+                        eprintln!(
+                            "[{}/{}] {} — tc-{} (round {})",
+                            index + 1,
+                            scenarios.len(),
+                            scenario.name,
+                            engine,
+                            round + 1
+                        );
+                        let result = cluster::run(scenario, &binary, engine, 5000 + index as u64 * 11 + round as u64);
+                        let row = if torture {
+                            cluster::torture_markdown(std::slice::from_ref(&result))
+                        } else {
+                            cluster::markdown(std::slice::from_ref(&result))
+                        };
+                        eprintln!("{}", row.lines().nth(2).unwrap_or(""));
+                        results.push(result);
+                    }
+                }
+            }
+            let table = if torture { cluster::torture_markdown(&results) } else { cluster::markdown(&results) };
+            println!("{table}");
+            if let Some(path) = out {
+                std::fs::write(format!("{path}.md"), &table).expect("write markdown");
+            }
+        }
         _ => {
             eprintln!(
-                "usage: mtproto-bench client <args> | mtproto-bench run [--mtprotokit PATH] [--suite quick|full] [--real] [--only NAME] [--repeat N] [--out PREFIX]"
+                "usage: mtproto-bench client <args> | mtproto-bench tc --telegramcore PATH [--suite quick|full] [--only NAME] [--repeat N] [--engines rust,mtprotokit] [--out PREFIX] | mtproto-bench run [--mtprotokit PATH] [--suite quick|full] [--real] [--only NAME] [--repeat N] [--out PREFIX]"
             );
             std::process::exit(2);
         }

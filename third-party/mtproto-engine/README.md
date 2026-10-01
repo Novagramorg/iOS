@@ -78,7 +78,11 @@ Telegram-Mac repo builds `MTProtoEngineFFI.xcframework` (arm64 + x86_64, macOS 1
 - `mtproto-ffi/tests/ffi.rs`: the C ABI end to end, plus a clang-compiled check that every struct in
   the header has the same layout as the Rust definitions.
 - `mtproto-core/examples/live_probe.rs`, `live_rpc.rs`: handshake and RPC against real test and
-  production datacenters.
+  production datacenters. `live_dedupe.rs` probes how production treats a re-sent msg_id (the basis
+  of the retransmission design).
+- `submodules/MTProtoRustEngine` (`swift test`): the Swift wrapper's mapping and bridge tests, and
+  end-to-end tests that drive `MTContext` → `RustNetworkSession` → the engine → the
+  `mtproto-testserver` binary (build it first with `cargo build --release -p mtproto-testserver`).
 
 ## Benchmarks
 

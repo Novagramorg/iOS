@@ -160,10 +160,10 @@ pub fn suite(name: &str, include_real: bool) -> Vec<Scenario> {
     }
 
     if include_real {
-        for profile in ["perfect", "3g"] {
+        for (profile, requests) in [("perfect", 12), ("3g", 12), ("flaky", 40)] {
             let mut real = scenario(
                 &format!("real-config/{profile}"),
-                ClientArgs { mode: "real".into(), requests: 12, concurrency: 2, deadline: 90.0, ..base("real-config") },
+                ClientArgs { mode: "real".into(), requests, concurrency: 2, deadline: 120.0, ..base("real-config") },
                 profile,
             );
             real.real_address = Some("149.154.167.51:443".into());
@@ -215,7 +215,7 @@ pub fn run(scenario: &Scenario, engine: &EngineBinary, seed: u64) -> RunResult {
         .args(&engine.prefix)
         .args(args.to_arguments())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
+        .stderr(if std::env::var_os("BENCH_STDERR").is_some() { Stdio::inherit() } else { Stdio::null() })
         .spawn()
     {
         Ok(child) => child,

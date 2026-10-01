@@ -412,17 +412,28 @@ fn quick_ack_events_only_for_requests_that_asked() {
 }
 
 #[test]
-fn cancelling_large_in_flight_request_drops_answer_and_resets_connection() {
+fn cancelling_in_flight_requests_drops_answers_without_resetting_the_connection() {
     let mut h = Harness::new(SessionRole::Worker { requires_auth_token: false }, Some("h1"));
     h.send(1, RequestFlags { expected_response_size: 1024 * 1024, ..Default::default() });
+    h.send(2, RequestFlags { expected_response_size: 128 * 1024, ..Default::default() });
     let calls = h.flush_calls();
     assert!(h.client.cancel(RequestId(1), h.now));
-    assert!(h.events().contains(&RpcEvent::ConnectionShouldReset));
+    assert!(h.client.cancel(RequestId(2), h.now));
+    assert!(!h.events().contains(&RpcEvent::ConnectionShouldReset), "other in-flight parts keep their connection");
     h.advance(0.01);
-    let transmit = h.client.poll_transmit(h.now, &mut h.rng).unwrap();
-    let packet = h.server.decode(&transmit.data);
-    let drop = packet.find(ids::RPC_DROP_ANSWER).expect("rpc_drop_answer");
-    assert_eq!(i64::from_le_bytes(drop.body[4..12].try_into().unwrap()), calls[0].0);
+    let mut dropped = Vec::new();
+    while let Some(transmit) = h.client.poll_transmit(h.now, &mut h.rng) {
+        let packet = h.server.decode(&transmit.data);
+        for message in &packet.messages {
+            if message.constructor() == ids::RPC_DROP_ANSWER {
+                dropped.push(i64::from_le_bytes(message.body[4..12].try_into().unwrap()));
+            }
+        }
+    }
+    dropped.sort_unstable();
+    let mut expected: Vec<i64> = calls.iter().map(|call| call.0).collect();
+    expected.sort_unstable();
+    assert_eq!(dropped, expected);
 }
 
 #[test]

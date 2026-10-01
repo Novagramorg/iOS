@@ -332,10 +332,8 @@ impl RpcClient {
         self.order.retain(|other| *other != id);
         if state.in_session
             && let CancelOutcome::RemovedInFlight { msg_id } = self.session.cancel(id.into())
-            && state.request.flags.expected_response_size >= LARGE_RESPONSE_THRESHOLD
         {
             self.session.drop_answer(msg_id, now);
-            self.events.push_back(RpcEvent::ConnectionShouldReset);
         }
         self.dispatch_ready(now);
         true
@@ -698,6 +696,14 @@ impl RpcClient {
 
     pub fn note_bytes_received(&mut self, now: Now) {
         self.session.note_bytes_received(now);
+    }
+
+    pub fn wants_outbound_backlog(&self) -> bool {
+        self.session.wants_outbound_backlog()
+    }
+
+    pub fn note_outbound_backlog(&mut self, backlog: Option<usize>, now: Now) {
+        self.session.note_outbound_backlog(backlog, now);
     }
 
     pub fn reset_session(&mut self, now: Now, rng: &mut impl SecureRandom) {

@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
@@ -83,6 +83,7 @@ pub struct Worker {
     scratch: Vec<u8>,
     network_available: bool,
     last_shrink: f64,
+    more_readable: VecDeque<SessionHandle>,
 }
 
 impl Worker {
@@ -107,6 +108,7 @@ impl Worker {
             scratch: vec![0u8; 256 * 1024],
             network_available: true,
             last_shrink: clock::monotonic_seconds(),
+            more_readable: VecDeque::new(),
         }
     }
 
@@ -120,7 +122,8 @@ impl Worker {
                     deadline = deadline.min(at);
                 }
             }
-            let wait = (deadline - now.mono).clamp(0.0, MAX_POLL_WAIT);
+            let wait =
+                if self.more_readable.is_empty() { (deadline - now.mono).clamp(0.0, MAX_POLL_WAIT) } else { 0.0 };
             if let Err(error) = self.poll.poll(&mut events, Some(Duration::from_secs_f64(wait)))
                 && error.kind() != std::io::ErrorKind::Interrupted
             {
@@ -128,6 +131,7 @@ impl Worker {
                 std::thread::sleep(Duration::from_millis(50));
             }
             let now = clock::now();
+            let mut carried: VecDeque<SessionHandle> = std::mem::take(&mut self.more_readable);
             for event in events.iter() {
                 if event.token() == WAKER_TOKEN {
                     continue;
@@ -138,7 +142,11 @@ impl Worker {
                 if let Some(session) = self.sessions.get_mut(&handle) {
                     let readable = event.is_readable() || event.is_read_closed() || event.is_error();
                     let writable = event.is_writable() || event.is_write_closed();
-                    session.handle_io(
+                    if readable {
+                        carried.retain(|other| *other != handle);
+                    }
+                    let more = session.handle_io(
+                        event.token(),
                         readable,
                         writable,
                         self.poll.registry(),
@@ -147,6 +155,26 @@ impl Worker {
                         &self.callbacks,
                         &mut self.rng,
                     );
+                    if more {
+                        self.more_readable.push_back(handle);
+                    }
+                }
+            }
+            for handle in carried {
+                if let Some(session) = self.sessions.get_mut(&handle)
+                    && let Some(token) = session.active_token()
+                    && session.handle_io(
+                        token,
+                        true,
+                        false,
+                        self.poll.registry(),
+                        &mut self.scratch,
+                        now,
+                        &self.callbacks,
+                        &mut self.rng,
+                    )
+                {
+                    self.more_readable.push_back(handle);
                 }
             }
             if !self.drain_commands(now) {
@@ -191,16 +219,18 @@ impl Worker {
                 Command::Shutdown => return false,
                 Command::Create { handle, setup } => {
                     let token = Token(self.next_token);
-                    self.next_token += 1;
+                    self.next_token += 2;
                     let mut runtime = SessionRuntime::new(handle, *setup, token, now, &mut self.rng);
                     runtime.set_network_available(self.network_available, now, self.poll.registry());
                     self.tokens.insert(token, handle);
+                    self.tokens.insert(runtime.race_token(), handle);
                     self.sessions.insert(handle, runtime);
                 }
                 Command::Destroy(handle) => {
                     if let Some(mut session) = self.sessions.remove(&handle) {
                         session.shutdown(self.poll.registry(), now);
                         self.tokens.remove(&session.token());
+                        self.tokens.remove(&session.race_token());
                         self.callbacks.on_event(handle, EngineEvent::Closed);
                     }
                 }

@@ -1,3 +1,6 @@
+pub mod api;
+pub mod chaos;
+
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::io::{ErrorKind, Read, Write};
 use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream};
@@ -91,6 +94,9 @@ pub struct ServerOptions {
     pub handshake_faults: Vec<HandshakeFault>,
     pub clock_offset: f64,
     pub validate_msg_id_time: bool,
+    pub datacenter_id: i32,
+    pub api: Option<Arc<api::ApiWorld>>,
+    pub chaos: Option<chaos::ChaosConfig>,
 }
 
 #[derive(Debug, Default)]
@@ -111,6 +117,9 @@ pub struct Stats {
     pub retransmissions_in_container: usize,
     pub duplicate_msg_ids: usize,
     pub redelivered_answers: usize,
+    pub chaos_injected: HashMap<&'static str, usize>,
+    pub unique_executions: HashMap<(u32, u64), u32>,
+    pub duplicate_executions: usize,
     pub bad_msgs_sent: usize,
     pub session_ids: HashSet<i64>,
     pub transport_errors_sent: usize,
@@ -474,6 +483,7 @@ fn serve_frames(
     let mut handshake_stalled = false;
     let mut delayed: Vec<Delayed> = Vec::new();
     let mut resent_for: HashSet<i64> = HashSet::new();
+    let mut chaos_rng = XorShiftRandom::new(options.chaos.as_ref().map_or(1, |chaos| chaos.seed) ^ wire.rng.next_u64());
     loop {
         if stop.load(Ordering::Relaxed) {
             return Ok(());
@@ -561,6 +571,7 @@ fn serve_frames(
         let mut outgoing: Vec<(Vec<u8>, bool)> = Vec::new();
         let mut close_after = false;
         let mut transport_error: Option<i32> = None;
+        let mut stall: Option<Duration> = None;
         let mut resend: Vec<(i64, i32, Vec<u8>)> = Vec::new();
         {
             let mut guard = shared.lock().unwrap();
@@ -666,8 +677,24 @@ fn serve_frames(
                             stats.init_connections += usize::from(flags.init_connection);
                             stats.without_updates += usize::from(flags.without_updates);
                             stats.invoke_after += usize::from(flags.invoke_after);
-                            let Some((tag, payload)) = call else {
-                                continue;
+                            let (tag, payload) = match call {
+                                Some(Inner::Call(tag, payload)) => (tag, payload),
+                                Some(Inner::Api(constructor, body)) => {
+                                    let reply = match &options.api {
+                                        Some(world) => {
+                                            world.handle(options.datacenter_id, auth_key_id, constructor, &body)
+                                        }
+                                        None => api::ApiReply::Error(400, "METHOD_INVALID".into()),
+                                    };
+                                    let body = match reply {
+                                        api::ApiReply::Result(result) => sp::rpc_result(message.msg_id, &result),
+                                        api::ApiReply::Error(code, text) => sp::rpc_error(message.msg_id, code, &text),
+                                    };
+                                    outgoing.push((body, true));
+                                    session.answered_queries.insert(message.msg_id, 0);
+                                    continue;
+                                }
+                                None => continue,
                             };
                             if tag == TAG_BAD_SALT_ONCE && !shared_ref.bad_salt_sent {
                                 shared_ref.bad_salt_sent = true;
@@ -679,12 +706,127 @@ fn serve_frames(
                                 ));
                                 continue;
                             }
+                            let fault = if tag < TAG_FLOOD_ONCE {
+                                options.chaos.as_ref().and_then(|chaos| chaos.roll(&mut chaos_rng))
+                            } else {
+                                None
+                            };
+                            if let Some(fault) = fault {
+                                *stats.chaos_injected.entry(fault.name()).or_insert(0) += 1;
+                                match fault {
+                                    chaos::Fault::DropBeforeExecution => {
+                                        session.received.remove(&message.msg_id);
+                                        close_after = true;
+                                        continue;
+                                    }
+                                    chaos::Fault::ResendRequest => {
+                                        session.received.remove(&message.msg_id);
+                                        session.awaiting_retransmission.insert(message.msg_id);
+                                        outgoing.push((sp::msg_resend_req(&[message.msg_id]), false));
+                                        continue;
+                                    }
+                                    chaos::Fault::FloodWait => {
+                                        outgoing.push((sp::rpc_error(message.msg_id, 420, "FLOOD_WAIT_1"), true));
+                                        continue;
+                                    }
+                                    chaos::Fault::InternalError => {
+                                        outgoing
+                                            .push((sp::rpc_error(message.msg_id, 500, "INTERNAL_SERVER_ERROR"), true));
+                                        continue;
+                                    }
+                                    chaos::Fault::TransportFlood => {
+                                        session.received.remove(&message.msg_id);
+                                        transport_error = Some(-429);
+                                        continue;
+                                    }
+                                    _ => {}
+                                }
+                            }
                             let count = {
                                 let entry = stats.executions.entry(tag).or_insert(0);
                                 *entry += 1;
                                 *entry
                             };
+                            if tag < TAG_FLOOD_ONCE && payload.len() >= 8 {
+                                let key = u64::from_le_bytes(payload[..8].try_into().unwrap());
+                                let entry = stats.unique_executions.entry((tag, key)).or_insert(0);
+                                *entry += 1;
+                                if *entry > 1 {
+                                    stats.duplicate_executions += 1;
+                                }
+                            }
                             let reply = sp::rpc_result(message.msg_id, &result_body(tag, &payload));
+                            if let Some(fault) = fault {
+                                session.peer.server_time = server_now(session.clock_offset);
+                                match fault {
+                                    chaos::Fault::DropAfterExecution => {
+                                        let msg_id = session.peer.next_msg_id(true);
+                                        session.unacked.push((msg_id, 1, reply));
+                                        session.answer_ids.insert(message.msg_id, msg_id);
+                                        close_after = true;
+                                    }
+                                    chaos::Fault::RotateSalt => {
+                                        shared_ref.salt = salt.wrapping_add((chaos_rng.next_u64() >> 1) as i64 | 1);
+                                        outgoing.push((reply, true));
+                                    }
+                                    chaos::Fault::UnknownSibling => {
+                                        let first = session.peer.next_msg_id(true);
+                                        let second = session.peer.next_msg_id(true);
+                                        outgoing.push((
+                                            sp::container(&[
+                                                (first, 1, sp::update(0x0bad_f00d, &[1, 2, 3, 4])),
+                                                (second, 1, reply),
+                                            ]),
+                                            false,
+                                        ));
+                                    }
+                                    chaos::Fault::SlowAnswer => delayed.push(Delayed {
+                                        at: Instant::now() + Duration::from_millis(300 + chaos_rng.next_u64() % 1200),
+                                        session_id,
+                                        body: reply,
+                                    }),
+                                    chaos::Fault::DuplicateAnswer => {
+                                        outgoing.push((reply.clone(), true));
+                                        outgoing.push((reply, true));
+                                    }
+                                    chaos::Fault::GzipAnswer => outgoing.push((
+                                        sp::rpc_result_gzipped(message.msg_id, &result_body(tag, &payload)),
+                                        true,
+                                    )),
+                                    chaos::Fault::MsgCopy => {
+                                        let inner = session.peer.next_msg_id(true);
+                                        outgoing.push((sp::msg_copy(inner, 1, &reply), false));
+                                    }
+                                    chaos::Fault::ServerPing => {
+                                        outgoing.push((sp::server_ping(SERVER_PING_ID), false));
+                                        outgoing.push((reply, true));
+                                    }
+                                    chaos::Fault::AckNoise => {
+                                        let noise: Vec<i64> =
+                                            (0..4).map(|_| chaos_rng.next_u64() as i64 & !3).collect();
+                                        outgoing.push((sp::msgs_ack(&noise), false));
+                                        outgoing.push((reply, true));
+                                    }
+                                    chaos::Fault::Stall => {
+                                        stall = Some(Duration::from_millis(200 + chaos_rng.next_u64() % 600));
+                                        outgoing.push((reply, true));
+                                    }
+                                    chaos::Fault::NewSession => {
+                                        outgoing.push((
+                                            sp::new_session_created(
+                                                message.msg_id,
+                                                chaos_rng.next_u64() as i64,
+                                                shared_ref.salt,
+                                            ),
+                                            true,
+                                        ));
+                                        outgoing.push((reply, true));
+                                    }
+                                    _ => outgoing.push((reply, true)),
+                                }
+                                session.answered_queries.insert(message.msg_id, 0);
+                                continue;
+                            }
                             let payload_word = |index: usize| {
                                 payload
                                     .get(index * 4..index * 4 + 4)
@@ -803,6 +945,9 @@ fn serve_frames(
                 }
             }
         }
+        if let Some(duration) = stall {
+            std::thread::sleep(duration);
+        }
         if let Some(code) = transport_error {
             wire.send_frame(&code.to_le_bytes())?;
             let _ = wire.stream.shutdown(Shutdown::Both);
@@ -872,7 +1017,12 @@ struct WrapperFlags {
     invoke_after: bool,
 }
 
-fn unwrap_wrappers(body: &[u8]) -> (Option<(u32, Vec<u8>)>, WrapperFlags) {
+enum Inner {
+    Call(u32, Vec<u8>),
+    Api(u32, Vec<u8>),
+}
+
+fn unwrap_wrappers(body: &[u8]) -> (Option<Inner>, WrapperFlags) {
     let mut flags = WrapperFlags::default();
     let mut reader = Reader::new(body);
     loop {
@@ -917,7 +1067,10 @@ fn unwrap_wrappers(body: &[u8]) -> (Option<(u32, Vec<u8>)>, WrapperFlags) {
             CALL => {
                 let tag = reader.read_u32().unwrap_or(0);
                 let payload = reader.read_bytes().map(<[u8]>::to_vec).unwrap_or_default();
-                return (Some((tag, payload)), flags);
+                return (Some(Inner::Call(tag, payload)), flags);
+            }
+            constructor if api::ApiWorld::handles(constructor) => {
+                return (Some(Inner::Api(constructor, reader.rest().to_vec())), flags);
             }
             _ => return (None, flags),
         }

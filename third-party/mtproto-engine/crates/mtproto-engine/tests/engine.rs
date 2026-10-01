@@ -833,3 +833,23 @@ fn network_usage_reports_interface_kind() {
     }));
     engine.shutdown();
 }
+
+#[test]
+fn connect_race_reaches_a_live_address_when_the_first_one_swallows_syns() {
+    let key = random_key(40);
+    let server = TestServer::start(vec![key.clone()], ServerOptions::default());
+    let collector = Arc::new(Collector::default());
+    let engine = engine(&collector, 2);
+    let mut session_setup = setup(&server, &key, SessionRole::Main);
+    session_setup.addresses.insert(0, DcAddress { host: "192.0.2.1".into(), port: 443, secret: None });
+    let started = std::time::Instant::now();
+    let session = engine.create_session(session_setup);
+    engine.send(session, request(1, 9));
+    assert!(collector.wait(WAIT, |events| completions(events, session) == 1));
+    assert!(
+        started.elapsed() < Duration::from_secs(4),
+        "a black-holed first address must not cost the 12 s connect timeout ({:?})",
+        started.elapsed()
+    );
+    engine.shutdown();
+}

@@ -95,6 +95,10 @@ impl Connection {
         })
     }
 
+    pub fn token(&self) -> Token {
+        self.token
+    }
+
     pub fn is_established(&self) -> bool {
         matches!(self.phase, Phase::Ready) && self.transport.is_ready()
     }
@@ -204,6 +208,11 @@ impl Connection {
         Ok(())
     }
 
+    pub fn outbound_backlog(&self) -> Option<usize> {
+        let unsent = self.write_buffer.len() - self.write_offset;
+        kernel_send_queue(&self.socket).map(|queued| unsent + queued)
+    }
+
     pub fn read_chunk(
         &mut self,
         registry: &Registry,
@@ -275,4 +284,27 @@ impl Connection {
     pub fn shrink(&mut self) {
         self.transport.shrink_buffers();
     }
+}
+
+#[cfg(target_vendor = "apple")]
+#[allow(unsafe_code)]
+fn kernel_send_queue(socket: &mio::net::TcpStream) -> Option<usize> {
+    use std::os::fd::AsRawFd;
+    let mut value: libc::c_int = 0;
+    let mut length = std::mem::size_of::<libc::c_int>() as libc::socklen_t;
+    let result = unsafe {
+        libc::getsockopt(
+            socket.as_raw_fd(),
+            libc::SOL_SOCKET,
+            libc::SO_NWRITE,
+            (&mut value as *mut libc::c_int).cast(),
+            &mut length,
+        )
+    };
+    (result == 0 && value >= 0).then_some(value as usize)
+}
+
+#[cfg(not(target_vendor = "apple"))]
+fn kernel_send_queue(_socket: &mio::net::TcpStream) -> Option<usize> {
+    None
 }

@@ -363,6 +363,145 @@ fn large_answers_are_acknowledged_at_once_small_ones_are_batched() {
     assert!(read_vector_after_constructor(&ack.body).len() >= 2, "pending small acks ride along");
 }
 
+fn busy_with_unanswered_ping(h: &mut Harness) -> f64 {
+    h.session.send(QueryId(1), query_body(1), QueryOptions::default(), h.now);
+    h.flush_all();
+    let since = h.session.unanswered_ping_since().expect("a ping went out with the query");
+    assert!(h.session.wants_outbound_backlog());
+    since
+}
+
+#[test]
+fn silent_connection_is_cut_by_the_probe_long_before_the_read_timeout() {
+    let mut h = Harness::new();
+    let since = busy_with_unanswered_ping(&mut h);
+    h.session.note_outbound_backlog(Some(0), h.now);
+    let timeout = h.session.probe_timeout();
+    assert!((PROBE_TIMEOUT_MIN..=PROBE_TIMEOUT_MAX).contains(&timeout));
+    assert!(timeout < h.session.read_disconnect_delay());
+    let deadline = h.session.poll_timeout(h.now).unwrap();
+    assert!(deadline <= h.now.mono + BACKLOG_SAMPLE_INTERVAL + 0.01, "backlog is sampled while the ping is unanswered");
+    let mut elapsed = 0.0;
+    let outcome = loop {
+        h.advance(0.1);
+        elapsed += 0.1;
+        h.session.note_outbound_backlog(Some(0), h.now);
+        match h.session.handle_timeout(h.now) {
+            Ok(()) => assert!(elapsed < 10.0),
+            Err(error) => break error,
+        }
+    };
+    assert_eq!(outcome, SessionError::ProbeTimeout);
+    assert!(h.now.mono - since <= timeout + 0.25, "cut {:.2} s after the ping", h.now.mono - since);
+}
+
+#[test]
+fn draining_backlog_is_progress_and_never_trips_the_probe() {
+    let mut h = Harness::new();
+    busy_with_unanswered_ping(&mut h);
+    let mut backlog = 4_000_000usize;
+    for _ in 0..60 {
+        h.session.note_outbound_backlog(Some(backlog), h.now);
+        assert_eq!(h.session.handle_timeout(h.now), Ok(()));
+        h.advance(0.1);
+        backlog -= 50_000;
+        h.session.note_bytes_received(h.now);
+    }
+    busy_with_unanswered_ping(&mut h);
+    let mut stalled = Ok(());
+    for _ in 0..80 {
+        h.advance(0.1);
+        h.session.note_outbound_backlog(Some(backlog), h.now);
+        stalled = h.session.handle_timeout(h.now);
+        if stalled.is_err() {
+            break;
+        }
+    }
+    assert_eq!(stalled, Err(SessionError::ProbeTimeout), "a backlog that stops draining is a dead path");
+}
+
+#[test]
+fn writes_acknowledged_by_a_proxy_after_the_ping_drained_are_not_liveness() {
+    let mut h = Harness::new();
+    let since = busy_with_unanswered_ping(&mut h);
+    h.session.note_outbound_backlog(Some(300), h.now);
+    h.advance(0.05);
+    h.session.note_outbound_backlog(Some(0), h.now);
+    let mut outcome = Ok(());
+    for step in 0..60 {
+        h.advance(0.1);
+        h.session.note_outbound_backlog(Some(if step % 2 == 0 { 120 } else { 0 }), h.now);
+        outcome = h.session.handle_timeout(h.now);
+        if outcome.is_err() {
+            break;
+        }
+    }
+    assert_eq!(outcome, Err(SessionError::ProbeTimeout));
+    assert!(
+        h.now.mono - since < h.session.probe_timeout() * 0.5 + 1.5,
+        "new writes after the drain must not extend the probe"
+    );
+}
+
+#[test]
+fn without_backlog_information_only_the_classic_timeouts_apply() {
+    let mut h = Harness::new();
+    busy_with_unanswered_ping(&mut h);
+    let mut seconds = 0.0;
+    let outcome = loop {
+        h.advance(0.25);
+        seconds += 0.25;
+        if let Err(error) = h.session.handle_timeout(h.now) {
+            break error;
+        }
+        assert!(seconds < 200.0);
+    };
+    assert_ne!(outcome, SessionError::ProbeTimeout);
+    assert!(seconds >= h.session.read_disconnect_delay() - 0.5);
+}
+
+#[test]
+fn inbound_bytes_after_the_ping_cancel_the_probe() {
+    let mut h = Harness::new();
+    busy_with_unanswered_ping(&mut h);
+    h.session.note_outbound_backlog(Some(0), h.now);
+    h.advance(0.3);
+    h.session.note_bytes_received(h.now);
+    assert!(h.session.unanswered_ping_since().is_none());
+    assert!(!h.session.wants_outbound_backlog());
+    h.advance(PROBE_TIMEOUT_MAX);
+    h.session.note_bytes_received(h.now);
+    assert_eq!(h.session.handle_timeout(h.now), Ok(()));
+}
+
+#[test]
+fn probe_backoff_grows_after_a_false_alarm_and_relaxes_after_fast_pongs() {
+    let mut h = Harness::new();
+    let base = h.session.probe_timeout();
+    busy_with_unanswered_ping(&mut h);
+    h.session.note_outbound_backlog(Some(0), h.now);
+    h.advance(PROBE_TIMEOUT_MAX + 0.5);
+    h.session.note_outbound_backlog(Some(0), h.now);
+    assert_eq!(h.session.handle_timeout(h.now), Err(SessionError::ProbeTimeout));
+    assert!(h.session.probe_timeout() > base * 1.5);
+    h.session.connection_closed();
+    h.session.connection_opened(h.now);
+    let mut answered = 0;
+    for _ in 0..20 {
+        h.session.handle_timeout(h.now).unwrap();
+        for packet in h.flush_all() {
+            if packet.find(ids::PING_DELAY_DISCONNECT).is_some() || packet.find(ids::PING).is_some() {
+                h.advance(0.05);
+                h.answer_pings(&packet);
+                answered += 1;
+            }
+        }
+        h.advance(1.1);
+    }
+    assert!(answered >= 3);
+    assert!((h.session.probe_timeout() - base).abs() < 0.3, "{} vs {}", h.session.probe_timeout(), base);
+}
+
 #[test]
 fn repeated_reconnects_keep_retransmitting_the_same_message() {
     let mut h = Harness::new();
@@ -828,7 +967,15 @@ fn dropped_answers_are_accounted() {
     let msg_id = h.sent_query(&packet, 1);
     h.session.cancel(QueryId(1));
     for _ in 0..20 {
-        h.deliver(vec![Outgoing::Content(rpc_result(msg_id, &vec![0u8; 20_000]))]).unwrap();
+        h.deliver(vec![Outgoing::Content(rpc_result(msg_id, &vec![0u8; 131_072]))]).unwrap();
+        h.advance(1.0);
+    }
+    assert!(
+        !h.events().iter().any(|e| matches!(e, SessionEvent::DroppedAnswerTooLarge { .. })),
+        "a trickle of cancelled parts is normal while scrolling"
+    );
+    for _ in 0..20 {
+        h.deliver(vec![Outgoing::Content(rpc_result(msg_id, &vec![0u8; 512 * 1024]))]).unwrap();
     }
     assert!(h.events().iter().any(|e| matches!(e, SessionEvent::DroppedAnswerTooLarge { .. })));
 }

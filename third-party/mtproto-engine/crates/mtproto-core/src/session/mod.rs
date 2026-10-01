@@ -38,7 +38,12 @@ pub const UNKNOWN_QUERIES_STUCK_AFTER: f64 = 60.0;
 pub const RETRANSMIT_WINDOW: f64 = MSG_ID_MAX_PAST_SECONDS - 60.0;
 pub const DROPPED_ANSWER_COUNTED_SIZE: usize = 16 * 1024;
 pub const IMMEDIATE_ACK_SIZE: usize = 16 * 1024;
-pub const DROPPED_ANSWER_LIMIT: usize = 256 * 1024;
+pub const PROBE_TIMEOUT_MIN: f64 = 1.0;
+pub const PROBE_TIMEOUT_MAX: f64 = 4.0;
+pub const PROBE_BACKOFF_MAX: f64 = 4.0;
+pub const BACKLOG_SAMPLE_INTERVAL: f64 = 0.25;
+pub const DROPPED_ANSWER_LIMIT: usize = 8 * 1024 * 1024;
+pub const DROPPED_ANSWER_WINDOW: f64 = 10.0;
 pub const RESPONSE_UNPACK_FAILED: &str = "RESPONSE_UNPACK_FAILED";
 pub const PROTOCOL_ERROR_PREFIX: &str = "PROTOCOL_ERROR_BAD_MSG_";
 
@@ -119,6 +124,8 @@ pub enum SessionError {
     PingTimeout,
     #[error("read timeout")]
     ReadTimeout,
+    #[error("probe timeout: no reply to a ping and the transport made no progress")]
+    ProbeTimeout,
     #[error("server reported a fatal session error {0}")]
     BadMessage(i32),
     #[error("too many dropped answers")]
@@ -281,9 +288,16 @@ pub struct Session {
     last_ping_msg_id: i64,
     last_ping_container_id: i64,
     pending_pings: HashMap<i64, f64>,
+    outbound_backlog: Option<usize>,
+    outbound_progress_at: f64,
+    backlog_sampled_at: f64,
+    probe_episode: Option<f64>,
+    probe_drained: bool,
+    probe_backoff: f64,
     last_future_salts_at: Option<f64>,
     unknown_since: Option<f64>,
     dropped_answer_bytes: usize,
+    dropped_answer_window_start: f64,
 
     need_destroy_auth_key: bool,
     sent_destroy_auth_key: bool,
@@ -348,9 +362,16 @@ impl Session {
             last_ping_msg_id: 0,
             last_ping_container_id: 0,
             pending_pings: HashMap::new(),
+            outbound_backlog: None,
+            outbound_progress_at: now.mono,
+            backlog_sampled_at: now.mono,
+            probe_episode: None,
+            probe_drained: false,
+            probe_backoff: 1.0,
             last_future_salts_at: None,
             unknown_since: None,
             dropped_answer_bytes: 0,
+            dropped_answer_window_start: now.mono,
             need_destroy_auth_key: false,
             sent_destroy_auth_key: false,
             pending_reset: false,
@@ -454,6 +475,45 @@ impl Session {
 
     pub fn request_destroy_auth_key(&mut self) {
         self.need_destroy_auth_key = true;
+    }
+
+    pub fn probe_timeout(&self) -> f64 {
+        (self.rtt * 3.0 + 0.75).clamp(PROBE_TIMEOUT_MIN, PROBE_TIMEOUT_MAX) * self.probe_backoff
+    }
+
+    pub fn unanswered_ping_since(&self) -> Option<f64> {
+        self.pending_pings.values().copied().filter(|sent| *sent >= self.last_read_at).reduce(f64::min)
+    }
+
+    pub fn wants_outbound_backlog(&self) -> bool {
+        self.connected && self.unanswered_ping_since().is_some()
+    }
+
+    pub fn note_outbound_backlog(&mut self, backlog: Option<usize>, now: Now) {
+        let episode = self.unanswered_ping_since();
+        if episode != self.probe_episode {
+            self.probe_episode = episode;
+            self.probe_drained = backlog == Some(0);
+            self.outbound_progress_at = now.mono;
+        } else if !self.probe_drained {
+            match (self.outbound_backlog, backlog) {
+                (_, Some(0)) => {
+                    self.probe_drained = true;
+                    self.outbound_progress_at = now.mono;
+                }
+                (Some(previous), Some(current)) if current < previous => self.outbound_progress_at = now.mono,
+                (None, Some(_)) => self.outbound_progress_at = now.mono,
+                _ => {}
+            }
+        }
+        self.outbound_backlog = backlog;
+        self.backlog_sampled_at = now.mono;
+    }
+
+    fn probe_deadline(&self) -> Option<f64> {
+        self.outbound_backlog?;
+        let since = self.unanswered_ping_since()?;
+        Some(since.max(self.outbound_progress_at) + self.probe_timeout())
     }
 
     pub fn note_bytes_received(&mut self, now: Now) {
@@ -670,6 +730,9 @@ impl Session {
         self.to_pong.clear();
         self.to_retransmit.clear();
         self.to_resend_answer.clear();
+        self.outbound_backlog = None;
+        self.probe_episode = None;
+        self.probe_drained = false;
     }
 
     pub fn connection_rejected(&mut self, now: Now) {
@@ -1385,6 +1448,9 @@ impl Session {
             }
             let rtt = (now.mono - sent_at).max(0.0);
             self.rtt = if self.rtt == 0.0 { rtt } else { self.rtt * 0.7 + rtt * 0.3 };
+            if rtt < self.probe_timeout() {
+                self.probe_backoff = (self.probe_backoff * 0.5).max(1.0);
+            }
             self.events.push_back(SessionEvent::Pong { rtt });
         }
         if ping_msg_id == self.last_ping_msg_id {
@@ -1412,6 +1478,10 @@ impl Session {
     ) {
         let Some(id) = self.by_msg_id.get(&req_msg_id).copied() else {
             if size > DROPPED_ANSWER_COUNTED_SIZE {
+                if now.mono - self.dropped_answer_window_start > DROPPED_ANSWER_WINDOW {
+                    self.dropped_answer_window_start = now.mono;
+                    self.dropped_answer_bytes = 0;
+                }
                 self.dropped_answer_bytes += size;
                 if self.dropped_answer_bytes > DROPPED_ANSWER_LIMIT {
                     let total = self.dropped_answer_bytes;
@@ -1662,6 +1732,9 @@ impl Session {
         if let Some(since) = self.unknown_since {
             deadline = deadline.min(since + STATE_REQUEST_RETRY);
         }
+        if let Some(at) = self.probe_deadline() {
+            deadline = deadline.min(at + 0.002).min(self.backlog_sampled_at + BACKLOG_SAMPLE_INTERVAL);
+        }
         for request in self.service_requests.values() {
             deadline = deadline.min(request.sent_at() + STATE_REQUEST_RETRY + 0.002);
         }
@@ -1679,6 +1752,10 @@ impl Session {
         }
         if self.last_read_at + self.read_disconnect_delay() < now.mono {
             return Err(SessionError::ReadTimeout);
+        }
+        if self.probe_deadline().is_some_and(|at| at < now.mono) {
+            self.probe_backoff = (self.probe_backoff * 2.0).min(PROBE_BACKOFF_MAX);
+            return Err(SessionError::ProbeTimeout);
         }
         self.expire_state_requests(now);
         if self.unknown_since.is_some_and(|since| since + STATE_REQUEST_RETRY < now.mono) {
