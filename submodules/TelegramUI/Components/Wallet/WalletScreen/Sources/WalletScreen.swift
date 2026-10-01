@@ -2810,7 +2810,7 @@ private final class WalletScreenComponent: Component {
             let leftButton: AnyComponentWithIdentity<NavigationButtonComponentEnvironment> = AnyComponentWithIdentity(
                 id: "back",
                 component: AnyComponent(NavigationButtonComponent(
-                    content: .icon(imageName: "Navigation/Back"),
+                    content: .icon(imageName: environment.metrics.widthClass == .regular ? "Navigation/Close" : "Navigation/Back"),
                     pressed: { [weak self] _ in
                         self?.dismiss()
                     }

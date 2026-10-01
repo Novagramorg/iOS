@@ -8,7 +8,6 @@ import PremiumDiamondComponent
 import WalletSendScreen
 import WalletTransactionItemComponent
 
-// A row owns its timeline even when LazySectionView recycles its view.
 final class WalletPendingTransferAnimation {
     private struct Star {
         let angle: Double
@@ -37,6 +36,7 @@ final class WalletPendingTransferAnimation {
 
     private static let starImages: [CGImage] = [UIColor(rgb: 0x30a1f5), UIColor(rgb: 0x5cccff), UIColor(rgb: 0x2178f7)].compactMap { color in
         return generateImage(CGSize(width: 48.0, height: 48.0), rotatedContext: { size, context in
+            context.clear(CGRect(origin: .zero, size: size))
             let center = CGPoint(x: size.width * 0.5, y: size.height * 0.5)
             if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: [color.withAlphaComponent(0.28).cgColor, color.withAlphaComponent(0.0).cgColor] as CFArray, locations: [0.0, 1.0]) {
                 context.drawRadialGradient(gradient, startCenter: center, startRadius: 0.0, endCenter: center, endRadius: 24.0, options: [])
@@ -171,7 +171,6 @@ final class WalletPendingTransferAnimation {
             self.laidOutSize = .zero
         }
         guard let row, content != nil else { return }
-        // Preserve the section's own separator opacity, including the hidden last separator.
         row.separatorLayer.mask = self.separatorMask
         self.separatorMask.frame = row.separatorLayer.bounds
         if self.surface.superlayer == nil {
@@ -275,7 +274,6 @@ final class WalletPendingTransferAnimation {
         if let finish, finish < 0.34 { slot.y -= CGFloat(sin(.pi * finish / 0.34)) * 11.0 }
         if let source = self.flightSource, let start = self.flightStart, let overlay = self.flightOverlay, let diamond = self.diamond {
             let t = min(1.0, max(0.0, now - start) / 0.5)
-            // Include the modal's presentation transform while the wallet is uncovered.
             let rowLayer = row.layer.presentation() ?? row.layer
             let target = rowLayer.convert(slot, to: overlay.layer.presentation() ?? overlay.layer)
             let d = target.y - source.center.y

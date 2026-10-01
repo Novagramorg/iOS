@@ -3761,7 +3761,13 @@ private final class PremiumIntroScreenComponent: CombinedComponent {
                         
             let titleOffset: CGFloat
             let titleScale: CGFloat
-            let titleOffsetDelta = (topInset + 160.0) - (environment.statusBarHeight + (environment.navigationHeight - environment.statusBarHeight) / 2.0)
+            let navigationTitleCenterY: CGFloat
+            if environment.metrics.widthClass == .regular {
+                navigationTitleCenterY = environment.navigationHeight - 60.0 / 2.0 + 2.0
+            } else {
+                navigationTitleCenterY = environment.statusBarHeight + (environment.navigationHeight - environment.statusBarHeight) / 2.0
+            }
+            let titleOffsetDelta = (topInset + 160.0) - navigationTitleCenterY
             let titleAlpha: CGFloat
             
             if let topContentOffset = state.topContentOffset {
@@ -3788,14 +3794,14 @@ private final class PremiumIntroScreenComponent: CombinedComponent {
             )
             
             context.addWithExternalContainer(title
-                .position(CGPoint(x: context.availableSize.width / 2.0, y: max(topInset + 160.0 - titleOffset, environment.statusBarHeight + (environment.navigationHeight - environment.statusBarHeight) / 2.0)))
+                .position(CGPoint(x: context.availableSize.width / 2.0, y: max(topInset + 160.0 - titleOffset, navigationTitleCenterY)))
                 .scale(titleScale)
                 .opacity(titleAlpha),
                 container: context.component.overNavigationContainer
             )
             
             context.addWithExternalContainer(secondaryTitle
-                .position(CGPoint(x: context.availableSize.width / 2.0, y: max(topInset + 160.0 - titleOffset, environment.statusBarHeight + (environment.navigationHeight - environment.statusBarHeight) / 2.0)))
+                .position(CGPoint(x: context.availableSize.width / 2.0, y: max(topInset + 160.0 - titleOffset, navigationTitleCenterY)))
                 .scale(titleScale)
                 .opacity(max(0.0, 1.0 - titleAlpha * 1.8)),
                 container: context.component.overNavigationContainer
@@ -4219,6 +4225,16 @@ public final class PremiumIntroScreen: ViewControllerComponentContainer {
         self.view.addSubview(ConfettiView(frame: self.view.bounds))
     }
     
+    override public func preferredContentSizeForLayout(_ layout: ContainerViewLayout) -> CGSize? {
+        guard layout.metrics.widthClass == .regular else {
+            return nil
+        }
+        return CGSize(
+            width: min(480.0, layout.size.width - 20.0),
+            height: min(layout.size.width, layout.size.height) - 88.0
+        )
+    }
+
     public override func containerLayoutUpdated(_ layout: ContainerViewLayout, transition: ContainedViewLayoutTransition) {
         super.containerLayoutUpdated(layout, transition: transition)
         

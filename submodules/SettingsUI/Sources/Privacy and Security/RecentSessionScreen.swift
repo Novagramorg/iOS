@@ -1142,6 +1142,7 @@ private final class RecentSessionSheetComponent: CombinedComponent {
                         )
                     },
                     backgroundColor: .color(environment.theme.list.modalBlocksBackgroundColor),
+                    centeredSize: CGSize(width: 414.0, height: 640.0),
                     animateOut: animateOut
                 ),
                 environment: {
