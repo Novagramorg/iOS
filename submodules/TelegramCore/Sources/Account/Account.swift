@@ -87,7 +87,7 @@ public class UnauthorizedAccount {
     }
     
     public var masterDatacenterId: Int32 {
-        return Int32(self.network.mtProto.datacenterId)
+        return Int32(self.network.datacenterId)
     }
     
     public let shouldBeServiceTaskMaster = Promise<AccountServiceTaskMasterMode>()
@@ -102,7 +102,7 @@ public class UnauthorizedAccount {
         self.network = network
         let updateLoginTokenPipe = self.updateLoginTokenPipe
         let serviceNotificationPipe = self.serviceNotificationPipe
-        let masterDatacenterId = Int32(network.mtProto.datacenterId)
+        let masterDatacenterId = Int32(network.datacenterId)
         
         var updateSentCodeImpl: ((Api.auth.SentCode) -> Void)?
         self.stateManager = UnauthorizedAccountStateManager(
@@ -226,21 +226,21 @@ public class UnauthorizedAccount {
     }
     
     public func changedMasterDatacenterId(accountManager: AccountManager<TelegramAccountManagerTypes>, masterDatacenterId: Int32) -> Signal<UnauthorizedAccount, NoError> {
-        if masterDatacenterId == Int32(self.network.mtProto.datacenterId) {
+        if masterDatacenterId == Int32(self.network.datacenterId) {
             return .single(self)
         } else {
             let keychain = makeExclusiveKeychain(id: self.id, postbox: self.postbox)
             
-            return accountManager.transaction { transaction -> (LocalizationSettings?, ProxySettings?) in
-                return (transaction.getSharedData(SharedDataKeys.localizationSettings)?.get(LocalizationSettings.self), transaction.getSharedData(SharedDataKeys.proxySettings)?.get(ProxySettings.self))
+            return accountManager.transaction { transaction -> (LocalizationSettings?, ProxySettings?, NetworkEngineSettings?) in
+                return (transaction.getSharedData(SharedDataKeys.localizationSettings)?.get(LocalizationSettings.self), transaction.getSharedData(SharedDataKeys.proxySettings)?.get(ProxySettings.self), transaction.getSharedData(SharedDataKeys.networkEngineSettings)?.get(NetworkEngineSettings.self))
             }
-            |> mapToSignal { localizationSettings, proxySettings -> Signal<(LocalizationSettings?, ProxySettings?, NetworkSettings?, AppConfiguration), NoError> in
-                return self.postbox.transaction { transaction -> (LocalizationSettings?, ProxySettings?, NetworkSettings?, AppConfiguration) in
-                    return (localizationSettings, proxySettings, transaction.getPreferencesEntry(key: PreferencesKeys.networkSettings)?.get(NetworkSettings.self), transaction.getPreferencesEntry(key: PreferencesKeys.appConfiguration)?.get(AppConfiguration.self) ?? .defaultValue)
+            |> mapToSignal { localizationSettings, proxySettings, networkEngineSettings -> Signal<(LocalizationSettings?, ProxySettings?, NetworkSettings?, AppConfiguration, NetworkEngineSettings?), NoError> in
+                return self.postbox.transaction { transaction -> (LocalizationSettings?, ProxySettings?, NetworkSettings?, AppConfiguration, NetworkEngineSettings?) in
+                    return (localizationSettings, proxySettings, transaction.getPreferencesEntry(key: PreferencesKeys.networkSettings)?.get(NetworkSettings.self), transaction.getPreferencesEntry(key: PreferencesKeys.appConfiguration)?.get(AppConfiguration.self) ?? .defaultValue, networkEngineSettings)
                 }
             }
-            |> mapToSignal { localizationSettings, proxySettings, networkSettings, appConfiguration -> Signal<UnauthorizedAccount, NoError> in
-                return initializedNetwork(accountId: self.id, arguments: self.networkArguments, supplementary: false, datacenterId: Int(masterDatacenterId), keychain: keychain, basePath: self.basePath, testingEnvironment: self.testingEnvironment, languageCode: localizationSettings?.primaryComponent.languageCode, proxySettings: proxySettings, networkSettings: networkSettings, phoneNumber: nil, useRequestTimeoutTimers: false, appConfiguration: appConfiguration)
+            |> mapToSignal { localizationSettings, proxySettings, networkSettings, appConfiguration, networkEngineSettings -> Signal<UnauthorizedAccount, NoError> in
+                return initializedNetwork(accountId: self.id, arguments: self.networkArguments, supplementary: false, datacenterId: Int(masterDatacenterId), keychain: keychain, basePath: self.basePath, testingEnvironment: self.testingEnvironment, languageCode: localizationSettings?.primaryComponent.languageCode, proxySettings: proxySettings, networkSettings: networkSettings, networkEngineSettings: networkEngineSettings, phoneNumber: nil, useRequestTimeoutTimers: false, appConfiguration: appConfiguration)
                 |> map { network in
                     let updated = UnauthorizedAccount(accountManager: accountManager, networkArguments: self.networkArguments, id: self.id, rootPath: self.rootPath, basePath: self.basePath, testingEnvironment: self.testingEnvironment, postbox: self.postbox, network: network)
                     updated.shouldBeServiceTaskMaster.set(self.shouldBeServiceTaskMaster.get())
@@ -289,14 +289,14 @@ public func accountWithId(accountManager: AccountManager<TelegramAccountManagerT
             case .error:
                 return .single(.upgrading(0.0))
             case let .postbox(postbox):
-                return accountManager.transaction { transaction -> (LocalizationSettings?, ProxySettings?) in
+                return accountManager.transaction { transaction -> (LocalizationSettings?, ProxySettings?, NetworkEngineSettings?) in
                     var localizationSettings: LocalizationSettings?
                     if !supplementary {
                         localizationSettings = transaction.getSharedData(SharedDataKeys.localizationSettings)?.get(LocalizationSettings.self)
                     }
-                    return (localizationSettings, transaction.getSharedData(SharedDataKeys.proxySettings)?.get(ProxySettings.self))
+                    return (localizationSettings, transaction.getSharedData(SharedDataKeys.proxySettings)?.get(ProxySettings.self), transaction.getSharedData(SharedDataKeys.networkEngineSettings)?.get(NetworkEngineSettings.self))
                 }
-                |> mapToSignal { localizationSettings, proxySettings -> Signal<AccountResult, NoError> in
+                |> mapToSignal { localizationSettings, proxySettings, networkEngineSettings -> Signal<AccountResult, NoError> in
                     return postbox.transaction { transaction -> (PostboxCoding?, LocalizationSettings?, ProxySettings?, NetworkSettings?, AppConfiguration) in
                         var state = transaction.getState()
                         if state == nil, let backupData = backupData {
@@ -338,7 +338,7 @@ public func accountWithId(accountManager: AccountManager<TelegramAccountManagerT
                         if let accountState = accountState {
                             switch accountState {
                                 case let unauthorizedState as UnauthorizedAccountState:
-                                    return initializedNetwork(accountId: id, arguments: networkArguments, supplementary: supplementary, datacenterId: Int(unauthorizedState.masterDatacenterId), keychain: keychain, basePath: path, testingEnvironment: unauthorizedState.isTestingEnvironment, languageCode: localizationSettings?.primaryComponent.languageCode, proxySettings: proxySettings, networkSettings: networkSettings, phoneNumber: nil, useRequestTimeoutTimers: useRequestTimeoutTimers, appConfiguration: appConfig)
+                                    return initializedNetwork(accountId: id, arguments: networkArguments, supplementary: supplementary, datacenterId: Int(unauthorizedState.masterDatacenterId), keychain: keychain, basePath: path, testingEnvironment: unauthorizedState.isTestingEnvironment, languageCode: localizationSettings?.primaryComponent.languageCode, proxySettings: proxySettings, networkSettings: networkSettings, networkEngineSettings: networkEngineSettings, phoneNumber: nil, useRequestTimeoutTimers: useRequestTimeoutTimers, appConfiguration: appConfig)
                                         |> map { network -> AccountResult in
                                             return .unauthorized(UnauthorizedAccount(accountManager: accountManager, networkArguments: networkArguments, id: id, rootPath: rootPath, basePath: path, testingEnvironment: unauthorizedState.isTestingEnvironment, postbox: postbox, network: network, shouldKeepAutoConnection: shouldKeepAutoConnection))
                                         }
@@ -347,7 +347,7 @@ public func accountWithId(accountManager: AccountManager<TelegramAccountManagerT
                                         return (transaction.getPeer(authorizedState.peerId) as? TelegramUser)?.phone
                                     }
                                     |> mapToSignal { phoneNumber in
-                                        return initializedNetwork(accountId: id, arguments: networkArguments, supplementary: supplementary, datacenterId: Int(authorizedState.masterDatacenterId), keychain: keychain, basePath: path, testingEnvironment: authorizedState.isTestingEnvironment, languageCode: localizationSettings?.primaryComponent.languageCode, proxySettings: proxySettings, networkSettings: networkSettings, phoneNumber: phoneNumber, useRequestTimeoutTimers: useRequestTimeoutTimers, appConfiguration: appConfig)
+                                        return initializedNetwork(accountId: id, arguments: networkArguments, supplementary: supplementary, datacenterId: Int(authorizedState.masterDatacenterId), keychain: keychain, basePath: path, testingEnvironment: authorizedState.isTestingEnvironment, languageCode: localizationSettings?.primaryComponent.languageCode, proxySettings: proxySettings, networkSettings: networkSettings, networkEngineSettings: networkEngineSettings, phoneNumber: phoneNumber, useRequestTimeoutTimers: useRequestTimeoutTimers, appConfiguration: appConfig)
                                         |> map { network -> AccountResult in
                                             return .authorized(Account(accountManager: accountManager, id: id, basePath: path, testingEnvironment: authorizedState.isTestingEnvironment, postbox: postbox, network: network, networkArguments: networkArguments, peerId: authorizedState.peerId, auxiliaryMethods: auxiliaryMethods, supplementary: supplementary, isSupportUser: isSupportUser))
                                         }
@@ -363,7 +363,7 @@ public func accountWithId(accountManager: AccountManager<TelegramAccountManagerT
                         let initialDatacenterId: Int = 2
                         #endif
                         
-                        return initializedNetwork(accountId: id, arguments: networkArguments, supplementary: supplementary, datacenterId: initialDatacenterId, keychain: keychain, basePath: path, testingEnvironment: beginWithTestingEnvironment, languageCode: localizationSettings?.primaryComponent.languageCode, proxySettings: proxySettings, networkSettings: networkSettings, phoneNumber: nil, useRequestTimeoutTimers: useRequestTimeoutTimers, appConfiguration: appConfig)
+                        return initializedNetwork(accountId: id, arguments: networkArguments, supplementary: supplementary, datacenterId: initialDatacenterId, keychain: keychain, basePath: path, testingEnvironment: beginWithTestingEnvironment, languageCode: localizationSettings?.primaryComponent.languageCode, proxySettings: proxySettings, networkSettings: networkSettings, networkEngineSettings: networkEngineSettings, phoneNumber: nil, useRequestTimeoutTimers: useRequestTimeoutTimers, appConfiguration: appConfig)
                         |> map { network -> AccountResult in
                             return .unauthorized(UnauthorizedAccount(accountManager: accountManager, networkArguments: networkArguments, id: id, rootPath: rootPath, basePath: path, testingEnvironment: beginWithTestingEnvironment, postbox: postbox, network: network, shouldKeepAutoConnection: shouldKeepAutoConnection))
                         }
@@ -1758,10 +1758,10 @@ public func standaloneStateManager(
         case let .postbox(postbox):
             Logger.shared.log("StandaloneStateManager", "Received postbox: valid")
             
-            return accountManager.transaction { transaction -> (LocalizationSettings?, ProxySettings?) in
-                return (nil, transaction.getSharedData(SharedDataKeys.proxySettings)?.get(ProxySettings.self))
+            return accountManager.transaction { transaction -> (LocalizationSettings?, ProxySettings?, NetworkEngineSettings?) in
+                return (nil, transaction.getSharedData(SharedDataKeys.proxySettings)?.get(ProxySettings.self), transaction.getSharedData(SharedDataKeys.networkEngineSettings)?.get(NetworkEngineSettings.self))
             }
-            |> mapToSignal { localizationSettings, proxySettings -> Signal<AccountStateManager?, NoError> in
+            |> mapToSignal { localizationSettings, proxySettings, networkEngineSettings -> Signal<AccountStateManager?, NoError> in
                 Logger.shared.log("StandaloneStateManager", "Received settings")
                 
                 return postbox.transaction { transaction -> (PostboxCoding?, LocalizationSettings?, ProxySettings?, NetworkSettings?) in
@@ -1805,6 +1805,7 @@ public func standaloneStateManager(
                                     languageCode: localizationSettings?.primaryComponent.languageCode,
                                     proxySettings: proxySettings,
                                     networkSettings: networkSettings,
+                                    networkEngineSettings: networkEngineSettings,
                                     phoneNumber: phoneNumber,
                                     useRequestTimeoutTimers: false,
                                     appConfiguration: .defaultValue
