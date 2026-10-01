@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
@@ -38,34 +38,38 @@ pub enum Command {
     SetTimeDifference(SessionHandle, f64),
     SetNetworkAvailable(bool),
     ResetConnections,
-    Resolved { handle: SessionHandle, host: String, port: u16, addresses: Vec<std::net::SocketAddr> },
+    Resolved { host: String, port: u16, addresses: Vec<std::net::SocketAddr> },
     Shutdown,
 }
 
 struct ThreadResolver {
     sender: Sender<Command>,
     waker: Arc<Waker>,
-    in_flight: HashSet<(SessionHandle, String, u16)>,
+    in_flight: HashMap<(String, u16), Vec<SessionHandle>>,
 }
 
 impl Resolve for ThreadResolver {
     fn resolve(&mut self, session: SessionHandle, host: &str, port: u16) -> Resolution {
-        let key = (session, host.to_string(), port);
-        if self.in_flight.contains(&key) {
+        let key = (host.to_string(), port);
+        if let Some(waiting) = self.in_flight.get_mut(&key) {
+            if !waiting.contains(&session) {
+                waiting.push(session);
+            }
             return Resolution::Pending;
         }
-        self.in_flight.insert(key);
         let sender = self.sender.clone();
         let waker = self.waker.clone();
         let host = host.to_string();
+        let lookup_host = host.clone();
         let spawned = std::thread::Builder::new().name("mtproto-resolver".into()).spawn(move || {
-            let addresses = resolve_blocking(&host, port);
-            let _ = sender.send(Command::Resolved { handle: session, host, port, addresses });
+            let addresses = resolve_blocking(&lookup_host, port);
+            let _ = sender.send(Command::Resolved { host: lookup_host, port, addresses });
             let _ = waker.wake();
         });
         if spawned.is_err() {
             return Resolution::Resolved(Vec::new());
         }
+        self.in_flight.insert((host, port), vec![session]);
         Resolution::Pending
     }
 }
@@ -98,7 +102,7 @@ impl Worker {
         Self {
             poll,
             receiver,
-            resolver: ThreadResolver { sender, waker, in_flight: HashSet::new() },
+            resolver: ThreadResolver { sender, waker, in_flight: HashMap::new() },
             sessions: HashMap::new(),
             tokens: HashMap::new(),
             next_token: 1,
@@ -118,7 +122,7 @@ impl Worker {
             let now = clock::now();
             let mut deadline = now.mono + MAX_POLL_WAIT;
             for session in self.sessions.values_mut() {
-                if let Some(at) = session.next_deadline(now) {
+                if let Some(at) = session.next_deadline(now, &self.config) {
                     deadline = deadline.min(at);
                 }
             }
@@ -331,10 +335,12 @@ impl Worker {
                         session.reset_connection(now, self.poll.registry());
                     }
                 }
-                Command::Resolved { handle, host, port, addresses } => {
-                    self.resolver.in_flight.remove(&(handle, host.clone(), port));
-                    if let Some(session) = self.sessions.get_mut(&handle) {
-                        session.on_resolved(host, port, addresses, now);
+                Command::Resolved { host, port, addresses } => {
+                    let waiting = self.resolver.in_flight.remove(&(host.clone(), port)).unwrap_or_default();
+                    for handle in waiting {
+                        if let Some(session) = self.sessions.get_mut(&handle) {
+                            session.on_resolved(&host, port, addresses.clone(), now);
+                        }
                     }
                 }
             }

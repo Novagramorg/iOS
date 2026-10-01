@@ -12,6 +12,7 @@ crate-type = ["staticlib", "rlib"]
 
 [dependencies]
 mtproto-engine = { path = "../mtproto-engine" }
+zeroize.workspace = true
 
 [dev-dependencies]
 mtproto-testserver = { path = "../mtproto-testserver" }

@@ -138,8 +138,11 @@ impl Socks5Handshake {
                 if data.len() < 2 {
                     return Ok(Socks5Progress::NeedMore);
                 }
-                let status = data[1];
+                let (version, status) = (data[0], data[1]);
                 input.consume(2);
+                if version != 0x01 {
+                    return Err(Socks5Error::InvalidVersion(version));
+                }
                 if status != 0 {
                     return Err(Socks5Error::AuthenticationFailed);
                 }

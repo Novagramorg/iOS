@@ -14,7 +14,7 @@ impl MsgIdGenerator {
 
     pub fn next(&mut self, server_unix_time: f64) -> i64 {
         let candidate = msg_id_for_time(server_unix_time);
-        let id = if candidate <= self.last { self.last + 4 } else { candidate };
+        let id = if candidate <= self.last { self.last.saturating_add(4) & !3 } else { candidate };
         self.last = id;
         id
     }
@@ -26,8 +26,10 @@ impl MsgIdGenerator {
     }
 }
 
+pub const MAX_MSG_ID_SECONDS: f64 = (i32::MAX - 1) as f64;
+
 pub fn msg_id_for_time(unix_time: f64) -> i64 {
-    let clamped = unix_time.max(0.0);
+    let clamped = unix_time.clamp(0.0, MAX_MSG_ID_SECONDS);
     let seconds = clamped.floor();
     let fraction = ((clamped - seconds) * 4_294_967_296.0) as u64 & 0xffff_fffc;
     ((seconds as i64) << 32) | fraction as i64

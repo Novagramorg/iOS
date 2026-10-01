@@ -894,3 +894,166 @@ fn verified_race_leaves_an_address_that_accepts_but_never_answers() {
     engine.shutdown();
     drop(keeper);
 }
+
+#[allow(unsafe_code)]
+fn process_cpu_seconds() -> f64 {
+    let mut usage: libc::rusage = unsafe { std::mem::zeroed() };
+    unsafe { libc::getrusage(libc::RUSAGE_SELF, &mut usage) };
+    let user = usage.ru_utime.tv_sec as f64 + usage.ru_utime.tv_usec as f64 * 1e-6;
+    let system = usage.ru_stime.tv_sec as f64 + usage.ru_stime.tv_usec as f64 * 1e-6;
+    user + system
+}
+
+#[test]
+fn unresolvable_proxy_host_backs_off_instead_of_spinning() {
+    let key = random_key(41);
+    let server = TestServer::start(vec![key.clone()], ServerOptions::default());
+    let collector = Arc::new(Collector::default());
+    let engine = engine(&collector, 1);
+    let mut sessions = Vec::new();
+    for role in [SessionRole::Main, SessionRole::Worker { requires_auth_token: false }, SessionRole::Cdn] {
+        let mut config = setup(&server, &key, role);
+        config.proxy = Some(ProxyConfig::Socks5 {
+            host: "mtproto-engine-test.invalid".into(),
+            port: 1080,
+            username: None,
+            password: None,
+        });
+        let session = engine.create_session(config);
+        engine.send(session, request(1, 1));
+        sessions.push(session);
+    }
+    std::thread::sleep(Duration::from_millis(300));
+    let before = process_cpu_seconds();
+    std::thread::sleep(Duration::from_secs(3));
+    let used = process_cpu_seconds() - before;
+    assert!(used < 0.6, "{used:.2} s of CPU in 3 s while the proxy host does not resolve");
+    for session in sessions {
+        assert!(collector.completed(session).is_empty());
+    }
+    engine.shutdown();
+}
+
+#[test]
+fn a_racer_fed_endless_garbage_is_dropped_without_starving_the_worker() {
+    use std::io::Write;
+    let key = random_key(43);
+    let server = TestServer::start(vec![key.clone()], ServerOptions::default());
+    let silent = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let silent_address = silent.local_addr().unwrap();
+    let held = Arc::new(Mutex::new(Vec::new()));
+    let keeper = {
+        let held = held.clone();
+        std::thread::spawn(move || {
+            for stream in silent.incoming().take(8).flatten() {
+                held.lock().unwrap().push(stream);
+            }
+        })
+    };
+    let garbage = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let garbage_address = garbage.local_addr().unwrap();
+    let written = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let streamer = {
+        let written = written.clone();
+        let stop = stop.clone();
+        garbage.set_nonblocking(true).unwrap();
+        std::thread::spawn(move || {
+            let chunk: Vec<u8> = (0..65536u32).map(|index| (index.wrapping_mul(2654435761) >> 13) as u8).collect();
+            let mut streams: Vec<std::net::TcpStream> = Vec::new();
+            while !stop.load(std::sync::atomic::Ordering::Relaxed) {
+                if let Ok((stream, _)) = garbage.accept() {
+                    stream.set_write_timeout(Some(Duration::from_millis(50))).unwrap();
+                    streams.push(stream);
+                }
+                streams.retain_mut(|stream| match stream.write(&chunk) {
+                    Ok(count) => {
+                        written.fetch_add(count, std::sync::atomic::Ordering::Relaxed);
+                        true
+                    }
+                    Err(error) => {
+                        matches!(error.kind(), std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut)
+                    }
+                });
+                if streams.is_empty() {
+                    std::thread::sleep(Duration::from_millis(5));
+                }
+            }
+        })
+    };
+    let collector = Arc::new(Collector::default());
+    let engine = engine(&collector, 1);
+    let mut hostile = setup(&server, &key, SessionRole::Main);
+    hostile.addresses = vec![
+        DcAddress { host: silent_address.ip().to_string(), port: silent_address.port(), secret: None },
+        DcAddress { host: garbage_address.ip().to_string(), port: garbage_address.port(), secret: None },
+    ];
+    let hostile_session = engine.create_session(hostile);
+    engine.send(hostile_session, request(1, 7));
+    std::thread::sleep(Duration::from_millis(2500));
+    let healthy = engine.create_session(setup(&server, &key, SessionRole::Worker { requires_auth_token: false }));
+    for id in 1..=5 {
+        engine.send(healthy, request(id, 30 + id as u32));
+    }
+    assert!(
+        collector.wait(WAIT, |events| completions(events, healthy) == 5),
+        "a session sharing the worker must keep working while a racer is fed garbage"
+    );
+    let total = written.load(std::sync::atomic::Ordering::Relaxed);
+    assert!(total < 64 * 1024 * 1024, "the engine kept reading garbage: {total} bytes");
+    stop.store(true, std::sync::atomic::Ordering::Relaxed);
+    engine.shutdown();
+    let _ = streamer.join();
+    drop(keeper);
+}
+
+fn run_hostile_case(name: &str, chaos: mtproto_testserver::chaos::ChaosConfig, requests: u64) -> Result<(), String> {
+    let key = random_key(77);
+    let server = TestServer::start(vec![key.clone()], ServerOptions { chaos: Some(chaos), ..ServerOptions::default() });
+    let collector = Arc::new(Collector::default());
+    let engine = engine(&collector, 1);
+    let session = engine.create_session(setup(&server, &key, SessionRole::Main));
+    let mut done = true;
+    for wave in (1..=requests).collect::<Vec<_>>().chunks(4) {
+        for &id in wave {
+            engine.send(session, request(id, 100 + (id % 40) as u32));
+        }
+        let expected = *wave.last().unwrap();
+        if !collector.wait(Duration::from_secs(30), |events| completions(events, session) as u64 >= expected) {
+            done = false;
+            break;
+        }
+    }
+    let duplicates = server.with_stats(|stats| stats.duplicate_executions);
+    let injected: usize = server.with_stats(|stats| stats.chaos_injected.values().sum());
+    let connections = server.with_stats(|stats| stats.connections);
+    if std::env::var_os("MTPROTO_HOSTILE_REPORT").is_some() {
+        eprintln!("{name}: injected {injected}, connections {connections}");
+    }
+    engine.shutdown();
+    if !done {
+        return Err(format!("{name}: {} of {requests} completed", collector.completed(session).len()));
+    }
+    if duplicates != 0 {
+        return Err(format!("{name}: {duplicates} duplicate executions"));
+    }
+    if injected == 0 {
+        return Err(format!("{name}: no fault was injected"));
+    }
+    Ok(())
+}
+
+#[test]
+fn hostile_server_faults_never_break_exactly_once_delivery() {
+    use mtproto_testserver::chaos::{ChaosConfig, Fault};
+    let mut cases: Vec<(String, ChaosConfig)> = Fault::HOSTILE
+        .into_iter()
+        .enumerate()
+        .map(|(index, fault)| (fault.name().to_string(), ChaosConfig::only(900 + index as u64, fault, 0.2)))
+        .collect();
+    cases.push(("all-hostile".into(), ChaosConfig::hostile(999, 0.02)));
+    let handles: Vec<_> =
+        cases.into_iter().map(|(name, chaos)| std::thread::spawn(move || run_hostile_case(&name, chaos, 80))).collect();
+    let failures: Vec<String> = handles.into_iter().filter_map(|handle| handle.join().unwrap().err()).collect();
+    assert!(failures.is_empty(), "{failures:#?}");
+}

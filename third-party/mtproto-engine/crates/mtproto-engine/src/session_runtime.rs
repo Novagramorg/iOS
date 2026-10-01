@@ -30,6 +30,13 @@ pub const READ_BUDGET_PER_TURN: usize = 512 * 1024;
 pub const RACE_AFTER: f64 = 1.0;
 pub const RACE_SILENT_AFTER: f64 = 1.5;
 pub const RACE_VERIFY_TIMEOUT: f64 = 4.0;
+pub const RACER_MAX_CHUNKS: usize = 2;
+pub const RACE_RETRY_BASE: f64 = 1.0;
+pub const RACE_RETRY_MAX: f64 = 8.0;
+pub const RACER_MAX_BUFFERED: usize = 16 * 1024;
+pub const RESOLVE_WAIT: f64 = 30.0;
+pub const RESOLVE_RETRY_MIN: f64 = 1.0;
+pub const RESOLVE_RETRY_MAX: f64 = 8.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CloseReason {
@@ -41,6 +48,12 @@ enum CloseReason {
 pub enum Resolution {
     Resolved(Vec<SocketAddr>),
     Pending,
+}
+
+enum Pick {
+    Ready(usize, SocketAddr, DcAddress),
+    Resolving,
+    Unavailable,
 }
 
 pub trait Resolve {
@@ -87,6 +100,8 @@ pub struct SessionRuntime {
     connection: Option<Connection>,
     racer: Option<Connection>,
     racer_check: Option<RacerCheck>,
+    racer_failures: u32,
+    racer_retry_at: f64,
     address_health: HashMap<(String, u16), AddressHealth>,
     token: Token,
     next_attempt_at: f64,
@@ -122,6 +137,8 @@ impl SessionRuntime {
             connection: None,
             racer: None,
             racer_check: None,
+            racer_failures: 0,
+            racer_retry_at: 0.0,
             address_health: HashMap::new(),
             token,
             next_attempt_at: now.mono,
@@ -448,6 +465,17 @@ impl SessionRuntime {
         (self.jitter_state >> 32) as u32
     }
 
+    fn fail_racer(&mut self, registry: &Registry, now: Now, callbacks: &Arc<dyn EngineCallbacks>) {
+        let Some(index) = self.racer.as_ref().map(|racer| racer.address_index) else {
+            return;
+        };
+        self.drop_racer(registry);
+        self.report_address(index, false, now, callbacks);
+        let backoff = RACE_RETRY_BASE * 2f64.powi(self.racer_failures.min(8) as i32);
+        self.racer_failures = self.racer_failures.saturating_add(1);
+        self.racer_retry_at = now.mono + backoff.min(RACE_RETRY_MAX);
+    }
+
     fn drop_racer(&mut self, registry: &Registry) {
         self.racer_check = None;
         if let Some(mut racer) = self.racer.take() {
@@ -484,15 +512,15 @@ impl SessionRuntime {
         self.reported_out += connection.bytes_out;
     }
 
-    fn pick_address(&mut self, resolver: &mut dyn Resolve) -> Option<(usize, SocketAddr, DcAddress)> {
+    fn pick_address(&mut self, resolver: &mut dyn Resolve) -> Pick {
         let index = self.best_address(None).unwrap_or(self.address_cursor);
         self.pick_address_at(index, resolver)
     }
 
-    fn pick_address_at(&mut self, cursor: usize, resolver: &mut dyn Resolve) -> Option<(usize, SocketAddr, DcAddress)> {
+    fn pick_address_at(&mut self, cursor: usize, resolver: &mut dyn Resolve) -> Pick {
         let count = self.setup.addresses.len();
         if count == 0 {
-            return None;
+            return Pick::Unavailable;
         }
         let index = cursor % count;
         let address = self.setup.addresses[index].clone();
@@ -516,18 +544,34 @@ impl SessionRuntime {
                             self.resolved = Some((key, addresses));
                             first
                         }
-                        Resolution::Resolved(_) => return None,
-                        Resolution::Pending => return None,
+                        Resolution::Resolved(_) => return Pick::Unavailable,
+                        Resolution::Pending => return Pick::Resolving,
                     },
                 }
             }
         };
-        Some((index, socket_address, address))
+        Pick::Ready(index, socket_address, address)
     }
 
-    pub fn on_resolved(&mut self, host: String, port: u16, addresses: Vec<SocketAddr>, now: Now) {
-        self.resolved = Some((format!("{host}:{port}"), addresses));
-        self.next_attempt_at = now.mono;
+    pub fn on_resolved(&mut self, host: &str, port: u16, addresses: Vec<SocketAddr>, now: Now) {
+        if addresses.is_empty() {
+            self.resolved = None;
+            self.failures = self.failures.saturating_add(1);
+            self.next_attempt_at = now.mono + self.reconnect_delay().clamp(RESOLVE_RETRY_MIN, RESOLVE_RETRY_MAX);
+        } else {
+            self.resolved = Some((format!("{host}:{port}"), addresses));
+            self.next_attempt_at = now.mono;
+        }
+    }
+
+    fn defer_connection(&mut self, pick: Pick, now: Now) {
+        match pick {
+            Pick::Resolving => self.next_attempt_at = now.mono + RESOLVE_WAIT,
+            Pick::Unavailable | Pick::Ready(..) => {
+                self.failures = self.failures.saturating_add(1);
+                self.next_attempt_at = now.mono + self.reconnect_delay().clamp(RESOLVE_RETRY_MIN, RESOLVE_RETRY_MAX);
+            }
+        }
     }
 
     fn start_connection(
@@ -538,8 +582,9 @@ impl SessionRuntime {
         config: &EngineConfig,
         rng: &mut OsRandom,
     ) {
-        let Some((index, socket_address, address)) = self.pick_address(resolver) else {
-            return;
+        let (index, socket_address, address) = match self.pick_address(resolver) {
+            Pick::Ready(index, socket_address, address) => (index, socket_address, address),
+            pick => return self.defer_connection(pick, now),
         };
         let socks = match &self.setup.proxy {
             Some(ProxyConfig::Socks5 { username, password, .. }) => {
@@ -583,7 +628,11 @@ impl SessionRuntime {
         let Some(primary) = &self.connection else {
             return;
         };
-        if self.racer.is_some() || self.setup.proxy.is_some() || self.setup.addresses.is_empty() {
+        if self.racer.is_some()
+            || self.setup.proxy.is_some()
+            || self.setup.addresses.is_empty()
+            || now.mono < self.racer_retry_at
+        {
             return;
         }
         let slow_connect = !primary.is_tcp_connected() && now.mono - primary.started_at >= RACE_AFTER;
@@ -600,7 +649,7 @@ impl SessionRuntime {
         }
         let primary_index = primary.address_index;
         let next = self.best_address(Some(primary_index)).unwrap_or(primary_index);
-        let Some((index, socket_address, address)) = self.pick_address_at(next, resolver) else {
+        let Pick::Ready(index, socket_address, address) = self.pick_address_at(next, resolver) else {
             return;
         };
         let transport = TransportConfig {
@@ -664,9 +713,7 @@ impl SessionRuntime {
             return;
         };
         if let Err(error) = racer.handle_writable(registry, now.mono) {
-            let index = racer.address_index;
-            self.drop_racer(registry);
-            self.report_address(index, false, now, callbacks);
+            self.fail_racer(registry, now, callbacks);
             self.log(callbacks, LogLevel::Debug, &format!("connection race lost: {error}"));
             return;
         }
@@ -684,9 +731,7 @@ impl SessionRuntime {
             let packet = encode_plain_message(msg_id, &writer.into_inner());
             let sent = racer.send_packet(registry, &packet, false, rng).and_then(|_| racer.flush(registry));
             if sent.is_err() {
-                let index = racer.address_index;
-                self.drop_racer(registry);
-                self.report_address(index, false, now, callbacks);
+                self.fail_racer(registry, now, callbacks);
                 return;
             }
             self.racer_check = Some(RacerCheck { sent: true, ..check });
@@ -697,31 +742,28 @@ impl SessionRuntime {
         let racer = self.racer.as_mut().expect("racer");
         let mut verified = false;
         let mut failed = false;
-        loop {
+        let mut chunks = 0;
+        while !verified && !failed {
             match racer.read_chunk(registry, scratch, now.mono) {
-                Ok(ChunkStatus::Data { .. }) => {}
+                Ok(ChunkStatus::Data { .. }) => chunks += 1,
                 Ok(ChunkStatus::WouldBlock) => break,
                 Ok(ChunkStatus::Eof) | Err(_) => {
                     failed = true;
                     break;
                 }
             }
-            while let Ok(Some(incoming)) = racer.next_incoming() {
-                if let Incoming::Packet(packet) = incoming
-                    && let Ok(message) = decode_plain_message(&packet)
-                    && message.body.len() >= 20
-                    && u32::from_le_bytes(message.body[..4].try_into().expect("4")) == ids::RES_PQ
-                    && message.body[4..20] == check.nonce
-                {
-                    verified = true;
-                }
+            match racer.next_incoming() {
+                Ok(Some(Incoming::Packet(packet))) if is_res_pq_for(&packet, &check.nonce) => verified = true,
+                Ok(Some(_)) | Err(_) => failed = true,
+                Ok(None) => {}
             }
-            if verified {
-                break;
+            if !verified && (chunks >= RACER_MAX_CHUNKS || racer.buffered_input_len() > RACER_MAX_BUFFERED) {
+                failed = true;
             }
         }
         if verified {
             let index = racer.address_index;
+            self.racer_failures = 0;
             self.note_address(index, true, now);
             if self.connection.as_ref().is_some_and(|primary| primary.received_bytes) {
                 self.drop_racer(registry);
@@ -729,9 +771,7 @@ impl SessionRuntime {
                 self.promote_racer(registry, now, callbacks, rng);
             }
         } else if failed {
-            let index = racer.address_index;
-            self.drop_racer(registry);
-            self.report_address(index, false, now, callbacks);
+            self.fail_racer(registry, now, callbacks);
         }
     }
 
@@ -1103,9 +1143,7 @@ impl SessionRuntime {
         self.start_racer(registry, now, resolver, rng);
         let racer_limit = if self.racer_check.is_some() { RACE_VERIFY_TIMEOUT } else { config.connect_timeout };
         if self.racer.as_ref().is_some_and(|racer| now.mono - racer.started_at > racer_limit) {
-            let index = self.racer.as_ref().map_or(0, |racer| racer.address_index);
-            self.drop_racer(registry);
-            self.report_address(index, false, now, callbacks);
+            self.fail_racer(registry, now, callbacks);
         }
         let mut failure = None;
         if let Some(connection) = &self.connection
@@ -1275,7 +1313,7 @@ impl SessionRuntime {
         }
     }
 
-    pub fn next_deadline(&mut self, now: Now) -> Option<f64> {
+    pub fn next_deadline(&mut self, now: Now, config: &EngineConfig) -> Option<f64> {
         let mut deadline = f64::INFINITY;
         let wants = self.wants_connection(now);
         if wants && self.connection.is_none() {
@@ -1286,7 +1324,7 @@ impl SessionRuntime {
         }
         if let Some(connection) = &self.connection {
             if !connection.is_established() {
-                deadline = deadline.min(connection.started_at + 12.0);
+                deadline = deadline.min(connection.started_at + config.connect_timeout);
             }
             if let Some(rpc) = &mut self.rpc
                 && connection.is_established()
@@ -1310,7 +1348,7 @@ impl SessionRuntime {
             deadline = deadline.min(self.last_activity_at + idle);
         }
         if self.reported_in > 0 || self.reported_out > 0 || self.connection.is_some() {
-            deadline = deadline.min(self.last_usage_report + 2.0);
+            deadline = deadline.min(self.last_usage_report + config.usage_report_interval);
         }
         deadline.is_finite().then_some(deadline)
     }
@@ -1323,6 +1361,14 @@ impl SessionRuntime {
             rpc.session_mut().shrink();
         }
     }
+}
+
+fn is_res_pq_for(packet: &[u8], nonce: &[u8; 16]) -> bool {
+    decode_plain_message(packet).is_ok_and(|message| {
+        message.body.len() >= 20
+            && u32::from_le_bytes(message.body[..4].try_into().expect("4")) == ids::RES_PQ
+            && message.body[4..20] == nonce[..]
+    })
 }
 
 fn rpc_pending_requests(rpc: RpcClient) -> Vec<RpcRequest> {

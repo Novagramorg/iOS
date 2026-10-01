@@ -17,6 +17,7 @@ dependencies = [
  "cfg-if",
  "cipher",
  "cpufeatures",
+ "zeroize",
 ]
 
 [[package]]
@@ -308,6 +309,14 @@ version = "0.1.0"
 dependencies = [
  "mtproto-engine",
  "mtproto-testserver",
+ "zeroize",
+]
+
+[[package]]
+name = "mtproto-fuzz"
+version = "0.1.0"
+dependencies = [
+ "mtproto-core",
 ]
 
 [[package]]

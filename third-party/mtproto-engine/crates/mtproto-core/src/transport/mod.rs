@@ -19,8 +19,10 @@ pub use socks5::{Socks5Auth, Socks5Error, Socks5Handshake, Socks5Progress, Socks
 pub use stream::{TransportConfig, TransportStream};
 pub use tls::{
     MAX_TLS_PACKET_LENGTH, MIN_CLIENT_HELLO_LEN, TlsHelloError, TlsRecordReader, TlsRecordWriter, client_hello,
-    server_hello_for_tests, verify_client_hello_for_tests, verify_server_hello,
+    verify_server_hello,
 };
+#[cfg(any(test, feature = "test-support"))]
+pub use tls::{server_hello_for_tests, verify_client_hello_for_tests};
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum TransportError {

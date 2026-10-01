@@ -2216,3 +2216,113 @@ fn empty_containers_and_empty_bodies_are_harmless() {
     assert!(acked.contains(&empty_body) && acked.contains(&short_body));
     assert!(!acked.contains(&empty_container));
 }
+
+fn flood_newer_messages(h: &mut Harness, count: usize) {
+    for chunk in 0..count.div_ceil(100) {
+        let children: Vec<(i64, i32, Vec<u8>)> = (0..100)
+            .map(|index| (h.server.next_msg_id(false), 1, update(0x7000_0000 + (chunk * 100 + index) as u32, &[0; 4])))
+            .collect();
+        h.deliver(vec![Outgoing::Service(container(&children))]).unwrap();
+    }
+    h.events();
+}
+
+#[test]
+fn hostile_detailed_info_fan_out_stays_bounded() {
+    let mut h = Harness::new();
+    h.sync();
+    let started = std::time::Instant::now();
+    for _ in 0..3 {
+        let mut outer = Vec::new();
+        for _ in 0..64 {
+            let children: Vec<(i64, i32, Vec<u8>)> = (0..400)
+                .map(|_| {
+                    let answer = h.server.next_msg_id(true);
+                    (h.server.next_msg_id(true), 0, msg_new_detailed_info(answer, 100))
+                })
+                .collect();
+            outer.push((h.server.next_msg_id(false), 0, container(&children)));
+        }
+        let packet_id = h.server.next_msg_id(false);
+        let _ = h.deliver_sealed(packet_id, 0, &container(&outer));
+    }
+    assert!(h.session.awaited_answers.len() <= MAX_AWAITED_ANSWERS, "{}", h.session.awaited_answers.len());
+    h.session.connection_closed();
+    h.session.connection_opened(h.now);
+    assert!(h.session.to_resend_answer.len() <= MAX_AWAITED_ANSWERS);
+    assert!(started.elapsed() < std::time::Duration::from_secs(3), "{:?}", started.elapsed());
+}
+
+#[test]
+fn failed_gzip_unpacks_spend_the_packet_budget() {
+    let mut h = Harness::new();
+    h.session = Session::new(
+        SessionConfig { max_unpacked_bytes: 1 << 20, ..SessionConfig::default() },
+        key(),
+        &h.session.salts(),
+        0.0,
+        h.now,
+        &mut h.rng,
+    );
+    h.session.connection_opened(h.now);
+    h.flush();
+    let bomb = gzip_packed(&vec![0u8; 2 << 20]);
+    let mut children: Vec<(i64, i32, Vec<u8>)> =
+        (0..400).map(|_| (h.server.next_msg_id(false), 1, bomb.clone())).collect();
+    children.push((h.server.next_msg_id(false), 1, gzip_packed(&update(0x4242_4242, &[0; 64]))));
+    let started = std::time::Instant::now();
+    h.deliver(vec![Outgoing::Service(container(&children))]).unwrap();
+    assert!(started.elapsed() < std::time::Duration::from_millis(1500), "{:?}", started.elapsed());
+    assert!(updates_of(&h.events()).is_empty(), "the failed unpacks spent the packet's budget");
+}
+
+#[test]
+fn replayed_old_salt_and_bad_msg_notifications_are_ignored() {
+    let mut h = Harness::new();
+    h.sync();
+    let query = h.sent_one(1);
+    let salt_id = h.server.next_msg_id(false);
+    let recorded_salt = h.server.seal(salt_id, 0, &bad_server_salt(query, 0, 999));
+    h.session.handle_packet(&recorded_salt, h.now, &mut h.rng).unwrap();
+    assert_eq!(h.session.salts.current_value(), 999);
+    let resent = h.flush_all();
+    let resent_query = resent.iter().flat_map(|packet| packet.queries()).map(|message| message.msg_id).next().unwrap();
+    h.server.salt = 999;
+    let notice_id = h.server.next_msg_id(false);
+    let recorded_notice = h.server.seal(notice_id, 0, &bad_msg_notification(resent_query, 0, 16));
+    let _ = h.session.handle_packet(&recorded_notice, h.now, &mut h.rng);
+    h.flush_all();
+    h.events();
+    flood_newer_messages(&mut h, 2500);
+    let fresh = h.sent_one(2);
+    h.deliver(vec![Outgoing::Service(bad_server_salt(fresh, 0, 777))]).unwrap();
+    assert_eq!(h.session.salts.current_value(), 777);
+    h.flush_all();
+    h.events();
+    let session_id = h.session.session_id();
+    let time_difference = h.session.time_difference();
+    let _ = h.session.handle_packet(&recorded_salt, h.now, &mut h.rng);
+    let _ = h.session.handle_packet(&recorded_notice, h.now, &mut h.rng);
+    assert_eq!(h.session.salts.current_value(), 777, "a replayed salt is not applied");
+    assert_eq!(h.session.session_id(), session_id);
+    assert_eq!(h.session.time_difference(), time_difference, "a replayed notification does not move the clock");
+    let events = h.events();
+    assert!(
+        !events.iter().any(|event| matches!(
+            event,
+            SessionEvent::SaltsUpdated { .. } | SessionEvent::TimeDifferenceUpdated { .. }
+        )),
+        "{events:?}"
+    );
+}
+
+#[test]
+fn an_answer_redelivered_with_an_evicted_msg_id_still_completes_its_query() {
+    let mut h = Harness::new();
+    h.sync();
+    let query = h.sent_one(1);
+    let answer_id = h.server.next_msg_id(true);
+    flood_newer_messages(&mut h, 1100);
+    h.deliver_sealed(answer_id, 1, &rpc_result(query, &[9, 0, 0, 0])).unwrap();
+    assert_eq!(h.results(), vec![(QueryId(1), vec![9, 0, 0, 0])]);
+}

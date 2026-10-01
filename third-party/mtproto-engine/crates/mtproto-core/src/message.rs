@@ -262,7 +262,7 @@ pub fn decode_plain_message(packet: &[u8]) -> Result<PlainMessage<'_>, MessageEr
     Ok(PlainMessage { msg_id, body: &packet[20..20 + length as usize] })
 }
 
-fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+pub(crate) fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
     a.len() == b.len() && a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
 }
 

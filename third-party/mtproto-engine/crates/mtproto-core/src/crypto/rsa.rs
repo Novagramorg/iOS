@@ -123,6 +123,7 @@ impl RsaPublicKey {
         encrypted
     }
 
+    #[cfg(any(test, feature = "test-support"))]
     pub fn decrypt_with_private_exponent(&self, d: &BigUint, data: &[u8]) -> Vec<u8> {
         BigUint::from_bytes_be(data).modpow(d, &self.n).to_bytes_be()
     }

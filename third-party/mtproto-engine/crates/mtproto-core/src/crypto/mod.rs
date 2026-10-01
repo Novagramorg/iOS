@@ -18,7 +18,9 @@ pub use kdf::{
     msg_key_v1, msg_key_v2,
 };
 pub use prime::is_probable_prime;
-pub use rng::{OsRandom, SecureRandom, SequenceRandom, XorShiftRandom};
+pub use rng::{OsRandom, SecureRandom};
+#[cfg(any(test, feature = "test-support"))]
+pub use rng::{SequenceRandom, XorShiftRandom};
 pub use rsa::{RsaError, RsaPublicKey};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]

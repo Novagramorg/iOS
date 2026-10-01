@@ -47,11 +47,13 @@ impl SecureRandom for OsRandom {
     }
 }
 
+#[cfg(any(test, feature = "test-support"))]
 #[derive(Debug, Clone)]
 pub struct XorShiftRandom {
     state: u64,
 }
 
+#[cfg(any(test, feature = "test-support"))]
 impl XorShiftRandom {
     pub fn new(seed: u64) -> Self {
         let mut z = seed.wrapping_add(0x9e37_79b9_7f4a_7c15);
@@ -71,6 +73,7 @@ impl XorShiftRandom {
     }
 }
 
+#[cfg(any(test, feature = "test-support"))]
 impl SecureRandom for XorShiftRandom {
     fn fill(&mut self, buffer: &mut [u8]) {
         for chunk in buffer.chunks_mut(8) {
@@ -80,6 +83,7 @@ impl SecureRandom for XorShiftRandom {
     }
 }
 
+#[cfg(any(test, feature = "test-support"))]
 #[derive(Debug, Clone)]
 pub struct SequenceRandom {
     data: Vec<u8>,
@@ -87,6 +91,7 @@ pub struct SequenceRandom {
     fallback: XorShiftRandom,
 }
 
+#[cfg(any(test, feature = "test-support"))]
 impl SequenceRandom {
     pub fn new(data: Vec<u8>) -> Self {
         Self { data, position: 0, fallback: XorShiftRandom::new(0) }
@@ -97,6 +102,7 @@ impl SequenceRandom {
     }
 }
 
+#[cfg(any(test, feature = "test-support"))]
 impl SecureRandom for SequenceRandom {
     fn fill(&mut self, buffer: &mut [u8]) {
         let available = self.remaining().min(buffer.len());

@@ -632,24 +632,31 @@ pub fn parse_rpc_result_limited(result: &[u8], unpack_limit: usize) -> TlResult<
     }
 }
 
-pub fn gunzip(data: &[u8], limit: usize) -> TlResult<Vec<u8>> {
+fn inflate(data: &[u8], limit: usize) -> (TlResult<()>, Vec<u8>) {
     let mut output = Vec::with_capacity((data.len() * 4).min(limit));
     let read = if data.len() >= 2 && data[0] == 0x1f && data[1] == 0x8b {
         GzDecoder::new(data).take(limit as u64 + 1).read_to_end(&mut output)
     } else {
         ZlibDecoder::new(data).take(limit as u64 + 1).read_to_end(&mut output)
     };
-    read.map_err(|error| TlError::Gzip(error.to_string()))?;
-    if output.len() > limit {
-        return Err(TlError::Gzip(format!("unpacked size exceeds {limit} bytes")));
-    }
-    Ok(output)
+    let result = match read {
+        Err(error) => Err(TlError::Gzip(error.to_string())),
+        Ok(_) if output.len() > limit => Err(TlError::Gzip(format!("unpacked size exceeds {limit} bytes"))),
+        Ok(_) => Ok(()),
+    };
+    (result, output)
+}
+
+pub fn gunzip(data: &[u8], limit: usize) -> TlResult<Vec<u8>> {
+    let (result, output) = inflate(data, limit);
+    result.map(|()| output)
 }
 
 pub fn gunzip_within(data: &[u8], budget: &mut usize) -> TlResult<Vec<u8>> {
-    let output = gunzip(data, (*budget).min(MAX_UNPACKED_SIZE))?;
-    *budget -= output.len();
-    Ok(output)
+    let (result, output) = inflate(data, (*budget).min(MAX_UNPACKED_SIZE));
+    let spent = if result.is_ok() { output.len() } else { output.len().max(data.len()) };
+    *budget = budget.saturating_sub(spent);
+    result.map(|()| output)
 }
 
 pub fn gzip(data: &[u8]) -> Vec<u8> {
@@ -1016,7 +1023,7 @@ mod tests {
         assert_eq!(gunzip_within(&packed, &mut budget).unwrap().len(), 1000);
         assert_eq!(budget, 500);
         assert!(gunzip_within(&packed, &mut budget).is_err());
-        assert_eq!(budget, 500);
+        assert_eq!(budget, 0, "a failed unpack is charged for what it inflated");
         assert_eq!(
             parse_rpc_result_limited(
                 &{

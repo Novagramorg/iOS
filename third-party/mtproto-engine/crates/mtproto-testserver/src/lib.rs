@@ -133,6 +133,35 @@ struct SessionState {
     answer_ids: HashMap<i64, i64>,
     clock_offset: f64,
     awaiting_retransmission: HashSet<i64>,
+    sent_packets: VecDeque<Vec<u8>>,
+}
+
+#[derive(Clone, Copy)]
+enum RawHostile {
+    Oversized,
+    Truncated,
+}
+
+fn gzip_bomb_update() -> &'static [u8] {
+    static BOMB: std::sync::OnceLock<Vec<u8>> = std::sync::OnceLock::new();
+    BOMB.get_or_init(|| sp::gzip_packed(&sp::update(0x0bad_0003, &vec![0u8; 65 << 20])))
+}
+
+fn hostile_raw_frame(framing: Framing, kind: RawHostile) -> Vec<u8> {
+    match (framing, kind) {
+        (Framing::Abridged, RawHostile::Oversized) => vec![0x7f, 0xff, 0xff, 0xff],
+        (_, RawHostile::Oversized) => 0x7fff_0000u32.to_le_bytes().to_vec(),
+        (Framing::Abridged, RawHostile::Truncated) => {
+            let mut frame = vec![0x7f, 0x00, 0x01, 0x00];
+            frame.extend_from_slice(&[0x55; 10]);
+            frame
+        }
+        (_, RawHostile::Truncated) => {
+            let mut frame = 1000u32.to_le_bytes().to_vec();
+            frame.extend_from_slice(&[0x55; 10]);
+            frame
+        }
+    }
 }
 
 struct Shared {
@@ -596,6 +625,9 @@ fn serve_frames_inner(
         let mut transport_error: Option<i32> = None;
         let mut stall: Option<Duration> = None;
         let mut sealed_extra: Vec<Vec<u8>> = Vec::new();
+        let mut hostile_frames: Vec<Vec<u8>> = Vec::new();
+        let mut hostile_raw: Option<RawHostile> = None;
+        let mut hostile_quick_acks: Vec<u32> = Vec::new();
         let mut resend: Vec<(i64, i32, Vec<u8>)> = Vec::new();
         {
             let mut guard = shared.lock().unwrap();
@@ -613,6 +645,7 @@ fn serve_frames_inner(
                     answer_ids: HashMap::new(),
                     clock_offset: options.clock_offset,
                     awaiting_retransmission: HashSet::new(),
+                    sent_packets: VecDeque::new(),
                 }
             });
             session.peer.server_time = server_now(session.clock_offset);
@@ -873,6 +906,131 @@ fn serve_frames_inner(
                                         ));
                                         outgoing.push((reply, true));
                                     }
+                                    fault if fault.closes_connection() => {
+                                        let msg_id = session.peer.next_msg_id(true);
+                                        session.unacked.push((msg_id, 1, reply.clone()));
+                                        session.answer_ids.insert(message.msg_id, msg_id);
+                                        close_after = true;
+                                        match fault {
+                                            chaos::Fault::HostileGarbage => {
+                                                let len = (64 + chaos_rng.next_u64() % 2000) as usize & !3;
+                                                let mut junk = vec![0u8; len];
+                                                chaos_rng.fill(&mut junk);
+                                                hostile_frames.push(junk);
+                                            }
+                                            chaos::Fault::HostileBadMsgKey => {
+                                                let mut packet = session.peer.seal(msg_id, 1, &reply);
+                                                let index = 24 + chaos_rng.next_u64() as usize % (packet.len() - 24);
+                                                packet[index] ^= 0x40;
+                                                hostile_frames.push(packet);
+                                            }
+                                            chaos::Fault::HostileTransportCode => {
+                                                let codes = [-1i32, -2, -100, -500, -9999, i32::MIN];
+                                                let code = codes[chaos_rng.next_u64() as usize % codes.len()];
+                                                hostile_frames.push(code.to_le_bytes().to_vec());
+                                            }
+                                            chaos::Fault::HostileOversized => hostile_raw = Some(RawHostile::Oversized),
+                                            _ => hostile_raw = Some(RawHostile::Truncated),
+                                        }
+                                    }
+                                    chaos::Fault::HostileForeignSession => {
+                                        let own = session.peer.session_id;
+                                        session.peer.session_id = chaos_rng.next_u64() as i64;
+                                        let id = session.peer.next_msg_id(false);
+                                        hostile_frames.push(session.peer.seal(
+                                            id,
+                                            1,
+                                            &sp::update(0x0bad_0001, &[0; 8]),
+                                        ));
+                                        session.peer.session_id = own;
+                                        outgoing.push((reply, true));
+                                    }
+                                    chaos::Fault::HostileEvenMsgId => {
+                                        let id = session.peer.next_msg_id(false) & !3;
+                                        hostile_frames.push(session.peer.seal(
+                                            id,
+                                            1,
+                                            &sp::update(0x0bad_0002, &[0; 8]),
+                                        ));
+                                        outgoing.push((reply, true));
+                                    }
+                                    chaos::Fault::HostileFanOut => {
+                                        let children: Vec<(i64, i32, Vec<u8>)> = (0..1024)
+                                            .map(|_| {
+                                                let answer = chaos_rng.next_u64() as i64 | 1;
+                                                (
+                                                    session.peer.next_msg_id(false),
+                                                    0,
+                                                    sp::msg_new_detailed_info(answer, 128),
+                                                )
+                                            })
+                                            .collect();
+                                        outgoing.push((sp::container(&children), false));
+                                        outgoing.push((reply, true));
+                                    }
+                                    chaos::Fault::HostileGzipBomb => {
+                                        outgoing.push((gzip_bomb_update().to_vec(), true));
+                                        outgoing.push((reply, true));
+                                    }
+                                    chaos::Fault::HostileHugeVector => {
+                                        let mut body = Writer::new();
+                                        body.write_u32(ids::MSGS_ACK);
+                                        body.write_u32(ids::VECTOR);
+                                        body.write_i32(i32::MAX);
+                                        body.write_i64(message.msg_id);
+                                        outgoing.push((body.into_inner(), false));
+                                        outgoing.push((reply, true));
+                                    }
+                                    chaos::Fault::HostileSaltsFlood => {
+                                        let now = server_now(session.clock_offset) as i32;
+                                        let salts: Vec<(i32, i32, i64)> = (0..65_536)
+                                            .map(|index| (now + index, now + index + 1800, chaos_rng.next_u64() as i64))
+                                            .collect();
+                                        let req = chaos_rng.next_u64() as i64 & !3;
+                                        outgoing.push((sp::future_salts(req, now, &salts), false));
+                                        outgoing.push((reply, true));
+                                    }
+                                    chaos::Fault::HostileReplay => {
+                                        if !session.sent_packets.is_empty() {
+                                            let index = chaos_rng.next_u64() as usize % session.sent_packets.len();
+                                            hostile_frames.push(session.sent_packets[index].clone());
+                                        }
+                                        outgoing.push((reply, true));
+                                    }
+                                    chaos::Fault::HostileSaltStorm => {
+                                        for _ in 0..64 {
+                                            let bad = chaos_rng.next_u64() as i64 & !3;
+                                            let salt = chaos_rng.next_u64() as i64;
+                                            outgoing.push((sp::bad_server_salt(bad, 0, salt), false));
+                                        }
+                                        outgoing.push((reply, true));
+                                    }
+                                    chaos::Fault::HostileUnknownResults => {
+                                        for _ in 0..64 {
+                                            let mut junk = vec![0u8; 1024];
+                                            chaos_rng.fill(&mut junk);
+                                            let body = sp::rpc_result(chaos_rng.next_u64() as i64 & !3, &junk);
+                                            let id = session.peer.next_msg_id(true);
+                                            sealed_extra.push(session.peer.seal(id, 1, &body));
+                                        }
+                                        outgoing.push((reply, true));
+                                    }
+                                    chaos::Fault::HostileDeepNest => {
+                                        let mut body = sp::update(0x0bad_0004, &[0; 8]);
+                                        for depth in 0..24 {
+                                            body = if depth % 2 == 0 {
+                                                sp::gzip_packed(&body)
+                                            } else {
+                                                sp::msg_copy(session.peer.next_msg_id(false), 1, &body)
+                                            };
+                                        }
+                                        outgoing.push((body, false));
+                                        outgoing.push((reply, true));
+                                    }
+                                    chaos::Fault::HostileQuickAckNoise => {
+                                        hostile_quick_acks.extend((0..8).map(|_| chaos_rng.next_u64() as u32));
+                                        outgoing.push((reply, true));
+                                    }
                                     _ => outgoing.push((reply, true)),
                                 }
                                 session.answered_queries.insert(message.msg_id, 0);
@@ -1020,8 +1178,23 @@ fn serve_frames_inner(
                 packets.push(seal_tracked(session, body, *content));
             }
             packets.extend(sealed_extra);
+            session.sent_packets.extend(packets.iter().cloned());
+            while session.sent_packets.len() > 32 {
+                session.sent_packets.pop_front();
+            }
             packets
         };
+        for token in hostile_quick_acks {
+            wire.send_quick_ack(token & 0x7fff_ffff)?;
+        }
+        for frame in hostile_frames {
+            wire.send_frame(&frame)?;
+        }
+        if let Some(kind) = hostile_raw {
+            wire.send_raw_frame(hostile_raw_frame(wire.framing, kind))?;
+            let _ = wire.stream.shutdown(Shutdown::Both);
+            return Ok(());
+        }
         for packet in packets {
             wire.send_frame(&packet)?;
         }

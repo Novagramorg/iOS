@@ -6,7 +6,7 @@ use crate::crypto::{
     DhError, DhPrimeCache, RsaPublicKey, SecureRandom, aes_ige_decrypt, aes_ige_encrypt, check_dh_params,
     check_g_a_or_b, factorize_pq, handshake_tmp_aes, is_probable_prime, sha1, sha1_parts, to_fixed_be,
 };
-use crate::message::{MessageError, decode_plain_message, encode_plain_message};
+use crate::message::{MessageError, constant_time_eq, decode_plain_message, encode_plain_message};
 use crate::msg_id::MsgIdGenerator;
 use crate::tl::mtproto::{
     ClientDhInnerData, DhGenKind, PqInnerData, ReqDhParams, ReqPqMulti, ResPq, ServerDhInnerData, ServerDhParams,
@@ -199,7 +199,7 @@ impl Handshake {
                     } => {
                         check_nonces(&nonce, &received_nonce, &server_nonce, &received_server_nonce)?;
                         let expected = sha1(&new_nonce);
-                        if new_nonce_hash != expected[4..20] {
+                        if !constant_time_eq(&new_nonce_hash, &expected[4..20]) {
                             return Err(HandshakeError::NewNonceHashMismatch);
                         }
                         return Err(HandshakeError::ServerDhParamsFail);
@@ -218,7 +218,7 @@ impl Handshake {
                 let inner = ServerDhInnerData::read_from(&mut reader)?;
                 let consumed = reader.position();
                 let padding = answer.len() - 20 - consumed;
-                if padding >= 16 || sha1(&answer[20..20 + consumed]) != answer[..20] {
+                if padding >= 16 || !constant_time_eq(&sha1(&answer[20..20 + consumed]), &answer[..20]) {
                     return Err(HandshakeError::BadEncryptedAnswer);
                 }
                 check_nonces(&nonce, &inner.nonce, &server_nonce, &inner.server_nonce)?;
@@ -263,7 +263,7 @@ impl Handshake {
                 };
                 let aux = auth_key.aux_hash().to_le_bytes();
                 let expected = sha1_parts(&[&new_nonce, &[number], &aux]);
-                if answer.new_nonce_hash != expected[4..20] {
+                if !constant_time_eq(&answer.new_nonce_hash, &expected[4..20]) {
                     return Err(HandshakeError::NewNonceHashMismatch);
                 }
                 match answer.kind {

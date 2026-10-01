@@ -48,7 +48,12 @@ const WORKER_BITS: u64 = 8;
 impl Engine {
     pub fn new(config: EngineConfig, callbacks: Arc<dyn EngineCallbacks>) -> io::Result<Self> {
         let count = config.worker_threads.clamp(1, 16);
-        let mut workers = Vec::with_capacity(count);
+        let mut inner = EngineInner {
+            workers: Vec::with_capacity(count),
+            next_session: AtomicU64::new(1),
+            next_request: AtomicU64::new(1),
+            round_robin: AtomicUsize::new(0),
+        };
         for index in 0..count {
             let poll = Poll::new()?;
             let waker = Arc::new(Waker::new(poll.registry(), WAKER_TOKEN)?);
@@ -58,16 +63,9 @@ impl Engine {
                 .name(if index == 0 { "mtproto-main".into() } else { format!("mtproto-worker-{index}") })
                 .stack_size(512 * 1024)
                 .spawn(move || worker.run())?;
-            workers.push(WorkerHandle { sender: Mutex::new(sender), waker, thread: Mutex::new(Some(thread)) });
+            inner.workers.push(WorkerHandle { sender: Mutex::new(sender), waker, thread: Mutex::new(Some(thread)) });
         }
-        Ok(Self {
-            inner: Arc::new(EngineInner {
-                workers,
-                next_session: AtomicU64::new(1),
-                next_request: AtomicU64::new(1),
-                round_robin: AtomicUsize::new(0),
-            }),
-        })
+        Ok(Self { inner: Arc::new(inner) })
     }
 
     pub fn worker_count(&self) -> usize {

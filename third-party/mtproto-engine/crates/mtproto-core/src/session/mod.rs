@@ -1,7 +1,7 @@
 mod dedupe;
 mod salts;
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 pub use dedupe::{DuplicateCheck, DuplicateChecker};
 pub use salts::{SALT_SAFETY_MARGIN, SINGLE_SALT_LIFETIME, SaltState, ServerSalt};
@@ -31,6 +31,8 @@ pub const RECENT_SENT_CAPACITY: usize = 1024;
 pub const MAX_PROTOCOL_STRIKES: u32 = 3;
 pub const MAX_ANSWER_REQUESTS: u32 = 3;
 pub const MAX_NESTING_DEPTH: usize = 8;
+pub const MAX_AWAITED_ANSWERS: usize = 1024;
+pub const MAX_MESSAGES_PER_PACKET: usize = 4 * 1024;
 pub const MAX_UNPACKED_PER_PACKET: usize = 64 * 1024 * 1024;
 pub const CLOCK_JUMP_THRESHOLD: f64 = 1.0;
 pub const RESPONSE_TIME_SKEW: i64 = 15i64 << 32;
@@ -221,6 +223,7 @@ impl Mode {
 struct PacketContext {
     mode: Mode,
     budget: usize,
+    messages: usize,
     deferred_resends: Vec<(QueryId, i64)>,
     updates_lost: bool,
     unknown_queries_stuck: bool,
@@ -232,6 +235,7 @@ impl PacketContext {
         Self {
             mode,
             budget,
+            messages: 0,
             deferred_resends: Vec::new(),
             updates_lost: false,
             unknown_queries_stuck: false,
@@ -598,7 +602,7 @@ impl Session {
             id += 4;
         }
         if id <= self.last_msg_id {
-            id = self.last_msg_id + 8 * (((random >> 22) & 1023) as i64 + 1);
+            id = self.last_msg_id.saturating_add(8 * (((random >> 22) & 1023) as i64 + 1)) & !3;
         }
         self.last_msg_id = id;
         id
@@ -713,12 +717,10 @@ impl Session {
             self.unknown_since.get_or_insert(now.mono);
             self.send_before(now.mono);
         }
-        let awaited: Vec<i64> = self.awaited_answers.keys().copied().collect();
-        for answer in awaited {
-            if !self.to_resend_answer.contains(&answer) {
-                self.to_resend_answer.push(answer);
-            }
-        }
+        let queued: HashSet<i64> = self.to_resend_answer.iter().copied().collect();
+        let awaited: Vec<i64> =
+            self.awaited_answers.keys().copied().filter(|answer| !queued.contains(answer)).collect();
+        self.to_resend_answer.extend(awaited);
         if !self.pending.is_empty() || !self.to_ack.is_empty() || !self.to_resend_answer.is_empty() {
             self.send_before(now.mono);
         }
@@ -871,6 +873,10 @@ impl Session {
             self.pending.insert(position.min(self.pending.len()), id);
             self.send_before(now.mono);
         }
+    }
+
+    fn was_sent_recently(&self, msg_id: i64, now: Now) -> bool {
+        self.was_sent(msg_id) && msg_id_time(msg_id) >= self.server_time(now) - MSG_ID_MAX_PAST_SECONDS
     }
 
     fn was_sent(&self, msg_id: i64) -> bool {
@@ -1099,18 +1105,18 @@ impl Session {
             DuplicateCheck::Duplicate => Mode::AckOnly,
             DuplicateCheck::TooOld => Mode::Replay,
         };
+        let mut budget = self.config.max_unpacked_bytes;
         if mode != Mode::AckOnly {
             self.observe_server_time(header.msg_id, now);
             if !self.is_within_time_window(header.msg_id, now) {
-                let mut budget = self.config.max_unpacked_bytes;
-                if !self.has_freshness_proof(body, 0, &mut budget) {
+                if !self.has_freshness_proof(body, 0, &mut budget, &mut 0, now) {
                     return Ok(());
                 }
                 self.reset_server_time(header.msg_id, now);
             }
             self.received.check(header.msg_id);
         }
-        let mut context = PacketContext::new(mode, self.config.max_unpacked_bytes);
+        let mut context = PacketContext::new(mode, budget);
         self.process_message(&mut context, header.msg_id, header.seq_no, body, 0, now);
         self.finish_packet(context, now, rng)
     }
@@ -1156,28 +1162,36 @@ impl Session {
         message_time >= server_time - MSG_ID_MAX_PAST_SECONDS && message_time <= server_time + MSG_ID_MAX_FUTURE_SECONDS
     }
 
-    fn has_freshness_proof(&self, body: &[u8], depth: usize, budget: &mut usize) -> bool {
-        if depth > MAX_NESTING_DEPTH {
+    fn has_freshness_proof(
+        &self,
+        body: &[u8],
+        depth: usize,
+        budget: &mut usize,
+        visited: &mut usize,
+        now: Now,
+    ) -> bool {
+        *visited += 1;
+        if depth > MAX_NESTING_DEPTH || *visited > MAX_MESSAGES_PER_PACKET {
             return false;
         }
         match ServiceMessage::parse(body) {
             Ok(ServiceMessage::Container(children)) => {
-                children.iter().any(|child| self.has_freshness_proof(child.body, depth + 1, budget))
+                children.iter().any(|child| self.has_freshness_proof(child.body, depth + 1, budget, visited, now))
             }
             Ok(ServiceMessage::GzipPacked(packed)) => tlm::gunzip_within(packed, budget)
-                .map(|unpacked| self.has_freshness_proof(&unpacked, depth + 1, budget))
+                .map(|unpacked| self.has_freshness_proof(&unpacked, depth + 1, budget, visited, now))
                 .unwrap_or(false),
-            Ok(ServiceMessage::MsgCopy(inner)) => self.has_freshness_proof(inner.body, depth + 1, budget),
+            Ok(ServiceMessage::MsgCopy(inner)) => self.has_freshness_proof(inner.body, depth + 1, budget, visited, now),
             Ok(ServiceMessage::RpcResult { req_msg_id, .. }) => self.by_msg_id.contains_key(&req_msg_id),
             Ok(ServiceMessage::Pong { msg_id, ping_id }) => {
                 self.pending_pings.contains_key(&msg_id) || self.pending_pings.contains_key(&ping_id)
             }
             Ok(ServiceMessage::BadMsgNotification { bad_msg_id, .. })
-            | Ok(ServiceMessage::BadServerSalt { bad_msg_id, .. }) => self.was_sent(bad_msg_id),
+            | Ok(ServiceMessage::BadServerSalt { bad_msg_id, .. }) => self.was_sent_recently(bad_msg_id, now),
             Ok(ServiceMessage::MsgsStateInfo { req_msg_id, .. }) => self.service_requests.contains_key(&req_msg_id),
             Ok(ServiceMessage::FutureSalts { req_msg_id, .. }) => self.future_salts_requests.contains(&req_msg_id),
             Ok(ServiceMessage::MsgDetailedInfo { msg_id, .. }) => self.by_msg_id.contains_key(&msg_id),
-            Ok(ServiceMessage::NewSessionCreated { first_msg_id, .. }) => self.was_sent(first_msg_id),
+            Ok(ServiceMessage::NewSessionCreated { first_msg_id, .. }) => self.was_sent_recently(first_msg_id, now),
             _ => false,
         }
     }
@@ -1230,6 +1244,10 @@ impl Session {
         depth: usize,
         now: Now,
     ) {
+        context.messages += 1;
+        if context.messages > MAX_MESSAGES_PER_PACKET {
+            return;
+        }
         if seq_no & 1 == 1 {
             self.schedule_ack(msg_id, now);
             if body.len() >= IMMEDIATE_ACK_SIZE {
@@ -1271,6 +1289,9 @@ impl Session {
                 }
                 _ => {}
             }
+            return;
+        }
+        if context.mode == Mode::Replay && !Self::replay_may_act(&message) {
             return;
         }
         match message {
@@ -1363,6 +1384,20 @@ impl Session {
                 }
             }
         }
+    }
+
+    fn replay_may_act(message: &ServiceMessage<'_>) -> bool {
+        matches!(
+            message,
+            ServiceMessage::Container(_)
+                | ServiceMessage::MsgCopy(_)
+                | ServiceMessage::GzipPacked(_)
+                | ServiceMessage::RpcResult { .. }
+                | ServiceMessage::Pong { .. }
+                | ServiceMessage::MsgsStateInfo { .. }
+                | ServiceMessage::FutureSalts { .. }
+                | ServiceMessage::Other { .. }
+        )
     }
 
     fn process_child(&mut self, context: &mut PacketContext, child: ContainerMessage<'_>, depth: usize, now: Now) {
@@ -1533,12 +1568,15 @@ impl Session {
                 SessionEvent::Result { id, body: value, response_msg_id: msg_id, original_size: size }
             }
             Ok(RpcResultBody::DropAnswer(_)) => return,
-            Err(error) => SessionEvent::Error {
-                id,
-                code: 500,
-                message: format!("{RESPONSE_UNPACK_FAILED}: {error}"),
-                response_msg_id: msg_id,
-            },
+            Err(error) => {
+                context.budget = 0;
+                SessionEvent::Error {
+                    id,
+                    code: 500,
+                    message: format!("{RESPONSE_UNPACK_FAILED}: {error}"),
+                    response_msg_id: msg_id,
+                }
+            }
         };
         self.complete_query(id, req_msg_id);
         self.events.push_back(event);
@@ -1630,6 +1668,9 @@ impl Session {
     }
 
     fn request_answer(&mut self, answer: i64, query: Option<QueryId>, now: Now) {
+        if !self.awaited_answers.contains_key(&answer) && self.awaited_answers.len() >= MAX_AWAITED_ANSWERS {
+            return;
+        }
         let entry = self.awaited_answers.entry(answer).or_insert(AwaitedAnswer { query, requests: 0 });
         if entry.query.is_none() {
             entry.query = query;

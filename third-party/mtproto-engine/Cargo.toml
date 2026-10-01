@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/mtproto-core", "crates/mtproto-engine", "crates/mtproto-testserver", "crates/mtproto-ffi", "crates/mtproto-netsim", "crates/mtproto-bench"]
+members = ["crates/mtproto-core", "crates/mtproto-engine", "crates/mtproto-testserver", "crates/mtproto-ffi", "crates/mtproto-netsim", "crates/mtproto-bench", "crates/mtproto-fuzz"]
 resolver = "3"
 
 [workspace.package]
@@ -10,7 +10,7 @@ license = "GPL-2.0-or-later"
 publish = false
 
 [workspace.dependencies]
-aes = "=0.8.4"
+aes = { version = "=0.8.4", features = ["zeroize"] }
 sha1 = "0.10"
 sha2 = "=0.10.9"
 hmac = "=0.12.1"
@@ -30,6 +30,14 @@ codegen-units = 1
 lto = "thin"
 panic = "abort"
 debug = false
+
+[profile.fuzz]
+inherits = "release"
+panic = "unwind"
+debug-assertions = true
+overflow-checks = true
+lto = false
+codegen-units = 16
 
 [profile.test]
 opt-level = 1

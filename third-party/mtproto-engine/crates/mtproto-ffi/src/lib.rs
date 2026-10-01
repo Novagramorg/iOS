@@ -3,6 +3,9 @@
 
 use std::ffi::c_void;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+use zeroize::Zeroize;
 
 use mtproto_engine::mtproto_core::auth_key::AuthKey;
 use mtproto_engine::mtproto_core::crypto::RsaPublicKey;
@@ -136,6 +139,15 @@ pub struct MTEvent {
 
 pub struct MTBuffer {
     data: Vec<u8>,
+    secret: bool,
+}
+
+impl Drop for MTBuffer {
+    fn drop(&mut self) {
+        if self.secret {
+            self.data.zeroize();
+        }
+    }
 }
 
 pub type MTEventCallback = Option<unsafe extern "C" fn(context: *mut c_void, session: u64, event: *const MTEvent)>;
@@ -143,6 +155,7 @@ pub type MTLogCallback = Option<unsafe extern "C" fn(context: *mut c_void, level
 
 pub struct MTEngine {
     engine: Engine,
+    bridge: Arc<Bridge>,
 }
 
 struct ContextPointer(*mut c_void);
@@ -154,6 +167,7 @@ struct Bridge {
     context: ContextPointer,
     on_event: MTEventCallback,
     on_log: MTLogCallback,
+    closed: AtomicBool,
 }
 
 const EMPTY_STRING: MTString = MTString { data: std::ptr::null(), length: 0 };
@@ -162,17 +176,32 @@ fn string_ref(text: &str) -> MTString {
     MTString { data: text.as_ptr(), length: text.len() }
 }
 
-fn buffer(data: Vec<u8>) -> *mut MTBuffer {
-    Box::into_raw(Box::new(MTBuffer { data }))
+fn buffer(data: Vec<u8>, secret: bool) -> *mut MTBuffer {
+    Box::into_raw(Box::new(MTBuffer { data, secret }))
 }
 
 impl Bridge {
-    fn emit(&self, session: SessionHandle, mut event: MTEvent, payload: Option<Vec<u8>>) {
+    fn emit(&self, session: SessionHandle, event: MTEvent, payload: Option<Vec<u8>>) {
+        self.deliver(session, event, payload, false);
+    }
+
+    fn emit_secret(&self, session: SessionHandle, event: MTEvent, mut payload: Vec<u8>) {
+        if self.on_event.is_none() || self.closed.load(Ordering::Acquire) {
+            payload.zeroize();
+            return;
+        }
+        self.deliver(session, event, Some(payload), true);
+    }
+
+    fn deliver(&self, session: SessionHandle, mut event: MTEvent, payload: Option<Vec<u8>>, secret: bool) {
         let Some(callback) = self.on_event else {
             return;
         };
+        if self.closed.load(Ordering::Acquire) {
+            return;
+        }
         if let Some(data) = payload {
-            event.payload = buffer(data);
+            event.payload = buffer(data, secret);
         }
         unsafe { callback(self.context.0, session.0, &event) };
     }
@@ -241,7 +270,7 @@ impl EngineCallbacks for Bridge {
                 event.integer1 = salt;
                 event.integer2 = expires_at.map(i64::from).unwrap_or(0);
                 event.value1 = time_difference;
-                self.emit(session, event, Some(key));
+                self.emit_secret(session, event, key);
             }
             EngineEvent::AuthKeyCreationFailed { reason } => {
                 let mut event = blank(22);
@@ -267,6 +296,9 @@ impl EngineCallbacks for Bridge {
     }
 
     fn on_log(&self, level: LogLevel, message: &str) {
+        if self.closed.load(Ordering::Acquire) {
+            return;
+        }
         if let Some(callback) = self.on_log {
             let level = match level {
                 LogLevel::Error => 0,
@@ -516,9 +548,10 @@ pub unsafe extern "C" fn mt_engine_create(
     if worker_threads > 0 {
         config.worker_threads = worker_threads as usize;
     }
-    let bridge = Arc::new(Bridge { context: ContextPointer(context), on_event, on_log });
-    match Engine::new(config, bridge) {
-        Ok(engine) => Box::into_raw(Box::new(MTEngine { engine })),
+    let bridge =
+        Arc::new(Bridge { context: ContextPointer(context), on_event, on_log, closed: AtomicBool::new(false) });
+    match Engine::new(config, bridge.clone()) {
+        Ok(engine) => Box::into_raw(Box::new(MTEngine { engine, bridge })),
         Err(_) => std::ptr::null_mut(),
     }
 }
@@ -529,6 +562,7 @@ pub unsafe extern "C" fn mt_engine_destroy(pointer: *mut MTEngine) {
         return;
     }
     let engine = unsafe { Box::from_raw(pointer) };
+    engine.bridge.closed.store(true, Ordering::Release);
     engine.engine.shutdown();
 }
 
@@ -572,8 +606,10 @@ pub unsafe extern "C" fn mt_session_create(pointer: *mut MTEngine, setup: *const
         _ => Framing::Abridged,
     };
     config.proxy = unsafe { proxy(&setup.proxy) };
-    let key = unsafe { bytes(setup.auth_key) };
-    if let Some(key) = AuthKey::from_slice(&key) {
+    let mut key = unsafe { bytes(setup.auth_key) };
+    let parsed = AuthKey::from_slice(&key);
+    key.zeroize();
+    if let Some(key) = parsed {
         config.auth_key = Some(AuthKeyMaterial {
             key,
             salts: unsafe { salts(setup.salts, setup.salt_count) },
@@ -652,8 +688,10 @@ pub unsafe extern "C" fn mt_session_set_auth_key(
     let Some(engine) = (unsafe { engine(pointer) }) else {
         return;
     };
-    let key = unsafe { bytes(key) };
-    let material = AuthKey::from_slice(&key).map(|key| AuthKeyMaterial {
+    let mut key = unsafe { bytes(key) };
+    let parsed = AuthKey::from_slice(&key);
+    key.zeroize();
+    let material = parsed.map(|key| AuthKeyMaterial {
         key,
         salts: unsafe { salts(salt_entries, salt_count) },
         init_hash: (has_init_hash != 0).then(|| unsafe { text(init_hash) }),

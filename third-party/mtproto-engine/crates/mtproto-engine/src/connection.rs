@@ -234,6 +234,9 @@ impl Connection {
         self.received_bytes = true;
         self.last_read_at = now;
         let mut became_ready = false;
+        if matches!(self.phase, Phase::Connecting) {
+            became_ready = self.handle_writable(registry, now)?;
+        }
         match &mut self.phase {
             Phase::Connecting => {
                 self.phase = Phase::Ready;
@@ -278,6 +281,10 @@ impl Connection {
 
     pub fn next_incoming(&mut self) -> Result<Option<Incoming>, ConnectionError> {
         self.transport.next_incoming().map_err(ConnectionError::Transport)
+    }
+
+    pub fn buffered_input_len(&self) -> usize {
+        self.transport.buffered_input_len()
     }
 
     pub fn pending_frame_head(&self) -> Option<(usize, &[u8])> {

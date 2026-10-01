@@ -19,6 +19,22 @@ pub enum Fault {
     AckNoise,
     Stall,
     NewSession,
+    HostileGarbage,
+    HostileBadMsgKey,
+    HostileForeignSession,
+    HostileEvenMsgId,
+    HostileFanOut,
+    HostileGzipBomb,
+    HostileHugeVector,
+    HostileSaltsFlood,
+    HostileReplay,
+    HostileSaltStorm,
+    HostileUnknownResults,
+    HostileDeepNest,
+    HostileTransportCode,
+    HostileOversized,
+    HostileTruncated,
+    HostileQuickAckNoise,
 }
 
 impl Fault {
@@ -42,6 +58,25 @@ impl Fault {
         Fault::NewSession,
     ];
 
+    pub const HOSTILE: [Fault; 16] = [
+        Fault::HostileGarbage,
+        Fault::HostileBadMsgKey,
+        Fault::HostileForeignSession,
+        Fault::HostileEvenMsgId,
+        Fault::HostileFanOut,
+        Fault::HostileGzipBomb,
+        Fault::HostileHugeVector,
+        Fault::HostileSaltsFlood,
+        Fault::HostileReplay,
+        Fault::HostileSaltStorm,
+        Fault::HostileUnknownResults,
+        Fault::HostileDeepNest,
+        Fault::HostileTransportCode,
+        Fault::HostileOversized,
+        Fault::HostileTruncated,
+        Fault::HostileQuickAckNoise,
+    ];
+
     pub fn name(self) -> &'static str {
         match self {
             Fault::DropBeforeExecution => "drop-before",
@@ -61,11 +96,38 @@ impl Fault {
             Fault::AckNoise => "ack-noise",
             Fault::Stall => "stall",
             Fault::NewSession => "new-session",
+            Fault::HostileGarbage => "x-garbage",
+            Fault::HostileBadMsgKey => "x-bad-msg-key",
+            Fault::HostileForeignSession => "x-foreign-session",
+            Fault::HostileEvenMsgId => "x-even-msg-id",
+            Fault::HostileFanOut => "x-fan-out",
+            Fault::HostileGzipBomb => "x-gzip-bomb",
+            Fault::HostileHugeVector => "x-huge-vector",
+            Fault::HostileSaltsFlood => "x-salts-flood",
+            Fault::HostileReplay => "x-replay",
+            Fault::HostileSaltStorm => "x-salt-storm",
+            Fault::HostileUnknownResults => "x-unknown-results",
+            Fault::HostileDeepNest => "x-deep-nest",
+            Fault::HostileTransportCode => "x-transport-code",
+            Fault::HostileOversized => "x-oversized",
+            Fault::HostileTruncated => "x-truncated",
+            Fault::HostileQuickAckNoise => "x-quick-ack-noise",
         }
     }
 
     pub fn by_name(name: &str) -> Option<Fault> {
-        Fault::ALL.into_iter().find(|fault| fault.name() == name)
+        Fault::ALL.into_iter().chain(Fault::HOSTILE).find(|fault| fault.name() == name)
+    }
+
+    pub fn closes_connection(self) -> bool {
+        matches!(
+            self,
+            Fault::HostileGarbage
+                | Fault::HostileBadMsgKey
+                | Fault::HostileTransportCode
+                | Fault::HostileOversized
+                | Fault::HostileTruncated
+        )
     }
 }
 
@@ -89,6 +151,10 @@ impl ChaosConfig {
                 .map(|fault| (fault, rate_each))
                 .collect(),
         }
+    }
+
+    pub fn hostile(seed: u64, rate_each: f64) -> Self {
+        Self { seed, faults: Fault::HOSTILE.into_iter().map(|fault| (fault, rate_each)).collect() }
     }
 
     pub fn roll(&self, rng: &mut XorShiftRandom) -> Option<Fault> {
@@ -120,7 +186,7 @@ mod tests {
         }
         let expected = 100_000.0 * 0.01 * (Fault::ALL.len() - 1) as f64;
         assert!((hits as f64 - expected).abs() < expected * 0.1, "{hits} vs {expected}");
-        for fault in Fault::ALL {
+        for fault in Fault::ALL.into_iter().chain(Fault::HOSTILE) {
             assert_eq!(Fault::by_name(fault.name()), Some(fault));
         }
     }
