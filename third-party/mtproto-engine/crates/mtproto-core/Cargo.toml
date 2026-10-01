@@ -1,0 +1,33 @@
+[package]
+name = "mtproto-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+aes.workspace = true
+sha1.workspace = true
+sha2.workspace = true
+hmac.workspace = true
+num-bigint.workspace = true
+num-traits.workspace = true
+num-integer.workspace = true
+getrandom.workspace = true
+flate2.workspace = true
+zeroize.workspace = true
+thiserror.workspace = true
+
+base64 = "=0.22.1"
+
+[features]
+test-support = []
+
+[dev-dependencies]
+mtproto-core = { path = ".", features = ["test-support"] }
+hex.workspace = true
+proptest.workspace = true
+
+[lints]
+workspace = true
