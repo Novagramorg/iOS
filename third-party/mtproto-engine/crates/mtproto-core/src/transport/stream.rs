@@ -229,7 +229,8 @@ mod tests {
         let emulate_tls = config.secret.as_ref().is_some_and(ProxySecret::emulate_tls);
         let key = config.secret.as_ref().map(ProxySecret::proxy_key);
         if emulate_tls {
-            assert_eq!(wire.len(), super::super::tls::CLIENT_HELLO_LEN);
+            assert_eq!(wire.len(), 5 + usize::from(u16::from_be_bytes([wire[3], wire[4]])));
+            assert!(wire.len() >= super::super::tls::MIN_CLIENT_HELLO_LEN);
             assert_eq!(verify_client_hello_for_tests(&wire, key.as_ref().unwrap()), Some(config.unix_time));
             assert!(!client.is_ready());
             let response = server_hello_for_tests(&wire, key.as_ref().unwrap(), &mut rng);

@@ -44,6 +44,7 @@ pub const TAG_GZIP: u32 = 1019;
 pub const SERVER_PING_ID: i64 = 0x5e57_9149;
 pub const LARGE_SIZE: usize = 1024 * 1024;
 pub const SERVER_SALT: i64 = 0x5a17;
+const MAX_REMEMBERED_ANSWERS: usize = 16 * 1024;
 
 pub fn call(tag: u32, payload: &[u8]) -> Vec<u8> {
     let mut writer = Writer::new();
@@ -108,6 +109,8 @@ pub struct Stats {
     pub client_pongs: usize,
     pub retransmissions: usize,
     pub retransmissions_in_container: usize,
+    pub duplicate_msg_ids: usize,
+    pub redelivered_answers: usize,
     pub bad_msgs_sent: usize,
     pub session_ids: HashSet<i64>,
     pub transport_errors_sent: usize,
@@ -118,6 +121,7 @@ struct SessionState {
     received: HashSet<i64>,
     unacked: Vec<(i64, i32, Vec<u8>)>,
     answered_queries: HashMap<i64, i64>,
+    answer_ids: HashMap<i64, i64>,
     clock_offset: f64,
     awaiting_retransmission: HashSet<i64>,
 }
@@ -571,6 +575,7 @@ fn serve_frames(
                     received: HashSet::new(),
                     unacked: Vec::new(),
                     answered_queries: HashMap::new(),
+                    answer_ids: HashMap::new(),
                     clock_offset: options.clock_offset,
                     awaiting_retransmission: HashSet::new(),
                 }
@@ -601,6 +606,17 @@ fn serve_frames(
             } else {
                 for message in &decoded.messages {
                     if !session.received.insert(message.msg_id) {
+                        stats.duplicate_msg_ids += 1;
+                        let cached = session
+                            .answer_ids
+                            .get(&message.msg_id)
+                            .and_then(|answer_id| session.unacked.iter().find(|(id, _, _)| id == answer_id).cloned());
+                        if let Some(answer) = cached
+                            && !resend.iter().any(|(id, _, _)| *id == answer.0)
+                        {
+                            stats.redelivered_answers += 1;
+                            resend.push(answer);
+                        }
                         continue;
                     }
                     if session.awaiting_retransmission.remove(&message.msg_id) {
@@ -816,8 +832,14 @@ fn seal_tracked(session: &mut SessionState, body: &[u8], content: bool) -> Vec<u
     session.peer.server_time = server_now(session.clock_offset);
     let msg_id = session.peer.next_msg_id(true);
     let seq = if content { 1 } else { 0 };
-    if body.len() >= 4 && u32::from_le_bytes(body[..4].try_into().unwrap()) == ids::RPC_RESULT {
+    if body.len() >= 12 && u32::from_le_bytes(body[..4].try_into().unwrap()) == ids::RPC_RESULT {
         session.unacked.push((msg_id, seq, body.to_vec()));
+        let req_msg_id = i64::from_le_bytes(body[4..12].try_into().unwrap());
+        session.answer_ids.insert(req_msg_id, msg_id);
+        if session.answer_ids.len() > MAX_REMEMBERED_ANSWERS {
+            let unacked: HashSet<i64> = session.unacked.iter().map(|(id, _, _)| *id).collect();
+            session.answer_ids.retain(|_, answer_id| unacked.contains(answer_id));
+        }
     }
     session.peer.seal(msg_id, seq, body)
 }

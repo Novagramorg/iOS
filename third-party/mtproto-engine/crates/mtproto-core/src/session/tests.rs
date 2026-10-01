@@ -283,7 +283,105 @@ fn new_session_created_resends_older_queries_and_reports_reset() {
 }
 
 #[test]
-fn reconnect_without_ack_asks_state_and_resends_only_unreceived() {
+fn reconnect_without_ack_retransmits_with_original_msg_ids() {
+    let mut h = Harness::new();
+    h.session.send(QueryId(1), query_body(1), QueryOptions::default(), h.now);
+    h.session.send(QueryId(2), query_body(2), QueryOptions::default(), h.now);
+    let packet = h.flush().unwrap();
+    let originals: Vec<(i64, i32)> = packet.queries().iter().map(|m| (m.msg_id, m.seq_no)).collect();
+    h.session.connection_closed();
+    assert!(h.session.has_unknown_queries());
+    h.advance(1.0);
+    h.session.connection_opened(h.now);
+    let packet = h.flush().unwrap();
+    assert!(packet.find(ids::MSGS_STATE_REQ).is_none(), "no state request round trip");
+    assert!(packet.messages.iter().all(|m| m.container_id.is_some()));
+    let retransmitted: Vec<(i64, i32)> = packet.queries().iter().map(|m| (m.msg_id, m.seq_no)).collect();
+    assert_eq!(retransmitted, originals, "same msg_id and seqno, so the server deduplicates");
+    assert!(!h.session.has_unknown_queries());
+    h.deliver(vec![
+        Outgoing::Content(rpc_result(originals[0].0, &[1, 1, 1, 1])),
+        Outgoing::Content(rpc_result(originals[1].0, &[2, 2, 2, 2])),
+    ])
+    .unwrap();
+    let mut results = h.results();
+    results.sort_by_key(|(id, _)| id.0);
+    assert_eq!(results, vec![(QueryId(1), vec![1, 1, 1, 1]), (QueryId(2), vec![2, 2, 2, 2])]);
+    assert!(h.flush_all().iter().all(|packet| packet.queries().is_empty()));
+}
+
+#[test]
+fn retransmissions_respect_container_limits_and_keep_order() {
+    let mut h = Harness::new();
+    let part = vec![0x55u8; DEFAULT_CONTAINER_BYTES / 2 + 4];
+    let mut originals = Vec::new();
+    for index in 0..6u32 {
+        let mut body = query_body(index);
+        body.extend_from_slice(&part);
+        h.session.send(QueryId(u64::from(index)), body, QueryOptions::default(), h.now);
+        let packet = h.flush().unwrap();
+        originals.push(h.sent_query(&packet, index));
+    }
+    h.session.connection_closed();
+    h.session.connection_opened(h.now);
+    h.session.send(QueryId(99), query_body(99), QueryOptions::default(), h.now);
+    let packets = h.flush_all();
+    let mut retransmitted = Vec::new();
+    let mut fresh_seen_at = None;
+    for (index, packet) in packets.iter().enumerate() {
+        let queries = packet.queries();
+        let bytes: usize = queries.iter().map(|m| m.body.len()).sum();
+        assert!(queries.len() == 1 || bytes <= DEFAULT_CONTAINER_BYTES, "packet {index} carries {bytes} bytes");
+        for message in queries {
+            if query_tag(&message.body) == Some(99) {
+                fresh_seen_at = Some(retransmitted.len());
+            } else {
+                retransmitted.push(message.msg_id);
+            }
+        }
+    }
+    assert_eq!(retransmitted, originals);
+    assert_eq!(fresh_seen_at, Some(originals.len()), "new queries follow the retransmissions");
+    assert!(packets.len() >= 3);
+}
+
+#[test]
+fn large_answers_are_acknowledged_at_once_small_ones_are_batched() {
+    let mut h = Harness::new();
+    h.sync();
+    h.session.send(QueryId(1), query_body(1), QueryOptions::default(), h.now);
+    h.session.send(QueryId(2), query_body(2), QueryOptions::default(), h.now);
+    let packet = h.flush().unwrap();
+    let small = h.sent_query(&packet, 1);
+    let large = h.sent_query(&packet, 2);
+    h.flush_all();
+    h.deliver(vec![Outgoing::Content(rpc_result(small, &[1, 2, 3, 4]))]).unwrap();
+    assert!(h.flush_all().iter().all(|packet| packet.find(ids::MSGS_ACK).is_none()), "small answers wait for company");
+    h.deliver(vec![Outgoing::Content(rpc_result(large, &vec![7u8; IMMEDIATE_ACK_SIZE]))]).unwrap();
+    let packets = h.flush_all();
+    let ack = packets.iter().find_map(|packet| packet.find(ids::MSGS_ACK)).expect("large answer acknowledged at once");
+    assert!(read_vector_after_constructor(&ack.body).len() >= 2, "pending small acks ride along");
+}
+
+#[test]
+fn repeated_reconnects_keep_retransmitting_the_same_message() {
+    let mut h = Harness::new();
+    h.session.send(QueryId(1), query_body(1), QueryOptions::default(), h.now);
+    let packet = h.flush().unwrap();
+    let original = h.sent_query(&packet, 1);
+    for _ in 0..5 {
+        h.session.connection_closed();
+        h.advance(2.0);
+        h.session.connection_opened(h.now);
+        let packet = h.flush().unwrap();
+        assert_eq!(h.sent_query(&packet, 1), original);
+    }
+    h.deliver(vec![Outgoing::Content(rpc_result(original, &[9, 9, 9, 9]))]).unwrap();
+    assert_eq!(h.results(), vec![(QueryId(1), vec![9, 9, 9, 9])]);
+}
+
+#[test]
+fn reconnect_after_retransmit_window_asks_state_and_resends_only_unreceived() {
     let mut h = Harness::new();
     h.session.send(QueryId(1), query_body(1), QueryOptions::default(), h.now);
     h.session.send(QueryId(2), query_body(2), QueryOptions::default(), h.now);
@@ -293,7 +391,7 @@ fn reconnect_without_ack_asks_state_and_resends_only_unreceived() {
     h.session.connection_closed();
     assert!(h.session.has_unknown_queries());
     assert!(h.session.is_performing_service_tasks());
-    h.advance(1.0);
+    h.advance(RETRANSMIT_WINDOW + 1.0);
     h.session.connection_opened(h.now);
     let packet = h.flush().unwrap();
     assert!(packet.messages.iter().all(|m| query_tag(&m.body).is_none()), "no blind resend");
@@ -310,8 +408,92 @@ fn reconnect_without_ack_asks_state_and_resends_only_unreceived() {
     let packet = h.flush().unwrap();
     let tags: Vec<u32> = packet.messages.iter().filter_map(|m| query_tag(&m.body)).collect();
     assert_eq!(tags, vec![2]);
+    assert!(h.sent_query(&packet, 2) > second);
     h.deliver(vec![Outgoing::Content(rpc_result(first, &[1, 1, 1, 1]))]).unwrap();
     assert_eq!(h.results(), vec![(QueryId(1), vec![1, 1, 1, 1])]);
+}
+
+#[test]
+fn retransmission_rejected_for_salt_is_retransmitted_again_with_the_same_msg_id() {
+    let mut h = Harness::new();
+    h.session.send(QueryId(1), query_body(1), QueryOptions::default(), h.now);
+    let packet = h.flush().unwrap();
+    let original = h.sent_query(&packet, 1);
+    h.session.connection_closed();
+    h.session.connection_opened(h.now);
+    let packet = h.flush().unwrap();
+    assert_eq!(h.sent_query(&packet, 1), original);
+    h.deliver(vec![Outgoing::Service(bad_server_salt(packet.header.msg_id, packet.header.seq_no, 555))]).unwrap();
+    let packet = h.flush().unwrap();
+    assert_eq!(h.sent_query(&packet, 1), original, "a new msg_id could execute the query twice");
+    assert_eq!(packet.header.salt, 555);
+}
+
+#[test]
+fn fresh_query_rejected_for_salt_still_gets_a_new_msg_id() {
+    let mut h = Harness::new();
+    h.session.send(QueryId(1), query_body(1), QueryOptions::default(), h.now);
+    let packet = h.flush().unwrap();
+    let original = h.sent_query(&packet, 1);
+    h.deliver(vec![Outgoing::Service(bad_server_salt(packet.header.msg_id, packet.header.seq_no, 555))]).unwrap();
+    let packet = h.flush().unwrap();
+    assert!(h.sent_query(&packet, 1) > original);
+}
+
+#[test]
+fn retransmission_rejected_by_bad_msg_falls_back_to_state_request() {
+    let mut h = Harness::new();
+    h.session.send(QueryId(1), query_body(1), QueryOptions::default(), h.now);
+    let packet = h.flush().unwrap();
+    let original = h.sent_query(&packet, 1);
+    h.session.connection_closed();
+    h.session.connection_opened(h.now);
+    let packet = h.flush().unwrap();
+    assert_eq!(h.sent_query(&packet, 1), original);
+    h.deliver(vec![Outgoing::Service(bad_msg_notification(packet.header.msg_id, packet.header.seq_no, 20))]).unwrap();
+    let packet = h.flush().unwrap();
+    assert!(packet.queries().is_empty(), "the first transmission may have been executed");
+    let request = packet.find(ids::MSGS_STATE_REQ).expect("state request");
+    assert_eq!(read_vector_after_constructor(&request.body), vec![original]);
+    h.session.connection_closed();
+    h.session.connection_opened(h.now);
+    let packet = h.flush().unwrap();
+    assert!(packet.queries().is_empty(), "a refused retransmission is not retried blindly");
+    let request = packet.find(ids::MSGS_STATE_REQ).expect("state request after reconnect");
+    h.deliver(vec![Outgoing::Content(msgs_state_info(request.msg_id, &[2]))]).unwrap();
+    let packet = h.flush().unwrap();
+    assert!(h.sent_query(&packet, 1) > original, "not received, so a new msg_id is safe");
+}
+
+#[test]
+fn stale_not_received_info_does_not_duplicate_a_retransmitted_query() {
+    let mut h = Harness::new();
+    h.session.send(QueryId(1), query_body(1), QueryOptions::default(), h.now);
+    let packet = h.flush().unwrap();
+    let original = h.sent_query(&packet, 1);
+    h.session.connection_closed();
+    h.session.connection_opened(h.now);
+    let packet = h.flush().unwrap();
+    assert_eq!(h.sent_query(&packet, 1), original);
+    h.deliver(vec![Outgoing::Service(msgs_all_info(&[original], &[2]))]).unwrap();
+    assert!(h.flush_all().iter().all(|packet| packet.queries().is_empty()));
+    h.deliver(vec![Outgoing::Content(rpc_result(original, &[3, 3, 3, 3]))]).unwrap();
+    assert_eq!(h.results(), vec![(QueryId(1), vec![3, 3, 3, 3])]);
+}
+
+#[test]
+fn rejected_connection_does_not_resend_a_retransmission_under_a_new_msg_id() {
+    let mut h = Harness::new();
+    h.session.send(QueryId(1), query_body(1), QueryOptions::default(), h.now);
+    let packet = h.flush().unwrap();
+    let original = h.sent_query(&packet, 1);
+    h.session.connection_closed();
+    h.session.connection_opened(h.now);
+    h.flush().unwrap();
+    h.session.connection_rejected(h.now);
+    h.session.connection_opened(h.now);
+    let packet = h.flush().unwrap();
+    assert_eq!(h.sent_query(&packet, 1), original);
 }
 
 #[test]
@@ -340,6 +522,7 @@ fn unanswered_state_request_is_retried() {
     h.session.send(QueryId(1), query_body(1), QueryOptions::default(), h.now);
     h.flush().unwrap();
     h.session.connection_closed();
+    h.advance(RETRANSMIT_WINDOW + 1.0);
     h.session.connection_opened(h.now);
     let packet = h.flush().unwrap();
     let first_request = packet.find(ids::MSGS_STATE_REQ).expect("state request").msg_id;
@@ -1354,6 +1537,7 @@ fn state_info_with_mismatched_length_is_ignored() {
     h.session.send(QueryId(1), query_body(1), QueryOptions::default(), h.now);
     h.flush().unwrap();
     h.session.connection_closed();
+    h.advance(RETRANSMIT_WINDOW + 1.0);
     h.session.connection_opened(h.now);
     let packet = h.flush().unwrap();
     let request = packet.find(ids::MSGS_STATE_REQ).unwrap().msg_id;
@@ -1370,6 +1554,7 @@ fn unknown_queries_stuck_for_a_minute_close_the_connection_after_processing() {
     let packet = h.flush().unwrap();
     let second = h.sent_query(&packet, 2);
     h.session.connection_closed();
+    h.advance(RETRANSMIT_WINDOW + 1.0);
     h.session.connection_opened(h.now);
     let mut outcome = Ok(());
     for _ in 0..70 {

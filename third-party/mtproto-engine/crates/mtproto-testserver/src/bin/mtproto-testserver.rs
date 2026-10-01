@@ -32,9 +32,20 @@ fn main() {
             "stats" => {
                 let summary = server.with_stats(|stats| {
                     let executions: usize = stats.executions.values().sum();
+                    let mut tags: Vec<_> = stats.executions.iter().collect();
+                    tags.sort();
+                    let tags: Vec<String> = tags.iter().map(|(tag, count)| format!("\"{tag}\":{count}")).collect();
                     format!(
-                        "{{\"connections\":{},\"executions\":{},\"init_connections\":{},\"state_requests\":{},\"pings\":{},\"closed_by_client\":{}}}",
-                        stats.connections, executions, stats.init_connections, stats.state_requests, stats.pings, stats.closed_by_client
+                        "{{\"connections\":{},\"executions\":{},\"init_connections\":{},\"state_requests\":{},\"pings\":{},\"closed_by_client\":{},\"duplicate_msg_ids\":{},\"redelivered_answers\":{},\"tags\":{{{}}}}}",
+                        stats.connections,
+                        executions,
+                        stats.init_connections,
+                        stats.state_requests,
+                        stats.pings,
+                        stats.closed_by_client,
+                        stats.duplicate_msg_ids,
+                        stats.redelivered_answers,
+                        tags.join(",")
                     )
                 });
                 println!("{summary}");

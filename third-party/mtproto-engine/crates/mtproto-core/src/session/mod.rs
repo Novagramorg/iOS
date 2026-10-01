@@ -35,7 +35,9 @@ pub const MAX_UNPACKED_PER_PACKET: usize = 64 * 1024 * 1024;
 pub const CLOCK_JUMP_THRESHOLD: f64 = 1.0;
 pub const RESPONSE_TIME_SKEW: i64 = 15i64 << 32;
 pub const UNKNOWN_QUERIES_STUCK_AFTER: f64 = 60.0;
+pub const RETRANSMIT_WINDOW: f64 = MSG_ID_MAX_PAST_SECONDS - 60.0;
 pub const DROPPED_ANSWER_COUNTED_SIZE: usize = 16 * 1024;
+pub const IMMEDIATE_ACK_SIZE: usize = 16 * 1024;
 pub const DROPPED_ANSWER_LIMIT: usize = 256 * 1024;
 pub const RESPONSE_UNPACK_FAILED: &str = "RESPONSE_UNPACK_FAILED";
 pub const PROTOCOL_ERROR_PREFIX: &str = "PROTOCOL_ERROR_BAD_MSG_";
@@ -161,6 +163,14 @@ struct Query {
     sent_at: f64,
     connection_epoch: u64,
     protocol_strikes: u32,
+    may_have_arrived: bool,
+    retransmit_refused: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FailureKind {
+    Salt,
+    Other,
 }
 
 #[derive(Debug, Clone)]
@@ -554,6 +564,8 @@ impl Session {
                 sent_at: 0.0,
                 connection_epoch: 0,
                 protocol_strikes: 0,
+                may_have_arrived: false,
+                retransmit_refused: false,
             },
         );
         self.pending.push_back(id);
@@ -598,12 +610,26 @@ impl Session {
         self.last_ping_container_id = 0;
         self.pending_pings.clear();
         self.quick_acks.clear();
-        let unknown: Vec<i64> = self
-            .queries
-            .values()
-            .filter(|query| query.state == QueryState::Unknown)
-            .map(|query| query.msg_id)
-            .collect();
+        let server_time = self.server_time(now);
+        let mut retransmit = Vec::new();
+        let mut unknown = Vec::new();
+        for (id, query) in &self.queries {
+            if query.state != QueryState::Unknown {
+                continue;
+            }
+            if !query.retransmit_refused && server_time - msg_id_time(query.msg_id) < RETRANSMIT_WINDOW {
+                retransmit.push((query.msg_id, *id));
+            } else {
+                unknown.push(query.msg_id);
+            }
+        }
+        retransmit.sort_unstable();
+        for (_, id) in retransmit {
+            if !self.to_retransmit.contains(&id) {
+                self.to_retransmit.push(id);
+            }
+            self.send_before(now.mono);
+        }
         if !unknown.is_empty() {
             self.to_state_request.extend(unknown);
             self.unknown_since.get_or_insert(now.mono);
@@ -631,6 +657,7 @@ impl Session {
         for query in self.queries.values_mut() {
             if query.state == QueryState::Sent && !query.acknowledged && query.connection_epoch == epoch {
                 query.state = QueryState::Unknown;
+                query.may_have_arrived = true;
             }
         }
         self.to_state_request.clear();
@@ -654,7 +681,10 @@ impl Session {
             .queries
             .iter()
             .filter(|(_, query)| {
-                query.state == QueryState::Sent && !query.acknowledged && query.connection_epoch == epoch
+                query.state == QueryState::Sent
+                    && !query.acknowledged
+                    && !query.may_have_arrived
+                    && query.connection_epoch == epoch
             })
             .map(|(id, query)| (query.msg_id, *id))
             .collect();
@@ -731,6 +761,8 @@ impl Session {
         query.container_id = 0;
         query.invoke_after_msg_id = 0;
         query.acknowledged = false;
+        query.may_have_arrived = false;
+        query.retransmit_refused = false;
         self.by_msg_id.remove(&released.0);
         self.detach_from_container(released.1, released.0);
         self.to_retransmit.retain(|other| *other != id);
@@ -785,7 +817,34 @@ impl Session {
         targets.iter().filter_map(|target| self.by_msg_id.get(target).copied()).collect()
     }
 
-    fn message_failed(&mut self, msg_id: i64, now: Now) {
+    fn query_failed(&mut self, id: QueryId, kind: FailureKind, now: Now) {
+        let Some(query) = self.queries.get_mut(&id).filter(|query| query.state != QueryState::Pending) else {
+            return;
+        };
+        if !query.may_have_arrived {
+            self.resend_query(id, now);
+            return;
+        }
+        match kind {
+            FailureKind::Salt => {
+                if !self.to_retransmit.contains(&id) {
+                    self.to_retransmit.push(id);
+                }
+            }
+            FailureKind::Other => {
+                query.state = QueryState::Unknown;
+                query.retransmit_refused = true;
+                let msg_id = query.msg_id;
+                if !self.to_state_request.contains(&msg_id) {
+                    self.to_state_request.push(msg_id);
+                }
+                self.unknown_since.get_or_insert(now.mono);
+            }
+        }
+        self.send_before(now.mono);
+    }
+
+    fn message_failed(&mut self, msg_id: i64, kind: FailureKind, now: Now) {
         if msg_id == self.last_ping_msg_id || msg_id == self.last_ping_container_id {
             self.last_ping_at = None;
             self.last_ping_msg_id = 0;
@@ -803,7 +862,7 @@ impl Session {
         }
         for target in targets {
             if let Some(id) = self.by_msg_id.get(&target).copied() {
-                self.resend_query(id, now);
+                self.query_failed(id, kind, now);
             }
             if let Some(service) = self.service_requests.remove(&target) {
                 match service {
@@ -1091,6 +1150,9 @@ impl Session {
     ) {
         if seq_no & 1 == 1 {
             self.schedule_ack(msg_id, now);
+            if body.len() >= IMMEDIATE_ACK_SIZE {
+                self.send_before(now.mono);
+            }
         }
         if context.mode != Mode::AckOnly {
             self.note_awaited_answer(msg_id);
@@ -1161,7 +1223,7 @@ impl Session {
                 self.salts.set_server_salt(new_server_salt, server_time);
                 self.events.push_back(SessionEvent::SaltsUpdated { salts: self.salts.all() });
                 self.last_future_salts_at = None;
-                self.message_failed(bad_msg_id, now);
+                self.message_failed(bad_msg_id, FailureKind::Salt, now);
             }
             ServiceMessage::BadMsgNotification { bad_msg_id, error_code, .. } => {
                 self.on_bad_msg_notification(msg_id, bad_msg_id, error_code, now)
@@ -1290,26 +1352,26 @@ impl Session {
         match error_code {
             16 => {
                 self.reset_server_time(msg_id, now);
-                self.message_failed(bad_msg_id, now);
+                self.message_failed(bad_msg_id, FailureKind::Other, now);
             }
             17 => {
                 self.reset_server_time(msg_id, now);
-                self.message_failed(bad_msg_id, now);
+                self.message_failed(bad_msg_id, FailureKind::Other, now);
                 self.pending_reset = true;
             }
-            20 => self.message_failed(bad_msg_id, now),
+            20 => self.message_failed(bad_msg_id, FailureKind::Other, now),
             32 | 33 => {
-                self.message_failed(bad_msg_id, now);
+                self.message_failed(bad_msg_id, FailureKind::Other, now);
                 self.pending_reset = true;
             }
             48 => {
                 self.salts.invalidate_current();
                 self.last_future_salts_at = None;
-                self.message_failed(bad_msg_id, now);
+                self.message_failed(bad_msg_id, FailureKind::Salt, now);
             }
             _ => {
                 self.strike_and_fail(bad_msg_id, error_code, msg_id);
-                self.message_failed(bad_msg_id, now);
+                self.message_failed(bad_msg_id, FailureKind::Other, now);
             }
         }
     }
@@ -1502,7 +1564,12 @@ impl Session {
         }
         for (msg_id, state) in msg_ids.iter().zip(info) {
             if let Some(id) = self.by_msg_id.get(msg_id).copied() {
+                let stale = self
+                    .queries
+                    .get(&id)
+                    .is_some_and(|query| query.state == QueryState::Sent && query.may_have_arrived);
                 match state & 7 {
+                    1..=3 if stale => {}
                     1..=3 => self.resend_query(id, now),
                     4 => self.mark_acknowledged(id),
                     _ => {}
@@ -1747,21 +1814,39 @@ impl Session {
         let mut wants_quick_ack = false;
         let mut force_container = false;
 
-        if has_salt {
+        let mut total = 0usize;
+        if has_salt && !self.to_retransmit.is_empty() {
+            let epoch = self.connection_epoch;
+            let mut deferred = Vec::new();
             for id in std::mem::take(&mut self.to_retransmit) {
-                let Some(query) = self.queries.get(&id).filter(|query| query.state != QueryState::Pending) else {
+                if !deferred.is_empty() {
+                    deferred.push(id);
+                    continue;
+                }
+                let Some(query) = self.queries.get_mut(&id).filter(|query| query.state != QueryState::Pending) else {
                     continue;
                 };
                 let body = Self::query_wire_body(query);
+                if query_messages.len() >= self.config.max_container_queries
+                    || (!query_messages.is_empty() && total + body.len() > self.config.max_container_bytes)
+                {
+                    deferred.push(id);
+                    continue;
+                }
+                query.state = QueryState::Sent;
+                query.connection_epoch = epoch;
+                query.may_have_arrived = true;
+                total += body.len();
                 wants_quick_ack |= query.options.quick_ack;
                 query_messages.push((id, messages.len()));
                 messages.push(OutgoingMessage { msg_id: query.msg_id, seq_no: query.seq_no, body });
                 force_container = true;
             }
+            self.to_retransmit = deferred;
+            self.refresh_unknown_tracking();
         }
 
-        if has_salt {
-            let mut total = 0usize;
+        if has_salt && self.to_retransmit.is_empty() {
             let mut sent_now: HashMap<QueryId, i64> = HashMap::new();
             while let Some(&id) = self.pending.front() {
                 if query_messages.len() >= self.config.max_container_queries {
@@ -1836,6 +1921,16 @@ impl Session {
         }
 
         let mut state_request = None;
+        if has_salt && !self.to_state_request.is_empty() {
+            let queries = &self.queries;
+            let by_msg_id = &self.by_msg_id;
+            self.to_state_request.retain(|msg_id| {
+                by_msg_id
+                    .get(msg_id)
+                    .and_then(|id| queries.get(id))
+                    .is_none_or(|query| query.state == QueryState::Unknown)
+            });
+        }
         if has_salt && !self.to_state_request.is_empty() {
             let ids = take_tail(&mut self.to_state_request, MAX_IDS_PER_SERVICE_MESSAGE);
             let mut writer = Writer::new();

@@ -18,7 +18,7 @@ pub use proxy_secret::{MAX_DOMAIN_LENGTH, ProxySecret, ProxySecretError};
 pub use socks5::{Socks5Auth, Socks5Error, Socks5Handshake, Socks5Progress, Socks5Target};
 pub use stream::{TransportConfig, TransportStream};
 pub use tls::{
-    CLIENT_HELLO_LEN, MAX_TLS_PACKET_LENGTH, TlsHelloError, TlsRecordReader, TlsRecordWriter, client_hello,
+    MAX_TLS_PACKET_LENGTH, MIN_CLIENT_HELLO_LEN, TlsHelloError, TlsRecordReader, TlsRecordWriter, client_hello,
     server_hello_for_tests, verify_client_hello_for_tests, verify_server_hello,
 };
 

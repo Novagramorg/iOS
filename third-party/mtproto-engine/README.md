@@ -38,9 +38,13 @@ instead:
 
 ## Protocol behaviour (highlights)
 
-- **Delivery**: after a reconnect, queries that were sent but not acknowledged become "unknown" and
-  are resolved with `msgs_state_req` (tdlib). Only queries the server never received are re-sent, so
-  non-idempotent calls are not executed twice (MtProtoKit re-sends everything with a new msg_id).
+- **Delivery**: after a reconnect, queries that were sent but not acknowledged are retransmitted at
+  once under their original msg_id and seqno. The server deduplicates by msg_id within a session and
+  re-delivers the cached answer of a query it already ran (verified against production with
+  `examples/live_dedupe.rs`), so recovery takes one round trip and non-idempotent calls still run once.
+  tdlib asks `msgs_state_req` first (two round trips); MtProtoKit re-sends with a new msg_id, which
+  executes the query again. Messages older than `RETRANSMIT_WINDOW` (240 s, the server accepts 300 s),
+  and retransmissions the server refused with a `bad_msg_notification`, fall back to `msgs_state_req`.
 - **Salts**: `get_future_salts` keeps a rolling set; MtProtoKit never requests future salts and stalls
   roughly every 30 minutes on `bad_server_salt`.
 - **Liveness**: `ping_delay_disconnect` with tdlib's online/offline timing plus read timeouts, so dead

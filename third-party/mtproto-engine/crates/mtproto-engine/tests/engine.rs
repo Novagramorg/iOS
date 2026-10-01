@@ -175,6 +175,7 @@ fn dropped_connection_recovers_without_duplicate_execution() {
     assert!(collector.wait(WAIT, |events| completions(events, session) == 2));
     assert_eq!(server.executions(TAG_DROP_CONNECTION_ONCE), 1, "query must not be executed twice");
     assert!(server.with_stats(|stats| stats.connections) >= 2);
+    assert_eq!(server.with_stats(|stats| stats.state_requests), 0, "recovered without a state round trip");
     let results = collector.completed(session);
     assert_eq!(results.iter().filter(|(id, _)| id.0 == 1).count(), 1);
     engine.shutdown();
@@ -460,7 +461,7 @@ fn network_unavailable_blocks_connections() {
 }
 
 #[test]
-fn stalled_timed_requests_reconnect_and_ask_state() {
+fn stalled_timed_requests_reconnect_and_retransmit_without_reexecution() {
     let key = random_key(16);
     let server = TestServer::start(vec![key.clone()], ServerOptions::default());
     let collector = Arc::new(Collector::default());
@@ -472,7 +473,7 @@ fn stalled_timed_requests_reconnect_and_ask_state() {
     stalled.flags.timeout_timer = true;
     engine.send(session, stalled);
     assert!(collector.wait(WAIT, |_| server.with_stats(|stats| stats.connections) >= 2));
-    assert!(collector.wait(WAIT, |_| server.with_stats(|stats| stats.state_requests) >= 1));
+    assert!(collector.wait(WAIT, |_| server.with_stats(|stats| stats.duplicate_msg_ids) >= 1));
     assert_eq!(server.executions(TAG_NEVER), 1);
     engine.shutdown();
 }
