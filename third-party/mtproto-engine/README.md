@@ -94,3 +94,24 @@ cargo build --release -p mtproto-bench
 Each engine's client runs as a separate process against the fake server (or a real DC with `--real`)
 behind `mtproto-netsim`, so CPU time, peak RSS, latency percentiles, throughput, server-side
 duplicate executions and recovery after outages are measured identically for both engines.
+
+### Through TelegramCore
+
+```sh
+(cd bench/telegramcore-client && swift build -c release -Xswiftc -enable-testing)
+./target/release/mtproto-bench tc --telegramcore bench/telegramcore-client/.build/release/telegramcore-bench [--suite quick|full|torture] [--only NAME] [--engines rust,mtprotokit]
+```
+
+`telegramcore-bench` starts the real TelegramCore network stack (`initializedNetwork`, the engine
+chosen by `NetworkEngineSettings` exactly like the Developer switch, `MultiplexedRequestManager`,
+`Download`, `multipartFetchV2`, `Network.request`) against a fake cluster: main DC 2, file DC 4 (the
+authorization is exported and imported) and CDN DC 203 (`upload.fileCdnRedirect`, AES-CTR parts,
+`upload.getCdnFileHashes`, `upload.cdnFileReuploadNeeded`), each behind its own `mtproto-netsim`.
+Rebuild `MTProtoEngineFFI.xcframework` first, otherwise the bench links the previous engine.
+
+- `--suite quick|full`: downloads (photos, DC 4 videos, CDN), scrolling with cancellations, main-session
+  probes during downloads, small requests; on perfect, broadband, 3G, lossy, flaky, blackhole and outage
+  networks. The report adds served/needed bytes and re-fetched parts.
+- `--suite torture`: numbered calls through `Network.request` while the server injects one fault class
+  at 1 % (or all of them mixed), plus a clean million-call run. Columns: wrong results, double
+  completions, server-side duplicate executions, req/s, CPU, peak RSS and how the process exited.

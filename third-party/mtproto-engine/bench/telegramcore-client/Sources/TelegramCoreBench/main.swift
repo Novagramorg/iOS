@@ -26,6 +26,7 @@ struct Arguments {
     var rate = 20.0
     var deadline = 120.0
     var cancelFraction = 0.5
+    var trickle = 0.0
     var seed: UInt64 = 1
 
     static func parse() -> Arguments {
@@ -46,6 +47,7 @@ struct Arguments {
             case "--deadline": result.deadline = Double(value) ?? result.deadline
             case "--cancel-fraction": result.cancelFraction = Double(value) ?? result.cancelFraction
             case "--seed": result.seed = UInt64(value) ?? result.seed
+            case "--trickle": result.trickle = Double(value) ?? result.trickle
             default: fail("unknown argument \(argument)")
             }
         }
@@ -604,6 +606,9 @@ final class Bench {
                 self.smallBurst(remaining: self.arguments.requests, deadline: deadline, done: done)
             case "tc-torture":
                 self.recorder.compact = self.arguments.requests > 200_000
+                if self.arguments.trickle > 0 {
+                    self.trickle(interval: self.arguments.trickle, deadline: deadline)
+                }
                 self.torture(total: self.arguments.requests, deadline: deadline, done: done)
             default:
                 fail("unknown workload \(workload)")
@@ -631,6 +636,16 @@ final class Bench {
         self.probe()
         self.queue.after(interval, { [weak self] in
             self?.scheduleProbes(interval: interval, deadline: deadline)
+        })
+    }
+
+    private func trickle(interval: Double, deadline: Date) {
+        if Date() >= deadline {
+            return
+        }
+        let _ = self.network.request(makeCall(tag: 999, index: UInt64.max)).start()
+        self.queue.after(interval, { [weak self] in
+            self?.trickle(interval: interval, deadline: deadline)
         })
     }
 

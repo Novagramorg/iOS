@@ -5,6 +5,7 @@ pub enum Fault {
     DropBeforeExecution,
     DropAfterExecution,
     RotateSalt,
+    ExpireSalt,
     ResendRequest,
     UnknownSibling,
     FloodWait,
@@ -21,10 +22,11 @@ pub enum Fault {
 }
 
 impl Fault {
-    pub const ALL: [Fault; 16] = [
+    pub const ALL: [Fault; 17] = [
         Fault::DropBeforeExecution,
         Fault::DropAfterExecution,
         Fault::RotateSalt,
+        Fault::ExpireSalt,
         Fault::ResendRequest,
         Fault::UnknownSibling,
         Fault::FloodWait,
@@ -45,6 +47,7 @@ impl Fault {
             Fault::DropBeforeExecution => "drop-before",
             Fault::DropAfterExecution => "drop-after",
             Fault::RotateSalt => "rotate-salt",
+            Fault::ExpireSalt => "expire-salt",
             Fault::ResendRequest => "resend-req",
             Fault::UnknownSibling => "unknown-sibling",
             Fault::FloodWait => "flood-wait",

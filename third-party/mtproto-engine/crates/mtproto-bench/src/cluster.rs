@@ -100,10 +100,11 @@ pub fn torture_suite(quick: bool) -> Vec<ClusterScenario> {
     };
     let mut scenarios = Vec::new();
     for fault in Fault::ALL {
+        let requests = if fault == Fault::ExpireSalt { scale(500_000, 200_000) } else { scale(50_000, 20_000) };
         scenarios.push(torture(
             &format!("torture/{}", fault.name()),
             "perfect",
-            scale(50_000, 20_000),
+            requests,
             Some(ChaosConfig::only(17, fault, 0.01)),
         ));
     }
@@ -288,6 +289,8 @@ pub fn run(scenario: &ClusterScenario, binary: &str, engine: &str, seed: u64) ->
             &scenario.cancel_fraction.to_string(),
             "--seed",
             &seed.to_string(),
+            "--trickle",
+            &std::env::var("TC_BENCH_TRICKLE").unwrap_or_else(|_| "0".into()),
         ])
         .stdout(Stdio::piped())
         .stderr(if std::env::var_os("TC_BENCH_STDERR").is_some() { Stdio::inherit() } else { Stdio::null() })

@@ -140,6 +140,8 @@ struct Shared {
     sessions: HashMap<i64, SessionState>,
     stats: Stats,
     salt: i64,
+    previous_salt: Option<(i64, Instant)>,
+    last_salt_change: Option<Instant>,
     bad_salt_sent: bool,
     handshake_faults: VecDeque<HandshakeFault>,
 }
@@ -162,6 +164,8 @@ impl TestServer {
             sessions: HashMap::new(),
             stats: Stats::default(),
             salt: SERVER_SALT,
+            previous_salt: None,
+            last_salt_change: None,
             bad_salt_sent: false,
             handshake_faults: options.handshake_faults.iter().copied().collect(),
         }));
@@ -612,7 +616,11 @@ fn serve_frames(
             if let Some(code) = time_error {
                 stats.bad_msgs_sent += 1;
                 outgoing.push((sp::bad_msg_notification(decoded.header.msg_id, decoded.header.seq_no, code), false));
-            } else if decoded.header.salt != salt {
+            } else if decoded.header.salt != salt
+                && !shared_ref
+                    .previous_salt
+                    .is_some_and(|(previous, until)| previous == decoded.header.salt && Instant::now() < until)
+            {
                 outgoing.push((sp::bad_server_salt(decoded.header.msg_id, decoded.header.seq_no, salt), false));
             } else {
                 for message in &decoded.messages {
@@ -767,6 +775,19 @@ fn serve_frames(
                                     }
                                     chaos::Fault::RotateSalt => {
                                         shared_ref.salt = salt.wrapping_add((chaos_rng.next_u64() >> 1) as i64 | 1);
+                                        shared_ref.previous_salt = None;
+                                        outgoing.push((reply, true));
+                                    }
+                                    chaos::Fault::ExpireSalt => {
+                                        let now = Instant::now();
+                                        if shared_ref
+                                            .last_salt_change
+                                            .is_none_or(|at| now.duration_since(at) > Duration::from_secs(2))
+                                        {
+                                            shared_ref.previous_salt = Some((salt, now + Duration::from_secs(1)));
+                                            shared_ref.salt = salt.wrapping_add((chaos_rng.next_u64() >> 1) as i64 | 1);
+                                            shared_ref.last_salt_change = Some(now);
+                                        }
                                         outgoing.push((reply, true));
                                     }
                                     chaos::Fault::UnknownSibling => {
