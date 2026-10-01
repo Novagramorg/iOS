@@ -84,8 +84,6 @@ public final class WalletSendCommentBackgroundView: UIView {
             UIGraphicsPopContext()
         }) else { return nil }
 
-        // Intersect translated silhouettes to inset the actual bubble contour,
-        // including its tail, without scaling the corners or stretching a stroke.
         func insetMask(by inset: CGFloat) -> UIImage? {
             return Display.generateImage(size, scale: parameters.scale, rotatedContext: { _, context in
                 context.clear(bounds)
@@ -102,9 +100,10 @@ public final class WalletSendCommentBackgroundView: UIView {
                 UIGraphicsPopContext()
             })
         }
-        guard let borderMask = insetMask(by: 1.0 / parameters.scale),
-              let rimMask = insetMask(by: 0.65),
-              let innerMask = insetMask(by: 1.4) else { return nil }
+        let contourScale: CGFloat = parameters.isDark ? 0.5 : 1.0
+        guard let borderMask = insetMask(by: contourScale / parameters.scale),
+              let rimMask = insetMask(by: 0.65 * contourScale),
+              let innerMask = insetMask(by: 1.4 * contourScale) else { return nil }
 
         let glowRadius = min(10.0, size.height * 0.24)
         let padding = ceil(glowRadius * 2.0)
@@ -117,33 +116,40 @@ public final class WalletSendCommentBackgroundView: UIView {
             UIGraphicsPopContext()
         }) else { return nil }
 
-        // Sampled from the reference: the darker band sits above the midpoint,
-        // with a longer, softer transition back to the light lower edge.
         let fillLocations: [CGFloat] = [0.0, 0.10, 0.23, 0.40, 0.54, 0.70, 0.82, 1.0]
-        let fillShades: [UInt32] = [0xfafafb, 0xf9f9fa, 0xf6f6f7, 0xf4f4f5, 0xf6f6f7, 0xf8f8f9, 0xf9f9fa, 0xfafafb]
-        let fillColors = fillShades.map { shade -> CGColor in
-            if parameters.isDark {
-                let brightness = CGFloat((shade >> 16) & 0xff)
-                return parameters.backgroundColor.mixedWith(.white, alpha: 0.035 + (brightness - 244.0) / 255.0).cgColor
-            } else {
-                return UIColor(rgb: shade).cgColor
+        let fillColors: [CGColor]
+        if parameters.isDark {
+            let fillAmounts: [CGFloat] = [0.048, 0.026, 0.013, 0.013, 0.018, 0.018, 0.022, 0.048]
+            fillColors = fillAmounts.map { amount in
+                parameters.backgroundColor.mixedWith(parameters.primaryTextColor, alpha: amount).cgColor
             }
+        } else {
+            let fillShades: [UInt32] = [0xfafafb, 0xf9f9fa, 0xf6f6f7, 0xf4f4f5, 0xf6f6f7, 0xf8f8f9, 0xf9f9fa, 0xfafafb]
+            fillColors = fillShades.map { UIColor(rgb: $0).cgColor }
         }
         guard let fillGradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: fillColors as CFArray, locations: fillLocations) else { return nil }
-        // The reference has a stronger contour at the sides and a lighter one
-        // along the top and bottom. Blend theme colors before applying the mask.
+        let highlightColor: UIColor
+        if parameters.isDark {
+            var hue: CGFloat = 0.0
+            var saturation: CGFloat = 0.0
+            parameters.backgroundColor.getHue(&hue, saturation: &saturation, brightness: nil, alpha: nil)
+            highlightColor = UIColor(hue: hue, saturation: saturation * 0.65, brightness: parameters.primaryTextColor.brightness, alpha: 1.0)
+        } else {
+            highlightColor = .white
+        }
+
         let borderLocations: [CGFloat] = [0.0, 0.20, 0.50, 0.80, 1.0]
-        let borderAmounts: [CGFloat] = parameters.isDark ? [0.14, 0.23, 0.30, 0.23, 0.14] : [0.10, 0.24, 0.33, 0.24, 0.11]
+        let borderAmounts: [CGFloat] = parameters.isDark ? [0.26, 0.075, 0.013, 0.075, 0.26] : [0.10, 0.24, 0.33, 0.24, 0.11]
         let borderColors = borderAmounts.map { amount in
-            parameters.backgroundColor.mixedWith(parameters.primaryTextColor, alpha: amount).cgColor
+            parameters.backgroundColor.mixedWith(parameters.isDark ? highlightColor : parameters.primaryTextColor, alpha: amount).cgColor
         }
         guard let borderGradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: borderColors as CFArray, locations: borderLocations) else { return nil }
-        let glowColor = UIColor.white.withAlphaComponent(parameters.isDark ? 0.14 : 0.9)
-        let highlightColor = UIColor.white.withAlphaComponent(parameters.isDark ? 0.24 : 0.94)
+        let glowColor = highlightColor.withAlphaComponent(parameters.isDark ? 0.025 : 0.9)
+        let highlightAmounts: [CGFloat] = parameters.isDark ? [0.14, 0.03, 0.0, 0.03, 0.14] : [0.94, 0.94, 0.94, 0.94, 0.94]
+        let highlightColors = highlightAmounts.map { highlightColor.withAlphaComponent($0).cgColor }
+        guard let highlightGradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: highlightColors as CFArray, locations: borderLocations) else { return nil }
 
         return Display.generateImage(size, scale: parameters.scale, rotatedContext: { _, context in
-            // messageBubbleImage includes two points of transparent margin.
-            // Keep the gradient anchored to the body, independently of its size.
             let fillInset = min(2.0, size.height * 0.1)
             context.drawLinearGradient(
                 fillGradient,
@@ -153,8 +159,6 @@ public final class WalletSendCommentBackgroundView: UIView {
             )
             UIGraphicsPushContext(context)
 
-            // The blurred outside silhouette lights the edges and fades smoothly
-            // toward the darker center, following the shape on every side.
             context.saveGState()
             context.setShadow(offset: .zero, blur: glowRadius, color: glowColor.cgColor)
             outsideMask.draw(in: CGRect(x: -padding, y: -padding, width: outsideSize.width, height: outsideSize.height))
@@ -181,8 +185,12 @@ public final class WalletSendCommentBackgroundView: UIView {
                 )
             }
             drawRing(outer: rimMask, inner: innerMask) {
-                context.setFillColor(highlightColor.cgColor)
-                context.fill(bounds)
+                context.drawLinearGradient(
+                    highlightGradient,
+                    start: CGPoint(x: 0.0, y: fillInset),
+                    end: CGPoint(x: 0.0, y: size.height - fillInset),
+                    options: [.drawsBeforeStartLocation, .drawsAfterEndLocation]
+                )
             }
             UIGraphicsPopContext()
         })
