@@ -1,0 +1,54 @@
+use std::io::BufRead;
+
+use mtproto_core::auth_key::AuthKey;
+use mtproto_testserver::{random_key, ServerOptions, TestServer, SERVER_SALT};
+
+fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+fn unhex(text: &str) -> Vec<u8> {
+    (0..text.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&text[i..i + 2], 16).expect("hex"))
+        .collect()
+}
+
+fn main() {
+    let mut args = std::env::args().skip(1);
+    let mut key: Option<AuthKey> = None;
+    let mut options = ServerOptions::default();
+    while let Some(arg) = args.next() {
+        match arg.as_str() {
+            "--key-hex" => key = AuthKey::from_slice(&unhex(&args.next().expect("value"))),
+            "--secret" => options.secret = Some(unhex(&args.next().expect("value"))),
+            "--socks5" => options.socks5 = true,
+            other => panic!("unknown argument {other}"),
+        }
+    }
+    let key = key.unwrap_or_else(|| random_key(std::process::id() as u64));
+    let server = TestServer::start(vec![key.clone()], options);
+    println!(
+        "{{\"address\":\"{}\",\"key_hex\":\"{}\",\"salt\":{}}}",
+        server.address,
+        hex(key.bytes()),
+        SERVER_SALT
+    );
+    for line in std::io::stdin().lock().lines() {
+        let Ok(line) = line else { break };
+        match line.trim() {
+            "stats" => {
+                let summary = server.with_stats(|stats| {
+                    let executions: usize = stats.executions.values().sum();
+                    format!(
+                        "{{\"connections\":{},\"executions\":{},\"init_connections\":{},\"state_requests\":{},\"pings\":{},\"closed_by_client\":{}}}",
+                        stats.connections, executions, stats.init_connections, stats.state_requests, stats.pings, stats.closed_by_client
+                    )
+                });
+                println!("{summary}");
+            }
+            "quit" => break,
+            _ => {}
+        }
+    }
+}
