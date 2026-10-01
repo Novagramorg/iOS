@@ -124,6 +124,7 @@ swift_library(
         "//third-party/td:TdBinding",
         "//submodules/TelegramUI/Components/AnimatedTextComponent",
         "//submodules/TelegramUI/Components/GlassBackgroundComponent",
+        "//submodules/TelegramUI/Components/LiquidGlassShapes",
         "//submodules/ChatPresentationInterfaceState",
         "//submodules/TelegramUI/Components/MessageInputPanelComponent",
         "//submodules/TelegramUI/Components/TextFieldComponent",

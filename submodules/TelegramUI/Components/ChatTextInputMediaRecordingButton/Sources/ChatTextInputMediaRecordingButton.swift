@@ -17,8 +17,11 @@ import LottieComponent
 import LegacyInstantVideoController
 import GlassBackgroundComponent
 import ComponentDisplayAdapters
+import LiquidGlassShapes
 
 private let offsetThreshold: CGFloat = 10.0
+/// The recording decoration's size; the Objective-C button centres it on itself.
+private let micDecorationSize = CGSize(width: 220.0, height: 220.0)
 private let dismissOffsetThreshold: CGFloat = 70.0
 
 private func findTargetView(_ view: UIView, point: CGPoint) -> UIView? {
@@ -309,24 +312,39 @@ public final class ChatTextInputMediaRecordingButton: TGModernConversationInputM
         }
     }
     
-    private var micDecorationValue: VoiceBlobView?
+    /// Whether the server has switched the liquid glass blob off, bringing back the previous one.
+    private var isGlassRecordingBlobDisabled: Bool {
+        return ChatRecordingBlobKillswitch.isActive(appConfigurationValue: self.context.getAppConfigValue)
+    }
+
+    private var micDecorationValue: (UIView & TGModernConversationInputMicButtonDecoration)?
     private var micDecoration: (UIView & TGModernConversationInputMicButtonDecoration) {
         if let micDecorationValue = self.micDecorationValue {
             return micDecorationValue
-        } else {
+        }
+        let theme = self.hidesOnLock ? defaultDarkColorPresentationTheme : self.theme
+        let decoration: UIView & TGModernConversationInputMicButtonDecoration
+        if self.isGlassRecordingBlobDisabled {
             let blobView = VoiceBlobView(
-                frame: CGRect(origin: CGPoint(), size: CGSize(width: 220.0, height: 220.0)),
+                frame: CGRect(origin: CGPoint(), size: micDecorationSize),
                 maxLevel: 4,
                 smallBlobRange: (0.45, 0.55),
                 mediumBlobRange: (0.52, 0.87),
                 bigBlobRange: (0.57, 1.00)
             )
-            let theme = self.hidesOnLock ? defaultDarkColorPresentationTheme : self.theme
             blobView.setColor(theme.chat.inputPanel.actionControlFillColor)
             blobView.hitTestSize = 110.0
-            self.micDecorationValue = blobView
-            return blobView
+            decoration = blobView
+        } else {
+            let blobView = ChatRecordingBlobView(frame: CGRect(origin: CGPoint(), size: micDecorationSize))
+            blobView.hitTestSize = 110.0
+            blobView.isDarkAppearance = theme.overallDarkAppearance
+            blobView.isFlat = !self.context.sharedContext.energyUsageSettings.fullTranslucency
+            blobView.setColor(theme.chat.inputPanel.actionControlFillColor)
+            decoration = blobView
         }
+        self.micDecorationValue = decoration
+        return decoration
     }
     
     private var micLockValue: (UIView & TGModernConversationInputMicButtonLock)?
@@ -364,6 +382,10 @@ public final class ChatTextInputMediaRecordingButton: TGModernConversationInputM
         self.isExclusiveTouch = false;
         
         self.centerOffset = CGPoint(x: 0.0, y: -1.0 + UIScreenPixel)
+        
+        if !self.isGlassRecordingBlobDisabled {
+            prewarmLiquidGlassShapes([.radial])
+        }
     }
     
     required public init?(coder aDecoder: NSCoder) {
@@ -460,7 +482,9 @@ public final class ChatTextInputMediaRecordingButton: TGModernConversationInputM
         self.updateAnimation(previousMode: self.mode)
         
         self.pallete = legacyInputMicPalette(from: theme)
-        self.micDecorationValue?.setColor(self.theme.chat.inputPanel.actionControlFillColor)
+        let decorationTheme = self.hidesOnLock ? defaultDarkColorPresentationTheme : self.theme
+        self.micDecorationValue?.setColor(decorationTheme.chat.inputPanel.actionControlFillColor)
+        (self.micDecorationValue as? ChatRecordingBlobView)?.isDarkAppearance = decorationTheme.overallDarkAppearance
         (self.micLockValue as? LockView)?.updateTheme(theme)
     }
     
@@ -569,6 +593,7 @@ public final class ChatTextInputMediaRecordingButton: TGModernConversationInputM
     override public func animateIn() {
         super.animateIn()
         
+        (micDecoration as? ChatRecordingBlobView)?.isFlat = !self.context.sharedContext.energyUsageSettings.fullTranslucency
         if self.context.sharedContext.energyUsageSettings.fullTranslucency {
             micDecoration.isHidden = false
             micDecoration.startAnimating()

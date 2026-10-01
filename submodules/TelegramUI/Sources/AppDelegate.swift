@@ -49,6 +49,7 @@ import ProxyServerPreviewScreen
 import WalletContext
 import WalletSendScreen
 import PasscodeCore
+import LiquidGlassShapes
 
 #if DEBUG
 import AlertComponent
@@ -440,7 +441,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         hostView.containerView.layer.addSublayer(MetalEngine.shared.rootLayer)
         // On the first start after an update, compile the pipelines that would otherwise stall their first use.
         if MetalEngine.shared.pipelineCache.isFresh {
-            prewarmCallStatusBarWaves(qos: .utility)
+            prewarmLiquidGlassShapes([.crest], qos: .utility)
         }
         
         if !UIDevice.current.isBatteryMonitoringEnabled {

@@ -189,6 +189,16 @@ open class MetalEngineSubjectLayer: SimpleLayer {
         super.init(layer: layer)
     }
     
+    /// Gives the layer's rendering surface back to the engine and clears its contents, for a layer that is kept but
+    /// will not be drawn for a while: otherwise the surface is freed only when the layer is deallocated. The next
+    /// render of the layer allocates a new one. Main thread only.
+    public func releaseSurface() {
+        assert(Thread.isMainThread)
+        MetalEngine.shared.impl.removeLayerSurfaceAllocation(layer: self)
+        self.surfaceAllocation = nil
+        self.contents = nil
+    }
+    
     required public init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }

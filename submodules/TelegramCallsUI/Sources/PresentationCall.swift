@@ -13,6 +13,7 @@ import UniversalMediaPlayer
 import AccountContext
 import DeviceProximity
 import PhoneNumberFormat
+import LiquidGlassShapes
 
 public final class PresentationCallImpl: PresentationCall {
     public let context: AccountContext
@@ -198,7 +199,7 @@ public final class PresentationCallImpl: PresentationCall {
         enableTCP: Bool,
         preferredVideoCodec: String?
     ) {
-        prewarmCallStatusBarWaves()
+        prewarmLiquidGlassShapes([.crest])
         
         self.context = context
         self.audioSession = audioSession

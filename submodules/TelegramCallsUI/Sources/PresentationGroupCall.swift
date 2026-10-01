@@ -19,6 +19,7 @@ import UndoUI
 import TemporaryCachedPeerDataManager
 import CallsEmoji
 import TdBinding
+import LiquidGlassShapes
 
 private extension PresentationGroupCallState {
     static func initialValue(myPeerId: PeerId, title: String?, scheduleTimestamp: Int32?, subscribedToScheduled: Bool, isChannel: Bool) -> PresentationGroupCallState {
@@ -864,7 +865,7 @@ public final class PresentationGroupCallImpl: PresentationGroupCall {
         sharedAudioContext: SharedCallAudioContext?,
         unmuteByDefault: Bool? = nil
     ) {
-        prewarmCallStatusBarWaves()
+        prewarmLiquidGlassShapes([.crest])
         
         self.account = accountContext.account
         self.accountContext = accountContext
