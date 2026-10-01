@@ -326,9 +326,12 @@ final class ChatWalletTransferAnimation {
                   overlay.bounds.contains(slot.center) else {
                 if flight.startedAt != nil || now - flight.createdAt >= 0.5 {
                     self.cancel(id: id, animated: true)
+                } else {
+                    source.updateFlightHaptics(at: now)
                 }
                 continue
             }
+            source.updateFlightHaptics(at: now)
             target.setAwaitingTransferFlight(true)
             if flight.startedAt == nil { flight.startedAt = now }
             let t = min(1.0, max(0.0, now - (flight.startedAt ?? now)) / 0.62)

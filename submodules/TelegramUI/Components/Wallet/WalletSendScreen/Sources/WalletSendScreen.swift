@@ -89,16 +89,18 @@ public final class WalletSendTransferAnimationSource {
     public let center: CGPoint
     public let width: CGFloat
     public let rotation: CGFloat
+    private var secondImpactTime: CFTimeInterval?
 
-    init(diamond: InteractiveDiamondComponent.View, window: UIWindow, center: CGPoint, width: CGFloat, rotation: CGFloat) {
+    init(diamond: InteractiveDiamondComponent.View, window: UIWindow, center: CGPoint, width: CGFloat, rotation: CGFloat, spinStartedAt: CFTimeInterval?) {
         self.diamond = diamond
         self.window = window
         self.center = center
         self.width = width
         self.rotation = rotation
+        self.secondImpactTime = spinStartedAt.map { $0 + 0.45 }
     }
 
-    public static func capture(diamond: InteractiveDiamondComponent.View, width: CGFloat) -> WalletSendTransferAnimationSource? {
+    public static func capture(diamond: InteractiveDiamondComponent.View, width: CGFloat, spinStartedAt: CFTimeInterval? = nil) -> WalletSendTransferAnimationSource? {
         guard let window = diamond.window else { return nil }
         let layer = diamond.layer.presentation() ?? diamond.layer
         let windowLayer = window.layer.presentation() ?? window.layer
@@ -106,7 +108,14 @@ public final class WalletSendTransferAnimationSource {
         let left = layer.convert(CGPoint(x: layer.bounds.midX - width * 0.5, y: layer.bounds.midY), to: windowLayer)
         let right = layer.convert(CGPoint(x: layer.bounds.midX + width * 0.5, y: layer.bounds.midY), to: windowLayer)
         return WalletSendTransferAnimationSource(diamond: diamond, window: window, center: center,
-            width: hypot(right.x - left.x, right.y - left.y), rotation: atan2(right.y - left.y, right.x - left.x))
+            width: hypot(right.x - left.x, right.y - left.y), rotation: atan2(right.y - left.y, right.x - left.x), spinStartedAt: spinStartedAt)
+    }
+
+    public func updateFlightHaptics(at time: CFTimeInterval) {
+        guard let secondImpactTime = self.secondImpactTime, time >= secondImpactTime else { return }
+        self.secondImpactTime = nil
+        guard UIApplication.shared.applicationState == .active else { return }
+        Haptics.hit(0.6)
     }
 }
 
@@ -1365,14 +1374,16 @@ private final class WalletSendScreenComponent: Component {
             }
             guard let feeRequest = self.currentFeeRequest else { return }
             self.sendRevision &+= 1
-            Haptics.hit(0.95)
-            let revision = self.sendRevision
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { [weak self] in
-                guard let self, self.sendRevision == revision,
-                      self.isVisible, self.commentSessionAvailable,
-                      self.isPreparingTransfer || self.isSubmittingTransfer,
-                      UIApplication.shared.applicationState == .active else { return }
-                Haptics.hit(0.6)
+            if component.transferAnimation == nil || UIAccessibility.isReduceMotionEnabled {
+                Haptics.hit(0.95)
+                let revision = self.sendRevision
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { [weak self] in
+                    guard let self, self.sendRevision == revision,
+                          self.isVisible, self.commentSessionAvailable,
+                          self.isPreparingTransfer || self.isSubmittingTransfer,
+                          UIApplication.shared.applicationState == .active else { return }
+                    Haptics.hit(0.6)
+                }
             }
             self.pendingSend = WalletSendTransferRequest(
                 feeRequest: feeRequest,

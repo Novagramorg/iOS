@@ -1920,7 +1920,7 @@ private final class WalletTransactionContentComponent: Component {
             if !UIAccessibility.isReduceMotionEnabled, self.commentSessionAvailable,
                self.environment?.isVisible == true,
                let diamond = self.gramAnimation.view as? InteractiveDiamondComponent.View {
-                source = WalletSendTransferAnimationSource.capture(diamond: diamond, width: 78.0)
+                source = WalletSendTransferAnimationSource.capture(diamond: diamond, width: 78.0, spinStartedAt: CACurrentMediaTime())
             } else {
                 source = nil
             }
@@ -1928,6 +1928,7 @@ private final class WalletTransactionContentComponent: Component {
                 self.hasTransferredDiamond = true
                 self.gramAnimation = ComponentView<Empty>()
                 source.diamond.prepareForWalletTransfer()
+                Haptics.hit(0.95)
                 source.diamond.spin(-10.0, decay: 0.9)
             }
             if !transferAnimation("pending:\(id)", source) {

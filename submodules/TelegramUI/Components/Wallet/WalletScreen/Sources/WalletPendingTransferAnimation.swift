@@ -85,6 +85,7 @@ final class WalletPendingTransferAnimation {
             self.suspend()
             return false
         }
+        self.flightSource?.updateFlightHaptics(at: time)
         return true
     }
 
@@ -238,6 +239,7 @@ final class WalletPendingTransferAnimation {
             self.suspend()
             self.isVisible = true
         }
+        self.flightSource?.updateFlightHaptics(at: now)
         if !self.isPending && self.completion == nil && !self.isFlying {
             self.completion = now
             Haptics.hit(0.9)
