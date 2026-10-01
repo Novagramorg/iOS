@@ -84,6 +84,30 @@ Telegram-Mac repo builds `MTProtoEngineFFI.xcframework` (arm64 + x86_64, macOS 1
   end-to-end tests that drive `MTContext` → `RustNetworkSession` → the engine → the
   `mtproto-testserver` binary (build it first with `cargo build --release -p mtproto-testserver`).
 
+### Hostile input, fuzzing and soak
+
+- `crates/mtproto-fuzz`: stable-toolchain, seed-reproducible fuzzer with structure-aware generators for every
+  parser and state machine (TL, gzip, framing, obfuscated2/fake-TLS streams, SOCKS5, proxy secrets, `pq`, the
+  handshake against a tampering MITM, session and RPC layers fed validly encrypted hostile packets including
+  amplification packets, and a 30–90-day `soak`). Each case is checked for panics (overflow checks on), time,
+  memory, livelock and protocol invariants (no forged packet or key accepted, exactly-once delivery).
+
+  ```sh
+  cargo build --profile fuzz -p mtproto-fuzz
+  ./target/fuzz/mtproto-fuzz --cases 1000000 --jobs 8          # all targets
+  ./target/fuzz/mtproto-fuzz --target session --seed 42 --cases 1   # reproduce one case
+  ```
+
+  `cargo test -p mtproto-fuzz` runs a short pass of every target.
+- `mtproto-testserver` hostile faults (`Fault::HOSTILE`, `Fault::LOOPS`): garbage, tampered msg_key, foreign
+  session, even msg_id, detailed-info fan-out, gzip bombs, huge vector counts, salt floods and storms, replays,
+  unknown results, deep nesting, transport codes, oversized and truncated frames, quick-ack noise, and requests the
+  server rejects forever (salt, clock and resend loops). `engine::hostile_server_faults_never_break_exactly_once_delivery`
+  runs each against the engine; `mtproto-bench tc --suite hostile[-quick]` runs them through TelegramCore for both
+  engines.
+- `mtproto-bench soak --minutes N`: the engine under continuous load with chaos, network flaps, connection resets
+  and session churn against a test server in a child process; samples RSS, live heap, threads and descriptors.
+
 ## Benchmarks
 
 ```sh

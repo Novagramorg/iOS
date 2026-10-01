@@ -311,9 +311,23 @@ pub struct NetSim {
     thread: Option<JoinHandle<()>>,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum Upstream {
+    Fixed(SocketAddr),
+    Socks5,
+}
+
 impl NetSim {
     pub fn start(upstream: SocketAddr, profile: Profile, seed: u64) -> std::io::Result<Self> {
-        let listener = TcpListener::bind("127.0.0.1:0")?;
+        Self::start_with(Upstream::Fixed(upstream), profile, seed, "127.0.0.1:0")
+    }
+
+    pub fn start_socks5(profile: Profile, seed: u64, bind: &str) -> std::io::Result<Self> {
+        Self::start_with(Upstream::Socks5, profile, seed, bind)
+    }
+
+    pub fn start_with(upstream: Upstream, profile: Profile, seed: u64, bind: &str) -> std::io::Result<Self> {
+        let listener = TcpListener::bind(bind)?;
         listener.set_nonblocking(true)?;
         let address = listener.local_addr()?;
         let rate = profile.bandwidth.map(|value| value as f64);
@@ -401,7 +415,55 @@ impl Drop for NetSim {
     }
 }
 
-fn handle_connection(client: TcpStream, upstream: SocketAddr, shared: Arc<Shared>) {
+fn socks5_accept(client: &mut TcpStream) -> Option<SocketAddr> {
+    use std::io::{Read, Write};
+    use std::net::ToSocketAddrs;
+    let _ = client.set_read_timeout(Some(Duration::from_secs(10)));
+    let mut head = [0u8; 2];
+    client.read_exact(&mut head).ok()?;
+    if head[0] != 5 {
+        return None;
+    }
+    let mut methods = vec![0u8; head[1] as usize];
+    client.read_exact(&mut methods).ok()?;
+    client.write_all(&[5, 0]).ok()?;
+    let mut request = [0u8; 4];
+    client.read_exact(&mut request).ok()?;
+    if request[0] != 5 || request[1] != 1 {
+        return None;
+    }
+    let target = match request[3] {
+        1 => {
+            let mut address = [0u8; 6];
+            client.read_exact(&mut address).ok()?;
+            SocketAddr::from((
+                [address[0], address[1], address[2], address[3]],
+                u16::from_be_bytes([address[4], address[5]]),
+            ))
+        }
+        4 => {
+            let mut address = [0u8; 18];
+            client.read_exact(&mut address).ok()?;
+            let ip: [u8; 16] = address[..16].try_into().ok()?;
+            SocketAddr::from((ip, u16::from_be_bytes([address[16], address[17]])))
+        }
+        3 => {
+            let mut length = [0u8; 1];
+            client.read_exact(&mut length).ok()?;
+            let mut name = vec![0u8; length[0] as usize + 2];
+            client.read_exact(&mut name).ok()?;
+            let port = u16::from_be_bytes([name[name.len() - 2], name[name.len() - 1]]);
+            let host = String::from_utf8_lossy(&name[..name.len() - 2]).into_owned();
+            (host.as_str(), port).to_socket_addrs().ok()?.next()?
+        }
+        _ => return None,
+    };
+    client.write_all(&[5, 0, 0, 1, 0, 0, 0, 0, 0, 0]).ok()?;
+    let _ = client.set_read_timeout(None);
+    Some(target)
+}
+
+fn handle_connection(mut client: TcpStream, upstream: Upstream, shared: Arc<Shared>) {
     let _ = client.set_nonblocking(false);
     let profile = shared.profile.lock().unwrap().clone();
     let mut random = Random(shared.seed.fetch_add(0x9e37_79b9_7f4a_7c15, Ordering::Relaxed) | 1);
@@ -420,10 +482,17 @@ fn handle_connection(client: TcpStream, upstream: SocketAddr, shared: Arc<Shared
         }
         return;
     }
+    let target = match upstream {
+        Upstream::Fixed(address) => address,
+        Upstream::Socks5 => match socks5_accept(&mut client) {
+            Some(address) => address,
+            None => return,
+        },
+    };
     if !profile.connect_delay.is_zero() {
         std::thread::sleep(profile.connect_delay);
     }
-    let Ok(upstream) = TcpStream::connect_timeout(&upstream, Duration::from_secs(10)) else {
+    let Ok(upstream) = TcpStream::connect_timeout(&target, Duration::from_secs(10)) else {
         return;
     };
     let _ = client.set_nodelay(true);

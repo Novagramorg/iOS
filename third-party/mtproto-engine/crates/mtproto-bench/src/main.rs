@@ -1,12 +1,17 @@
 mod args;
 mod client;
 mod cluster;
+mod heap;
 mod json;
 mod orchestrator;
 mod report;
+mod soak;
 
 use args::ClientArgs;
 use orchestrator::EngineBinary;
+
+#[global_allocator]
+static GLOBAL: heap::CountingAlloc = heap::CountingAlloc;
 
 fn main() {
     let arguments: Vec<String> = std::env::args().collect();
@@ -73,6 +78,66 @@ fn main() {
                 std::fs::write(format!("{path}.md"), &table).expect("write markdown");
                 std::fs::write(format!("{path}.json"), orchestrator::json(&results)).expect("write json");
             }
+        }
+        Some("serve") => soak::serve(),
+        Some("proxy") => {
+            let mut profile = "perfect".to_string();
+            let mut bind = "127.0.0.1:1080".to_string();
+            let mut outage_every: Option<f64> = None;
+            let mut outage_for = 8.0;
+            let mut iter = arguments[2..].iter();
+            while let Some(flag) = iter.next() {
+                match flag.as_str() {
+                    "--profile" => profile = iter.next().cloned().expect("profile"),
+                    "--bind" => bind = iter.next().cloned().expect("bind"),
+                    "--outage-every" => outage_every = iter.next().and_then(|v| v.parse().ok()),
+                    "--outage-for" => outage_for = iter.next().and_then(|v| v.parse().ok()).expect("seconds"),
+                    other => panic!("unknown argument {other}"),
+                }
+            }
+            let sim = mtproto_netsim::NetSim::start_socks5(
+                mtproto_netsim::Profile::by_name(&profile).expect("profile"),
+                0x50c5,
+                &bind,
+            )
+            .expect("proxy");
+            eprintln!("SOCKS5 {} profile {profile}", sim.address);
+            let started = std::time::Instant::now();
+            let mut next_outage = outage_every.map(|every| started + std::time::Duration::from_secs_f64(every));
+            loop {
+                std::thread::sleep(std::time::Duration::from_secs(1));
+                if let Some(at) = next_outage
+                    && std::time::Instant::now() >= at
+                {
+                    sim.outage(std::time::Duration::from_secs_f64(outage_for));
+                    next_outage = outage_every.map(|every| at + std::time::Duration::from_secs_f64(every));
+                }
+                if started.elapsed().as_secs() % 10 == 0 {
+                    let stats = sim.stats();
+                    eprintln!(
+                        "{:6.0} s  conns {}  refused {}  resets {}  up {} KB  down {} KB",
+                        started.elapsed().as_secs_f64(),
+                        stats.connections,
+                        stats.refused,
+                        stats.resets,
+                        stats.bytes_up / 1024,
+                        stats.bytes_down / 1024
+                    );
+                }
+            }
+        }
+        Some("soak") => {
+            let mut minutes = 10.0;
+            let mut out: Option<String> = None;
+            let mut iter = arguments[2..].iter();
+            while let Some(flag) = iter.next() {
+                match flag.as_str() {
+                    "--minutes" => minutes = iter.next().and_then(|v| v.parse().ok()).expect("minutes"),
+                    "--out" => out = iter.next().cloned(),
+                    other => panic!("unknown argument {other}"),
+                }
+            }
+            soak::run(minutes, out);
         }
         Some("tc") => {
             let mut binary: Option<String> = None;

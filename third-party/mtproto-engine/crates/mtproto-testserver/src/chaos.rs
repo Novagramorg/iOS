@@ -35,6 +35,9 @@ pub enum Fault {
     HostileOversized,
     HostileTruncated,
     HostileQuickAckNoise,
+    HostileSaltLoop,
+    HostileTimeLoop,
+    HostileResendLoop,
 }
 
 impl Fault {
@@ -57,6 +60,8 @@ impl Fault {
         Fault::Stall,
         Fault::NewSession,
     ];
+
+    pub const LOOPS: [Fault; 3] = [Fault::HostileSaltLoop, Fault::HostileTimeLoop, Fault::HostileResendLoop];
 
     pub const HOSTILE: [Fault; 16] = [
         Fault::HostileGarbage,
@@ -112,11 +117,14 @@ impl Fault {
             Fault::HostileOversized => "x-oversized",
             Fault::HostileTruncated => "x-truncated",
             Fault::HostileQuickAckNoise => "x-quick-ack-noise",
+            Fault::HostileSaltLoop => "x-salt-loop",
+            Fault::HostileTimeLoop => "x-time-loop",
+            Fault::HostileResendLoop => "x-resend-loop",
         }
     }
 
     pub fn by_name(name: &str) -> Option<Fault> {
-        Fault::ALL.into_iter().chain(Fault::HOSTILE).find(|fault| fault.name() == name)
+        Fault::ALL.into_iter().chain(Fault::HOSTILE).chain(Fault::LOOPS).find(|fault| fault.name() == name)
     }
 
     pub fn closes_connection(self) -> bool {
@@ -186,7 +194,7 @@ mod tests {
         }
         let expected = 100_000.0 * 0.01 * (Fault::ALL.len() - 1) as f64;
         assert!((hits as f64 - expected).abs() < expected * 0.1, "{hits} vs {expected}");
-        for fault in Fault::ALL.into_iter().chain(Fault::HOSTILE) {
+        for fault in Fault::ALL.into_iter().chain(Fault::HOSTILE).chain(Fault::LOOPS) {
             assert_eq!(Fault::by_name(fault.name()), Some(fault));
         }
     }

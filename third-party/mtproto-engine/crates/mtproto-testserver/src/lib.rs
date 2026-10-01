@@ -123,6 +123,9 @@ pub struct Stats {
     pub bad_msgs_sent: usize,
     pub session_ids: HashSet<i64>,
     pub transport_errors_sent: usize,
+    pub client_packets: usize,
+    pub client_bytes: usize,
+    pub loop_rejections: usize,
 }
 
 struct SessionState {
@@ -174,6 +177,7 @@ struct Shared {
     last_transport_flood: Option<Instant>,
     bad_salt_sent: bool,
     handshake_faults: VecDeque<HandshakeFault>,
+    doomed: HashMap<(u32, u64), chaos::Fault>,
 }
 
 pub struct TestServer {
@@ -199,6 +203,7 @@ impl TestServer {
             last_transport_flood: None,
             bad_salt_sent: false,
             handshake_faults: options.handshake_faults.iter().copied().collect(),
+            doomed: HashMap::new(),
         }));
         let stop = Arc::new(AtomicBool::new(false));
         let thread = {
@@ -655,6 +660,8 @@ fn serve_frames_inner(
             }
             let stats = &mut shared_ref.stats;
             stats.session_ids.insert(session_id);
+            stats.client_packets += 1;
+            stats.client_bytes += packet.len();
             let message_time = msg_id_time(decoded.header.msg_id);
             let server_time = server_now(session.clock_offset);
             let time_error = if !options.validate_msg_id_time {
@@ -767,11 +774,37 @@ fn serve_frames_inner(
                                 ));
                                 continue;
                             }
-                            let fault = if tag < TAG_FLOOD_ONCE {
+                            let unique = (tag < TAG_FLOOD_ONCE && payload.len() >= 8)
+                                .then(|| (tag, u64::from_le_bytes(payload[..8].try_into().unwrap())));
+                            let doomed = unique.and_then(|key| shared_ref.doomed.get(&key).copied());
+                            let fault = if doomed.is_some() {
+                                doomed
+                            } else if tag < TAG_FLOOD_ONCE {
                                 options.chaos.as_ref().and_then(|chaos| chaos.roll(&mut chaos_rng))
                             } else {
                                 None
                             };
+                            if let (Some(fault), Some(key)) = (fault, unique)
+                                && chaos::Fault::LOOPS.contains(&fault)
+                            {
+                                if doomed.is_none() {
+                                    *stats.chaos_injected.entry(fault.name()).or_insert(0) += 1;
+                                    shared_ref.doomed.insert(key, fault);
+                                }
+                                stats.loop_rejections += 1;
+                                session.received.remove(&message.msg_id);
+                                let rejection = match fault {
+                                    chaos::Fault::HostileSaltLoop => {
+                                        sp::bad_server_salt(message.msg_id, message.seq_no, shared_ref.salt)
+                                    }
+                                    chaos::Fault::HostileTimeLoop => {
+                                        sp::bad_msg_notification(message.msg_id, message.seq_no, 16)
+                                    }
+                                    _ => sp::msg_resend_req(&[message.msg_id]),
+                                };
+                                outgoing.push((rejection, false));
+                                continue;
+                            }
                             if let Some(fault) = fault {
                                 *stats.chaos_injected.entry(fault.name()).or_insert(0) += 1;
                                 match fault {

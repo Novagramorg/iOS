@@ -76,6 +76,9 @@ pub struct ClusterResult {
     pub double_completions: usize,
     pub duplicate_executions: usize,
     pub chaos_injected: usize,
+    pub client_packets: usize,
+    pub client_bytes: usize,
+    pub loop_rejections: usize,
     pub stalled: bool,
     pub exit: String,
     pub error: Option<String>,
@@ -233,6 +236,16 @@ pub fn hostile_suite(quick: bool) -> Vec<ClusterScenario> {
         })
         .collect();
     scenarios.push(hostile("hostile/all".into(), scale(100_000, 10_000), ChaosConfig::hostile(97, 0.0005)));
+    for (index, fault) in Fault::LOOPS.into_iter().enumerate() {
+        let mut scenario = hostile(
+            format!("loop/{}", fault.name()),
+            scale(2_000, 400),
+            ChaosConfig::only(71 + index as u64, fault, 0.005),
+        );
+        scenario.deadline = 60.0;
+        scenario.stall_exit = 30.0;
+        scenarios.push(scenario);
+    }
     scenarios
 }
 
@@ -469,6 +482,9 @@ pub fn run(scenario: &ClusterScenario, binary: &str, engine: &str, seed: u64) ->
         double_completions: 0,
         duplicate_executions: 0,
         chaos_injected: 0,
+        client_packets: 0,
+        client_bytes: 0,
+        loop_rejections: 0,
         stalled: false,
         exit: String::new(),
         error: None,
@@ -514,6 +530,9 @@ pub fn run(scenario: &ClusterScenario, binary: &str, engine: &str, seed: u64) ->
     main_server.with_stats(|stats| {
         result.duplicate_executions = stats.duplicate_executions;
         result.chaos_injected = stats.chaos_injected.values().sum();
+        result.client_packets = stats.client_packets;
+        result.client_bytes = stats.client_bytes;
+        result.loop_rejections = stats.loop_rejections;
     });
     result.cpu_seconds = cpu_seconds;
     result.max_rss_mb = max_rss_mb;
@@ -596,12 +615,12 @@ pub fn markdown(results: &[ClusterResult]) -> String {
 
 pub fn torture_markdown(results: &[ClusterResult]) -> String {
     let mut out = String::new();
-    out.push_str("| Scenario | Engine | Done/Issued | Failed or hung | Wrong results | Double completions | Duplicate executions | Faults injected | p50 ms | p99 ms | req/s | CPU s | Peak RSS MB | Conns | Process |\n");
-    out.push_str("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n");
+    out.push_str("| Scenario | Engine | Done/Issued | Failed or hung | Wrong results | Double completions | Duplicate executions | Faults injected | p50 ms | p99 ms | req/s | CPU s | Peak RSS MB | Conns | Client packets | Client MB | Loop rejections | Process |\n");
+    out.push_str("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n");
     for result in results {
         let Some(report) = &result.report else {
             out.push_str(&format!(
-                "| {} | {} | no report ({}) | | | | | {} | | | | {:.2} | {:.1} | {} | {} |\n",
+                "| {} | {} | no report ({}) | | | | | {} | | | | {:.2} | {:.1} | {} | {} | {:.1} | {} | {} |\n",
                 result.scenario,
                 result.engine,
                 result.error.clone().unwrap_or_default(),
@@ -609,13 +628,16 @@ pub fn torture_markdown(results: &[ClusterResult]) -> String {
                 result.cpu_seconds,
                 result.max_rss_mb,
                 result.connections,
+                result.client_packets,
+                result.client_bytes as f64 / 1e6,
+                result.loop_rejections,
                 result.exit
             ));
             continue;
         };
         let rate = if report.elapsed > 0.0 { report.completed as f64 / report.elapsed } else { 0.0 };
         out.push_str(&format!(
-            "| {} | {} | {}/{} | {} | {} | {} | {} | {} | {:.2} | {:.1} | {:.0} | {:.2} | {:.1} | {} | {} |\n",
+            "| {} | {} | {}/{} | {} | {} | {} | {} | {} | {:.2} | {:.1} | {:.0} | {:.2} | {:.1} | {} | {} | {:.1} | {} | {} |\n",
             result.scenario,
             result.engine,
             report.completed,
@@ -631,6 +653,9 @@ pub fn torture_markdown(results: &[ClusterResult]) -> String {
             result.cpu_seconds,
             result.max_rss_mb,
             result.connections,
+            result.client_packets,
+            result.client_bytes as f64 / 1e6,
+            result.loop_rejections,
             if result.stalled { format!("{} (stalled)", result.exit) } else { result.exit.clone() },
         ));
     }
