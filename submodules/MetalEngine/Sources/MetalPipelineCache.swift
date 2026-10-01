@@ -17,6 +17,11 @@ import Metal
 /// and bounded storage: a file that fails to load is never trusted (the next save replaces it), saves replace the file
 /// atomically, and the archive is version-scoped and capped in size.
 ///
+/// Saving goes through Metal's own code, which has crashed the app (see `MetalBinaryArchiveSerialization`, which turns
+/// the known case into an error). A save is marked on disk while it runs, so a process that dies inside one leaves
+/// the mark behind; from then on the archive is still used but never saved again, until the app or OS version
+/// changes and a new archive starts.
+///
 /// The archive can be switched off remotely (`setArchiveDisabled`, driven by the
 /// `ios_killswitch_disable_metal_pipeline_cache` app configuration key); pipelines are then compiled as they were before
 /// this cache existed.
@@ -48,16 +53,20 @@ public final class MetalPipelineCache {
     /// update. A good moment to make the pipelines a user is likely to need, in the background.
     public let isFresh: Bool
 
-    init(device: MTLDevice) {
-        self.device = device
-
-        let isArchiveDisabled = UserDefaults.standard.bool(forKey: MetalPipelineCache.isArchiveDisabledKey)
+    convenience init(device: MTLDevice) {
         // Namespaced by app: on macOS, Caches can be shared between builds of the app.
         let directoryUrl = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first.flatMap { cachesUrl in
             return cachesUrl
                 .appendingPathComponent("MetalPipelineCache", isDirectory: true)
                 .appendingPathComponent(Bundle.main.bundleIdentifier ?? "default", isDirectory: true)
         }
+        self.init(device: device, directoryUrl: directoryUrl)
+    }
+
+    init(device: MTLDevice, directoryUrl: URL?) {
+        self.device = device
+
+        let isArchiveDisabled = UserDefaults.standard.bool(forKey: MetalPipelineCache.isArchiveDisabledKey)
 
         var url: URL?
         var archive: AnyObject?
@@ -119,13 +128,19 @@ public final class MetalPipelineCache {
         }
         let _ = try? fileManager.createDirectory(at: directoryUrl, withIntermediateDirectories: true)
 
-        let fileName = "pipelines-\(MetalPipelineCache.archiveKey(device: device)).metallib"
+        let fileName = MetalPipelineCache.archiveFileName(device: device)
         let fileUrl = directoryUrl.appendingPathComponent(fileName)
 
-        // Archives of previous versions are never valid again.
-        for item in (try? fileManager.contentsOfDirectory(atPath: directoryUrl.path)) ?? [] where item != fileName {
+        let saveMarkerUrl = MetalPipelineCache.saveMarkerUrl(archiveUrl: fileUrl)
+
+        // Archives of previous versions are never valid again, and neither are their saves' marks.
+        for item in (try? fileManager.contentsOfDirectory(atPath: directoryUrl.path)) ?? [] where item != fileName && item != saveMarkerUrl.lastPathComponent {
             let _ = try? fileManager.removeItem(at: directoryUrl.appendingPathComponent(item))
         }
+
+        // A mark means a save of this archive never finished: the process died in it. The file it was replacing is
+        // untouched (saves are renamed into place), so keep using it, but do not risk saving it again.
+        let saveUrl: URL? = fileManager.fileExists(atPath: saveMarkerUrl.path) ? nil : fileUrl
 
         // Changed pipelines are added next to their old versions, which are never used again. Within one app version
         // that only happens in development builds; start over if it ever adds up.
@@ -134,12 +149,12 @@ public final class MetalPipelineCache {
         }
 
         guard fileManager.fileExists(atPath: fileUrl.path) else {
-            return (fileUrl, emptyArchive, true)
+            return (saveUrl, emptyArchive, true)
         }
         let descriptor = MTLBinaryArchiveDescriptor()
         descriptor.url = fileUrl
         if let archive = try? device.makeBinaryArchive(descriptor: descriptor) {
-            return (fileUrl, archive, false)
+            return (saveUrl, archive, false)
         }
         if (try? FileHandle(forReadingFrom: fileUrl)) == nil {
             // Not readable yet: Caches stays protected until the first unlock after a reboot, and a background launch
@@ -147,7 +162,7 @@ public final class MetalPipelineCache {
             return (nil, emptyArchive, true)
         }
         // Readable but not an archive; the next save replaces it.
-        return (fileUrl, emptyArchive, true)
+        return (saveUrl, emptyArchive, true)
     }
 
     public func makeRenderPipelineState(descriptor: MTLRenderPipelineDescriptor) -> MTLRenderPipelineState? {
@@ -235,9 +250,19 @@ public final class MetalPipelineCache {
         guard !self.isArchiveDisabled, let archive = self.archiveStorage as? MTLBinaryArchive, let url = self.url else {
             return
         }
+        // Created before serializing and removed after it returns, so it is only left behind by a process that died
+        // in between. Without it, a save that crashes would crash again on every launch.
+        let saveMarkerUrl = MetalPipelineCache.saveMarkerUrl(archiveUrl: url)
+        guard FileManager.default.createFile(atPath: saveMarkerUrl.path, contents: nil) else {
+            return
+        }
+        defer {
+            let _ = try? FileManager.default.removeItem(at: saveMarkerUrl)
+        }
+
         let temporaryUrl = url.deletingLastPathComponent().appendingPathComponent(UUID().uuidString + ".tmp")
         do {
-            try archive.serialize(to: temporaryUrl)
+            try MetalBinaryArchiveSerialization.serialize(archive, to: temporaryUrl)
             // rename(2) replaces the previous archive atomically: there is always either the old file or the new one.
             if rename(temporaryUrl.path, url.path) != 0 {
                 let _ = try? FileManager.default.removeItem(at: temporaryUrl)
@@ -245,6 +270,20 @@ public final class MetalPipelineCache {
         } catch {
             let _ = try? FileManager.default.removeItem(at: temporaryUrl)
         }
+    }
+
+    /// Whether this launch saves the archive (for tests).
+    var isSaveEnabled: Bool {
+        return self.url != nil
+    }
+
+    static func archiveFileName(device: MTLDevice) -> String {
+        return "pipelines-\(MetalPipelineCache.archiveKey(device: device)).metallib"
+    }
+
+    /// Exists while the archive at `archiveUrl` is being saved.
+    static func saveMarkerUrl(archiveUrl: URL) -> URL {
+        return archiveUrl.deletingPathExtension().appendingPathExtension("saving")
     }
 
     /// Identifies the app version, OS build and GPU the archived code was compiled for.

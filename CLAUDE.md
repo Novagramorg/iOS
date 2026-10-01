@@ -51,6 +51,16 @@ WebRTC for the host (~2.5 min); later runs take seconds. Note the binary is vers
 arch-suffixed (`bazel-9.2.0-darwin-arm64` since 2026-09-14, was `bazel-8.4.2-darwin-arm64`), not the
 bare `bazel-8.4.2` the tgcalls CLAUDE.md names; `versions.json` is the single pin.
 
+`//submodules/MetalEngine:MetalPipelineCacheTests` (added 2026-10-01) is the first host `swift_test`, run
+the same way (`… bazel-9.2.0-darwin-arm64 test //submodules/MetalEngine:MetalPipelineCacheTests`; one test
+via `--test_filter=MetalPipelineCacheTests/<name>`, comma lists are not supported). It compiles only
+`MetalPipelineCache.swift` + `MetalBinaryArchiveSerialization.swift` and runs on the Mac's GPU, because
+the simulator has no binary archives (serializing fails an assertion there). It pins an **Apple bug**: a
+`MTLBinaryArchive.serialize(to:)` whose final file move fails does not throw — Metal frees the error on
+the compiler's reply thread and the caller crashes retaining it (device crash on iOS 26.3, reproduced on
+macOS 27). `MetalBinaryArchiveSerialization` hooks that one `NSFileManager` call to keep the error alive;
+the target sets `NSZombieEnabled` so a regression fails deterministically.
+
 ### Updating the running simulator after a rebuild (whole-`.app` copy)
 
 `simctl install` will NOT replace an already-installed app when the build number is unchanged (installd keeps a hard-link cache), so a rebuilt binary silently doesn't take effect. **Preferred fix: copy the whole freshly-built `.app` over the installed bundle in place.** This is more robust than swapping only the `Frameworks/TelegramUIFramework` binary (no risk of app↔framework version skew), and it preserves the account/login because the **data container is a separate path** (`.../data/Containers/Data/Application/<uuid>/`, keyed by bundle id) — only the **bundle** container is replaced, and the install-DB entry stays valid since the path + bundle id are unchanged.
