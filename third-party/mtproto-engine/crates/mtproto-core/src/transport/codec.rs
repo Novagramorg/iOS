@@ -274,26 +274,24 @@ impl FrameDecoder {
     }
 }
 
+pub const SHORT_FRAME_LEN: usize = 16;
+pub const SHORT_PADDED_FRAME_LEN: usize = 24;
+
 fn classify(mut payload: Vec<u8>, padded: bool) -> Incoming {
-    if payload.len() >= 4 {
+    let short_limit = if padded { SHORT_PADDED_FRAME_LEN } else { SHORT_FRAME_LEN };
+    if payload.len() < short_limit {
+        if payload.len() < 4 {
+            return Incoming::Nop;
+        }
         let header = u32::from_le_bytes(payload[..4].try_into().expect("4"));
         if header == 0xffff_ffff && payload.len() >= 8 {
             let word = u32::from_le_bytes(payload[4..8].try_into().expect("4"));
             return Incoming::QuickAck(word & !QUICK_ACK_BIT);
         }
-        let minimal = if padded { payload.len() < 24 } else { payload.len() == 4 };
-        if minimal {
-            let code = header as i32;
-            if code < 0 {
-                return Incoming::TransportError(code);
-            }
-            if code == 0 {
-                return Incoming::Nop;
-            }
-        }
-        if header == 0 && payload.len() < 16 {
-            return Incoming::Nop;
-        }
+        return match header as i32 {
+            0 => Incoming::Nop,
+            code => Incoming::TransportError(code),
+        };
     }
     if padded {
         let trimmed = trim_padded_payload(&payload);
@@ -402,6 +400,53 @@ mod tests {
         buffer.extend(&(ack.len() as u32).to_le_bytes());
         buffer.extend(&ack);
         assert_eq!(decoder.decode(&mut buffer).unwrap(), Some(Incoming::QuickAck(0xff)));
+    }
+
+    #[test]
+    fn short_frames_follow_tdlib_classification() {
+        let decoder = FrameDecoder::new(Framing::Intermediate);
+        let frame = |payload: &[u8]| {
+            let mut buffer = InputBuffer::new();
+            buffer.extend(&(payload.len() as u32).to_le_bytes());
+            buffer.extend(payload);
+            decoder.decode(&mut buffer).unwrap().unwrap()
+        };
+        assert_eq!(frame(&0u32.to_le_bytes()), Incoming::Nop);
+        assert_eq!(frame(&[0u8; 12]), Incoming::Nop);
+        assert_eq!(frame(&(-444i32).to_le_bytes()), Incoming::TransportError(-444));
+        assert_eq!(frame(&(-403i32).to_le_bytes()), Incoming::TransportError(-403));
+        assert_eq!(frame(&(-1234i32).to_le_bytes()), Incoming::TransportError(-1234));
+        assert_eq!(frame(&7i32.to_le_bytes()), Incoming::TransportError(7));
+        let mut with_slack = (-429i32).to_le_bytes().to_vec();
+        with_slack.extend_from_slice(&[1, 2, 3, 4, 5, 6, 7, 8]);
+        assert_eq!(frame(&with_slack), Incoming::TransportError(-429));
+        let mut http_ack = 0xffff_ffffu32.to_le_bytes().to_vec();
+        http_ack.extend_from_slice(&0x8000_0042u32.to_le_bytes());
+        assert_eq!(frame(&http_ack), Incoming::QuickAck(0x42));
+    }
+
+    #[test]
+    fn long_frames_are_packets_even_with_suspicious_prefixes() {
+        let decoder = FrameDecoder::new(Framing::Intermediate);
+        for prefix in [0xffff_ffffu32, 0, (-404i32) as u32] {
+            let mut payload = prefix.to_le_bytes().to_vec();
+            payload.resize(24 + 48, 9);
+            let mut buffer = InputBuffer::new();
+            buffer.extend(&(payload.len() as u32).to_le_bytes());
+            buffer.extend(&payload);
+            assert_eq!(decoder.decode(&mut buffer).unwrap(), Some(Incoming::Packet(payload)));
+        }
+    }
+
+    #[test]
+    fn abridged_nop_and_long_quick_ack() {
+        let decoder = FrameDecoder::new(Framing::Abridged);
+        let mut buffer = InputBuffer::new();
+        buffer.extend(&[1, 0, 0, 0, 0]);
+        buffer.extend(&[0xff, 0xee, 0xdd, 0xcc]);
+        assert_eq!(decoder.decode(&mut buffer).unwrap(), Some(Incoming::Nop));
+        assert_eq!(decoder.decode(&mut buffer).unwrap(), Some(Incoming::QuickAck(0x7feeddcc)));
+        assert!(buffer.is_empty());
     }
 
     #[test]

@@ -50,7 +50,19 @@ impl SaltState {
         self.future.clear();
     }
 
-    pub fn set_future(&mut self, mut salts: Vec<ServerSalt>, server_time: f64) {
+    pub fn invalidate_current(&mut self) {
+        self.current.valid_until = f64::NEG_INFINITY;
+    }
+
+    pub fn current_value(&self) -> i64 {
+        self.current.salt
+    }
+
+    pub fn set_future(&mut self, salts: Vec<ServerSalt>, server_time: f64) {
+        let mut salts: Vec<ServerSalt> = salts
+            .into_iter()
+            .filter(|salt| salt.valid_since.is_finite() && salt.valid_until.is_finite() && salt.valid_until > salt.valid_since)
+            .collect();
         if salts.is_empty() {
             return;
         }

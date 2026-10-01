@@ -388,6 +388,22 @@ mod tests {
     }
 
     #[test]
+    fn zero_length_and_split_records_do_not_stall() {
+        let mut input = InputBuffer::new();
+        let mut reader = TlsRecordReader::new();
+        let mut collected = Vec::new();
+        input.extend(b"\x17\x03\x03\x00\x00");
+        input.extend(b"\x17\x03\x03\x00\x03ab");
+        assert!(reader.read(&mut input, &mut collected).unwrap());
+        assert!(collected.is_empty());
+        assert!(!reader.read(&mut input, &mut collected).unwrap());
+        input.extend(b"c");
+        assert!(reader.read(&mut input, &mut collected).unwrap());
+        assert_eq!(collected, b"abc");
+        assert!(input.is_empty());
+    }
+
+    #[test]
     fn record_writer_and_reader() {
         let mut writer = TlsRecordWriter::new();
         let mut out = Vec::new();

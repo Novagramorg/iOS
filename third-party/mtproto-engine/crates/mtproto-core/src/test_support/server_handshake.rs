@@ -24,6 +24,17 @@ pub struct ServerHandshakeBehavior {
     pub bad_g: Option<i32>,
     pub small_g_a: bool,
     pub server_time: i32,
+    pub pq_override: Option<Vec<u8>>,
+    pub wrong_server_nonce_in_dh_params: bool,
+    pub wrong_nonce_in_inner_data: bool,
+    pub wrong_nonce_in_dh_gen: bool,
+    pub corrupt_new_nonce_hash: bool,
+    pub corrupt_fail_hash: bool,
+    pub unaligned_encrypted_answer: bool,
+    pub excess_answer_padding: bool,
+    pub dh_prime_override: Option<Vec<u8>>,
+    pub trailing_bytes: bool,
+    pub repeat_res_pq: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -71,9 +82,34 @@ impl ServerHandshake {
         self.keys.public.clone()
     }
 
-    fn reply(&mut self, body: Vec<u8>) -> Vec<u8> {
+    fn reply(&mut self, mut body: Vec<u8>) -> Vec<u8> {
         let id = self.msg_ids.next(self.behavior.server_time as f64) | 1;
-        encode_plain_message(id, &body)
+        let mut packet = encode_plain_message(id, &body);
+        if self.behavior.trailing_bytes {
+            body.clear();
+            body.extend_from_slice(&[0x5au8; 12]);
+            packet.extend_from_slice(&body);
+            let declared = u32::from_le_bytes(packet[16..20].try_into().unwrap()) + 12;
+            packet[16..20].copy_from_slice(&declared.to_le_bytes());
+        }
+        packet
+    }
+
+    fn res_pq(&mut self, rng: &mut impl SecureRandom) -> Vec<u8> {
+        let mut nonce = self.nonce;
+        if self.behavior.wrong_nonce_in_res_pq {
+            nonce[0] ^= 1;
+        }
+        let fingerprint = if self.behavior.foreign_fingerprint { 0x1234 } else { self.keys.public.fingerprint() };
+        let _ = rng;
+        let body = ResPq {
+            nonce,
+            server_nonce: self.server_nonce,
+            pq: self.behavior.pq_override.clone().unwrap_or_else(|| PQ.to_be_bytes().to_vec()),
+            fingerprints: vec![0x7777, fingerprint],
+        }
+        .to_bytes();
+        self.reply(body)
     }
 
     pub fn handle(&mut self, packet: &[u8], rng: &mut impl SecureRandom) -> Option<Vec<u8>> {
@@ -84,19 +120,7 @@ impl ServerHandshake {
             ids::REQ_PQ_MULTI => {
                 self.nonce = reader.read_int128().ok()?;
                 self.server_nonce = rng.array();
-                let mut nonce = self.nonce;
-                if self.behavior.wrong_nonce_in_res_pq {
-                    nonce[0] ^= 1;
-                }
-                let fingerprint = if self.behavior.foreign_fingerprint { 0x1234 } else { self.keys.public.fingerprint() };
-                let body = ResPq {
-                    nonce,
-                    server_nonce: self.server_nonce,
-                    pq: PQ.to_be_bytes().to_vec(),
-                    fingerprints: vec![0x7777, fingerprint],
-                }
-                .to_bytes();
-                Some(self.reply(body))
+                Some(self.res_pq(rng))
             }
             ids::REQ_DH_PARAMS => {
                 let nonce = reader.read_int128().ok()?;
@@ -128,18 +152,29 @@ impl ServerHandshake {
                 self.dc = inner.dc;
                 self.expires_in = inner.expires_in;
 
+                if self.behavior.repeat_res_pq {
+                    return Some(self.res_pq(rng));
+                }
+                let mut server_nonce = self.server_nonce;
+                if self.behavior.wrong_server_nonce_in_dh_params {
+                    server_nonce[3] ^= 0x40;
+                }
                 if self.behavior.fail_dh_params {
-                    let hash = sha1(&self.new_nonce);
+                    let mut hash = sha1(&self.new_nonce);
+                    if self.behavior.corrupt_fail_hash {
+                        hash[7] ^= 1;
+                    }
                     let body = ServerDhParams::Fail {
                         nonce: self.nonce,
-                        server_nonce: self.server_nonce,
+                        server_nonce,
                         new_nonce_hash: hash[4..20].try_into().unwrap(),
                     }
                     .to_bytes();
                     return Some(self.reply(body));
                 }
 
-                let prime = BigUint::from_bytes_be(&KNOWN_DH_PRIME);
+                let prime_bytes = self.behavior.dh_prime_override.clone().unwrap_or_else(|| KNOWN_DH_PRIME.to_vec());
+                let prime = BigUint::from_bytes_be(&prime_bytes);
                 let g = self.behavior.bad_g.unwrap_or(3);
                 let mut a_bytes = [0u8; 256];
                 rng.fill(&mut a_bytes);
@@ -149,11 +184,15 @@ impl ServerHandshake {
                 } else {
                     BigUint::from(3u32).modpow(&self.a, &prime)
                 };
+                let mut inner_nonce = self.nonce;
+                if self.behavior.wrong_nonce_in_inner_data {
+                    inner_nonce[9] ^= 0x10;
+                }
                 let inner = ServerDhInnerData {
-                    nonce: self.nonce,
+                    nonce: inner_nonce,
                     server_nonce: self.server_nonce,
                     g,
-                    dh_prime: KNOWN_DH_PRIME.to_vec(),
+                    dh_prime: prime_bytes,
                     g_a: g_a.to_bytes_be(),
                     server_time: self.behavior.server_time,
                 }
@@ -165,12 +204,18 @@ impl ServerHandshake {
                 answer.extend_from_slice(&inner);
                 let unpadded = answer.len();
                 answer.resize(unpadded.div_ceil(16) * 16, 0);
+                if self.behavior.excess_answer_padding {
+                    answer.resize(answer.len() + 16, 0);
+                }
                 rng.fill(&mut answer[unpadded..]);
                 let tmp = handshake_tmp_aes(&self.new_nonce, &self.server_nonce);
                 aes_ige_encrypt(&tmp.key, &tmp.iv, &mut answer).ok()?;
+                if self.behavior.unaligned_encrypted_answer {
+                    answer.truncate(answer.len() - 4);
+                }
                 let body = ServerDhParams::Ok {
                     nonce: self.nonce,
-                    server_nonce: self.server_nonce,
+                    server_nonce,
                     encrypted_answer: answer,
                 }
                 .to_bytes();
@@ -213,10 +258,17 @@ impl ServerHandshake {
                 if self.retries_sent > 0 && kind != DhGenKind::Retry {
                     assert_ne!(inner.retry_id, 0);
                 }
-                let hash = sha1_parts(&[&self.new_nonce, &[number], &auth_key.aux_hash().to_le_bytes()]);
+                let mut hash = sha1_parts(&[&self.new_nonce, &[number], &auth_key.aux_hash().to_le_bytes()]);
+                if self.behavior.corrupt_new_nonce_hash {
+                    hash[10] ^= 2;
+                }
+                let mut nonce = self.nonce;
+                if self.behavior.wrong_nonce_in_dh_gen {
+                    nonce[15] ^= 0x80;
+                }
                 let body = SetClientDhParamsAnswer {
                     kind,
-                    nonce: self.nonce,
+                    nonce,
                     server_nonce: self.server_nonce,
                     new_nonce_hash: hash[4..20].try_into().unwrap(),
                 }

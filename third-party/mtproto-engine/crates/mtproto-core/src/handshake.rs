@@ -3,8 +3,8 @@ use zeroize::Zeroize;
 
 use crate::auth_key::AuthKey;
 use crate::crypto::{
-    aes_ige_decrypt, aes_ige_encrypt, check_dh_params, check_g_a_or_b, factorize_pq, handshake_tmp_aes, sha1, sha1_parts,
-    to_fixed_be, DhError, DhPrimeCache, RsaPublicKey, SecureRandom,
+    aes_ige_decrypt, aes_ige_encrypt, check_dh_params, check_g_a_or_b, factorize_pq, handshake_tmp_aes, is_probable_prime, sha1,
+    sha1_parts, to_fixed_be, DhError, DhPrimeCache, RsaPublicKey, SecureRandom,
 };
 use crate::message::{decode_plain_message, encode_plain_message, MessageError};
 use crate::msg_id::MsgIdGenerator;
@@ -137,7 +137,7 @@ impl Handshake {
         let state = core::mem::replace(&mut self.state, State::Done);
         match state {
             State::WaitResPq { nonce } => {
-                let res_pq = ResPq::from_bytes(message.body)?;
+                let res_pq = ResPq::read_from(&mut Reader::new(message.body))?;
                 if res_pq.nonce != nonce {
                     return Err(HandshakeError::NonceMismatch);
                 }
@@ -151,6 +151,9 @@ impl Handshake {
                     return Err(HandshakeError::BadPq(res_pq.pq.len()));
                 }
                 let pq = res_pq.pq.iter().fold(0u64, |acc, &b| (acc << 8) | b as u64);
+                if pq < 4 || is_probable_prime(&BigUint::from(pq), 32, rng) {
+                    return Err(HandshakeError::FactorizationFailed);
+                }
                 let (p, q) = factorize_pq(pq).ok_or(HandshakeError::FactorizationFailed)?;
                 let p_bytes = minimal_be(p);
                 let q_bytes = minimal_be(q);
@@ -189,7 +192,7 @@ impl Handshake {
                 server_nonce,
                 new_nonce,
             } => {
-                let params = ServerDhParams::from_bytes(message.body)?;
+                let params = ServerDhParams::read_from(&mut Reader::new(message.body))?;
                 let encrypted_answer = match params {
                     ServerDhParams::Ok {
                         nonce: received_nonce,
@@ -261,7 +264,7 @@ impl Handshake {
                 time_difference,
                 retries,
             } => {
-                let answer = SetClientDhParamsAnswer::from_bytes(message.body)?;
+                let answer = SetClientDhParamsAnswer::read_from(&mut Reader::new(message.body))?;
                 check_nonces(&nonce, &answer.nonce, &server_nonce, &answer.server_nonce)?;
                 let number = match answer.kind {
                     DhGenKind::Ok => 1u8,

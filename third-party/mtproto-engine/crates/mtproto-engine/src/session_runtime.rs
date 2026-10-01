@@ -3,11 +3,13 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use mio::{Registry, Token};
-use mtproto_core::crypto::OsRandom;
+use mtproto_core::crypto::{OsRandom, SecureRandom};
 use mtproto_core::handshake::{Handshake, HandshakeConfig, HandshakeStep};
 use mtproto_core::rpc::{ApiEnvironment, RequestId, RpcClient, RpcEvent, RpcRequest, SessionRole, Verification};
 use mtproto_core::session::{Now, ServerSalt, Session, SessionConfig, SessionError};
-use mtproto_core::transport::{Incoming, Socks5Auth, Socks5Target, TransportConfig};
+use mtproto_core::transport::{
+    reconnect_delay, transport_flood_delay, Incoming, Socks5Auth, Socks5Target, TransportConfig, TransportErrorKind,
+};
 
 use crate::connection::{ChunkStatus, Connection, ConnectionError};
 use crate::resolver::parse_literal;
@@ -18,7 +20,14 @@ use crate::types::{
 
 const PROGRESS_THRESHOLD: usize = 4096;
 const PROGRESS_HEAD: usize = 128;
-const TRANSPORT_FLOOD_DELAY: f64 = 5.0;
+const HANDSHAKE_TIMEOUT: f64 = 10.0;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CloseReason {
+    ServerRejected,
+    TransportFlood,
+    HandshakeFailed,
+}
 
 pub enum Resolution {
     Resolved(Vec<SocketAddr>),
@@ -58,6 +67,10 @@ pub struct SessionRuntime {
     last_usage_report: f64,
     resolved: Option<(String, Vec<SocketAddr>)>,
     closed: bool,
+    close_reason: Option<CloseReason>,
+    transport_floods: u32,
+    handshake_started_at: Option<f64>,
+    jitter_state: u64,
 }
 
 impl SessionRuntime {
@@ -84,6 +97,10 @@ impl SessionRuntime {
             last_usage_report: now.mono,
             resolved: None,
             closed: false,
+            close_reason: None,
+            transport_floods: 0,
+            handshake_started_at: None,
+            jitter_state: rng.next_u64() | 1,
             setup,
         };
         if let Some(material) = runtime.setup.auth_key.take() {
@@ -303,27 +320,31 @@ impl SessionRuntime {
         self.close_connection(registry, now, false);
     }
 
+    fn next_jitter(&mut self) -> u32 {
+        self.jitter_state ^= self.jitter_state << 13;
+        self.jitter_state ^= self.jitter_state >> 7;
+        self.jitter_state ^= self.jitter_state << 17;
+        (self.jitter_state >> 32) as u32
+    }
+
     fn close_connection(&mut self, registry: &Registry, now: Now, failed: bool) {
+        self.close_reason = None;
         if let Some(mut connection) = self.connection.take() {
             self.account_usage(&connection);
             connection.deregister(registry);
             let index = connection.address_index;
             if failed {
                 self.failures += 1;
-                let delay = match self.failures {
-                    0 | 1 => 0.0,
-                    2 => 1.0,
-                    3 => 2.0,
-                    4 => 4.0,
-                    _ => 8.0,
-                };
-                self.next_attempt_at = now.mono + delay;
+                let jitter = self.next_jitter();
+                let delay = reconnect_delay(self.failures, jitter);
+                self.next_attempt_at = self.next_attempt_at.max(now.mono + delay);
                 self.address_cursor = index + 1;
             }
             if let Some(rpc) = &mut self.rpc {
                 rpc.connection_closed(now);
             }
             self.handshake = None;
+            self.handshake_started_at = None;
             self.pending_plain.clear();
             self.progress = None;
         }
@@ -409,7 +430,8 @@ impl SessionRuntime {
             Err(_) => {
                 self.failures += 1;
                 self.address_cursor = index + 1;
-                self.next_attempt_at = now.mono + 1.0;
+                let jitter = self.next_jitter();
+                self.next_attempt_at = now.mono + reconnect_delay(self.failures, jitter).max(0.3);
             }
         }
     }
@@ -438,6 +460,7 @@ impl SessionRuntime {
             };
             let (handshake, packet) = Handshake::start(config, now.unix + self.setup.time_difference, rng);
             self.handshake = Some(handshake);
+            self.handshake_started_at = Some(now.mono);
             let _ = callbacks;
             self.pending_plain.push_back(packet);
         }
@@ -475,6 +498,9 @@ impl SessionRuntime {
                         if became_ready {
                             self.on_established(now, callbacks, rng);
                         }
+                        if let Some(rpc) = &mut self.rpc {
+                            rpc.note_bytes_received(now);
+                        }
                         if let Err(error) = self.process_incoming(registry, now, callbacks, rng) {
                             failure = Some(error);
                             break;
@@ -507,17 +533,24 @@ impl SessionRuntime {
             }
             self.log(callbacks, LogLevel::Info, &format!("connection closed: {error}"));
             let established = self.connection.as_ref().is_some_and(Connection::is_established);
+            let reason = self.close_reason.take();
+            let reachable = matches!(reason, Some(CloseReason::ServerRejected) | Some(CloseReason::TransportFlood));
             if let Some(connection) = &self.connection {
                 callbacks.on_event(
                     self.handle,
                     EngineEvent::AddressResult {
                         index: connection.address_index,
-                        success: connection.received_packet,
+                        success: connection.received_packet || reachable,
                     },
                 );
             }
             let received = self.connection_received_packet();
-            self.close_connection(registry, now, !established || !received);
+            let failed = match reason {
+                Some(CloseReason::ServerRejected) | Some(CloseReason::HandshakeFailed) => true,
+                Some(CloseReason::TransportFlood) => false,
+                None => !established || !received,
+            };
+            self.close_connection(registry, now, failed);
         }
     }
 
@@ -548,6 +581,8 @@ impl SessionRuntime {
                             Ok(HandshakeStep::Send(next)) => self.pending_plain.push_back(next),
                             Ok(HandshakeStep::Done(result)) => {
                                 self.handshake = None;
+                                self.handshake_started_at = None;
+                                self.failures = 0;
                                 let expires_at = result.expires_at;
                                 let server_time = now.unix + result.time_difference;
                                 self.setup.time_difference = result.time_difference;
@@ -581,6 +616,7 @@ impl SessionRuntime {
                                         reason: error.to_string(),
                                     },
                                 );
+                                self.close_reason = Some(CloseReason::HandshakeFailed);
                                 return Err(ConnectionError::Closed);
                             }
                         }
@@ -591,6 +627,7 @@ impl SessionRuntime {
                     };
                     match rpc.handle_packet(&packet, now, rng) {
                         Ok(()) => {
+                            self.transport_floods = 0;
                             if let Some(connection) = &mut self.connection {
                                 if !connection.received_packet {
                                     connection.received_packet = true;
@@ -623,23 +660,7 @@ impl SessionRuntime {
                 }
                 Incoming::TransportError(code) => {
                     self.log(callbacks, LogLevel::Warning, &format!("transport error {code}"));
-                    match code {
-                        -404 => {
-                            callbacks.on_event(self.handle, EngineEvent::AuthKeyInvalid { code });
-                            if self.handshake.is_none() {
-                                if let Some(rpc) = self.rpc.take() {
-                                    for request in rpc_pending_requests(rpc) {
-                                        self.queued.push_back(request);
-                                    }
-                                }
-                            }
-                        }
-                        -429 => {
-                            callbacks.on_event(self.handle, EngineEvent::TransportFlood);
-                            self.next_attempt_at = now.mono + TRANSPORT_FLOOD_DELAY;
-                        }
-                        _ => {}
-                    }
+                    self.on_transport_error(code, now, callbacks);
                     return Err(ConnectionError::Closed);
                 }
                 Incoming::Nop => {}
@@ -647,6 +668,54 @@ impl SessionRuntime {
         }
         self.update_progress(callbacks);
         Ok(())
+    }
+
+    fn on_transport_error(&mut self, code: i32, now: Now, callbacks: &Arc<dyn EngineCallbacks>) {
+        let kind = TransportErrorKind::from_code(code);
+        if self.handshake.is_some() {
+            callbacks.on_event(
+                self.handle,
+                EngineEvent::AuthKeyCreationFailed {
+                    reason: format!("transport error {code}"),
+                },
+            );
+            if kind == TransportErrorKind::Flood {
+                self.transport_floods += 1;
+                callbacks.on_event(self.handle, EngineEvent::TransportFlood);
+                self.next_attempt_at = self.next_attempt_at.max(now.mono + transport_flood_delay(self.transport_floods));
+            }
+            self.close_reason = Some(CloseReason::HandshakeFailed);
+            return;
+        }
+        match kind {
+            TransportErrorKind::AuthKeyNotFound => {
+                callbacks.on_event(self.handle, EngineEvent::AuthKeyInvalid { code });
+                if let Some(rpc) = self.rpc.take() {
+                    for request in rpc_pending_requests(rpc) {
+                        self.queued.push_back(request);
+                    }
+                }
+                self.close_reason = Some(CloseReason::ServerRejected);
+            }
+            TransportErrorKind::Flood => {
+                self.transport_floods += 1;
+                callbacks.on_event(self.handle, EngineEvent::TransportFlood);
+                if let Some(rpc) = &mut self.rpc {
+                    rpc.connection_rejected(now);
+                }
+                self.next_attempt_at = self.next_attempt_at.max(now.mono + transport_flood_delay(self.transport_floods));
+                self.close_reason = Some(CloseReason::TransportFlood);
+            }
+            TransportErrorKind::InvalidDc => {
+                if let Some(rpc) = &mut self.rpc {
+                    rpc.connection_rejected(now);
+                }
+                self.close_reason = Some(CloseReason::ServerRejected);
+            }
+            TransportErrorKind::Forbidden | TransportErrorKind::Other => {
+                self.close_reason = Some(CloseReason::ServerRejected);
+            }
+        }
     }
 
     fn update_progress(&mut self, callbacks: &Arc<dyn EngineCallbacks>) {
@@ -740,6 +809,16 @@ impl SessionRuntime {
             if !connection.is_established() && now.mono - connection.started_at > config.connect_timeout {
                 failure = Some("connect timeout");
             }
+        }
+        if failure.is_none() && self.handshake_started_at.is_some_and(|started| now.mono - started > HANDSHAKE_TIMEOUT) {
+            callbacks.on_event(
+                self.handle,
+                EngineEvent::AuthKeyCreationFailed {
+                    reason: "handshake timeout".into(),
+                },
+            );
+            self.log(callbacks, LogLevel::Info, "handshake timeout");
+            self.close_connection(registry, now, true);
         }
         if failure.is_none() {
             if let Some(rpc) = &mut self.rpc {
@@ -874,6 +953,9 @@ impl SessionRuntime {
         let wants = self.wants_connection(now);
         if wants && self.connection.is_none() {
             deadline = deadline.min(self.next_attempt_at.max(now.mono));
+        }
+        if let Some(started) = self.handshake_started_at {
+            deadline = deadline.min(started + HANDSHAKE_TIMEOUT + 0.01);
         }
         if let Some(connection) = &self.connection {
             if !connection.is_established() {

@@ -294,3 +294,96 @@ pub fn read_vector_after_constructor(body: &[u8]) -> Vec<i64> {
     let mut reader = crate::tl::Reader::new(&body[4..]);
     reader.read_i64_vector(1 << 16).expect("vector")
 }
+
+pub fn server_ping(ping_id: i64) -> Vec<u8> {
+    let mut writer = Writer::new();
+    writer.write_u32(ids::PING);
+    writer.write_i64(ping_id);
+    writer.into_inner()
+}
+
+pub fn server_ping_delay_disconnect(ping_id: i64, delay: i32) -> Vec<u8> {
+    let mut writer = Writer::new();
+    writer.write_u32(ids::PING_DELAY_DISCONNECT);
+    writer.write_i64(ping_id);
+    writer.write_i32(delay);
+    writer.into_inner()
+}
+
+pub fn msg_copy(msg_id: i64, seq_no: i32, body: &[u8]) -> Vec<u8> {
+    let mut writer = Writer::new();
+    crate::tl::mtproto::write_msg_copy(&mut writer, &ContainerMessage { msg_id, seqno: seq_no, body });
+    writer.into_inner()
+}
+
+pub fn msg_resend_req(msg_ids: &[i64]) -> Vec<u8> {
+    let mut writer = Writer::new();
+    writer.write_u32(ids::MSG_RESEND_REQ);
+    writer.write_i64_vector(msg_ids);
+    writer.into_inner()
+}
+
+pub fn msg_resend_ans_req(msg_ids: &[i64]) -> Vec<u8> {
+    let mut writer = Writer::new();
+    writer.write_u32(ids::MSG_RESEND_ANS_REQ);
+    writer.write_i64_vector(msg_ids);
+    writer.into_inner()
+}
+
+pub fn msgs_all_info(msg_ids: &[i64], info: &[u8]) -> Vec<u8> {
+    let mut writer = Writer::new();
+    writer.write_u32(ids::MSGS_ALL_INFO);
+    writer.write_i64_vector(msg_ids);
+    writer.write_bytes(info);
+    writer.into_inner()
+}
+
+pub fn msg_detailed_info_status(msg_id: i64, answer_msg_id: i64, bytes: i32, status: i32) -> Vec<u8> {
+    let mut writer = Writer::new();
+    writer.write_u32(ids::MSG_DETAILED_INFO);
+    writer.write_i64(msg_id);
+    writer.write_i64(answer_msg_id);
+    writer.write_i32(bytes);
+    writer.write_i32(status);
+    writer.into_inner()
+}
+
+pub fn container(messages: &[(i64, i32, Vec<u8>)]) -> Vec<u8> {
+    let refs: Vec<ContainerMessage<'_>> = messages
+        .iter()
+        .map(|(msg_id, seqno, body)| ContainerMessage {
+            msg_id: *msg_id,
+            seqno: *seqno,
+            body,
+        })
+        .collect();
+    let mut writer = Writer::new();
+    write_container(&mut writer, &refs);
+    writer.into_inner()
+}
+
+pub fn gzip_packed(body: &[u8]) -> Vec<u8> {
+    let mut writer = Writer::new();
+    writer.write_u32(ids::GZIP_PACKED);
+    writer.write_bytes(&gzip(body));
+    writer.into_inner()
+}
+
+pub fn rpc_answer(req_msg_id: i64, constructor: u32, payload: &[u8]) -> Vec<u8> {
+    rpc_result(req_msg_id, &update(constructor, payload))
+}
+
+pub fn rpc_error_raw(req_msg_id: i64, code: i32, message: &[u8]) -> Vec<u8> {
+    let mut inner = Writer::new();
+    inner.write_u32(ids::RPC_ERROR);
+    inner.write_i32(code);
+    inner.write_bytes(message);
+    rpc_result(req_msg_id, inner.as_slice())
+}
+
+pub fn ping_id_of(message: &ClientMessage) -> Option<i64> {
+    match message.constructor() {
+        ids::PING | ids::PING_DELAY_DISCONNECT => Some(i64::from_le_bytes(message.body[4..12].try_into().ok()?)),
+        _ => None,
+    }
+}

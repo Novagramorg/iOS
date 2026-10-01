@@ -5,6 +5,8 @@ pub const BOOL_FALSE: u32 = 0xbc799737;
 pub const RES_PQ: u32 = 0x05162463;
 pub const P_Q_INNER_DATA_DC: u32 = 0xa9f55f95;
 pub const P_Q_INNER_DATA_TEMP_DC: u32 = 0x56fddf88;
+pub const P_Q_INNER_DATA: u32 = 0x83c95aec;
+pub const P_Q_INNER_DATA_TEMP: u32 = 0x3c6a84d4;
 pub const SERVER_DH_PARAMS_OK: u32 = 0xd0e8075c;
 pub const SERVER_DH_PARAMS_FAIL: u32 = 0x79cb045d;
 pub const SERVER_DH_INNER_DATA: u32 = 0xb5890dba;
@@ -15,6 +17,7 @@ pub const DH_GEN_FAIL: u32 = 0xa69dae02;
 pub const BIND_AUTH_KEY_INNER: u32 = 0x75a3f765;
 
 pub const REQ_PQ_MULTI: u32 = 0xbe7e8ef1;
+pub const REQ_PQ: u32 = 0x60469778;
 pub const REQ_DH_PARAMS: u32 = 0xd712e4be;
 pub const SET_CLIENT_DH_PARAMS: u32 = 0xf5045f1f;
 
@@ -36,10 +39,12 @@ pub const PONG: u32 = 0x347773c5;
 pub const DESTROY_SESSION: u32 = 0xe7512126;
 pub const DESTROY_SESSION_OK: u32 = 0xe22045fc;
 pub const DESTROY_SESSION_NONE: u32 = 0x62d350c9;
+pub const DESTROY_SESSIONS_RES: u32 = 0xfb95abcd;
 
 pub const NEW_SESSION_CREATED: u32 = 0x9ec20908;
 pub const MSG_CONTAINER: u32 = 0x73f1f8dc;
 pub const MSG_COPY: u32 = 0xe06046b2;
+pub const MESSAGE: u32 = 0x5bb8e511;
 pub const GZIP_PACKED: u32 = 0x3072cfa1;
 
 pub const MSGS_ACK: u32 = 0x62d6b459;

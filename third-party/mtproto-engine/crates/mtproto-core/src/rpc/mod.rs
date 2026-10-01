@@ -9,12 +9,20 @@ pub use wrap::{
 
 use crate::crypto::SecureRandom;
 use crate::msg_id::msg_id_time;
-use crate::session::{CancelOutcome, Now, QueryId, QueryOptions, ServerSalt, Session, SessionError, SessionEvent, Transmit};
+use crate::session::{
+    CancelOutcome, Now, QueryId, QueryOptions, ServerSalt, Session, SessionError, SessionEvent, Transmit, PROTOCOL_ERROR_PREFIX,
+    RESPONSE_UNPACK_FAILED,
+};
 
 pub const SERVER_ERROR_RETRY_DELAY: f64 = 2.0;
 pub const SERVER_ERROR_MAX_RETRY_DELAY: f64 = 16.0;
 pub const LARGE_RESPONSE_THRESHOLD: u32 = 512 * 1024;
 pub const MAX_CONNECTION_NOT_INITED_RETRIES: u32 = 5;
+pub const MIN_FLOOD_WAIT_SECONDS: i64 = 1;
+pub const MAX_FLOOD_WAIT_SECONDS: i64 = 14 * 24 * 60 * 60;
+pub const TEMPORARY_KEY_RETRY_DELAY: f64 = 1.0;
+pub const TEMPORARY_KEY_MAX_RETRY_DELAY: f64 = 30.0;
+pub const TEMPORARY_KEY_REPORT_INTERVAL: f64 = 30.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct RequestId(pub u64);
@@ -126,6 +134,8 @@ struct RequestState {
     flood_wait_seconds: i64,
     flood_wait_text: Option<String>,
     pending_decision: Option<PendingDecision>,
+    rejected_key: Option<u64>,
+    temporary_key_rejections: u32,
 }
 
 #[derive(Debug, Clone)]
@@ -145,6 +155,7 @@ pub struct RpcClient {
     order: VecDeque<RequestId>,
     events: VecDeque<RpcEvent>,
     auth_token_ready: bool,
+    temporary_key_reported: Option<(u64, f64)>,
 }
 
 impl RpcClient {
@@ -158,6 +169,7 @@ impl RpcClient {
             order: VecDeque::new(),
             events: VecDeque::new(),
             auth_token_ready: true,
+            temporary_key_reported: None,
         }
     }
 
@@ -256,6 +268,8 @@ impl RpcClient {
                 flood_wait_seconds: 0,
                 flood_wait_text: None,
                 pending_decision: None,
+                rejected_key: None,
+                temporary_key_rejections: 0,
             },
         );
         self.order.push_back(id);
@@ -332,7 +346,8 @@ impl RpcClient {
         if state.in_session || state.waiting_for_token || state.pending_verification || state.pending_decision.is_some() {
             return false;
         }
-        if state.not_before > now.mono {
+        let key_replaced = state.rejected_key.is_some_and(|key| key != self.session.auth_key_id());
+        if state.not_before > now.mono && !key_replaced {
             return false;
         }
         if let Some(dependency) = state.waiting_for_dependency {
@@ -372,6 +387,7 @@ impl RpcClient {
             );
             state.wrapped_with_init = initialize;
             state.in_session = true;
+            state.rejected_key = None;
             state.sent_at_unix = now.unix;
             let options = QueryOptions {
                 quick_ack: state.request.flags.quick_ack,
@@ -437,7 +453,7 @@ impl RpcClient {
                 }
                 self.events.push_back(RpcEvent::Update { body });
             }
-            SessionEvent::ServerSessionReset { .. } | SessionEvent::LocalSessionReset { .. } => {
+            SessionEvent::ServerSessionReset { .. } | SessionEvent::LocalSessionReset { .. } | SessionEvent::UpdatesLost => {
                 self.events.push_back(RpcEvent::UpdatesReset);
             }
             SessionEvent::TimeDifferenceUpdated { difference, .. } => {
@@ -457,34 +473,45 @@ impl RpcClient {
             return;
         };
         let flags = state.request.flags;
+        let dependency = state.request.invoke_after;
         let is_main = self.role == SessionRole::Main;
 
+        if is_local_terminal_error(&message) {
+            self.surface(id, code, message, response_time, now);
+            return;
+        }
         if code == 401 && message == "AUTH_KEY_PERM_EMPTY" {
-            self.events.push_back(RpcEvent::TemporaryKeyRejected);
-            self.requeue(id, 0.0, now);
+            self.park_for_temporary_key(id, now);
             return;
         }
         if code == 401 && !message.contains("SESSION_PASSWORD_NEEDED") {
             match self.role {
                 SessionRole::Main => self.events.push_back(RpcEvent::AuthorizationRequired { message: message.clone() }),
-                SessionRole::Worker { requires_auth_token: true }
-                    if message.contains("SESSION_REVOKED") || message.contains("AUTH_KEY_UNREGISTERED") =>
-                {
-                    self.auth_token_ready = false;
+                SessionRole::Worker { requires_auth_token: true } => {
                     self.events.push_back(RpcEvent::AuthTokenRequired);
-                    if let Some(state) = self.requests.get_mut(&id) {
-                        state.waiting_for_token = true;
-                        state.in_session = false;
+                    if message.contains("SESSION_REVOKED") || message.contains("AUTH_KEY_UNREGISTERED") {
+                        self.auth_token_ready = false;
+                        if let Some(state) = self.requests.get_mut(&id) {
+                            state.waiting_for_token = true;
+                            state.in_session = false;
+                        }
+                        return;
                     }
-                    return;
                 }
                 _ => {}
             }
         }
-        if code == 500 || code == -500 || code == -503 {
+        if (message == "MSG_WAIT_TIMEOUT" || message == "MSG_WAIT_FAILED") && dependency.is_some() {
+            if let Some(state) = self.requests.get_mut(&id) {
+                state.waiting_for_dependency = dependency;
+            }
+            self.requeue(id, 0.0, now);
+            return;
+        }
+        if is_server_error(code) {
             let state = self.requests.get_mut(&id).expect("request exists");
             state.server_errors += 1;
-            if flags.delegate_retry_decisions && message != "MSG_WAIT_FAILED" {
+            if flags.delegate_retry_decisions {
                 let server_errors = state.server_errors;
                 let flood_wait_seconds = state.flood_wait_seconds;
                 let flood_wait_text = state.flood_wait_text.clone();
@@ -505,33 +532,19 @@ impl RpcClient {
                 });
                 return;
             }
-            if flags.retry_server_errors && message != "MSG_WAIT_FAILED" {
+            if flags.retry_server_errors {
                 let delay = (SERVER_ERROR_RETRY_DELAY * f64::from(1u32 << (state.server_errors - 1).min(3)))
                     .min(SERVER_ERROR_MAX_RETRY_DELAY);
                 self.requeue(id, delay, now);
                 return;
             }
-            if message == "MSG_WAIT_FAILED" {
-                if let Some(state) = self.requests.get_mut(&id) {
-                    state.request.invoke_after = None;
-                }
-                self.requeue(id, 0.0, now);
-                return;
-            }
-        }
-        if code == 400 && message == "MSG_WAIT_TIMEOUT" {
-            let dependency = self.requests.get(&id).and_then(|state| state.request.invoke_after);
-            if let Some(state) = self.requests.get_mut(&id) {
-                state.waiting_for_dependency = dependency;
-            }
-            self.requeue(id, 0.0, now);
-            return;
         }
         let is_flood = (code == 420 && !message.contains("FROZEN_METHOD_INVALID"))
             || message.contains("FLOOD_WAIT_")
             || message.contains("FLOOD_PREMIUM_WAIT_");
         if is_flood {
             if let Some(seconds) = flood_wait_seconds(&message) {
+                let delay = seconds.clamp(MIN_FLOOD_WAIT_SECONDS, MAX_FLOOD_WAIT_SECONDS) as f64;
                 if flags.delegate_retry_decisions {
                     let state = self.requests.get_mut(&id).expect("request exists");
                     state.flood_wait_seconds = seconds;
@@ -540,7 +553,7 @@ impl RpcClient {
                     state.pending_decision = Some(PendingDecision {
                         code,
                         message: message.clone(),
-                        delay: seconds as f64,
+                        delay,
                         response_time,
                     });
                     let server_errors = state.server_errors;
@@ -561,7 +574,7 @@ impl RpcClient {
                     });
                 }
                 if flags.automatic_flood_wait {
-                    self.requeue(id, seconds as f64, now);
+                    self.requeue(id, delay, now);
                     return;
                 }
             }
@@ -595,6 +608,10 @@ impl RpcClient {
         if code == 406 && is_main {
             self.events.push_back(RpcEvent::SoftAuthReset { message: message.clone() });
         }
+        self.surface(id, code, message, response_time, now);
+    }
+
+    fn surface(&mut self, id: RequestId, code: i32, message: String, response_time: f64, now: Now) {
         if let Some(state) = self.finish(id) {
             self.events.push_back(RpcEvent::Failed {
                 id,
@@ -603,6 +620,26 @@ impl RpcClient {
                 response_time,
                 duration: (now.unix - state.sent_at_unix).max(0.0),
             });
+        }
+    }
+
+    fn park_for_temporary_key(&mut self, id: RequestId, now: Now) {
+        let key = self.session.auth_key_id();
+        let report = match self.temporary_key_reported {
+            Some((reported, at)) => reported != key || now.mono - at >= TEMPORARY_KEY_REPORT_INTERVAL,
+            None => true,
+        };
+        if report {
+            self.temporary_key_reported = Some((key, now.mono));
+            self.events.push_back(RpcEvent::TemporaryKeyRejected);
+        }
+        if let Some(state) = self.requests.get_mut(&id) {
+            let delay = (TEMPORARY_KEY_RETRY_DELAY * f64::from(1u32 << state.temporary_key_rejections.min(5)))
+                .min(TEMPORARY_KEY_MAX_RETRY_DELAY);
+            state.temporary_key_rejections += 1;
+            state.rejected_key = Some(key);
+            state.in_session = false;
+            state.not_before = now.mono + delay;
         }
     }
 
@@ -643,6 +680,15 @@ impl RpcClient {
         self.pump_session_events(now);
     }
 
+    pub fn connection_rejected(&mut self, now: Now) {
+        self.session.connection_rejected(now);
+        self.pump_session_events(now);
+    }
+
+    pub fn note_bytes_received(&mut self, now: Now) {
+        self.session.note_bytes_received(now);
+    }
+
     pub fn reset_session(&mut self, now: Now, rng: &mut impl SecureRandom) {
         self.session.reset(rng);
         self.pump_session_events(now);
@@ -660,6 +706,7 @@ impl RpcClient {
         for state in self.requests.values() {
             if !state.in_session
                 && state.not_before > now.mono
+                && state.rejected_key.is_none_or(|key| key == self.session.auth_key_id())
                 && !state.waiting_for_token
                 && !state.pending_verification
                 && state.pending_decision.is_none()
@@ -702,6 +749,14 @@ impl RpcClient {
     pub fn drain_events(&mut self) -> Vec<RpcEvent> {
         self.events.drain(..).collect()
     }
+}
+
+fn is_server_error(code: i32) -> bool {
+    code == 500 || code < 0
+}
+
+fn is_local_terminal_error(message: &str) -> bool {
+    message.starts_with(RESPONSE_UNPACK_FAILED) || message.starts_with(PROTOCOL_ERROR_PREFIX)
 }
 
 fn is_updates_too_long(body: &[u8]) -> bool {

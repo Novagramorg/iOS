@@ -134,9 +134,9 @@ pub fn decrypt_message(auth_key: &AuthKey, packet: &[u8], side: Side) -> Result<
     if packet.len() < ENCRYPTED_HEADER_LEN + INNER_HEADER_LEN + MIN_PADDING {
         return Err(MessageError::TooShort(packet.len()));
     }
-    let encrypted_len = packet.len() - ENCRYPTED_HEADER_LEN;
-    if encrypted_len % 16 != 0 {
-        return Err(MessageError::Unaligned(encrypted_len));
+    let encrypted_len = (packet.len() - ENCRYPTED_HEADER_LEN) / 16 * 16;
+    if encrypted_len < INNER_HEADER_LEN + MIN_PADDING {
+        return Err(MessageError::TooShort(packet.len()));
     }
     let found = read_auth_key_id(packet).expect("length checked");
     if found != auth_key.id() {
@@ -147,7 +147,7 @@ pub fn decrypt_message(auth_key: &AuthKey, packet: &[u8], side: Side) -> Result<
     }
     let msg_key: [u8; 16] = packet[8..24].try_into().expect("16 bytes");
     let material = message_key_v2(auth_key.bytes(), &msg_key, side);
-    let mut plaintext = packet[ENCRYPTED_HEADER_LEN..].to_vec();
+    let mut plaintext = packet[ENCRYPTED_HEADER_LEN..ENCRYPTED_HEADER_LEN + encrypted_len].to_vec();
     aes_ige_decrypt(&material.key, &material.iv, &mut plaintext).expect("aligned");
 
     let x = match side {
@@ -282,7 +282,7 @@ pub fn decode_plain_message(packet: &[u8]) -> Result<PlainMessage<'_>, MessageEr
     }
     let msg_id = i64::from_le_bytes(packet[8..16].try_into().expect("8"));
     let length = i32::from_le_bytes(packet[16..20].try_into().expect("4")) as i64;
-    if length < 0 || length as usize != packet.len() - 20 {
+    if length < 0 || length as usize > packet.len() - 20 {
         return Err(MessageError::InvalidLength {
             length,
             available: packet.len() - 20,
@@ -290,7 +290,7 @@ pub fn decode_plain_message(packet: &[u8]) -> Result<PlainMessage<'_>, MessageEr
     }
     Ok(PlainMessage {
         msg_id,
-        body: &packet[20..],
+        body: &packet[20..20 + length as usize],
     })
 }
 
@@ -357,7 +357,73 @@ mod tests {
     fn rejects_bad_shapes() {
         assert_eq!(decrypt_message(&key(1), &[0u8; 10], Side::Server), Err(MessageError::TooShort(10)));
         assert_eq!(decrypt_message(&key(1), &[0u8; 67], Side::Server), Err(MessageError::TooShort(67)));
-        assert_eq!(decrypt_message(&key(1), &[0u8; 24 + 50 + 1], Side::Server), Err(MessageError::Unaligned(51)));
+        assert!(matches!(
+            decrypt_message(&key(1), &[0u8; 24 + 50 + 1], Side::Server),
+            Err(MessageError::AuthKeyMismatch { .. })
+        ));
+    }
+
+    #[test]
+    fn trailing_transport_junk_is_ignored_like_tdlib() {
+        let mut rng = XorShiftRandom::new(11);
+        let body = [7u8; 40];
+        let mut packet = encrypt_message(&key(1), &header(), &body, Side::Server, PaddingPolicy::default(), &mut rng).data;
+        for junk in 1..16 {
+            let mut padded = packet.clone();
+            padded.extend(std::iter::repeat_n(0xa5u8, junk));
+            let decrypted = decrypt_message(&key(1), &padded, Side::Server).unwrap();
+            assert_eq!(decrypted.body(), &body[..]);
+        }
+        packet.truncate(packet.len() - 1);
+        assert_eq!(decrypt_message(&key(1), &packet, Side::Server), Err(MessageError::MsgKeyMismatch));
+    }
+
+    fn forge(auth_key: &AuthKey, declared_length: i32, payload_len: usize, rng: &mut XorShiftRandom) -> Vec<u8> {
+        let mut plaintext = Vec::new();
+        plaintext.extend_from_slice(&header().salt.to_le_bytes());
+        plaintext.extend_from_slice(&header().session_id.to_le_bytes());
+        plaintext.extend_from_slice(&header().msg_id.to_le_bytes());
+        plaintext.extend_from_slice(&header().seq_no.to_le_bytes());
+        plaintext.extend_from_slice(&declared_length.to_le_bytes());
+        plaintext.resize(32 + payload_len, 0);
+        rng.fill(&mut plaintext[32..]);
+        let large = sha256_parts(&[&auth_key.bytes()[96..128], &plaintext]);
+        let msg_key: [u8; 16] = large[8..24].try_into().unwrap();
+        let material = message_key_v2(auth_key.bytes(), &msg_key, Side::Server);
+        aes_ige_encrypt(&material.key, &material.iv, &mut plaintext).unwrap();
+        let mut packet = auth_key.id().to_le_bytes().to_vec();
+        packet.extend_from_slice(&msg_key);
+        packet.extend_from_slice(&plaintext);
+        packet
+    }
+
+    #[test]
+    fn padding_bounds_are_enforced_after_authentication() {
+        let auth_key = key(5);
+        let mut rng = XorShiftRandom::new(12);
+        assert_eq!(decrypt_message(&auth_key, &forge(&auth_key, 24, 32, &mut rng), Side::Server), Err(MessageError::InvalidPadding(8)));
+        assert!(decrypt_message(&auth_key, &forge(&auth_key, 20, 32, &mut rng), Side::Server).is_ok());
+        assert_eq!(
+            decrypt_message(&auth_key, &forge(&auth_key, 4, 1056, &mut rng), Side::Server),
+            Err(MessageError::InvalidPadding(1052))
+        );
+        assert!(decrypt_message(&auth_key, &forge(&auth_key, 16, 1040, &mut rng), Side::Server).is_ok());
+        assert_eq!(
+            decrypt_message(&auth_key, &forge(&auth_key, 12, 1040, &mut rng), Side::Server),
+            Err(MessageError::InvalidPadding(1028))
+        );
+        assert!(matches!(
+            decrypt_message(&auth_key, &forge(&auth_key, -16, 64, &mut rng), Side::Server),
+            Err(MessageError::InvalidLength { .. })
+        ));
+        assert!(matches!(
+            decrypt_message(&auth_key, &forge(&auth_key, 18, 64, &mut rng), Side::Server),
+            Err(MessageError::InvalidLength { .. })
+        ));
+        assert!(matches!(
+            decrypt_message(&auth_key, &forge(&auth_key, 68, 64, &mut rng), Side::Server),
+            Err(MessageError::InvalidLength { .. })
+        ));
     }
 
     #[test]
@@ -425,9 +491,15 @@ mod tests {
         let mut wrong_len = encoded.clone();
         wrong_len[16] = 5;
         assert!(decode_plain_message(&wrong_len).is_err());
-        let mut keyed = encoded;
+        let mut keyed = encoded.clone();
         keyed[0] = 1;
         assert_eq!(decode_plain_message(&keyed), Err(MessageError::NotPlain));
+        let mut trailing = encoded;
+        trailing.extend_from_slice(&[9u8; 7]);
+        assert_eq!(decode_plain_message(&trailing).unwrap().body, b"abcd");
+        let mut negative = trailing.clone();
+        negative[16..20].copy_from_slice(&(-4i32).to_le_bytes());
+        assert!(matches!(decode_plain_message(&negative), Err(MessageError::InvalidLength { .. })));
     }
 
     proptest! {

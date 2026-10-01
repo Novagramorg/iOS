@@ -23,6 +23,22 @@ pub const STATE_REQUEST_RETRY: f64 = 20.0;
 pub const DEFAULT_CONTAINER_BYTES: usize = 1 << 15;
 pub const DEFAULT_CONTAINER_QUERIES: usize = 1000;
 pub const MAX_RECENT_QUICK_ACKS: usize = 256;
+pub const MAX_QUEUED_ACKS: usize = 2 * MAX_IDS_PER_SERVICE_MESSAGE;
+pub const MAX_QUEUED_SERVICE_REPLIES: usize = 64;
+pub const MAX_PENDING_PINGS: usize = 16;
+pub const MAX_TRACKED_SERVICE_CONTAINERS: usize = 64;
+pub const RECENT_SENT_CAPACITY: usize = 1024;
+pub const MAX_PROTOCOL_STRIKES: u32 = 3;
+pub const MAX_ANSWER_REQUESTS: u32 = 3;
+pub const MAX_NESTING_DEPTH: usize = 8;
+pub const MAX_UNPACKED_PER_PACKET: usize = 64 * 1024 * 1024;
+pub const CLOCK_JUMP_THRESHOLD: f64 = 1.0;
+pub const RESPONSE_TIME_SKEW: i64 = 15i64 << 32;
+pub const UNKNOWN_QUERIES_STUCK_AFTER: f64 = 60.0;
+pub const DROPPED_ANSWER_COUNTED_SIZE: usize = 16 * 1024;
+pub const DROPPED_ANSWER_LIMIT: usize = 256 * 1024;
+pub const RESPONSE_UNPACK_FAILED: &str = "RESPONSE_UNPACK_FAILED";
+pub const PROTOCOL_ERROR_PREFIX: &str = "PROTOCOL_ERROR_BAD_MSG_";
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Now {
@@ -46,6 +62,7 @@ pub struct SessionConfig {
     pub max_container_bytes: usize,
     pub max_container_queries: usize,
     pub use_ping_delay_disconnect: bool,
+    pub max_unpacked_bytes: usize,
 }
 
 impl Default for SessionConfig {
@@ -56,6 +73,7 @@ impl Default for SessionConfig {
             max_container_bytes: DEFAULT_CONTAINER_BYTES,
             max_container_queries: DEFAULT_CONTAINER_QUERIES,
             use_ping_delay_disconnect: true,
+            max_unpacked_bytes: MAX_UNPACKED_PER_PACKET,
         }
     }
 }
@@ -66,6 +84,7 @@ pub enum SessionEvent {
     Error { id: QueryId, code: i32, message: String, response_msg_id: i64 },
     Acknowledged { id: QueryId },
     Update { body: Vec<u8>, msg_id: i64 },
+    UpdatesLost,
     ServerSessionReset { unique_id: i64, first_msg_id: i64 },
     LocalSessionReset { previous_session_id: i64 },
     TimeDifferenceUpdated { difference: f64, forced: bool },
@@ -136,16 +155,71 @@ struct Query {
     msg_id: i64,
     seq_no: i32,
     container_id: i64,
+    invoke_after_msg_id: i64,
     acknowledged: bool,
     ack_reported: bool,
     sent_at: f64,
     connection_epoch: u64,
+    protocol_strikes: u32,
 }
 
 #[derive(Debug, Clone)]
 enum ServiceRequest {
-    StateRequest { msg_ids: Vec<i64> },
-    ResendRequest { msg_ids: Vec<i64> },
+    StateRequest { msg_ids: Vec<i64>, sent_at: f64 },
+    ResendRequest { msg_ids: Vec<i64>, sent_at: f64 },
+}
+
+impl ServiceRequest {
+    fn sent_at(&self) -> f64 {
+        match self {
+            ServiceRequest::StateRequest { sent_at, .. } | ServiceRequest::ResendRequest { sent_at, .. } => *sent_at,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct AwaitedAnswer {
+    query: Option<QueryId>,
+    requests: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Mode {
+    Process,
+    Replay,
+    AckOnly,
+}
+
+impl Mode {
+    fn combine(self, child: Mode) -> Mode {
+        match (self, child) {
+            (_, Mode::AckOnly) | (Mode::AckOnly, _) => Mode::AckOnly,
+            (Mode::Replay, _) | (_, Mode::Replay) => Mode::Replay,
+            _ => Mode::Process,
+        }
+    }
+}
+
+struct PacketContext {
+    mode: Mode,
+    budget: usize,
+    deferred_resends: Vec<(QueryId, i64)>,
+    updates_lost: bool,
+    unknown_queries_stuck: bool,
+    structure_error: Option<TlError>,
+}
+
+impl PacketContext {
+    fn new(mode: Mode, budget: usize) -> Self {
+        Self {
+            mode,
+            budget,
+            deferred_resends: Vec::new(),
+            updates_lost: false,
+            unknown_queries_stuck: false,
+            structure_error: None,
+        }
+    }
 }
 
 pub struct Session {
@@ -153,6 +227,8 @@ pub struct Session {
     auth_key: AuthKey,
     session_id: i64,
     salts: SaltState,
+    server_offset: f64,
+    wall_offset: f64,
     time_difference: f64,
     time_synchronized: bool,
     last_msg_id: i64,
@@ -169,8 +245,14 @@ pub struct Session {
     to_state_request: Vec<i64>,
     to_drop_answer: Vec<i64>,
     to_state_info_reply: Vec<(i64, Vec<u8>)>,
+    to_pong: Vec<(i64, i64)>,
+    to_retransmit: Vec<QueryId>,
     service_requests: HashMap<i64, ServiceRequest>,
-    service_containers: HashMap<i64, Vec<i64>>,
+    service_containers: VecDeque<(i64, Vec<i64>)>,
+    future_salts_requests: VecDeque<i64>,
+    awaited_answers: HashMap<i64, AwaitedAnswer>,
+    recent_sent: VecDeque<i64>,
+    recent_unique_ids: VecDeque<i64>,
     force_send_at: Option<f64>,
 
     received: DuplicateChecker,
@@ -180,6 +262,7 @@ pub struct Session {
     connection_epoch: u64,
     connected_at: f64,
     online: bool,
+    was_busy: bool,
     random_delay: f64,
     rtt: f64,
     last_read_at: f64,
@@ -215,6 +298,8 @@ impl Session {
             auth_key,
             session_id: rng.next_u64() as i64,
             salts: SaltState::from_salts(salts, server_time),
+            server_offset: server_time - now.mono,
+            wall_offset: now.unix - now.mono,
             time_difference,
             time_synchronized: false,
             last_msg_id: 0,
@@ -229,8 +314,14 @@ impl Session {
             to_state_request: Vec::new(),
             to_drop_answer: Vec::new(),
             to_state_info_reply: Vec::new(),
+            to_pong: Vec::new(),
+            to_retransmit: Vec::new(),
             service_requests: HashMap::new(),
-            service_containers: HashMap::new(),
+            service_containers: VecDeque::new(),
+            future_salts_requests: VecDeque::new(),
+            awaited_answers: HashMap::new(),
+            recent_sent: VecDeque::new(),
+            recent_unique_ids: VecDeque::new(),
             force_send_at: None,
             received: DuplicateChecker::new(1000),
             updates: DuplicateChecker::new(1000),
@@ -238,6 +329,7 @@ impl Session {
             connection_epoch: 0,
             connected_at: now.mono,
             online: false,
+            was_busy: false,
             random_delay,
             rtt: 0.0,
             last_read_at: now.mono,
@@ -300,6 +392,13 @@ impl Session {
         self.has_unknown_queries() || !self.service_requests.is_empty() || !self.to_resend_answer.is_empty()
     }
 
+    pub fn is_awaiting_responses(&self) -> bool {
+        self.has_unanswered_queries()
+            || !self.service_requests.is_empty()
+            || !self.to_state_request.is_empty()
+            || !self.to_resend_answer.is_empty()
+    }
+
     pub fn query_msg_id(&self, id: QueryId) -> Option<i64> {
         self.queries.get(&id).filter(|query| query.state != QueryState::Pending).map(|query| query.msg_id)
     }
@@ -325,6 +424,7 @@ impl Session {
 
     pub fn set_time_difference(&mut self, difference: f64) {
         self.time_difference = difference;
+        self.server_offset = difference + self.wall_offset;
     }
 
     pub fn replace_auth_key(&mut self, auth_key: AuthKey, salts: &[ServerSalt], now: Now) {
@@ -346,16 +446,36 @@ impl Session {
         self.need_destroy_auth_key = true;
     }
 
+    pub fn note_bytes_received(&mut self, now: Now) {
+        if self.connected {
+            self.last_read_at = self.last_read_at.max(now.mono);
+        }
+    }
+
     fn server_time(&self, now: Now) -> f64 {
-        now.unix + self.time_difference
+        now.mono + self.server_offset
+    }
+
+    fn sync_wall_clock(&mut self, now: Now) {
+        let wall_offset = now.unix - now.mono;
+        if (wall_offset - self.wall_offset).abs() > CLOCK_JUMP_THRESHOLD {
+            self.wall_offset = wall_offset;
+            let difference = self.server_time(now) - now.unix;
+            self.time_difference = difference;
+            self.events.push_back(SessionEvent::TimeDifferenceUpdated { difference, forced: true });
+        }
     }
 
     fn rtt_estimate(&self) -> f64 {
         (self.rtt * 1.5 + 1.0).max(2.0)
     }
 
+    fn uses_fast_liveness(&self) -> bool {
+        self.online || self.was_busy
+    }
+
     pub fn read_disconnect_delay(&self) -> f64 {
-        if self.online {
+        if self.uses_fast_liveness() {
             self.rtt_estimate() * 3.5
         } else {
             135.0 + self.random_delay
@@ -371,7 +491,7 @@ impl Session {
     }
 
     fn ping_may_delay(&self) -> f64 {
-        if self.online {
+        if self.uses_fast_liveness() {
             self.rtt_estimate() * 0.5
         } else {
             30.0 + self.random_delay
@@ -379,11 +499,23 @@ impl Session {
     }
 
     fn ping_must_delay(&self) -> f64 {
-        if self.online {
+        if self.uses_fast_liveness() {
             self.rtt_estimate()
         } else {
             60.0 + self.random_delay
         }
+    }
+
+    fn liveness_at(&self) -> f64 {
+        self.last_pong_at.max(self.last_read_at)
+    }
+
+    fn refresh_busy(&mut self, now: Now) {
+        let busy = self.is_awaiting_responses();
+        if busy && !self.was_busy {
+            self.last_read_at = self.last_read_at.max(now.mono);
+        }
+        self.was_busy = busy;
     }
 
     fn next_msg_id(&mut self, now: Now, rng: &mut impl SecureRandom) -> i64 {
@@ -391,6 +523,9 @@ impl Session {
         let random = rng.next_u32();
         let base = msg_id_for_time(server_time) ^ (random & ((1 << 22) - 1)) as i64;
         let mut id = base & !3;
+        if id & 0xffff_ffff == 0 {
+            id += 4;
+        }
         if id <= self.last_msg_id {
             id = self.last_msg_id + 8 * (((random >> 22) & 1023) as i64 + 1);
         }
@@ -416,7 +551,7 @@ impl Session {
     }
 
     pub fn send(&mut self, id: QueryId, body: Vec<u8>, options: QueryOptions, now: Now) {
-        debug_assert!(body.len() % 4 == 0, "query body must be 4-byte aligned");
+        debug_assert!(body.len().is_multiple_of(4), "query body must be 4-byte aligned");
         if self.queries.contains_key(&id) {
             return;
         }
@@ -429,10 +564,12 @@ impl Session {
                 msg_id: 0,
                 seq_no: 0,
                 container_id: 0,
+                invoke_after_msg_id: 0,
                 acknowledged: false,
                 ack_reported: false,
                 sent_at: 0.0,
                 connection_epoch: 0,
+                protocol_strikes: 0,
             },
         );
         self.pending.push_back(id);
@@ -443,6 +580,7 @@ impl Session {
         let Some(query) = self.queries.remove(&id) else {
             return CancelOutcome::NotFound;
         };
+        self.to_retransmit.retain(|other| *other != id);
         match query.state {
             QueryState::Pending => {
                 self.pending.retain(|pending| *pending != id);
@@ -450,17 +588,22 @@ impl Session {
             }
             QueryState::Sent | QueryState::Unknown => {
                 self.by_msg_id.remove(&query.msg_id);
+                self.detach_from_container(query.container_id, query.msg_id);
+                self.refresh_unknown_tracking();
                 CancelOutcome::RemovedInFlight { msg_id: query.msg_id }
             }
         }
     }
 
     pub fn drop_answer(&mut self, msg_id: i64, now: Now) {
-        self.to_drop_answer.push(msg_id);
+        if !self.to_drop_answer.contains(&msg_id) {
+            self.to_drop_answer.push(msg_id);
+        }
         self.send_before(now.mono);
     }
 
     pub fn connection_opened(&mut self, now: Now) {
+        self.sync_wall_clock(now);
         self.connected = true;
         self.connection_epoch += 1;
         self.connected_at = now.mono;
@@ -482,9 +625,17 @@ impl Session {
             self.unknown_since.get_or_insert(now.mono);
             self.send_before(now.mono);
         }
-        if !self.pending.is_empty() || !self.to_ack.is_empty() {
+        let awaited: Vec<i64> = self.awaited_answers.keys().copied().collect();
+        for answer in awaited {
+            if !self.to_resend_answer.contains(&answer) {
+                self.to_resend_answer.push(answer);
+            }
+        }
+        if !self.pending.is_empty() || !self.to_ack.is_empty() || !self.to_resend_answer.is_empty() {
             self.send_before(now.mono);
         }
+        self.was_busy = false;
+        self.refresh_busy(now);
     }
 
     pub fn connection_closed(&mut self) {
@@ -501,8 +652,32 @@ impl Session {
         self.to_state_request.clear();
         self.service_requests.clear();
         self.service_containers.clear();
+        self.future_salts_requests.clear();
+        self.last_future_salts_at = None;
         self.quick_acks.clear();
         self.pending_pings.clear();
+        self.to_pong.clear();
+        self.to_retransmit.clear();
+        self.to_resend_answer.clear();
+    }
+
+    pub fn connection_rejected(&mut self, now: Now) {
+        if !self.connected {
+            return;
+        }
+        let epoch = self.connection_epoch;
+        let mut rejected: Vec<(i64, QueryId)> = self
+            .queries
+            .iter()
+            .filter(|(_, query)| query.state == QueryState::Sent && !query.acknowledged && query.connection_epoch == epoch)
+            .map(|(id, query)| (query.msg_id, *id))
+            .collect();
+        rejected.sort_unstable();
+        self.connection_closed();
+        for (_, id) in rejected {
+            self.resend_query(id, now);
+        }
+        self.refresh_unknown_tracking();
     }
 
     pub fn reset(&mut self, rng: &mut impl SecureRandom) {
@@ -518,8 +693,14 @@ impl Session {
         self.to_state_request.clear();
         self.to_drop_answer.clear();
         self.to_state_info_reply.clear();
+        self.to_pong.clear();
+        self.to_retransmit.clear();
         self.service_requests.clear();
         self.service_containers.clear();
+        self.future_salts_requests.clear();
+        self.awaited_answers.clear();
+        self.recent_sent.clear();
+        self.recent_unique_ids.clear();
         self.pending_pings.clear();
         self.received.clear();
         self.updates.clear();
@@ -527,6 +708,7 @@ impl Session {
         self.last_ping_at = None;
         self.last_ping_msg_id = 0;
         self.last_ping_container_id = 0;
+        self.last_future_salts_at = None;
         let mut resend: Vec<(i64, QueryId)> = self
             .queries
             .iter()
@@ -540,41 +722,80 @@ impl Session {
         self.events.push_back(SessionEvent::LocalSessionReset { previous_session_id });
     }
 
-    fn requeue_front(&mut self, id: QueryId) {
-        if let Some(query) = self.queries.get_mut(&id) {
-            if query.state != QueryState::Pending {
-                self.by_msg_id.remove(&query.msg_id);
-                query.state = QueryState::Pending;
-                query.msg_id = 0;
-                query.container_id = 0;
-                query.acknowledged = false;
-                self.pending.push_front(id);
+    fn detach_from_container(&mut self, container_id: i64, msg_id: i64) {
+        if container_id == 0 {
+            return;
+        }
+        if let Some(children) = self.containers.get_mut(&container_id) {
+            children.retain(|child| *child != msg_id);
+            if children.is_empty() {
+                self.containers.remove(&container_id);
             }
         }
     }
 
-    fn resend_query(&mut self, id: QueryId, now: Now) {
-        let mut position = 0;
-        if let Some(query) = self.queries.get(&id) {
-            if query.state == QueryState::Pending {
-                return;
-            }
-            let msg_id = query.msg_id;
-            position = self
-                .pending
-                .iter()
-                .position(|other| self.queries.get(other).is_some_and(|other| other.msg_id > msg_id))
-                .unwrap_or(self.pending.len());
+    fn release_query_message(&mut self, id: QueryId) -> Option<(i64, i64)> {
+        let query = self.queries.get_mut(&id)?;
+        if query.state == QueryState::Pending {
+            return None;
         }
-        if let Some(query) = self.queries.get_mut(&id) {
-            self.by_msg_id.remove(&query.msg_id);
-            query.state = QueryState::Pending;
-            query.msg_id = 0;
-            query.container_id = 0;
-            query.acknowledged = false;
+        let released = (query.msg_id, query.container_id);
+        query.state = QueryState::Pending;
+        query.msg_id = 0;
+        query.container_id = 0;
+        query.invoke_after_msg_id = 0;
+        query.acknowledged = false;
+        self.by_msg_id.remove(&released.0);
+        self.detach_from_container(released.1, released.0);
+        self.to_retransmit.retain(|other| *other != id);
+        Some(released)
+    }
+
+    fn requeue_front(&mut self, id: QueryId) {
+        if self.release_query_message(id).is_some() {
+            self.pending.push_front(id);
+        }
+    }
+
+    fn resend_query(&mut self, id: QueryId, now: Now) {
+        let Some(msg_id) = self.queries.get(&id).filter(|query| query.state != QueryState::Pending).map(|query| query.msg_id)
+        else {
+            return;
+        };
+        let position = self
+            .pending
+            .iter()
+            .position(|other| self.queries.get(other).is_some_and(|other| other.msg_id > msg_id))
+            .unwrap_or(self.pending.len());
+        if self.release_query_message(id).is_some() {
             self.pending.insert(position.min(self.pending.len()), id);
             self.send_before(now.mono);
         }
+    }
+
+    fn was_sent(&self, msg_id: i64) -> bool {
+        self.by_msg_id.contains_key(&msg_id)
+            || self.containers.contains_key(&msg_id)
+            || self.service_requests.contains_key(&msg_id)
+            || self.pending_pings.contains_key(&msg_id)
+            || self.future_salts_requests.contains(&msg_id)
+            || self.service_containers.iter().any(|(container, _)| *container == msg_id)
+            || self.recent_sent.contains(&msg_id)
+    }
+
+    fn remember_sent(&mut self, msg_id: i64) {
+        self.recent_sent.push_back(msg_id);
+        while self.recent_sent.len() > RECENT_SENT_CAPACITY {
+            self.recent_sent.pop_front();
+        }
+    }
+
+    fn affected_queries(&self, msg_id: i64) -> Vec<QueryId> {
+        let mut targets = vec![msg_id];
+        if let Some(children) = self.containers.get(&msg_id) {
+            targets.extend(children.iter().copied());
+        }
+        targets.iter().filter_map(|target| self.by_msg_id.get(target).copied()).collect()
     }
 
     fn message_failed(&mut self, msg_id: i64, now: Now) {
@@ -588,7 +809,9 @@ impl Session {
         if let Some(children) = self.containers.remove(&msg_id) {
             targets.extend(children);
         }
-        if let Some(children) = self.service_containers.remove(&msg_id) {
+        if let Some(position) = self.service_containers.iter().position(|(container, _)| *container == msg_id)
+            && let Some((_, children)) = self.service_containers.remove(position)
+        {
             targets.extend(children);
         }
         for target in targets {
@@ -597,17 +820,45 @@ impl Session {
             }
             if let Some(service) = self.service_requests.remove(&target) {
                 match service {
-                    ServiceRequest::StateRequest { msg_ids } => {
+                    ServiceRequest::StateRequest { msg_ids, .. } => {
                         self.to_state_request.extend(msg_ids);
                     }
-                    ServiceRequest::ResendRequest { msg_ids } => {
-                        self.to_resend_answer.extend(msg_ids);
+                    ServiceRequest::ResendRequest { msg_ids, .. } => {
+                        for id in msg_ids {
+                            if !self.to_resend_answer.contains(&id) {
+                                self.to_resend_answer.push(id);
+                            }
+                        }
                     }
                 }
                 self.send_before(now.mono);
             }
             if self.pending_pings.remove(&target).is_some() {
                 self.last_ping_at = None;
+            }
+            if self.future_salts_requests.contains(&target) {
+                self.last_future_salts_at = None;
+            }
+        }
+    }
+
+    fn strike_and_fail(&mut self, bad_msg_id: i64, code: i32, response_msg_id: i64) {
+        for id in self.affected_queries(bad_msg_id) {
+            let exhausted = match self.queries.get_mut(&id) {
+                Some(query) => {
+                    query.protocol_strikes += 1;
+                    query.protocol_strikes >= MAX_PROTOCOL_STRIKES
+                }
+                None => false,
+            };
+            if exhausted && let Some(msg_id) = self.query_msg_id(id) {
+                self.complete_query(id, msg_id);
+                self.events.push_back(SessionEvent::Error {
+                    id,
+                    code: 500,
+                    message: format!("{PROTOCOL_ERROR_PREFIX}{code}"),
+                    response_msg_id,
+                });
             }
         }
     }
@@ -626,6 +877,9 @@ impl Session {
 
     fn mark_acknowledged(&mut self, id: QueryId) {
         if let Some(query) = self.queries.get_mut(&id) {
+            if query.state == QueryState::Pending {
+                return;
+            }
             if query.state == QueryState::Unknown {
                 query.state = QueryState::Sent;
             }
@@ -660,6 +914,10 @@ impl Session {
         }
         if self.to_ack.last() != Some(&msg_id) {
             self.to_ack.push(msg_id);
+            if self.to_ack.len() > MAX_QUEUED_ACKS {
+                let excess = self.to_ack.len() - MAX_QUEUED_ACKS;
+                self.to_ack.drain(..excess);
+            }
             if self.to_ack.len() >= MAX_PENDING_ACKS {
                 self.send_before(now.mono);
             }
@@ -704,126 +962,211 @@ impl Session {
         if header.msg_id & 1 == 0 {
             return Err(SessionError::EvenServerMsgId(header.msg_id));
         }
+        self.sync_wall_clock(now);
         self.last_read_at = now.mono;
         self.last_pong_at = now.mono;
-        match self.received.check(header.msg_id) {
-            DuplicateCheck::New => {}
-            DuplicateCheck::Duplicate => {
-                self.schedule_ack(header.msg_id, now);
-                return Ok(());
-            }
-            DuplicateCheck::TooOld => return Err(SessionError::TooOld),
-        }
-        self.observe_server_time(header.msg_id, now);
-        if self.time_synchronized {
-            let server_time = self.server_time(now);
-            let message_time = msg_id_time(header.msg_id);
-            if message_time < server_time - MSG_ID_MAX_PAST_SECONDS || message_time > server_time + MSG_ID_MAX_FUTURE_SECONDS {
-                self.schedule_ack(header.msg_id, now);
-                return Ok(());
-            }
-        }
         let body = decrypted.body();
-        let result = self.process_message(header.msg_id, header.seq_no, body, header.msg_id, now, rng);
+        let mode = match self.received.peek(header.msg_id) {
+            DuplicateCheck::New => Mode::Process,
+            DuplicateCheck::Duplicate => Mode::AckOnly,
+            DuplicateCheck::TooOld => Mode::Replay,
+        };
+        if mode != Mode::AckOnly {
+            self.observe_server_time(header.msg_id, now);
+            if !self.is_within_time_window(header.msg_id, now) {
+                let mut budget = self.config.max_unpacked_bytes;
+                if !self.has_freshness_proof(body, 0, &mut budget) {
+                    return Ok(());
+                }
+                self.reset_server_time(header.msg_id, now);
+            }
+            self.received.check(header.msg_id);
+        }
+        let mut context = PacketContext::new(mode, self.config.max_unpacked_bytes);
+        self.process_message(&mut context, header.msg_id, header.seq_no, body, 0, now);
+        self.finish_packet(context, now, rng)
+    }
+
+    fn finish_packet(&mut self, context: PacketContext, now: Now, rng: &mut impl SecureRandom) -> Result<(), SessionError> {
+        if context.updates_lost {
+            self.events.push_back(SessionEvent::UpdatesLost);
+        }
+        for (id, msg_id) in context.deferred_resends {
+            if self.queries.get(&id).is_some_and(|query| query.state != QueryState::Pending && query.msg_id == msg_id) {
+                self.resend_query(id, now);
+            }
+        }
         if self.pending_reset {
             self.pending_reset = false;
             self.reset(rng);
             self.send_before(now.mono);
         }
-        result?;
         if self.to_ack.len() >= MAX_PENDING_ACKS {
             self.send_before(now.mono);
+        }
+        self.refresh_busy(now);
+        if let Some(error) = context.structure_error {
+            return Err(SessionError::Malformed(error));
+        }
+        if context.unknown_queries_stuck {
+            return Err(SessionError::UnknownQueriesStuck);
         }
         Ok(())
     }
 
-    fn observe_server_time(&mut self, msg_id: i64, now: Now) {
-        let difference = (msg_id >> 32) as f64 - now.unix;
+    fn is_within_time_window(&self, msg_id: i64, now: Now) -> bool {
         if !self.time_synchronized {
+            return true;
+        }
+        let server_time = self.server_time(now);
+        let message_time = msg_id_time(msg_id);
+        message_time >= server_time - MSG_ID_MAX_PAST_SECONDS && message_time <= server_time + MSG_ID_MAX_FUTURE_SECONDS
+    }
+
+    fn has_freshness_proof(&self, body: &[u8], depth: usize, budget: &mut usize) -> bool {
+        if depth > MAX_NESTING_DEPTH {
+            return false;
+        }
+        match ServiceMessage::parse(body) {
+            Ok(ServiceMessage::Container(children)) => children
+                .iter()
+                .any(|child| self.has_freshness_proof(child.body, depth + 1, budget)),
+            Ok(ServiceMessage::GzipPacked(packed)) => tlm::gunzip_within(packed, budget)
+                .map(|unpacked| self.has_freshness_proof(&unpacked, depth + 1, budget))
+                .unwrap_or(false),
+            Ok(ServiceMessage::MsgCopy(inner)) => self.has_freshness_proof(inner.body, depth + 1, budget),
+            Ok(ServiceMessage::RpcResult { req_msg_id, .. }) => self.by_msg_id.contains_key(&req_msg_id),
+            Ok(ServiceMessage::Pong { msg_id, ping_id }) => {
+                self.pending_pings.contains_key(&msg_id) || self.pending_pings.contains_key(&ping_id)
+            }
+            Ok(ServiceMessage::BadMsgNotification { bad_msg_id, .. }) | Ok(ServiceMessage::BadServerSalt { bad_msg_id, .. }) => {
+                self.was_sent(bad_msg_id)
+            }
+            Ok(ServiceMessage::MsgsStateInfo { req_msg_id, .. }) => self.service_requests.contains_key(&req_msg_id),
+            Ok(ServiceMessage::FutureSalts { req_msg_id, .. }) => self.future_salts_requests.contains(&req_msg_id),
+            Ok(ServiceMessage::MsgDetailedInfo { msg_id, .. }) => self.by_msg_id.contains_key(&msg_id),
+            Ok(ServiceMessage::NewSessionCreated { first_msg_id, .. }) => self.was_sent(first_msg_id),
+            _ => false,
+        }
+    }
+
+    fn observe_server_time(&mut self, msg_id: i64, now: Now) {
+        let seconds = (msg_id >> 32) as f64;
+        let offset = seconds - now.mono;
+        if !self.time_synchronized || self.server_offset + 1e-4 < offset {
             self.time_synchronized = true;
-            self.time_difference = difference;
-            self.events.push_back(SessionEvent::TimeDifferenceUpdated { difference, forced: false });
-        } else if self.time_difference + 1e-4 < difference {
-            self.time_difference = difference;
-            self.events.push_back(SessionEvent::TimeDifferenceUpdated { difference, forced: false });
+            self.server_offset = offset;
+            self.time_difference = seconds - now.unix;
+            self.events.push_back(SessionEvent::TimeDifferenceUpdated {
+                difference: self.time_difference,
+                forced: false,
+            });
         }
     }
 
     fn reset_server_time(&mut self, msg_id: i64, now: Now) {
-        let difference = (msg_id >> 32) as f64 - now.unix;
+        let seconds = (msg_id >> 32) as f64;
         self.time_synchronized = false;
-        self.time_difference = difference;
-        self.events.push_back(SessionEvent::TimeDifferenceUpdated { difference, forced: true });
+        self.server_offset = seconds - now.mono;
+        self.time_difference = seconds - now.unix;
+        self.events.push_back(SessionEvent::TimeDifferenceUpdated {
+            difference: self.time_difference,
+            forced: true,
+        });
     }
 
-    fn process_message(
-        &mut self,
-        msg_id: i64,
-        seq_no: i32,
-        body: &[u8],
-        outer_msg_id: i64,
-        now: Now,
-        rng: &mut impl SecureRandom,
-    ) -> Result<(), SessionError> {
+    fn note_awaited_answer(&mut self, msg_id: i64) {
+        if self.awaited_answers.remove(&msg_id).is_none() {
+            return;
+        }
+        self.to_resend_answer.retain(|id| *id != msg_id);
+        let mut finished = Vec::new();
+        for (request_id, request) in self.service_requests.iter_mut() {
+            if let ServiceRequest::ResendRequest { msg_ids, .. } = request {
+                msg_ids.retain(|id| *id != msg_id);
+                if msg_ids.is_empty() {
+                    finished.push(*request_id);
+                }
+            }
+        }
+        for request_id in finished {
+            self.service_requests.remove(&request_id);
+        }
+    }
+
+    fn process_message(&mut self, context: &mut PacketContext, msg_id: i64, seq_no: i32, body: &[u8], depth: usize, now: Now) {
         if seq_no & 1 == 1 {
             self.schedule_ack(msg_id, now);
         }
-        if body.len() < 4 {
-            return Err(SessionError::Malformed(TlError::UnexpectedEof { offset: 0, needed: 4 }));
+        if context.mode != Mode::AckOnly {
+            self.note_awaited_answer(msg_id);
         }
-        let message = ServiceMessage::parse(body)?;
+        if body.len() < 4 || depth > MAX_NESTING_DEPTH {
+            return;
+        }
+        let message = match ServiceMessage::parse(body) {
+            Ok(message) => message,
+            Err(error) => {
+                let constructor = u32::from_le_bytes(body[..4].try_into().expect("4 bytes"));
+                if depth == 0 && constructor == ids::MSG_CONTAINER {
+                    context.structure_error = Some(error);
+                }
+                return;
+            }
+        };
+        if context.mode == Mode::AckOnly {
+            match message {
+                ServiceMessage::Container(children) => {
+                    for child in children {
+                        if child.msg_id & 1 == 1 {
+                            self.process_message(context, child.msg_id, child.seqno, child.body, depth + 1, now);
+                        }
+                    }
+                }
+                ServiceMessage::GzipPacked(packed) => {
+                    if let Ok(unpacked) = tlm::gunzip_within(packed, &mut context.budget) {
+                        self.process_message(context, msg_id, seq_no & !1, &unpacked, depth + 1, now);
+                    }
+                }
+                ServiceMessage::MsgCopy(inner) if inner.msg_id & 1 == 1 => {
+                    self.process_message(context, inner.msg_id, inner.seqno, inner.body, depth + 1, now);
+                }
+                _ => {}
+            }
+            return;
+        }
         match message {
             ServiceMessage::Container(children) => {
                 for child in children {
-                    if child.msg_id & 1 == 0 {
-                        continue;
-                    }
-                    match self.received.check(child.msg_id) {
-                        DuplicateCheck::New => {}
-                        DuplicateCheck::Duplicate => {
-                            if child.seqno & 1 == 1 {
-                                self.schedule_ack(child.msg_id, now);
-                            }
-                            continue;
-                        }
-                        DuplicateCheck::TooOld => continue,
-                    }
-                    if child.body.len() >= 4 && u32::from_le_bytes(child.body[..4].try_into().expect("4")) == ids::MSG_CONTAINER {
-                        continue;
-                    }
-                    self.process_message(child.msg_id, child.seqno, child.body, outer_msg_id, now, rng)?;
+                    self.process_child(context, child, depth + 1, now);
                 }
             }
+            ServiceMessage::MsgCopy(inner) => self.process_child(context, inner, depth + 1, now),
             ServiceMessage::GzipPacked(packed) => {
-                let unpacked = tlm::gunzip(packed, tlm::MAX_UNPACKED_SIZE)?;
-                self.process_message(msg_id, seq_no & !1, &unpacked, outer_msg_id, now, rng)?;
+                if let Ok(unpacked) = tlm::gunzip_within(packed, &mut context.budget) {
+                    self.process_message(context, msg_id, seq_no & !1, &unpacked, depth + 1, now);
+                }
             }
             ServiceMessage::RpcResult { req_msg_id, result } => {
-                self.on_rpc_result(msg_id, req_msg_id, result, body.len(), now)?;
+                self.on_rpc_result(context, msg_id, req_msg_id, result, body.len(), now);
             }
             ServiceMessage::Pong { msg_id: ping_msg_id, ping_id } => {
-                if msg_id < ping_msg_id.wrapping_sub(15i64 << 32) {
-                    self.reset_server_time(msg_id, now);
+                self.on_pong(context, msg_id, ping_msg_id, ping_id, now);
+            }
+            ServiceMessage::Ping { ping_id } => {
+                if self.to_pong.len() < MAX_QUEUED_SERVICE_REPLIES {
+                    self.to_pong.push((msg_id, ping_id));
                 }
-                self.last_pong_at = now.mono;
-                let sent_at = self.pending_pings.remove(&ping_msg_id).or_else(|| self.pending_pings.remove(&ping_id));
-                if let Some(sent_at) = sent_at {
-                    let rtt = (now.mono - sent_at).max(0.0);
-                    self.rtt = if self.rtt == 0.0 { rtt } else { self.rtt * 0.7 + rtt * 0.3 };
-                    self.events.push_back(SessionEvent::Pong { rtt });
-                }
-                if ping_msg_id == self.last_ping_msg_id {
-                    self.last_ping_msg_id = 0;
-                }
-                if self.has_unknown_queries() && now.mono - self.connected_at > 60.0 {
-                    return Err(SessionError::UnknownQueriesStuck);
-                }
+                self.send_before(now.mono);
             }
             ServiceMessage::BadServerSalt {
                 bad_msg_id,
                 new_server_salt,
                 ..
             } => {
+                if !self.was_sent(bad_msg_id) {
+                    return;
+                }
                 let server_time = self.server_time(now);
                 self.salts.set_server_salt(new_server_salt, server_time);
                 self.events.push_back(SessionEvent::SaltsUpdated { salts: self.salts.all() });
@@ -832,33 +1175,12 @@ impl Session {
             }
             ServiceMessage::BadMsgNotification {
                 bad_msg_id, error_code, ..
-            } => match error_code {
-                16 => {
-                    self.reset_server_time(msg_id, now);
-                    self.message_failed(bad_msg_id, now);
-                }
-                17 => {
-                    self.reset_server_time(msg_id, now);
-                    self.message_failed(bad_msg_id, now);
-                    self.pending_reset = true;
-                }
-                32 | 33 | 34 | 35 | 64 => {
-                    self.message_failed(bad_msg_id, now);
-                    self.pending_reset = true;
-                }
-                48 => {
-                    self.last_future_salts_at = None;
-                    self.message_failed(bad_msg_id, now);
-                }
-                _ => {
-                    self.message_failed(bad_msg_id, now);
-                }
-            },
+            } => self.on_bad_msg_notification(msg_id, bad_msg_id, error_code, now),
             ServiceMessage::NewSessionCreated {
-                first_msg_id, unique_id, ..
-            } => {
-                self.on_new_session_created(unique_id, first_msg_id, now);
-            }
+                first_msg_id,
+                unique_id,
+                server_salt,
+            } => self.on_new_session_created(context, unique_id, first_msg_id, server_salt, now),
             ServiceMessage::MsgsAck(msg_ids) => {
                 for acked in msg_ids {
                     self.acknowledge(acked);
@@ -870,48 +1192,165 @@ impl Session {
                 status,
                 ..
             } => {
-                self.on_message_info(Some(query_msg_id), status, Some(answer_msg_id), now);
+                self.on_message_info(Some(query_msg_id), status, Some(answer_msg_id).filter(|id| *id != 0), now);
             }
             ServiceMessage::MsgNewDetailedInfo { answer_msg_id, .. } => {
-                self.on_message_info(None, 0, Some(answer_msg_id), now);
+                self.on_message_info(None, 0, Some(answer_msg_id).filter(|id| *id != 0), now);
             }
-            ServiceMessage::MsgsStateInfo { req_msg_id, info } => {
-                if let Some(ServiceRequest::StateRequest { msg_ids }) = self.service_requests.remove(&req_msg_id) {
-                    self.on_state_info(&msg_ids, info, now);
-                }
-            }
+            ServiceMessage::MsgsStateInfo { req_msg_id, info } => match self.service_requests.remove(&req_msg_id) {
+                Some(ServiceRequest::StateRequest { msg_ids, .. }) => self.on_state_info(&msg_ids, info, now),
+                Some(ServiceRequest::ResendRequest { msg_ids, .. }) => self.on_answers_unavailable(&msg_ids, now),
+                None => {}
+            },
             ServiceMessage::MsgsAllInfo { msg_ids, info } => {
                 self.on_state_info(&msg_ids, info, now);
             }
             ServiceMessage::MsgsStateReq(msg_ids) => {
-                let info: Vec<u8> = msg_ids
-                    .iter()
-                    .map(|id| if self.received.contains(*id) { 4u8 } else { 1u8 })
-                    .collect();
-                self.to_state_info_reply.push((msg_id, info));
-                self.send_before(now.mono);
+                let info: Vec<u8> = msg_ids.iter().map(|id| self.received_state(*id)).collect();
+                self.queue_state_info_reply(msg_id, info, now);
             }
-            ServiceMessage::MsgResendReq(_) => {}
-            ServiceMessage::FutureSalts { salts, .. } => {
-                self.on_future_salts(&salts, now);
+            ServiceMessage::MsgResendReq(msg_ids) => self.on_server_resend_request(msg_id, &msg_ids, now),
+            ServiceMessage::MsgResendAnsReq(msg_ids) => {
+                self.queue_state_info_reply(msg_id, vec![1; msg_ids.len()], now);
+            }
+            ServiceMessage::FutureSalts { req_msg_id, salts, .. } => {
+                if let Some(position) = self.future_salts_requests.iter().position(|request| *request == req_msg_id) {
+                    self.future_salts_requests.remove(position);
+                    self.on_future_salts(&salts, now);
+                }
             }
             ServiceMessage::DestroySessionOk { .. } | ServiceMessage::DestroySessionNone { .. } => {}
             ServiceMessage::DestroyAuthKeyOk => self.on_destroy_auth_key(DestroyAuthKeyOutcome::Ok),
             ServiceMessage::DestroyAuthKeyNone => self.on_destroy_auth_key(DestroyAuthKeyOutcome::None),
             ServiceMessage::DestroyAuthKeyFail => self.on_destroy_auth_key(DestroyAuthKeyOutcome::Fail),
-            ServiceMessage::Other { constructor, body } => {
-                if constructor == ids::PING || constructor == ids::PING_DELAY_DISCONNECT {
-                    return Ok(());
+            ServiceMessage::HttpWait { .. } | ServiceMessage::Ignored { .. } => {}
+            ServiceMessage::Other { body, .. } => {
+                if context.mode == Mode::Replay {
+                    context.updates_lost = true;
+                    return;
                 }
-                if self.updates.check(msg_id) == DuplicateCheck::New {
-                    self.events.push_back(SessionEvent::Update {
+                match self.updates.check(msg_id) {
+                    DuplicateCheck::New => self.events.push_back(SessionEvent::Update {
                         body: body.to_vec(),
                         msg_id,
-                    });
+                    }),
+                    DuplicateCheck::Duplicate => {}
+                    DuplicateCheck::TooOld => context.updates_lost = true,
                 }
             }
         }
-        Ok(())
+    }
+
+    fn process_child(&mut self, context: &mut PacketContext, child: ContainerMessage<'_>, depth: usize, now: Now) {
+        if child.msg_id & 1 == 0 {
+            return;
+        }
+        let child_mode = match self.received.check(child.msg_id) {
+            DuplicateCheck::New => Mode::Process,
+            DuplicateCheck::Duplicate => Mode::AckOnly,
+            DuplicateCheck::TooOld => Mode::Replay,
+        };
+        let parent_mode = context.mode;
+        context.mode = parent_mode.combine(child_mode);
+        self.process_message(context, child.msg_id, child.seqno, child.body, depth, now);
+        context.mode = parent_mode;
+    }
+
+    fn received_state(&self, msg_id: i64) -> u8 {
+        if self.received.contains(msg_id) {
+            return 4;
+        }
+        match (self.received.oldest(), self.received.newest()) {
+            (Some(oldest), _) if msg_id < oldest => 1,
+            (_, Some(newest)) if msg_id > newest => 3,
+            (Some(_), Some(_)) => 2,
+            _ => 1,
+        }
+    }
+
+    fn queue_state_info_reply(&mut self, req_msg_id: i64, info: Vec<u8>, now: Now) {
+        if self.to_state_info_reply.len() < MAX_QUEUED_SERVICE_REPLIES {
+            self.to_state_info_reply.push((req_msg_id, info));
+        }
+        self.send_before(now.mono);
+    }
+
+    fn on_server_resend_request(&mut self, request_msg_id: i64, msg_ids: &[i64], now: Now) {
+        let mut any_unknown = false;
+        let mut info = Vec::with_capacity(msg_ids.len());
+        for msg_id in msg_ids {
+            let known = self
+                .by_msg_id
+                .get(msg_id)
+                .copied()
+                .filter(|id| self.queries.get(id).is_some_and(|query| query.state != QueryState::Pending));
+            match known {
+                Some(id) => {
+                    if !self.to_retransmit.contains(&id) {
+                        self.to_retransmit.push(id);
+                    }
+                    info.push(4);
+                }
+                None => {
+                    any_unknown = true;
+                    info.push(1);
+                }
+            }
+        }
+        if any_unknown {
+            self.queue_state_info_reply(request_msg_id, info, now);
+        }
+        self.send_before(now.mono);
+    }
+
+    fn on_bad_msg_notification(&mut self, msg_id: i64, bad_msg_id: i64, error_code: i32, now: Now) {
+        if !self.was_sent(bad_msg_id) {
+            return;
+        }
+        match error_code {
+            16 => {
+                self.reset_server_time(msg_id, now);
+                self.message_failed(bad_msg_id, now);
+            }
+            17 => {
+                self.reset_server_time(msg_id, now);
+                self.message_failed(bad_msg_id, now);
+                self.pending_reset = true;
+            }
+            20 => self.message_failed(bad_msg_id, now),
+            32 | 33 => {
+                self.message_failed(bad_msg_id, now);
+                self.pending_reset = true;
+            }
+            48 => {
+                self.salts.invalidate_current();
+                self.last_future_salts_at = None;
+                self.message_failed(bad_msg_id, now);
+            }
+            _ => {
+                self.strike_and_fail(bad_msg_id, error_code, msg_id);
+                self.message_failed(bad_msg_id, now);
+            }
+        }
+    }
+
+    fn on_pong(&mut self, context: &mut PacketContext, msg_id: i64, ping_msg_id: i64, ping_id: i64, now: Now) {
+        self.last_pong_at = now.mono;
+        let sent_at = self.pending_pings.remove(&ping_msg_id).or_else(|| self.pending_pings.remove(&ping_id));
+        if let Some(sent_at) = sent_at {
+            if msg_id < ping_msg_id.wrapping_sub(RESPONSE_TIME_SKEW) {
+                self.reset_server_time(msg_id, now);
+            }
+            let rtt = (now.mono - sent_at).max(0.0);
+            self.rtt = if self.rtt == 0.0 { rtt } else { self.rtt * 0.7 + rtt * 0.3 };
+            self.events.push_back(SessionEvent::Pong { rtt });
+        }
+        if ping_msg_id == self.last_ping_msg_id {
+            self.last_ping_msg_id = 0;
+        }
+        if self.has_unknown_queries() && now.mono - self.connected_at > UNKNOWN_QUERIES_STUCK_AFTER {
+            context.unknown_queries_stuck = true;
+        }
     }
 
     fn on_destroy_auth_key(&mut self, outcome: DestroyAuthKeyOutcome) {
@@ -920,76 +1359,87 @@ impl Session {
         }
     }
 
-    fn on_rpc_result(&mut self, msg_id: i64, req_msg_id: i64, result: &[u8], size: usize, now: Now) -> Result<(), SessionError> {
-        if msg_id < req_msg_id.wrapping_sub(15i64 << 32) {
-            self.reset_server_time(msg_id, now);
-        }
+    fn on_rpc_result(&mut self, context: &mut PacketContext, msg_id: i64, req_msg_id: i64, result: &[u8], size: usize, now: Now) {
         let Some(id) = self.by_msg_id.get(&req_msg_id).copied() else {
-            if size > 16 * 1024 {
+            if size > DROPPED_ANSWER_COUNTED_SIZE {
                 self.dropped_answer_bytes += size;
-                if self.dropped_answer_bytes > 256 * 1024 {
+                if self.dropped_answer_bytes > DROPPED_ANSWER_LIMIT {
                     let total = self.dropped_answer_bytes;
                     self.dropped_answer_bytes = 0;
                     self.events.push_back(SessionEvent::DroppedAnswerTooLarge { total });
                 }
             }
-            return Ok(());
+            return;
         };
-        let event = match tlm::parse_rpc_result(result) {
-            Ok(RpcResultBody::Error(error)) => SessionEvent::Error {
-                id,
-                code: error.code,
-                message: error.message,
-                response_msg_id: msg_id,
-            },
+        if msg_id < req_msg_id.wrapping_sub(RESPONSE_TIME_SKEW) {
+            self.reset_server_time(msg_id, now);
+        }
+        let event = match tlm::parse_rpc_result_limited(result, context.budget.min(tlm::MAX_UNPACKED_SIZE)) {
+            Ok(RpcResultBody::Error(error)) => {
+                let error = error.normalized();
+                SessionEvent::Error {
+                    id,
+                    code: error.code,
+                    message: error.message,
+                    response_msg_id: msg_id,
+                }
+            }
             Ok(RpcResultBody::Value(value)) => SessionEvent::Result {
                 id,
                 body: value.to_vec(),
                 response_msg_id: msg_id,
                 original_size: size,
             },
-            Ok(RpcResultBody::PackedValue(value)) => SessionEvent::Result {
-                id,
-                body: value,
-                response_msg_id: msg_id,
-                original_size: size,
-            },
-            Ok(RpcResultBody::DropAnswer(_)) => return Ok(()),
+            Ok(RpcResultBody::PackedValue(value)) => {
+                context.budget = context.budget.saturating_sub(value.len());
+                SessionEvent::Result {
+                    id,
+                    body: value,
+                    response_msg_id: msg_id,
+                    original_size: size,
+                }
+            }
+            Ok(RpcResultBody::DropAnswer(_)) => return,
             Err(error) => SessionEvent::Error {
                 id,
                 code: 500,
-                message: format!("RESPONSE_UNPACK_FAILED: {error}"),
+                message: format!("{RESPONSE_UNPACK_FAILED}: {error}"),
                 response_msg_id: msg_id,
             },
         };
         self.complete_query(id, req_msg_id);
         self.events.push_back(event);
-        Ok(())
     }
 
     fn complete_query(&mut self, id: QueryId, msg_id: i64) {
         if let Some(query) = self.queries.remove(&id) {
             self.by_msg_id.remove(&msg_id);
-            if query.container_id != 0 {
-                if let Some(children) = self.containers.get_mut(&query.container_id) {
-                    children.retain(|child| *child != msg_id);
-                    if children.is_empty() {
-                        self.containers.remove(&query.container_id);
-                    }
-                }
-            }
+            self.detach_from_container(query.container_id, msg_id);
+            self.to_retransmit.retain(|other| *other != id);
+            self.awaited_answers.retain(|_, awaited| awaited.query != Some(id));
         }
         self.refresh_unknown_tracking();
     }
 
-    fn on_new_session_created(&mut self, unique_id: i64, first_msg_id: i64, now: Now) {
+    fn on_new_session_created(&mut self, context: &mut PacketContext, unique_id: i64, first_msg_id: i64, server_salt: i64, now: Now) {
+        if context.mode == Mode::Replay || self.recent_unique_ids.contains(&unique_id) {
+            return;
+        }
+        self.recent_unique_ids.push_back(unique_id);
+        while self.recent_unique_ids.len() > 16 {
+            self.recent_unique_ids.pop_front();
+        }
+        let server_time = self.server_time(now);
+        if self.salts.current_value() != server_salt || !self.salts.has_valid_salt(server_time) {
+            self.salts.set_server_salt(server_salt, server_time);
+            self.last_future_salts_at = None;
+            self.events.push_back(SessionEvent::SaltsUpdated { salts: self.salts.all() });
+        }
         let mut first = first_msg_id;
-        if let Some(id) = self.by_msg_id.get(&first_msg_id) {
-            if let Some(query) = self.queries.get(id) {
-                if query.container_id != 0 {
-                    first = query.container_id;
-                }
-            }
+        if let Some(query) = self.by_msg_id.get(&first_msg_id).and_then(|id| self.queries.get(id))
+            && query.container_id != 0
+        {
+            first = query.container_id;
         }
         let mut resend: Vec<(i64, QueryId)> = self
             .queries
@@ -1002,9 +1452,7 @@ impl Session {
             .map(|(id, query)| (query.msg_id, *id))
             .collect();
         resend.sort_unstable();
-        for (_, id) in resend {
-            self.resend_query(id, now);
-        }
+        context.deferred_resends.extend(resend.into_iter().map(|(msg_id, id)| (id, msg_id)));
         self.events.push_back(SessionEvent::ServerSessionReset {
             unique_id,
             first_msg_id,
@@ -1012,9 +1460,9 @@ impl Session {
     }
 
     fn on_message_info(&mut self, query_msg_id: Option<i64>, status: i32, answer_msg_id: Option<i64>, now: Now) {
-        let query = query_msg_id.and_then(|msg_id| self.by_msg_id.get(&msg_id).copied());
+        let mut answered_query = None;
         if let Some(query_msg_id) = query_msg_id {
-            let Some(id) = query else {
+            let Some(id) = self.by_msg_id.get(&query_msg_id).copied() else {
                 if let Some(answer) = answer_msg_id {
                     self.schedule_ack(answer, now);
                 }
@@ -1033,18 +1481,38 @@ impl Session {
                     self.mark_acknowledged(id);
                 }
             }
-            let _ = query_msg_id;
+            answered_query = Some(id);
         }
         if let Some(answer) = answer_msg_id {
             if self.received.contains(answer) {
                 self.schedule_ack(answer, now);
             } else {
-                if self.to_resend_answer.is_empty() {
-                    self.send_before(now.mono + 0.001);
-                }
-                if !self.to_resend_answer.contains(&answer) {
-                    self.to_resend_answer.push(answer);
-                }
+                self.request_answer(answer, answered_query, now);
+            }
+        }
+    }
+
+    fn request_answer(&mut self, answer: i64, query: Option<QueryId>, now: Now) {
+        let entry = self.awaited_answers.entry(answer).or_insert(AwaitedAnswer { query, requests: 0 });
+        if entry.query.is_none() {
+            entry.query = query;
+        }
+        if self.to_resend_answer.is_empty() {
+            self.send_before(now.mono + QUERY_DELAY);
+        }
+        if !self.to_resend_answer.contains(&answer) {
+            self.to_resend_answer.push(answer);
+            if self.to_resend_answer.len() > MAX_QUEUED_ACKS {
+                let excess = self.to_resend_answer.len() - MAX_QUEUED_ACKS;
+                self.to_resend_answer.drain(..excess);
+            }
+        }
+    }
+
+    fn on_answers_unavailable(&mut self, answers: &[i64], now: Now) {
+        for answer in answers {
+            if let Some(id) = self.awaited_answers.remove(answer).and_then(|awaited| awaited.query) {
+                self.resend_query(id, now);
             }
         }
     }
@@ -1100,10 +1568,8 @@ impl Session {
         let server_time = self.server_time(now);
         let has_salt = self.salts.has_valid_salt(server_time);
         if has_salt {
-            if let Some(at) = self.force_send_at {
-                if now.mono >= at {
-                    return true;
-                }
+            if self.force_send_at.is_some_and(|at| now.mono >= at) {
+                return true;
             }
             if self.must_ping(now) {
                 return true;
@@ -1145,10 +1611,13 @@ impl Session {
         if let Some(change) = self.salts.next_change_time() {
             deadline = deadline.min(now.mono + (change - server_time).max(0.0));
         }
-        deadline = deadline.min(self.last_pong_at + self.ping_disconnect_delay() + 0.002);
+        deadline = deadline.min(self.liveness_at() + self.ping_disconnect_delay() + 0.002);
         deadline = deadline.min(self.last_read_at + self.read_disconnect_delay() + 0.002);
         if let Some(since) = self.unknown_since {
             deadline = deadline.min(since + STATE_REQUEST_RETRY);
+        }
+        for request in self.service_requests.values() {
+            deadline = deadline.min(request.sent_at() + STATE_REQUEST_RETRY + 0.002);
         }
         deadline.is_finite().then_some(deadline)
     }
@@ -1157,47 +1626,127 @@ impl Session {
         if !self.connected {
             return Ok(());
         }
-        if self.last_pong_at + self.ping_disconnect_delay() < now.mono {
+        self.sync_wall_clock(now);
+        self.refresh_busy(now);
+        if self.liveness_at() + self.ping_disconnect_delay() < now.mono {
             return Err(SessionError::PingTimeout);
         }
         if self.last_read_at + self.read_disconnect_delay() < now.mono {
             return Err(SessionError::ReadTimeout);
         }
-        if let Some(since) = self.unknown_since {
-            if since + STATE_REQUEST_RETRY < now.mono {
-                self.unknown_since = Some(now.mono);
-                let unknown: Vec<i64> = self
-                    .queries
-                    .values()
-                    .filter(|query| query.state == QueryState::Unknown)
-                    .map(|query| query.msg_id)
-                    .collect();
-                let already_requested: Vec<i64> = self
-                    .service_requests
-                    .values()
-                    .flat_map(|request| match request {
-                        ServiceRequest::StateRequest { msg_ids } => msg_ids.clone(),
-                        ServiceRequest::ResendRequest { .. } => Vec::new(),
-                    })
-                    .collect();
-                for msg_id in unknown {
-                    if !already_requested.contains(&msg_id) && !self.to_state_request.contains(&msg_id) {
+        self.expire_state_requests(now);
+        if self.unknown_since.is_some_and(|since| since + STATE_REQUEST_RETRY < now.mono) {
+            self.unknown_since = Some(now.mono);
+            let unknown: Vec<i64> = self
+                .queries
+                .values()
+                .filter(|query| query.state == QueryState::Unknown)
+                .map(|query| query.msg_id)
+                .collect();
+            let already_requested: Vec<i64> = self
+                .service_requests
+                .values()
+                .flat_map(|request| match request {
+                    ServiceRequest::StateRequest { msg_ids, .. } => msg_ids.clone(),
+                    ServiceRequest::ResendRequest { .. } => Vec::new(),
+                })
+                .collect();
+            for msg_id in unknown {
+                if !already_requested.contains(&msg_id) && !self.to_state_request.contains(&msg_id) {
+                    self.to_state_request.push(msg_id);
+                }
+            }
+            if !self.to_state_request.is_empty() {
+                self.send_before(now.mono);
+            }
+        }
+        self.expire_answer_requests(now);
+        Ok(())
+    }
+
+    fn expire_state_requests(&mut self, now: Now) {
+        let expired: Vec<i64> = self
+            .service_requests
+            .iter()
+            .filter_map(|(request_id, request)| match request {
+                ServiceRequest::StateRequest { sent_at, .. } if sent_at + STATE_REQUEST_RETRY < now.mono => Some(*request_id),
+                _ => None,
+            })
+            .collect();
+        for request_id in expired {
+            if let Some(ServiceRequest::StateRequest { msg_ids, .. }) = self.service_requests.remove(&request_id) {
+                for msg_id in msg_ids {
+                    let still_unknown = self
+                        .by_msg_id
+                        .get(&msg_id)
+                        .and_then(|id| self.queries.get(id))
+                        .is_some_and(|query| query.state == QueryState::Unknown);
+                    if still_unknown && !self.to_state_request.contains(&msg_id) {
                         self.to_state_request.push(msg_id);
                     }
                 }
-                if !self.to_state_request.is_empty() {
+                self.send_before(now.mono);
+            }
+        }
+    }
+
+    fn expire_answer_requests(&mut self, now: Now) {
+        let expired: Vec<i64> = self
+            .service_requests
+            .iter()
+            .filter_map(|(request_id, request)| match request {
+                ServiceRequest::ResendRequest { sent_at, .. } if sent_at + STATE_REQUEST_RETRY < now.mono => Some(*request_id),
+                _ => None,
+            })
+            .collect();
+        for request_id in expired {
+            let Some(ServiceRequest::ResendRequest { msg_ids, .. }) = self.service_requests.remove(&request_id) else {
+                continue;
+            };
+            for answer in msg_ids {
+                let Some(awaited) = self.awaited_answers.get_mut(&answer) else {
+                    continue;
+                };
+                awaited.requests += 1;
+                if awaited.requests >= MAX_ANSWER_REQUESTS {
+                    let query = awaited.query;
+                    self.awaited_answers.remove(&answer);
+                    if let Some(id) = query {
+                        self.resend_query(id, now);
+                    }
+                } else if !self.to_resend_answer.contains(&answer) {
+                    self.to_resend_answer.push(answer);
                     self.send_before(now.mono);
                 }
             }
         }
-        Ok(())
     }
 
     pub fn poll_transmit(&mut self, now: Now, rng: &mut impl SecureRandom) -> Option<Transmit> {
+        self.sync_wall_clock(now);
         if !self.must_flush(now) {
             return None;
         }
-        self.flush_packet(now, rng)
+        let transmit = self.flush_packet(now, rng);
+        self.refresh_busy(now);
+        transmit
+    }
+
+    fn query_wire_body(query: &Query) -> Vec<u8> {
+        if query.invoke_after_msg_id == 0 {
+            return query.body.clone();
+        }
+        let mut writer = Writer::with_capacity(query.body.len() + 12);
+        tlm::write_invoke_after_msg(&mut writer, query.invoke_after_msg_id);
+        writer.write_raw(&query.body);
+        writer.into_inner()
+    }
+
+    fn push_service(&mut self, messages: &mut Vec<OutgoingMessage>, body: Vec<u8>, now: Now, rng: &mut impl SecureRandom) -> i64 {
+        let msg_id = self.next_msg_id(now, rng);
+        let seq_no = self.next_seq_no(false);
+        messages.push(OutgoingMessage { msg_id, seq_no, body });
+        msg_id
     }
 
     fn flush_packet(&mut self, now: Now, rng: &mut impl SecureRandom) -> Option<Transmit> {
@@ -1207,6 +1756,24 @@ impl Session {
         let mut messages: Vec<OutgoingMessage> = Vec::new();
         let mut query_messages: Vec<(QueryId, usize)> = Vec::new();
         let mut wants_quick_ack = false;
+        let mut force_container = false;
+
+        if has_salt {
+            for id in std::mem::take(&mut self.to_retransmit) {
+                let Some(query) = self.queries.get(&id).filter(|query| query.state != QueryState::Pending) else {
+                    continue;
+                };
+                let body = Self::query_wire_body(query);
+                wants_quick_ack |= query.options.quick_ack;
+                query_messages.push((id, messages.len()));
+                messages.push(OutgoingMessage {
+                    msg_id: query.msg_id,
+                    seq_no: query.seq_no,
+                    body,
+                });
+                force_container = true;
+            }
+        }
 
         if has_salt {
             let mut total = 0usize;
@@ -1227,23 +1794,17 @@ impl Session {
                     invoke_after.and_then(|dependency| sent_now.get(&dependency).copied().or_else(|| self.query_msg_id(dependency)));
                 let msg_id = self.next_msg_id(now, rng);
                 let seq_no = self.next_seq_no(true);
+                let epoch = self.connection_epoch;
                 let query = self.queries.get_mut(&id).expect("query exists");
-                let body = match dependency {
-                    Some(after) => {
-                        let mut writer = Writer::with_capacity(query.body.len() + 12);
-                        tlm::write_invoke_after_msg(&mut writer, after);
-                        writer.write_raw(&query.body);
-                        writer.into_inner()
-                    }
-                    None => query.body.clone(),
-                };
+                query.invoke_after_msg_id = dependency.unwrap_or(0);
+                let body = Self::query_wire_body(query);
                 total += body.len();
                 wants_quick_ack |= query.options.quick_ack;
                 query.state = QueryState::Sent;
                 query.msg_id = msg_id;
                 query.seq_no = seq_no;
                 query.sent_at = now.mono;
-                query.connection_epoch = self.connection_epoch;
+                query.connection_epoch = epoch;
                 query.acknowledged = false;
                 self.by_msg_id.insert(msg_id, id);
                 sent_now.insert(id, msg_id);
@@ -1264,6 +1825,11 @@ impl Session {
             }
             self.last_ping_at = Some(now.mono);
             self.pending_pings.insert(msg_id, now.mono);
+            if self.pending_pings.len() > MAX_PENDING_PINGS
+                && let Some(oldest) = self.pending_pings.keys().min().copied()
+            {
+                self.pending_pings.remove(&oldest);
+            }
             ping_msg_id = msg_id;
             messages.push(OutgoingMessage {
                 msg_id,
@@ -1272,102 +1838,67 @@ impl Session {
             });
         }
 
-        let mut future_salts_requested = false;
         if self.salts.needs_future_salts(server_time)
             && self.last_future_salts_at.is_none_or(|at| at + FUTURE_SALTS_RETRY < now.mono)
         {
             self.last_future_salts_at = Some(now.mono);
-            future_salts_requested = true;
-            let msg_id = self.next_msg_id(now, rng);
-            let seq_no = self.next_seq_no(false);
             let mut writer = Writer::with_capacity(8);
             tlm::write_get_future_salts(&mut writer, FUTURE_SALTS_COUNT);
-            messages.push(OutgoingMessage {
-                msg_id,
-                seq_no,
-                body: writer.into_inner(),
-            });
+            let msg_id = self.push_service(&mut messages, writer.into_inner(), now, rng);
+            self.future_salts_requests.push_back(msg_id);
+            while self.future_salts_requests.len() > 8 {
+                self.future_salts_requests.pop_front();
+            }
         }
 
         let mut state_request = None;
         if has_salt && !self.to_state_request.is_empty() {
             let ids = take_tail(&mut self.to_state_request, MAX_IDS_PER_SERVICE_MESSAGE);
-            let msg_id = self.next_msg_id(now, rng);
-            let seq_no = self.next_seq_no(false);
             let mut writer = Writer::new();
             tlm::write_msgs_state_req(&mut writer, &ids);
-            messages.push(OutgoingMessage {
-                msg_id,
-                seq_no,
-                body: writer.into_inner(),
-            });
+            let msg_id = self.push_service(&mut messages, writer.into_inner(), now, rng);
             state_request = Some((msg_id, ids));
         }
 
         let mut resend_request = None;
         if has_salt && !self.to_resend_answer.is_empty() {
             let ids = take_tail(&mut self.to_resend_answer, MAX_IDS_PER_SERVICE_MESSAGE);
-            let msg_id = self.next_msg_id(now, rng);
-            let seq_no = self.next_seq_no(false);
             let mut writer = Writer::new();
             tlm::write_msg_resend_req(&mut writer, &ids);
-            messages.push(OutgoingMessage {
-                msg_id,
-                seq_no,
-                body: writer.into_inner(),
-            });
+            let msg_id = self.push_service(&mut messages, writer.into_inner(), now, rng);
             resend_request = Some((msg_id, ids));
         }
 
         if has_salt {
             for msg_id in std::mem::take(&mut self.to_drop_answer) {
-                let id = self.next_msg_id(now, rng);
-                let seq_no = self.next_seq_no(false);
                 let mut writer = Writer::new();
                 tlm::write_rpc_drop_answer(&mut writer, msg_id);
-                messages.push(OutgoingMessage {
-                    msg_id: id,
-                    seq_no,
-                    body: writer.into_inner(),
-                });
+                self.push_service(&mut messages, writer.into_inner(), now, rng);
             }
             for (req_msg_id, info) in std::mem::take(&mut self.to_state_info_reply) {
-                let id = self.next_msg_id(now, rng);
-                let seq_no = self.next_seq_no(false);
                 let mut writer = Writer::new();
                 tlm::write_msgs_state_info(&mut writer, req_msg_id, &info);
-                messages.push(OutgoingMessage {
-                    msg_id: id,
-                    seq_no,
-                    body: writer.into_inner(),
-                });
+                self.push_service(&mut messages, writer.into_inner(), now, rng);
+            }
+            for (ping_msg_id, ping_id) in std::mem::take(&mut self.to_pong) {
+                let mut writer = Writer::with_capacity(20);
+                tlm::write_pong(&mut writer, ping_msg_id, ping_id);
+                self.push_service(&mut messages, writer.into_inner(), now, rng);
             }
         }
 
         if has_salt && self.need_destroy_auth_key && !self.sent_destroy_auth_key {
             self.sent_destroy_auth_key = true;
-            let msg_id = self.next_msg_id(now, rng);
-            let seq_no = self.next_seq_no(false);
             let mut writer = Writer::new();
             tlm::write_destroy_auth_key(&mut writer);
-            messages.push(OutgoingMessage {
-                msg_id,
-                seq_no,
-                body: writer.into_inner(),
-            });
+            self.push_service(&mut messages, writer.into_inner(), now, rng);
         }
 
         if !self.to_ack.is_empty() {
             let ids = take_tail(&mut self.to_ack, MAX_IDS_PER_SERVICE_MESSAGE);
-            let msg_id = self.next_msg_id(now, rng);
-            let seq_no = self.next_seq_no(false);
             let mut writer = Writer::with_capacity(16 + ids.len() * 8);
             tlm::write_msgs_ack(&mut writer, &ids);
-            messages.push(OutgoingMessage {
-                msg_id,
-                seq_no,
-                body: writer.into_inner(),
-            });
+            self.push_service(&mut messages, writer.into_inner(), now, rng);
         }
 
         let nothing_left = self.pending.is_empty()
@@ -1375,7 +1906,9 @@ impl Session {
             && self.to_state_request.is_empty()
             && self.to_resend_answer.is_empty()
             && self.to_drop_answer.is_empty()
-            && self.to_state_info_reply.is_empty();
+            && self.to_state_info_reply.is_empty()
+            && self.to_pong.is_empty()
+            && self.to_retransmit.is_empty();
         if nothing_left {
             self.force_send_at = None;
         }
@@ -1383,9 +1916,12 @@ impl Session {
         if messages.is_empty() {
             return None;
         }
-        let _ = future_salts_requested;
 
-        let (outer_msg_id, seq_no, body, container_id) = if messages.len() == 1 {
+        for message in &messages {
+            self.remember_sent(message.msg_id);
+        }
+
+        let (outer_msg_id, seq_no, body, container_id) = if messages.len() == 1 && !force_container {
             let message = messages.pop().expect("one message");
             (message.msg_id, message.seq_no, message.body, 0)
         } else {
@@ -1404,13 +1940,21 @@ impl Session {
             tlm::write_container(&mut writer, &refs);
             (container_id, seq_no, writer.into_inner(), container_id)
         };
+        self.remember_sent(outer_msg_id);
 
         if container_id != 0 {
             let children: Vec<i64> = query_messages.iter().map(|(_, index)| messages[*index].msg_id).collect();
+            let mut moved = Vec::new();
             for (id, _) in &query_messages {
                 if let Some(query) = self.queries.get_mut(id) {
+                    if query.container_id != 0 && query.container_id != container_id {
+                        moved.push((query.container_id, query.msg_id));
+                    }
                     query.container_id = container_id;
                 }
+            }
+            for (old_container, msg_id) in moved {
+                self.detach_from_container(old_container, msg_id);
             }
             if !children.is_empty() {
                 self.containers.insert(container_id, children);
@@ -1427,17 +1971,32 @@ impl Session {
                 self.last_ping_container_id = container_id;
             }
             if !services.is_empty() {
-                self.service_containers.insert(container_id, services);
+                self.service_containers.push_back((container_id, services));
+                while self.service_containers.len() > MAX_TRACKED_SERVICE_CONTAINERS {
+                    self.service_containers.pop_front();
+                }
             }
         }
         if ping_msg_id != 0 {
             self.last_ping_msg_id = ping_msg_id;
         }
         if let Some((msg_id, ids)) = state_request {
-            self.service_requests.insert(msg_id, ServiceRequest::StateRequest { msg_ids: ids });
+            self.service_requests.insert(
+                msg_id,
+                ServiceRequest::StateRequest {
+                    msg_ids: ids,
+                    sent_at: now.mono,
+                },
+            );
         }
         if let Some((msg_id, ids)) = resend_request {
-            self.service_requests.insert(msg_id, ServiceRequest::ResendRequest { msg_ids: ids });
+            self.service_requests.insert(
+                msg_id,
+                ServiceRequest::ResendRequest {
+                    msg_ids: ids,
+                    sent_at: now.mono,
+                },
+            );
         }
 
         let header = MessageHeader {
@@ -1485,6 +2044,38 @@ impl Session {
             self.pending.shrink_to(16);
             self.containers.shrink_to(16);
         }
+        if self.to_ack.is_empty() {
+            self.to_ack.shrink_to(16);
+        }
+        if self.awaited_answers.is_empty() {
+            self.awaited_answers.shrink_to(16);
+        }
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn footprint(&self) -> usize {
+        self.queries.len()
+            + self.pending.len()
+            + self.by_msg_id.len()
+            + self.containers.values().map(Vec::len).sum::<usize>()
+            + self.quick_acks.len()
+            + self.to_ack.len()
+            + self.to_resend_answer.len()
+            + self.to_state_request.len()
+            + self.to_drop_answer.len()
+            + self.to_state_info_reply.iter().map(|(_, info)| info.len() + 1).sum::<usize>()
+            + self.to_pong.len()
+            + self.to_retransmit.len()
+            + self.service_requests.len()
+            + self.service_containers.len()
+            + self.future_salts_requests.len()
+            + self.awaited_answers.len()
+            + self.recent_sent.len()
+            + self.recent_unique_ids.len()
+            + self.received.len()
+            + self.updates.len()
+            + self.pending_pings.len()
+            + self.events.len()
     }
 }
 

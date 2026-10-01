@@ -101,6 +101,18 @@ impl Harness {
             .collect()
     }
 
+    fn answer_pings(&mut self, packet: &DecodedPacket) {
+        let pongs: Vec<Outgoing> = packet
+            .messages
+            .iter()
+            .filter(|message| message.constructor() == ids::PING_DELAY_DISCONNECT || message.constructor() == ids::PING)
+            .map(|message| Outgoing::Service(pong(message.msg_id, i64::from_le_bytes(message.body[4..12].try_into().unwrap()))))
+            .collect();
+        if !pongs.is_empty() {
+            self.deliver(pongs).unwrap();
+        }
+    }
+
     fn sent_query(&mut self, packet: &DecodedPacket, tag: u32) -> i64 {
         packet
             .messages
@@ -340,11 +352,19 @@ fn unanswered_state_request_is_retried() {
     h.session.connection_closed();
     h.session.connection_opened(h.now);
     let packet = h.flush().unwrap();
-    assert!(packet.find(ids::MSGS_STATE_REQ).is_some());
-    h.deliver(vec![Outgoing::Service(pong(packet.header.msg_id, 0))]).unwrap();
-    h.advance(STATE_REQUEST_RETRY - 1.0);
-    h.session.handle_timeout(h.now).unwrap();
-    assert!(h.flush().map_or(true, |p| p.find(ids::MSGS_STATE_REQ).is_none()));
+    let first_request = packet.find(ids::MSGS_STATE_REQ).expect("state request").msg_id;
+    let mut state_requests = vec![first_request];
+    for _ in 0..30 {
+        h.advance(1.0);
+        h.session.handle_timeout(h.now).unwrap();
+        while let Some(packet) = h.flush() {
+            h.answer_pings(&packet);
+            if let Some(request) = packet.find(ids::MSGS_STATE_REQ) {
+                state_requests.push(request.msg_id);
+            }
+        }
+    }
+    assert_eq!(state_requests.len(), 2, "re-asked once after STATE_REQUEST_RETRY");
 }
 
 #[test]
@@ -589,6 +609,13 @@ fn messages_outside_time_window_are_ignored_after_sync() {
     let packet = h.server.seal(old_id, 1, &update(2, &[0; 4]));
     h.session.handle_packet(&packet, h.now, &mut h.rng).unwrap();
     assert!(h.events().iter().all(|e| !matches!(e, SessionEvent::Update { .. })));
+    assert!(!h.session.received.contains(old_id), "a dropped stale packet is not recorded as received");
+    let future_id = msg_id_for_time(START + 400.0) | 3;
+    h.session.handle_packet(&h.server.seal(future_id, 1, &update(3, &[0; 4])), h.now, &mut h.rng).unwrap();
+    assert_eq!(updates_of(&h.events()), vec![3], "a newer server clock raises ours");
+    let acked = h.acks_after_delay();
+    assert!(!acked.contains(&old_id), "and it is not acknowledged");
+    assert!(acked.contains(&future_id));
 }
 
 #[test]
@@ -604,7 +631,7 @@ fn server_state_request_is_answered() {
     let reply = packet.find(ids::MSGS_STATE_INFO).expect("state info reply");
     let mut reader = Reader::new(&reply.body[4..]);
     reader.read_i64().unwrap();
-    assert_eq!(reader.read_bytes().unwrap(), &[4, 1]);
+    assert_eq!(reader.read_bytes().unwrap(), &[4, 3]);
 }
 
 #[test]
@@ -661,4 +688,1190 @@ fn dropped_answers_are_accounted() {
         h.deliver(vec![Outgoing::Content(rpc_result(msg_id, &vec![0u8; 20_000]))]).unwrap();
     }
     assert!(h.events().iter().any(|e| matches!(e, SessionEvent::DroppedAnswerTooLarge { .. })));
+}
+
+fn ack_ids(packets: &[DecodedPacket]) -> Vec<i64> {
+    packets
+        .iter()
+        .filter_map(|packet| packet.find(ids::MSGS_ACK))
+        .flat_map(|ack| read_vector_after_constructor(&ack.body))
+        .collect()
+}
+
+fn has_forced_time_update(events: &[SessionEvent]) -> bool {
+    events
+        .iter()
+        .any(|event| matches!(event, SessionEvent::TimeDifferenceUpdated { forced: true, .. }))
+}
+
+fn updates_of(events: &[SessionEvent]) -> Vec<u32> {
+    events
+        .iter()
+        .filter_map(|event| match event {
+            SessionEvent::Update { body, .. } => Some(u32::from_le_bytes(body[..4].try_into().unwrap())),
+            _ => None,
+        })
+        .collect()
+}
+
+impl Harness {
+    fn sync(&mut self) {
+        self.flush();
+        self.deliver(vec![Outgoing::Content(update(0x0bad_cafe, &[0; 4]))]).unwrap();
+        self.events();
+    }
+
+    fn sent_one(&mut self, tag: u32) -> i64 {
+        self.session.send(QueryId(tag as u64), query_body(tag), QueryOptions::default(), self.now);
+        let packet = self.flush().expect("packet with query");
+        self.sent_query(&packet, tag)
+    }
+
+    fn deliver_sealed(&mut self, msg_id: i64, seq_no: i32, body: &[u8]) -> Result<(), SessionError> {
+        let packet = self.server.seal(msg_id, seq_no, body);
+        self.session.handle_packet(&packet, self.now, &mut self.rng)
+    }
+
+    fn acks_after_delay(&mut self) -> Vec<i64> {
+        self.advance(ACK_DELAY + 1.0);
+        let packets = self.flush_all();
+        ack_ids(&packets)
+    }
+}
+
+#[test]
+fn even_server_msg_id_is_ignored() {
+    let mut h = Harness::new();
+    h.flush();
+    let even = h.server.next_msg_id(true) & !3;
+    assert_eq!(
+        h.deliver_sealed(even, 1, &update(0x1234_5678, &[0; 4])),
+        Err(SessionError::EvenServerMsgId(even))
+    );
+    assert!(h.events().is_empty());
+    assert!(h.acks_after_delay().is_empty());
+}
+
+#[test]
+fn duplicate_container_reacks_every_content_child() {
+    let mut h = Harness::new();
+    let query = h.sent_one(1);
+    let result_id = h.server.next_msg_id(true);
+    let update_id = h.server.next_msg_id(false);
+    let outer = h.server.next_msg_id(false);
+    let body = container(&[(result_id, 1, rpc_result(query, &[1, 0, 0, 0])), (update_id, 3, update(0x1111_2222, &[0; 4]))]);
+    let packet = h.server.seal(outer, 0, &body);
+    h.session.handle_packet(&packet, h.now, &mut h.rng).unwrap();
+    let events = h.events();
+    assert_eq!(updates_of(&events), vec![0x1111_2222]);
+    assert!(events.iter().any(|event| matches!(event, SessionEvent::Result { id: QueryId(1), .. })));
+    let mut acked = h.acks_after_delay();
+    acked.sort_unstable();
+    assert_eq!(acked, vec![result_id, update_id]);
+    h.session.handle_packet(&packet, h.now, &mut h.rng).unwrap();
+    assert!(updates_of(&h.events()).is_empty(), "duplicates are not reprocessed");
+    let mut reacked = h.acks_after_delay();
+    reacked.sort_unstable();
+    assert_eq!(reacked, vec![result_id, update_id], "children of a duplicate container are acked again");
+}
+
+#[test]
+fn too_old_messages_are_acked_and_replayed_safely() {
+    let mut h = Harness::new();
+    let query = h.sent_one(1);
+    let old_result = h.server.next_msg_id(true);
+    let old_update = h.server.next_msg_id(false);
+    let old_outer = h.server.next_msg_id(false);
+    for _ in 0..2100 {
+        h.deliver(vec![Outgoing::Content(update(0x0101_0101, &[0; 4]))]).unwrap();
+    }
+    h.events();
+    h.advance(ACK_DELAY + 1.0);
+    h.flush_all();
+    let outer = h.server.next_msg_id(false);
+    let body = container(&[(old_result, 1, rpc_result(query, &[7, 0, 0, 0])), (old_update, 3, update(0x0202_0202, &[0; 4]))]);
+    h.deliver_sealed(outer, 0, &body).unwrap();
+    let events = h.events();
+    assert!(events.iter().any(|event| matches!(event, SessionEvent::Result { id: QueryId(1), .. })), "pending query completes");
+    assert!(updates_of(&events).is_empty(), "an unverifiable update is not delivered twice");
+    assert!(events.contains(&SessionEvent::UpdatesLost), "the host is told to fetch the difference");
+    let acked = h.acks_after_delay();
+    assert!(acked.contains(&old_result) && acked.contains(&old_update), "acked so the server stops resending");
+
+    h.deliver_sealed(old_outer, 1, &update(0x0303_0303, &[0; 4])).unwrap();
+    let events = h.events();
+    assert!(updates_of(&events).is_empty());
+    assert!(events.contains(&SessionEvent::UpdatesLost));
+    assert!(h.acks_after_delay().contains(&old_outer));
+}
+
+#[test]
+fn future_msg_id_glitch_is_recovered_through_a_freshness_proof() {
+    let mut h = Harness::new();
+    h.session.send(QueryId(1), query_body(1), QueryOptions::default(), h.now);
+    let packet = h.flush().unwrap();
+    let query = h.sent_query(&packet, 1);
+    let ping = packet.find(ids::PING_DELAY_DISCONNECT).unwrap().clone();
+    let glitch = msg_id_for_time(h.server.server_time + 1000.0) | 3;
+    h.deliver_sealed(glitch, 1, &update(1, &[0; 4])).unwrap();
+    assert_eq!(updates_of(&h.events()), vec![1]);
+    let normal = msg_id_for_time(h.server.server_time) | 3;
+    h.deliver_sealed(normal, 1, &update(2, &[0; 4])).unwrap();
+    assert!(updates_of(&h.events()).is_empty(), "looks 1000 s old after the glitch and has no proof");
+    let proof = msg_id_for_time(h.server.server_time + 0.01) | 1;
+    let body = container(&[(proof + 4, 0, pong(ping.msg_id, ping_id_of(&ping).unwrap())), (proof + 8, 1, rpc_result(query, &[3, 0, 0, 0]))]);
+    h.deliver_sealed(proof + 12, 0, &body).unwrap();
+    let events = h.events();
+    assert!(has_forced_time_update(&events));
+    assert!(events.iter().any(|event| matches!(event, SessionEvent::Result { id: QueryId(1), .. })));
+    let later = msg_id_for_time(h.server.server_time + 0.02) | 3;
+    h.deliver_sealed(later, 1, &update(3, &[0; 4])).unwrap();
+    assert_eq!(updates_of(&h.events()), vec![3]);
+}
+
+#[test]
+fn wall_clock_jumps_do_not_move_server_time() {
+    let mut h = Harness::new();
+    h.sync();
+    h.now.unix += 3600.0;
+    h.deliver(vec![Outgoing::Content(update(5, &[0; 4]))]).unwrap();
+    let events = h.events();
+    assert_eq!(updates_of(&events), vec![5]);
+    assert!(events.iter().any(
+        |event| matches!(event, SessionEvent::TimeDifferenceUpdated { forced: true, difference } if (*difference + 3600.0).abs() < 1.0)
+    ));
+    assert!((h.session.time_difference() + 3600.0).abs() < 1.0);
+    let query = h.sent_one(1);
+    assert!((msg_id_time(query) - h.server.server_time).abs() < 2.0);
+    h.now.unix -= 7200.0;
+    let query = h.sent_one(2);
+    assert!((msg_id_time(query) - h.server.server_time).abs() < 2.0);
+}
+
+#[test]
+fn server_pings_are_answered_with_pongs() {
+    let mut h = Harness::new();
+    h.sync();
+    let ping_msg = h.server.next_msg_id(false);
+    let delayed_ping_msg = h.server.next_msg_id(false);
+    let outer = h.server.next_msg_id(false);
+    let body = container(&[(ping_msg, 0, server_ping(77)), (delayed_ping_msg, 0, server_ping_delay_disconnect(78, 75))]);
+    h.deliver_sealed(outer, 0, &body).unwrap();
+    assert!(h.events().is_empty(), "server pings are not updates");
+    let packet = h.flush().expect("pong reply");
+    let pongs: Vec<(i64, i64)> = packet
+        .messages
+        .iter()
+        .filter(|message| message.constructor() == ids::PONG)
+        .map(|message| {
+            let mut reader = Reader::new(&message.body[4..]);
+            (reader.read_i64().unwrap(), reader.read_i64().unwrap())
+        })
+        .collect();
+    assert_eq!(pongs, vec![(ping_msg, 77), (delayed_ping_msg, 78)]);
+    assert!(packet.messages.iter().filter(|m| m.constructor() == ids::PONG).all(|m| !m.is_content_related()));
+}
+
+#[test]
+fn pong_for_unknown_ping_is_ignored() {
+    let mut h = Harness::new();
+    h.sync();
+    let fake = msg_id_for_time(START + 100.0);
+    h.deliver(vec![Outgoing::Service(pong(fake, fake))]).unwrap();
+    let events = h.events();
+    assert!(!events.iter().any(|event| matches!(event, SessionEvent::Pong { .. })));
+    assert!(!has_forced_time_update(&events));
+}
+
+#[test]
+fn responses_older_than_their_request_reset_the_clock() {
+    let mut h = Harness::new();
+    h.sync();
+    h.session.set_time_difference(100.0);
+    let query = h.sent_one(1);
+    assert!(msg_id_time(query) > h.server.server_time + 99.0);
+    h.deliver(vec![Outgoing::Content(rpc_result(query, &[1, 0, 0, 0]))]).unwrap();
+    let events = h.events();
+    assert!(events.iter().any(
+        |event| matches!(event, SessionEvent::TimeDifferenceUpdated { forced: true, difference } if difference.abs() < 1.0)
+    ));
+
+    let mut h = Harness::new();
+    h.sync();
+    h.session.set_time_difference(100.0);
+    h.advance(70.0);
+    let packet = h.flush().expect("ping");
+    let ping = packet.find(ids::PING_DELAY_DISCONNECT).unwrap().clone();
+    h.deliver(vec![Outgoing::Service(pong(ping.msg_id, ping_id_of(&ping).unwrap()))]).unwrap();
+    let events = h.events();
+    assert!(has_forced_time_update(&events));
+    assert!(events.iter().any(|event| matches!(event, SessionEvent::Pong { .. })));
+}
+
+#[test]
+fn notifications_about_messages_we_never_sent_are_ignored() {
+    let mut h = Harness::new();
+    h.sync();
+    let stranger = msg_id_for_time(START - 50.0);
+    h.deliver(vec![
+        Outgoing::Service(bad_server_salt(stranger, 0, 999)),
+        Outgoing::Service(bad_msg_notification(stranger + 4, 0, 16)),
+        Outgoing::Service(bad_msg_notification(stranger + 8, 0, 17)),
+        Outgoing::Service(bad_msg_notification(stranger + 12, 0, 32)),
+    ])
+    .unwrap();
+    let events = h.events();
+    assert!(!events.iter().any(|event| matches!(event, SessionEvent::SaltsUpdated { .. })));
+    assert!(!has_forced_time_update(&events));
+    assert!(!events.iter().any(|event| matches!(event, SessionEvent::LocalSessionReset { .. })));
+    h.session.send(QueryId(1), query_body(1), QueryOptions::default(), h.now);
+    assert_eq!(h.flush().unwrap().header.salt, 101);
+}
+
+#[test]
+fn every_bad_msg_notification_code_recovers_the_message() {
+    for code in [16, 17, 18, 19, 20, 32, 33, 34, 35, 48, 64, 0, 99, -1] {
+        let mut h = Harness::new();
+        let old_session = h.session.session_id();
+        let first = h.sent_one(1);
+        h.deliver(vec![Outgoing::Service(bad_msg_notification(first, 1, code))]).unwrap();
+        let events = h.events();
+        let reset = events.iter().any(|event| matches!(event, SessionEvent::LocalSessionReset { .. }));
+        assert_eq!(reset, matches!(code, 17 | 32 | 33), "code {code}");
+        assert_eq!(reset, h.session.session_id() != old_session, "code {code}");
+        assert_eq!(has_forced_time_update(&events), matches!(code, 16 | 17), "code {code}");
+        assert!(!events.iter().any(|event| matches!(event, SessionEvent::Error { .. })), "code {code}");
+        if code == 48 {
+            let packet = h.flush().unwrap();
+            assert_eq!(packet.constructors(), vec![ids::GET_FUTURE_SALTS], "queries wait for a valid salt");
+            let now = h.server.server_time as i32;
+            h.deliver(vec![Outgoing::Content(future_salts(packet.messages[0].msg_id, now, &[(now - 10, now + 1800, 555)]))])
+                .unwrap();
+        }
+        let packet = h.flush().unwrap();
+        let second = h.sent_query(&packet, 1);
+        assert!(second > first, "code {code}: resent with a fresh msg_id");
+        if code == 48 {
+            assert_eq!(packet.header.salt, 555);
+        }
+    }
+}
+
+#[test]
+fn container_rejection_resends_every_child() {
+    let mut h = Harness::new();
+    h.session.send(QueryId(1), query_body(1), QueryOptions::default(), h.now);
+    h.session.send(QueryId(2), query_body(2), QueryOptions::default(), h.now);
+    let packet = h.flush().unwrap();
+    let container_id = packet.header.msg_id;
+    let first = h.sent_query(&packet, 1);
+    let second = h.sent_query(&packet, 2);
+    h.deliver(vec![Outgoing::Service(bad_msg_notification(container_id, 0, 64))]).unwrap();
+    let packet = h.flush().unwrap();
+    assert!(h.sent_query(&packet, 1) > first);
+    assert!(h.sent_query(&packet, 2) > second);
+    assert!(packet.find(ids::PING_DELAY_DISCONNECT).is_some(), "the ping in the rejected container is restarted");
+}
+
+#[test]
+fn repeated_bug_class_rejections_fail_the_query_instead_of_looping() {
+    let mut h = Harness::new();
+    let mut msg_id = h.sent_one(1);
+    for attempt in 1..=MAX_PROTOCOL_STRIKES {
+        h.deliver(vec![Outgoing::Service(bad_msg_notification(msg_id, 1, 34))]).unwrap();
+        let events = h.events();
+        let failed = events.iter().any(|event| {
+            matches!(event, SessionEvent::Error { id: QueryId(1), code: 500, message, .. } if message == "PROTOCOL_ERROR_BAD_MSG_34")
+        });
+        assert_eq!(failed, attempt == MAX_PROTOCOL_STRIKES);
+        if attempt < MAX_PROTOCOL_STRIKES {
+            let packet = h.flush().unwrap();
+            msg_id = h.sent_query(&packet, 1);
+        }
+    }
+    assert!(!h.session.has_queries());
+    assert!(h.flush_all().iter().all(|packet| packet.messages.iter().all(|m| query_tag(&m.body).is_none())));
+}
+
+#[test]
+fn bad_server_salt_inside_a_container_keeps_siblings() {
+    let mut h = Harness::new();
+    h.session.send(QueryId(1), query_body(1), QueryOptions::default(), h.now);
+    h.session.send(QueryId(2), query_body(2), QueryOptions::default(), h.now);
+    let packet = h.flush().unwrap();
+    let first = h.sent_query(&packet, 1);
+    let second = h.sent_query(&packet, 2);
+    h.deliver(vec![
+        Outgoing::Content(rpc_result(first, &[1, 0, 0, 0])),
+        Outgoing::Service(bad_server_salt(second, 3, 4242)),
+    ])
+    .unwrap();
+    assert_eq!(h.results(), vec![(QueryId(1), vec![1, 0, 0, 0])]);
+    let packet = h.flush().unwrap();
+    assert_eq!(packet.header.salt, 4242);
+    assert!(h.sent_query(&packet, 2) > second);
+}
+
+#[test]
+fn new_session_created_never_resends_queries_answered_in_the_same_packet() {
+    for result_first in [false, true] {
+        let mut h = Harness::new();
+        let query = h.sent_one(1);
+        let notification = Outgoing::Content(new_session_created(query + 4, 42, 101));
+        let answer = Outgoing::Content(rpc_result(query, &[9, 0, 0, 0]));
+        let items = if result_first { vec![answer, notification] } else { vec![notification, answer] };
+        h.deliver(items).unwrap();
+        let events = h.events();
+        assert!(events.iter().any(|event| matches!(event, SessionEvent::Result { id: QueryId(1), .. })));
+        assert!(events.iter().any(|event| matches!(event, SessionEvent::ServerSessionReset { unique_id: 42, .. })));
+        assert!(h.flush_all().iter().all(|packet| packet.messages.iter().all(|m| query_tag(&m.body).is_none())));
+    }
+}
+
+#[test]
+fn duplicate_new_session_notifications_are_ignored() {
+    let mut h = Harness::new();
+    h.session.send(QueryId(1), query_body(1), QueryOptions::default(), h.now);
+    let packet = h.flush().unwrap();
+    let query = h.sent_query(&packet, 1);
+    h.deliver(vec![Outgoing::Content(new_session_created(packet.header.msg_id + 4, 42, 101))]).unwrap();
+    assert_eq!(h.events().iter().filter(|event| matches!(event, SessionEvent::ServerSessionReset { .. })).count(), 1);
+    let packet = h.flush().unwrap();
+    let resent = h.sent_query(&packet, 1);
+    assert!(resent > query);
+    h.deliver(vec![Outgoing::Content(new_session_created(packet.header.msg_id + 4, 42, 101))]).unwrap();
+    assert!(!h.events().iter().any(|event| matches!(event, SessionEvent::ServerSessionReset { .. })));
+    assert!(h.flush_all().iter().all(|packet| packet.messages.iter().all(|m| query_tag(&m.body).is_none())));
+}
+
+#[test]
+fn new_session_created_salt_is_adopted() {
+    let mut h = Harness::new();
+    h.flush();
+    h.deliver(vec![Outgoing::Content(new_session_created(1, 7, 31337))]).unwrap();
+    assert!(h.events().iter().any(|event| matches!(event, SessionEvent::SaltsUpdated { .. })));
+    h.session.send(QueryId(1), query_body(1), QueryOptions::default(), h.now);
+    assert_eq!(h.flush().unwrap().header.salt, 31337);
+}
+
+#[test]
+fn msg_copy_is_unwrapped_and_deduplicated() {
+    let mut h = Harness::new();
+    let query = h.sent_one(1);
+    let inner = h.server.next_msg_id(true);
+    h.deliver(vec![Outgoing::Service(msg_copy(inner, 1, &rpc_result(query, &[5, 0, 0, 0])))]).unwrap();
+    assert_eq!(h.results(), vec![(QueryId(1), vec![5, 0, 0, 0])]);
+    assert!(h.acks_after_delay().contains(&inner));
+    h.deliver(vec![Outgoing::Service(msg_copy(inner, 1, &update(0x4444_4444, &[0; 4])))]).unwrap();
+    assert!(updates_of(&h.events()).is_empty(), "the copy of an already received message is not processed again");
+    assert!(h.acks_after_delay().contains(&inner), "and its original is acknowledged again");
+}
+
+#[test]
+fn nested_containers_and_gzip_are_unwrapped() {
+    let mut h = Harness::new();
+    let query = h.sent_one(1);
+    let a = h.server.next_msg_id(true);
+    let b = h.server.next_msg_id(false);
+    let c = h.server.next_msg_id(false);
+    let inner = container(&[(a, 1, rpc_result(query, &[8, 0, 0, 0]))]);
+    let packed_update = gzip_packed(&update(0x5555_5555, &[1; 8]));
+    let outer = container(&[(b, 0, inner), (c, 1, packed_update)]);
+    h.deliver(vec![Outgoing::Service(gzip_packed(&outer))]).unwrap();
+    let events = h.events();
+    assert!(events.iter().any(|event| matches!(event, SessionEvent::Result { id: QueryId(1), .. })));
+    assert_eq!(updates_of(&events), vec![0x5555_5555]);
+    let mut acked = h.acks_after_delay();
+    acked.sort_unstable();
+    assert!(acked.contains(&a) && acked.contains(&c));
+}
+
+#[test]
+fn container_children_with_even_msg_ids_are_skipped() {
+    let mut h = Harness::new();
+    h.flush();
+    let good = h.server.next_msg_id(false);
+    let even = (good + 64) & !3;
+    let outer = h.server.next_msg_id(false) + 128;
+    let body = container(&[(even, 1, update(0x6666_6666, &[0; 4])), (good, 1, update(0x7777_7777, &[0; 4]))]);
+    h.deliver_sealed(outer, 0, &body).unwrap();
+    assert_eq!(updates_of(&h.events()), vec![0x7777_7777]);
+}
+
+#[test]
+fn malformed_and_unknown_children_do_not_break_the_container() {
+    let mut h = Harness::new();
+    let query = h.sent_one(1);
+    let ids_: Vec<i64> = (0..6).map(|_| h.server.next_msg_id(false)).collect();
+    let truncated_bad_msg = bad_msg_notification(query, 1, 16)[..12].to_vec();
+    let mut broken_gzip = Writer::new();
+    broken_gzip.write_u32(ids::GZIP_PACKED);
+    broken_gzip.write_bytes(&[0x1f, 0x8b, 1, 2, 3, 4]);
+    let body = container(&[
+        (ids_[0], 1, truncated_bad_msg),
+        (ids_[1], 1, update(0xfeed_f00d, &[0; 12])),
+        (ids_[2], 1, Vec::new()),
+        (ids_[3], 1, broken_gzip.into_inner()),
+        (ids_[4], 1, rpc_result(query, &[6, 0, 0, 0])),
+    ]);
+    let outer = h.server.next_msg_id(false);
+    assert!(h.deliver_sealed(outer, 0, &body).is_ok());
+    let events = h.events();
+    assert!(events.iter().any(|event| matches!(event, SessionEvent::Result { id: QueryId(1), .. })));
+    assert_eq!(updates_of(&events), vec![0xfeed_f00d], "unknown constructors are handed to the host");
+    assert!(!has_forced_time_update(&events));
+    let acked = h.acks_after_delay();
+    for id in &ids_[..5] {
+        assert!(acked.contains(id), "every content child is acked, even malformed ones");
+    }
+}
+
+#[test]
+fn broken_container_structure_is_reported() {
+    let mut h = Harness::new();
+    h.flush();
+    let mut body = container(&[(h.server.next_msg_id(false), 1, update(1, &[0; 4]))]);
+    body[4..8].copy_from_slice(&3i32.to_le_bytes());
+    let outer = h.server.next_msg_id(false);
+    assert!(matches!(h.deliver_sealed(outer, 0, &body), Err(SessionError::Malformed(_))));
+    let mut body = container(&[(h.server.next_msg_id(false), 1, update(1, &[0; 4]))]);
+    let length_offset = 8 + 12;
+    body[length_offset..length_offset + 4].copy_from_slice(&400i32.to_le_bytes());
+    let outer = h.server.next_msg_id(false);
+    assert!(matches!(h.deliver_sealed(outer, 0, &body), Err(SessionError::Malformed(_))));
+}
+
+#[test]
+fn unpacking_is_bounded_per_packet_and_by_depth() {
+    let mut h = Harness::new();
+    h.session = Session::new(
+        SessionConfig {
+            max_unpacked_bytes: 64 * 1024,
+            ..SessionConfig::default()
+        },
+        key(),
+        &h.session.salts(),
+        0.0,
+        h.now,
+        &mut h.rng,
+    );
+    h.session.connection_opened(h.now);
+    h.flush();
+    let children: Vec<(i64, i32, Vec<u8>)> = (0..3u32)
+        .map(|index| (h.server.next_msg_id(false), 1, gzip_packed(&update(0x1000 + index, &vec![0u8; 30 * 1024]))))
+        .collect();
+    h.deliver(vec![Outgoing::Service(container(&children))]).unwrap();
+    assert_eq!(updates_of(&h.events()), vec![0x1000, 0x1001], "the third child exceeds the packet budget");
+    let mut nested = update(0x2000, &[0; 4]);
+    for _ in 0..(MAX_NESTING_DEPTH + 4) {
+        nested = gzip_packed(&nested);
+    }
+    h.deliver(vec![Outgoing::Content(nested)]).unwrap();
+    assert!(updates_of(&h.events()).is_empty());
+}
+
+#[test]
+fn server_state_requests_get_precise_statuses() {
+    let mut h = Harness::new();
+    h.flush();
+    let first = h.server.next_msg_id(false);
+    let missing = h.server.next_msg_id(false);
+    let last = h.server.next_msg_id(false);
+    h.deliver_sealed(first, 1, &update(1, &[0; 4])).unwrap();
+    h.deliver_sealed(last, 1, &update(2, &[0; 4])).unwrap();
+    let older = first - 400;
+    let newer = last + 400;
+    h.deliver(vec![Outgoing::Service(msgs_state_req(&[first, missing, newer, last]))]).unwrap();
+    let packet = h.flush().unwrap();
+    let reply = packet.find(ids::MSGS_STATE_INFO).expect("reply");
+    let mut reader = Reader::new(&reply.body[12..]);
+    assert_eq!(reader.read_bytes().unwrap(), &[4, 2, 3, 4]);
+    assert!(!reply.is_content_related());
+    let _ = older;
+    let mut filled = Harness::new();
+    filled.flush();
+    let ancient = filled.server.next_msg_id(false);
+    for _ in 0..1001 {
+        filled.deliver(vec![Outgoing::Content(update(3, &[0; 4]))]).unwrap();
+    }
+    filled.deliver(vec![Outgoing::Service(msgs_state_req(&[ancient]))]).unwrap();
+    filled.events();
+    let packets = filled.flush_all();
+    let reply = packets.iter().find_map(|packet| packet.find(ids::MSGS_STATE_INFO)).expect("reply");
+    let mut reader = Reader::new(&reply.body[12..]);
+    assert_eq!(reader.read_bytes().unwrap(), &[1]);
+}
+
+#[test]
+fn server_resend_request_retransmits_the_original_message_in_a_container() {
+    let mut h = Harness::new();
+    h.session.send(QueryId(1), query_body(1), QueryOptions::default(), h.now);
+    let packet = h.flush().unwrap();
+    let original = packet.messages.iter().find(|m| query_tag(&m.body) == Some(1)).unwrap().clone();
+    h.deliver(vec![Outgoing::Service(msg_resend_req(&[original.msg_id]))]).unwrap();
+    let packet = h.flush().unwrap();
+    let copy = packet.messages.iter().find(|m| query_tag(&m.body) == Some(1)).expect("retransmitted");
+    assert_eq!(copy.msg_id, original.msg_id);
+    assert_eq!(copy.seq_no, original.seq_no);
+    assert_eq!(copy.body, original.body);
+    assert_eq!(copy.container_id, Some(packet.header.msg_id), "a resent message always travels in a fresh container");
+    assert!(packet.header.msg_id > original.msg_id);
+    assert!(packet.find(ids::MSGS_STATE_INFO).is_none());
+    h.deliver(vec![Outgoing::Content(rpc_result(original.msg_id, &[1, 1, 1, 1]))]).unwrap();
+    assert_eq!(h.results(), vec![(QueryId(1), vec![1, 1, 1, 1])]);
+
+    let unknown = original.msg_id + 4000;
+    let request_id = h.server.next_msg_id(false);
+    h.deliver_sealed(request_id, 0, &msg_resend_req(&[unknown])).unwrap();
+    let packet = h.flush().unwrap();
+    let reply = packet.find(ids::MSGS_STATE_INFO).expect("state info for unknown ids");
+    let mut reader = Reader::new(&reply.body[4..]);
+    assert_eq!(reader.read_i64().unwrap(), request_id);
+    assert_eq!(reader.read_bytes().unwrap(), &[1]);
+}
+
+#[test]
+fn server_resend_answer_request_gets_state_info() {
+    let mut h = Harness::new();
+    h.flush();
+    let request_id = h.server.next_msg_id(false);
+    h.deliver_sealed(request_id, 0, &msg_resend_ans_req(&[11, 15])).unwrap();
+    let packet = h.flush().unwrap();
+    let reply = packet.find(ids::MSGS_STATE_INFO).expect("reply");
+    let mut reader = Reader::new(&reply.body[4..]);
+    assert_eq!(reader.read_i64().unwrap(), request_id);
+    assert_eq!(reader.read_bytes().unwrap(), &[1, 1]);
+}
+
+#[test]
+fn future_salts_must_answer_our_request() {
+    let mut h = Harness::with_salts(vec![]);
+    let packet = h.flush().unwrap();
+    let request = packet.messages[0].msg_id;
+    let now = h.server.server_time as i32;
+    h.deliver(vec![Outgoing::Service(bad_server_salt(request, 0, 900))]).unwrap();
+    h.deliver(vec![Outgoing::Content(future_salts(request + 400, now, &[(now - 10, now + 1800, 1), (now + 1800, now + 3600, 2)]))])
+        .unwrap();
+    assert_eq!(h.session.salts().iter().map(|salt| salt.salt).collect::<Vec<_>>(), vec![900]);
+    h.deliver(vec![Outgoing::Content(future_salts(
+        request,
+        now,
+        &[(now - 10, now + 1800, 3), (now + 1800, now + 3600, 4), (now + 50, now + 40, 5)],
+    ))])
+    .unwrap();
+    let salts: Vec<i64> = h.session.salts().iter().map(|salt| salt.salt).collect();
+    assert_eq!(salts, vec![3, 4], "inverted ranges are dropped");
+}
+
+#[test]
+fn drop_answer_replies_are_silent_and_acked() {
+    let mut h = Harness::new();
+    let query = h.sent_one(1);
+    assert!(matches!(h.session.cancel(QueryId(1)), CancelOutcome::RemovedInFlight { .. }));
+    h.session.drop_answer(query, h.now);
+    let packet = h.flush().unwrap();
+    assert!(packet.find(ids::RPC_DROP_ANSWER).is_some());
+    let mut dropped = Vec::new();
+    dropped.extend_from_slice(&query.to_le_bytes());
+    dropped.extend_from_slice(&1i32.to_le_bytes());
+    dropped.extend_from_slice(&64i32.to_le_bytes());
+    h.deliver(vec![
+        Outgoing::Content(rpc_answer(query, ids::RPC_ANSWER_UNKNOWN, &[])),
+        Outgoing::Content(rpc_answer(query, ids::RPC_ANSWER_DROPPED_RUNNING, &[])),
+        Outgoing::Content(rpc_answer(query, ids::RPC_ANSWER_DROPPED, &dropped)),
+    ])
+    .unwrap();
+    assert!(!h.events().iter().any(|event| matches!(
+        event,
+        SessionEvent::Result { .. } | SessionEvent::Error { .. } | SessionEvent::Update { .. }
+    )));
+    assert_eq!(h.acks_after_delay().len(), 3);
+}
+
+#[test]
+fn rpc_errors_are_sanitized_like_tdlib() {
+    for (code, message, expected_code, expected_message) in [
+        (0, b"ZERO".to_vec(), 500, "ZERO".to_string()),
+        (10000, b"HUGE".to_vec(), 500, "HUGE".to_string()),
+        (-10000, b"TINY".to_vec(), 500, "TINY".to_string()),
+        (303, b"PHONE_MIGRATE_4".to_vec(), 303, "PHONE_MIGRATE_4".to_string()),
+        (400, vec![0xff, 0xfe, 0x41], 400, "INVALID_UTF8_ERROR_MESSAGE".to_string()),
+        (-503, b"Timeout".to_vec(), -503, "Timeout".to_string()),
+    ] {
+        let mut h = Harness::new();
+        let query = h.sent_one(1);
+        h.deliver(vec![Outgoing::Content(rpc_error_raw(query, code, &message))]).unwrap();
+        let events = h.events();
+        assert!(
+            events.iter().any(|event| matches!(event, SessionEvent::Error { code, message, .. } if *code == expected_code && *message == expected_message)),
+            "{code}: {events:?}"
+        );
+    }
+}
+
+#[test]
+fn unparsable_results_fail_the_query_once() {
+    let mut h = Harness::new();
+    let query = h.sent_one(1);
+    let mut broken = Writer::new();
+    broken.write_u32(ids::GZIP_PACKED);
+    broken.write_bytes(&[1, 2, 3, 4, 5]);
+    h.deliver(vec![Outgoing::Content(rpc_result(query, broken.as_slice()))]).unwrap();
+    let events = h.events();
+    assert!(events.iter().any(
+        |event| matches!(event, SessionEvent::Error { id: QueryId(1), code: 500, message, .. } if message.starts_with(RESPONSE_UNPACK_FAILED))
+    ));
+    assert!(!h.session.has_queries());
+}
+
+#[test]
+fn detailed_info_without_answer_resends_the_query() {
+    let mut h = Harness::new();
+    let query = h.sent_one(1);
+    h.deliver(vec![Outgoing::Service(msg_detailed_info_status(query, 0, 0, 0))]).unwrap();
+    let packet = h.flush().unwrap();
+    assert!(h.sent_query(&packet, 1) > query);
+    assert!(packet.find(ids::MSG_RESEND_REQ).is_none());
+}
+
+#[test]
+fn answer_resend_requests_resolve_or_fall_back_to_resending_the_query() {
+    let mut h = Harness::new();
+    let query = h.sent_one(1);
+    let answer = h.server.next_msg_id(true);
+    h.deliver(vec![Outgoing::Service(msg_detailed_info(query, answer, 100))]).unwrap();
+    let packet = h.flush().unwrap();
+    assert!(packet.find(ids::MSG_RESEND_REQ).is_some());
+    assert!(h.session.is_performing_service_tasks());
+    h.deliver_sealed(answer, 1, &rpc_result(query, &[4, 4, 4, 4])).unwrap();
+    assert_eq!(h.results(), vec![(QueryId(1), vec![4, 4, 4, 4])]);
+    assert!(!h.session.is_performing_service_tasks(), "a satisfied resend request no longer shows 'updating'");
+
+    let query = h.sent_one(2);
+    let answer = h.server.next_msg_id(true);
+    h.deliver(vec![Outgoing::Service(msg_detailed_info(query, answer, 100))]).unwrap();
+    let packet = h.flush().unwrap();
+    let request = packet.find(ids::MSG_RESEND_REQ).unwrap().msg_id;
+    h.deliver(vec![Outgoing::Service(msgs_state_info(request, &[1]))]).unwrap();
+    let packet = h.flush().unwrap();
+    assert!(h.sent_query(&packet, 2) > query, "an answer the server cannot resend means the query is resent");
+
+    let query = h.sent_one(3);
+    let answer = h.server.next_msg_id(true);
+    h.deliver(vec![Outgoing::Service(msg_detailed_info(query, answer, 100))]).unwrap();
+    let mut requests = 0;
+    let mut resent = None;
+    for _ in 0..80 {
+        h.advance(1.0);
+        h.session.handle_timeout(h.now).unwrap();
+        while let Some(packet) = h.flush() {
+            h.answer_pings(&packet);
+            if packet.find(ids::MSG_RESEND_REQ).is_some() {
+                requests += 1;
+            }
+            if let Some(message) = packet.messages.iter().find(|m| query_tag(&m.body) == Some(3)) {
+                resent = Some(message.msg_id);
+            }
+        }
+    }
+    assert_eq!(requests, MAX_ANSWER_REQUESTS as usize);
+    assert!(resent.is_some_and(|id| id > query), "unanswered resend requests fall back to resending the query");
+    assert!(!h.session.is_performing_service_tasks() || h.session.has_unanswered_queries());
+}
+
+#[test]
+fn state_info_with_mismatched_length_is_ignored() {
+    let mut h = Harness::new();
+    h.session.send(QueryId(1), query_body(1), QueryOptions::default(), h.now);
+    h.flush().unwrap();
+    h.session.connection_closed();
+    h.session.connection_opened(h.now);
+    let packet = h.flush().unwrap();
+    let request = packet.find(ids::MSGS_STATE_REQ).unwrap().msg_id;
+    h.deliver(vec![Outgoing::Service(msgs_state_info(request, &[4, 4]))]).unwrap();
+    assert!(h.session.has_unknown_queries());
+    assert!(h.flush_all().iter().all(|packet| packet.messages.iter().all(|m| query_tag(&m.body).is_none())));
+}
+
+#[test]
+fn unknown_queries_stuck_for_a_minute_close_the_connection_after_processing() {
+    let mut h = Harness::new();
+    h.session.send(QueryId(1), query_body(1), QueryOptions::default(), h.now);
+    h.session.send(QueryId(2), query_body(2), QueryOptions::default(), h.now);
+    let packet = h.flush().unwrap();
+    let second = h.sent_query(&packet, 2);
+    h.session.connection_closed();
+    h.session.connection_opened(h.now);
+    let mut outcome = Ok(());
+    for _ in 0..70 {
+        h.advance(1.0);
+        h.session.handle_timeout(h.now).unwrap();
+        while let Some(packet) = h.flush() {
+            if let Some(ping) = packet.find(ids::PING_DELAY_DISCONNECT) {
+                let reply = vec![
+                    Outgoing::Service(pong(ping.msg_id, ping_id_of(ping).unwrap())),
+                    Outgoing::Content(rpc_result(second, &[2, 0, 0, 0])),
+                ];
+                outcome = h.deliver(reply);
+            }
+        }
+        if outcome.is_err() {
+            break;
+        }
+    }
+    assert_eq!(outcome, Err(SessionError::UnknownQueriesStuck));
+    assert!(h.results().iter().any(|(id, _)| *id == QueryId(2)), "siblings of the pong are still processed");
+}
+
+#[test]
+fn service_queues_are_bounded() {
+    let mut h = Harness::new();
+    h.sync();
+    for index in 0..(MAX_QUEUED_ACKS as i64 * 2) {
+        h.session.schedule_ack(index * 4 + 1, h.now);
+    }
+    assert_eq!(h.session.to_ack.len(), MAX_QUEUED_ACKS);
+    for index in 0..(MAX_QUEUED_SERVICE_REPLIES * 3) as i64 {
+        let id = h.server.next_msg_id(false);
+        h.deliver_sealed(id, 0, &server_ping(index)).unwrap();
+        h.deliver(vec![Outgoing::Service(msgs_state_req(&[index]))]).unwrap();
+    }
+    assert!(h.session.to_pong.len() <= MAX_QUEUED_SERVICE_REPLIES);
+    assert!(h.session.to_state_info_reply.len() <= MAX_QUEUED_SERVICE_REPLIES);
+}
+
+#[test]
+fn offline_session_with_a_pending_query_detects_a_dead_connection_fast() {
+    let mut h = Harness::new();
+    h.flush_all();
+    h.advance(100.0);
+    h.flush_all();
+    let started = h.now.mono;
+    h.session.send(QueryId(1), query_body(1), QueryOptions::default(), h.now);
+    h.flush().unwrap();
+    let mut failed_at = None;
+    for _ in 0..200 {
+        h.advance(0.25);
+        h.flush_all();
+        if let Err(error) = h.session.handle_timeout(h.now) {
+            failed_at = Some((h.now.mono - started, error));
+            break;
+        }
+    }
+    let (elapsed, error) = failed_at.expect("dead connection detected");
+    assert_eq!(error, SessionError::ReadTimeout);
+    assert!((6.9..=8.0).contains(&elapsed), "detected after {elapsed} s");
+    let deadline = h.session.poll_timeout(h.now);
+    assert!(deadline.is_some());
+}
+
+#[test]
+fn offline_idle_session_keeps_the_long_timeout() {
+    let mut h = Harness::new();
+    h.flush_all();
+    let started = h.now.mono;
+    let mut failed_at = None;
+    for _ in 0..400 {
+        h.advance(1.0);
+        h.flush_all();
+        if h.session.handle_timeout(h.now).is_err() {
+            failed_at = Some(h.now.mono - started);
+            break;
+        }
+    }
+    let elapsed = failed_at.expect("eventually times out");
+    assert!(elapsed >= 135.0, "idle offline sessions wait {elapsed} s");
+}
+
+#[test]
+fn slow_link_trickling_bytes_never_times_out() {
+    for online in [false, true] {
+        let mut h = Harness::new();
+        h.session.set_online(online, h.now);
+        h.flush_all();
+        h.session.send(QueryId(1), query_body(1), QueryOptions::default(), h.now);
+        h.flush().unwrap();
+        for _ in 0..30 {
+            for _ in 0..8 {
+                h.advance(0.25);
+                h.flush_all();
+                assert!(h.session.handle_timeout(h.now).is_ok(), "online={online}");
+            }
+            h.session.note_bytes_received(h.now);
+        }
+    }
+}
+
+#[test]
+fn reconnect_sends_a_ping_immediately() {
+    let mut h = Harness::new();
+    h.flush_all();
+    h.advance(10.0);
+    h.session.connection_closed();
+    h.session.connection_opened(h.now);
+    let packet = h.flush().expect("ping right after reconnect");
+    assert!(packet.find(ids::PING_DELAY_DISCONNECT).is_some());
+}
+
+#[test]
+fn rejected_connection_requeues_only_unacknowledged_queries() {
+    let mut h = Harness::new();
+    h.session.send(QueryId(1), query_body(1), QueryOptions::default(), h.now);
+    let packet = h.flush().unwrap();
+    let first = h.sent_query(&packet, 1);
+    h.deliver(vec![Outgoing::Service(msgs_ack(&[first]))]).unwrap();
+    let second = h.sent_one(2);
+    h.session.connection_rejected(h.now);
+    assert!(!h.session.is_connected());
+    h.session.connection_opened(h.now);
+    let packet = h.flush().unwrap();
+    assert!(packet.find(ids::MSGS_STATE_REQ).is_none(), "nothing is unknown");
+    let tags: Vec<u32> = packet.messages.iter().filter_map(|m| query_tag(&m.body)).collect();
+    assert_eq!(tags, vec![2]);
+    assert!(h.sent_query(&packet, 2) > second);
+    h.deliver(vec![Outgoing::Content(rpc_result(first, &[1, 0, 0, 0]))]).unwrap();
+    assert_eq!(h.results(), vec![(QueryId(1), vec![1, 0, 0, 0])]);
+}
+
+#[test]
+fn destroy_responses_are_handled() {
+    let mut h = Harness::new();
+    h.sync();
+    let mut session_ok = Writer::new();
+    session_ok.write_u32(ids::DESTROY_SESSION_OK);
+    session_ok.write_i64(5);
+    let mut session_none = Writer::new();
+    session_none.write_u32(ids::DESTROY_SESSION_NONE);
+    session_none.write_i64(6);
+    h.deliver(vec![
+        Outgoing::Service(session_ok.into_inner()),
+        Outgoing::Service(session_none.into_inner()),
+        Outgoing::Service(update(ids::DESTROY_AUTH_KEY_OK, &[])),
+    ])
+    .unwrap();
+    assert!(h.events().is_empty(), "unsolicited destroy results are ignored");
+    h.session.request_destroy_auth_key();
+    let packet = h.flush().unwrap();
+    assert!(packet.find(ids::DESTROY_AUTH_KEY).is_some());
+    for (constructor, outcome) in [
+        (ids::DESTROY_AUTH_KEY_OK, DestroyAuthKeyOutcome::Ok),
+        (ids::DESTROY_AUTH_KEY_NONE, DestroyAuthKeyOutcome::None),
+        (ids::DESTROY_AUTH_KEY_FAIL, DestroyAuthKeyOutcome::Fail),
+    ] {
+        h.deliver(vec![Outgoing::Service(update(constructor, &[]))]).unwrap();
+        assert_eq!(h.events(), vec![SessionEvent::DestroyAuthKey { outcome }]);
+    }
+}
+
+#[test]
+fn mtproto_service_constructors_are_never_forwarded_as_updates() {
+    let mut h = Harness::new();
+    h.flush();
+    let mut items = Vec::new();
+    for constructor in [
+        ids::HTTP_WAIT,
+        ids::RPC_ERROR,
+        ids::RPC_ANSWER_UNKNOWN,
+        ids::FUTURE_SALT,
+        ids::MESSAGE,
+        ids::VECTOR,
+        ids::GET_FUTURE_SALTS,
+        ids::RPC_DROP_ANSWER,
+        ids::DESTROY_SESSION,
+        ids::RES_PQ,
+        ids::DH_GEN_OK,
+        ids::REQ_PQ_MULTI,
+        ids::DESTROY_SESSIONS_RES,
+    ] {
+        items.push(Outgoing::Content(update(constructor, &[0; 12])));
+    }
+    h.deliver(items).unwrap();
+    assert!(updates_of(&h.events()).is_empty());
+    assert_eq!(h.acks_after_delay().len(), 13, "content-related service objects are still acked");
+}
+
+#[test]
+fn msgs_all_info_drives_resend_and_ack() {
+    let mut h = Harness::new();
+    h.session.send(QueryId(1), query_body(1), QueryOptions::default(), h.now);
+    h.session.send(QueryId(2), query_body(2), QueryOptions::default(), h.now);
+    let packet = h.flush().unwrap();
+    let first = h.sent_query(&packet, 1);
+    let second = h.sent_query(&packet, 2);
+    h.deliver(vec![Outgoing::Service(msgs_all_info(&[first, second], &[4 | 8, 2]))]).unwrap();
+    assert!(h.events().iter().any(|event| matches!(event, SessionEvent::Acknowledged { id: QueryId(1) })));
+    let packet = h.flush().unwrap();
+    assert_eq!(packet.messages.iter().filter_map(|m| query_tag(&m.body)).collect::<Vec<_>>(), vec![2]);
+}
+
+#[test]
+fn outgoing_msg_ids_stay_monotonic_when_the_clock_moves_back() {
+    let mut h = Harness::new();
+    let mut previous = 0i64;
+    for step in 0..20u32 {
+        if step % 3 == 0 {
+            h.session.set_time_difference(-(step as f64) * 50.0);
+        }
+        let id = h.sent_one(step + 1);
+        assert!(id > previous);
+        assert_eq!(id % 4, 0);
+        assert_ne!(id & 0xffff_ffff, 0);
+        previous = id;
+    }
+}
+
+mod fuzz {
+    use super::*;
+    use proptest::prelude::*;
+
+    #[derive(Debug, Clone)]
+    enum Item {
+        Garbage(Vec<u8>),
+        Service { kind: u8, a: usize, b: usize, value: i64, truncate: Option<usize> },
+        Container(Vec<(u8, Item)>),
+        Gzip(Box<Item>),
+        Copy(u8, Box<Item>),
+    }
+
+    fn leaf() -> impl Strategy<Value = Item> {
+        prop_oneof![
+            proptest::collection::vec(any::<u8>(), 0..48).prop_map(Item::Garbage),
+            (0u8..20, any::<usize>(), any::<usize>(), any::<i64>(), proptest::option::of(0usize..40))
+                .prop_map(|(kind, a, b, value, truncate)| Item::Service { kind, a, b, value, truncate }),
+        ]
+    }
+
+    fn item() -> impl Strategy<Value = Item> {
+        leaf().prop_recursive(3, 24, 6, |inner| {
+            prop_oneof![
+                proptest::collection::vec((any::<u8>(), inner.clone()), 0..6).prop_map(Item::Container),
+                inner.clone().prop_map(|item| Item::Gzip(Box::new(item))),
+                (any::<u8>(), inner).prop_map(|(choice, item)| Item::Copy(choice, Box::new(item))),
+            ]
+        })
+    }
+
+    #[derive(Debug, Clone)]
+    struct Packet {
+        outer: u8,
+        seq: i32,
+        item: Item,
+        advance: u8,
+    }
+
+    fn packet() -> impl Strategy<Value = Packet> {
+        (any::<u8>(), any::<i32>(), item(), any::<u8>()).prop_map(|(outer, seq, item, advance)| Packet { outer, seq, item, advance })
+    }
+
+    struct Pools {
+        ours: Vec<i64>,
+        theirs: Vec<i64>,
+    }
+
+    impl Pools {
+        fn pick(list: &[i64], index: usize, fallback: i64) -> i64 {
+            if list.is_empty() {
+                fallback
+            } else {
+                list[index % list.len()]
+            }
+        }
+
+        fn ours(&self, index: usize) -> i64 {
+            Self::pick(&self.ours, index, index as i64)
+        }
+
+        fn theirs(&self, index: usize) -> i64 {
+            Self::pick(&self.theirs, index, (index as i64) | 1)
+        }
+    }
+
+    fn service(kind: u8, a: usize, b: usize, value: i64, pools: &Pools, server: &mut ServerPeer) -> Vec<u8> {
+        let ours = pools.ours(a);
+        let theirs = pools.theirs(b);
+        let small = (value & 0xff) as i32;
+        match kind {
+            0 => rpc_result(ours, &value.to_le_bytes()),
+            1 => rpc_error_raw(ours, small - 128, &value.to_le_bytes()),
+            2 => pong(ours, pools.ours(b)),
+            3 => bad_msg_notification(ours, small, [16, 17, 18, 19, 20, 32, 33, 34, 35, 48, 64, small][b % 12]),
+            4 => bad_server_salt(ours, small, value),
+            5 => new_session_created(ours, value, value.rotate_left(7)),
+            6 => msgs_ack(&[ours, pools.ours(b)]),
+            7 => msg_detailed_info_status(ours, theirs, small, small >> 2),
+            8 => msg_new_detailed_info(theirs, small),
+            9 => msgs_state_info(ours, &value.to_le_bytes()[..(b % 9)]),
+            10 => msgs_all_info(&[ours, pools.ours(b)], &value.to_le_bytes()[..(b % 3)]),
+            11 => msgs_state_req(&[theirs, value]),
+            12 => msg_resend_req(&[ours, value]),
+            13 => msg_resend_ans_req(&[theirs]),
+            14 => {
+                let now = server.server_time as i32;
+                future_salts(ours, now, &[(now - small, now + small * 10, value), (now + 5, now - 5, value + 1)])
+            }
+            15 => server_ping(value),
+            16 => update([ids::DESTROY_AUTH_KEY_OK, ids::DESTROY_SESSION_OK, ids::HTTP_WAIT, ids::RPC_ANSWER_UNKNOWN][b % 4], &[0; 12]),
+            17 => update(0x74ae_4240, &value.to_le_bytes()),
+            18 => rpc_answer(ours, ids::GZIP_PACKED, &value.to_le_bytes()),
+            _ => update(value as u32, &[]),
+        }
+    }
+
+    fn build(item: &Item, pools: &Pools, server: &mut ServerPeer) -> Vec<u8> {
+        match item {
+            Item::Garbage(bytes) => bytes.clone(),
+            Item::Service { kind, a, b, value, truncate } => {
+                let mut body = service(*kind, *a, *b, *value, pools, server);
+                if let Some(cut) = truncate {
+                    body.truncate((*cut).max(4).min(body.len()));
+                }
+                body
+            }
+            Item::Container(children) => {
+                let messages: Vec<(i64, i32, Vec<u8>)> = children
+                    .iter()
+                    .map(|(choice, child)| {
+                        let msg_id = match choice % 5 {
+                            0 => pools.theirs(*choice as usize),
+                            1 => server.next_msg_id(true) & !1,
+                            _ => server.next_msg_id(choice % 2 == 0),
+                        };
+                        (msg_id, i32::from(*choice), build(child, pools, server))
+                    })
+                    .collect();
+                container(&messages)
+            }
+            Item::Gzip(inner) => gzip_packed(&build(inner, pools, server)),
+            Item::Copy(choice, inner) => {
+                let msg_id = if choice % 2 == 0 { pools.theirs(*choice as usize) } else { server.next_msg_id(true) };
+                msg_copy(msg_id, i32::from(*choice), &build(inner, pools, server))
+            }
+        }
+    }
+
+    fn collect_ours(pools: &mut Pools, packet: &DecodedPacket) {
+        pools.ours.push(packet.header.msg_id);
+        pools.ours.extend(packet.messages.iter().map(|message| message.msg_id));
+        if pools.ours.len() > 64 {
+            let excess = pools.ours.len() - 64;
+            pools.ours.drain(..excess);
+        }
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(96))]
+        #[test]
+        fn arbitrary_server_packets_never_panic_and_state_stays_bounded(packets in proptest::collection::vec(packet(), 1..40)) {
+            let mut h = Harness::new();
+            let mut pools = Pools { ours: Vec::new(), theirs: Vec::new() };
+            for tag in 1..=4u32 {
+                h.session.send(QueryId(tag as u64), query_body(tag), QueryOptions { quick_ack: tag % 2 == 0, invoke_after: None }, h.now);
+            }
+            if let Some(packet) = h.flush() {
+                collect_ours(&mut pools, &packet);
+            }
+            for (index, packet) in packets.iter().enumerate() {
+                let body = build(&packet.item, &pools, &mut h.server);
+                let mut body = body;
+                body.resize(body.len().div_ceil(4) * 4, 0);
+                let msg_id = match packet.outer % 7 {
+                    0 => pools.theirs(packet.outer as usize),
+                    1 => msg_id_for_time(h.server.server_time - 400.0) | 1,
+                    2 => msg_id_for_time(h.server.server_time + 400.0) | 3,
+                    3 => h.server.next_msg_id(true) & !1,
+                    _ => h.server.next_msg_id(packet.outer % 2 == 0),
+                };
+                pools.theirs.push(msg_id);
+                let sealed = h.server.seal(msg_id, packet.seq, &body);
+                let _ = h.session.handle_packet(&sealed, h.now, &mut h.rng);
+                h.events();
+                if index % 3 == 0 {
+                    h.session.handle_quick_ack(packet.seq as u32);
+                }
+                h.advance(f64::from(packet.advance) * 0.05);
+                if h.session.handle_timeout(h.now).is_err() {
+                    h.session.connection_closed();
+                    h.session.connection_opened(h.now);
+                }
+                for _ in 0..4 {
+                    match h.flush() {
+                        Some(sent) => collect_ours(&mut pools, &sent),
+                        None => break,
+                    }
+                }
+                h.events();
+                prop_assert!(h.session.footprint() < 40_000, "footprint {}", h.session.footprint());
+            }
+        }
+    }
+}
+
+#[test]
+fn only_odd_seqno_messages_are_acked() {
+    let mut h = Harness::new();
+    h.sync();
+    let even = h.server.next_msg_id(false);
+    let odd = h.server.next_msg_id(false);
+    h.deliver_sealed(even, 2, &update(0x1357_9bdf, &[0; 4])).unwrap();
+    h.deliver_sealed(odd, 3, &update(0x2468_ace0, &[0; 4])).unwrap();
+    assert_eq!(updates_of(&h.events()), vec![0x1357_9bdf, 0x2468_ace0]);
+    let acked = h.acks_after_delay();
+    assert!(acked.contains(&odd));
+    assert!(!acked.contains(&even));
+}
+
+#[test]
+fn msg_new_detailed_info_requests_an_unseen_answer() {
+    let mut h = Harness::new();
+    h.sync();
+    let answer = h.server.next_msg_id(false);
+    h.deliver(vec![Outgoing::Service(msg_new_detailed_info(answer, 64))]).unwrap();
+    let packet = h.flush().unwrap();
+    let request = packet.find(ids::MSG_RESEND_REQ).expect("resend request");
+    assert_eq!(read_vector_after_constructor(&request.body), vec![answer]);
+    assert!(!request.is_content_related());
+    h.deliver_sealed(answer, 1, &update(0x0f0f_0f0f, &[0; 4])).unwrap();
+    assert_eq!(updates_of(&h.events()), vec![0x0f0f_0f0f]);
+    assert!(!h.session.is_performing_service_tasks());
+}
+
+#[test]
+fn rpc_result_for_unknown_or_zero_request_is_dropped_and_acked() {
+    let mut h = Harness::new();
+    h.sync();
+    let result_id = h.server.next_msg_id(true);
+    let zero_id = h.server.next_msg_id(true);
+    h.deliver_sealed(result_id, 1, &rpc_result(msg_id_for_time(START) + 400, &[1, 2, 3, 4])).unwrap();
+    h.deliver_sealed(zero_id, 1, &rpc_result(0, &[1, 2, 3, 4])).unwrap();
+    assert!(h.events().is_empty());
+    let acked = h.acks_after_delay();
+    assert!(acked.contains(&result_id) && acked.contains(&zero_id));
+}
+
+#[test]
+fn incoming_salt_is_not_validated() {
+    let mut h = Harness::new();
+    h.sync();
+    h.server.salt = 0x00dd_5a17;
+    h.deliver(vec![Outgoing::Content(update(0x3141_5926, &[0; 4]))]).unwrap();
+    assert_eq!(updates_of(&h.events()), vec![0x3141_5926]);
+    h.session.send(QueryId(1), query_body(1), QueryOptions::default(), h.now);
+    assert_eq!(h.flush().unwrap().header.salt, 101, "only bad_server_salt, future_salts and new_session_created change our salt");
+}
+
+#[test]
+fn empty_containers_and_empty_bodies_are_harmless() {
+    let mut h = Harness::new();
+    h.sync();
+    let empty_container = h.server.next_msg_id(false);
+    h.deliver_sealed(empty_container, 0, &container(&[])).unwrap();
+    let empty_body = h.server.next_msg_id(false);
+    h.deliver_sealed(empty_body, 1, &[]).unwrap();
+    let short_body = h.server.next_msg_id(false);
+    h.deliver_sealed(short_body, 1, &[0xcc; 4][..2].iter().chain(&[0, 0]).copied().collect::<Vec<u8>>()).unwrap();
+    let events = h.events();
+    assert!(!events.iter().any(|event| matches!(event, SessionEvent::LocalSessionReset { .. })));
+    let acked = h.acks_after_delay();
+    assert!(acked.contains(&empty_body) && acked.contains(&short_body));
+    assert!(!acked.contains(&empty_container));
 }

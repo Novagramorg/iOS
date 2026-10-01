@@ -11,6 +11,8 @@ use super::{Reader, TlError, TlRead, TlResult, TlWrite, Writer};
 pub const MAX_CONTAINER_MESSAGES: usize = 1024;
 pub const MAX_VECTOR_ITEMS: usize = 1 << 16;
 pub const MAX_UNPACKED_SIZE: usize = 64 * 1024 * 1024;
+pub const INVALID_UTF8_ERROR_MESSAGE: &str = "INVALID_UTF8_ERROR_MESSAGE";
+pub const MAX_VALID_ERROR_CODE: i32 = 9999;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResPq {
@@ -363,10 +365,20 @@ pub struct RpcError {
 
 impl RpcError {
     pub fn read_body(reader: &mut Reader<'_>) -> TlResult<Self> {
-        Ok(Self {
-            code: reader.read_i32()?,
-            message: String::from_utf8_lossy(reader.read_bytes()?).into_owned(),
-        })
+        let code = reader.read_i32()?;
+        let message = match core::str::from_utf8(reader.read_bytes()?) {
+            Ok(text) => text.to_string(),
+            Err(_) => INVALID_UTF8_ERROR_MESSAGE.to_string(),
+        };
+        Ok(Self { code, message })
+    }
+
+    pub fn normalized(self) -> Self {
+        let valid = self.code != 0 && (-MAX_VALID_ERROR_CODE..=MAX_VALID_ERROR_CODE).contains(&self.code);
+        Self {
+            code: if valid { self.code } else { 500 },
+            message: self.message,
+        }
     }
 }
 
@@ -398,6 +410,7 @@ pub enum ServiceMessage<'a> {
     MsgDetailedInfo { msg_id: i64, answer_msg_id: i64, bytes: i32, status: i32 },
     MsgNewDetailedInfo { answer_msg_id: i64, bytes: i32, status: i32 },
     MsgResendReq(Vec<i64>),
+    MsgResendAnsReq(Vec<i64>),
     MsgsStateReq(Vec<i64>),
     MsgsStateInfo { req_msg_id: i64, info: &'a [u8] },
     MsgsAllInfo { msg_ids: Vec<i64>, info: &'a [u8] },
@@ -407,7 +420,71 @@ pub enum ServiceMessage<'a> {
     DestroyAuthKeyOk,
     DestroyAuthKeyNone,
     DestroyAuthKeyFail,
+    Ping { ping_id: i64 },
+    MsgCopy(ContainerMessage<'a>),
+    HttpWait { max_delay: i32, wait_after: i32, max_wait: i32 },
+    Ignored { constructor: u32 },
     Other { constructor: u32, body: &'a [u8] },
+}
+
+pub fn is_mtproto_constructor(constructor: u32) -> bool {
+    matches!(
+        constructor,
+        ids::RES_PQ
+            | ids::P_Q_INNER_DATA
+            | ids::P_Q_INNER_DATA_TEMP
+            | ids::P_Q_INNER_DATA_DC
+            | ids::P_Q_INNER_DATA_TEMP_DC
+            | ids::SERVER_DH_PARAMS_OK
+            | ids::SERVER_DH_PARAMS_FAIL
+            | ids::SERVER_DH_INNER_DATA
+            | ids::CLIENT_DH_INNER_DATA
+            | ids::DH_GEN_OK
+            | ids::DH_GEN_RETRY
+            | ids::DH_GEN_FAIL
+            | ids::BIND_AUTH_KEY_INNER
+            | ids::REQ_PQ
+            | ids::REQ_PQ_MULTI
+            | ids::REQ_DH_PARAMS
+            | ids::SET_CLIENT_DH_PARAMS
+            | ids::RPC_RESULT
+            | ids::RPC_ERROR
+            | ids::RPC_ANSWER_UNKNOWN
+            | ids::RPC_ANSWER_DROPPED_RUNNING
+            | ids::RPC_ANSWER_DROPPED
+            | ids::RPC_DROP_ANSWER
+            | ids::FUTURE_SALT
+            | ids::FUTURE_SALTS
+            | ids::GET_FUTURE_SALTS
+            | ids::PING
+            | ids::PING_DELAY_DISCONNECT
+            | ids::PONG
+            | ids::DESTROY_SESSION
+            | ids::DESTROY_SESSION_OK
+            | ids::DESTROY_SESSION_NONE
+            | ids::DESTROY_SESSIONS_RES
+            | ids::NEW_SESSION_CREATED
+            | ids::MSG_CONTAINER
+            | ids::MSG_COPY
+            | ids::MESSAGE
+            | ids::GZIP_PACKED
+            | ids::MSGS_ACK
+            | ids::BAD_MSG_NOTIFICATION
+            | ids::BAD_SERVER_SALT
+            | ids::MSG_RESEND_REQ
+            | ids::MSG_RESEND_ANS_REQ
+            | ids::MSGS_STATE_REQ
+            | ids::MSGS_STATE_INFO
+            | ids::MSGS_ALL_INFO
+            | ids::MSG_DETAILED_INFO
+            | ids::MSG_NEW_DETAILED_INFO
+            | ids::HTTP_WAIT
+            | ids::DESTROY_AUTH_KEY
+            | ids::DESTROY_AUTH_KEY_OK
+            | ids::DESTROY_AUTH_KEY_NONE
+            | ids::DESTROY_AUTH_KEY_FAIL
+            | ids::VECTOR
+    )
 }
 
 impl<'a> ServiceMessage<'a> {
@@ -453,9 +530,17 @@ impl<'a> ServiceMessage<'a> {
                 bytes: reader.read_i32()?,
                 status: reader.read_i32()?,
             },
-            ids::MSG_RESEND_REQ | ids::MSG_RESEND_ANS_REQ => {
-                Self::MsgResendReq(reader.read_i64_vector(MAX_VECTOR_ITEMS)?)
-            }
+            ids::MSG_RESEND_REQ => Self::MsgResendReq(reader.read_i64_vector(MAX_VECTOR_ITEMS)?),
+            ids::MSG_RESEND_ANS_REQ => Self::MsgResendAnsReq(reader.read_i64_vector(MAX_VECTOR_ITEMS)?),
+            ids::PING | ids::PING_DELAY_DISCONNECT => Self::Ping {
+                ping_id: reader.read_i64()?,
+            },
+            ids::MSG_COPY => Self::MsgCopy(parse_copied_message(&mut reader)?),
+            ids::HTTP_WAIT => Self::HttpWait {
+                max_delay: reader.read_i32()?,
+                wait_after: reader.read_i32()?,
+                max_wait: reader.read_i32()?,
+            },
             ids::MSGS_STATE_REQ => Self::MsgsStateReq(reader.read_i64_vector(MAX_VECTOR_ITEMS)?),
             ids::MSGS_STATE_INFO => Self::MsgsStateInfo {
                 req_msg_id: reader.read_i64()?,
@@ -491,6 +576,7 @@ impl<'a> ServiceMessage<'a> {
             ids::DESTROY_AUTH_KEY_OK => Self::DestroyAuthKeyOk,
             ids::DESTROY_AUTH_KEY_NONE => Self::DestroyAuthKeyNone,
             ids::DESTROY_AUTH_KEY_FAIL => Self::DestroyAuthKeyFail,
+            other if is_mtproto_constructor(other) => Self::Ignored { constructor: other },
             _ => {
                 return Ok(Self::Other {
                     constructor,
@@ -500,6 +586,24 @@ impl<'a> ServiceMessage<'a> {
         };
         Ok(message)
     }
+}
+
+fn parse_copied_message<'a>(reader: &mut Reader<'a>) -> TlResult<ContainerMessage<'a>> {
+    if reader.peek_u32()? == ids::MESSAGE {
+        reader.read_u32()?;
+    }
+    let msg_id = reader.read_i64()?;
+    let seqno = reader.read_i32()?;
+    let offset = reader.position();
+    let length = reader.read_i32()?;
+    if length < 0 || length % 4 != 0 || length as usize > reader.remaining() {
+        return Err(TlError::InvalidLength {
+            offset,
+            length: length as i64,
+        });
+    }
+    let body = reader.read_raw(length as usize)?;
+    Ok(ContainerMessage { msg_id, seqno, body })
 }
 
 impl Reader<'_> {
@@ -554,11 +658,15 @@ pub enum RpcDropAnswer {
 }
 
 pub fn parse_rpc_result(result: &[u8]) -> TlResult<RpcResultBody<'_>> {
+    parse_rpc_result_limited(result, MAX_UNPACKED_SIZE)
+}
+
+pub fn parse_rpc_result_limited(result: &[u8], unpack_limit: usize) -> TlResult<RpcResultBody<'_>> {
     let mut reader = Reader::new(result);
     match reader.read_u32()? {
         ids::RPC_ERROR => Ok(RpcResultBody::Error(RpcError::read_body(&mut reader)?)),
         ids::GZIP_PACKED => {
-            let unpacked = gunzip(reader.read_bytes()?, MAX_UNPACKED_SIZE)?;
+            let unpacked = gunzip(reader.read_bytes()?, unpack_limit)?;
             if unpacked.len() >= 4 && u32::from_le_bytes(unpacked[..4].try_into().expect("4 bytes")) == ids::RPC_ERROR {
                 let mut inner = Reader::new(&unpacked[4..]);
                 return Ok(RpcResultBody::Error(RpcError::read_body(&mut inner)?));
@@ -590,6 +698,12 @@ pub fn gunzip(data: &[u8], limit: usize) -> TlResult<Vec<u8>> {
     Ok(output)
 }
 
+pub fn gunzip_within(data: &[u8], budget: &mut usize) -> TlResult<Vec<u8>> {
+    let output = gunzip(data, (*budget).min(MAX_UNPACKED_SIZE))?;
+    *budget -= output.len();
+    Ok(output)
+}
+
 pub fn gzip(data: &[u8]) -> Vec<u8> {
     let mut encoder = GzEncoder::new(Vec::with_capacity(data.len() / 2 + 32), Compression::default());
     encoder.write_all(data).expect("writing to a Vec cannot fail");
@@ -615,6 +729,21 @@ pub fn write_ping_delay_disconnect(writer: &mut Writer, ping_id: i64, disconnect
     writer.write_u32(ids::PING_DELAY_DISCONNECT);
     writer.write_i64(ping_id);
     writer.write_i32(disconnect_delay);
+}
+
+pub fn write_pong(writer: &mut Writer, msg_id: i64, ping_id: i64) {
+    writer.write_u32(ids::PONG);
+    writer.write_i64(msg_id);
+    writer.write_i64(ping_id);
+}
+
+pub fn write_msg_copy(writer: &mut Writer, message: &ContainerMessage<'_>) {
+    writer.write_u32(ids::MSG_COPY);
+    writer.write_u32(ids::MESSAGE);
+    writer.write_i64(message.msg_id);
+    writer.write_i32(message.seqno);
+    writer.write_i32(i32::try_from(message.body.len()).expect("message too large"));
+    writer.write_raw(message.body);
 }
 
 pub fn write_get_future_salts(writer: &mut Writer, num: i32) {
@@ -842,17 +971,134 @@ mod tests {
         );
     }
 
+    #[test]
+    fn server_pings_parse_as_ping() {
+        let mut ping = Writer::new();
+        write_ping(&mut ping, 77);
+        assert_eq!(ServiceMessage::parse(ping.as_slice()).unwrap(), ServiceMessage::Ping { ping_id: 77 });
+        let mut delayed = Writer::new();
+        write_ping_delay_disconnect(&mut delayed, 78, 75);
+        assert_eq!(ServiceMessage::parse(delayed.as_slice()).unwrap(), ServiceMessage::Ping { ping_id: 78 });
+    }
+
+    #[test]
+    fn msg_copy_accepts_boxed_and_bare_messages() {
+        let body = [1u8, 2, 3, 4];
+        let mut boxed = Writer::new();
+        write_msg_copy(&mut boxed, &ContainerMessage { msg_id: 41, seqno: 3, body: &body });
+        let expected = ServiceMessage::MsgCopy(ContainerMessage { msg_id: 41, seqno: 3, body: &body });
+        assert_eq!(ServiceMessage::parse(boxed.as_slice()).unwrap(), expected);
+        let mut bare = Writer::new();
+        bare.write_u32(ids::MSG_COPY);
+        bare.write_i64(41);
+        bare.write_i32(3);
+        bare.write_i32(4);
+        bare.write_raw(&body);
+        assert_eq!(ServiceMessage::parse(bare.as_slice()).unwrap(), expected);
+        let mut short = Writer::new();
+        short.write_u32(ids::MSG_COPY);
+        short.write_i64(41);
+        short.write_i32(3);
+        short.write_i32(8);
+        short.write_raw(&body);
+        assert!(ServiceMessage::parse(short.as_slice()).is_err());
+    }
+
+    #[test]
+    fn resend_answer_requests_and_http_wait_are_distinct() {
+        let mut writer = Writer::new();
+        writer.write_u32(ids::MSG_RESEND_ANS_REQ);
+        writer.write_i64_vector(&[5, 9]);
+        assert_eq!(ServiceMessage::parse(writer.as_slice()).unwrap(), ServiceMessage::MsgResendAnsReq(vec![5, 9]));
+        let mut writer = Writer::new();
+        writer.write_u32(ids::MSG_RESEND_REQ);
+        writer.write_i64_vector(&[5]);
+        assert_eq!(ServiceMessage::parse(writer.as_slice()).unwrap(), ServiceMessage::MsgResendReq(vec![5]));
+        let mut writer = Writer::new();
+        write_http_wait(&mut writer, 1, 2, 3);
+        assert_eq!(
+            ServiceMessage::parse(writer.as_slice()).unwrap(),
+            ServiceMessage::HttpWait { max_delay: 1, wait_after: 2, max_wait: 3 }
+        );
+    }
+
+    #[test]
+    fn mtproto_constructors_are_never_updates() {
+        for constructor in [ids::RPC_ERROR, ids::RES_PQ, ids::DH_GEN_FAIL, ids::VECTOR, ids::MESSAGE, ids::DESTROY_SESSIONS_RES, ids::RPC_DROP_ANSWER] {
+            let body = constructor.to_le_bytes();
+            assert_eq!(ServiceMessage::parse(&body).unwrap(), ServiceMessage::Ignored { constructor });
+        }
+        assert!(!is_mtproto_constructor(0x74ae4240));
+        assert!(!is_mtproto_constructor(0xe317af7e));
+    }
+
+    #[test]
+    fn rpc_errors_are_sanitized() {
+        let mut writer = Writer::new();
+        writer.write_u32(ids::RPC_ERROR);
+        writer.write_i32(0);
+        writer.write_bytes(&[0xff, 0xfe]);
+        match parse_rpc_result(writer.as_slice()).unwrap() {
+            RpcResultBody::Error(error) => {
+                assert_eq!(error.message, INVALID_UTF8_ERROR_MESSAGE);
+                assert_eq!(error.code, 0);
+                assert_eq!(error.normalized().code, 500);
+            }
+            other => panic!("{other:?}"),
+        }
+        for (code, normalized) in [(0, 500), (10000, 500), (-10000, 500), (9999, 9999), (-9999, -9999), (420, 420), (-503, -503)] {
+            assert_eq!(RpcError { code, message: String::new() }.normalized().code, normalized);
+        }
+    }
+
+    #[test]
+    fn gunzip_budget_is_shared() {
+        let packed = gzip(&[0u8; 1000]);
+        let mut budget = 1500;
+        assert_eq!(gunzip_within(&packed, &mut budget).unwrap().len(), 1000);
+        assert_eq!(budget, 500);
+        assert!(gunzip_within(&packed, &mut budget).is_err());
+        assert_eq!(budget, 500);
+        assert_eq!(parse_rpc_result_limited(&{
+            let mut writer = Writer::new();
+            write_gzip_packed(&mut writer, &packed);
+            writer.into_inner()
+        }, 999).map(|_| ()), Err(TlError::Gzip("unpacked size exceeds 999 bytes".into())));
+    }
+
     proptest! {
         #[test]
         fn service_parser_never_panics(data in proptest::collection::vec(any::<u8>(), 0..256), constructor in prop::sample::select(vec![
             ids::RPC_RESULT, ids::MSG_CONTAINER, ids::GZIP_PACKED, ids::PONG, ids::BAD_MSG_NOTIFICATION,
             ids::BAD_SERVER_SALT, ids::NEW_SESSION_CREATED, ids::MSGS_ACK, ids::MSG_DETAILED_INFO,
             ids::MSG_NEW_DETAILED_INFO, ids::MSG_RESEND_REQ, ids::MSGS_STATE_REQ, ids::MSGS_STATE_INFO,
-            ids::MSGS_ALL_INFO, ids::FUTURE_SALTS, ids::DESTROY_SESSION_OK])) {
+            ids::MSGS_ALL_INFO, ids::FUTURE_SALTS, ids::DESTROY_SESSION_OK, ids::DESTROY_SESSION_NONE,
+            ids::MSG_COPY, ids::MSG_RESEND_ANS_REQ, ids::PING, ids::PING_DELAY_DISCONNECT, ids::HTTP_WAIT,
+            ids::RPC_ERROR, ids::RPC_ANSWER_DROPPED, ids::DESTROY_AUTH_KEY_OK, ids::MESSAGE, ids::VECTOR])) {
             let mut body = constructor.to_le_bytes().to_vec();
             body.extend_from_slice(&data);
             let _ = ServiceMessage::parse(&body);
             let _ = parse_rpc_result(&body);
+            let _ = parse_rpc_result_limited(&body, 1024);
+        }
+
+        #[test]
+        fn container_parser_never_panics_on_any_layout(counts in proptest::collection::vec((any::<i64>(), any::<i32>(), -8i32..64), 0..8), tail in proptest::collection::vec(any::<u8>(), 0..128)) {
+            let mut writer = Writer::new();
+            writer.write_u32(ids::MSG_CONTAINER);
+            writer.write_i32(counts.len() as i32);
+            for (msg_id, seqno, length) in &counts {
+                writer.write_i64(*msg_id);
+                writer.write_i32(*seqno);
+                writer.write_i32(*length);
+            }
+            writer.write_raw(&tail);
+            if let Ok(ServiceMessage::Container(children)) = ServiceMessage::parse(writer.as_slice()) {
+                prop_assert!(children.len() <= counts.len());
+                for child in children {
+                    prop_assert_eq!(child.body.len() % 4, 0);
+                }
+            }
         }
     }
 }

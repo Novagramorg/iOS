@@ -1,0 +1,270 @@
+# MTProto protocol coverage matrix
+
+Every protocol condition the Rust engine can meet on the wire, how the two reference clients handle it, what
+the engine does, and the test that pins the behaviour. Every row ends with at least one passing test.
+
+Sources: `docs/research/tdlib.md` (tdlib 1.8.49), `docs/research/tdesktop-and-docs.md` (Part B checklist ids
+`P-NNN`, gotchas `D-N`, error table §B4), `docs/research/mtprotokit.md` (§3.11–3.20 incoming handling, §4.9
+error classification, §10 bug list `H*`/`M*`/`L*`), `docs/research/integration.md` §2.4 (what TelegramCore needs
+surfaced).
+
+Columns:
+
+- **Spec**: checklist id or research section.
+- **tdlib** / **MtProtoKit**: reference behaviour. MtProtoKit bugs carry their §10 id.
+- **Rust engine**: current behaviour.
+- **Tests**: test functions. Unqualified names live in `crates/mtproto-core/src/session/tests.rs`. Prefixes:
+  `rpc::` = `crates/mtproto-core/src/rpc/tests.rs`, `hs::` = `crates/mtproto-core/tests/handshake.rs`,
+  `engine::` = `crates/mtproto-engine/tests/engine.rs` (real sockets against `mtproto-testserver`),
+  `tl::` = `src/tl/mtproto.rs` and `src/tl/reader.rs`, `msg::` = `src/message.rs`, `codec::` =
+  `src/transport/codec.rs`, `transport::` = other files under `src/transport/`, `salts::`/`dedupe::` = files under
+  `src/session/`, `msgid::` = `src/msg_id.rs`, `dh::` = `src/crypto/dh.rs`.
+- **Δ**: `ok` = the engine already behaved correctly (a test may have been added), `fixed` = behaviour changed in
+  this pass, `new` = the condition was not handled at all before.
+
+Fault injection used by the engine tests (`crates/mtproto-testserver`): `TAG_TRANSPORT_ERROR_ONCE`
+(`transport_error_call(code)`), `TAG_BAD_MSG_ONCE` (`bad_msg_call(code, container)`), `TAG_SERVER_PING`,
+`TAG_RESEND_REQ_ONCE`, `TAG_MSG_COPY`, `TAG_GARBAGE_SIBLINGS`, `TAG_GZIP`, `ServerOptions::handshake_faults`
+(`HandshakeFault::TransportError`, `HandshakeFault::Stall`), `ServerOptions::clock_offset` with
+`validate_msg_id_time`. Existing tags keep their behaviour.
+
+## 1. Transport framing and transport errors
+
+| ID | Condition | Spec | tdlib | MtProtoKit | Rust engine | Tests | Δ |
+|---|---|---|---|---|---|---|---|
+| T01 | Transport error `-404` on an encrypted session (auth key unknown, e.g. expired temp key) | P-048, P-049, P-241 | Close with status -404; PFS: drop temp key and regenerate (§5.9 ladder) | `handleMissingKey`, and the connection is reported as broken: scheme invalidation, backup discovery and proxy probing that never stops (H10) | `AuthKeyInvalid{-404}` to the host; in-flight requests are kept and replayed on the next key; the address is reported reachable (`AddressResult{success:true}`); failure backoff | `codec::intermediate_quick_ack_and_error`, `engine::unknown_key_reports_invalid_and_recovers_with_new_key` | fixed |
+| T02 | `-404` while generating an auth key | P-049, P-100 | Handshake cleared and restarted | Restart at once, no limit, no delay (H7) | `AuthKeyCreationFailed("transport error -404")`, never `AuthKeyInvalid`; restart after the reconnect ladder | `engine::handshake_transport_error_restarts_key_generation_without_key_invalid` | fixed |
+| T03 | Transport flood `-429` | P-050 | Close with status 500: unacknowledged queries fail with 500 and are re-sent by the delayer; separate flood control (≤1/1 s, 2/4 s, 3/8 s) | Sets a throttle flag whose 5 s clear timer is never started: the MTProto stops sending for good (H1) | `TransportFlood` event; unacknowledged queries of that connection are re-queued with new msg_ids (the server rejected them); reconnect after 5, 10, 20, 40, 60 s; the failure ladder can no longer shorten that delay | `transport::transport_error_kinds`, `transport::flood_delay_grows_and_caps`, `rejected_connection_requeues_only_unacknowledged_queries`, `engine::transport_flood_backs_off_and_resends_rejected_queries` | fixed |
+| T04 | `-429` during key generation | P-050 | As T03 | H7 loop | `AuthKeyCreationFailed` + `TransportFlood` + flood delay | `engine::handshake_transport_error_restarts_key_generation_without_key_invalid` | fixed |
+| T05 | `-444` invalid DC (test/prod mismatch, MTProxy cannot route) | P-051 | Generic close; queries unknown | Connection problems path (H10) | Unacknowledged queries re-queued, next address, failure backoff, address reported reachable | `engine::other_transport_errors_reconnect_quickly`, `engine::handshake_transport_error_restarts_key_generation_without_key_invalid` | fixed |
+| T06 | `-403` and any other negative code | P-052 | Generic close; queries become unknown | As T05 | Close with failure backoff (previously an immediate reconnect loop once a packet had been received); queries become unknown and are resolved with `msgs_state_req` | `codec::short_frames_follow_tdlib_classification`, `engine::other_transport_errors_reconnect_quickly` | fixed |
+| T07 | Non-negative non-zero code in a short frame (4..15 bytes) | §2.6 | Treated as an error code | 4..19 bytes are errors | `TransportError(code)` → close with backoff (previously handed to the decryptor) | `codec::short_frames_follow_tdlib_classification`, `engine::other_transport_errors_reconnect_quickly` | fixed |
+| T08 | Zero first word in a short frame | §2.6 | `Nop` | — | Ignored | `codec::short_frames_follow_tdlib_classification`, `codec::abridged_nop_and_long_quick_ack` | ok |
+| T09 | Quick ack: abridged (big-endian, top bit), intermediate/padded (little-endian, top bit), padded `0xffffffff` + token form; unknown tokens | P-034, P-037, P-040, §2.9 | Parsed; unknown ignored | Parsed | Parsed; unknown and repeated tokens ignored | `codec::abridged_quick_ack_is_big_endian`, `codec::intermediate_quick_ack_and_error`, `codec::padded_error_and_ffff_quick_ack`, `codec::abridged_nop_and_long_quick_ack`, `quick_ack_marks_query_acknowledged`, `rpc::quick_ack_events_only_for_requests_that_asked` | ok |
+| T10 | A long frame whose first word is `0xffffffff` (an auth key id with that low word) | P-040 | Only short frames are quick acks | — | Treated as a packet; previously every packet for such a key was misread as a quick ack | `codec::long_frames_are_packets_even_with_suspicious_prefixes` | fixed |
+| T11 | Invalid frame length (0, < 4, > 16 MiB, abridged marker 0) | P-031, P-036 | Close | Abridged ≤ 4 MiB, intermediate ≤ 16 MiB (L16) | Connection error → reconnect | `codec::rejects_bad_lengths` | ok |
+| T12 | Frames split at arbitrary byte boundaries, several frames per read | — | Reassembled | Reassembled | Reassembled | `codec::decode_any_split` | ok |
+| T13 | Garbage byte stream | — | — | — | Never panics | `codec::decoder_never_panics` | ok |
+| T14 | Padded intermediate random padding | P-041 | Ignored by the decryptor | — | Trimmed using the inner structure | `codec::padded_trim_uses_inner_structure` | ok |
+| T15 | Encrypted payload followed by 1..15 bytes of transport junk | P-041 | Decrypts the 16-byte-aligned prefix | Same (floor) | Same as tdlib (previously rejected as unaligned) | `msg::trailing_transport_junk_is_ignored_like_tdlib` | fixed |
+| T16 | Fake-TLS ServerHello: wrong prefix, HMAC mismatch, byte-by-byte arrival | §3.5.2 | Error | Error | Error / waits for more | `transport::server_hello_roundtrip` | ok |
+| T17 | Fake-TLS records: wrong record type, zero-length record, records split across reads | §3.5.3 | Close on wrong type | Zero-length record stalls the stream (M23); reassembly can reorder (M22) | Wrong type closes; zero-length and split records are handled | `transport::record_writer_and_reader`, `transport::zero_length_and_split_records_do_not_stall` | ok |
+| T18 | SOCKS5 failures (version, method, credentials, CONNECT reply, address type) | §3.7 | Error | IPv4 only (M24) | Error → reconnect; IPv4, IPv6 and domain targets | `transport::failures`, `transport::no_auth_ipv4`, `transport::password_auth_ipv6_and_domain_reply`, `engine::socks5_proxy_without_and_with_credentials` | ok |
+| T19 | Obfuscation header that starts with a forbidden word | P-061 | Regenerated | Checks the wrong (encrypted) bytes (M1) | Regenerated (plaintext header) | `transport::rejects_forbidden_prefixes` | ok |
+| T20 | MTProxy secrets: 16 bytes, `dd`, `ee`+domain, too long, malformed | §3.4 | Same | Lenient parsing (L15) | Same as tdlib | `transport::rejections_and_truncation`, `transport::simple_and_padded_hex`, `transport::fake_tls_hex_and_base64`, `engine::mtproxy_simple_padded_and_fake_tls` | ok |
+| T21 | Packets queued before the transport is ready (fake-TLS/SOCKS) and the connection dies | — | — | The request hangs until the transport is replaced (H4) | Sent-but-unacknowledged queries become unknown and are resolved by `msgs_state_req` on the next connection | `reconnect_without_ack_asks_state_and_resends_only_unreceived`, `engine::mtproxy_simple_padded_and_fake_tls` | ok |
+| T22 | HTTP transport, `http_wait` | P-220 | HTTP and long poll | Not used | TCP only; a received `http_wait` is ignored | `tl::resend_answer_requests_and_http_wait_are_distinct`, `mtproto_service_constructors_are_never_forwarded_as_updates` | new |
+
+## 2. Decryption and per-packet header checks
+
+| ID | Condition | Spec | tdlib | MtProtoKit | Rust engine | Tests | Δ |
+|---|---|---|---|---|---|---|---|
+| D01 | Packet shorter than header + 12-byte padding | P-130 | Error, close | Dropped | `Decrypt(TooShort)` → close | `msg::rejects_bad_shapes`, `msg::decrypt_never_panics` | ok |
+| D02 | `auth_key_id` of another key | P-130 | Error, close | Undecryptable | `Decrypt(AuthKeyMismatch)` → close | `msg::wrong_side_or_key_is_rejected` | ok |
+| D03 | `msg_key` mismatch (constant time, checked before any length field) | P-131, P-132 | Same | Same | Same | `msg::tampering_is_detected_everywhere`, `msg::rejects_forged_length_with_valid_msg_key`, `foreign_session_and_tampering_are_rejected` | ok |
+| D04 | `message_data_length` negative, not a multiple of 4, or past the plaintext | P-133 | Error | Error | `Decrypt(InvalidLength)` | `msg::padding_bounds_are_enforced_after_authentication` | ok |
+| D05 | Padding outside 12..1024 | P-133 | Error | Error | `Decrypt(InvalidPadding)` | `msg::padding_bounds_are_enforced_after_authentication` | ok |
+| D06 | Wrong direction (`x = 0` instead of 8) | P-120 | Error | Error | `MsgKeyMismatch` | `msg::wrong_side_or_key_is_rejected` | ok |
+| D07 | `session_id` of another session | P-134 | Error, close | Parse error: packet dropped and session reset | Packet ignored, connection kept (stragglers of a session we just reset are harmless) | `foreign_session_and_tampering_are_rejected` | ok |
+| D08 | Even server `msg_id` | P-135 | Error, close | Not checked (M31) | Ignored, not acknowledged | `even_server_msg_id_is_ignored` | ok |
+| D09 | Duplicate `msg_id` (outer packet or container child) | P-136 | Ack the outer id, skip | Ack again, skip | Not reprocessed; every content-related child of a duplicated container is acknowledged again so the server stops resending | `duplicate_container_reacks_every_content_child`, `gzip_rpc_errors_and_duplicates`, `updates_are_delivered_once_and_unknown_constructors_do_not_break_containers`, `dedupe::never_accepts_same_id_twice_within_window` | fixed |
+| D10 | `msg_id` older than the 1000-id window (outer or child) | P-136 | Session failed: new session, everything re-sent | Processed-id set grows without bound (M2) | Acknowledged and processed in replay-safe mode: `rpc_result`s complete pending queries (idempotent by query map), verified service messages apply, updates and `new_session_created` are not trusted and the host is told to fetch the difference. Previously dropped silently and never acked, so the server re-sent it forever | `too_old_messages_are_acked_and_replayed_safely`, `rpc::lost_updates_ask_the_host_for_a_difference`, `dedupe::peek_predicts_check`, `dedupe::peek_does_not_record` | fixed |
+| D11 | `msg_id` outside (−300 s, +30 s) after time sync, nothing in it refers to our messages | P-137 | Error, close | Not checked | Dropped without acknowledgement and without being recorded as received (a later fresh copy is still processed) | `messages_outside_time_window_are_ignored_after_sync` | fixed |
+| D12 | Same, but the packet answers one of our in-flight messages (pong, `rpc_result`, `bad_msg_*`, state info, future salts, detailed info, new session) | P-138 | Error, close | — | That proves the packet is fresh and our clock is wrong: forced resync from the packet, then processed | `future_msg_id_glitch_is_recovered_through_a_freshness_proof` | new |
+| D13 | Updates: duplicate filter on the inner `msg_id`; update older than its window | §4.6 | Duplicate skipped; too old → session failed | — | Duplicate skipped; too old → host told to fetch the difference (previously dropped silently) | `updates_are_delivered_once_and_unknown_constructors_do_not_break_containers`, `rpc::lost_updates_ask_the_host_for_a_difference` | fixed |
+| D14 | Ack every odd-seqno message, before processing, including malformed ones; never ack even seqno | P-171, P-173 | Same | Same (no flush timer, M33) | Same; flushed within 30 s or at 100 pending | `only_odd_seqno_messages_are_acked`, `malformed_and_unknown_children_do_not_break_the_container`, `many_acks_flush_immediately`, `request_roundtrip_with_ping_and_acks` | ok |
+| D15 | Incoming salt differs from ours | P-203 | Not checked | Not checked | Not checked; our salt only changes through `bad_server_salt`, `future_salts` and `new_session_created` | `incoming_salt_is_not_validated` | ok |
+| D16 | Server `msg_id`s out of order within the window | P-136 | Accepted | Accepted | Accepted once each | `dedupe::detects_duplicates_and_out_of_order`, `dedupe::never_accepts_same_id_twice_within_window` | ok |
+
+## 3. Service messages
+
+| ID | Condition | Spec | tdlib | MtProtoKit | Rust engine | Tests | Δ |
+|---|---|---|---|---|---|---|---|
+| S01 | `rpc_result` for a pending query | P-210 | Result | Result | `Completed` | `request_roundtrip_with_ping_and_acks`, `engine::requests_complete_with_correct_payloads` | ok |
+| S02 | `rpc_result` carrying `gzip_packed` value or `gzip_packed` `rpc_error` | P-015 | Unpacked | Unpacked | Unpacked | `gzip_rpc_errors_and_duplicates`, `tl::rpc_result_variants`, `engine::copied_gzipped_and_noisy_answers_complete_on_one_connection` | ok |
+| S03 | `rpc_result` for an unknown, cancelled or zero `req_msg_id` | §4.7.1 | Dropped (0 closes the connection) | Dropped | Dropped and acknowledged | `rpc_result_for_unknown_or_zero_request_is_dropped_and_acked`, `cancellation` | ok |
+| S04 | Unwanted answers: more than 256 KB of > 16 KB results for unknown queries | §5.3 | Close the connection | — | Connection reset | `dropped_answers_are_accounted` | ok |
+| S05 | `rpc_answer_unknown` / `rpc_answer_dropped_running` / `rpc_answer_dropped` (replies to our `rpc_drop_answer`) | P-212 | Dropped | `rpc_drop_answer` never sent (M14) | Silent, acknowledged; a cancelled ≥ 512 KiB request sends `rpc_drop_answer` and reconnects | `drop_answer_replies_are_silent_and_acked`, `rpc::cancelling_large_in_flight_request_drops_answer_and_resets_connection` | ok |
+| S06 | Response `msg_id` more than 15 s older than the request (`rpc_result`, `pong`) | §4.9 | Forced time reset | — | Forced time reset, now only for responses to our own messages | `responses_older_than_their_request_reset_the_clock` | fixed |
+| S07 | `rpc_result` whose body cannot be unpacked (broken gzip, empty, over budget) | — | Empty result fails at the API layer | `500 TL_PARSING_ERROR`, retried every 2 s forever with initConnection (H8) | `500 RESPONSE_UNPACK_FAILED: …`, terminal: never retried, never delegated | `unparsable_results_fail_the_query_once`, `rpc::local_unpack_failures_are_terminal_and_never_retried` | fixed |
+| S08 | `pong` for our ping | P-215 | RTT, liveness | Clears actualization ping | RTT, liveness | `request_roundtrip_with_ping_and_acks`, `responses_older_than_their_request_reset_the_clock` | ok |
+| S09 | `pong` for a ping we never sent | — | Time check still applied | Ignored | Ignored: no RTT sample, no time reset | `pong_for_unknown_ping_is_ignored` | fixed |
+| S10 | Server-initiated `ping` / `ping_delay_disconnect` | P-215 | Not in schema: handed to the update layer | Passed to services, never answered | Answered with `pong` (same `msg_id`/`ping_id`, non-content) | `server_pings_are_answered_with_pongs`, `tl::server_pings_parse_as_ping`, `engine::server_pings_are_answered` | new |
+| S11 | `msgs_ack` (including a container id); acks never complete an RPC | P-170, P-176 | Same | Same | Same | `msgs_ack_on_container_acknowledges_children_once`, `acknowledged_queries_survive_reconnect_without_state_request` | ok |
+| S12 | `bad_server_salt` | P-198 | New salt, resend with new msg_id | Synthetic 30 min salt (H2) | New salt (10 min), future salts refetched, resend with new msg_id, executed once | `bad_server_salt_updates_salt_and_resends`, `engine::bad_server_salt_rotates_salt_and_executes_once` | ok |
+| S13 | `bad_server_salt` inside a container next to other results | — | Each processed | Each processed | Each processed | `bad_server_salt_inside_a_container_keeps_siblings` | ok |
+| S14 | `bad_server_salt` / `bad_msg_notification` naming a message we never sent | P-146, P-191 | Not verified | Not verified | Ignored: no salt, time or session change | `notifications_about_messages_we_never_sent_are_ignored` | fixed |
+| S15 | `new_session_created` | P-207, P-208 | Resend queries whose container is older than `first_msg_id`; fake `updatesTooLong` | Same; salt ignored | Same; acknowledged; `UpdatesReset` to the host | `new_session_created_resends_older_queries_and_reports_reset`, `rpc::updates_too_long_and_session_resets_emit_updates_reset`, `engine::updates_and_session_resets_are_delivered` | ok |
+| S16 | `new_session_created` and an answer for an older query in the same packet (either order) | — | Resends, then drops the late answer: double execution | Same | Resends are deferred to the end of the packet, so an answered query is never re-sent | `new_session_created_never_resends_queries_answered_in_the_same_packet` | fixed |
+| S17 | Duplicate `new_session_created` (same `unique_id`) | P-209 | Not deduplicated | Not deduplicated | Ignored | `duplicate_new_session_notifications_are_ignored` | new |
+| S18 | `new_session_created.server_salt` | P-204 | Ignored | Ignored (H2) | Adopted when it differs or the current salt is invalid | `new_session_created_salt_is_adopted` | new |
+| S19 | `msg_detailed_info`: status 1..3 → resend; otherwise ack the query and ask for an unseen answer with `msg_resend_req`; `answer_msg_id = 0` → resend | P-185, P-186 | Same | Asks for the answer while the request is pending | Same as tdlib (a zero answer id used to produce `msg_resend_req [0]`) | `msg_detailed_info_requests_lost_answer`, `detailed_info_without_answer_resends_the_query` | fixed |
+| S20 | `msg_new_detailed_info`: seen answer → ack; unseen → `msg_resend_req` | P-185, P-186 | Same | Always requests | Same as tdlib | `msg_new_detailed_info_for_received_message_is_only_acked`, `msg_new_detailed_info_requests_an_unseen_answer` | ok |
+| S21 | Our `msg_resend_req`: answer arrives / server replies `msgs_state_info` / no reply | P-184 | Fire and forget | No timeout: "Updating" forever (M34) | Answer clears the request and the "updating" flag; a `msgs_state_info` reply means the answer is gone → query re-sent; no reply → asked again every 20 s, after 3 requests the query is re-sent | `answer_resend_requests_resolve_or_fall_back_to_resending_the_query` | fixed |
+| S22 | `msgs_state_info` for our `msgs_state_req` (status flags masked with `& 7`) | P-180, P-181 | 1..3 resend, 4 ack | — | Same | `reconnect_without_ack_asks_state_and_resends_only_unreceived`, `engine::stalled_timed_requests_reconnect_and_ask_state` | ok |
+| S23 | `msgs_state_info` whose `info` length differs from the request | — | Error | — | Ignored; the request is retried later | `state_info_with_mismatched_length_is_ignored` | ok |
+| S24 | Our `msgs_state_req` never answered | — | Re-asked on the next connection | — | Re-asked after 20 s on the same connection (previously never, while the first request was outstanding) | `unanswered_state_request_is_retried` | fixed |
+| S25 | `msgs_all_info` | P-183 | As state info | Not handled | 1..3 resend, 4 ack | `msgs_all_info_drives_resend_and_ack` | ok |
+| S26 | Server `msgs_state_req` | P-180, P-181 | — | Never answered | `msgs_state_info` with 4 (received), 2 (in range, missing), 3 (newer than anything seen), 1 (older than the window) | `server_state_requests_get_precise_statuses`, `server_state_request_is_answered` | fixed |
+| S27 | Server `msg_resend_req` for our messages | P-182, P-184 | Ignored | Cannot parse it (vector header): whole packet dropped and session reset (H3) | Pending queries are re-transmitted with their original `msg_id`, `seqno` and body inside a fresh container; ids we no longer have get `msgs_state_info` | `server_resend_request_retransmits_the_original_message_in_a_container`, `engine::server_resend_request_is_answered_with_the_original_message` | new |
+| S28 | Server `msg_resend_ans_req` | P-184 | — | — | `msgs_state_info` (1 = nothing known; we never answer server queries) | `server_resend_answer_request_gets_state_info`, `tl::resend_answer_requests_and_http_wait_are_distinct` | new |
+| S29 | `future_salts` for our request (bare or boxed items) | P-201 | Set future salts | Never requested (H2) | Set and rotate | `missing_salt_requests_future_salts_first`, `tl::future_salts_accepts_bare_and_boxed_items` | ok |
+| S30 | `future_salts` with a foreign `req_msg_id`; salts with `valid_until ≤ valid_since` | P-201 | `req_msg_id` ignored | — | Foreign answers ignored; inverted ranges dropped | `future_salts_must_answer_our_request` | fixed |
+| S31 | `destroy_session_ok` / `destroy_session_none` | P-218 | Not implemented | Ignored | Ignored | `destroy_responses_are_handled` | ok |
+| S32 | `destroy_auth_key_ok/none/fail` | P-219 | Acted on only when requested | — | Outcome event only when requested | `destroy_responses_are_handled` | ok |
+| S33 | `msg_copy` (boxed or bare `message`) | P-166 | Not in schema: handed to the update layer | Unwrapped | Inner message processed once; a copy of an already-received message is acknowledged again, not reprocessed (previously forwarded to the host as an update) | `msg_copy_is_unwrapped_and_deduplicated`, `tl::msg_copy_accepts_boxed_and_bare_messages`, `engine::copied_gzipped_and_noisy_answers_complete_on_one_connection` | new |
+| S34 | Other MTProto-layer constructors from the server (`http_wait`, top-level `rpc_error`/`rpc_answer_*`, `future_salt`, `message`, `vector`, handshake objects, `get_future_salts`, `rpc_drop_answer`, `destroy_session`, …) | — | Handed to the update layer | Unknown to `Api.parse`: packet dropped and session reset (H3) | Ignored (acknowledged when content-related), never forwarded as updates | `mtproto_service_constructors_are_never_forwarded_as_updates`, `tl::mtproto_constructors_are_never_updates` | new |
+| S35 | Unknown constructors (new API layer) inside containers | — | Passed as updates | Packet dropped and session reset (H3) | Passed as updates; siblings unaffected; no reconnect, no session reset | `updates_are_delivered_once_and_unknown_constructors_do_not_break_containers`, `malformed_and_unknown_children_do_not_break_the_container`, `tl::unknown_constructor_is_passed_through`, `engine::copied_gzipped_and_noisy_answers_complete_on_one_connection` | ok |
+| S36 | `updatesTooLong` | P-320 | getDifference | `.reset` | `UpdatesReset` | `rpc::updates_too_long_and_session_resets_emit_updates_reset` | ok |
+
+## 4. `bad_msg_notification` codes
+
+All codes act only when `bad_msg_id` (or the container holding it) is one of our recent messages (S14). "Resend"
+always means a fresh `msg_id`.
+
+| ID | Code | Spec | tdlib | MtProtoKit | Rust engine | Tests | Δ |
+|---|---|---|---|---|---|---|---|
+| B16 | 16 msg_id too low | P-192 | Resend (time already raised) | Time sync, resend | Forced resync from the notification's `msg_id`, resend | `bad_msg_16_resyncs_time_and_resends`, `every_bad_msg_notification_code_recovers_the_message`, `engine::bad_msg_notifications_are_recovered_end_to_end`, `engine::clock_skew_in_either_direction_is_corrected` | ok |
+| B17 | 17 msg_id too high | P-193 | Forced reset + new session | Time sync, resend | Forced resync + new session (ids must stay monotonic), resend | `bad_msg_17_resets_session`, `every_bad_msg_notification_code_recovers_the_message`, `engine::clock_skew_in_either_direction_is_corrected` | ok |
+| B18 | 18 msg_id not divisible by 4 | P-194 | Close ("BUG") | Resend | Resend; after 3 such rejections of the same query it fails with terminal `500 PROTOCOL_ERROR_BAD_MSG_18` instead of looping | `every_bad_msg_notification_code_recovers_the_message`, `repeated_bug_class_rejections_fail_the_query_instead_of_looping` | fixed |
+| B19 | 19 container id reused | P-195 | Close | Resend | Resend children; strikes as B18 | `every_bad_msg_notification_code_recovers_the_message`, `engine::bad_msg_notifications_are_recovered_end_to_end` | fixed |
+| B20 | 20 message too old | P-196 | Resend | Resend | Resend | `every_bad_msg_notification_code_recovers_the_message`, `engine::bad_msg_notifications_are_recovered_end_to_end` | ok |
+| B32 | 32 seqno too low | P-197, P-157 | Close | Session reset | New session, resend; the rest of the packet is still processed | `bad_msg_32_resets_session_and_keeps_processing_container`, `every_bad_msg_notification_code_recovers_the_message`, `engine::bad_msg_notifications_are_recovered_end_to_end` | ok |
+| B33 | 33 seqno too high | P-197, P-157 | Close | Session reset | As B32 | `every_bad_msg_notification_code_recovers_the_message`, `engine::bad_msg_notifications_are_recovered_end_to_end` | ok |
+| B34 | 34 even seqno expected | P-197 | Close | Resend | Resend; strikes as B18 (previously a full session reset, re-executing every in-flight query) | `every_bad_msg_notification_code_recovers_the_message`, `repeated_bug_class_rejections_fail_the_query_instead_of_looping`, `rpc::protocol_errors_after_repeated_rejections_are_terminal`, `engine::bad_msg_notifications_are_recovered_end_to_end` | fixed |
+| B35 | 35 odd seqno expected | P-197 | Close | Resend | As B34 | `every_bad_msg_notification_code_recovers_the_message`, `rpc::protocol_errors_after_repeated_rejections_are_terminal` | fixed |
+| B48 | 48 bad salt (as `bad_msg_notification`, no salt given) | P-198 | Unknown code: close | Time sync | Current salt invalidated, queries wait for `get_future_salts`, then resend (previously re-sent at once with the same bad salt) | `every_bad_msg_notification_code_recovers_the_message`, `engine::bad_msg_notifications_are_recovered_end_to_end` | fixed |
+| B64 | 64 invalid container | P-199 | Close | Resend children | Every child re-sent, ping restarted (previously a full session reset) | `container_rejection_resends_every_child`, `every_bad_msg_notification_code_recovers_the_message`, `engine::bad_msg_notifications_are_recovered_end_to_end` | fixed |
+| B?? | Unknown codes (0, 99, −1, …) | — | Close | Resend | Resend; strikes as B18 | `every_bad_msg_notification_code_recovers_the_message`, `engine::bad_msg_notifications_are_recovered_end_to_end` | fixed |
+
+## 5. Containers, gzip, malformed and oversized input
+
+| ID | Condition | Spec | tdlib | MtProtoKit | Rust engine | Tests | Δ |
+|---|---|---|---|---|---|---|---|
+| C01 | Container structure broken (count > 1024, child length negative/unaligned/past the end) | P-160, P-163 | Parse error, close | Packet dropped, session reset | Connection closed (no session reset); unacked children are re-sent by the server | `tl::container_parse_and_limits`, `broken_container_structure_is_reported`, `tl::container_parser_never_panics_on_any_layout` | ok |
+| C02 | Nested container | P-162 | Processed recursively | Opaque body | Processed recursively, depth ≤ 8 (previously dropped silently) | `nested_containers_and_gzip_are_unwrapped` | fixed |
+| C03 | Container child with an even `msg_id` | P-135 | Not checked | — | Skipped | `container_children_with_even_msg_ids_are_skipped` | ok |
+| C04 | Malformed child (truncated known constructor), empty child, broken gzip child | — | Parse error, close | Packet dropped, session reset (H3) | Child acknowledged and skipped; siblings processed; no reconnect (previously the connection was closed and later siblings lost) | `malformed_and_unknown_children_do_not_break_the_container`, `engine::copied_gzipped_and_noisy_answers_complete_on_one_connection` | fixed |
+| C05 | `gzip_packed` at top level, in containers, around containers, in `rpc_result` | P-015, P-322 | Unpacked | Unpacked | Unpacked | `nested_containers_and_gzip_are_unwrapped`, `gzip_rpc_errors_and_duplicates`, `engine::copied_gzipped_and_noisy_answers_complete_on_one_connection` | ok |
+| C06 | Decompression bombs and deep gzip nesting | C2.15 | No limit | 32 MiB per object | Shared per-packet budget (64 MiB default, `SessionConfig::max_unpacked_bytes`) and depth ≤ 8 (previously 64 MiB per object, unbounded nesting) | `unpacking_is_bounded_per_packet_and_by_depth`, `tl::gunzip_enforces_limit`, `tl::gunzip_budget_is_shared` | fixed |
+| C07 | TL limits: vector counts, byte lengths, booleans, truncation | P-006 | Checked | Partly | Checked | `tl::vector_count_limits`, `tl::rejects_truncated_bytes`, `tl::bool_roundtrip_and_rejection`, `tl::reader_never_panics_on_garbage` | ok |
+| C08 | Arbitrary service-message bodies | — | — | — | Parser never panics | `tl::service_parser_never_panics`, `tl::container_parser_never_panics_on_any_layout` | ok |
+| C09 | Arbitrary server packets with valid encryption: random service objects, ids (ours, stale, future, even, duplicate), nesting, gzip, copies, truncation | — | — | — | Never panics; all state bounded | `arbitrary_server_packets_never_panic_and_state_stays_bounded` | new |
+| C10 | Memory bounds of per-session state | M2 | Bounded windows | Grows ~69 KB/h | Acks ≤ 16384, server replies ≤ 64 each, pending pings ≤ 16, recent outgoing ids ≤ 1024, service containers ≤ 64 (previously one entry per ping for the whole connection), container maps detached on resend (previously leaked), dedupe windows ≤ 2000 | `service_queues_are_bounded`, `arbitrary_server_packets_never_panic_and_state_stays_bounded` | fixed |
+| C11 | Empty container, empty or sub-4-byte body | P-165 | Error for short bodies (session failed) | Parse error | Ignored (acked when content-related); no reset | `empty_containers_and_empty_bodies_are_harmless` | ok |
+
+## 6. Outgoing msg_id and seq_no
+
+| ID | Condition | Spec | tdlib | MtProtoKit | Rust engine | Tests | Δ |
+|---|---|---|---|---|---|---|---|
+| I01 | Client `msg_id`: server time, `% 4 == 0`, strictly increasing even when the clock moves back, low 32 bits never zero | P-140, P-141 | Same | Can go backwards (M32) | Same as tdlib, plus non-zero low bits | `outgoing_msg_ids_stay_monotonic_when_the_clock_moves_back`, `msgid::ids_are_divisible_by_four_and_monotonic`, `msgid::strictly_increasing_for_any_clock` | fixed |
+| I02 | Container `msg_id` greater than every child | P-144, P-161 | Same | Can be lower (M32) | Same as tdlib | `request_roundtrip_with_ping_and_acks`, `server_resend_request_retransmits_the_original_message_in_a_container` | ok |
+| I03 | seqno: queries odd, service messages and containers even, 0 on a new session | P-150..P-156 | Same | Same | Same | `queries_are_packed_into_one_container_in_order`, `bad_msg_32_resets_session_and_keeps_processing_container`, `server_pings_are_answered_with_pongs`, `msgid::seqno_rules` | ok |
+| I04 | Container limits (1000 queries, 32 KiB) and oversized single queries | §4.3 | Same | 3 KiB groups | Same as tdlib | `container_limits_split_packets`, `single_large_query_is_sent_alone` | ok |
+
+## 7. Salts
+
+| ID | Condition | Spec | tdlib | MtProtoKit | Rust engine | Tests | Δ |
+|---|---|---|---|---|---|---|---|
+| SA1 | No valid salt: only `get_future_salts` until one arrives, retried every 60 s | §4.8 | Same | Time-fix ping (H2) | Same as tdlib | `missing_salt_requests_future_salts_first`, `salts::empty_state_needs_salts` | ok |
+| SA2 | Rotation by `valid_since`, 60 s safety margin, restore from persisted salts | P-202 | Same | Last eligible entry wins (L3) | Same as tdlib | `salts::future_salts_rotate_in_order`, `salts::restore_picks_currently_valid_salt` | ok |
+| SA3 | `bad_server_salt`: 10 min validity, future salts cleared | §4.8 | Same | 30 min synthetic window | Same as tdlib | `salts::bad_server_salt_gives_ten_minutes`, `bad_server_salt_updates_salt_and_resends` | ok |
+| SA4 | Salt from `new_session_created`, foreign `future_salts`, bad_msg 48 | — | — | — | See S18, S30, B48 | `new_session_created_salt_is_adopted`, `future_salts_must_answer_our_request`, `every_bad_msg_notification_code_recovers_the_message` | fixed |
+
+## 8. Time synchronisation and clock problems
+
+| ID | Condition | Spec | tdlib | MtProtoKit | Rust engine | Tests | Δ |
+|---|---|---|---|---|---|---|---|
+| TI1 | First packet sets the offset; later packets only raise it | §4.9 | Same | Time-fix ping only | Same as tdlib | `bad_msg_16_resyncs_time_and_resends`, `messages_outside_time_window_are_ignored_after_sync` | ok |
+| TI2 | Server clock 1000 s ahead or behind at start (server enforces the msg_id window) | P-143, P-192, P-193 | bad_msg 16/17 recovery | Time sync | Recovers through 16/17; the host is told the new difference | `engine::clock_skew_in_either_direction_is_corrected` | ok |
+| TI3 | Local wall clock jumps ±1 h during a session | §4.9 | Unaffected (monotonic clock) | Wall clock based | Server time now runs on the monotonic clock, so a jump changes nothing on the wire; the host gets a forced `TimeDifferenceUpdated`. Previously a forward jump made every server packet look "too old": the session ignored everything, including the bad_msg 17 that would have fixed it | `wall_clock_jumps_do_not_move_server_time` | fixed |
+| TI4 | One server packet with a far-future `msg_id` (raises our clock) | P-138 | Same raise; later packets rejected and the connection closed | — | Recovered by the first packet that answers one of our messages (D12) | `future_msg_id_glitch_is_recovered_through_a_freshness_proof` | new |
+| TI5 | Host pushes a wrong time difference | — | — | — | Corrected by the 15 s response rule (S06) | `responses_older_than_their_request_reset_the_clock` | ok |
+
+## 9. Delivery, acknowledgement and resend
+
+| ID | Condition | Spec | tdlib | MtProtoKit | Rust engine | Tests | Δ |
+|---|---|---|---|---|---|---|---|
+| A01 | Disconnect with sent-but-unacknowledged queries | P-079, P-182 | Unknown → `msgs_state_req`, resend only not-received | Re-send everything with new msg_ids (H12) | Same as tdlib; executed once | `reconnect_without_ack_asks_state_and_resends_only_unreceived`, `engine::dropped_connection_recovers_without_duplicate_execution`, `engine::stalled_timed_requests_reconnect_and_ask_state` | ok |
+| A02 | Disconnect with acknowledged queries | P-079 | Wait for the server to re-deliver | Re-send | Same as tdlib | `acknowledged_queries_survive_reconnect_without_state_request` | ok |
+| A03 | Unknown queries still unresolved 60 s after connecting | §5.3 | Close on pong | — | Close on pong, after the rest of that packet has been processed (previously the packet was abandoned at the pong) | `unknown_queries_stuck_for_a_minute_close_the_connection_after_processing` | fixed |
+| A04 | Local session reset requeues every in-flight query in order | §5.3 | Same | Same | Same | `reset_requeues_everything_in_original_order` | ok |
+| A05 | Cancellation (pending, in flight, large in flight) | P-212 | `rpc_drop_answer` | Session reset for ≥ 512 KiB (M14) | Removed; large in-flight requests send `rpc_drop_answer` and reconnect | `cancellation`, `rpc::cancelling_large_in_flight_request_drops_answer_and_resets_connection`, `engine::cancelled_requests_never_complete` | ok |
+| A06 | `invokeAfterMsg` dependencies | P-256, P-257 | Same | Dynamic decorator (M38) | Wrapped with the dependency's msg_id; dropped once the dependency completed | `dependencies_wrap_invoke_after_msg`, `rpc::dependency_ordering_and_msg_wait_timeout` | ok |
+
+## 10. Liveness and reconnection
+
+| ID | Condition | Spec | tdlib | MtProtoKit | Rust engine | Tests | Δ |
+|---|---|---|---|---|---|---|---|
+| L01 | `ping_delay_disconnect` cadence, online/offline timing | P-216, §4.10 | rtt-based online, 60/135 s offline | No keepalive | Same as tdlib | `online_mode_pings_faster`, `ping_and_read_timeouts` | ok |
+| L02 | Silently dead connection (blackhole, NAT timeout) while answers are awaited by an offline (worker) session | — | 135 s | 12 s response timer | rtt-grade ping and read timeouts whenever queries or state/resend requests are outstanding: detected after ~7 s (`max(2, 1.5·rtt + 1) · 3.5`), previously 135 s | `offline_session_with_a_pending_query_detects_a_dead_connection_fast` | fixed |
+| L03 | Idle offline session | §4.10 | 135 s | — | 135 s kept | `offline_idle_session_keeps_the_long_timeout` | ok |
+| L04 | Slow but alive link (a large response trickling in) | — | Main online session can time out mid-packet | Response timer reset by partial reads | Every received byte refreshes both the read and the ping deadline, so slow links are never cut | `slow_link_trickling_bytes_never_times_out` | fixed |
+| L05 | Ping right after (re)connect | §4.11 | Same | Actualization ping | Same | `reconnect_sends_a_ping_immediately`, `request_roundtrip_with_ping_and_acks` | ok |
+| L06 | Reconnect backoff | §6.2 | Flood controls | 1..64 s | Immediate, then 0.3, 1, 2, 4 s with ±20 % jitter; reset on network change and on any decrypted packet; `-429` keeps its own longer delay (previously 0, 1, 2, 4, 8 s) | `transport::reconnect_ladder_is_fast_and_jittered`, `engine::network_unavailable_blocks_connections`, `engine::idle_workers_disconnect_and_reconnect_on_demand` | fixed |
+| L07 | Handshake that never answers | §1.1 | 10 s | No handshake timeout (M25) | 10 s timeout → `AuthKeyCreationFailed("handshake timeout")` → retry | `engine::stalled_handshake_times_out_and_retries` | new |
+
+## 11. RPC errors
+
+| ID | Condition | Spec | tdlib | MtProtoKit | Rust engine | Tests | Δ |
+|---|---|---|---|---|---|---|---|
+| E01 | `303 PHONE_/NETWORK_/USER_/FILE_/STATS_MIGRATE_X`, and `FILE_MIGRATE_X` with code 400 | P-270, P-271, D2 | PHONE/NETWORK/USER handled internally | Surfaced | Surfaced verbatim (TelegramCore switches DC) | `rpc::migrate_errors_surface_verbatim`, `rpc::every_migrate_error_surfaces_verbatim` | ok |
+| E02 | `400 CONNECTION_NOT_INITED` / `CONNECTION_LAYER_INVALID` | P-253 | Re-send header, retry | Clear hash, retry without limit (M15) | Clear init hash, retry wrapped, at most 5 times, then surface | `rpc::connection_not_inited_clears_hash_and_retries_wrapped`, `rpc::connection_initialization_errors_are_retried_a_bounded_number_of_times` | ok |
+| E03 | `MSG_WAIT_TIMEOUT` (400 or −503) and `MSG_WAIT_FAILED` (400 or 500) | P-258, P-259 | Normalized for any code, chain restarted | 400 timeout only; 500 failed unreachable (M15) | Matched by text for any code: wait for the dependency to finish, then resend without the stale wrapper; without a dependency the code decides (no hot loop) | `rpc::dependency_ordering_and_msg_wait_timeout`, `rpc::msg_wait_errors_wait_for_the_dependency_with_any_code`, `rpc::msg_wait_errors_without_a_dependency_follow_their_code` | fixed |
+| E04 | Other `400`s (`PEER_ID_INVALID`, `CONNECTION_API_ID_INVALID`, `INPUT_*`, `ENCRYPTED_MESSAGE_INVALID`, `TEMP_AUTH_KEY_*`, empty text) | B4.2 | Returned | Surfaced | Surfaced verbatim | `rpc::other_error_classes_surface_verbatim` | ok |
+| E05 | Main session `401 AUTH_KEY_UNREGISTERED`, `AUTH_KEY_INVALID`, `USER_DEACTIVATED`, `USER_DEACTIVATED_BAN`, `SESSION_REVOKED`, `SESSION_EXPIRED` | integration §2.4 | Log out | `AuthorizationRequired` + surfaced | `AuthorizationRequired` + surfaced | `rpc::main_session_401_requires_authorization_and_surfaces`, `rpc::main_session_401_family_requires_authorization`, `engine::main_session_401_requests_authorization` | ok |
+| E06 | `401 SESSION_PASSWORD_NEEDED` | B4.2 | Not a logout | Password flag | Surfaced only | `rpc::main_session_401_family_requires_authorization` | ok |
+| E07 | `401 AUTH_KEY_PERM_EMPTY` | P-232, integration §2.4 | Drop temp key, retry as 500 | Intercepted; the whole packet is dropped (L10) | Never surfaced; `TemporaryKeyRejected` once per key (or every 30 s); the request waits for a new key or a 1..30 s backoff (previously re-sent at once: a hot loop until the host rebinds); other messages in the packet are processed | `rpc::auth_key_perm_empty_never_surfaces`, `rpc::temporary_key_rejection_does_not_drop_sibling_results` | fixed |
+| E08 | `401` on a token worker | integration §2.9 | Drop key, re-import | Any 401 re-transfers the token; revoked/unregistered park | Any 401 except the password case → `AuthTokenRequired`; `SESSION_REVOKED`/`AUTH_KEY_UNREGISTERED` park until the token is back (previously other 401s did not ask for a token) | `rpc::worker_token_wait_parks_requests`, `rpc::token_workers_refresh_the_token_on_any_401_but_park_only_revocations` | fixed |
+| E09 | `401`/`406` on plain workers and CDN | integration §2.9 | — | Never logs out | Surfaced only | `rpc::plain_workers_and_cdn_never_log_out` | ok |
+| E10 | `403 APNS_VERIFY_CHECK_x`, `RECAPTCHA_CHECK_m__k`; other 403 | integration §2.4 | Verifier | Verification | Verification; other 403 (and RECAPTCHA without `__`) surfaced | `rpc::apns_and_recaptcha_verification_park_until_resolved`, `rpc::other_error_classes_surface_verbatim` | ok |
+| E11 | `404 METHOD_INVALID` | B4.1 | Returned | Surfaced | Surfaced | `rpc::other_error_classes_surface_verbatim` | ok |
+| E12 | `406` (incl. `AUTH_KEY_DUPLICATED`, `UPDATE_APP_TO_LOGIN`) | P-283, B4.2 | Returned (`FROZEN_METHOD_INVALID` rewritten) | Soft reset callback + surfaced | Main: `SoftAuthReset` + surfaced verbatim; workers: surfaced | `rpc::soft_auth_reset_is_reported_and_surfaced`, `rpc::other_error_classes_surface_verbatim`, `rpc::plain_workers_and_cdn_never_log_out` | ok |
+| E13 | `420 FLOOD_WAIT_X` / `FLOOD_PREMIUM_WAIT_X` (any code containing the marker) | B4.2 | Wait clamp(X, 1 s, 14 d), surface above the budget | Wait X (0 = immediate, no cap) | Wait clamp(X, 1 s, 14 d) unless automatic waiting is off; reported or delegated on request; unparsable X surfaces | `rpc::flood_wait_is_waited_out_and_reported`, `rpc::flood_wait_surfaces_without_automatic_wait`, `rpc::flood_wait_delays_are_bounded`, `rpc::delegated_retry_decisions_for_flood_and_server_errors`, `engine::flood_wait_and_server_errors_are_retried_transparently` | fixed |
+| E14 | `420 SLOWMODE_WAIT_X`, `2FA_CONFIRM_WAIT_X`, `TAKEOUT_INIT_DELAY_X`, `PREMIUM_SUB_ACTIVE_UNTIL_X`, `FROZEN_METHOD_INVALID` | B4.2 | Returned | Surfaced | Surfaced verbatim | `rpc::unparsable_flood_and_frozen_method_surface`, `rpc::other_error_classes_surface_verbatim` | ok |
+| E15 | `500` (incl. `INTERDC_X_CALL_ERROR`, `WORKER_BUSY_TOO_LONG_RETRY`, `RANDOM_ID_DUPLICATE`, server-side `TL_PARSING_ERROR`, `AUTH_KEY_UNSYNCHRONIZED`) | B4.1 | Backoff 1..64 s | Retry every 2 s if the gate allows | Retry after 2, 4, 8, 16 s; surfaced when retries are disabled; delegated on request | `rpc::server_errors_retry_with_backoff_or_fail`, `rpc::negative_and_normalized_codes_are_retried_as_server_errors`, `engine::flood_wait_and_server_errors_are_retried_transparently` | ok |
+| E16 | Negative codes (`-503 Timeout`, `-500`, any other negative) | B4.1 | Backoff | `-500` only | Server-error class (previously only −500 and −503) | `rpc::negative_and_normalized_codes_are_retried_as_server_errors` | fixed |
+| E17 | Invalid codes: 0, ≥ 10000, ≤ −10000 | §5.7 | Treated as 500 | Verbatim | Normalized to 500 (retried as E15) | `rpc_errors_are_sanitized_like_tdlib`, `tl::rpc_errors_are_sanitized`, `rpc::negative_and_normalized_codes_are_retried_as_server_errors` | fixed |
+| E18 | Error text that is not valid UTF-8 | §5.7 | `INVALID_UTF8_ERROR_MESSAGE` | Lossy | `INVALID_UTF8_ERROR_MESSAGE` (previously lossy replacement characters) | `rpc::invalid_utf8_error_messages_are_replaced`, `rpc_errors_are_sanitized_like_tdlib` | fixed |
+| E19 | Other unknown codes (418, 502, …) | B4 | Returned | Surfaced | Surfaced verbatim | `rpc::other_error_classes_surface_verbatim` | ok |
+| E20 | Engine-made errors (`RESPONSE_UNPACK_FAILED`, `PROTOCOL_ERROR_BAD_MSG_x`) | H8 | — | `TL_PARSING_ERROR` retried forever | Terminal: never retried or delegated | `rpc::local_unpack_failures_are_terminal_and_never_retried`, `rpc::protocol_errors_after_repeated_rejections_are_terminal` | fixed |
+
+## 12. Auth key handshake
+
+| ID | Condition | Spec | tdlib | MtProtoKit | Rust engine | Tests | Δ |
+|---|---|---|---|---|---|---|---|
+| H01 | `resPQ.nonce` mismatch | P-091 | Error | Reset | `NonceMismatch` | `hs::tampering_is_rejected` | ok |
+| H02 | No known RSA fingerprint | P-092 | Error | Single-key fallback | `UnknownFingerprints` | `hs::tampering_is_rejected`, `hs::unknown_server_key_is_rejected` | ok |
+| H03 | Hostile `pq`: empty, > 8 bytes, < 4, prime | P-091, M7 | Factorization fails | Divide by zero / truncation (M7) | Rejected before factorization; a prime `pq` no longer burns minutes of CPU in Pollard–Brent | `hs::hostile_pq_values_fail_fast_without_hanging` | fixed |
+| H04 | `server_DH_params_fail` with valid / invalid `new_nonce_hash` | D5 | Parse error | Reset | `ServerDhParamsFail` / `NewNonceHashMismatch` | `hs::server_failures_are_reported`, `hs::server_dh_params_fail_with_bad_hash_is_reported_as_hash_mismatch` | ok |
+| H05 | `server_nonce` mismatch in DH params; nonce mismatch inside `server_DH_inner_data`; nonce mismatch in `dh_gen_*` | P-332 | Error | Partly | Error | `hs::nonce_checks_cover_every_message` | ok |
+| H06 | `encrypted_answer` not a multiple of 16; SHA1 mismatch; ≥ 16 bytes of padding | P-099, D4 | Error | Error | `BadEncryptedAnswer` | `hs::encrypted_answer_shape_is_validated`, `hs::tampering_is_rejected` | ok |
+| H07 | `dh_prime` not 2048-bit or not safe; unsupported `g`; `g_a` out of range | P-101..P-104 | Error | Error | `Dh(..)` | `hs::non_safe_or_short_primes_are_rejected`, `hs::tampering_is_rejected`, `dh::generator_conditions_follow_documentation`, `dh::g_a_range_checks`, `dh::unknown_composite_is_rejected_and_cached`, `dh::rejects_wrong_prime_shapes` | ok |
+| H08 | `dh_gen_ok` with a wrong `new_nonce_hash1` | P-110 | Error | Error | `NewNonceHashMismatch` | `hs::dh_gen_hash_mismatch_is_rejected` | ok |
+| H09 | `dh_gen_retry` (with `retry_id`), too many retries, `dh_gen_fail` | P-111 | Restart | Restart (L17) | Retry with `retry_id` up to 5, then fail; `DhGenFail` | `hs::dh_gen_retry_is_followed`, `hs::too_many_retries_fail`, `hs::server_failures_are_reported` | ok |
+| H10 | Trailing bytes after the TL object, declared length shorter than the frame | §1.2 | Allowed (`check_end = false`) | Body not truncated | Allowed (previously `TrailingData` failed the handshake) | `hs::trailing_bytes_after_handshake_answers_are_tolerated_like_tdlib`, `msg::plain_message_roundtrip` | fixed |
+| H11 | Wrong constructor for the current state | — | Error | Reset | `Tl(UnexpectedConstructor)` | `hs::unexpected_constructor_in_state_fails` | ok |
+| H12 | Garbage plain packets | — | — | — | Never panics | `hs::handshake_never_panics_on_garbage` | new |
+| H13 | Transport errors and stalls during the handshake | P-100 | Restart, 10 s timeout | H7, M25 | See T02, T04, L07 | `engine::handshake_transport_error_restarts_key_generation_without_key_invalid`, `engine::stalled_handshake_times_out_and_retries` | fixed |
+| H14 | Auth key with a leading zero byte | M6 | 256-byte encoding | Unpadded (M6) | 256-byte encoding | `dh::fixed_be_padding`, `hs::permanent_key_agreement` | ok |
+| H15 | Temporary key (`p_q_inner_data_temp_dc`, `expires_at`) | P-230 | Same | Legacy constructor (L17) | Same as tdlib | `hs::temporary_key_agreement` | ok |
+
+## 13. Temporary keys (PFS)
+
+| ID | Condition | Spec | tdlib | MtProtoKit | Rust engine | Tests | Δ |
+|---|---|---|---|---|---|---|---|
+| P01 | Temp key unknown (`-404`) | P-241 | Regenerate and rebind | Recreate | `AuthKeyInvalid`; requests kept for the new key | `engine::unknown_key_reports_invalid_and_recovers_with_new_key` | ok |
+| P02 | Unbound temp key (`AUTH_KEY_PERM_EMPTY`) | P-232 | Rebind | Intercept | See E07 | `rpc::auth_key_perm_empty_never_surfaces` | fixed |
+| P03 | Bind errors (`ENCRYPTED_MESSAGE_INVALID`, `TEMP_AUTH_KEY_EMPTY`, `TEMP_AUTH_KEY_ALREADY_BOUND`, `EXPIRES_AT_INVALID`) | P-237, P-239 | 60 s rule | H5 | Surfaced verbatim to the host, which owns binding | `rpc::other_error_classes_surface_verbatim` | ok |
+| P04 | Key replaced by the host | — | New session | — | Session reset; requests parked by E07 are released at once | `rpc::auth_key_perm_empty_never_surfaces` | fixed |
+
+## Not covered (deliberately)
+
+- **HTTP transport** (`http_wait`, long poll): the engine only speaks TCP transports (T22).
+- **Answers lost after the server acknowledged a query** (the server says "received" but never answers):
+  tdlib closes the connection after 60 s and asks again, which never resolves either; the engine relies on
+  host request timeouts. Unacknowledged queries are fully covered (A01, A03).
+- **`destroy_session` for old sessions** after a local reset: not sent (tdlib and MtProtoKit do not either);
+  the responses are handled (S31).
+- **Binding temp keys** (`auth.bindTempAuthKey`) is done by the host; the engine only reports and surfaces the
+  conditions (P01..P04).

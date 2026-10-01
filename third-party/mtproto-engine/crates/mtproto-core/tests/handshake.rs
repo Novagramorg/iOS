@@ -86,3 +86,122 @@ fn unknown_server_key_is_rejected() {
     .unwrap();
     assert!(matches!(run(behavior(), None, Some(vec![production])).unwrap_err(), HandshakeError::UnknownFingerprints(_)));
 }
+
+#[test]
+fn server_dh_params_fail_with_bad_hash_is_reported_as_hash_mismatch() {
+    assert_eq!(
+        run(ServerHandshakeBehavior { fail_dh_params: true, corrupt_fail_hash: true, ..behavior() }, None, None).unwrap_err(),
+        HandshakeError::NewNonceHashMismatch
+    );
+}
+
+#[test]
+fn nonce_checks_cover_every_message() {
+    assert_eq!(
+        run(ServerHandshakeBehavior { wrong_server_nonce_in_dh_params: true, ..behavior() }, None, None).unwrap_err(),
+        HandshakeError::ServerNonceMismatch
+    );
+    assert_eq!(
+        run(ServerHandshakeBehavior { wrong_nonce_in_inner_data: true, ..behavior() }, None, None).unwrap_err(),
+        HandshakeError::NonceMismatch
+    );
+    assert_eq!(
+        run(ServerHandshakeBehavior { wrong_nonce_in_dh_gen: true, ..behavior() }, None, None).unwrap_err(),
+        HandshakeError::NonceMismatch
+    );
+}
+
+#[test]
+fn dh_gen_hash_mismatch_is_rejected() {
+    assert_eq!(
+        run(ServerHandshakeBehavior { corrupt_new_nonce_hash: true, ..behavior() }, None, None).unwrap_err(),
+        HandshakeError::NewNonceHashMismatch
+    );
+}
+
+#[test]
+fn encrypted_answer_shape_is_validated() {
+    assert_eq!(
+        run(ServerHandshakeBehavior { unaligned_encrypted_answer: true, ..behavior() }, None, None).unwrap_err(),
+        HandshakeError::BadEncryptedAnswer
+    );
+    assert_eq!(
+        run(ServerHandshakeBehavior { excess_answer_padding: true, ..behavior() }, None, None).unwrap_err(),
+        HandshakeError::BadEncryptedAnswer
+    );
+}
+
+#[test]
+fn hostile_pq_values_fail_fast_without_hanging() {
+    let started = std::time::Instant::now();
+    for pq in [vec![], vec![0], vec![1], vec![3], vec![0x7f; 9], 0xffff_ffff_ffff_ffc5u64.to_be_bytes().to_vec(), 2_305_843_009_213_693_951u64.to_be_bytes().to_vec()] {
+        let error = run(ServerHandshakeBehavior { pq_override: Some(pq.clone()), ..behavior() }, None, None).unwrap_err();
+        assert!(matches!(error, HandshakeError::BadPq(_) | HandshakeError::FactorizationFailed), "{pq:?}: {error:?}");
+    }
+    assert!(started.elapsed() < std::time::Duration::from_secs(5));
+}
+
+#[test]
+fn non_safe_or_short_primes_are_rejected() {
+    let mut composite = mtproto_core::crypto::KNOWN_DH_PRIME;
+    composite[255] = 0xff;
+    let g = (2..=7)
+        .find(|&g| {
+            let p = num_bigint_dig(&composite);
+            match g {
+                2 => p % 8 == 7,
+                3 => p % 3 == 2,
+                4 => true,
+                5 => [1, 4].contains(&(p % 5)),
+                6 => [19, 23].contains(&(p % 24)),
+                _ => [3, 5, 6].contains(&(p % 7)),
+            }
+        })
+        .unwrap();
+    let error = run(ServerHandshakeBehavior { dh_prime_override: Some(composite.to_vec()), bad_g: Some(g), ..behavior() }, None, None).unwrap_err();
+    assert!(matches!(error, HandshakeError::Dh(_)), "{error:?}");
+    let error = run(ServerHandshakeBehavior { dh_prime_override: Some(composite[1..].to_vec()), ..behavior() }, None, None).unwrap_err();
+    assert!(matches!(error, HandshakeError::Dh(_)), "{error:?}");
+}
+
+fn num_bigint_dig(bytes: &[u8]) -> u64 {
+    bytes.iter().fold(0u64, |acc, &byte| (acc * 256 + byte as u64) % 840)
+}
+
+#[test]
+fn trailing_bytes_after_handshake_answers_are_tolerated_like_tdlib() {
+    let (result, server) = run(ServerHandshakeBehavior { trailing_bytes: true, ..behavior() }, None, None).unwrap();
+    assert_eq!(result.auth_key, server.outcome.unwrap().auth_key);
+}
+
+#[test]
+fn unexpected_constructor_in_state_fails() {
+    assert!(matches!(
+        run(ServerHandshakeBehavior { repeat_res_pq: true, ..behavior() }, None, None).unwrap_err(),
+        HandshakeError::Tl(_)
+    ));
+}
+
+#[test]
+fn handshake_never_panics_on_garbage() {
+    use mtproto_core::message::encode_plain_message;
+    let mut rng = XorShiftRandom::new(5);
+    let server = ServerHandshake::new(behavior());
+    for seed in 0..300u64 {
+        let config = HandshakeConfig {
+            dc_id: 2,
+            temp_key_expires_in: None,
+            public_keys: vec![server.public_key()],
+        };
+        let (mut client, _) = Handshake::start(config, NOW, &mut rng);
+        let mut garbage = XorShiftRandom::new(seed);
+        let length = (seed as usize * 7) % 700;
+        let mut body = vec![0u8; length];
+        mtproto_core::crypto::SecureRandom::fill(&mut garbage, &mut body);
+        if seed % 3 == 0 && body.len() >= 4 {
+            body[..4].copy_from_slice(&0x05162463u32.to_le_bytes());
+        }
+        let _ = client.on_packet(&encode_plain_message(5, &body), NOW, None, &mut rng);
+        let _ = client.on_packet(&body, NOW, None, &mut rng);
+    }
+}

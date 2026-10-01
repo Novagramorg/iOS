@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::io::{ErrorKind, Read, Write};
 use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -9,6 +9,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use mtproto_core::auth_key::AuthKey;
 use mtproto_core::crypto::{SecureRandom, XorShiftRandom};
 use mtproto_core::message::read_auth_key_id;
+use mtproto_core::msg_id::msg_id_time;
 use mtproto_core::rpc::{INIT_CONNECTION, INPUT_CLIENT_PROXY, INVOKE_WITH_APNS_SECRET, INVOKE_WITH_RECAPTCHA};
 use mtproto_core::test_support::server_peer::{self as sp, ServerPeer};
 use mtproto_core::test_support::{ServerHandshake, ServerHandshakeBehavior};
@@ -33,6 +34,14 @@ pub const TAG_NEW_SESSION: u32 = 1009;
 pub const TAG_UNAUTHORIZED: u32 = 1010;
 pub const TAG_UPDATE_PUSH: u32 = 1011;
 pub const TAG_SIZED: u32 = 1012;
+pub const TAG_TRANSPORT_ERROR_ONCE: u32 = 1013;
+pub const TAG_BAD_MSG_ONCE: u32 = 1014;
+pub const TAG_SERVER_PING: u32 = 1015;
+pub const TAG_RESEND_REQ_ONCE: u32 = 1016;
+pub const TAG_MSG_COPY: u32 = 1017;
+pub const TAG_GARBAGE_SIBLINGS: u32 = 1018;
+pub const TAG_GZIP: u32 = 1019;
+pub const SERVER_PING_ID: i64 = 0x5e57_9149;
 pub const LARGE_SIZE: usize = 1024 * 1024;
 pub const SERVER_SALT: i64 = 0x5a17;
 
@@ -46,6 +55,22 @@ pub fn call(tag: u32, payload: &[u8]) -> Vec<u8> {
 
 pub fn sized_call(size: u32) -> Vec<u8> {
     call(TAG_SIZED, &size.to_le_bytes())
+}
+
+pub fn transport_error_call(code: i32) -> Vec<u8> {
+    call(TAG_TRANSPORT_ERROR_ONCE, &code.to_le_bytes())
+}
+
+pub fn bad_msg_call(code: i32, target_container: bool) -> Vec<u8> {
+    let mut payload = code.to_le_bytes().to_vec();
+    payload.extend_from_slice(&i32::from(target_container).to_le_bytes());
+    call(TAG_BAD_MSG_ONCE, &payload)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum HandshakeFault {
+    TransportError(i32),
+    Stall,
 }
 
 pub fn parse_result(body: &[u8]) -> Option<(u32, Vec<u8>)> {
@@ -62,6 +87,9 @@ pub struct ServerOptions {
     pub secret: Option<Vec<u8>>,
     pub socks5: bool,
     pub handshake: ServerHandshakeBehavior,
+    pub handshake_faults: Vec<HandshakeFault>,
+    pub clock_offset: f64,
+    pub validate_msg_id_time: bool,
 }
 
 #[derive(Debug, Default)]
@@ -76,6 +104,12 @@ pub struct Stats {
     pub future_salts_requests: usize,
     pub handshakes: usize,
     pub closed_by_client: usize,
+    pub client_pongs: usize,
+    pub retransmissions: usize,
+    pub retransmissions_in_container: usize,
+    pub bad_msgs_sent: usize,
+    pub session_ids: HashSet<i64>,
+    pub transport_errors_sent: usize,
 }
 
 struct SessionState {
@@ -83,6 +117,8 @@ struct SessionState {
     received: HashSet<i64>,
     unacked: Vec<(i64, i32, Vec<u8>)>,
     answered_queries: HashMap<i64, i64>,
+    clock_offset: f64,
+    awaiting_retransmission: HashSet<i64>,
 }
 
 struct Shared {
@@ -91,6 +127,7 @@ struct Shared {
     stats: Stats,
     salt: i64,
     bad_salt_sent: bool,
+    handshake_faults: VecDeque<HandshakeFault>,
 }
 
 pub struct TestServer {
@@ -112,6 +149,7 @@ impl TestServer {
             stats: Stats::default(),
             salt: SERVER_SALT,
             bad_salt_sent: false,
+            handshake_faults: options.handshake_faults.iter().copied().collect(),
         }));
         let stop = Arc::new(AtomicBool::new(false));
         let thread = {
@@ -406,9 +444,14 @@ struct Delayed {
     body: Vec<u8>,
 }
 
+fn server_now(offset: f64) -> f64 {
+    unix_now() + offset
+}
+
 fn serve_frames(mut wire: Wire, shared: Arc<Mutex<Shared>>, stop: Arc<AtomicBool>, options: ServerOptions) -> std::io::Result<()> {
     let decoder = FrameDecoder::new(wire.framing);
     let mut handshake: Option<ServerHandshake> = None;
+    let mut handshake_stalled = false;
     let mut delayed: Vec<Delayed> = Vec::new();
     let mut resent_for: HashSet<i64> = HashSet::new();
     loop {
@@ -445,6 +488,29 @@ fn serve_frames(mut wire: Wire, shared: Arc<Mutex<Shared>>, stop: Arc<AtomicBool
             continue;
         };
         if auth_key_id == 0 {
+            if handshake_stalled {
+                continue;
+            }
+            let starts_handshake = mtproto_core::message::decode_plain_message(&packet)
+                .ok()
+                .and_then(|message| message.body.get(..4).map(|head| u32::from_le_bytes(head.try_into().unwrap())))
+                == Some(ids::REQ_PQ_MULTI);
+            if starts_handshake {
+                let fault = shared.lock().unwrap().handshake_faults.pop_front();
+                match fault {
+                    Some(HandshakeFault::TransportError(code)) => {
+                        shared.lock().unwrap().stats.transport_errors_sent += 1;
+                        wire.send_frame(&code.to_le_bytes())?;
+                        let _ = wire.stream.shutdown(Shutdown::Both);
+                        return Ok(());
+                    }
+                    Some(HandshakeFault::Stall) => {
+                        handshake_stalled = true;
+                        continue;
+                    }
+                    None => {}
+                }
+            }
             let reply = handshake
                 .get_or_insert_with(|| ServerHandshake::new(options.handshake.clone()))
                 .handle(&packet, &mut wire.rng);
@@ -481,7 +547,7 @@ fn serve_frames(mut wire: Wire, shared: Arc<Mutex<Shared>>, stop: Arc<AtomicBool
             let shared_ref = &mut *guard;
             let salt = shared_ref.salt;
             let session = shared_ref.sessions.entry(session_id).or_insert_with(|| {
-                let mut peer = ServerPeer::new(key.clone(), unix_now());
+                let mut peer = ServerPeer::new(key.clone(), server_now(options.clock_offset));
                 peer.session_id = session_id;
                 peer.salt = salt;
                 SessionState {
@@ -489,22 +555,51 @@ fn serve_frames(mut wire: Wire, shared: Arc<Mutex<Shared>>, stop: Arc<AtomicBool
                     received: HashSet::new(),
                     unacked: Vec::new(),
                     answered_queries: HashMap::new(),
+                    clock_offset: options.clock_offset,
+                    awaiting_retransmission: HashSet::new(),
                 }
             });
-            session.peer.server_time = unix_now();
+            session.peer.server_time = server_now(session.clock_offset);
             session.peer.salt = salt;
             if resent_for.insert(session_id) {
                 resend = session.unacked.clone();
             }
             let stats = &mut shared_ref.stats;
-            if decoded.header.salt != salt {
+            stats.session_ids.insert(session_id);
+            let message_time = msg_id_time(decoded.header.msg_id);
+            let server_time = server_now(session.clock_offset);
+            let time_error = if !options.validate_msg_id_time {
+                None
+            } else if message_time < server_time - 300.0 {
+                Some(16)
+            } else if message_time > server_time + 30.0 {
+                Some(17)
+            } else {
+                None
+            };
+            if let Some(code) = time_error {
+                stats.bad_msgs_sent += 1;
+                outgoing.push((sp::bad_msg_notification(decoded.header.msg_id, decoded.header.seq_no, code), false));
+            } else if decoded.header.salt != salt {
                 outgoing.push((sp::bad_server_salt(decoded.header.msg_id, decoded.header.seq_no, salt), false));
             } else {
                 for message in &decoded.messages {
                     if !session.received.insert(message.msg_id) {
                         continue;
                     }
+                    if session.awaiting_retransmission.remove(&message.msg_id) {
+                        stats.retransmissions += 1;
+                        if message.container_id.is_some() {
+                            stats.retransmissions_in_container += 1;
+                        }
+                    }
                     match message.constructor() {
+                        ids::PONG => {
+                            let ping_id = i64::from_le_bytes(message.body[12..20].try_into().unwrap());
+                            if ping_id == SERVER_PING_ID {
+                                stats.client_pongs += 1;
+                            }
+                        }
                         ids::PING | ids::PING_DELAY_DISCONNECT => {
                             stats.pings += 1;
                             let ping_id = i64::from_le_bytes(message.body[4..12].try_into().unwrap());
@@ -512,7 +607,7 @@ fn serve_frames(mut wire: Wire, shared: Arc<Mutex<Shared>>, stop: Arc<AtomicBool
                         }
                         ids::GET_FUTURE_SALTS => {
                             stats.future_salts_requests += 1;
-                            outgoing.push((future_salts_reply(message.msg_id, salt), true));
+                            outgoing.push((future_salts_reply(message.msg_id, salt, session.clock_offset), true));
                         }
                         ids::MSGS_ACK => {
                             let acked = sp::read_vector_after_constructor(&message.body);
@@ -557,7 +652,66 @@ fn serve_frames(mut wire: Wire, shared: Arc<Mutex<Shared>>, stop: Arc<AtomicBool
                                 *entry
                             };
                             let reply = sp::rpc_result(message.msg_id, &result_body(tag, &payload));
+                            let payload_word = |index: usize| {
+                                payload
+                                    .get(index * 4..index * 4 + 4)
+                                    .map(|bytes| i32::from_le_bytes(bytes.try_into().unwrap()))
+                                    .unwrap_or(0)
+                            };
                             match tag {
+                                TAG_TRANSPORT_ERROR_ONCE if count == 1 => {
+                                    session.received.remove(&message.msg_id);
+                                    stats.transport_errors_sent += 1;
+                                    transport_error = Some(payload_word(0));
+                                }
+                                TAG_BAD_MSG_ONCE if count == 1 => {
+                                    let target = if payload_word(1) == 1 {
+                                        message.container_id.unwrap_or(message.msg_id)
+                                    } else {
+                                        message.msg_id
+                                    };
+                                    session.received.remove(&message.msg_id);
+                                    stats.bad_msgs_sent += 1;
+                                    outgoing.push((sp::bad_msg_notification(target, message.seq_no, payload_word(0)), false));
+                                }
+                                TAG_SERVER_PING => {
+                                    outgoing.push((sp::server_ping(SERVER_PING_ID), false));
+                                    outgoing.push((reply, true));
+                                }
+                                TAG_RESEND_REQ_ONCE if count == 1 => {
+                                    session.received.remove(&message.msg_id);
+                                    session.awaiting_retransmission.insert(message.msg_id);
+                                    outgoing.push((sp::msg_resend_req(&[message.msg_id]), false));
+                                }
+                                TAG_MSG_COPY => {
+                                    session.peer.server_time = server_now(session.clock_offset);
+                                    let inner = session.peer.next_msg_id(true);
+                                    outgoing.push((sp::msg_copy(inner, 1, &reply), false));
+                                }
+                                TAG_GARBAGE_SIBLINGS => {
+                                    session.peer.server_time = server_now(session.clock_offset);
+                                    let ids_: Vec<i64> = (0..4).map(|_| session.peer.next_msg_id(false)).collect();
+                                    let truncated = sp::bad_msg_notification(message.msg_id, 1, 16)[..12].to_vec();
+                                    let mut http_wait = Writer::new();
+                                    mtproto_core::tl::mtproto::write_http_wait(&mut http_wait, 0, 0, 0);
+                                    let body = sp::container(&[
+                                        (ids_[0], 1, sp::update(0xdead_beef, &[0; 8])),
+                                        (ids_[1], 1, truncated),
+                                        (ids_[2], 0, http_wait.into_inner()),
+                                        (ids_[3], 1, reply),
+                                    ]);
+                                    outgoing.push((body, false));
+                                }
+                                TAG_GZIP => {
+                                    session.peer.server_time = server_now(session.clock_offset);
+                                    let first = session.peer.next_msg_id(false);
+                                    let second = session.peer.next_msg_id(true);
+                                    let body = sp::container(&[
+                                        (first, 1, sp::gzip_packed(&sp::update(0x74ae4240, &tag.to_le_bytes()))),
+                                        (second, 1, sp::rpc_result_gzipped(message.msg_id, &result_body(tag, &payload))),
+                                    ]);
+                                    outgoing.push((sp::gzip_packed(&body), false));
+                                }
                                 TAG_KEY_UNKNOWN => transport_error = Some(-404),
                                 TAG_FLOOD_ONCE if count == 1 => outgoing.push((sp::rpc_error(message.msg_id, 420, "FLOOD_WAIT_1"), true)),
                                 TAG_SERVER_ERROR_ONCE if count == 1 => {
@@ -565,7 +719,7 @@ fn serve_frames(mut wire: Wire, shared: Arc<Mutex<Shared>>, stop: Arc<AtomicBool
                                 }
                                 TAG_UNAUTHORIZED => outgoing.push((sp::rpc_error(message.msg_id, 401, "AUTH_KEY_UNREGISTERED"), true)),
                                 TAG_DROP_CONNECTION_ONCE if count == 1 => {
-                                    session.peer.server_time = unix_now();
+                                    session.peer.server_time = server_now(session.clock_offset);
                                     let msg_id = session.peer.next_msg_id(true);
                                     session.unacked.push((msg_id, 1, reply));
                                     close_after = true;
@@ -630,7 +784,7 @@ fn serve_frames(mut wire: Wire, shared: Arc<Mutex<Shared>>, stop: Arc<AtomicBool
 }
 
 fn seal_tracked(session: &mut SessionState, body: &[u8], content: bool) -> Vec<u8> {
-    session.peer.server_time = unix_now();
+    session.peer.server_time = server_now(session.clock_offset);
     let msg_id = session.peer.next_msg_id(true);
     let seq = if content { 1 } else { 0 };
     if body.len() >= 4 && u32::from_le_bytes(body[..4].try_into().unwrap()) == ids::RPC_RESULT {
@@ -655,8 +809,8 @@ fn result_body(tag: u32, payload: &[u8]) -> Vec<u8> {
     writer.into_inner()
 }
 
-fn future_salts_reply(req_msg_id: i64, salt: i64) -> Vec<u8> {
-    let now = unix_now() as i32;
+fn future_salts_reply(req_msg_id: i64, salt: i64, clock_offset: f64) -> Vec<u8> {
+    let now = server_now(clock_offset) as i32;
     sp::future_salts(req_msg_id, now, &[(now - 60, now + 3600, salt), (now + 3600, now + 7200, salt)])
 }
 

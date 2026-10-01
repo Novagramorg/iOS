@@ -439,6 +439,11 @@ fn unknown_key_reports_invalid_and_recovers_with_new_key() {
     let session = engine.create_session(setup(&server, &old, SessionRole::Main));
     engine.send(session, request(1, 1));
     assert!(collector.wait(WAIT, |events| events.iter().any(|(_, e)| matches!(e, EngineEvent::AuthKeyInvalid { code: -404 }))));
+    assert_eq!(
+        collector.count(|event| matches!(event, EngineEvent::AddressResult { success: false, .. })),
+        0,
+        "a routine -404 does not mark the address as broken"
+    );
     engine.set_auth_key(
         session,
         Some(AuthKeyMaterial {
@@ -562,3 +567,229 @@ fn connection_state_reports_connected_main_session() {
 
 
 
+fn raw_request(id: u64, body: Vec<u8>) -> RpcRequest {
+    RpcRequest {
+        id: RequestId(id),
+        body,
+        flags: RequestFlags::default(),
+        invoke_after: None,
+    }
+}
+
+fn completed_ids(collector: &Collector, session: SessionHandle) -> Vec<u64> {
+    collector.completed(session).iter().map(|(id, _)| id.0).collect()
+}
+
+#[test]
+fn transport_flood_backs_off_and_resends_rejected_queries() {
+    let key = random_key(30);
+    let server = TestServer::start(vec![key.clone()], ServerOptions::default());
+    let collector = Arc::new(Collector::default());
+    let engine = engine(&collector, 2);
+    let session = engine.create_session(setup(&server, &key, SessionRole::Main));
+    let started = Instant::now();
+    engine.send(session, raw_request(1, transport_error_call(-429)));
+    assert!(collector.wait(Duration::from_secs(20), |events| completions(events, session) == 1));
+    assert!(started.elapsed() >= Duration::from_millis(4900), "waited {:?}", started.elapsed());
+    assert_eq!(collector.count(|event| matches!(event, EngineEvent::TransportFlood)), 1);
+    assert_eq!(collector.count(|event| matches!(event, EngineEvent::AuthKeyInvalid { .. })), 0);
+    assert_eq!(server.executions(TAG_TRANSPORT_ERROR_ONCE), 2);
+    assert_eq!(server.with_stats(|stats| stats.state_requests), 0, "rejected queries are resent, not left unknown");
+    engine.shutdown();
+}
+
+#[test]
+fn other_transport_errors_reconnect_quickly() {
+    for code in [-444, -403, -1, 7] {
+        let key = random_key(31);
+        let server = TestServer::start(vec![key.clone()], ServerOptions::default());
+        let collector = Arc::new(Collector::default());
+        let engine = engine(&collector, 2);
+        let session = engine.create_session(setup(&server, &key, SessionRole::Main));
+        let started = Instant::now();
+        engine.send(session, raw_request(1, transport_error_call(code)));
+        assert!(collector.wait(WAIT, |events| completions(events, session) == 1), "code {code}");
+        assert!(started.elapsed() < Duration::from_secs(4), "code {code}: {:?}", started.elapsed());
+        assert!(server.with_stats(|stats| stats.connections) >= 2);
+        assert_eq!(collector.count(|event| matches!(event, EngineEvent::TransportFlood)), 0);
+        assert_eq!(collector.count(|event| matches!(event, EngineEvent::AuthKeyInvalid { .. })), 0);
+        assert_eq!(collector.count(|event| matches!(event, EngineEvent::AddressResult { success: false, .. })), 0, "code {code}");
+        engine.shutdown();
+    }
+}
+
+fn generating_setup(server: &TestServer) -> SessionSetup {
+    let mut generated = SessionSetup::new(
+        2,
+        SessionRole::Main,
+        vec![DcAddress {
+            host: "127.0.0.1".into(),
+            port: server.address.port(),
+            secret: None,
+        }],
+    );
+    generated.key_generation = Some(KeyGeneration {
+        public_keys: vec![ServerHandshake::new(ServerHandshakeBehavior::default()).public_key()],
+        temporary_expires_in: None,
+    });
+    generated
+}
+
+fn handshake_server(faults: Vec<HandshakeFault>) -> TestServer {
+    TestServer::start(
+        vec![],
+        ServerOptions {
+            handshake: ServerHandshakeBehavior {
+                server_time: unix_seconds() as i32,
+                ..Default::default()
+            },
+            handshake_faults: faults,
+            ..Default::default()
+        },
+    )
+}
+
+#[test]
+fn handshake_transport_error_restarts_key_generation_without_key_invalid() {
+    let server = handshake_server(vec![
+        HandshakeFault::TransportError(-404),
+        HandshakeFault::TransportError(-444),
+        HandshakeFault::TransportError(-429),
+    ]);
+    let collector = Arc::new(Collector::default());
+    let engine = engine(&collector, 2);
+    let session = engine.create_session(generating_setup(&server));
+    let started = Instant::now();
+    engine.send(session, request(1, 9));
+    assert!(collector.wait(Duration::from_secs(25), |events| completions(events, session) == 1));
+    assert!(started.elapsed() >= Duration::from_millis(4900), "the handshake flood delay applies");
+    assert_eq!(collector.count(|event| matches!(event, EngineEvent::AuthKeyInvalid { .. })), 0);
+    assert_eq!(collector.count(|event| matches!(event, EngineEvent::TransportFlood)), 1);
+    assert_eq!(
+        collector.count(|event| matches!(event, EngineEvent::AuthKeyCreationFailed { reason } if reason.contains("transport error"))),
+        3
+    );
+    assert_eq!(collector.count(|event| matches!(event, EngineEvent::AuthKeyCreated { .. })), 1);
+    engine.shutdown();
+}
+
+#[test]
+fn stalled_handshake_times_out_and_retries() {
+    let server = handshake_server(vec![HandshakeFault::Stall]);
+    let collector = Arc::new(Collector::default());
+    let engine = engine(&collector, 2);
+    let session = engine.create_session(generating_setup(&server));
+    engine.send(session, request(1, 9));
+    assert!(collector.wait(Duration::from_secs(25), |events| completions(events, session) == 1));
+    assert_eq!(
+        collector.count(|event| matches!(event, EngineEvent::AuthKeyCreationFailed { reason } if reason == "handshake timeout")),
+        1
+    );
+    engine.shutdown();
+}
+
+#[test]
+fn server_pings_are_answered() {
+    let key = random_key(32);
+    let server = TestServer::start(vec![key.clone()], ServerOptions::default());
+    let collector = Arc::new(Collector::default());
+    let engine = engine(&collector, 2);
+    let session = engine.create_session(setup(&server, &key, SessionRole::Main));
+    engine.send(session, request(1, TAG_SERVER_PING));
+    assert!(collector.wait(WAIT, |events| completions(events, session) == 1));
+    assert!(collector.wait(WAIT, |_| server.with_stats(|stats| stats.client_pongs) >= 1));
+    assert_eq!(collector.count(|event| matches!(event, EngineEvent::Rpc(RpcEvent::Update { .. }))), 0);
+    engine.shutdown();
+}
+
+#[test]
+fn server_resend_request_is_answered_with_the_original_message() {
+    let key = random_key(33);
+    let server = TestServer::start(vec![key.clone()], ServerOptions::default());
+    let collector = Arc::new(Collector::default());
+    let engine = engine(&collector, 2);
+    let session = engine.create_session(setup(&server, &key, SessionRole::Main));
+    engine.send(session, request(1, TAG_RESEND_REQ_ONCE));
+    assert!(collector.wait(WAIT, |events| completions(events, session) == 1));
+    assert_eq!(server.with_stats(|stats| stats.retransmissions), 1);
+    assert_eq!(server.with_stats(|stats| stats.retransmissions_in_container), 1);
+    assert_eq!(server.with_stats(|stats| stats.connections), 1);
+    engine.shutdown();
+}
+
+#[test]
+fn copied_gzipped_and_noisy_answers_complete_on_one_connection() {
+    let key = random_key(34);
+    let server = TestServer::start(vec![key.clone()], ServerOptions::default());
+    let collector = Arc::new(Collector::default());
+    let engine = engine(&collector, 2);
+    let session = engine.create_session(setup(&server, &key, SessionRole::Main));
+    engine.send(session, request(1, TAG_MSG_COPY));
+    engine.send(session, request(2, TAG_GZIP));
+    engine.send(session, request(3, TAG_GARBAGE_SIBLINGS));
+    assert!(collector.wait(WAIT, |events| completions(events, session) == 3));
+    let mut ids = completed_ids(&collector, session);
+    ids.sort_unstable();
+    assert_eq!(ids, vec![1, 2, 3]);
+    for (id, body) in collector.completed(session) {
+        let (_, payload) = parse_result(&body).expect("result");
+        assert_eq!(payload, id.0.to_le_bytes());
+    }
+    assert_eq!(server.with_stats(|stats| stats.connections), 1, "garbage never forces a reconnect");
+    assert_eq!(server.with_stats(|stats| stats.session_ids.len()), 1, "and never resets the session");
+    assert!(collector.count(|event| matches!(event, EngineEvent::Rpc(RpcEvent::Update { .. }))) >= 2);
+    engine.shutdown();
+}
+
+#[test]
+fn bad_msg_notifications_are_recovered_end_to_end() {
+    for (code, container) in [(16, false), (20, false), (32, false), (33, false), (34, false), (48, false), (64, true), (19, true), (99, false)] {
+        let key = random_key(35);
+        let server = TestServer::start(vec![key.clone()], ServerOptions::default());
+        let collector = Arc::new(Collector::default());
+        let engine = engine(&collector, 2);
+        let session = engine.create_session(setup(&server, &key, SessionRole::Main));
+        engine.send(session, raw_request(1, bad_msg_call(code, container)));
+        assert!(collector.wait(WAIT, |events| completions(events, session) == 1), "code {code}");
+        assert_eq!(server.with_stats(|stats| stats.bad_msgs_sent), 1, "code {code}");
+        let expected_sessions = if matches!(code, 32 | 33) { 2 } else { 1 };
+        assert_eq!(server.with_stats(|stats| stats.session_ids.len()), expected_sessions, "code {code}");
+        assert_eq!(server.with_stats(|stats| stats.connections), 1, "code {code}");
+        engine.shutdown();
+    }
+}
+
+#[test]
+fn clock_skew_in_either_direction_is_corrected() {
+    for offset in [1000.0, -1000.0, 200.0] {
+        let key = random_key(36);
+        let server = TestServer::start(
+            vec![key.clone()],
+            ServerOptions {
+                clock_offset: offset,
+                validate_msg_id_time: true,
+                ..Default::default()
+            },
+        );
+        let collector = Arc::new(Collector::default());
+        let engine = engine(&collector, 2);
+        let session = engine.create_session(setup(&server, &key, SessionRole::Main));
+        for id in 1..=3 {
+            engine.send(session, request(id, id as u32));
+        }
+        assert!(collector.wait(WAIT, |events| completions(events, session) == 3), "offset {offset}");
+        let differences: Vec<f64> = collector
+            .events
+            .lock()
+            .unwrap()
+            .iter()
+            .filter_map(|(_, event)| match event {
+                EngineEvent::Rpc(RpcEvent::TimeDifferenceUpdated { difference }) => Some(*difference),
+                _ => None,
+            })
+            .collect();
+        let last = *differences.last().expect("time difference reported");
+        assert!((last - offset).abs() < 2.0, "offset {offset}: {differences:?}");
+        engine.shutdown();
+    }
+}
