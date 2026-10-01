@@ -537,6 +537,14 @@ public final class InteractiveDiamondComponent: Component {
             self.diamondLayer.updateTransferState(isSending: isSending, animateCompletion: animateCompletion)
         }
 
+        public func beginReceivingTransfer(at startTime: CFTimeInterval, completionDelay: Double) {
+            self.diamondLayer.beginReceivingTransfer(at: startTime, completionDelay: Float(completionDelay))
+        }
+
+        public func endReceivingTransfer() {
+            self.diamondLayer.endReceivingTransfer()
+        }
+
         public func updateRefractionSource(_ source: RefractionSource?) {
             guard self.refractionSource != source else { return }
             self.refractionSource = source

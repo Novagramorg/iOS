@@ -6,6 +6,7 @@ import simd
 struct DiamondTransferAnimation {
     enum Phase {
         case sending
+        case receiving
         case completion
     }
 
@@ -20,9 +21,9 @@ struct DiamondTransferAnimation {
         let breath: Float
         let blow: Float
         switch self.phase {
-        case .sending:
+        case .sending, .receiving:
             energy = pow(min(t / 0.45, 1), 0.65)
-            hit = t < 0.42 ? sin(.pi * t / 0.42) * (1 - 0.3 * t / 0.42) : 0
+            hit = self.phase == .sending && t < 0.42 ? sin(.pi * t / 0.42) * (1 - 0.3 * t / 0.42) : 0
             breath = sin(2 * .pi * 1.1 * t)
             blow = 0
         case .completion:
@@ -31,7 +32,7 @@ struct DiamondTransferAnimation {
             breath = 0
             blow = t < 0.9 ? sin(2 * .pi * 1.6 * t) * exp(-t / 0.2) : 0
         }
-        let offset: Float = self.phase == .sending ? -1.6 * energy * sin(2 * .pi * 1.1 * (t - 0.18)) : 0
+        let offset: Float = self.phase != .completion ? -1.6 * energy * sin(2 * .pi * 1.1 * (t - 0.18)) : 0
         return (energy, 1 + 0.32 * hit + 0.07 * energy * breath + blow, offset)
     }
 }

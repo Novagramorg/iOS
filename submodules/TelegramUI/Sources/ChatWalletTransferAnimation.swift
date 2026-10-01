@@ -9,8 +9,22 @@ import WalletSendScreen
 import PremiumDiamondComponent
 import ChatMessageBubbleItemNode
 import ChatMessageTransferBubbleContentNode
+import ChatControllerInteraction
 
 final class ChatWalletTransferAnimation {
+    private final class Arrival {
+        let message: EngineRawMessage
+        let rise: Bool
+        var startTime: CFTimeInterval?
+        var didPlayHaptic = false
+        weak var target: ChatMessageTransferBubbleContentNode?
+
+        init(message: EngineRawMessage, rise: Bool) {
+            self.message = message
+            self.rise = rise
+        }
+    }
+
     private final class Flight {
         let id: String
         let operationId: String
@@ -70,6 +84,9 @@ final class ChatWalletTransferAnimation {
     private weak var controller: ChatControllerImpl?
     private var flights: [String: Flight] = [:]
     private var endedFlights = Set<String>()
+    private var arrivals: [EngineMessage.Id: Arrival] = [:]
+    private var seenArrivals = Set<EngineMessage.Id>()
+    private var lastArrivalStartTime: CFTimeInterval?
     private var displayLink: SharedDisplayLinkDriver.Link?
     private var activityDisposable: Disposable?
     private var isApplicationActive = UIApplication.shared.applicationState == .active
@@ -101,6 +118,74 @@ final class ChatWalletTransferAnimation {
         for flight in self.flights.values {
             flight.source?.diamond.isRenderingEnabled = false
             flight.overlay?.removeFromSuperview()
+        }
+        for arrival in self.arrivals.values {
+            arrival.target?.finishIncomingTransferAnimation()
+        }
+    }
+
+    func arrivalState(_ id: EngineMessage.Id) -> WalletTransferArrivalState? {
+        if let arrival = self.arrivals[id] {
+            if let startTime = arrival.startTime {
+                return .playing(startTime: startTime, rise: arrival.rise)
+            }
+            return .queued(rise: arrival.rise)
+        }
+        return self.seenArrivals.contains(id) ? .finished : nil
+    }
+
+    func requestArrival(_ message: EngineRawMessage) {
+        guard self.isApplicationActive, !self.seenArrivals.contains(message.id),
+              let interaction = self.controller?.controllerInteraction, interaction.canReadHistory,
+              message.flags.contains(.Incoming),
+              interaction.unreadMessageRange[UnreadMessageRangeKey(peerId: message.id.peerId, namespace: message.id.namespace)]?.contains(message.id.id) == true else { return }
+        self.seenArrivals.insert(message.id)
+        let rise = interaction.freshWalletTransferMessageIds.remove(message.id) != nil
+        guard !UIAccessibility.isReduceMotionEnabled else { return }
+        self.arrivals[message.id] = Arrival(message: message, rise: rise)
+        // All requests from the current layout transaction are sorted on the next frame.
+        self.ensureDisplayLink()
+    }
+
+    func cancelArrival(_ id: EngineMessage.Id) {
+        guard let arrival = self.arrivals.removeValue(forKey: id) else { return }
+        arrival.target?.finishIncomingTransferAnimation()
+        for node in self.contentNodes() where node.item?.message.id == id && node !== arrival.target {
+            node.finishIncomingTransferAnimation()
+        }
+        if self.arrivals.isEmpty { self.lastArrivalStartTime = nil }
+        self.stopDisplayLinkIfIdle()
+    }
+
+    private func updateArrivals(at now: CFTimeInterval, nodes: [ChatMessageTransferBubbleContentNode]) {
+        for arrival in self.arrivals.values.sorted(by: { $0.message.index < $1.message.index }) {
+            let id = arrival.message.id
+            guard self.controller?.controllerInteraction?.canReadHistory == true,
+                  !UIAccessibility.isReduceMotionEnabled,
+                  let node = nodes.first(where: { $0.item?.message.id == id && $0.canPlayIncomingTransferAnimation }) else {
+                self.cancelArrival(id)
+                continue
+            }
+            if let previous = arrival.target, previous !== node {
+                previous.finishIncomingTransferAnimation()
+            }
+            arrival.target = node
+            if arrival.startTime == nil {
+                if let previousStart = self.lastArrivalStartTime, now - previousStart < 0.9 { continue }
+                arrival.startTime = now
+                self.lastArrivalStartTime = now
+            }
+            guard let startTime = arrival.startTime else { continue }
+            if now - startTime >= WalletTransferArrivalAnimation.duration {
+                self.cancelArrival(id)
+            } else {
+                node.updateIncomingTransferAnimation(startTime: startTime, rise: arrival.rise, at: now)
+                if self.arrivals[id] === arrival, !arrival.didPlayHaptic,
+                   now - startTime >= WalletTransferArrivalAnimation.climax {
+                    arrival.didPlayHaptic = true
+                    Haptics.strong()
+                }
+            }
         }
     }
 
@@ -153,7 +238,7 @@ final class ChatWalletTransferAnimation {
     }
 
     private func ensureDisplayLink() {
-        if !self.flights.isEmpty && self.displayLink == nil {
+        if (!self.flights.isEmpty || !self.arrivals.isEmpty) && self.displayLink == nil {
             self.displayLink = SharedDisplayLinkDriver.shared.add(framesPerSecond: .max, { [weak self] _ in
                 self?.update()
             })
@@ -161,6 +246,9 @@ final class ChatWalletTransferAnimation {
     }
 
     func cancelAll() {
+        for id in Array(self.arrivals.keys) {
+            self.cancelArrival(id)
+        }
         for id in Array(self.flights.keys) {
             self.cancel(id: id, animated: false)
         }
@@ -197,18 +285,22 @@ final class ChatWalletTransferAnimation {
 
     private func update() {
         guard self.isApplicationActive, let controller = self.controller, controller.isNodeLoaded,
-              controller.view.window != nil, let wallet = controller.context.walletContext else {
+              controller.view.window != nil else {
             self.cancelAll()
             return
         }
         let now = CACurrentMediaTime()
-        let state = wallet.stateValue
         let nodes = self.contentNodes()
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
+        self.updateArrivals(at: now, nodes: nodes)
         for id in Array(self.flights.keys) {
             guard let flight = self.flights[id] else { continue }
+            guard let state = controller.context.walletContext?.stateValue else {
+                self.cancel(id: id, animated: false)
+                continue
+            }
             self.refresh(flight, state: state)
             let transaction = state.transactions.items.first(where: { $0.presentationId == id })
             let hasPending = state.pendingTransfers.contains(where: { $0.id == flight.operationId })
@@ -283,7 +375,7 @@ final class ChatWalletTransferAnimation {
     }
 
     private func stopDisplayLinkIfIdle() {
-        if self.flights.isEmpty {
+        if self.flights.isEmpty && self.arrivals.isEmpty {
             self.displayLink?.invalidate()
             self.displayLink = nil
         }

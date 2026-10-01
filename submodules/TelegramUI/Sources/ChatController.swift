@@ -6031,6 +6031,15 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         controllerInteraction.enableFullTranslucency = context.sharedContext.energyUsageSettings.fullTranslucency
         
         self.controllerInteraction = controllerInteraction
+        controllerInteraction.requestWalletTransferArrival = { [weak self] message in
+            self?.walletTransferAnimationCoordinator().requestArrival(message)
+        }
+        controllerInteraction.walletTransferArrivalState = { [weak self] id in
+            self?.walletTransferAnimation?.arrivalState(id)
+        }
+        controllerInteraction.cancelWalletTransferArrival = { [weak self] id in
+            self?.walletTransferAnimation?.cancelArrival(id)
+        }
         
         self.navigationBar?.allowsCustomTransition = { [weak self] in
             guard let strongSelf = self else {

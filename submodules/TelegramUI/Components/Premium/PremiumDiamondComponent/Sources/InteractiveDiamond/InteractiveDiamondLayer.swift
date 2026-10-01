@@ -188,6 +188,7 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
     }
     private var isSendingTransfer = false
     private var transferAnimation: DiamondTransferAnimation?
+    private var receivingTransfer: (startTime: CFTimeInterval, completionDelay: Float)?
 
     var hasTransferAnimation: Bool {
         return !self.reduceMotion && self.transferAnimation != nil
@@ -447,8 +448,30 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
         self.setNeedsUpdate()
     }
 
+    func beginReceivingTransfer(at startTime: CFTimeInterval, completionDelay: Float) {
+        self.cancelTapSpin()
+        self.cancelTransferCompletion()
+        self.receivingTransfer = (startTime, completionDelay)
+        self.updateMotion(at: CACurrentMediaTime())
+        self.setNeedsUpdate()
+    }
+
+    func endReceivingTransfer() {
+        guard let receiving = self.receivingTransfer else { return }
+        if CACurrentMediaTime() - receiving.startTime >= Double(receiving.completionDelay + DiamondTransferAnimation.completionDuration) {
+            self.receivingTransfer = nil
+            self.transferAnimation = nil
+            self.starBursts.removeAll(where: { !$0.isFromTap })
+        } else {
+            self.cancelTransferCompletion()
+        }
+        self.onPoseUpdated?(self.pose)
+        self.setNeedsUpdate()
+    }
+
     private func cancelTransferCompletion() {
-        guard self.transferAnimation?.phase == .completion else { return }
+        guard self.transferAnimation?.phase == .completion || self.receivingTransfer != nil else { return }
+        self.receivingTransfer = nil
         self.transferAnimation = nil
         self.starBursts.removeAll()
         self.motion.stopSpin()
@@ -528,6 +551,23 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
         }
         if !self.reduceMotion {
             self.elapsed += animationDt
+        }
+        if let receiving = self.receivingTransfer {
+            let t = Float(max(0.0, time - receiving.startTime))
+            let completionTime = t - receiving.completionDelay
+            if completionTime >= DiamondTransferAnimation.completionDuration {
+                self.receivingTransfer = nil
+                self.transferAnimation = nil
+                self.starBursts.removeAll(where: { !$0.isFromTap })
+            } else {
+                let phase: DiamondTransferAnimation.Phase = completionTime >= 0 ? .completion : .receiving
+                let didComplete = phase == .completion && self.transferAnimation?.phase != .completion
+                self.transferAnimation = DiamondTransferAnimation(phase: phase, startTime: self.elapsed - (phase == .completion ? completionTime : t))
+                if didComplete {
+                    self.motion.spin((self.diamondStyle.rotationSpeed < 0 ? -11 : 11) * exp(-completionTime / 0.7), decay: 0.7)
+                    self.addStarBurst(at: self.elapsed - completionTime)
+                }
+            }
         }
         if let animation = self.transferAnimation, animation.phase == .completion,
            self.elapsed - animation.startTime >= DiamondTransferAnimation.completionDuration {

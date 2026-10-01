@@ -781,6 +781,35 @@ public final class TextNodeLayout: NSObject {
         return nil
     }
     
+    public func enumerateRenderedLines(in bounds: CGRect, _ body: (CTLine, CGPoint) -> Void) {
+        var offset = CGPoint(x: self.insets.left, y: self.insets.top)
+        switch self.verticalAlignment {
+        case .top:
+            break
+        case .middle:
+            offset.y += floor((bounds.height - self.size.height) / 2.0)
+        case .bottom:
+            offset.y += floor(bounds.height - self.size.height)
+        }
+        offset.y += self.lines.first?.descent ?? 0.0
+        for line in self.lines {
+            var frame = line.frame
+            frame.origin.y += offset.y - line.descent
+            switch self.resolvedAlignment {
+            case .center:
+                frame.origin.x = offset.x + floor((bounds.width - frame.width) / 2.0)
+            case .right:
+                frame.origin.x = offset.x + bounds.width - frame.width
+            case .natural where line.isRTL:
+                frame.origin.x = offset.x + floor(bounds.width - frame.width)
+                frame = displayLineFrame(frame: frame, isRTL: line.isRTL, boundingRect: CGRect(origin: .zero, size: bounds.size), cutout: self.cutout)
+            default:
+                frame.origin.x += offset.x
+            }
+            body(line.line, frame.origin)
+        }
+    }
+
     public func linesRects() -> [CGRect] {
         var rects: [CGRect] = []
         for line in self.lines {

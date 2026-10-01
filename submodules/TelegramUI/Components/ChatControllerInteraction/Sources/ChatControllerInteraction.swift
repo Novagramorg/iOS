@@ -57,6 +57,12 @@ public enum ChatControllerInteractionReaction {
     case reaction(MessageReaction.Reaction)
 }
 
+public enum WalletTransferArrivalState {
+    case queued(rise: Bool)
+    case playing(startTime: Double, rise: Bool)
+    case finished
+}
+
 public struct UnreadMessageRangeKey: Hashable {
     public var peerId: EnginePeer.Id
     public var namespace: Int32
@@ -346,6 +352,10 @@ public final class ChatControllerInteraction: ChatControllerInteractionProtocol 
     public var searchTextHighightState: (String, [EngineMessage.Index])?
     public var unreadMessageRange: [UnreadMessageRangeKey: Range<Int32>] = [:]
     public var seenOneTimeAnimatedMedia = Set<EngineMessage.Id>()
+    public var freshWalletTransferMessageIds = Set<EngineMessage.Id>()
+    public var requestWalletTransferArrival: ((EngineRawMessage) -> Void)?
+    public var walletTransferArrivalState: ((EngineMessage.Id) -> WalletTransferArrivalState?)?
+    public var cancelWalletTransferArrival: ((EngineMessage.Id) -> Void)?
     public var currentMessageWithLoadingReplyThread: EngineMessage.Id?
     public var updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?
     public let presentationContext: ChatPresentationContext

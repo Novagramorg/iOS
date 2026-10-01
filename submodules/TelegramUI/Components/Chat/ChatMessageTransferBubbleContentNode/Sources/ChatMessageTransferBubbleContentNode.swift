@@ -1,6 +1,7 @@
 import Foundation
 import LottieSettings
 import UIKit
+import CoreText
 import Metal
 import MetalEngine
 import AsyncDisplayKit
@@ -27,6 +28,275 @@ private enum TransferCardStatus: Equatable {
     case pending
     case completed
     case unavailable
+}
+
+public enum WalletTransferArrivalAnimation {
+    public static let climax = passTime(122.0)
+    static let landing = climax - 0.08
+    public static let duration = landing + 1.8
+
+    static func passTime(_ x: CGFloat) -> Double {
+        let e = min(1.0, max(0.0, (Double(x) + 30.0) / 320.0))
+        return 0.05 + 1.1 * (0.5 - sin(asin(1.0 - 2.0 * e) / 3.0))
+    }
+
+    static func sheenX(_ time: Double) -> CGFloat? {
+        let u = (time - 0.05) / 1.1
+        guard u >= 0.0, u <= 1.0 else { return nil }
+        return CGFloat(-30.0 + 320.0 * u * u * (3.0 - 2.0 * u))
+    }
+
+    static func crossing(_ point: CGPoint) -> CGFloat {
+        // Card content is inset four points in the reference's 224 x 156 canvas.
+        return point.x + 4.0 + 0.35 * (point.y + 4.0) - 13.7
+    }
+
+    static func lift(_ time: Double, at x: CGFloat) -> CGFloat {
+        let t = time - passTime(x)
+        guard t > 0.0, t < 0.8 else { return 0.0 }
+        return CGFloat(sin(2.0 * .pi * 1.7 * t) * exp(-t / 0.2))
+    }
+}
+
+private final class TransferArrivalTextView: UIView {
+    private struct GlyphKey: Hashable {
+        let font: String
+        let size: CGFloat
+        let glyph: CGGlyph
+    }
+    private struct Shape {
+        let path: CGPath
+        let advance: CGFloat
+        let image: UIImage?
+    }
+    private struct Glyph {
+        let path: CGPath
+        let origin: CGPoint
+        let color: CGColor
+        let kind: Int
+        let landing: CGFloat
+        let value: Int?
+        let column: Int
+        let pitch: CGFloat
+        let advance: CGFloat
+        let digits: [Shape]
+        let image: UIImage?
+    }
+    private static var shapes: [GlyphKey: Shape] = [:]
+    private var glyphs: [Glyph] = []
+    private var layouts: [(TextNodeLayout, CGRect)] = []
+    private var integralCount = 0
+    private var time: Double = 0.0
+    private let addressGradient: CGGradient
+    private let nameGradient: CGGradient
+
+    override init(frame: CGRect) {
+        func gradient(color: UIColor, peak: CGFloat) -> CGGradient {
+            let alphas: [CGFloat] = [0.0, 0.18, 0.6, 1.0, 0.6, 0.18, 0.0]
+            let colors = alphas.map { color.withAlphaComponent($0 * peak).cgColor }
+            let locations: [CGFloat] = [0.0, 0.22, 0.4, 0.5, 0.6, 0.78, 1.0]
+            return CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors as CFArray, locations: locations)!
+        }
+        self.addressGradient = gradient(color: UIColor(red: 0.36, green: 0.86, blue: 1.0, alpha: 1.0), peak: 0.9)
+        self.nameGradient = gradient(color: .white, peak: 0.25)
+        super.init(frame: frame)
+        self.isOpaque = false
+        self.isUserInteractionEnabled = false
+        self.accessibilityElementsHidden = true
+        self.contentScaleFactor = UIScreenScale
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    private static func shape(font: CTFont, glyph: CGGlyph) -> Shape {
+        let key = GlyphKey(font: CTFontCopyPostScriptName(font) as String, size: CTFontGetSize(font), glyph: glyph)
+        if let cached = self.shapes[key] { return cached }
+        var glyph = glyph
+        var advance = CGSize.zero
+        CTFontGetAdvancesForGlyphs(font, .horizontal, &glyph, &advance, 1)
+        let path: CGPath
+        var image: UIImage?
+        if let outline = CTFontCreatePathForGlyph(font, glyph, nil) {
+            path = outline
+        } else {
+            let bounds = CTFontGetBoundingRectsForGlyphs(font, .horizontal, &glyph, nil, 1).integral
+            if !bounds.isEmpty && !bounds.isInfinite && !bounds.isNull {
+                // Keep color-font glyphs (for example an emoji in a peer name).
+                let format = UIGraphicsImageRendererFormat()
+                format.scale = UIScreenScale
+                image = UIGraphicsImageRenderer(size: bounds.size, format: format).image { renderer in
+                    let context = renderer.cgContext
+                    context.translateBy(x: -bounds.minX, y: bounds.maxY)
+                    context.scaleBy(x: 1, y: -1)
+                    var position = CGPoint.zero
+                    CTFontDrawGlyphs(font, &glyph, &position, 1, context)
+                }
+                path = CGPath(rect: bounds, transform: nil)
+            } else {
+                path = CGMutablePath()
+            }
+        }
+        let result = Shape(path: path, advance: advance.width, image: image)
+        self.shapes[key] = result
+        return result
+    }
+
+    func update(nodes: [TextNode]) {
+        let layouts = nodes.compactMap { node -> (TextNodeLayout, CGRect)? in
+            node.cachedLayout.map { ($0, node.frame) }
+        }
+        if layouts.count == self.layouts.count && zip(layouts, self.layouts).allSatisfy({ $0.0.0 === $0.1.0 && $0.0.1 == $0.1.1 }) { return }
+        self.layouts = layouts
+        self.glyphs.removeAll(keepingCapacity: true)
+        self.integralCount = 0
+        var column = 0
+        for (kind, entry) in layouts.enumerated() {
+            let (layout, frame) = entry
+            let string = (layout.attributedString?.string ?? "") as NSString
+            layout.enumerateRenderedLines(in: CGRect(origin: .zero, size: frame.size)) { line, baseline in
+                for run in CTLineGetGlyphRuns(line) as! [CTRun] {
+                    let attributes = CTRunGetAttributes(run) as NSDictionary
+                    let font = attributes[kCTFontAttributeName] as! CTFont
+                    let count = CTRunGetGlyphCount(run)
+                    var glyphs = [CGGlyph](repeating: 0, count: count)
+                    var positions = [CGPoint](repeating: .zero, count: count)
+                    var indices = [CFIndex](repeating: 0, count: count)
+                    CTRunGetGlyphs(run, CFRange(), &glyphs)
+                    CTRunGetPositions(run, CFRange(), &positions)
+                    CTRunGetStringIndices(run, CFRange(), &indices)
+                    for i in 0 ..< count {
+                        let shape = Self.shape(font: font, glyph: glyphs[i])
+                        guard !shape.path.isEmpty else { continue }
+                        let origin = CGPoint(x: frame.minX + baseline.x + positions[i].x, y: frame.minY + baseline.y - positions[i].y)
+                        var transform = CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: origin.x, ty: origin.y)
+                        guard let path = shape.path.copy(using: &transform) else { continue }
+                        let index = indices[i]
+                        var value: Int?
+                        var digits: [Shape] = []
+                        let color = (attributes[NSAttributedString.Key.foregroundColor.rawValue] as? UIColor)
+                            ?? (index >= 0 && index < string.length ? layout.attributedString?.attribute(.foregroundColor, at: index, effectiveRange: nil) as? UIColor : nil)
+                            ?? .white
+                        if kind == 0, index >= 0, index < string.length {
+                            let character = string.substring(with: string.rangeOfComposedCharacterSequence(at: index)).first
+                            if let number = character?.wholeNumberValue, number < 10 {
+                                // Verify the shaped glyph: a truncation token may reuse a string index.
+                                var code = string.character(at: index)
+                                var expected: CGGlyph = 0
+                                if CTFontGetGlyphsForCharacters(font, &code, &expected, 1), expected == glyphs[i] {
+                                    value = number
+                                    for digit in 0 ..< 10 {
+                                        var digitCode = UniChar(Int(code) - number + digit)
+                                        var digitGlyph: CGGlyph = 0
+                                        CTFontGetGlyphsForCharacters(font, &digitCode, &digitGlyph, 1)
+                                        digits.append(Self.shape(font: font, glyph: digitGlyph))
+                                    }
+                                }
+                            }
+                        }
+                        let isIntegral = CTFontGetSize(font) >= 17.0
+                        if value != nil && isIntegral { self.integralCount += 1 }
+                        let midpoint = CGPoint(x: path.boundingBoxOfPath.midX, y: path.boundingBoxOfPath.midY)
+                        self.glyphs.append(Glyph(path: path, origin: origin, color: color.cgColor, kind: kind,
+                            landing: WalletTransferArrivalAnimation.crossing(midpoint), value: value, column: column,
+                            pitch: isIntegral ? 17.0 : 13.2, advance: shape.advance, digits: digits, image: shape.image))
+                        if value != nil { column += 1 }
+                    }
+                }
+            }
+        }
+        self.setNeedsDisplay()
+    }
+
+    func update(time: Double) {
+        self.time = time
+        self.setNeedsDisplay()
+    }
+
+    override func draw(_ rect: CGRect) {
+        guard let context = UIGraphicsGetCurrentContext() else { return }
+        let namePath = CGMutablePath()
+        let addressPath = CGMutablePath()
+        for glyph in self.glyphs {
+            let landing = WalletTransferArrivalAnimation.passTime(glyph.landing)
+            func progress(_ back: Double) -> Double {
+                return min(1.0, max(0.0, (self.time - back - 0.02) / max(landing - 0.02, 0.05)))
+            }
+            if let value = glyph.value, progress(0) < 0.999 {
+                let distance = Double(value + 10 * min(glyph.column, 2))
+                func position(_ back: Double) -> Double { distance * (1.0 - pow(1.0 - progress(back), 1.7)) }
+                let now = position(0.0)
+                let was = position(1.0 / 60.0)
+                let travel = CGFloat(abs(now - was)) * glyph.pitch
+                let samples = travel > 1.0 ? min(2 + Int(travel), 14) : 1
+                let weights = (0 ..< samples).map { index -> CGFloat in
+                    guard samples > 1 else { return 1.0 }
+                    let q = CGFloat(index) / CGFloat(samples - 1) * 2.0 - 1.0
+                    return 1.0 - 0.55 * q * q
+                }
+                let total = weights.reduce(0, +)
+                let low = Int(floor(min(now, was))) - 1
+                let high = Int(ceil(max(now, was))) + 1
+                for n in low ... high {
+                    let digit = ((n % 10) + 10) % 10
+                    if digit == 0 && glyph.column == 0 && self.integralCount > 1 && value != 0 { continue }
+                    let shape = glyph.digits[digit]
+                    for sample in 0 ..< samples {
+                        let q = samples > 1 ? Double(sample) / Double(samples - 1) : 1.0
+                        let dy = CGFloat(was + (now - was) * q - Double(n)) * glyph.pitch
+                        let edge = abs(dy) / (glyph.pitch * 0.58)
+                        let alpha = (edge >= 1 ? 0 : 1 - pow(edge, 2.2)) * weights[sample] / total
+                        guard alpha > 0.006 else { continue }
+                        context.saveGState()
+                        context.translateBy(x: glyph.origin.x + (glyph.advance - shape.advance) * 0.5, y: glyph.origin.y - dy)
+                        context.scaleBy(x: 1.0, y: -1.0)
+                        context.setAlpha(alpha)
+                        context.setFillColor(glyph.color)
+                        context.addPath(shape.path)
+                        context.fillPath()
+                        context.restoreGState()
+                    }
+                }
+                continue
+            }
+            let lift = WalletTransferArrivalAnimation.lift(self.time, at: glyph.landing)
+            let bounds = glyph.path.boundingBoxOfPath
+            let scale = 1.0 + (glyph.kind == 0 ? 0.1 : 0.08) * lift
+            var transform = CGAffineTransform(translationX: bounds.midX, y: bounds.midY - (glyph.kind == 0 ? 1.2 : 0.9) * lift)
+                .scaledBy(x: scale, y: scale).translatedBy(x: -bounds.midX, y: -bounds.midY)
+            if let image = glyph.image {
+                context.saveGState()
+                context.concatenate(transform)
+                image.draw(in: bounds)
+                context.restoreGState()
+                continue
+            }
+            guard let path = glyph.path.copy(using: &transform) else { continue }
+            if glyph.kind == 2 {
+                context.saveGState()
+                context.translateBy(x: 0, y: 1)
+                context.setFillColor(UIColor.white.withAlphaComponent(0.06).cgColor)
+                context.addPath(path)
+                context.fillPath()
+                context.restoreGState()
+                addressPath.addPath(path)
+            } else if glyph.kind == 1 {
+                namePath.addPath(path)
+            }
+            context.setFillColor(glyph.color)
+            context.addPath(path)
+            context.fillPath()
+        }
+        if let x = WalletTransferArrivalAnimation.sheenX(self.time) {
+            for (path, gradient) in [(addressPath, self.addressGradient), (namePath, self.nameGradient)] {
+                context.saveGState()
+                context.addPath(path)
+                context.clip()
+                if path === namePath { context.setBlendMode(.plusLighter) }
+                context.drawLinearGradient(gradient, start: CGPoint(x: x - 112 - 4, y: -4), end: CGPoint(x: x + 112 - 4, y: 112 * 0.7 - 4), options: [])
+                context.restoreGState()
+            }
+        }
+    }
 }
 
 private struct TransferCardWalletState: Equatable {
@@ -152,6 +422,7 @@ private func transferCardWalletState(_ state: WalletContext.State, operationId: 
 
 private final class TransferCardShimmerView: UIView {
     let repeatAnimation: Bool
+    let followsArrival: Bool
     var completion: (() -> Void)?
 
     private let surfaceLayer = SimpleGradientLayer()
@@ -164,8 +435,9 @@ private final class TransferCardShimmerView: UIView {
     private var currentLayout: (size: CGSize, addressFrame: CGRect)?
     private var animationStartTime: CFTimeInterval?
 
-    init(addressMask: UIView, repeatAnimation: Bool) {
+    init(addressMask: UIView, repeatAnimation: Bool, followsArrival: Bool = false) {
         self.repeatAnimation = repeatAnimation
+        self.followsArrival = followsArrival
 
         super.init(frame: .zero)
         self.isUserInteractionEnabled = false
@@ -199,6 +471,7 @@ private final class TransferCardShimmerView: UIView {
             self.layer.addSublayer(layer)
         }
         self.addSubview(self.addressView)
+        self.addressView.isHidden = followsArrival
         self.surfaceLayer.compositingFilter = "screenBlendMode"
         self.borderGlowLayer.compositingFilter = "plusL"
         self.borderLayer.compositingFilter = "plusL"
@@ -231,6 +504,8 @@ private final class TransferCardShimmerView: UIView {
         self.addressView.mask?.frame = addressFrame
         self.addressLayer.frame = bounds
 
+        if self.followsArrival { return }
+
         for (layer, width, frame) in [
             (self.surfaceLayer, CGFloat(160.0), bounds),
             (self.borderGlowLayer, CGFloat(128.0), bounds),
@@ -238,6 +513,18 @@ private final class TransferCardShimmerView: UIView {
             (self.addressLayer, CGFloat(112.0), bounds)
         ] {
             self.animateBand(layer, width: width, frame: frame, cardWidth: size.width + 8.0)
+        }
+    }
+
+    func updateArrival(time: Double) {
+        guard self.followsArrival, self.bounds.width > 0, self.bounds.height > 0 else { return }
+        let x = WalletTransferArrivalAnimation.sheenX(time)
+        for (layer, width) in [(self.surfaceLayer, CGFloat(160)), (self.borderGlowLayer, CGFloat(128)), (self.borderLayer, CGFloat(112))] {
+            layer.opacity = x == nil ? 0 : 1
+            if let x {
+                layer.startPoint = CGPoint(x: (x - width - 4) / self.bounds.width, y: -4 / self.bounds.height)
+                layer.endPoint = CGPoint(x: (x + width - 4) / self.bounds.width, y: (width * 0.7 - 4) / self.bounds.height)
+            }
         }
     }
 
@@ -330,6 +617,10 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
     private var ribbonAnimationMaskLayer: SimpleShapeLayer?
     private var ribbonGlintLayer: SimpleGradientLayer?
     private var completionAnimationId = 0
+    private var arrivalTextView: TransferArrivalTextView?
+    private var arrivalStartTime: CFTimeInterval?
+    private var arrivalDidLand = false
+    private var arrivalDidGlint = false
 
     private weak var walletContext: WalletContext?
     private var walletStateDisposable: MetaDisposable?
@@ -369,11 +660,26 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
         return true
     }
 
+    override public func didEnterHierarchy() {
+        super.didEnterHierarchy()
+        self.updateIncomingTransferVisibility()
+        // UIKit may attach the backing view to its window after the node enters hierarchy.
+        DispatchQueue.main.async { [weak self] in
+            self?.updateIncomingTransferVisibility()
+        }
+    }
+
+    override public func didExitHierarchy() {
+        super.didExitHierarchy()
+        self.cancelIncomingTransferAnimation()
+    }
+
     override public var visibility: ListViewItemNodeVisibility {
         didSet {
             if (oldValue != .none) != (self.visibility != .none) {
                 self.cardIcon?.isRenderingEnabled = self.visibility != .none && !self.isAwaitingTransferFlight
                 if self.visibility == .none {
+                    self.cancelIncomingTransferAnimation()
                     self.mediaContainerNode.layer.removeAnimation(forKey: "transferFlightLanding")
                     self.stopCardBackgroundMotion()
                     self.finishCompletionAnimation()
@@ -382,6 +688,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                 self.updateSendingClockAnimation()
                 self.updateShimmer(animated: false)
             }
+            self.updateIncomingTransferVisibility()
         }
     }
 
@@ -522,7 +829,8 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
         )
 
         let rotation: CGFloat
-        if let transferEnergy = state.transferEnergy, !self.isIncomingTransfer, self.displayedTransferStatus == .pending {
+        if let transferEnergy = state.transferEnergy,
+           (!self.isIncomingTransfer && self.displayedTransferStatus == .pending) || (self.arrivalStartTime != nil && !self.arrivalDidLand) {
             self.cardBackgroundRotationAnimation = nil
             defer {
                 self.cardBackgroundMotion = (state.rotation, state.time)
@@ -579,6 +887,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
         diamond.onExpansionChanged = { [weak self] isExpanded in
             guard let self else { return }
             if isExpanded {
+                self.cancelIncomingTransferAnimation()
                 if self.cardBackgroundRotationAnimation != nil {
                     self.cardBackgroundRotationAnimation = BackgroundRotationAnimation(duration: 0.22, turns: 0.0)
                 }
@@ -604,6 +913,154 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
         }
         diamond.bounds = CGRect(origin: .zero, size: size)
         diamond.center = CGPoint(x: floorToScreenPixels((self.cardNode.bounds.width - 38.0) * 0.5) + 19.0, y: 35.0)
+    }
+
+    public var canPlayIncomingTransferAnimation: Bool {
+        return self.isIncomingTransfer && self.visibility != .none && self.cardNode.bounds.width > 0
+            && self.isNodeLoaded && self.view.window != nil
+            && self.cardIcon?.isExpanded != true
+            && self.item?.controllerInteraction.canReadHistory == true
+            && UIApplication.shared.applicationState == .active
+    }
+
+    override public func unreadMessageRangeUpdated() {
+        self.updateIncomingTransferVisibility()
+    }
+
+    private func updateIncomingTransferVisibility() {
+        guard let item = self.item, self.canPlayIncomingTransferAnimation else { return }
+        var state = item.controllerInteraction.walletTransferArrivalState?(item.message.id)
+        if state == nil,
+           item.controllerInteraction.unreadMessageRange[UnreadMessageRangeKey(peerId: item.message.id.peerId, namespace: item.message.id.namespace)]?.contains(item.message.id.id) == true {
+            item.controllerInteraction.requestWalletTransferArrival?(item.message)
+            state = item.controllerInteraction.walletTransferArrivalState?(item.message.id)
+        }
+        switch state {
+        case let .queued(rise):
+            self.prepareIncomingTransferAnimation(rise: rise)
+        case let .playing(startTime, rise):
+            self.updateIncomingTransferAnimation(startTime: startTime, rise: rise, at: CACurrentMediaTime())
+        case .finished:
+            self.finishIncomingTransferAnimation()
+        case nil:
+            break
+        }
+    }
+
+    private func prepareIncomingTransferAnimation(rise: Bool) {
+        guard self.arrivalTextView == nil else { return }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        self.finishCompletionAnimation()
+        self.isPlayingHighlightShimmer = false
+        self.mediaContainerNode.layer.removeAnimation(forKey: "sublayerTransform.scale")
+        self.shimmerView?.removeFromSuperview()
+        self.shimmerView = nil
+        let text = TransferArrivalTextView(frame: self.cardNode.bounds)
+        self.arrivalTextView = text
+        self.cardNode.view.addSubview(text)
+        text.update(nodes: [self.amountNode, self.nameNode, self.addressNode])
+        for node in [self.amountNode, self.nameNode, self.addressNode, self.addressHighlightNode] {
+            node.alpha = 0.0
+        }
+        self.sendingClockNode.alpha = 0.0
+        self.ribbonBackgroundNode.alpha = 0.0
+        self.ribbonTextContainerNode.alpha = 0.0
+        self.mediaContainerNode.alpha = rise ? 0.0 : 1.0
+        self.updateShimmer(animated: false)
+        CATransaction.commit()
+    }
+
+    public func updateIncomingTransferAnimation(startTime: CFTimeInterval, rise: Bool, at timestamp: CFTimeInterval) {
+        guard self.canPlayIncomingTransferAnimation else { return }
+        if UIAccessibility.isReduceMotionEnabled {
+            self.cancelIncomingTransferAnimation()
+            return
+        }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+        self.prepareIncomingTransferAnimation(rise: rise)
+        if self.arrivalStartTime == nil {
+            self.arrivalStartTime = startTime
+            self.cardBackgroundRotationAnimation = nil
+            self.cardBackgroundMotion = nil
+            self.cardIcon?.beginReceivingTransfer(at: startTime, completionDelay: WalletTransferArrivalAnimation.landing)
+        }
+        let t = max(0.0, timestamp - startTime)
+        let finish = t - WalletTransferArrivalAnimation.landing
+        self.arrivalTextView?.update(time: t)
+        self.shimmerView?.updateArrival(time: t)
+
+        let bounce = finish > 0 && finish < 1.2 ? -sin(2 * .pi * 2 * finish) * exp(-finish / 0.25) : 0
+        let scale: CGFloat
+        let y: CGFloat
+        if rise {
+            let spring = t < 0.8 ? 1 - exp(-9 * t) * (cos(13 * t) + 9.0 / 13.0 * sin(13 * t)) : 1
+            scale = CGFloat(0.86 + 0.14 * spring) * CGFloat(1 + 0.045 * bounce)
+            y = CGFloat(70 * (1 - spring)) + (1 - scale) * self.mediaContainerNode.bounds.height * 0.5
+            self.mediaContainerNode.alpha = CGFloat(min(1, t / 0.12))
+        } else {
+            let pop = t < 1.2 ? 0.05 * sin(2 * .pi * 1.8 * t) * exp(-t / 0.22) : 0
+            scale = CGFloat((1 + pop) * (1 + 0.045 * bounce))
+            y = 0
+            self.mediaContainerNode.alpha = 1
+        }
+        self.mediaContainerNode.layer.sublayerTransform = CATransform3DScale(CATransform3DMakeTranslation(0, y, 0), scale, scale, 1)
+
+        if finish >= 0 {
+            if !self.arrivalDidLand {
+                self.arrivalDidLand = true
+                self.cardBackgroundRotationAnimation = BackgroundRotationAnimation(duration: 1.8, turns: 2)
+            }
+            let tau = 0.08, w = 2 * Double.pi * 1.6
+            let length = 1 - exp(-finish / tau) * (cos(w * finish) + sin(w * finish) / (tau * w))
+            let width = 1 - pow(1 - min(1, finish / 0.3), 2.2)
+            let pivot = CGPoint(x: 200, y: 24)
+            let center = self.ribbonBackgroundNode.position
+            let transform = CGAffineTransform(translationX: pivot.x - center.x, y: pivot.y - center.y)
+                .rotated(by: .pi / 4).scaledBy(x: CGFloat(max(0.001, length)), y: CGFloat(0.2 + 0.8 * width))
+                .rotated(by: -.pi / 4).translatedBy(x: center.x - pivot.x, y: center.y - pivot.y)
+            self.ribbonBackgroundNode.transform = CATransform3DMakeAffineTransform(transform)
+            self.ribbonTextContainerNode.transform = CATransform3DMakeAffineTransform(transform)
+            self.ribbonBackgroundNode.alpha = CGFloat(min(1, max(0, length * 4)))
+            self.ribbonTextContainerNode.alpha = self.ribbonBackgroundNode.alpha * CGFloat(min(1, max(0, (length - 0.6) / 0.35)))
+            if finish >= 0.6 && !self.arrivalDidGlint {
+                self.arrivalDidGlint = true
+                self.animateRibbonGlint()
+            }
+        }
+    }
+
+    private func cancelIncomingTransferAnimation() {
+        guard self.arrivalTextView != nil, let item = self.item else { return }
+        item.controllerInteraction.cancelWalletTransferArrival?(item.message.id)
+        self.finishIncomingTransferAnimation()
+    }
+
+    public func finishIncomingTransferAnimation() {
+        guard let text = self.arrivalTextView else { return }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        self.arrivalTextView = nil
+        text.removeFromSuperview()
+        self.arrivalStartTime = nil
+        self.arrivalDidLand = false
+        self.arrivalDidGlint = false
+        for node in [self.amountNode, self.nameNode, self.addressNode, self.addressHighlightNode] {
+            node.alpha = 1.0
+        }
+        self.addressHighlightNode.alpha = 0.06
+        self.mediaContainerNode.alpha = 1.0
+        self.mediaContainerNode.layer.sublayerTransform = CATransform3DIdentity
+        self.ribbonBackgroundNode.transform = CATransform3DIdentity
+        self.ribbonTextContainerNode.transform = CATransform3DIdentity
+        self.cardIcon?.endReceivingTransfer()
+        self.cardBackgroundMotion = nil
+        self.cardBackgroundRotationAnimation = BackgroundRotationAnimation(duration: 0.22, turns: 0)
+        self.finishCompletionAnimation()
+        self.updateShimmer(animated: false)
+        CATransaction.commit()
     }
 
     public func transferDiamondTarget(in view: UIView) -> (center: CGPoint, width: CGFloat)? {
@@ -820,6 +1277,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
 
     private func updateTransferAppearance(previousStatus: TransferCardStatus?, animated: Bool) {
         let status = self.displayedTransferStatus
+        if self.arrivalTextView != nil { return }
         if self.isAwaitingTransferFlight {
             self.finishCompletionAnimation()
             self.updateShimmer(animated: false)
@@ -876,6 +1334,20 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
     }
 
     private func updateShimmer(animated: Bool) {
+        if let text = self.arrivalTextView {
+            let shimmer: TransferCardShimmerView
+            if let current = self.shimmerView, current.followsArrival {
+                shimmer = current
+            } else {
+                self.shimmerView?.removeFromSuperview()
+                shimmer = TransferCardShimmerView(addressMask: self.addressShimmerMaskNode.view, repeatAnimation: false, followsArrival: true)
+                self.shimmerView = shimmer
+                self.cardNode.view.insertSubview(shimmer, belowSubview: text)
+            }
+            shimmer.update(size: self.cardNode.bounds.size, addressFrame: self.addressNode.frame)
+            if let diamond = self.cardIcon { self.cardNode.view.bringSubviewToFront(diamond) }
+            return
+        }
         let displayShimmer = !self.isAwaitingTransferFlight && (self.displayedTransferStatus == .pending || self.isPlayingHighlightShimmer) && self.visibility != .none
         if displayShimmer {
             let repeatAnimation = !self.isPlayingHighlightShimmer
@@ -992,6 +1464,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
     }
 
     private func finishCompletionAnimation() {
+        guard self.arrivalTextView == nil else { return }
         self.completionAnimationId &+= 1
         self.removeRibbonAnimation()
         self.ribbonGlintLayer?.removeAllAnimations()
@@ -1030,7 +1503,9 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
     }
 
     private func animateRibbonGlint() {
-        let frame = self.ribbonBackgroundNode.frame
+        let size = self.ribbonBackgroundNode.bounds.size
+        let center = self.ribbonBackgroundNode.position
+        let frame = CGRect(x: center.x - size.width * 0.5, y: center.y - size.height * 0.5, width: size.width, height: size.height)
         guard frame.width > 0.0, frame.height > 0.0 else {
             return
         }
@@ -1532,6 +2007,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                             && self.item?.message.id.peerId == item.message.id.peerId
                             && self.item?.message.stableId == item.message.stableId
                         if !isSameMessage {
+                            self.cancelIncomingTransferAnimation()
                             self.mediaContainerNode.layer.removeAnimation(forKey: "transferFlightLanding")
                             self.stopCardBackgroundMotion()
                             self.cardIcon?.isRenderingEnabled = false
@@ -1617,6 +2093,11 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                         self.addressShimmerMaskNode.frame = self.addressNode.frame
 
                         let ribbonSize = TransferCardRibbonGeometry.size
+                        if self.arrivalTextView != nil {
+                            // Apply layout in model coordinates, then restore the arrival pose below.
+                            self.ribbonBackgroundNode.transform = CATransform3DIdentity
+                            self.ribbonTextContainerNode.transform = CATransform3DIdentity
+                        }
                         let ribbonFrame = CGRect(
                             origin: CGPoint(x: cardFrame.maxX - ribbonSize.width + 2.0, y: cardFrame.minY - 2.0),
                             size: ribbonSize
@@ -1729,6 +2210,9 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                             self.updateTransferAppearance(previousStatus: nil, animated: false)
                         }
                         self.shimmerView?.update(size: cardSize, addressFrame: self.addressNode.frame)
+                        self.arrivalTextView?.frame = self.cardNode.bounds
+                        self.arrivalTextView?.update(nodes: [self.amountNode, self.nameNode, self.addressNode])
+                        self.updateIncomingTransferVisibility()
                     })
                 })
             })
@@ -1747,7 +2231,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
         let highlighted = item.controllerInteraction.highlightedState?.messageStableId == item.message.stableId
         if self.isHighlighted != highlighted {
             self.isHighlighted = highlighted
-            if highlighted {
+            if highlighted && self.arrivalTextView == nil {
                 self.isPlayingHighlightShimmer = true
                 self.shimmerView?.removeFromSuperview()
                 self.shimmerView = nil
