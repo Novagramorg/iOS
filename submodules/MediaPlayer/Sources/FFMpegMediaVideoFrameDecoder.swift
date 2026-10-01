@@ -56,6 +56,9 @@ public final class FFMpegMediaVideoFrameDecoder: MediaTrackFrameDecoder {
     
     private var pixelBufferPool: CVPixelBufferPool?
     
+    public var reusesPixelBuffers: Bool = false
+    private var reusablePixelBufferPool: (pool: CVPixelBufferPool, width: Int32, height: Int32, pixelFormat: OSType, alignment: Int32)?
+    
     private var delayedFrames: [MediaTrackFrame] = []
     
     private var uvPlane: (UnsafeMutablePointer<UInt8>, Int)?
@@ -444,6 +447,27 @@ public final class FFMpegMediaVideoFrameDecoder: MediaTrackFrameDecoder {
         return UIImage(cgImage: image, scale: 1.0, orientation: .up)
     }
     
+    private func reusablePixelBufferPool(width: Int32, height: Int32, pixelFormat: OSType, alignment: Int32) -> CVPixelBufferPool? {
+        if let current = self.reusablePixelBufferPool, current.width == width, current.height == height, current.pixelFormat == pixelFormat, current.alignment == alignment {
+            return current.pool
+        }
+        let ioSurfaceProperties = NSMutableDictionary()
+        ioSurfaceProperties["IOSurfaceIsGlobal"] = true as NSNumber
+        let attributes: [String: Any] = [
+            kCVPixelBufferWidthKey as String: Int(width) as NSNumber,
+            kCVPixelBufferHeightKey as String: Int(height) as NSNumber,
+            kCVPixelBufferPixelFormatTypeKey as String: pixelFormat as NSNumber,
+            kCVPixelBufferBytesPerRowAlignmentKey as String: alignment as NSNumber,
+            kCVPixelBufferIOSurfacePropertiesKey as String: ioSurfaceProperties
+        ]
+        var pool: CVPixelBufferPool?
+        guard CVPixelBufferPoolCreate(kCFAllocatorDefault, nil, attributes as CFDictionary, &pool) == kCVReturnSuccess, let pool else {
+            return nil
+        }
+        self.reusablePixelBufferPool = (pool, width, height, pixelFormat, alignment)
+        return pool
+    }
+    
     private func convertVideoFrame(_ frame: FFMpegAVFrame, pts: CMTime, dts: CMTime, duration: CMTime, forceARGB: Bool = false, unpremultiplyAlpha: Bool = true, displayImmediately: Bool = true) -> MediaTrackFrame? {
         if frame.nativePixelFormat() == FFMpegAVFrameNativePixelFormat.videoToolbox {
             guard let pixelBufferRef = frame.data[3] else {
@@ -524,6 +548,8 @@ public final class FFMpegMediaVideoFrameDecoder: MediaTrackFrameDecoder {
                 print("kCVReturnWouldExceedAllocationThreshold, dropping frame")
                 return nil
             }
+        } else if self.reusesPixelBuffers, let pool = self.reusablePixelBufferPool(width: frame.width, height: frame.height, pixelFormat: pixelFormat, alignment: frame.lineSize[0]) {
+            CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool, &pixelBufferRef)
         } else {
             let ioSurfaceProperties = NSMutableDictionary()
             ioSurfaceProperties["IOSurfaceIsGlobal"] = true as NSNumber
