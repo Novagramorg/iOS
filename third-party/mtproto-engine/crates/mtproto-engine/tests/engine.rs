@@ -1146,3 +1146,23 @@ fn a_path_that_cuts_every_connection_after_the_first_answer_does_not_cause_a_rec
     assert!(completed >= 1, "requests still get through a cutting path");
     assert!(connections <= 25, "{connections} connections in 15 s through a path that cuts each one");
 }
+
+#[test]
+fn destroying_the_auth_key_on_logout_reaches_the_server() {
+    let key = random_key(61);
+    let server = TestServer::start(vec![key.clone()], ServerOptions::default());
+    let collector = Arc::new(Collector::default());
+    let engine = engine(&collector, 1);
+    let session = engine.create_session(setup(&server, &key, SessionRole::Main));
+    engine.send(session, request(1, 1));
+    assert!(collector.wait(WAIT, |events| completions(events, session) == 1));
+    engine.destroy_auth_key(session);
+    assert!(collector.wait(WAIT, |events| events.iter().any(|(handle, event)| *handle == session
+        && matches!(
+            event,
+            EngineEvent::Rpc(RpcEvent::AuthKeyDestroyed {
+                outcome: mtproto_engine::mtproto_core::session::DestroyAuthKeyOutcome::Ok
+            })
+        ))));
+    engine.shutdown();
+}

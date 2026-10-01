@@ -33,6 +33,8 @@ pub const MAX_ANSWER_REQUESTS: u32 = 3;
 pub const MAX_NESTING_DEPTH: usize = 8;
 pub const MAX_AWAITED_ANSWERS: usize = 1024;
 pub const MAX_MESSAGES_PER_PACKET: usize = 4 * 1024;
+pub const MAX_CONTAINER_MESSAGES_OUT: usize = 1024;
+pub const CONTAINER_RESERVED_SLOTS: usize = 2;
 pub const MAX_UNPACKED_PER_PACKET: usize = 64 * 1024 * 1024;
 pub const CLOCK_JUMP_THRESHOLD: f64 = 1.0;
 pub const RESPONSE_TIME_SKEW: i64 = 15i64 << 32;
@@ -278,6 +280,7 @@ pub struct Session {
     service_containers: VecDeque<(i64, Vec<i64>)>,
     future_salts_requests: VecDeque<i64>,
     awaited_answers: HashMap<i64, AwaitedAnswer>,
+    resend_individually: HashSet<i64>,
     recent_sent: VecDeque<i64>,
     recent_unique_ids: VecDeque<i64>,
     force_send_at: Option<f64>,
@@ -357,6 +360,7 @@ impl Session {
             service_containers: VecDeque::new(),
             future_salts_requests: VecDeque::new(),
             awaited_answers: HashMap::new(),
+            resend_individually: HashSet::new(),
             recent_sent: VecDeque::new(),
             recent_unique_ids: VecDeque::new(),
             force_send_at: None,
@@ -487,6 +491,12 @@ impl Session {
         if !future.is_empty() {
             self.salts.set_future(future, server_time);
         }
+    }
+
+    pub fn destroy_auth_key(&mut self, now: Now) {
+        self.need_destroy_auth_key = true;
+        self.sent_destroy_auth_key = false;
+        self.send_before(now.mono);
     }
 
     pub fn request_destroy_auth_key(&mut self) {
@@ -805,6 +815,7 @@ impl Session {
         self.service_containers.clear();
         self.future_salts_requests.clear();
         self.awaited_answers.clear();
+        self.resend_individually.clear();
         self.recent_sent.clear();
         self.recent_unique_ids.clear();
         self.pending_pings.clear();
@@ -1712,7 +1723,20 @@ impl Session {
     }
 
     fn on_answers_unavailable(&mut self, answers: &[i64], now: Now) {
+        if answers.len() > 1 {
+            for answer in answers {
+                if self.awaited_answers.contains_key(answer) {
+                    self.resend_individually.insert(*answer);
+                    if !self.to_resend_answer.contains(answer) {
+                        self.to_resend_answer.push(*answer);
+                    }
+                }
+            }
+            self.send_before(now.mono);
+            return;
+        }
         for answer in answers {
+            self.resend_individually.remove(answer);
             if let Some(id) = self.awaited_answers.remove(answer).and_then(|awaited| awaited.query) {
                 self.resend_query(id, now);
             }
@@ -2109,27 +2133,50 @@ impl Session {
             state_request = Some((msg_id, ids));
         }
 
-        let mut resend_request = None;
+        let mut resend_requests: Vec<(i64, Vec<i64>)> = Vec::new();
         if has_salt && !self.to_resend_answer.is_empty() {
+            let awaited = &self.awaited_answers;
+            self.resend_individually.retain(|id| awaited.contains_key(id));
             let ids = take_tail(&mut self.to_resend_answer, MAX_IDS_PER_SERVICE_MESSAGE);
-            let mut writer = Writer::new();
-            tlm::write_msg_resend_req(&mut writer, &ids);
-            let msg_id = self.push_service(&mut messages, writer.into_inner(), now, rng);
-            resend_request = Some((msg_id, ids));
+            let (single, batch): (Vec<i64>, Vec<i64>) =
+                ids.into_iter().partition(|id| self.resend_individually.contains(id));
+            if !batch.is_empty() {
+                let mut writer = Writer::new();
+                tlm::write_msg_resend_req(&mut writer, &batch);
+                let msg_id = self.push_service(&mut messages, writer.into_inner(), now, rng);
+                resend_requests.push((msg_id, batch));
+            }
+            for (index, id) in single.iter().enumerate() {
+                if messages.len() + CONTAINER_RESERVED_SLOTS + 4 >= MAX_CONTAINER_MESSAGES_OUT {
+                    self.to_resend_answer.extend_from_slice(&single[index..]);
+                    break;
+                }
+                let mut writer = Writer::new();
+                tlm::write_msg_resend_req(&mut writer, &[*id]);
+                let msg_id = self.push_service(&mut messages, writer.into_inner(), now, rng);
+                resend_requests.push((msg_id, vec![*id]));
+            }
         }
 
         if has_salt {
-            for msg_id in std::mem::take(&mut self.to_drop_answer) {
+            let room = MAX_CONTAINER_MESSAGES_OUT.saturating_sub(messages.len() + CONTAINER_RESERVED_SLOTS);
+            let drops: Vec<i64> = self.to_drop_answer.drain(..room.min(self.to_drop_answer.len())).collect();
+            for msg_id in drops {
                 let mut writer = Writer::new();
                 tlm::write_rpc_drop_answer(&mut writer, msg_id);
                 self.push_service(&mut messages, writer.into_inner(), now, rng);
             }
-            for (req_msg_id, info) in std::mem::take(&mut self.to_state_info_reply) {
+            let room = MAX_CONTAINER_MESSAGES_OUT.saturating_sub(messages.len() + CONTAINER_RESERVED_SLOTS);
+            let replies: Vec<(i64, Vec<u8>)> =
+                self.to_state_info_reply.drain(..room.min(self.to_state_info_reply.len())).collect();
+            for (req_msg_id, info) in replies {
                 let mut writer = Writer::new();
                 tlm::write_msgs_state_info(&mut writer, req_msg_id, &info);
                 self.push_service(&mut messages, writer.into_inner(), now, rng);
             }
-            for (ping_msg_id, ping_id) in std::mem::take(&mut self.to_pong) {
+            let room = MAX_CONTAINER_MESSAGES_OUT.saturating_sub(messages.len() + CONTAINER_RESERVED_SLOTS);
+            let pongs: Vec<(i64, i64)> = self.to_pong.drain(..room.min(self.to_pong.len())).collect();
+            for (ping_msg_id, ping_id) in pongs {
                 let mut writer = Writer::with_capacity(20);
                 tlm::write_pong(&mut writer, ping_msg_id, ping_id);
                 self.push_service(&mut messages, writer.into_inner(), now, rng);
@@ -2208,9 +2255,7 @@ impl Session {
             if let Some((msg_id, _)) = &state_request {
                 services.push(*msg_id);
             }
-            if let Some((msg_id, _)) = &resend_request {
-                services.push(*msg_id);
-            }
+            services.extend(resend_requests.iter().map(|(msg_id, _)| *msg_id));
             if ping_msg_id != 0 {
                 services.push(ping_msg_id);
                 self.last_ping_container_id = container_id;
@@ -2228,7 +2273,7 @@ impl Session {
         if let Some((msg_id, ids)) = state_request {
             self.service_requests.insert(msg_id, ServiceRequest::StateRequest { msg_ids: ids, sent_at: now.mono });
         }
-        if let Some((msg_id, ids)) = resend_request {
+        for (msg_id, ids) in resend_requests {
             self.service_requests.insert(msg_id, ServiceRequest::ResendRequest { msg_ids: ids, sent_at: now.mono });
         }
 

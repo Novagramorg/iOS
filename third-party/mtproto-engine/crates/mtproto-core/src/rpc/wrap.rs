@@ -1,3 +1,4 @@
+use crate::tl::mtproto as tlm;
 use crate::tl::{Writer, ids};
 
 pub const INIT_CONNECTION: u32 = 0xc1cd5ea9;
@@ -83,8 +84,30 @@ pub fn wrap_request(
             writer.write_raw(params);
         }
     }
-    writer.write_raw(payload);
+    match compressed_payload(payload) {
+        Some(packed) => writer.write_raw(&packed),
+        None => writer.write_raw(payload),
+    }
     writer.into_inner()
+}
+
+pub const GZIP_MIN_REQUEST_SIZE: usize = 256;
+pub const UPLOAD_SAVE_FILE_PART: u32 = 0xb304_a621;
+pub const UPLOAD_SAVE_BIG_FILE_PART: u32 = 0xde7b_673d;
+
+pub fn compressed_payload(payload: &[u8]) -> Option<Vec<u8>> {
+    if payload.len() < GZIP_MIN_REQUEST_SIZE {
+        return None;
+    }
+    let constructor = u32::from_le_bytes(payload[..4].try_into().ok()?);
+    if matches!(constructor, UPLOAD_SAVE_FILE_PART | UPLOAD_SAVE_BIG_FILE_PART | ids::GZIP_PACKED) {
+        return None;
+    }
+    let packed = tlm::gzip(payload);
+    let mut writer = Writer::with_capacity(packed.len() + 8);
+    tlm::write_gzip_packed(&mut writer, &packed);
+    let body = writer.into_inner();
+    (body.len() * 10 < payload.len() * 9).then_some(body)
 }
 
 pub fn flood_wait_seconds(message: &str) -> Option<i64> {
@@ -101,6 +124,29 @@ pub fn flood_wait_seconds(message: &str) -> Option<i64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn large_requests_are_gzipped_but_file_parts_and_small_ones_are_not() {
+        let mut text = vec![0x11u8, 0x22, 0x33, 0x44];
+        text.extend(std::iter::repeat_n(b'a', 4000));
+        let wrapped = wrap_request(&text, None, false, None);
+        assert_eq!(u32::from_le_bytes(wrapped[..4].try_into().unwrap()), ids::GZIP_PACKED);
+        assert!(wrapped.len() < 200);
+        let mut reader = crate::tl::Reader::new(&wrapped[4..]);
+        assert_eq!(tlm::gunzip(reader.read_bytes().unwrap(), 1 << 20).unwrap(), text);
+        let mut part = UPLOAD_SAVE_FILE_PART.to_le_bytes().to_vec();
+        part.extend(std::iter::repeat_n(0u8, 4000));
+        assert_eq!(wrap_request(&part, None, false, None), part);
+        let small = [1u8, 2, 3, 4, 5, 6, 7, 8];
+        assert_eq!(wrap_request(&small, None, false, None), small);
+        let mut random = vec![0x11u8, 0x22, 0x33, 0x44];
+        let mut state = 7u64;
+        random.extend((0..4000).map(|_| {
+            state = state.wrapping_mul(6364136223846793005).wrapping_add(1);
+            (state >> 33) as u8
+        }));
+        assert_eq!(wrap_request(&random, None, false, None), random, "incompressible bodies are sent as is");
+    }
     use crate::tl::Reader;
 
     fn environment() -> ApiEnvironment {

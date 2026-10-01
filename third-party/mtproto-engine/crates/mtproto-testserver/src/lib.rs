@@ -740,6 +740,11 @@ fn serve_frames_inner(
                             }
                         }
                         ids::RPC_DROP_ANSWER => {}
+                        ids::DESTROY_AUTH_KEY => {
+                            let mut writer = Writer::new();
+                            writer.write_u32(ids::DESTROY_AUTH_KEY_OK);
+                            outgoing.push((writer.into_inner(), false));
+                        }
                         _ => {
                             let (call, flags) = unwrap_wrappers(&message.body);
                             stats.init_connections += usize::from(flags.init_connection);
@@ -1342,6 +1347,18 @@ fn unwrap_wrappers(body: &[u8]) -> (Option<Inner>, WrapperFlags) {
             }
             constructor if api::ApiWorld::handles(constructor) => {
                 return (Some(Inner::Api(constructor, reader.rest().to_vec())), flags);
+            }
+            ids::GZIP_PACKED => {
+                let Some(unpacked) =
+                    reader.read_bytes().ok().and_then(|packed| mtproto_core::tl::mtproto::gunzip(packed, 1 << 24).ok())
+                else {
+                    return (None, flags);
+                };
+                let (inner, inner_flags) = unwrap_wrappers(&unpacked);
+                flags.invoke_after |= inner_flags.invoke_after;
+                flags.without_updates |= inner_flags.without_updates;
+                flags.init_connection |= inner_flags.init_connection;
+                return (inner, flags);
             }
             _ => return (None, flags),
         }

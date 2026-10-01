@@ -36,6 +36,7 @@ pub enum Command {
     DecideRetry(SessionHandle, RequestId, bool),
     InvalidateInitialization(SessionHandle),
     SetTimeDifference(SessionHandle, f64),
+    DestroyAuthKey(SessionHandle),
     SetNetworkAvailable(bool),
     ResetConnections,
     Resolved { host: String, port: u16, addresses: Vec<std::net::SocketAddr> },
@@ -317,6 +318,11 @@ impl Worker {
                 Command::InvalidateInitialization(handle) => {
                     if let Some(session) = self.sessions.get_mut(&handle) {
                         session.invalidate_initialization();
+                    }
+                }
+                Command::DestroyAuthKey(handle) => {
+                    if let Some(session) = self.sessions.get_mut(&handle) {
+                        session.destroy_auth_key(now);
                     }
                 }
                 Command::SetTimeDifference(handle, difference) => {

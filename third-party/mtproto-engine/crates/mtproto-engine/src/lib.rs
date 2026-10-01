@@ -177,6 +177,10 @@ impl Engine {
         self.post(handle, Command::SetTimeDifference(handle, difference));
     }
 
+    pub fn destroy_auth_key(&self, handle: SessionHandle) {
+        self.post(handle, Command::DestroyAuthKey(handle));
+    }
+
     pub fn set_network_available(&self, available: bool) {
         self.broadcast(|| Command::SetNetworkAvailable(available));
     }

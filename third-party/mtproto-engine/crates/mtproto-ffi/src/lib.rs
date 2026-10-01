@@ -13,7 +13,7 @@ use mtproto_engine::mtproto_core::rpc::{
     ApiEnvironment, ClientProxy, RequestFlags, RequestId, RpcEvent, RpcRequest, SessionRole, Verification,
     VerificationKind,
 };
-use mtproto_engine::mtproto_core::session::ServerSalt;
+use mtproto_engine::mtproto_core::session::{DestroyAuthKeyOutcome, ServerSalt};
 use mtproto_engine::mtproto_core::transport::Framing;
 use mtproto_engine::{
     AuthKeyMaterial, DcAddress, Engine, EngineCallbacks, EngineConfig, EngineEvent, KeyGeneration, LogLevel,
@@ -403,6 +403,15 @@ impl Bridge {
                 self.emit(session, event, None);
             }
             RpcEvent::ConnectionShouldReset => {}
+            RpcEvent::AuthKeyDestroyed { outcome } => {
+                let mut event = blank(28);
+                event.code = match outcome {
+                    DestroyAuthKeyOutcome::Ok => 0,
+                    DestroyAuthKeyOutcome::None => 1,
+                    DestroyAuthKeyOutcome::Fail => 2,
+                };
+                self.emit(session, event, None);
+            }
             RpcEvent::RetryDecisionRequired {
                 id,
                 code,
@@ -799,6 +808,13 @@ pub unsafe extern "C" fn mt_session_invalidate_initialization(pointer: *mut MTEn
 pub unsafe extern "C" fn mt_session_set_time_difference(pointer: *mut MTEngine, session: u64, difference: f64) {
     if let Some(engine) = unsafe { engine(pointer) } {
         engine.set_time_difference(SessionHandle(session), difference);
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mt_session_destroy_auth_key(pointer: *mut MTEngine, session: u64) {
+    if let Some(engine) = unsafe { engine(pointer) } {
+        engine.destroy_auth_key(SessionHandle(session));
     }
 }
 

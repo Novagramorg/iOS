@@ -10,14 +10,16 @@ pub use wrap::{
 use crate::crypto::SecureRandom;
 use crate::msg_id::msg_id_time;
 use crate::session::{
-    CancelOutcome, Now, PROTOCOL_ERROR_PREFIX, QueryId, QueryOptions, RESPONSE_UNPACK_FAILED, ServerSalt, Session,
-    SessionError, SessionEvent, Transmit,
+    CancelOutcome, DestroyAuthKeyOutcome, Now, PROTOCOL_ERROR_PREFIX, QueryId, QueryOptions, RESPONSE_UNPACK_FAILED,
+    ServerSalt, Session, SessionError, SessionEvent, Transmit,
 };
 
 pub const SERVER_ERROR_RETRY_DELAY: f64 = 2.0;
 pub const SERVER_ERROR_MAX_RETRY_DELAY: f64 = 16.0;
 pub const LARGE_RESPONSE_THRESHOLD: u32 = 512 * 1024;
 pub const MAX_CONNECTION_NOT_INITED_RETRIES: u32 = 5;
+pub const MAX_REQUEST_BYTES: usize = 8 * 1024 * 1024;
+pub const REQUEST_INVALID_SIZE: &str = "REQUEST_INVALID_SIZE";
 pub const MIN_FLOOD_WAIT_SECONDS: i64 = 1;
 pub const MAX_FLOOD_WAIT_SECONDS: i64 = 14 * 24 * 60 * 60;
 pub const TEMPORARY_KEY_RETRY_DELAY: f64 = 1.0;
@@ -134,6 +136,9 @@ pub enum RpcEvent {
         rtt: f64,
     },
     ConnectionShouldReset,
+    AuthKeyDestroyed {
+        outcome: DestroyAuthKeyOutcome,
+    },
     RetryDecisionRequired {
         id: RequestId,
         code: i32,
@@ -282,6 +287,16 @@ impl RpcClient {
         if self.requests.contains_key(&id) {
             return;
         }
+        if request.body.len() > MAX_REQUEST_BYTES || !request.body.len().is_multiple_of(4) || request.body.len() < 4 {
+            self.events.push_back(RpcEvent::Failed {
+                id,
+                code: 400,
+                message: REQUEST_INVALID_SIZE.to_string(),
+                response_time: now.unix,
+                duration: 0.0,
+            });
+            return;
+        }
         self.requests.insert(
             id,
             RequestState {
@@ -362,6 +377,10 @@ impl RpcClient {
             });
             self.dispatch_ready(now);
         }
+    }
+
+    pub fn destroy_auth_key(&mut self, now: Now) {
+        self.session.destroy_auth_key(now);
     }
 
     pub fn invalidate_initialization(&mut self) {
@@ -465,6 +484,11 @@ impl RpcClient {
                     self.events.push_back(RpcEvent::Acknowledged { id });
                 }
             }
+            SessionEvent::Update { .. }
+            | SessionEvent::ServerSessionReset { .. }
+            | SessionEvent::LocalSessionReset { .. }
+            | SessionEvent::UpdatesLost
+                if self.role == SessionRole::Cdn => {}
             SessionEvent::Update { body, .. } => {
                 if is_updates_too_long(&body) {
                     self.events.push_back(RpcEvent::UpdatesReset);
@@ -484,7 +508,7 @@ impl RpcClient {
             }
             SessionEvent::Pong { rtt } => self.events.push_back(RpcEvent::Pong { rtt }),
             SessionEvent::DroppedAnswerTooLarge { .. } => self.events.push_back(RpcEvent::ConnectionShouldReset),
-            SessionEvent::DestroyAuthKey { .. } => {}
+            SessionEvent::DestroyAuthKey { outcome } => self.events.push_back(RpcEvent::AuthKeyDestroyed { outcome }),
         }
     }
 

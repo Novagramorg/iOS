@@ -2395,3 +2395,73 @@ fn a_server_cannot_make_the_client_upload_a_query_forever() {
     }
     assert!(uploads as u32 <= MAX_SERVER_RESENDS + 1, "{uploads} uploads of the same query");
 }
+
+#[test]
+fn outgoing_containers_never_exceed_1024_messages() {
+    let mut h = Harness::new();
+    h.sync();
+    for tag in 0..1500u32 {
+        h.session.send(QueryId(tag as u64 + 1), query_body(tag), QueryOptions::default(), h.now);
+    }
+    h.flush_all();
+    let sent: Vec<i64> = (0..1500u64).filter_map(|tag| h.session.query_msg_id(QueryId(tag + 1))).collect();
+    assert_eq!(sent.len(), 1500);
+    for tag in 0..1500u64 {
+        let _ = h.session.cancel(QueryId(tag + 1));
+    }
+    for msg_id in sent {
+        h.session.drop_answer(msg_id, h.now);
+    }
+    let mut drops = 0;
+    for _ in 0..10 {
+        h.advance(0.01);
+        let Some(transmit) = h.session.poll_transmit(h.now, &mut h.rng) else {
+            break;
+        };
+        let packet = h.server.decode(&transmit.data);
+        assert!(
+            packet.messages.len() <= MAX_CONTAINER_MESSAGES_OUT,
+            "{} messages in one container",
+            packet.messages.len()
+        );
+        drops += packet.messages.iter().filter(|message| message.constructor() == ids::RPC_DROP_ANSWER).count();
+    }
+    assert_eq!(drops, 1500, "every cancelled query's answer is dropped eventually");
+}
+
+#[test]
+fn a_failed_batched_answer_request_is_retried_one_by_one_before_any_query_is_resent() {
+    let mut h = Harness::new();
+    h.sync();
+    h.session.send(QueryId(1), query_body(1), QueryOptions::default(), h.now);
+    h.session.send(QueryId(2), query_body(2), QueryOptions::default(), h.now);
+    let packet = h.flush().unwrap();
+    let (first, second) = (h.sent_query(&packet, 1), h.sent_query(&packet, 2));
+    let (answer_one, answer_two) = (h.server.next_msg_id(true), h.server.next_msg_id(true));
+    h.deliver(vec![
+        Outgoing::Service(msg_detailed_info(first, answer_one, 100)),
+        Outgoing::Service(msg_detailed_info(second, answer_two, 100)),
+    ])
+    .unwrap();
+    let packet = h.flush().unwrap();
+    let batch = packet.find(ids::MSG_RESEND_REQ).unwrap();
+    assert_eq!(read_vector_after_constructor(&batch.body).len(), 2);
+    h.deliver(vec![Outgoing::Service(msgs_state_info(batch.msg_id, &[4, 1]))]).unwrap();
+    let packet = h.flush().unwrap();
+    assert!(packet.queries().is_empty(), "no query is resent while one of the answers may still exist");
+    let singles: Vec<(i64, Vec<i64>)> = packet
+        .messages
+        .iter()
+        .filter(|message| message.constructor() == ids::MSG_RESEND_REQ)
+        .map(|message| (message.msg_id, read_vector_after_constructor(&message.body)))
+        .collect();
+    assert_eq!(singles.len(), 2);
+    assert!(singles.iter().all(|(_, ids)| ids.len() == 1));
+    h.deliver_sealed(answer_one, 1, &rpc_result(first, &[1, 1, 1, 1])).unwrap();
+    let missing = singles.iter().find(|(_, ids)| ids[0] == answer_two).unwrap().0;
+    h.deliver(vec![Outgoing::Service(msgs_state_info(missing, &[1]))]).unwrap();
+    let packet = h.flush().unwrap();
+    let resent: Vec<u32> = packet.queries().iter().filter_map(|message| query_tag(&message.body)).collect();
+    assert_eq!(resent, vec![2], "only the query whose answer is gone is resent");
+    assert_eq!(h.results(), vec![(QueryId(1), vec![1, 1, 1, 1])]);
+}

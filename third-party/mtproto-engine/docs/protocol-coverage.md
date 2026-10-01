@@ -289,6 +289,27 @@ proxy secret, transport error codes, the unencrypted handshake) or a server hold
 | X12 | Secrets in memory | Partly | — | FFI copies of auth keys and key buffers zeroed, AES key schedules zeroed, no callbacks after `mt_engine_destroy`, test RNGs and helpers not compiled into the library | ffi tests | fixed |
 | X13 | Months of uptime: counters, salts expiring during sleep, wall-clock changes, state growth | — | Grows ~69 KB/h (C10) | 30–90 simulated days per fuzz case: exactly-once on both sides, monotonic msg_ids, idle state ≤ 256 KB; real-time `mtproto-bench soak` keeps threads, descriptors and live heap flat | fuzz `soak`, `mtproto-bench soak` | new |
 
+## 15. Documentation re-audit (2026-10-02)
+
+Every normative statement on the core.telegram.org MTProto and invoking pages, checked against the code after the
+hardening pass.
+
+| ID | Condition | Spec | tdlib | MtProtoKit | Rust engine | Tests | Δ |
+|---|---|---|---|---|---|---|---|
+| I05 | Outgoing container: queries + `rpc_drop_answer` + every service message ≤ 1024 | service_messages#simple-container, mtproto-transports (-429) | queries+cancels ≤ 1000 | 3 KiB groups | One budget of 1024 per container (2 slots reserved for destroy/ack); overflow stays queued (was: drop answers, pongs and state replies unbounded) | `outgoing_containers_never_exceed_1024_messages` | fixed |
+| I06 | Retransmission under the original msg_id never sent bare | service_messages_about_messages#request-for-message-status-information | — | — | Always wrapped in a fresh container | `reconnect_without_ack_retransmits_with_original_msg_ids` | ok |
+| I07 | Padding length | description (12..1024) | Size buckets, +0..255 random with proxy secrets | Random ≤ 72 | 0–64 random extra bytes direct, 0–240 behind proxies or secrets (was minimal 12..27, a DPI length fingerprint) | `message::padding` tests | fixed |
+| I08 | Request body size and alignment | mtproto (multiple of 4) | — | — | Bodies that are empty, unaligned or > 8 MiB fail locally with `REQUEST_INVALID_SIZE` (was: ≥ 16 MiB aborted the process) | `rpc::oversized_or_unaligned_requests_fail_locally_instead_of_reaching_the_wire` | fixed |
+| S21 | Our `msg_resend_req` answered by `msgs_state_info` | service_messages_about_messages#explicit-request-to-re-send-messages | Closes the connection | M34 | A multi-id request that fails is retried one id at a time; only a query whose own single-id request fails is re-sent (was: every query in the batch re-sent, re-executing those whose answers still existed) | `a_failed_batched_answer_request_is_retried_one_by_one_before_any_query_is_resent`, `answer_resend_requests_resolve_or_fall_back_to_resending_the_query` | fixed |
+| S28 | `msg_resend_ans_req` | Removed from the docs in 2024, never in the schema | — | — | Answered with state info, all 1; we send `msg_resend_req` with answer ids, as tdlib | (unchanged) | ok |
+| S32 | `destroy_auth_key` on logout | service_messages#destruction-of-a-permanent-auth-key | Sent on logout | Never | `Engine::destroy_auth_key` / `mt_session_destroy_auth_key`, outcome reported as `RpcEvent::AuthKeyDestroyed` (TelegramCore does not call it yet) | `engine::destroying_the_auth_key_on_logout_reaches_the_server`, `destroy_responses_are_handled` | fixed |
+| D11 | msg_id outside the window after sync | security_guidelines#checking-msg-id | Same | — | > 300 s in the past dropped; future ids adopted as the new server time (tdlib parity, deliberate) | `messages_outside_time_window_are_ignored_after_sync` | ok |
+| E21 | `initConnection` after an app restart | invoking#saving-client-info ("must") | Re-sent per process | Skipped while the hash matches | The persisted hash is honoured only for keys initialised in this process, so the first request after a restart is wrapped again | engine tests | fixed |
+| E22 | `MSG_WAIT_TIMEOUT` | invoking#sequential-requests | — | — | Waits for the dependency, re-sends unwrapped (deliberate: keeps order without a server-side wait) | `rpc::msg_wait_errors_wait_for_the_dependency_with_any_code` | ok |
+| E23 | Outgoing `gzip_packed` | invoking#data-compression ("recommend") | Yes | No | The innermost query is gzipped when it is ≥ 256 bytes, not a file part and shrinks by ≥ 10 % | `rpc::wrap` tests | fixed |
+| U01 | Updates from CDN sessions | cdn ("must not accept") | — | — | Dropped in the RPC layer for `SessionRole::Cdn` (was left to the host) | `rpc::cdn_sessions_never_forward_updates` | fixed |
+| P05–P08 | Temp key binding (`bind_auth_key_inner`, gate until bound, `initConnection` after bind, `ENCRYPTED_MESSAGE_INVALID` rule) | api/pfs | Yes | Yes | Not in Rust yet; keys (including temporary ones) are created and bound by MTContext | — | gap |
+
 ## Not covered (deliberately)
 
 - **HTTP transport** (`http_wait`, long poll): the engine only speaks TCP transports (T22).

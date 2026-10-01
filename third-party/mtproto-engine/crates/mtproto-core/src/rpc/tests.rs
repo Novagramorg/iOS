@@ -805,3 +805,34 @@ fn msg_wait_errors_without_a_dependency_follow_their_code() {
     h.advance(SERVER_ERROR_RETRY_DELAY + 0.1);
     assert_eq!(h.flush_calls().len(), 1);
 }
+
+#[test]
+fn cdn_sessions_never_forward_updates() {
+    let mut h = Harness::new(SessionRole::Cdn, Some("h1"));
+    h.flush_calls();
+    h.reply(vec![Outgoing::Content(update(0x1234_5678, &[0; 8]))]);
+    let events = h.events();
+    assert!(
+        !events.iter().any(|event| matches!(event, RpcEvent::Update { .. } | RpcEvent::UpdatesReset)),
+        "{events:?}"
+    );
+}
+
+#[test]
+fn oversized_or_unaligned_requests_fail_locally_instead_of_reaching_the_wire() {
+    let mut h = Harness::new(SessionRole::Main, Some("h1"));
+    for (id, body) in [(1u64, vec![0u8; MAX_REQUEST_BYTES + 4]), (2, vec![0u8; 6]), (3, Vec::new())] {
+        h.client
+            .send(RpcRequest { id: RequestId(id), body, flags: RequestFlags::default(), invoke_after: None }, h.now);
+    }
+    let failed: Vec<u64> = h
+        .events()
+        .into_iter()
+        .filter_map(|event| match event {
+            RpcEvent::Failed { id, code: 400, message, .. } if message == REQUEST_INVALID_SIZE => Some(id.0),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(failed, vec![1, 2, 3]);
+    assert!(h.flush_calls().is_empty());
+}

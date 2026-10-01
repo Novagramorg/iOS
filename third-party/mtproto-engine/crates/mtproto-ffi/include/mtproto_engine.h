@@ -154,6 +154,7 @@ typedef enum {
     MTEventKindAddressResult = 25,
     MTEventKindClosed = 26,
     MTEventKindRetryDecisionRequired = 27,
+    MTEventKindAuthKeyDestroyed = 28,
 } MTEventKind;
 
 enum {
@@ -216,6 +217,7 @@ void mt_session_fail_request(MTEngine *engine, MTSessionHandle session, MTReques
 void mt_session_decide_retry(MTEngine *engine, MTSessionHandle session, MTRequestId request, uint8_t retry);
 void mt_session_invalidate_initialization(MTEngine *engine, MTSessionHandle session);
 void mt_session_set_time_difference(MTEngine *engine, MTSessionHandle session, double difference);
+void mt_session_destroy_auth_key(MTEngine *engine, MTSessionHandle session);
 
 const uint8_t *mt_buffer_data(const MTBuffer *buffer);
 size_t mt_buffer_length(const MTBuffer *buffer);

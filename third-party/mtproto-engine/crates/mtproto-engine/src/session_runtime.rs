@@ -5,7 +5,7 @@ use std::sync::Arc;
 use mio::{Registry, Token};
 use mtproto_core::crypto::{OsRandom, SecureRandom};
 use mtproto_core::handshake::{Handshake, HandshakeConfig, HandshakeStep};
-use mtproto_core::message::{decode_plain_message, encode_plain_message};
+use mtproto_core::message::{PaddingPolicy, decode_plain_message, encode_plain_message};
 use mtproto_core::msg_id::msg_id_for_time;
 use mtproto_core::rpc::{ApiEnvironment, RequestId, RpcClient, RpcEvent, RpcRequest, SessionRole, Verification};
 use mtproto_core::session::{Now, ServerSalt, Session, SessionConfig, SessionError};
@@ -31,6 +31,8 @@ pub const RACE_AFTER: f64 = 1.0;
 pub const RACE_SILENT_AFTER: f64 = 1.5;
 pub const RACE_VERIFY_TIMEOUT: f64 = 4.0;
 pub const RACER_MAX_CHUNKS: usize = 2;
+pub const DIRECT_PADDING_BLOCKS: usize = 4;
+pub const PROXY_PADDING_BLOCKS: usize = 15;
 pub const RACE_RETRY_BASE: f64 = 1.0;
 pub const RACE_RETRY_MAX: f64 = 8.0;
 pub const RACER_MAX_BUFFERED: usize = 16 * 1024;
@@ -193,16 +195,24 @@ impl SessionRuntime {
     }
 
     fn session_config(&self) -> SessionConfig {
-        SessionConfig { is_main: self.setup.role == SessionRole::Main, ..SessionConfig::default() }
+        let disguised =
+            self.setup.proxy.is_some() || self.setup.addresses.iter().any(|address| address.secret.is_some());
+        let extra_random_blocks = if disguised { PROXY_PADDING_BLOCKS } else { DIRECT_PADDING_BLOCKS };
+        SessionConfig {
+            is_main: self.setup.role == SessionRole::Main,
+            padding: PaddingPolicy { extra_random_blocks },
+            ..SessionConfig::default()
+        }
     }
 
     fn install_key(&mut self, material: AuthKeyMaterial, now: Now, rng: &mut OsRandom) {
+        let init_hash = initialized_in_this_process(material.key.id(), material.init_hash);
         match &mut self.rpc {
             Some(rpc) => {
                 if rpc.session().auth_key_id() != material.key.id() {
                     rpc.session_mut().replace_auth_key(material.key, &material.salts, now);
                     rpc.reset_session(now, rng);
-                    rpc.set_stored_init_hash(material.init_hash);
+                    rpc.set_stored_init_hash(init_hash);
                 } else {
                     rpc.session_mut().merge_salts(&material.salts, now);
                 }
@@ -217,8 +227,7 @@ impl SessionRuntime {
                     rng,
                 );
                 session.set_online(self.setup.online, now);
-                let mut rpc =
-                    RpcClient::new(session, self.setup.role, self.setup.environment.clone(), material.init_hash);
+                let mut rpc = RpcClient::new(session, self.setup.role, self.setup.environment.clone(), init_hash);
                 if !self.auth_token_ready {
                     rpc.set_auth_token_ready(false, now);
                 }
@@ -271,6 +280,13 @@ impl SessionRuntime {
             rpc.cancel(id, now);
         }
         self.pump_rpc_events(now, registry, callbacks);
+    }
+
+    pub fn destroy_auth_key(&mut self, now: Now) {
+        if let Some(rpc) = &mut self.rpc {
+            rpc.destroy_auth_key(now);
+            self.next_attempt_at = self.next_attempt_at.min(now.mono);
+        }
     }
 
     pub fn set_paused(&mut self, paused: bool, now: Now, registry: &Registry) {
@@ -1127,6 +1143,7 @@ impl SessionRuntime {
                         continue;
                     }
                     RpcEvent::TimeDifferenceUpdated { difference } => self.setup.time_difference = *difference,
+                    RpcEvent::InitHashStored { hash } => remember_initialized(rpc.session().auth_key_id(), hash),
                     RpcEvent::AuthTokenRequired => self.auth_token_ready = false,
                     RpcEvent::Completed { .. } | RpcEvent::Failed { .. } => {
                         self.last_activity_at = now.mono;
@@ -1390,6 +1407,22 @@ impl SessionRuntime {
         if let Some(rpc) = &mut self.rpc {
             rpc.session_mut().shrink();
         }
+    }
+}
+
+fn initialized_keys() -> &'static std::sync::Mutex<std::collections::HashSet<(u64, String)>> {
+    static KEYS: std::sync::OnceLock<std::sync::Mutex<std::collections::HashSet<(u64, String)>>> =
+        std::sync::OnceLock::new();
+    KEYS.get_or_init(Default::default)
+}
+
+fn initialized_in_this_process(auth_key_id: u64, hash: Option<String>) -> Option<String> {
+    hash.filter(|hash| initialized_keys().lock().is_ok_and(|keys| keys.contains(&(auth_key_id, hash.clone()))))
+}
+
+fn remember_initialized(auth_key_id: u64, hash: &str) {
+    if let Ok(mut keys) = initialized_keys().lock() {
+        keys.insert((auth_key_id, hash.to_string()));
     }
 }
 
