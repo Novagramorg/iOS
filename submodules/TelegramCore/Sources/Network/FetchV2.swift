@@ -584,7 +584,12 @@ private final class FetchImpl {
                     excludedInHigherPriorities.subtract(filteredRequiredRanges[i])
                 }
                 
-                if state.pendingParts.count < state.maxPendingParts && state.pendingReadyParts.count < state.maxPendingParts {
+                var maxPendingParts = state.maxPendingParts
+                if self.knownSize == nil && state.completedRanges.isEmpty {
+                    maxPendingParts = 1
+                }
+                
+                if state.pendingParts.count < maxPendingParts && state.pendingReadyParts.count < state.maxPendingParts {
                     var debugRangesString = ""
                     for priorityIndex in 0 ..< 3 {
                         if filteredRequiredRanges[priorityIndex].isEmpty {
@@ -612,7 +617,7 @@ private final class FetchImpl {
                         Logger.shared.log("FetchV2", "\(self.loggingIdentifier): will fetch \(debugRangesString)")
                     }
                     
-                    while state.pendingParts.count < state.maxPendingParts && state.pendingReadyParts.count < state.maxPendingParts {
+                    while state.pendingParts.count < maxPendingParts && state.pendingReadyParts.count < state.maxPendingParts {
                         var found = false
                         inner: for i in 0 ..< filteredRequiredRanges.count {
                             let priorityIndex = (state.nextRangePriorityIndex + i) % filteredRequiredRanges.count
