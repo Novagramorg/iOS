@@ -285,6 +285,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "mtproto-netsim"
+version = "0.1.0"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "mtproto-testserver"
 version = "0.1.0"
 dependencies = [

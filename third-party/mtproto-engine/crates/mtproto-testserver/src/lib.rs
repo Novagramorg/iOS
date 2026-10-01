@@ -32,6 +32,7 @@ pub const TAG_KEY_UNKNOWN: u32 = 1008;
 pub const TAG_NEW_SESSION: u32 = 1009;
 pub const TAG_UNAUTHORIZED: u32 = 1010;
 pub const TAG_UPDATE_PUSH: u32 = 1011;
+pub const TAG_SIZED: u32 = 1012;
 pub const LARGE_SIZE: usize = 1024 * 1024;
 pub const SERVER_SALT: i64 = 0x5a17;
 
@@ -41,6 +42,10 @@ pub fn call(tag: u32, payload: &[u8]) -> Vec<u8> {
     writer.write_u32(tag);
     writer.write_bytes(payload);
     writer.into_inner()
+}
+
+pub fn sized_call(size: u32) -> Vec<u8> {
+    call(TAG_SIZED, &size.to_le_bytes())
 }
 
 pub fn parse_result(body: &[u8]) -> Option<(u32, Vec<u8>)> {
@@ -578,6 +583,15 @@ fn serve_frames(mut wire: Wire, shared: Arc<Mutex<Shared>>, stop: Arc<AtomicBool
                                 TAG_NEW_SESSION if count == 1 => {
                                     outgoing.push((sp::new_session_created(message.msg_id + 4, 77, salt), true));
                                     outgoing.push((reply, true));
+                                }
+                                TAG_SIZED => {
+                                    let size = payload
+                                        .get(..4)
+                                        .map(|bytes| u32::from_le_bytes(bytes.try_into().unwrap()) as usize)
+                                        .unwrap_or(0)
+                                        .min(4 * 1024 * 1024);
+                                    let data = vec![(count & 0xff) as u8; size];
+                                    outgoing.push((sp::rpc_result(message.msg_id, &result_body(tag, &data)), true));
                                 }
                                 TAG_UPDATE_PUSH => {
                                     outgoing.push((sp::update(0x74ae4240, &tag.to_le_bytes()), true));
