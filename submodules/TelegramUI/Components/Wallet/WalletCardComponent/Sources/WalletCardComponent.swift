@@ -1169,7 +1169,7 @@ public final class WalletCardComponent: Component {
             }
             if let diamondView = self.gramDiamond.view {
                 let targetIconFrame = target.map { layout in
-                    layout.icon.insetBy(dx: layout.icon.width * 0.095, dy: layout.icon.height * 0.095)
+                    layout.icon.insetBy(dx: layout.icon.width * 0.0545, dy: layout.icon.height * 0.0545)
                 }
                 let iconFrame = contentFrame(self.gramIconContentFrame, targetFrame: targetIconFrame)
                 let center = CGPoint(

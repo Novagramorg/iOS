@@ -48,7 +48,7 @@ public final class FFMpegMediaDataReaderV2: MediaDataReader {
         self.init(content: content, isVideo: isVideo, codecName: codecName, ignoreEditList: false)
     }
 
-    init(content: Content, isVideo: Bool, codecName: String?, ignoreEditList: Bool) {
+    public init(content: Content, isVideo: Bool, codecName: String?, ignoreEditList: Bool) {
         self.content = content
         self.isVideo = isVideo
         
@@ -177,7 +177,7 @@ public final class FFMpegMediaDataReaderV1: MediaDataReader {
         self.init(filePath: filePath, isVideo: isVideo, codecName: codecName, ignoreEditList: false)
     }
 
-    init(filePath: String, isVideo: Bool, codecName: String?, ignoreEditList: Bool) {
+    public init(filePath: String, isVideo: Bool, codecName: String?, ignoreEditList: Bool) {
         self.isVideo = isVideo
         
         if self.isVideo {

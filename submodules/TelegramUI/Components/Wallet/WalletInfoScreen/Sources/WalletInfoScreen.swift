@@ -135,7 +135,7 @@ private func walletInfoContent(
             items: [
                 WalletInfoItem(
                     id: "send",
-                    title: strings.Wallet_Send,
+                    title: strings.Wallet_Info_SendTitle,
                     text: strings.Wallet_Info_SendText,
                     iconName: "Wallet/InfoSend",
                     textIconName: "Wallet/InfoAttach"
@@ -308,6 +308,7 @@ private final class WalletInfoSheetContent: CombinedComponent {
         let closeButton = Child(GlassBarButtonComponent.self)
         let animation = Child(LottieComponent.self)
         let diamond = Child(InteractiveDiamondComponent.self)
+        let premiumDiamond = Child(PremiumDiamondComponent.self)
         let title = Child(BalancedTextComponent.self)
         let text = Child(BalancedTextComponent.self)
         let list = Child(List<Empty>.self)
@@ -341,7 +342,17 @@ private final class WalletInfoSheetContent: CombinedComponent {
 
             let animationSide: CGFloat = content.logo.name == "GramDiamond" ? 118.0 : 100.0
             let animationSize = CGSize(width: animationSide, height: animationSide)
-            if content.logo.name == "GramDiamond" {
+            if [.wallet, .gram, .firstGrams].contains(component.mode) {
+                let premiumDiamondSize = CGSize(width: context.availableSize.width, height: 164.0)
+                let premiumDiamond = premiumDiamond.update(
+                    component: PremiumDiamondComponent(theme: theme),
+                    availableSize: premiumDiamondSize,
+                    transition: context.transition
+                )
+                context.add(premiumDiamond
+                    .position(CGPoint(x: context.availableSize.width / 2.0, y: contentSize.height + animationSize.height / 2.0 + 8.0))
+                )
+            } else if content.logo.name == "GramDiamond" {
                 let diamond = diamond.update(
                     component: InteractiveDiamondComponent(
                         size: animationSize,

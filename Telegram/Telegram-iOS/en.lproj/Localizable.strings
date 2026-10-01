@@ -13366,6 +13366,8 @@ Sorry for the inconvenience.";
 "Camera.CollageDelete" = "Delete";
 "Camera.CollageManagementTooltip" = "Tap a tile to delete or reorder it.";
 "Camera.CollageReorderingInfo" = "Hold and drag tiles to reorder them.";
+"Camera.CollageReorderHint" = "Hold and drag tiles to reorder them";
+"Camera.CollageRemoveHint" = "Tap to remove grid";
 
 "MediaPicker.InvertCaptionTooltip" = "Tap here to move caption up.";
 "MediaPicker.InvertCaption.Updated.Up.Title" = "Caption moved up";
@@ -16796,6 +16798,7 @@ Error: %8$@";
 "Wallet.Info.UsefulText" = "Pay for apps, services, and fees across the TON ecosystem.";
 "Wallet.Info.FirstGramsTitle" = "Your first Grams!";
 "Wallet.Info.FirstGramsText" = "You can:";
+"Wallet.Info.SendTitle" = "Send";
 "Wallet.Info.SendText" = "Transfer Grams to anyone.\nTap  # → Money in chats.";
 "Wallet.Info.TradeTitle" = "Trade";
 "Wallet.Info.TradeText" = "Convert Grams to cash or crypto on exchanges.";
@@ -17067,3 +17070,5 @@ Error: %8$@";
 "MESSAGE_GRAM_TRANSFER_COMMENT" = "{1} sent you {2}: {3}";
 "MESSAGE_WALLET_TONCONNECT_REQUEST" = "You have a TON Connect request";
 "MESSAGE_WALLET_TONCONNECT_REQUEST_DAPP" = "You have a TON Connect request from {2}";
+
+"Story.Editor.CollageDraftAllMediaMissing" = "None of the media in this collage are available anymore. This draft will be deleted.";
