@@ -1,0 +1,304 @@
+import Foundation
+
+/// Bits of `MTRequest.flags` in `mtproto_engine.h`.
+public enum RustEngineRequestFlags {
+    public static let automaticFloodWait: UInt32 = 1 << 0
+    public static let reportFloodWait: UInt32 = 1 << 1
+    public static let retryServerErrors: UInt32 = 1 << 2
+    public static let quickAck: UInt32 = 1 << 3
+    public static let progress: UInt32 = 1 << 4
+    public static let timeoutTimer: UInt32 = 1 << 5
+    public static let withoutUpdates: UInt32 = 1 << 6
+    public static let delegateRetryDecisions: UInt32 = 1 << 7
+}
+
+/// Values of `MTSessionSetup.role` in `mtproto_engine.h`.
+public enum RustEngineSessionRole: UInt8, Equatable {
+    case main = 0
+    case worker = 1
+    case workerRequiringAuthToken = 2
+    case cdn = 3
+}
+
+/// Bits of `MTEvent.flags` for `MTEventKindConnectionState`.
+public struct RustEngineConnectionFlags: Equatable {
+    public var isNetworkAvailable: Bool
+    public var isConnected: Bool
+    public var isUpdatingConnectionContext: Bool
+    public var isPerformingServiceTasks: Bool
+    public var proxyHasConnectionIssues: Bool
+
+    public init(rawValue: UInt32) {
+        self.isNetworkAvailable = (rawValue & (1 << 0)) != 0
+        self.isConnected = (rawValue & (1 << 1)) != 0
+        self.isUpdatingConnectionContext = (rawValue & (1 << 2)) != 0
+        self.isPerformingServiceTasks = (rawValue & (1 << 3)) != 0
+        self.proxyHasConnectionIssues = (rawValue & (1 << 4)) != 0
+    }
+}
+
+/// A server salt with its validity window in server seconds, as the engine stores it.
+public struct RustEngineSalt: Equatable {
+    public var salt: Int64
+    public var validSince: Double
+    public var validUntil: Double
+
+    public init(salt: Int64, validSince: Double, validUntil: Double) {
+        self.salt = salt
+        self.validSince = validSince
+        self.validUntil = validUntil
+    }
+}
+
+/// MtProtoKit keeps salt windows as message ids (`seconds * 2^32`).
+public let rustEngineMessageIdsPerSecond: Double = 4294967296.0
+
+public func rustEngineSalt(salt: Int64, firstValidMessageId: Int64, lastValidMessageId: Int64) -> RustEngineSalt {
+    return RustEngineSalt(
+        salt: salt,
+        validSince: Double(firstValidMessageId) / rustEngineMessageIdsPerSecond,
+        validUntil: Double(lastValidMessageId) / rustEngineMessageIdsPerSecond
+    )
+}
+
+public func rustEngineMessageId(seconds: Double) -> Int64? {
+    if !seconds.isFinite {
+        return nil
+    }
+    let value = (seconds * rustEngineMessageIdsPerSecond).rounded(.towardZero)
+    if value <= Double(Int64.min) || value >= Double(Int64.max) {
+        return nil
+    }
+    return Int64(value)
+}
+
+/// The `MTDatacenterSaltInfo` window of an engine salt, or nil when the engine reports a placeholder
+/// without a finite window.
+public func rustEngineMessageIdRange(_ salt: RustEngineSalt) -> (first: Int64, last: Int64)? {
+    guard let first = rustEngineMessageId(seconds: salt.validSince), let last = rustEngineMessageId(seconds: salt.validUntil) else {
+        return nil
+    }
+    if last <= first {
+        return nil
+    }
+    return (first, last)
+}
+
+public func rustEngineRequestFlags(wantsQuickAck: Bool, wantsProgress: Bool, needsTimeoutTimer: Bool, withoutUpdates: Bool) -> UInt32 {
+    var flags = RustEngineRequestFlags.delegateRetryDecisions
+    if wantsQuickAck {
+        flags |= RustEngineRequestFlags.quickAck
+    }
+    if wantsProgress {
+        flags |= RustEngineRequestFlags.progress
+    }
+    if needsTimeoutTimer {
+        flags |= RustEngineRequestFlags.timeoutTimer
+    }
+    if withoutUpdates {
+        flags |= RustEngineRequestFlags.withoutUpdates
+    }
+    return flags
+}
+
+/// The no-op `help.test` sent after an API environment change. MtProtoKit gives it no error gate, so
+/// server errors complete it and flood waits are waited out.
+public func rustEngineNoopFlags(withoutUpdates: Bool) -> UInt32 {
+    var flags = RustEngineRequestFlags.automaticFloodWait
+    if withoutUpdates {
+        flags |= RustEngineRequestFlags.withoutUpdates
+    }
+    return flags
+}
+
+public func rustEngineExpectedResponseSize(_ value: Int32) -> UInt32 {
+    return UInt32(max(0, value))
+}
+
+/// Index of the latest candidate the dependency closure accepts, scanning newest first.
+public func rustEngineDependencyIndex<T>(candidates: [T], accepts: (T) -> Bool) -> Int? {
+    var index = candidates.count - 1
+    while index >= 0 {
+        if accepts(candidates[index]) {
+            return index
+        }
+        index -= 1
+    }
+    return nil
+}
+
+/// Cumulative per-request error state that `NetworkEngineErrorContext` is built from. A request may
+/// be resubmitted to the engine under a new id; counters of earlier submissions stay included.
+public struct RustEngineErrorState: Equatable {
+    public struct Context: Equatable {
+        public var floodWaitSeconds: Int
+        public var floodWaitErrorText: String?
+        public var internalServerErrorCount: Int
+
+        public init(floodWaitSeconds: Int, floodWaitErrorText: String?, internalServerErrorCount: Int) {
+            self.floodWaitSeconds = floodWaitSeconds
+            self.floodWaitErrorText = floodWaitErrorText
+            self.internalServerErrorCount = internalServerErrorCount
+        }
+    }
+
+    public private(set) var floodWaitSeconds: Int = 0
+    public private(set) var floodWaitErrorText: String?
+    public private(set) var serverErrorsOfEarlierSubmissions: Int = 0
+    public private(set) var serverErrorsOfCurrentSubmission: Int = 0
+    public private(set) var parseFailures: Int = 0
+
+    public init() {
+    }
+
+    public var context: Context {
+        return Context(
+            floodWaitSeconds: self.floodWaitSeconds,
+            floodWaitErrorText: self.floodWaitErrorText,
+            internalServerErrorCount: self.serverErrorsOfEarlierSubmissions + self.serverErrorsOfCurrentSubmission + self.parseFailures
+        )
+    }
+
+    public mutating func applyRetryDecision(floodWaitSeconds: Int64, floodWaitErrorText: String?, serverErrors: Int64) -> Context {
+        if floodWaitSeconds != 0 || floodWaitErrorText != nil {
+            self.floodWaitSeconds = Int(clamping: floodWaitSeconds)
+            self.floodWaitErrorText = floodWaitErrorText
+        }
+        self.serverErrorsOfCurrentSubmission = Int(clamping: max(0, serverErrors))
+        return self.context
+    }
+
+    public mutating func applyParseFailure() -> Context {
+        self.parseFailures += 1
+        return self.context
+    }
+
+    public mutating func didResubmit() {
+        self.serverErrorsOfEarlierSubmissions += self.serverErrorsOfCurrentSubmission
+        self.serverErrorsOfCurrentSubmission = 0
+    }
+}
+
+/// An unparsable `rpc_result` is a `500 TL_PARSING_ERROR`. MtProtoKit retries it every 2 seconds
+/// for as long as the error gate allows; the Rust adapter caps it at three attempts in total.
+public enum RustEngineParseFailurePolicy {
+    public static let errorCode: Int32 = 500
+    public static let errorText = "TL_PARSING_ERROR"
+    public static let retryDelay: Double = 2.0
+    public static let maxAttempts: Int = 3
+
+    public static func shouldResubmit(parseFailures: Int, gateAllowsRetry: Bool) -> Bool {
+        return gateAllowsRetry && parseFailures < self.maxAttempts
+    }
+}
+
+/// `-[MTProto handleMissingKey:]` without the explicit-key and `canResetAuthData` branches, which
+/// TelegramCore never uses.
+public enum RustEngineMissingKeyAction: Equatable {
+    case dropAndRequire(isCdn: Bool)
+    case removeTokenDropAndRequire
+    case checkIfLoggedOut
+}
+
+public func rustEngineMissingKeyAction(isCdn: Bool, requiresForeignAuthToken: Bool, selectorIsEphemeral: Bool) -> RustEngineMissingKeyAction {
+    if isCdn {
+        return .dropAndRequire(isCdn: true)
+    } else if requiresForeignAuthToken {
+        return .removeTokenDropAndRequire
+    } else if selectorIsEphemeral {
+        return .dropAndRequire(isCdn: false)
+    } else {
+        return .checkIfLoggedOut
+    }
+}
+
+/// A worker re-transfers its authorization after every `401` except `SESSION_PASSWORD_NEEDED`
+/// (`MTRequestMessageService` calls `requestMessageServiceAuthorizationRequired:` for those).
+public func rustEngineWorkerShouldTransferAuthToken(code: Int32, text: String) -> Bool {
+    return code == 401 && !text.contains("SESSION_PASSWORD_NEEDED")
+}
+
+public func rustEngineRequiresForeignAuthToken(isMain: Bool, isCdn: Bool, datacenterId: Int, masterDatacenterId: Int) -> Bool {
+    return !isMain && !isCdn && datacenterId != masterDatacenterId
+}
+
+public func rustEngineSessionRole(isMain: Bool, isCdn: Bool, datacenterId: Int, masterDatacenterId: Int) -> RustEngineSessionRole {
+    if isMain {
+        return .main
+    } else if isCdn {
+        return .cdn
+    } else if rustEngineRequiresForeignAuthToken(isMain: isMain, isCdn: isCdn, datacenterId: datacenterId, masterDatacenterId: masterDatacenterId) {
+        return .workerRequiringAuthToken
+    } else {
+        return .worker
+    }
+}
+
+/// The datacenter tag of the obfuscated transport header (`MTTcpConnection._datacenterTag`).
+public func rustEngineObfuscationDatacenterId(datacenterId: Int, isTestingEnvironment: Bool, preferForMedia: Bool) -> Int16 {
+    var value = datacenterId
+    if isTestingEnvironment {
+        value += 10000
+    }
+    if preferForMedia {
+        value = -value
+    }
+    return Int16(clamping: value)
+}
+
+/// Connection order for the engine's address list: the scheme MTContext would pick first, then the
+/// other IPv4 addresses, then IPv6 ones only when MTContext would consider IPv6 at all (or when
+/// nothing else is left).
+public func rustEngineAddressOrder(isIpv6: [Bool], preferredIndex: Int?, allowIpv6: Bool) -> [Int] {
+    var result: [Int] = []
+    if let preferredIndex = preferredIndex, preferredIndex >= 0, preferredIndex < isIpv6.count {
+        result.append(preferredIndex)
+    }
+    for index in 0 ..< isIpv6.count where !isIpv6[index] && !result.contains(index) {
+        result.append(index)
+    }
+    let hasIpv4 = isIpv6.contains(false)
+    if allowIpv6 || !hasIpv4 {
+        for index in 0 ..< isIpv6.count where isIpv6[index] && !result.contains(index) {
+            result.append(index)
+        }
+    }
+    return result
+}
+
+private let updatesTooLongConstructor: UInt32 = 0xe317af7e
+
+public func rustEngineIsUpdatesTooLong(_ data: Data) -> Bool {
+    if data.count < 4 {
+        return false
+    }
+    var value: UInt32 = 0
+    for index in 0 ..< 4 {
+        value |= UInt32(data[data.startIndex + index]) << (8 * UInt32(index))
+    }
+    return value == updatesTooLongConstructor
+}
+
+/// External verification for `APNS_VERIFY_CHECK_` / `RECAPTCHA_CHECK_`.
+public enum RustEngineVerificationKind: Int32, Equatable {
+    case apns = 1
+    case recaptcha = 2
+
+    /// The literal TelegramCore's verifiers produce on their 15 second timeout.
+    public var timeoutErrorText: String {
+        switch self {
+        case .apns:
+            return "APNS_PUSH_TIMEOUT"
+        case .recaptcha:
+            return "RECAPTCHA_TIMEOUT"
+        }
+    }
+
+    public static let failureCode: Int32 = 403
+    public static let timeout: Double = 20.0
+}
+
+/// `NetworkEngineErrorContext.floodWaitErrorText` from the event's `text2`, which is empty when unset.
+public func rustEngineOptionalText(_ text: String) -> String? {
+    return text.isEmpty ? nil : text
+}
