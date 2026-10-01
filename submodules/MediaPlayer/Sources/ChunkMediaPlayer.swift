@@ -28,7 +28,7 @@ public final class ChunkMediaPlayerPart {
     
     public final class TempFile {
         public let file: TempBoxFile
-        let ignoreAudioEditList: Bool
+        public let ignoreAudioEditList: Bool
         
         public convenience init(file: TempBoxFile) {
             self.init(file: file, ignoreAudioEditList: false)
