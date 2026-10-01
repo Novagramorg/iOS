@@ -1,14 +1,19 @@
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::net::SocketAddr;
 use std::sync::Arc;
 
 use mio::{Registry, Token};
 use mtproto_core::crypto::{OsRandom, SecureRandom};
 use mtproto_core::handshake::{Handshake, HandshakeConfig, HandshakeStep};
+use mtproto_core::message::{decode_plain_message, encode_plain_message};
+use mtproto_core::msg_id::msg_id_for_time;
 use mtproto_core::rpc::{ApiEnvironment, RequestId, RpcClient, RpcEvent, RpcRequest, SessionRole, Verification};
 use mtproto_core::session::{Now, ServerSalt, Session, SessionConfig, SessionError};
+use mtproto_core::tl::mtproto::ReqPqMulti;
+use mtproto_core::tl::{TlWrite, Writer, ids};
 use mtproto_core::transport::{
     Incoming, Socks5Auth, Socks5Target, TransportConfig, TransportErrorKind, reconnect_delay, transport_flood_delay,
+    urgent_reconnect_delay,
 };
 
 use crate::connection::{ChunkStatus, Connection, ConnectionError};
@@ -23,6 +28,8 @@ const PROGRESS_HEAD: usize = 128;
 const HANDSHAKE_TIMEOUT: f64 = 10.0;
 pub const READ_BUDGET_PER_TURN: usize = 512 * 1024;
 pub const RACE_AFTER: f64 = 1.0;
+pub const RACE_SILENT_AFTER: f64 = 1.5;
+pub const RACE_VERIFY_TIMEOUT: f64 = 4.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CloseReason {
@@ -46,6 +53,30 @@ struct ProgressTracking {
     last_reported: usize,
 }
 
+#[derive(Debug, Clone, Copy)]
+struct RacerCheck {
+    nonce: [u8; 16],
+    sent: bool,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+struct AddressHealth {
+    ok_at: f64,
+    error_at: f64,
+}
+
+impl AddressHealth {
+    fn rank(&self) -> (u8, f64) {
+        if self.ok_at > 0.0 && self.ok_at >= self.error_at {
+            (0, -self.ok_at)
+        } else if self.error_at == 0.0 {
+            (1, 0.0)
+        } else {
+            (2, self.error_at)
+        }
+    }
+}
+
 pub struct SessionRuntime {
     pub handle: SessionHandle,
     setup: SessionSetup,
@@ -55,6 +86,8 @@ pub struct SessionRuntime {
     handshake: Option<Handshake>,
     connection: Option<Connection>,
     racer: Option<Connection>,
+    racer_check: Option<RacerCheck>,
+    address_health: HashMap<(String, u16), AddressHealth>,
     token: Token,
     next_attempt_at: f64,
     failures: u32,
@@ -88,6 +121,8 @@ impl SessionRuntime {
             handshake: None,
             connection: None,
             racer: None,
+            racer_check: None,
+            address_health: HashMap::new(),
             token,
             next_attempt_at: now.mono,
             failures: 0,
@@ -360,6 +395,52 @@ impl SessionRuntime {
         self.close_connection(registry, now, false);
     }
 
+    fn address_key(&self, index: usize) -> Option<(String, u16)> {
+        self.setup.addresses.get(index).map(|address| (address.host.clone(), address.port))
+    }
+
+    fn report_address(&mut self, index: usize, success: bool, now: Now, callbacks: &Arc<dyn EngineCallbacks>) {
+        self.note_address(index, success, now);
+        callbacks.on_event(self.handle, EngineEvent::AddressResult { index, success });
+    }
+
+    fn note_address(&mut self, index: usize, success: bool, now: Now) {
+        if let Some(key) = self.address_key(index) {
+            let health = self.address_health.entry(key).or_default();
+            if success {
+                health.ok_at = now.mono;
+            } else {
+                health.error_at = now.mono;
+            }
+        }
+    }
+
+    fn best_address(&self, exclude: Option<usize>) -> Option<usize> {
+        (0..self.setup.addresses.len()).filter(|index| Some(*index) != exclude).min_by(|a, b| {
+            let rank = |index: usize| {
+                self.address_key(index)
+                    .and_then(|key| self.address_health.get(&key).copied())
+                    .unwrap_or_default()
+                    .rank()
+            };
+            let (left, right) = (rank(*a), rank(*b));
+            left.0.cmp(&right.0).then(left.1.total_cmp(&right.1)).then(a.cmp(b))
+        })
+    }
+
+    fn has_waiting_work(&self) -> bool {
+        !self.queued.is_empty() || self.rpc.as_ref().is_some_and(|rpc| rpc.session().is_awaiting_responses())
+    }
+
+    fn reconnect_delay(&mut self) -> f64 {
+        let jitter = self.next_jitter();
+        if self.has_waiting_work() {
+            urgent_reconnect_delay(self.failures, jitter)
+        } else {
+            reconnect_delay(self.failures, jitter)
+        }
+    }
+
     fn next_jitter(&mut self) -> u32 {
         self.jitter_state ^= self.jitter_state << 13;
         self.jitter_state ^= self.jitter_state >> 7;
@@ -368,6 +449,7 @@ impl SessionRuntime {
     }
 
     fn drop_racer(&mut self, registry: &Registry) {
+        self.racer_check = None;
         if let Some(mut racer) = self.racer.take() {
             self.account_usage(&racer);
             racer.deregister(registry);
@@ -383,8 +465,7 @@ impl SessionRuntime {
             let index = connection.address_index;
             if failed {
                 self.failures += 1;
-                let jitter = self.next_jitter();
-                let delay = reconnect_delay(self.failures, jitter);
+                let delay = self.reconnect_delay();
                 self.next_attempt_at = self.next_attempt_at.max(now.mono + delay);
                 self.address_cursor = index + 1;
             }
@@ -404,7 +485,8 @@ impl SessionRuntime {
     }
 
     fn pick_address(&mut self, resolver: &mut dyn Resolve) -> Option<(usize, SocketAddr, DcAddress)> {
-        self.pick_address_at(self.address_cursor, resolver)
+        let index = self.best_address(None).unwrap_or(self.address_cursor);
+        self.pick_address_at(index, resolver)
     }
 
     fn pick_address_at(&mut self, cursor: usize, resolver: &mut dyn Resolve) -> Option<(usize, SocketAddr, DcAddress)> {
@@ -491,8 +573,8 @@ impl SessionRuntime {
             Err(_) => {
                 self.failures += 1;
                 self.address_cursor = index + 1;
-                let jitter = self.next_jitter();
-                self.next_attempt_at = now.mono + reconnect_delay(self.failures, jitter).max(0.3);
+                self.note_address(index, false, now);
+                self.next_attempt_at = now.mono + self.reconnect_delay().max(0.05);
             }
         }
     }
@@ -501,22 +583,26 @@ impl SessionRuntime {
         let Some(primary) = &self.connection else {
             return;
         };
-        if self.racer.is_some()
-            || self.setup.proxy.is_some()
-            || self.setup.addresses.len() < 2
-            || primary.is_tcp_connected()
-            || now.mono - primary.started_at < RACE_AFTER
-        {
+        if self.racer.is_some() || self.setup.proxy.is_some() || self.setup.addresses.is_empty() {
+            return;
+        }
+        let slow_connect = !primary.is_tcp_connected() && now.mono - primary.started_at >= RACE_AFTER;
+        let silent_after = self
+            .rpc
+            .as_ref()
+            .and_then(|rpc| rpc.session().smoothed_rtt())
+            .map_or(RACE_SILENT_AFTER, |rtt| (rtt * 3.0 + 0.3).max(1.0));
+        let silent = primary.is_established()
+            && !primary.received_bytes
+            && primary.established_at.is_some_and(|at| now.mono - at >= silent_after);
+        if !slow_connect && !silent {
             return;
         }
         let primary_index = primary.address_index;
-        let primary_address = self.pick_address_at(primary_index, resolver).map(|picked| picked.1);
-        let Some((index, socket_address, address)) = self.pick_address_at(primary_index + 1, resolver) else {
+        let next = self.best_address(Some(primary_index)).unwrap_or(primary_index);
+        let Some((index, socket_address, address)) = self.pick_address_at(next, resolver) else {
             return;
         };
-        if Some(socket_address) == primary_address {
-            return;
-        }
         let transport = TransportConfig {
             framing: self.setup.framing,
             dc_id: self.setup.obfuscation_dc_id,
@@ -527,44 +613,125 @@ impl SessionRuntime {
         if let Ok(racer) = Connection::connect(registry, token, socket_address, &transport, None, index, now.mono, rng)
         {
             self.racer = Some(racer);
+            self.racer_check = silent.then(|| RacerCheck { nonce: rng.array(), sent: false });
         }
     }
 
-    fn handle_racer_io(
+    fn promote_racer(
         &mut self,
         registry: &Registry,
         now: Now,
         callbacks: &Arc<dyn EngineCallbacks>,
         rng: &mut OsRandom,
     ) {
+        self.racer_check = None;
+        let Some(winner) = self.racer.take() else {
+            return;
+        };
+        if let Some(mut loser) = self.connection.take() {
+            self.report_address(loser.address_index, false, now, callbacks);
+            self.account_usage(&loser);
+            loser.deregister(registry);
+        }
+        if let Some(rpc) = &mut self.rpc {
+            rpc.connection_closed(now);
+        }
+        self.handshake = None;
+        self.handshake_started_at = None;
+        self.pending_plain.clear();
+        self.progress = None;
+        self.address_cursor = winner.address_index;
+        let established = winner.is_established();
+        self.connection = Some(winner);
+        self.log(callbacks, LogLevel::Info, "connection race won by the alternate address");
+        if established {
+            self.on_established(now, callbacks, rng);
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn handle_racer_io(
+        &mut self,
+        readable: bool,
+        registry: &Registry,
+        scratch: &mut [u8],
+        now: Now,
+        callbacks: &Arc<dyn EngineCallbacks>,
+        rng: &mut OsRandom,
+    ) {
+        let server_time = now.unix + self.time_difference();
         let Some(racer) = &mut self.racer else {
             return;
         };
-        match racer.handle_writable(registry, now.mono) {
-            Ok(false) if !racer.is_tcp_connected() => {}
-            Ok(_) => {
-                let winner = self.racer.take().expect("racer");
-                if let Some(mut loser) = self.connection.take() {
-                    callbacks.on_event(
-                        self.handle,
-                        EngineEvent::AddressResult { index: loser.address_index, success: false },
-                    );
-                    self.account_usage(&loser);
-                    loser.deregister(registry);
-                }
-                self.address_cursor = winner.address_index;
-                let established = winner.is_established();
-                self.connection = Some(winner);
-                self.log(callbacks, LogLevel::Info, "connect race won by the alternate address");
-                if established {
-                    self.on_established(now, callbacks, rng);
-                }
-            }
-            Err(_) => {
+        if let Err(error) = racer.handle_writable(registry, now.mono) {
+            let index = racer.address_index;
+            self.drop_racer(registry);
+            self.report_address(index, false, now, callbacks);
+            self.log(callbacks, LogLevel::Debug, &format!("connection race lost: {error}"));
+            return;
+        }
+        if !racer.is_tcp_connected() {
+            return;
+        }
+        let Some(check) = self.racer_check else {
+            self.promote_racer(registry, now, callbacks, rng);
+            return;
+        };
+        if !check.sent && racer.is_established() {
+            let mut writer = Writer::with_capacity(24);
+            ReqPqMulti { nonce: check.nonce }.write_to(&mut writer);
+            let msg_id = msg_id_for_time(server_time) & !3;
+            let packet = encode_plain_message(msg_id, &writer.into_inner());
+            let sent = racer.send_packet(registry, &packet, false, rng).and_then(|_| racer.flush(registry));
+            if sent.is_err() {
                 let index = racer.address_index;
                 self.drop_racer(registry);
-                callbacks.on_event(self.handle, EngineEvent::AddressResult { index, success: false });
+                self.report_address(index, false, now, callbacks);
+                return;
             }
+            self.racer_check = Some(RacerCheck { sent: true, ..check });
+        }
+        if !readable {
+            return;
+        }
+        let racer = self.racer.as_mut().expect("racer");
+        let mut verified = false;
+        let mut failed = false;
+        loop {
+            match racer.read_chunk(registry, scratch, now.mono) {
+                Ok(ChunkStatus::Data { .. }) => {}
+                Ok(ChunkStatus::WouldBlock) => break,
+                Ok(ChunkStatus::Eof) | Err(_) => {
+                    failed = true;
+                    break;
+                }
+            }
+            while let Ok(Some(incoming)) = racer.next_incoming() {
+                if let Incoming::Packet(packet) = incoming
+                    && let Ok(message) = decode_plain_message(&packet)
+                    && message.body.len() >= 20
+                    && u32::from_le_bytes(message.body[..4].try_into().expect("4")) == ids::RES_PQ
+                    && message.body[4..20] == check.nonce
+                {
+                    verified = true;
+                }
+            }
+            if verified {
+                break;
+            }
+        }
+        if verified {
+            let index = racer.address_index;
+            self.note_address(index, true, now);
+            if self.connection.as_ref().is_some_and(|primary| primary.received_bytes) {
+                self.drop_racer(registry);
+            } else {
+                self.promote_racer(registry, now, callbacks, rng);
+            }
+        } else if failed {
+            let index = racer.address_index;
+            self.drop_racer(registry);
+            self.report_address(index, false, now, callbacks);
         }
     }
 
@@ -609,7 +776,7 @@ impl SessionRuntime {
     ) -> bool {
         if self.racer.as_ref().is_some_and(|racer| racer.token() == token) {
             if readable || writable {
-                self.handle_racer_io(registry, now, callbacks, rng);
+                self.handle_racer_io(readable, registry, scratch, now, callbacks, rng);
             }
             return false;
         }
@@ -681,14 +848,12 @@ impl SessionRuntime {
             let established = self.connection.as_ref().is_some_and(Connection::is_established);
             let reason = self.close_reason.take();
             let reachable = matches!(reason, Some(CloseReason::ServerRejected) | Some(CloseReason::TransportFlood));
-            if let Some(connection) = &self.connection {
-                callbacks.on_event(
-                    self.handle,
-                    EngineEvent::AddressResult {
-                        index: connection.address_index,
-                        success: connection.received_packet || reachable,
-                    },
-                );
+            if let Some((index, success)) = self
+                .connection
+                .as_ref()
+                .map(|connection| (connection.address_index, connection.received_packet || reachable))
+            {
+                self.report_address(index, success, now, callbacks);
             }
             let received = self.connection_received_packet();
             let failed = match reason {
@@ -779,10 +944,9 @@ impl SessionRuntime {
                             {
                                 connection.received_packet = true;
                                 self.failures = 0;
-                                callbacks.on_event(
-                                    self.handle,
-                                    EngineEvent::AddressResult { index: connection.address_index, success: true },
-                                );
+                                let index = connection.address_index;
+                                self.report_address(index, true, now, callbacks);
+                                self.drop_racer(registry);
                             }
                             self.timeout_fired = false;
                         }
@@ -937,21 +1101,21 @@ impl SessionRuntime {
         }
 
         self.start_racer(registry, now, resolver, rng);
-        if self.racer.as_ref().is_some_and(|racer| now.mono - racer.started_at > config.connect_timeout) {
+        let racer_limit = if self.racer_check.is_some() { RACE_VERIFY_TIMEOUT } else { config.connect_timeout };
+        if self.racer.as_ref().is_some_and(|racer| now.mono - racer.started_at > racer_limit) {
             let index = self.racer.as_ref().map_or(0, |racer| racer.address_index);
             self.drop_racer(registry);
-            callbacks.on_event(self.handle, EngineEvent::AddressResult { index, success: false });
+            self.report_address(index, false, now, callbacks);
         }
         let mut failure = None;
         if let Some(connection) = &self.connection
             && !connection.is_established()
             && now.mono - connection.started_at > config.connect_timeout
         {
-            callbacks
-                .on_event(self.handle, EngineEvent::AddressResult { index: connection.address_index, success: false });
-            if !connection.is_tcp_connected()
-                && let Some(racer) = self.racer.take()
-            {
+            let index = connection.address_index;
+            let tcp_connected = connection.is_tcp_connected();
+            self.report_address(index, false, now, callbacks);
+            if !tcp_connected && let Some(racer) = self.racer.take() {
                 if let Some(mut loser) = self.connection.take() {
                     self.account_usage(&loser);
                     loser.deregister(registry);
@@ -1002,6 +1166,9 @@ impl SessionRuntime {
         if let Some(reason) = failure {
             self.log(callbacks, LogLevel::Info, reason);
             let received = self.connection_received_packet();
+            if !received && let Some(index) = self.connection.as_ref().map(|connection| connection.address_index) {
+                self.report_address(index, false, now, callbacks);
+            }
             self.close_connection(registry, now, !received);
             if received {
                 self.next_attempt_at = now.mono;

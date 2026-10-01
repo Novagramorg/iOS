@@ -55,6 +55,7 @@ pub struct Connection {
     pub established_at: Option<f64>,
     pub last_read_at: f64,
     pub received_packet: bool,
+    pub received_bytes: bool,
     pub cellular: bool,
     pub bytes_in: u64,
     pub bytes_out: u64,
@@ -89,6 +90,7 @@ impl Connection {
             established_at: None,
             last_read_at: now,
             received_packet: false,
+            received_bytes: false,
             cellular: false,
             bytes_in: 0,
             bytes_out: 0,
@@ -229,6 +231,7 @@ impl Connection {
             }
         };
         self.bytes_in += read as u64;
+        self.received_bytes = true;
         self.last_read_at = now;
         let mut became_ready = false;
         match &mut self.phase {

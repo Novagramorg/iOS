@@ -438,9 +438,34 @@ fn writes_acknowledged_by_a_proxy_after_the_ping_drained_are_not_liveness() {
     }
     assert_eq!(outcome, Err(SessionError::ProbeTimeout));
     assert!(
-        h.now.mono - since < h.session.probe_timeout() * 0.5 + 1.5,
+        h.now.mono - since < h.session.probe_timeout() + 0.5,
         "new writes after the drain must not extend the probe"
     );
+}
+
+#[test]
+fn jittery_slow_links_get_a_wider_probe_window() {
+    let mut h = Harness::new();
+    h.session.send(QueryId(1), query_body(1), QueryOptions::default(), h.now);
+    let packet = h.flush().unwrap();
+    assert!(packet.find(ids::PING_DELAY_DISCONNECT).is_some());
+    h.advance(2.4);
+    h.answer_pings(&packet);
+    let timeout = h.session.probe_timeout();
+    assert!(timeout >= 2.4 * 1.5, "a 2.4 s round trip must not look dead after {timeout} s");
+    assert!(timeout <= PROBE_TIMEOUT_MAX);
+}
+
+#[test]
+fn a_connection_that_never_answered_does_not_grow_the_backoff() {
+    let mut h = Harness::new();
+    let base = h.session.probe_timeout();
+    busy_with_unanswered_ping(&mut h);
+    h.session.note_outbound_backlog(Some(0), h.now);
+    h.advance(base + 0.5);
+    h.session.note_outbound_backlog(Some(0), h.now);
+    assert_eq!(h.session.handle_timeout(h.now), Err(SessionError::ProbeTimeout));
+    assert_eq!(h.session.probe_timeout(), base, "a dead path is not a false alarm");
 }
 
 #[test]
@@ -477,10 +502,13 @@ fn inbound_bytes_after_the_ping_cancel_the_probe() {
 #[test]
 fn probe_backoff_grows_after_a_false_alarm_and_relaxes_after_fast_pongs() {
     let mut h = Harness::new();
+    h.sync();
+    h.advance(61.0);
     let base = h.session.probe_timeout();
     busy_with_unanswered_ping(&mut h);
     h.session.note_outbound_backlog(Some(0), h.now);
-    h.advance(PROBE_TIMEOUT_MAX + 0.5);
+    assert_eq!(base, PROBE_TIMEOUT_INITIAL, "no RTT sample yet: conservative");
+    h.advance(base + 0.5);
     h.session.note_outbound_backlog(Some(0), h.now);
     assert_eq!(h.session.handle_timeout(h.now), Err(SessionError::ProbeTimeout));
     assert!(h.session.probe_timeout() > base * 1.5);
@@ -499,7 +527,11 @@ fn probe_backoff_grows_after_a_false_alarm_and_relaxes_after_fast_pongs() {
         h.advance(1.1);
     }
     assert!(answered >= 3);
-    assert!((h.session.probe_timeout() - base).abs() < 0.3, "{} vs {}", h.session.probe_timeout(), base);
+    assert!(
+        h.session.probe_timeout() <= PROBE_TIMEOUT_MIN + 0.5,
+        "fast pongs shrink the timeout and the backoff: {}",
+        h.session.probe_timeout()
+    );
 }
 
 #[test]

@@ -28,6 +28,7 @@ struct Arguments {
     var cancelFraction = 0.5
     var trickle = 0.0
     var stallExit = 0.0
+    var duration = 10.0
     var seed: UInt64 = 1
 
     static func parse() -> Arguments {
@@ -50,6 +51,7 @@ struct Arguments {
             case "--seed": result.seed = UInt64(value) ?? result.seed
             case "--trickle": result.trickle = Double(value) ?? result.trickle
             case "--stall-exit": result.stallExit = Double(value) ?? result.stallExit
+            case "--duration": result.duration = Double(value) ?? result.duration
             default: fail("unknown argument \(argument)")
             }
         }
@@ -60,10 +62,27 @@ struct Arguments {
     }
 }
 
-struct DatacenterConfig {
-    let id: Int
+struct AddressConfig {
     let host: String
     let port: Int
+}
+
+struct InjectConfig {
+    let datacenterId: Int
+    let after: Double
+    let addresses: [AddressConfig]
+}
+
+struct ProxyConfig {
+    let kind: String
+    let host: String
+    let port: Int
+    let secret: Data
+}
+
+struct DatacenterConfig {
+    let id: Int
+    let addresses: [AddressConfig]
     let cdn: Bool
     let salt: Int64
     let keys: [MTDatacenterAuthInfoSelector: Data]
@@ -76,10 +95,18 @@ struct FileConfig {
     let cdn: Bool
 }
 
+func parseAddresses(_ value: Any?) -> [AddressConfig] {
+    return (value as? [[String: Any]] ?? []).map { item in
+        AddressConfig(host: item["host"] as? String ?? "127.0.0.1", port: (item["port"] as? NSNumber)?.intValue ?? 0)
+    }
+}
+
 struct BenchConfig {
     let mainDatacenterId: Int
     let datacenters: [DatacenterConfig]
     let files: [FileConfig]
+    let injections: [InjectConfig]
+    let proxy: ProxyConfig?
 
     static func load(_ path: String) -> BenchConfig {
         guard let data = FileManager.default.contents(atPath: path), let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
@@ -95,10 +122,13 @@ struct BenchConfig {
                     keys[selector] = dataFromHex(hex)
                 }
             }
+            var addresses = parseAddresses(item["addresses"])
+            if addresses.isEmpty {
+                addresses = [AddressConfig(host: item["host"] as? String ?? "127.0.0.1", port: (item["port"] as? NSNumber)?.intValue ?? 0)]
+            }
             datacenters.append(DatacenterConfig(
                 id: (item["id"] as? NSNumber)?.intValue ?? 0,
-                host: item["host"] as? String ?? "127.0.0.1",
-                port: (item["port"] as? NSNumber)?.intValue ?? 0,
+                addresses: addresses,
                 cdn: (item["cdn"] as? NSNumber)?.boolValue ?? false,
                 salt: (item["salt"] as? NSNumber)?.int64Value ?? 0,
                 keys: keys
@@ -113,7 +143,14 @@ struct BenchConfig {
                 cdn: (item["cdn"] as? NSNumber)?.boolValue ?? false
             ))
         }
-        return BenchConfig(mainDatacenterId: mainDatacenterId, datacenters: datacenters, files: files)
+        let injections = (object["inject"] as? [[String: Any]] ?? []).map { item in
+            InjectConfig(datacenterId: (item["dc"] as? NSNumber)?.intValue ?? mainDatacenterId, after: (item["after"] as? NSNumber)?.doubleValue ?? 0, addresses: parseAddresses(item["addresses"]))
+        }
+        var proxy: ProxyConfig?
+        if let item = object["proxy"] as? [String: Any] {
+            proxy = ProxyConfig(kind: item["kind"] as? String ?? "mtp", host: item["host"] as? String ?? "127.0.0.1", port: (item["port"] as? NSNumber)?.intValue ?? 0, secret: dataFromHex(item["secret"] as? String ?? ""))
+        }
+        return BenchConfig(mainDatacenterId: mainDatacenterId, datacenters: datacenters, files: files, injections: injections, proxy: proxy)
     }
 }
 
@@ -196,8 +233,8 @@ func seedKeychain(config: BenchConfig, keychain: Keychain, provider: EncryptionP
     context.keychain = keychain
     let now = Int64(Date().timeIntervalSince1970)
     for datacenter in config.datacenters {
-        let address = MTDatacenterAddress(ip: datacenter.host, port: UInt16(datacenter.port), preferForMedia: false, restrictToTcp: false, cdn: datacenter.cdn, preferForProxy: false, secret: nil)
-        context.updateAddressSetForDatacenter(withId: datacenter.id, addressSet: MTDatacenterAddressSet(addressList: [address]), forceUpdateSchemes: true)
+        let addresses = datacenter.addresses.map { MTDatacenterAddress(ip: $0.host, port: UInt16($0.port), preferForMedia: false, restrictToTcp: false, cdn: datacenter.cdn, preferForProxy: false, secret: nil) }
+        context.updateAddressSetForDatacenter(withId: datacenter.id, addressSet: MTDatacenterAddressSet(addressList: addresses), forceUpdateSchemes: true)
         for (selector, key) in datacenter.keys {
             let hash = MTSha1(key)
             var authKeyId: Int64 = 0
@@ -262,7 +299,13 @@ func makeNetwork(arguments: Arguments, config: BenchConfig, keychain: Keychain, 
     )
     let semaphore = DispatchSemaphore(value: 0)
     var result: Network?
-    let disposable = initializedNetwork(accountId: AccountRecordId(rawValue: 1), arguments: initialization, supplementary: true, datacenterId: config.mainDatacenterId, keychain: keychain, basePath: basePath, testingEnvironment: false, languageCode: "en", proxySettings: nil, networkSettings: nil, networkEngineSettings: NetworkEngineSettings(engine: engineKind), phoneNumber: nil, useRequestTimeoutTimers: true, appConfiguration: AppConfiguration.defaultValue).start(next: { network in
+    var proxySettings: ProxySettings?
+    if let proxy = config.proxy {
+        let connection: ProxyServerConnection = proxy.kind == "socks5" ? .socks5(username: nil, password: nil) : .mtp(secret: proxy.secret)
+        let server = ProxyServerSettings(host: proxy.host, port: Int32(proxy.port), connection: connection)
+        proxySettings = ProxySettings(enabled: true, servers: [server], activeServer: server, useForCalls: false)
+    }
+    let disposable = initializedNetwork(accountId: AccountRecordId(rawValue: 1), arguments: initialization, supplementary: true, datacenterId: config.mainDatacenterId, keychain: keychain, basePath: basePath, testingEnvironment: false, languageCode: "en", proxySettings: proxySettings, networkSettings: nil, networkEngineSettings: NetworkEngineSettings(engine: engineKind), phoneNumber: nil, useRequestTimeoutTimers: true, appConfiguration: AppConfiguration.defaultValue).start(next: { network in
         result = network
         semaphore.signal()
     })
@@ -601,6 +644,7 @@ final class Bench {
         let done = DispatchSemaphore(value: 0)
         var latencyFromProbes = false
         self.queue.async {
+            self.scheduleInjections()
             switch workload {
             case "tc-download", "tc-scroll":
                 self.startNextFiles(scroll: workload == "tc-scroll")
@@ -612,6 +656,8 @@ final class Bench {
                 self.poll(deadline: deadline, done: done) { $0.downloadsDone && $0.recorder.pendingCount == 0 }
             case "tc-small":
                 self.smallBurst(remaining: self.arguments.requests, deadline: deadline, done: done)
+            case "tc-steady":
+                self.steady(interval: 1.0 / max(self.arguments.rate, 0.1), until: Date().addingTimeInterval(self.arguments.duration), deadline: deadline, done: done)
             case "tc-torture":
                 self.recorder.compact = self.arguments.requests > 200_000
                 if self.arguments.trickle > 0 {
@@ -650,6 +696,47 @@ final class Bench {
         self.queue.after(interval, { [weak self] in
             self?.scheduleProbes(interval: interval, deadline: deadline)
         })
+    }
+
+    private func steady(interval: Double, until: Date, deadline: Date, done: DispatchSemaphore) {
+        var index: UInt64 = 0
+        var tick: (() -> Void)!
+        tick = { [weak self] in
+            guard let self = self else {
+                return
+            }
+            if Date() >= until {
+                self.poll(deadline: deadline, done: done) { $0.recorder.pendingCount == 0 }
+                return
+            }
+            let record = self.recorder.begin()
+            let recorder = self.recorder
+            let tag = UInt32(1 + index % 900)
+            let call = index
+            index += 1
+            let _ = (self.network.request(makeCall(tag: tag, index: call))
+            |> deliverOn(self.queue)).start(next: { result in
+                if result.tag != tag || result.index != call {
+                    recorder.addVerifyFailure()
+                }
+                recorder.finish(record, success: true)
+            }, error: { _ in
+                recorder.finish(record, success: false)
+            })
+            self.queue.after(interval, tick)
+        }
+        tick()
+    }
+
+    func scheduleInjections() {
+        for injection in self.config.injections {
+            let network = self.network
+            self.queue.after(injection.after, {
+                let addresses = injection.addresses.map { MTDatacenterAddress(ip: $0.host, port: UInt16($0.port), preferForMedia: false, restrictToTcp: false, cdn: false, preferForProxy: false, secret: nil) }
+                network.context.updateAddressSetForDatacenter(withId: injection.datacenterId, addressSet: MTDatacenterAddressSet(addressList: addresses), forceUpdateSchemes: true)
+                writeStderr("injected \(addresses.count) addresses for dc\(injection.datacenterId)")
+            })
+        }
     }
 
     private func trickle(interval: Double, deadline: Date) {

@@ -62,11 +62,21 @@ impl TransportErrorKind {
 pub const TRANSPORT_FLOOD_DELAY: f64 = 1.0;
 pub const TRANSPORT_FLOOD_MAX_DELAY: f64 = 30.0;
 pub const RECONNECT_DELAYS: [f64; 5] = [0.0, 0.3, 1.0, 2.0, 4.0];
+pub const URGENT_RECONNECT_DELAYS: [f64; 4] = [0.0, 0.05, 0.1, 0.25];
 pub const RECONNECT_JITTER: f64 = 0.2;
 
 pub fn transport_flood_delay(consecutive: u32) -> f64 {
     let exponent = consecutive.saturating_sub(1).min(16);
     (TRANSPORT_FLOOD_DELAY * f64::from(1u32 << exponent)).min(TRANSPORT_FLOOD_MAX_DELAY)
+}
+
+pub fn urgent_reconnect_delay(failures: u32, random: u32) -> f64 {
+    if failures == 0 {
+        return 0.0;
+    }
+    let index = (failures as usize - 1).min(URGENT_RECONNECT_DELAYS.len() - 1);
+    let unit = f64::from(random) / f64::from(u32::MAX);
+    URGENT_RECONNECT_DELAYS[index] * (1.0 + RECONNECT_JITTER * (2.0 * unit - 1.0))
 }
 
 pub fn reconnect_delay(failures: u32, random: u32) -> f64 {
@@ -103,6 +113,16 @@ mod policy_tests {
         assert_eq!(delays, vec![1.0, 2.0, 4.0, 8.0, 16.0, 30.0, 30.0]);
         assert_eq!(transport_flood_delay(0), 1.0);
         assert_eq!(transport_flood_delay(u32::MAX), 30.0);
+    }
+
+    #[test]
+    fn urgent_ladder_retries_four_times_a_second_at_most() {
+        assert_eq!(urgent_reconnect_delay(0, 0), 0.0);
+        assert_eq!(urgent_reconnect_delay(1, u32::MAX / 2), 0.0);
+        for failures in 4..40 {
+            let delay = urgent_reconnect_delay(failures, u32::MAX);
+            assert!((0.2..=0.3).contains(&delay), "{failures}: {delay}");
+        }
     }
 
     #[test]

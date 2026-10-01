@@ -16,6 +16,21 @@ const MAIN_DC: i32 = 2;
 const FILE_DC: i32 = 4;
 const CDN_DC: i32 = 203;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Route {
+    Dead,
+    Sim(&'static str),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProxyKind {
+    FakeTls,
+    Socks5,
+}
+
+const FAKE_TLS_SECRET: &str = "ee3131313131313131313131313131313177772e6578616d706c652e636f6d";
+const DEAD_ADDRESS: (&str, u16) = ("192.0.2.1", 443);
+
 #[derive(Debug, Clone)]
 pub struct ClusterScenario {
     pub name: String,
@@ -31,6 +46,10 @@ pub struct ClusterScenario {
     pub outage: Option<(f64, f64)>,
     pub chaos: Option<ChaosConfig>,
     pub stall_exit: f64,
+    pub routes: Vec<Route>,
+    pub inject: Option<(f64, Vec<Route>)>,
+    pub proxy: Option<ProxyKind>,
+    pub duration: f64,
 }
 
 #[derive(Debug, Clone)]
@@ -89,7 +108,69 @@ fn scenario(name: &str, workload: &str, profile: &str, files: Vec<FileSpec>, con
         outage: None,
         chaos: None,
         stall_exit: 0.0,
+        routes: Vec::new(),
+        inject: None,
+        proxy: None,
+        duration: 10.0,
     }
+}
+
+pub fn resilience_suite() -> Vec<ClusterScenario> {
+    let steady = |name: &str, profile: &str, routes: Vec<Route>| {
+        let mut scenario = scenario(name, "tc-steady", profile, Vec::new(), 8);
+        scenario.rate = 10.0;
+        scenario.duration = 20.0;
+        scenario.deadline = 120.0;
+        scenario.stall_exit = 60.0;
+        scenario.routes = routes;
+        scenario
+    };
+    let mut scenarios = vec![
+        steady("resilience/edge", "edge", vec![Route::Sim("edge")]),
+        steady("resilience/edge-flaky", "edge-flaky", vec![Route::Sim("edge-flaky")]),
+        steady("resilience/route-syn-drop-first", "perfect", vec![Route::Sim("perfect"), Route::Dead]),
+        steady("resilience/route-dpi-reset-first", "perfect", vec![Route::Sim("perfect"), Route::Sim("dpi-reset")]),
+        steady(
+            "resilience/route-dpi-blackhole-first",
+            "perfect",
+            vec![Route::Sim("perfect"), Route::Sim("dpi-blackhole")],
+        ),
+        steady("resilience/route-dpi-half", "perfect", vec![Route::Sim("dpi-half")]),
+        steady(
+            "resilience/route-only-last-works",
+            "perfect",
+            vec![Route::Sim("perfect"), Route::Sim("dpi-reset"), Route::Sim("dpi-blackhole"), Route::Dead],
+        ),
+    ];
+    let mut backup = steady("resilience/backup-arrives-5s", "perfect", vec![Route::Sim("dpi-blackhole")]);
+    backup.inject = Some((5.0, vec![Route::Sim("perfect"), Route::Sim("dpi-blackhole")]));
+    scenarios.push(backup);
+    let mut backlog = steady("resilience/backlog-outage-20s", "perfect", vec![Route::Sim("perfect")]);
+    backlog.rate = 20.0;
+    backlog.duration = 30.0;
+    backlog.outage = Some((3.0, 20.0));
+    scenarios.push(backlog);
+    for (name, kind, profile) in [
+        ("resilience/proxy-tls-flaky", ProxyKind::FakeTls, "flaky"),
+        ("resilience/proxy-tls-edge", ProxyKind::FakeTls, "edge"),
+        ("resilience/proxy-tls-dpi-half", ProxyKind::FakeTls, "dpi-half"),
+        ("resilience/proxy-socks5-flaky", ProxyKind::Socks5, "flaky"),
+    ] {
+        let mut proxied = steady(name, profile, vec![Route::Sim(profile)]);
+        proxied.proxy = Some(kind);
+        scenarios.push(proxied);
+    }
+    let mut edge_download = scenario(
+        "resilience/edge-photos",
+        "tc-download",
+        "edge",
+        files(31, 4, MAIN_DC, 60_000, 200_000, false, 4_000),
+        2,
+    );
+    edge_download.routes = vec![Route::Sim("edge")];
+    edge_download.deadline = 240.0;
+    scenarios.push(edge_download);
+    scenarios
 }
 
 pub fn torture_suite(quick: bool) -> Vec<ClusterScenario> {
@@ -153,7 +234,7 @@ pub fn suite(quick: bool) -> Vec<ClusterScenario> {
     let mut scroll = scenario("tc/scroll/broadband", "tc-scroll", "broadband", photos(8, scale(200, 100)), 12);
     scroll.cancel_fraction = 0.5;
     scenarios.push(scroll);
-    let mut outage = scenario("tc/mixed/outage-6s", "tc-mixed", "perfect", videos(9, 2), 3);
+    let mut outage = scenario("tc/mixed/outage-6s", "tc-mixed", "broadband", photos(9, 300), 8);
     outage.outage = Some((3.0, 6.0));
     outage.rate = 10.0;
     scenarios.push(outage);
@@ -220,6 +301,9 @@ pub fn run(scenario: &ClusterScenario, binary: &str, engine: &str, seed: u64) ->
                 datacenter_id,
                 api: Some(world.clone()),
                 chaos: scenario.chaos.clone().filter(|_| datacenter_id == MAIN_DC),
+                secret: (datacenter_id == MAIN_DC && scenario.proxy == Some(ProxyKind::FakeTls))
+                    .then(|| crate::args::unhex(FAKE_TLS_SECRET)),
+                socks5: datacenter_id == MAIN_DC && scenario.proxy == Some(ProxyKind::Socks5),
                 ..ServerOptions::default()
             },
         )
@@ -228,18 +312,48 @@ pub fn run(scenario: &ClusterScenario, binary: &str, engine: &str, seed: u64) ->
     let file_server = start_server(FILE_DC, file_keys.to_vec());
     let cdn_server = start_server(CDN_DC, vec![cdn_key.clone()]);
     let profile = Profile::by_name(&scenario.profile).unwrap_or_else(Profile::perfect);
-    let sims: Vec<NetSim> = [&main_server, &file_server, &cdn_server]
+    let mut sims: Vec<NetSim> = [&main_server, &file_server, &cdn_server]
         .iter()
         .enumerate()
         .map(|(index, server)| NetSim::start(server.address, profile.clone(), seed + index as u64).expect("netsim"))
         .collect();
-
-    let datacenter = |id: i32, sim: &NetSim, cdn: bool, keys: String| {
+    let route_address = |route: Route, sims: &mut Vec<NetSim>| -> String {
+        match route {
+            Route::Dead => format!("{{\"host\":\"{}\",\"port\":{}}}", DEAD_ADDRESS.0, DEAD_ADDRESS.1),
+            Route::Sim(name) => {
+                let profile = Profile::by_name(name).unwrap_or_else(Profile::perfect);
+                let sim = NetSim::start(main_server.address, profile, seed + 100 + sims.len() as u64).expect("netsim");
+                let address = format!("{{\"host\":\"{}\",\"port\":{}}}", sim.address.ip(), sim.address.port());
+                sims.push(sim);
+                address
+            }
+        }
+    };
+    let main_routes: Option<Vec<String>> = (!scenario.routes.is_empty())
+        .then(|| scenario.routes.iter().map(|route| route_address(*route, &mut sims)).collect());
+    let inject = scenario.inject.as_ref().map(|(after, routes)| {
+        let addresses: Vec<String> = routes.iter().map(|route| route_address(*route, &mut sims)).collect();
+        format!("[{{\"dc\":{MAIN_DC},\"after\":{after},\"addresses\":[{}]}}]", addresses.join(","))
+    });
+    let proxy = scenario.proxy.map(|kind| {
+        let sim = sims.last().expect("proxy route");
+        let (name, secret) = match kind {
+            ProxyKind::FakeTls => ("mtp", FAKE_TLS_SECRET),
+            ProxyKind::Socks5 => ("socks5", ""),
+        };
         format!(
-            "{{\"id\":{id},\"host\":\"{}\",\"port\":{},\"cdn\":{cdn},\"salt\":{SERVER_SALT},\"keys\":{keys}}}",
+            "{{\"kind\":\"{name}\",\"host\":\"{}\",\"port\":{},\"secret\":\"{secret}\"}}",
             sim.address.ip(),
             sim.address.port()
         )
+    });
+
+    let datacenter = |id: i32, sim: &NetSim, cdn: bool, keys: String| {
+        let addresses = match (&main_routes, id == MAIN_DC) {
+            (Some(routes), true) => routes.join(","),
+            _ => format!("{{\"host\":\"{}\",\"port\":{}}}", sim.address.ip(), sim.address.port()),
+        };
+        format!("{{\"id\":{id},\"addresses\":[{addresses}],\"cdn\":{cdn},\"salt\":{SERVER_SALT},\"keys\":{keys}}}")
     };
     let datacenters = [
         datacenter(
@@ -264,9 +378,11 @@ pub fn run(scenario: &ClusterScenario, binary: &str, engine: &str, seed: u64) ->
         })
         .collect();
     let config = format!(
-        "{{\"main_datacenter_id\":{MAIN_DC},\"datacenters\":[{}],\"files\":[{}]}}",
+        "{{\"main_datacenter_id\":{MAIN_DC},\"datacenters\":[{}],\"files\":[{}],\"inject\":{},\"proxy\":{}}}",
         datacenters.join(","),
-        files.join(",")
+        files.join(","),
+        inject.unwrap_or_else(|| "[]".into()),
+        proxy.unwrap_or_else(|| "null".into())
     );
     let config_path = std::env::temp_dir().join(format!("tc-bench-{}-{seed}-{engine}.json", std::process::id()));
     std::fs::write(&config_path, config).expect("write config");
@@ -299,6 +415,8 @@ pub fn run(scenario: &ClusterScenario, binary: &str, engine: &str, seed: u64) ->
             &std::env::var("TC_BENCH_TRICKLE").unwrap_or_else(|_| "0".into()),
             "--stall-exit",
             &scenario.stall_exit.to_string(),
+            "--duration",
+            &scenario.duration.to_string(),
         ])
         .stdout(Stdio::piped())
         .stderr(if std::env::var_os("TC_BENCH_STDERR").is_some() { Stdio::inherit() } else { Stdio::null() })
@@ -485,6 +603,44 @@ pub fn torture_markdown(results: &[ClusterResult]) -> String {
             report.latency.p50,
             report.latency.p99,
             rate,
+            result.cpu_seconds,
+            result.max_rss_mb,
+            result.connections,
+            if result.stalled { format!("{} (stalled)", result.exit) } else { result.exit.clone() },
+        ));
+    }
+    out
+}
+
+pub fn resilience_markdown(results: &[ClusterResult]) -> String {
+    let mut out = String::new();
+    out.push_str("| Scenario | Engine | Done/Issued | Failed or hung | First reply s | p50 ms | p99 ms | Longest gap s | Recovery s | Duplicate executions | CPU s | Peak RSS MB | Conns | Process |\n");
+    out.push_str("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n");
+    for result in results {
+        let Some(report) = &result.report else {
+            out.push_str(&format!(
+                "| {} | {} | no report ({}) |{}\n",
+                result.scenario,
+                result.engine,
+                result.error.clone().unwrap_or_default(),
+                " |".repeat(11)
+            ));
+            continue;
+        };
+        let first = report.requests.iter().filter_map(|(_, done)| *done).fold(f64::INFINITY, f64::min);
+        out.push_str(&format!(
+            "| {} | {} | {}/{} | {} | {} | {:.1} | {:.1} | {:.2} | {} | {} | {:.2} | {:.1} | {} | {} |\n",
+            result.scenario,
+            result.engine,
+            report.completed,
+            report.requests.len(),
+            report.requests.len().saturating_sub(report.completed),
+            if first.is_finite() { format!("{first:.2}") } else { "-".into() },
+            report.latency.p50,
+            report.latency.p99,
+            result.longest_gap,
+            result.recovery.map(|v| format!("{v:.2}")).unwrap_or_else(|| "-".into()),
+            result.duplicate_executions,
             result.cpu_seconds,
             result.max_rss_mb,
             result.connections,

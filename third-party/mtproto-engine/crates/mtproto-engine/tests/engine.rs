@@ -531,7 +531,11 @@ fn transport_flood_backs_off_and_retransmits_without_reexecution() {
     assert_eq!(collector.count(|event| matches!(event, EngineEvent::TransportFlood)), 1);
     assert_eq!(collector.count(|event| matches!(event, EngineEvent::AuthKeyInvalid { .. })), 0);
     assert_eq!(server.executions(TAG_TRANSPORT_ERROR_ONCE), 2);
-    assert_eq!(server.with_stats(|stats| stats.state_requests), 0, "retransmitted under the same msg_id, no state round trip");
+    assert_eq!(
+        server.with_stats(|stats| stats.state_requests),
+        0,
+        "retransmitted under the same msg_id, no state round trip"
+    );
     engine.shutdown();
 }
 
@@ -610,19 +614,20 @@ fn handshake_transport_error_restarts_key_generation_without_key_invalid() {
 }
 
 #[test]
-fn stalled_handshake_times_out_and_retries() {
+fn stalled_handshake_is_raced_away_and_the_key_is_created() {
     let server = handshake_server(vec![HandshakeFault::Stall]);
     let collector = Arc::new(Collector::default());
     let engine = engine(&collector, 2);
     let session = engine.create_session(generating_setup(&server));
+    let started = Instant::now();
     engine.send(session, request(1, 9));
     assert!(collector.wait(Duration::from_secs(25), |events| completions(events, session) == 1));
-    assert_eq!(
-        collector.count(
-            |event| matches!(event, EngineEvent::AuthKeyCreationFailed { reason } if reason == "handshake timeout")
-        ),
-        1
+    assert!(
+        started.elapsed() < Duration::from_secs(6),
+        "silent handshake must not cost the 10 s timeout ({:?})",
+        started.elapsed()
     );
+    assert_eq!(collector.count(|event| matches!(event, EngineEvent::AuthKeyCreated { .. })), 1);
     engine.shutdown();
 }
 
@@ -853,4 +858,39 @@ fn connect_race_reaches_a_live_address_when_the_first_one_swallows_syns() {
         started.elapsed()
     );
     engine.shutdown();
+}
+
+#[test]
+fn verified_race_leaves_an_address_that_accepts_but_never_answers() {
+    let key = random_key(41);
+    let server = TestServer::start(vec![key.clone()], ServerOptions::default());
+    let silent = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let silent_address = silent.local_addr().unwrap();
+    let held = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let keeper = {
+        let held = held.clone();
+        std::thread::spawn(move || {
+            for stream in silent.incoming().take(4).flatten() {
+                held.lock().unwrap().push(stream);
+            }
+        })
+    };
+    let collector = Arc::new(Collector::default());
+    let engine = engine(&collector, 2);
+    let mut session_setup = setup(&server, &key, SessionRole::Main);
+    session_setup
+        .addresses
+        .insert(0, DcAddress { host: silent_address.ip().to_string(), port: silent_address.port(), secret: None });
+    let started = Instant::now();
+    let session = engine.create_session(session_setup);
+    engine.send(session, request(1, 9));
+    assert!(collector.wait(WAIT, |events| completions(events, session) == 1));
+    assert!(
+        started.elapsed() < Duration::from_secs(3),
+        "a silent first address must be raced away in about 1.5 s ({:?})",
+        started.elapsed()
+    );
+    assert_eq!(server.executions(9), 1);
+    engine.shutdown();
+    drop(keeper);
 }

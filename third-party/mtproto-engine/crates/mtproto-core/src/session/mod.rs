@@ -39,7 +39,8 @@ pub const RETRANSMIT_WINDOW: f64 = MSG_ID_MAX_PAST_SECONDS - 60.0;
 pub const DROPPED_ANSWER_COUNTED_SIZE: usize = 16 * 1024;
 pub const IMMEDIATE_ACK_SIZE: usize = 16 * 1024;
 pub const PROBE_TIMEOUT_MIN: f64 = 1.0;
-pub const PROBE_TIMEOUT_MAX: f64 = 4.0;
+pub const PROBE_TIMEOUT_MAX: f64 = 8.0;
+pub const PROBE_TIMEOUT_INITIAL: f64 = 4.0;
 pub const PROBE_BACKOFF_MAX: f64 = 4.0;
 pub const BACKLOG_SAMPLE_INTERVAL: f64 = 0.25;
 pub const DROPPED_ANSWER_LIMIT: usize = 8 * 1024 * 1024;
@@ -282,6 +283,8 @@ pub struct Session {
     was_busy: bool,
     random_delay: f64,
     rtt: f64,
+    rtt_var: f64,
+    rtt_peak: f64,
     last_read_at: f64,
     last_pong_at: f64,
     last_ping_at: Option<f64>,
@@ -294,6 +297,7 @@ pub struct Session {
     probe_episode: Option<f64>,
     probe_drained: bool,
     probe_backoff: f64,
+    received_on_connection: bool,
     last_future_salts_at: Option<f64>,
     unknown_since: Option<f64>,
     dropped_answer_bytes: usize,
@@ -356,6 +360,8 @@ impl Session {
             was_busy: false,
             random_delay,
             rtt: 0.0,
+            rtt_var: 0.0,
+            rtt_peak: 0.0,
             last_read_at: now.mono,
             last_pong_at: now.mono,
             last_ping_at: None,
@@ -368,6 +374,7 @@ impl Session {
             probe_episode: None,
             probe_drained: false,
             probe_backoff: 1.0,
+            received_on_connection: false,
             last_future_salts_at: None,
             unknown_since: None,
             dropped_answer_bytes: 0,
@@ -477,8 +484,18 @@ impl Session {
         self.need_destroy_auth_key = true;
     }
 
+    pub fn smoothed_rtt(&self) -> Option<f64> {
+        (self.rtt > 0.0).then_some(self.rtt)
+    }
+
     pub fn probe_timeout(&self) -> f64 {
-        (self.rtt * 3.0 + 0.75).clamp(PROBE_TIMEOUT_MIN, PROBE_TIMEOUT_MAX) * self.probe_backoff
+        let base = if self.rtt == 0.0 {
+            PROBE_TIMEOUT_INITIAL
+        } else {
+            ((self.rtt + 4.0 * self.rtt_var).max(self.rtt_peak * 1.5) + 0.25)
+                .clamp(PROBE_TIMEOUT_MIN, PROBE_TIMEOUT_MAX)
+        };
+        base * self.probe_backoff
     }
 
     pub fn unanswered_ping_since(&self) -> Option<f64> {
@@ -661,6 +678,7 @@ impl Session {
     pub fn connection_opened(&mut self, now: Now) {
         self.sync_wall_clock(now);
         self.connected = true;
+        self.received_on_connection = false;
         self.connection_epoch += 1;
         self.connected_at = now.mono;
         self.last_read_at = now.mono;
@@ -1074,6 +1092,7 @@ impl Session {
         self.sync_wall_clock(now);
         self.last_read_at = now.mono;
         self.last_pong_at = now.mono;
+        self.received_on_connection = true;
         let body = decrypted.body();
         let mode = match self.received.peek(header.msg_id) {
             DuplicateCheck::New => Mode::Process,
@@ -1447,7 +1466,14 @@ impl Session {
                 self.reset_server_time(msg_id, now);
             }
             let rtt = (now.mono - sent_at).max(0.0);
-            self.rtt = if self.rtt == 0.0 { rtt } else { self.rtt * 0.7 + rtt * 0.3 };
+            self.rtt_peak = rtt.max(self.rtt_peak * 0.9);
+            if self.rtt == 0.0 {
+                self.rtt = rtt;
+                self.rtt_var = rtt / 2.0;
+            } else {
+                self.rtt_var = self.rtt_var * 0.75 + (self.rtt - rtt).abs() * 0.25;
+                self.rtt = self.rtt * 0.7 + rtt * 0.3;
+            }
             if rtt < self.probe_timeout() {
                 self.probe_backoff = (self.probe_backoff * 0.5).max(1.0);
             }
@@ -1754,7 +1780,9 @@ impl Session {
             return Err(SessionError::ReadTimeout);
         }
         if self.probe_deadline().is_some_and(|at| at < now.mono) {
-            self.probe_backoff = (self.probe_backoff * 2.0).min(PROBE_BACKOFF_MAX);
+            if self.received_on_connection {
+                self.probe_backoff = (self.probe_backoff * 2.0).min(PROBE_BACKOFF_MAX);
+            }
             return Err(SessionError::ProbeTimeout);
         }
         self.expire_state_requests(now);

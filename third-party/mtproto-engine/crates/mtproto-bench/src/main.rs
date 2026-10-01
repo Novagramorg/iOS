@@ -78,6 +78,7 @@ fn main() {
             let mut binary: Option<String> = None;
             let mut quick = true;
             let mut torture = false;
+            let mut resilience = false;
             let mut jobs = 1usize;
             let mut out: Option<String> = None;
             let mut only: Option<String> = None;
@@ -90,6 +91,7 @@ fn main() {
                     "--suite" => {
                         let name = iter.next().cloned().unwrap_or_default();
                         torture = name.starts_with("torture");
+                        resilience = name == "resilience";
                         quick = if torture { name == "torture-quick" } else { !name.ends_with("full") };
                     }
                     "--jobs" => jobs = iter.next().and_then(|v| v.parse().ok()).expect("jobs"),
@@ -103,7 +105,22 @@ fn main() {
                 }
             }
             let binary = binary.expect("--telegramcore PATH");
-            let scenarios = if torture { cluster::torture_suite(quick) } else { cluster::suite(quick) };
+            let scenarios = if resilience {
+                cluster::resilience_suite()
+            } else if torture {
+                cluster::torture_suite(quick)
+            } else {
+                cluster::suite(quick)
+            };
+            let render = |results: &[cluster::ClusterResult]| {
+                if resilience {
+                    cluster::resilience_markdown(results)
+                } else if torture {
+                    cluster::torture_markdown(results)
+                } else {
+                    cluster::markdown(results)
+                }
+            };
             let mut work = Vec::new();
             for (index, scenario) in scenarios.iter().enumerate() {
                 if let Some(filter) = &only
@@ -128,13 +145,17 @@ fn main() {
                             let Some((order, index, round, scenario, engine)) = next else {
                                 break;
                             };
-                            eprintln!("[{}/{}] {} — tc-{} (round {})", index + 1, total, scenario.name, engine, round + 1);
-                            let result = cluster::run(&scenario, &binary, &engine, 5000 + index as u64 * 11 + round as u64);
-                            let row = if torture {
-                                cluster::torture_markdown(std::slice::from_ref(&result))
-                            } else {
-                                cluster::markdown(std::slice::from_ref(&result))
-                            };
+                            eprintln!(
+                                "[{}/{}] {} — tc-{} (round {})",
+                                index + 1,
+                                total,
+                                scenario.name,
+                                engine,
+                                round + 1
+                            );
+                            let result =
+                                cluster::run(&scenario, &binary, &engine, 5000 + index as u64 * 11 + round as u64);
+                            let row = render(std::slice::from_ref(&result));
                             eprintln!("{}", row.lines().nth(2).unwrap_or(""));
                             collected.lock().unwrap().push((order, result));
                         }
@@ -144,7 +165,7 @@ fn main() {
             let mut collected = collected.into_inner().unwrap();
             collected.sort_by_key(|(order, _)| *order);
             let results: Vec<cluster::ClusterResult> = collected.into_iter().map(|(_, result)| result).collect();
-            let table = if torture { cluster::torture_markdown(&results) } else { cluster::markdown(&results) };
+            let table = render(&results);
             println!("{table}");
             if let Some(path) = out {
                 std::fs::write(format!("{path}.md"), &table).expect("write markdown");

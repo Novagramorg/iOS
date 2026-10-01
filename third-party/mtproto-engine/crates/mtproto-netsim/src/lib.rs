@@ -24,6 +24,19 @@ pub struct Blackhole {
     pub end: BlackholeEnd,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DpiAction {
+    Reset,
+    Blackhole,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Dpi {
+    pub after_bytes_up: u64,
+    pub action: DpiAction,
+    pub fraction: f64,
+}
+
 #[derive(Debug, Clone)]
 pub struct Profile {
     pub name: String,
@@ -37,6 +50,7 @@ pub struct Profile {
     pub blackhole: Option<Blackhole>,
     pub refuse_probability: f64,
     pub connect_delay: Duration,
+    pub dpi: Option<Dpi>,
 }
 
 impl Profile {
@@ -53,6 +67,40 @@ impl Profile {
             blackhole: None,
             refuse_probability: 0.0,
             connect_delay: Duration::ZERO,
+            dpi: None,
+        }
+    }
+
+    pub fn edge() -> Self {
+        Self {
+            name: "edge".into(),
+            latency: Duration::from_millis(450),
+            jitter: Duration::from_millis(300),
+            bandwidth: Some(64_000 / 8),
+            max_chunk: 512,
+            stall_probability: 0.03,
+            stall: Duration::from_millis(1500),
+            refuse_probability: 0.1,
+            connect_delay: Duration::from_millis(600),
+            ..Self::perfect()
+        }
+    }
+
+    pub fn edge_flaky() -> Self {
+        Self {
+            name: "edge-flaky".into(),
+            reset_after: Some((Duration::from_secs(8), Duration::from_secs(25))),
+            ..Self::edge()
+        }
+    }
+
+    pub fn dpi(name: &str, action: DpiAction, fraction: f64) -> Self {
+        Self {
+            name: name.into(),
+            latency: Duration::from_millis(30),
+            jitter: Duration::from_millis(10),
+            dpi: Some(Dpi { after_bytes_up: 0, action, fraction }),
+            ..Self::perfect()
         }
     }
 
@@ -130,12 +178,29 @@ impl Profile {
             "lossy" => Some(Self::lossy()),
             "flaky" => Some(Self::flaky()),
             "blackholes" => Some(Self::blackholes()),
+            "edge" => Some(Self::edge()),
+            "edge-flaky" => Some(Self::edge_flaky()),
+            "dpi-reset" => Some(Self::dpi("dpi-reset", DpiAction::Reset, 1.0)),
+            "dpi-blackhole" => Some(Self::dpi("dpi-blackhole", DpiAction::Blackhole, 1.0)),
+            "dpi-half" => Some(Self::dpi("dpi-half", DpiAction::Blackhole, 0.5)),
             _ => None,
         }
     }
 
     pub fn all_names() -> &'static [&'static str] {
-        &["perfect", "broadband", "3g", "lossy", "flaky", "blackholes"]
+        &[
+            "perfect",
+            "broadband",
+            "3g",
+            "lossy",
+            "flaky",
+            "blackholes",
+            "edge",
+            "edge-flaky",
+            "dpi-reset",
+            "dpi-blackhole",
+            "dpi-half",
+        ]
     }
 }
 
@@ -414,13 +479,14 @@ fn handle_connection(client: TcpStream, upstream: SocketAddr, shared: Arc<Shared
         });
     }
 
+    let dpi = profile.dpi.filter(|dpi| random.unit() < dpi.fraction);
     let up_seed = random.next();
     let down_seed = random.next();
     let (Ok(client_read), Ok(upstream_read)) = (client.try_clone(), upstream.try_clone()) else {
         return;
     };
-    let up = spawn_direction(client_read, upstream, shared.clone(), control.clone(), true, up_seed);
-    let down = spawn_direction(upstream_read, client, shared.clone(), control.clone(), false, down_seed);
+    let up = spawn_direction(client_read, upstream, shared.clone(), control.clone(), true, up_seed, dpi);
+    let down = spawn_direction(upstream_read, client, shared.clone(), control.clone(), false, down_seed, None);
     let _ = up.join();
     let _ = down.join();
     control.closed.store(true, Ordering::SeqCst);
@@ -434,6 +500,7 @@ fn spawn_direction(
     control: Arc<ConnectionControl>,
     upstream: bool,
     seed: u64,
+    dpi: Option<Dpi>,
 ) -> JoinHandle<()> {
     let (sender, receiver): (Sender<Chunk>, Receiver<Chunk>) = channel();
     let writer = {
@@ -445,6 +512,7 @@ fn spawn_direction(
         let mut random = Random(seed | 1);
         let mut buffer = vec![0u8; 64 * 1024];
         let mut last_delivery = Instant::now();
+        let mut seen: u64 = 0;
         loop {
             match source.read(&mut buffer) {
                 Ok(0) | Err(_) => {
@@ -452,6 +520,25 @@ fn spawn_direction(
                     break;
                 }
                 Ok(read) => {
+                    seen += read as u64;
+                    if let Some(dpi) = dpi
+                        && seen > dpi.after_bytes_up
+                    {
+                        match dpi.action {
+                            DpiAction::Reset => {
+                                shared.resets.fetch_add(1, Ordering::Relaxed);
+                                control.reset();
+                                let _ = sender.send(None);
+                                break;
+                            }
+                            DpiAction::Blackhole => {
+                                if !control.dead.swap(true, Ordering::SeqCst) {
+                                    shared.blackholes.fetch_add(1, Ordering::Relaxed);
+                                }
+                                control.blackholed.store(true, Ordering::SeqCst);
+                            }
+                        }
+                    }
                     let profile = shared.profile.lock().unwrap().clone();
                     for chunk in buffer[..read].chunks(profile.max_chunk.max(1)) {
                         let mut delay = profile.latency + random.between(Duration::ZERO, profile.jitter);
