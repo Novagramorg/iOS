@@ -342,14 +342,15 @@ private final class WalletInfoSheetContent: CombinedComponent {
 
             let animationSide: CGFloat = content.logo.name == "GramDiamond" ? 118.0 : 100.0
             let animationSize = CGSize(width: animationSide, height: animationSide)
-            if component.mode == .firstGrams {
+            if [.wallet, .gram, .firstGrams].contains(component.mode) {
+                let premiumDiamondSize = CGSize(width: context.availableSize.width, height: 164.0)
                 let premiumDiamond = premiumDiamond.update(
                     component: PremiumDiamondComponent(theme: theme),
-                    availableSize: animationSize,
+                    availableSize: premiumDiamondSize,
                     transition: context.transition
                 )
                 context.add(premiumDiamond
-                    .position(CGPoint(x: context.availableSize.width / 2.0, y: contentSize.height + premiumDiamond.size.height / 2.0))
+                    .position(CGPoint(x: context.availableSize.width / 2.0, y: contentSize.height + animationSize.height / 2.0 + 8.0))
                 )
             } else if content.logo.name == "GramDiamond" {
                 let diamond = diamond.update(
