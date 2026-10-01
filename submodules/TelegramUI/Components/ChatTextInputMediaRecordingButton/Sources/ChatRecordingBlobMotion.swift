@@ -1,7 +1,7 @@
 import Foundation
 import LiquidGlassShapes
 
-/// The recording blob's look and motion. Kept free of UIKit so the offline harness can check them.
+/// The recording blob's look and motion, kept free of UIKit.
 enum ChatRecordingBlobAppearance {
     static let maxLevel: CGFloat = 4.0
     /// Per-frame smoothing of the microphone level at 60 fps.
@@ -17,8 +17,13 @@ enum ChatRecordingBlobAppearance {
         return Float(((4.0 / 3.0) * tan(angle / 4.0)) / sin(angle / 2.0) / 2.0)
     }()
 
-    static let outerMotion = ChatRecordingBlobMotion.Parameters(minRandomness: 1.0, maxRandomness: 1.0, minSpeed: 0.9, maxSpeed: 4.0, minScale: 0.57, maxScale: 1.0)
-    static let middleMotion = ChatRecordingBlobMotion.Parameters(minRandomness: 1.0, maxRandomness: 1.0, minSpeed: 0.9, maxSpeed: 4.0, minScale: 0.52, maxScale: 0.87)
+    static let goldenRatio: CGFloat = (1.0 + sqrt(5.0)) / 2.0
+    /// The outer wave's scale, of the view, from silence to full level. Silent, it is VoiceBlobView's 0.57, 1.1 times
+    /// larger. At full level it is the centre circle times φ², so that with the middle wave at the geometric mean the
+    /// three circles grow by φ each; it then reaches past the view.
+    static let outerWaveScales: ClosedRange<CGFloat> = (0.57 * 1.1) ... (CGFloat(centreScale) * goldenRatio * goldenRatio)
+    /// Both waves morph alike; only their sizes differ.
+    static let waveMotion = ChatRecordingBlobMotion.Parameters(minRandomness: 1.0, maxRandomness: 1.0, minSpeed: 0.9, maxSpeed: 4.0)
 
     static func appearance(mode: LiquidGlassRenderMode, isDarkAppearance: Bool) -> LiquidGlassAppearance {
         return LiquidGlassAppearance(
@@ -28,7 +33,7 @@ enum ChatRecordingBlobAppearance {
                 // The centre is the button: a strong matte keeps it close to the solid color, letting through only
                 // 1 - matte of what is behind it. Dark themes get the stronger matte: there the multiplied color would
                 // otherwise darken the centre.
-                LiquidGlassLayerStyle(alpha: 1.0, fill: 0.0, saturation: 1.0, matte: isDarkAppearance ? 0.85 : 0.7375, rim: 0.3, refracts: true, plainAlpha: 1.0)
+                LiquidGlassLayerStyle(alpha: 1.0, fill: 0.0, saturation: 1.0, matte: isDarkAppearance ? 0.82 : 0.685, rim: 0.3, refracts: true, plainAlpha: 1.0)
             ],
             shadowStrength: mode == .glass ? 0.07 : 0.0,
             shadowBlur: 6.0,
@@ -43,10 +48,15 @@ enum ChatRecordingBlobAppearance {
     /// The three shapes: the outer and middle blobs (circles when nil, as in the flat style) and the centre circle.
     static func radialParameters(outer: ChatRecordingBlobMotion?, middle: ChatRecordingBlobMotion?, size: Float, level: CGFloat, presence: CGFloat, easing: (CGFloat) -> CGFloat) -> LiquidGlassRadialParameters {
         let centre = LiquidGlassRadialShape.circle(scale: ChatRecordingBlobAppearance.centreScale)
+        let scales = ChatRecordingBlobAppearance.outerWaveScales
+        let outerScale = (scales.lowerBound + (scales.upperBound - scales.lowerBound) * level) * presence
+        // The middle wave is the geometric mean of the centre circle and the outer wave: the three circles grow by one
+        // ratio, which reads as an evenly expanding ripple (φ at full level).
+        let middleScale = sqrt(CGFloat(ChatRecordingBlobAppearance.centreScale) * outerScale)
         return LiquidGlassRadialParameters(
             shapes: (
-                outer?.radialShape(level: level, presence: presence, easing: easing) ?? centre,
-                middle?.radialShape(level: level, presence: presence, easing: easing) ?? centre,
+                outer?.radialShape(scale: outerScale, easing: easing) ?? centre,
+                middle?.radialShape(scale: middleScale, easing: easing) ?? centre,
                 centre
             ),
             size: size,
@@ -63,8 +73,6 @@ final class ChatRecordingBlobMotion {
         var maxRandomness: CGFloat
         var minSpeed: CGFloat
         var maxSpeed: CGFloat
-        var minScale: CGFloat
-        var maxScale: CGFloat
     }
 
     let parameters: Parameters
@@ -99,12 +107,12 @@ final class ChatRecordingBlobMotion {
         }
     }
 
-    func radialShape(level: CGFloat, presence: CGFloat, easing: (CGFloat) -> CGFloat) -> LiquidGlassRadialShape {
+    /// The current outline at `scale` of the view.
+    func radialShape(scale: CGFloat, easing: (CGFloat) -> CGFloat) -> LiquidGlassRadialShape {
         func radialPoints(_ points: [SIMD2<Float>]) -> LiquidGlassRadialPoints {
             return (points[0], points[1], points[2], points[3], points[4], points[5], points[6], points[7])
         }
         let progress = easing(max(0.0, min(1.0, self.elapsed / self.duration)))
-        let scale = (self.parameters.minScale + (self.parameters.maxScale - self.parameters.minScale) * level) * presence
         return LiquidGlassRadialShape(fromPoints: radialPoints(self.fromPoints), toPoints: radialPoints(self.toPoints), progress: Float(progress), scale: Float(scale))
     }
 

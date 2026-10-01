@@ -50,8 +50,8 @@ public final class LiquidGlassShapesLayer: SimpleLayer, MetalEngineSubject {
     private enum Constants {
         /// Blur of the content under the shapes.
         static let glassBlurRadius: CGFloat = 1.0
-        /// The backdrop is blurred anyway, so it is captured below the screen scale.
-        static let backdropScale: CGFloat = min(2.0, UIScreenScale)
+        /// The backdrop is blurred anyway, so it is captured at 1x, as the legacy glass (LegacyGlassView) captures it.
+        static let backdropScale: CGFloat = 1.0
         static let colorTransitionDuration: Double = 0.3
         static let edgeInset = 2
     }

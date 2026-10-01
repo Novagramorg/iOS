@@ -10,12 +10,13 @@ import LiquidGlassShapes
 /// liquid glass on iOS 26 and later. The Objective-C mic button positions and transforms the view and adds the icon
 /// on top of it.
 final class ChatRecordingBlobView: UIView, TGModernConversationInputMicButtonDecoration {
-    /// How far the shapes reach past a view of `side`: the shadow and the rims reach past the outer blob, whose outline
-    /// overshoots its points by under 5% (measured by the harness's radial test).
+    /// How far the shapes reach past a view of `side`: the outer blob grows up to its largest scale and its outline
+    /// overshoots its points by under 5% (measured when the radial kernel was written), and the shadow and the rims
+    /// reach past it.
     private static func overflow(side: CGFloat) -> CGFloat {
         let appearance = ChatRecordingBlobAppearance.appearance(mode: .glass, isDarkAppearance: false)
-        let outlineOvershoot = side * 0.5 * 0.05
-        return ceil(outlineOvershoot + CGFloat(appearance.shadowDrop + 3.0 * appearance.shadowBlur + appearance.rimWidth * 0.5))
+        let outlineReach = side * 0.5 * ChatRecordingBlobAppearance.outerWaveScales.upperBound * 1.05
+        return ceil(max(0.0, outlineReach - side * 0.5) + CGFloat(appearance.shadowDrop + 3.0 * appearance.shadowBlur + appearance.rimWidth * 0.5))
     }
 
     /// Taps register only in a centred square of this side, as with the previous blob.
@@ -46,8 +47,8 @@ final class ChatRecordingBlobView: UIView, TGModernConversationInputMicButtonDec
 
     override init(frame: CGRect) {
         self.shapesLayer = LiquidGlassShapesLayer(colors: (.white, .white))
-        self.outerBlob = ChatRecordingBlobMotion(parameters: ChatRecordingBlobAppearance.outerMotion)
-        self.middleBlob = ChatRecordingBlobMotion(parameters: ChatRecordingBlobAppearance.middleMotion)
+        self.outerBlob = ChatRecordingBlobMotion(parameters: ChatRecordingBlobAppearance.waveMotion)
+        self.middleBlob = ChatRecordingBlobMotion(parameters: ChatRecordingBlobAppearance.waveMotion)
         self.presence = ChatRecordingBlobPresence(value: ChatRecordingBlobAppearance.restingPresence, easing: { bezierPoint(0.42, 0.0, 0.58, 1.0, $0) })
 
         super.init(frame: frame)

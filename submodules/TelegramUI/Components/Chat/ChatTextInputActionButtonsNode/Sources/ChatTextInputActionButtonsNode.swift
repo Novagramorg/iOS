@@ -374,7 +374,11 @@ public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessag
         }
     
         transition.updateFrame(view: self.micButtonBackgroundView, frame: CGRect(origin: CGPoint(), size: size))
-        self.micButtonBackgroundView.update(size: size, cornerRadius: size.height * 0.5, isDark:  interfaceState.theme.overallDarkAppearance, tintColor: defaultGlassTintColor, isInteractive: true, transition: ComponentTransition(transition))
+        // While recording, the recording blob stands in for this button. On iOS 26 the circle is system glass, which
+        // does not follow its view's alpha (the panel's fade-out leaves it on screen, under the translucent blob), so
+        // it is dissolved through the glass itself.
+        let isRecording = interfaceState.inputTextPanelState.mediaRecordingState != nil
+        self.micButtonBackgroundView.update(size: size, cornerRadius: size.height * 0.5, isDark:  interfaceState.theme.overallDarkAppearance, tintColor: defaultGlassTintColor, isInteractive: true, isVisible: !isRecording, transition: ComponentTransition(transition))
         
         transition.updatePosition(layer: self.micButton.layer, position: CGRect(origin: CGPoint(), size: size).center)
         transition.updateBounds(layer: self.micButton.layer, bounds: CGRect(origin: CGPoint(), size: size))

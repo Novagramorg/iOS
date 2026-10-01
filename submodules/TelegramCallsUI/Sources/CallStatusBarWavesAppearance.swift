@@ -1,8 +1,7 @@
 import Foundation
 import LiquidGlassShapes
 
-/// The call status bar's look (the WaveLab prototype's defaults). Kept free of UIKit so the offline harness can check
-/// that the bar renders exactly as before.
+/// The call status bar's look (the WaveLab prototype's defaults).
 enum CallStatusBarWavesAppearance {
     /// Bottom to top.
     static let appearance = LiquidGlassAppearance(
