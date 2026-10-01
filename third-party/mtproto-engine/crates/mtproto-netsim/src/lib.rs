@@ -197,6 +197,8 @@ impl Random {
     }
 }
 
+type Chunk = Option<(Instant, Vec<u8>)>;
+
 struct ConnectionControl {
     client: TcpStream,
     upstream: TcpStream,
@@ -447,7 +449,7 @@ fn spawn_direction(
     upstream: bool,
     seed: u64,
 ) -> JoinHandle<()> {
-    let (sender, receiver): (Sender<Option<(Instant, Vec<u8>)>>, Receiver<Option<(Instant, Vec<u8>)>>) = channel();
+    let (sender, receiver): (Sender<Chunk>, Receiver<Chunk>) = channel();
     let writer = {
         let shared = shared.clone();
         let control = control.clone();
@@ -484,7 +486,7 @@ fn spawn_direction(
 }
 
 fn deliver(
-    receiver: Receiver<Option<(Instant, Vec<u8>)>>,
+    receiver: Receiver<Chunk>,
     mut destination: TcpStream,
     shared: Arc<Shared>,
     control: Arc<ConnectionControl>,
@@ -501,11 +503,10 @@ fn deliver(
             return;
         }
         if control.blackholed.load(Ordering::SeqCst) {
-            if let Some(Some((_, data))) = item {
-                if !control.dead.load(Ordering::SeqCst) {
+            if let Some(Some((_, data))) = item
+                && !control.dead.load(Ordering::SeqCst) {
                     held.push(data);
                 }
-            }
             continue;
         }
         for data in held.drain(..) {

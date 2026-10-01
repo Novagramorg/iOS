@@ -2,7 +2,7 @@ pub fn factorize_pq(pq: u64) -> Option<(u64, u64)> {
     if pq < 4 {
         return None;
     }
-    if pq % 2 == 0 {
+    if pq.is_multiple_of(2) {
         return Some((2, pq / 2));
     }
     for seed in 1..64u64 {

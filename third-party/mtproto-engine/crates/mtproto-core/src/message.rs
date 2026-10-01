@@ -59,15 +59,11 @@ impl DecryptedMessage {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
 pub struct PaddingPolicy {
     pub extra_random_blocks: usize,
 }
 
-impl Default for PaddingPolicy {
-    fn default() -> Self {
-        Self { extra_random_blocks: 0 }
-    }
-}
 
 impl PaddingPolicy {
     pub fn padding_len(&self, unpadded: usize, rng: &mut impl SecureRandom) -> usize {
@@ -219,7 +215,7 @@ pub fn decrypt_message_v1(auth_key: &AuthKey, packet: &[u8], side: Side) -> Resu
         return Err(MessageError::TooShort(packet.len()));
     }
     let encrypted_len = packet.len() - ENCRYPTED_HEADER_LEN;
-    if encrypted_len % 16 != 0 {
+    if !encrypted_len.is_multiple_of(16) {
         return Err(MessageError::Unaligned(encrypted_len));
     }
     let found = read_auth_key_id(packet).expect("length checked");

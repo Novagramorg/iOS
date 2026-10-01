@@ -76,7 +76,7 @@ impl Driver {
             Kind::Sized { size } => sized_call(size),
             Kind::Real => {
                 let mut writer = Writer::new();
-                writer.write_u32(if index % 2 == 0 { 0xc4f9186b } else { 0x1fb33026 });
+                writer.write_u32(if index.is_multiple_of(2) { 0xc4f9186b } else { 0x1fb33026 });
                 writer.into_inner()
             }
         };

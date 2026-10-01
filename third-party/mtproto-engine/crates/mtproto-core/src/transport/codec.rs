@@ -39,7 +39,7 @@ pub enum Incoming {
 }
 
 pub fn encode_frame(framing: Framing, payload: &[u8], quick_ack: bool, rng: &mut impl SecureRandom, out: &mut Vec<u8>) {
-    assert!(payload.len() % 4 == 0, "payload must be 4-byte aligned");
+    assert!(payload.len().is_multiple_of(4), "payload must be 4-byte aligned");
     assert!(payload.len() < MAX_FRAME_LEN, "payload too large");
     match framing {
         Framing::Abridged => {
@@ -296,7 +296,7 @@ fn classify(mut payload: Vec<u8>, padded: bool) -> Incoming {
     if padded {
         let trimmed = trim_padded_payload(&payload);
         payload.truncate(trimmed);
-    } else if payload.len() % 4 != 0 {
+    } else if !payload.len().is_multiple_of(4) {
         let aligned = payload.len() & !3;
         payload.truncate(aligned);
     }

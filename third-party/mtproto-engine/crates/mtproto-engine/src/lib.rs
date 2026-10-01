@@ -88,20 +88,18 @@ impl Engine {
 
     fn post(&self, handle: SessionHandle, command: Command) {
         let worker = self.worker_for(handle);
-        if let Ok(sender) = worker.sender.lock() {
-            if sender.send(command).is_ok() {
+        if let Ok(sender) = worker.sender.lock()
+            && sender.send(command).is_ok() {
                 let _ = worker.waker.wake();
             }
-        }
     }
 
     fn broadcast(&self, make: impl Fn() -> Command) {
         for worker in &self.inner.workers {
-            if let Ok(sender) = worker.sender.lock() {
-                if sender.send(make()).is_ok() {
+            if let Ok(sender) = worker.sender.lock()
+                && sender.send(make()).is_ok() {
                     let _ = worker.waker.wake();
                 }
-            }
         }
     }
 
@@ -195,13 +193,11 @@ impl Engine {
     pub fn shutdown(&self) {
         self.broadcast(|| Command::Shutdown);
         for worker in &self.inner.workers {
-            if let Ok(mut thread) = worker.thread.lock() {
-                if let Some(thread) = thread.take() {
-                    if thread.thread().id() != std::thread::current().id() {
+            if let Ok(mut thread) = worker.thread.lock()
+                && let Some(thread) = thread.take()
+                    && thread.thread().id() != std::thread::current().id() {
                         let _ = thread.join();
                     }
-                }
-            }
         }
     }
 }
@@ -215,13 +211,11 @@ impl Drop for EngineInner {
             }
         }
         for worker in &self.workers {
-            if let Ok(mut thread) = worker.thread.lock() {
-                if let Some(thread) = thread.take() {
-                    if thread.thread().id() != std::thread::current().id() {
+            if let Ok(mut thread) = worker.thread.lock()
+                && let Some(thread) = thread.take()
+                    && thread.thread().id() != std::thread::current().id() {
                         let _ = thread.join();
                     }
-                }
-            }
         }
     }
 }

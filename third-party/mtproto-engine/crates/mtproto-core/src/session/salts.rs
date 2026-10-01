@@ -94,7 +94,7 @@ impl SaltState {
 
     pub fn needs_future_salts(&mut self, server_time: f64) -> bool {
         self.rotate(server_time);
-        self.future.is_empty() || !(self.current.valid_until > server_time + SALT_SAFETY_MARGIN)
+        self.future.is_empty() || self.current.valid_until <= server_time + SALT_SAFETY_MARGIN
     }
 
     pub fn all(&self) -> Vec<ServerSalt> {

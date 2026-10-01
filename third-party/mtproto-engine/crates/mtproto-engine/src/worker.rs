@@ -129,18 +129,15 @@ impl Worker {
                 }
             }
             let wait = (deadline - now.mono).clamp(0.0, MAX_POLL_WAIT);
-            if let Err(error) = self.poll.poll(&mut events, Some(Duration::from_secs_f64(wait))) {
-                if error.kind() != std::io::ErrorKind::Interrupted {
+            if let Err(error) = self.poll.poll(&mut events, Some(Duration::from_secs_f64(wait)))
+                && error.kind() != std::io::ErrorKind::Interrupted {
                     self.callbacks
                         .on_log(crate::types::LogLevel::Error, &format!("[MTProtoEngine] poll failed: {error}"));
                     std::thread::sleep(Duration::from_millis(50));
                 }
-            }
             let now = clock::now();
-            let mut woke = false;
             for event in events.iter() {
                 if event.token() == WAKER_TOKEN {
-                    woke = true;
                     continue;
                 }
                 let Some(handle) = self.tokens.get(&event.token()).copied() else {
@@ -160,11 +157,9 @@ impl Worker {
                     );
                 }
             }
-            if woke || !events.is_empty() || true {
-                if !self.drain_commands(now) {
-                    self.shutdown(now);
-                    return;
-                }
+            if !self.drain_commands(now) {
+                self.shutdown(now);
+                return;
             }
             for session in self.sessions.values_mut() {
                 session.drive(

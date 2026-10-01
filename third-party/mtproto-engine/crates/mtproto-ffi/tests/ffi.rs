@@ -7,9 +7,11 @@ use std::time::{Duration, Instant};
 use mtproto_engine_ffi::*;
 use mtproto_testserver::*;
 
+type Recorded = (u64, u32, u64, i32, Vec<u8>, String);
+
 #[derive(Default)]
 struct Sink {
-    events: Mutex<Vec<(u64, u32, u64, i32, Vec<u8>, String)>>,
+    events: Mutex<Vec<Recorded>>,
     condvar: Condvar,
 }
 

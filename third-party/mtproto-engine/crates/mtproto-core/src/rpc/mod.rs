@@ -221,11 +221,10 @@ impl RpcClient {
     pub fn update_environment(&mut self, environment: ApiEnvironment, noop_request: Option<RpcRequest>, now: Now) {
         let changed = self.environment.as_ref().map(|current| current.init_hash.as_str()) != Some(environment.init_hash.as_str());
         self.environment = Some(environment);
-        if changed {
-            if let Some(noop) = noop_request {
+        if changed
+            && let Some(noop) = noop_request {
                 self.send(noop, now);
             }
-        }
     }
 
     pub fn set_auth_token_ready(&mut self, ready: bool, now: Now) {
@@ -299,14 +298,12 @@ impl RpcClient {
             return false;
         };
         self.order.retain(|other| *other != id);
-        if state.in_session {
-            if let CancelOutcome::RemovedInFlight { msg_id } = self.session.cancel(id.into()) {
-                if state.request.flags.expected_response_size >= LARGE_RESPONSE_THRESHOLD {
+        if state.in_session
+            && let CancelOutcome::RemovedInFlight { msg_id } = self.session.cancel(id.into())
+                && state.request.flags.expected_response_size >= LARGE_RESPONSE_THRESHOLD {
                     self.session.drop_answer(msg_id, now);
                     self.events.push_back(RpcEvent::ConnectionShouldReset);
                 }
-            }
-        }
         self.dispatch_ready(now);
         true
     }
@@ -350,11 +347,10 @@ impl RpcClient {
         if state.not_before > now.mono && !key_replaced {
             return false;
         }
-        if let Some(dependency) = state.waiting_for_dependency {
-            if self.requests.contains_key(&dependency) {
+        if let Some(dependency) = state.waiting_for_dependency
+            && self.requests.contains_key(&dependency) {
                 return false;
             }
-        }
         if matches!(self.role, SessionRole::Worker { requires_auth_token: true }) && !self.auth_token_ready {
             return false;
         }
@@ -417,16 +413,14 @@ impl RpcClient {
             } => {
                 let id = RequestId::from(id);
                 if let Some(state) = self.finish(id) {
-                    if state.wrapped_with_init {
-                        if let Some(environment) = &self.environment {
-                            if self.stored_init_hash.as_deref() != Some(environment.init_hash.as_str()) {
+                    if state.wrapped_with_init
+                        && let Some(environment) = &self.environment
+                            && self.stored_init_hash.as_deref() != Some(environment.init_hash.as_str()) {
                                 self.stored_init_hash = Some(environment.init_hash.clone());
                                 self.events.push_back(RpcEvent::InitHashStored {
                                     hash: environment.init_hash.clone(),
                                 });
                             }
-                        }
-                    }
                     self.events.push_back(RpcEvent::Completed {
                         id,
                         body,
@@ -542,8 +536,8 @@ impl RpcClient {
         let is_flood = (code == 420 && !message.contains("FROZEN_METHOD_INVALID"))
             || message.contains("FLOOD_WAIT_")
             || message.contains("FLOOD_PREMIUM_WAIT_");
-        if is_flood {
-            if let Some(seconds) = flood_wait_seconds(&message) {
+        if is_flood
+            && let Some(seconds) = flood_wait_seconds(&message) {
                 let delay = seconds.clamp(MIN_FLOOD_WAIT_SECONDS, MAX_FLOOD_WAIT_SECONDS) as f64;
                 if flags.delegate_retry_decisions {
                     let state = self.requests.get_mut(&id).expect("request exists");
@@ -578,7 +572,6 @@ impl RpcClient {
                     return;
                 }
             }
-        }
         if code == 400 && (message.contains("CONNECTION_NOT_INITED") || message.contains("CONNECTION_LAYER_INVALID")) {
             let state = self.requests.get_mut(&id).expect("request exists");
             state.not_inited_retries += 1;
@@ -594,8 +587,8 @@ impl RpcClient {
                 self.park_for_verification(id, kind, now);
                 return;
             }
-            if let Some(rest) = message.strip_prefix("RECAPTCHA_CHECK_") {
-                if let Some((method, site_key)) = rest.split_once("__") {
+            if let Some(rest) = message.strip_prefix("RECAPTCHA_CHECK_")
+                && let Some((method, site_key)) = rest.split_once("__") {
                     let kind = VerificationKind::Recaptcha {
                         method: method.to_string(),
                         site_key: site_key.to_string(),
@@ -603,7 +596,6 @@ impl RpcClient {
                     self.park_for_verification(id, kind, now);
                     return;
                 }
-            }
         }
         if code == 406 && is_main {
             self.events.push_back(RpcEvent::SoftAuthReset { message: message.clone() });

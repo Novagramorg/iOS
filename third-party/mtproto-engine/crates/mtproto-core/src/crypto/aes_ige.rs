@@ -22,7 +22,7 @@ impl AesIge {
     }
 
     pub fn encrypt(&mut self, data: &mut [u8]) -> Result<(), CryptoError> {
-        if data.len() % 16 != 0 {
+        if !data.len().is_multiple_of(16) {
             return Err(CryptoError::UnalignedLength(data.len()));
         }
         let mut c_prev = block_from(&self.iv[..16]);
@@ -42,7 +42,7 @@ impl AesIge {
     }
 
     pub fn decrypt(&mut self, data: &mut [u8]) -> Result<(), CryptoError> {
-        if data.len() % 16 != 0 {
+        if !data.len().is_multiple_of(16) {
             return Err(CryptoError::UnalignedLength(data.len()));
         }
         let mut c_prev = block_from(&self.iv[..16]);

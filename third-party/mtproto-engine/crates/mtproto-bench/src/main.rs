@@ -49,11 +49,10 @@ fn main() {
             let mut results = Vec::new();
             let scenarios = orchestrator::suite(&suite_name, include_real);
             for (index, scenario) in scenarios.iter().enumerate() {
-                if let Some(filter) = &only {
-                    if !scenario.name.contains(filter.as_str()) {
+                if let Some(filter) = &only
+                    && !scenario.name.contains(filter.as_str()) {
                         continue;
                     }
-                }
                 for round in 0..repeat {
                     for engine in &engines {
                         eprintln!("[{}/{}] {} — {} (round {})", index + 1, scenarios.len(), scenario.name, engine.label, round + 1);

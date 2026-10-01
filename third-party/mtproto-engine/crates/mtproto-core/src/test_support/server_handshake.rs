@@ -245,8 +245,8 @@ impl ServerHandshake {
                 };
                 if kind == DhGenKind::Ok {
                     let mut salt = [0u8; 8];
-                    for i in 0..8 {
-                        salt[i] = self.new_nonce[i] ^ self.server_nonce[i];
+                    for (byte, (a, b)) in salt.iter_mut().zip(self.new_nonce.iter().zip(self.server_nonce.iter())) {
+                        *byte = a ^ b;
                     }
                     self.outcome = Some(ServerHandshakeOutcome {
                         auth_key: auth_key.clone(),

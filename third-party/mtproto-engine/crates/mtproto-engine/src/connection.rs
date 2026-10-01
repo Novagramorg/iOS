@@ -60,6 +60,7 @@ pub struct Connection {
 }
 
 impl Connection {
+    #[allow(clippy::too_many_arguments)]
     pub fn connect(
         registry: &Registry,
         token: Token,

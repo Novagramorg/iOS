@@ -61,16 +61,14 @@ pub struct Socks5Handshake {
 
 impl Socks5Handshake {
     pub fn new(target: Socks5Target, auth: Option<Socks5Auth>) -> Result<(Self, Vec<u8>), Socks5Error> {
-        if let Some(auth) = &auth {
-            if auth.username.len() > 255 || auth.password.len() > 255 {
+        if let Some(auth) = &auth
+            && (auth.username.len() > 255 || auth.password.len() > 255) {
                 return Err(Socks5Error::CredentialsTooLong);
             }
-        }
-        if let Socks5Target::Domain(domain, _) = &target {
-            if domain.len() > 255 {
+        if let Socks5Target::Domain(domain, _) = &target
+            && domain.len() > 255 {
                 return Err(Socks5Error::DomainTooLong);
             }
-        }
         let greeting = if auth.is_some() { vec![5, 2, 0, 2] } else { vec![5, 1, 0] };
         Ok((
             Self {

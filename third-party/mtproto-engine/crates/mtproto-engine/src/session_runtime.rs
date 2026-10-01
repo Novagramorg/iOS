@@ -466,6 +466,7 @@ impl SessionRuntime {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn handle_io(
         &mut self,
         readable: bool,
@@ -489,10 +490,7 @@ impl SessionRuntime {
             }
         }
         if readable && failure.is_none() {
-            loop {
-                let Some(connection) = self.connection.as_mut() else {
-                    break;
-                };
+            while let Some(connection) = self.connection.as_mut() {
                 match connection.read_chunk(registry, scratch, now.mono) {
                     Ok(ChunkStatus::Data { became_ready }) => {
                         if became_ready {
@@ -522,11 +520,10 @@ impl SessionRuntime {
             if let Err(error) = self.process_incoming(registry, now, callbacks, rng) {
                 failure = Some(error);
             }
-        } else if matches!(failure, Some(ConnectionError::Closed) | Some(ConnectionError::Io(_))) {
-            if let Err(error) = self.process_incoming(registry, now, callbacks, rng) {
+        } else if matches!(failure, Some(ConnectionError::Closed) | Some(ConnectionError::Io(_)))
+            && let Err(error) = self.process_incoming(registry, now, callbacks, rng) {
                 failure = Some(error);
             }
-        }
         if let Some(error) = failure {
             if self.connection.is_none() {
                 return;
@@ -628,8 +625,8 @@ impl SessionRuntime {
                     match rpc.handle_packet(&packet, now, rng) {
                         Ok(()) => {
                             self.transport_floods = 0;
-                            if let Some(connection) = &mut self.connection {
-                                if !connection.received_packet {
+                            if let Some(connection) = &mut self.connection
+                                && !connection.received_packet {
                                     connection.received_packet = true;
                                     self.failures = 0;
                                     callbacks.on_event(
@@ -640,7 +637,6 @@ impl SessionRuntime {
                                         },
                                     );
                                 }
-                            }
                             self.timeout_fired = false;
                         }
                         Err(SessionError::ForeignSession) | Err(SessionError::TooOld) | Err(SessionError::EvenServerMsgId(_)) => {}
@@ -805,11 +801,10 @@ impl SessionRuntime {
         }
 
         let mut failure = None;
-        if let Some(connection) = &self.connection {
-            if !connection.is_established() && now.mono - connection.started_at > config.connect_timeout {
+        if let Some(connection) = &self.connection
+            && !connection.is_established() && now.mono - connection.started_at > config.connect_timeout {
                 failure = Some("connect timeout");
             }
-        }
         if failure.is_none() && self.handshake_started_at.is_some_and(|started| now.mono - started > HANDSHAKE_TIMEOUT) {
             callbacks.on_event(
                 self.handle,
@@ -820,22 +815,19 @@ impl SessionRuntime {
             self.log(callbacks, LogLevel::Info, "handshake timeout");
             self.close_connection(registry, now, true);
         }
-        if failure.is_none() {
-            if let Some(rpc) = &mut self.rpc {
-                if self.connection.as_ref().is_some_and(Connection::is_established) && self.handshake.is_none() {
-                    if let Err(error) = rpc.handle_timeout(now) {
+        if failure.is_none()
+            && let Some(rpc) = &mut self.rpc
+                && self.connection.as_ref().is_some_and(Connection::is_established) && self.handshake.is_none()
+                    && let Err(error) = rpc.handle_timeout(now) {
                         failure = Some(match error {
                             SessionError::PingTimeout => "ping timeout",
                             SessionError::ReadTimeout => "read timeout",
                             _ => "session timeout",
                         });
                     }
-                }
-            }
-        }
-        if failure.is_none() {
-            if let (Some(connection), Some(rpc)) = (&self.connection, &self.rpc) {
-                if connection.is_established()
+        if failure.is_none()
+            && let (Some(connection), Some(rpc)) = (&self.connection, &self.rpc)
+                && connection.is_established()
                     && !self.timeout_fired
                     && rpc.has_timeout_timer_requests()
                     && now.mono - connection.last_read_at > self.setup.request_timeout
@@ -843,8 +835,6 @@ impl SessionRuntime {
                     self.timeout_fired = true;
                     failure = Some("request timeout");
                 }
-            }
-        }
         self.pump_rpc_events(now, registry, callbacks);
         if let Some(reason) = failure {
             self.log(callbacks, LogLevel::Info, reason);
@@ -874,9 +864,9 @@ impl SessionRuntime {
                 break;
             }
         }
-        if failed.is_none() && self.handshake.is_none() {
-            if let Some(rpc) = &mut self.rpc {
-                if connection.is_established() {
+        if failed.is_none() && self.handshake.is_none()
+            && let Some(rpc) = &mut self.rpc
+                && connection.is_established() {
                     while let Some(transmit) = rpc.poll_transmit(now, rng) {
                         if let Err(error) = connection.send_packet(registry, &transmit.data, transmit.quick_ack_token.is_some(), rng) {
                             failed = Some(error);
@@ -884,13 +874,10 @@ impl SessionRuntime {
                         }
                     }
                 }
-            }
-        }
-        if failed.is_none() {
-            if let Err(error) = connection.flush(registry) {
+        if failed.is_none()
+            && let Err(error) = connection.flush(registry) {
                 failed = Some(error);
             }
-        }
         self.pump_rpc_events(now, registry, callbacks);
         if let Some(error) = failed {
             self.log(callbacks, LogLevel::Info, &format!("write failed: {error}"));
@@ -961,8 +948,8 @@ impl SessionRuntime {
             if !connection.is_established() {
                 deadline = deadline.min(connection.started_at + 12.0);
             }
-            if let Some(rpc) = &mut self.rpc {
-                if connection.is_established() {
+            if let Some(rpc) = &mut self.rpc
+                && connection.is_established() {
                     if let Some(at) = rpc.poll_timeout(now) {
                         deadline = deadline.min(at);
                     }
@@ -970,17 +957,14 @@ impl SessionRuntime {
                         deadline = deadline.min(connection.last_read_at + self.setup.request_timeout);
                     }
                 }
-            }
-        } else if let Some(rpc) = &mut self.rpc {
-            if let Some(at) = rpc.poll_timeout(now) {
+        } else if let Some(rpc) = &mut self.rpc
+            && let Some(at) = rpc.poll_timeout(now) {
                 deadline = deadline.min(at.max(now.mono + 0.5));
             }
-        }
-        if let (Some(idle), Some(_)) = (self.setup.idle_disconnect_after, &self.connection) {
-            if !self.setup.keep_connected && !self.has_work() {
+        if let (Some(idle), Some(_)) = (self.setup.idle_disconnect_after, &self.connection)
+            && !self.setup.keep_connected && !self.has_work() {
                 deadline = deadline.min(self.last_activity_at + idle);
             }
-        }
         if self.reported_in > 0 || self.reported_out > 0 || self.connection.is_some() {
             deadline = deadline.min(self.last_usage_report + 2.0);
         }
