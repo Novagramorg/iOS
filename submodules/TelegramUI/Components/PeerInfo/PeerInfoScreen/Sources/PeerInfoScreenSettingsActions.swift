@@ -40,7 +40,12 @@ extension PeerInfoScreenNode {
                 
                 var animated = true
                 if let validLayout = strongSelf.validLayout?.0, case .regular = validLayout.metrics.widthClass {
-                    animated = false
+                    switch c.navigationPresentation {
+                    case .default, .master:
+                        animated = false
+                    case .modal, .flatModal, .standaloneModal, .standaloneFlatModal, .modalInLargeLayout, .modalInCompactLayout:
+                        break
+                    }
                 }
                 navigationController.setViewControllers(updatedControllers, animated: animated)
             }

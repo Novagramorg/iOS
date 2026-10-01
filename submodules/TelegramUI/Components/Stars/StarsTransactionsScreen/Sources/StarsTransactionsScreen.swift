@@ -126,7 +126,7 @@ final class StarsTransactionsScreenComponent: Component {
                                 
         private var component: StarsTransactionsScreenComponent?
         private weak var state: EmptyComponentState?
-        private var navigationMetrics: (navigationHeight: CGFloat, statusBarHeight: CGFloat)?
+        private var navigationMetrics: (navigationHeight: CGFloat, titleCenterY: CGFloat)?
         private var controller: (() -> ViewController?)?
         
         private var enableVelocityTracking: Bool = false
@@ -284,7 +284,7 @@ final class StarsTransactionsScreenComponent: Component {
                 
                 let titleOffset: CGFloat
                 let titleScale: CGFloat
-                let titleOffsetDelta = (topInset + 160.0) - (navigationMetrics.statusBarHeight + (navigationMetrics.navigationHeight - navigationMetrics.statusBarHeight) / 2.0)
+                let titleOffsetDelta = (topInset + 160.0) - navigationMetrics.titleCenterY
                 
                 var topContentOffset = self.scrollView.contentOffset.y
                 
@@ -296,7 +296,7 @@ final class StarsTransactionsScreenComponent: Component {
                 let headerTransition: ComponentTransition = .immediate
                 
                 if let titleView = self.titleView.view {
-                    let titlePosition = CGPoint(x: scrollBounds.width / 2.0, y: max(topInset + 160.0 - titleOffset, navigationMetrics.statusBarHeight + (navigationMetrics.navigationHeight - navigationMetrics.statusBarHeight) / 2.0))
+                    let titlePosition = CGPoint(x: scrollBounds.width / 2.0, y: max(topInset + 160.0 - titleOffset, navigationMetrics.titleCenterY))
                     
                     headerTransition.setPosition(view: titleView, position: titlePosition)
                     headerTransition.setScale(view: titleView, scale: titleScale)
@@ -410,7 +410,13 @@ final class StarsTransactionsScreenComponent: Component {
             
             self.controller = environment.controller
             
-            self.navigationMetrics = (environment.navigationHeight, environment.statusBarHeight)
+            let navigationTitleCenterY: CGFloat
+            if environment.metrics.widthClass == .regular {
+                navigationTitleCenterY = environment.navigationHeight - 60.0 / 2.0 + 2.0
+            } else {
+                navigationTitleCenterY = environment.statusBarHeight + (environment.navigationHeight - environment.statusBarHeight) / 2.0
+            }
+            self.navigationMetrics = (environment.navigationHeight, navigationTitleCenterY)
             
             self.backgroundColor = environment.theme.list.blocksBackgroundColor
 
@@ -595,8 +601,7 @@ final class StarsTransactionsScreenComponent: Component {
                 containerSize: availableSize
             )
             
-            let navigationHeight = environment.navigationHeight - environment.statusBarHeight
-            let topBalanceOriginY = environment.statusBarHeight + (navigationHeight - topBalanceTitleSize.height - topBalanceValueSize.height) / 2.0
+            let topBalanceOriginY = navigationTitleCenterY - (topBalanceTitleSize.height + topBalanceValueSize.height) / 2.0
             let topBalanceTitleFrame = CGRect(origin: CGPoint(x: availableSize.width - topBalanceTitleSize.width - 16.0 - environment.safeInsets.right, y: topBalanceOriginY), size: topBalanceTitleSize)
             if let topBalanceTitleView = self.topBalanceTitleView.view {
                 if topBalanceTitleView.superview == nil {
@@ -1549,5 +1554,15 @@ public final class StarsTransactionsScreen: ViewControllerComponentContainer {
     
     public func update() {
         self.subscriptionsContext?.loadMore()
+    }
+
+    override public func preferredContentSizeForLayout(_ layout: ContainerViewLayout) -> CGSize? {
+        guard layout.metrics.widthClass == .regular else {
+            return nil
+        }
+        return CGSize(
+            width: min(480.0, layout.size.width - 20.0),
+            height: min(layout.size.width, layout.size.height) - 88.0
+        )
     }
 }
