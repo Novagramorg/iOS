@@ -59,26 +59,38 @@ final class FixturePeer: Peer {
     }
 }
 
-/// Cached data that only names the peers it refers to.
+/// Cached data that names the peers it refers to and, for a channel migrated from a basic
+/// group, the group's last message (which makes the channel's history views `.associated`).
 final class FixtureCachedPeerData: CachedPeerData {
     let peerIds: Set<PeerId>
     let messageIds: Set<MessageId> = []
-    let associatedHistoryMessageId: MessageId? = nil
+    let associatedHistoryMessageId: MessageId?
 
-    init(peerIds: Set<PeerId>) {
+    init(peerIds: Set<PeerId>, associatedHistoryMessageId: MessageId? = nil) {
         self.peerIds = peerIds
+        self.associatedHistoryMessageId = associatedHistoryMessageId
     }
 
     init(decoder: PostboxDecoder) {
         self.peerIds = Set(decoder.decodeInt64ArrayForKey("p").map(PeerId.init))
+        if let peerId = decoder.decodeOptionalInt64ForKey("ap") {
+            self.associatedHistoryMessageId = MessageId(peerId: PeerId(peerId), namespace: decoder.decodeInt32ForKey("an", orElse: 0), id: decoder.decodeInt32ForKey("ai", orElse: 0))
+        } else {
+            self.associatedHistoryMessageId = nil
+        }
     }
 
     func encode(_ encoder: PostboxEncoder) {
         encoder.encodeInt64Array(self.peerIds.map { $0.toInt64() }.sorted(), forKey: "p")
+        if let associatedHistoryMessageId = self.associatedHistoryMessageId {
+            encoder.encodeInt64(associatedHistoryMessageId.peerId.toInt64(), forKey: "ap")
+            encoder.encodeInt32(associatedHistoryMessageId.namespace, forKey: "an")
+            encoder.encodeInt32(associatedHistoryMessageId.id, forKey: "ai")
+        }
     }
 
     func isEqual(to other: CachedPeerData) -> Bool {
         guard let other = other as? FixtureCachedPeerData else { return false }
-        return other.peerIds == self.peerIds
+        return other.peerIds == self.peerIds && other.associatedHistoryMessageId == self.associatedHistoryMessageId
     }
 }
