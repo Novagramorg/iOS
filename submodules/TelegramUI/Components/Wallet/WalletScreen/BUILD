@@ -39,6 +39,7 @@ swift_library(
         "//submodules/UndoUI",
         "//submodules/SettingsUI",
         "//submodules/TelegramUI/Components/Wallet/WalletCardComponent",
+        "//submodules/TelegramUI/Components/Premium/PremiumDiamondComponent",
         "//submodules/WalletContext",
         "//submodules/PasscodeCore",
         "//submodules/Markdown",
@@ -46,6 +47,7 @@ swift_library(
         "//submodules/TelegramUI/Components/Wallet/WalletSendScreen",
         "//submodules/TelegramUI/Components/Wallet/WalletCollectibleItemComponent",
         "//submodules/TelegramUI/Components/Wallet/WalletTransactionItemComponent",
+        "//submodules/TelegramUI/Components/Wallet/WalletTransactionScreen",
         "//submodules/TelegramUI/Components/Wallet/WalletAuthorizationUI",
     ],
     visibility = [

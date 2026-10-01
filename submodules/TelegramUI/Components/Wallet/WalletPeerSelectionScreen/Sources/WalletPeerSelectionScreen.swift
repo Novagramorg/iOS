@@ -245,19 +245,25 @@ private final class WalletPeerSelectionScreenComponent: Component {
     let walletContext: WalletContext
     let mode: WalletPeerSelectionScreenMode
     let dismissSourceScreen: () -> Void
+    let transferAnimation: WalletSendTransferAnimation?
+    let returnedToWallet: (() -> Void)?
 
     init(
         context: AccountContext,
         updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>),
         walletContext: WalletContext,
         mode: WalletPeerSelectionScreenMode,
-        dismissSourceScreen: @escaping () -> Void
+        dismissSourceScreen: @escaping () -> Void,
+        transferAnimation: WalletSendTransferAnimation?,
+        returnedToWallet: (() -> Void)?
     ) {
         self.context = context
         self.updatedPresentationData = updatedPresentationData
         self.walletContext = walletContext
         self.mode = mode
         self.dismissSourceScreen = dismissSourceScreen
+        self.transferAnimation = transferAnimation
+        self.returnedToWallet = returnedToWallet
     }
 
     static func ==(lhs: WalletPeerSelectionScreenComponent, rhs: WalletPeerSelectionScreenComponent) -> Bool {
@@ -1121,11 +1127,12 @@ private final class WalletPeerSelectionScreenComponent: Component {
                     resolvedAddress: resolvedAddress,
                     initialAddress: address ?? "",
                     refreshBalanceOnOpen: false,
-                    displaySuccessToast: address == nil,
+                    transferAnimation: address == nil ? component.transferAnimation : nil,
                     completed: { [weak controller] in
                         rememberSearchedPeer?()
                         let navigationController = controller?.navigationController as? NavigationController
                         dismissSelectionScreen()
+                        if address == nil { component.returnedToWallet?() }
                         if address != nil, let navigationController {
                             component.context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: navigationController, context: component.context, chatLocation: .peer(peer), keepStack: .default, useExisting: true, completion: { chatController in
                                 chatController.scrollToEndOfHistory()
@@ -1139,7 +1146,11 @@ private final class WalletPeerSelectionScreenComponent: Component {
                     walletContext: component.walletContext,
                     address: address,
                     refreshBalanceOnOpen: false,
-                    completed: dismissSelectionScreen
+                    transferAnimation: component.transferAnimation,
+                    completed: {
+                        dismissSelectionScreen()
+                        component.returnedToWallet?()
+                    }
                 )
             } else {
                 return
@@ -2037,7 +2048,9 @@ public final class WalletPeerSelectionScreen: ViewControllerComponentContainer {
         context: AccountContext,
         walletContext: WalletContext,
         mode: WalletPeerSelectionScreenMode = .transfer,
-        dismissSourceScreen: @escaping () -> Void = {}
+        dismissSourceScreen: @escaping () -> Void = {},
+        transferAnimation: WalletSendTransferAnimation? = nil,
+        returnedToWallet: (() -> Void)? = nil
     ) {
         let updatedPresentationData = presentationDataWithDefaultAccent((
             initial: context.sharedContext.currentPresentationData.with { $0 },
@@ -2050,7 +2063,9 @@ public final class WalletPeerSelectionScreen: ViewControllerComponentContainer {
                 updatedPresentationData: updatedPresentationData,
                 walletContext: walletContext,
                 mode: mode,
-                dismissSourceScreen: dismissSourceScreen
+                dismissSourceScreen: dismissSourceScreen,
+                transferAnimation: transferAnimation,
+                returnedToWallet: returnedToWallet
             ),
             navigationBarAppearance: .none,
             theme: .default,

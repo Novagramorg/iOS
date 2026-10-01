@@ -73,7 +73,6 @@ private final class WalletTransactionGramIconComponent: Component {
             self.pendingIconView.frame = frame
             self.highlightView.frame = frame
 
-            // Keep the original icon opaque underneath so the fade only changes its color.
             if case .none = transition.animation {
                 self.pendingContainer.layer.removeAnimation(forKey: "opacity")
             }
@@ -200,6 +199,7 @@ public final class WalletTransactionItemComponent: Component {
     public let transaction: WalletContext.Transaction?
     public let walletAddress: String?
     public let content: Content?
+    public let animatesPendingTransfer: Bool
 
     public init(
         context: AccountContext,
@@ -207,7 +207,8 @@ public final class WalletTransactionItemComponent: Component {
         strings: PresentationStrings,
         dateTimeFormat: PresentationDateTimeFormat,
         transaction: WalletContext.Transaction,
-        walletAddress: String? = nil
+        walletAddress: String? = nil,
+        animatesPendingTransfer: Bool = false
     ) {
         self.context = context
         self.theme = theme
@@ -216,6 +217,7 @@ public final class WalletTransactionItemComponent: Component {
         self.transaction = transaction
         self.walletAddress = walletAddress
         self.content = nil
+        self.animatesPendingTransfer = animatesPendingTransfer
     }
 
     public init(
@@ -232,6 +234,7 @@ public final class WalletTransactionItemComponent: Component {
         self.transaction = nil
         self.walletAddress = nil
         self.content = content
+        self.animatesPendingTransfer = false
     }
 
     public static func ==(lhs: WalletTransactionItemComponent, rhs: WalletTransactionItemComponent) -> Bool {
@@ -251,6 +254,9 @@ public final class WalletTransactionItemComponent: Component {
             return false
         }
         if lhs.walletAddress != rhs.walletAddress {
+            return false
+        }
+        if lhs.animatesPendingTransfer != rhs.animatesPendingTransfer {
             return false
         }
         if lhs.content != rhs.content {
@@ -283,6 +289,79 @@ public final class WalletTransactionItemComponent: Component {
         private let customAdditionalContent = ComponentView<Empty>()
 
         private var component: WalletTransactionItemComponent?
+        private var transferPresentation: (expansion: CGFloat, iconAlpha: CGFloat, iconScale: CGFloat, clockAlpha: CGFloat, time: Double)?
+        private var pendingClock: UIView?
+        private var pendingStatus: UILabel?
+        private let clockMinute = CALayer()
+        private let clockHour = CALayer()
+
+        public var transferIconFrame: CGRect {
+            guard let view = self.amountIcon.view else { return .zero }
+            return CGRect(x: view.center.x - view.bounds.width * 0.5, y: view.center.y - view.bounds.height * 0.5, width: view.bounds.width, height: view.bounds.height)
+        }
+
+        public func applyTransferPresentation(expansion: CGFloat, iconAlpha: CGFloat, iconScale: CGFloat, clockAlpha: CGFloat, time: Double) {
+            self.transferPresentation = (expansion, iconAlpha, iconScale, clockAlpha, time)
+            guard self.component?.animatesPendingTransfer == true else { return }
+            if let view = self.amount.view {
+                let scale = 1.0 + 0.33 * expansion
+                view.transform = CGAffineTransform(a: scale, b: 0.0, c: 0.0, d: scale,
+                    tx: -23.0 * expansion - (scale - 1.0) * view.bounds.width * 0.5, ty: 20.35 * expansion)
+            }
+            self.amountIcon.view?.alpha = iconAlpha
+            self.amountIcon.view?.transform = CGAffineTransform(scaleX: max(0.001, iconScale), y: max(0.001, iconScale))
+            if clockAlpha > 0.0 && self.pendingClock == nil {
+                let clock = UIView(frame: CGRect(x: 0.0, y: 0.0, width: 17.0, height: 17.0))
+                clock.isUserInteractionEnabled = false
+                clock.accessibilityElementsHidden = true
+                clock.layer.cornerRadius = 8.5
+                let ring = CAShapeLayer()
+                ring.path = UIBezierPath(ovalIn: CGRect(x: 2.9, y: 2.9, width: 11.2, height: 11.2)).cgPath
+                ring.fillColor = nil
+                ring.strokeColor = UIColor(rgb: 0x30a1f5).cgColor
+                ring.lineWidth = 1.3
+                clock.layer.addSublayer(ring)
+                for (hand, length) in [(self.clockMinute, 5.6 * 0.62), (self.clockHour, 5.6 * 0.42)] {
+                    hand.backgroundColor = UIColor(rgb: 0x30a1f5).cgColor
+                    hand.bounds = CGRect(x: 0.0, y: 0.0, width: length + 1.3, height: 1.3)
+                    hand.anchorPoint = CGPoint(x: 0.65 / (length + 1.3), y: 0.5)
+                    hand.position = CGPoint(x: 8.5, y: 8.5)
+                    hand.cornerRadius = 0.65
+                    clock.layer.addSublayer(hand)
+                }
+                self.addSubview(clock)
+                self.pendingClock = clock
+                let status = UILabel()
+                status.font = Font.regular(14.0)
+                self.addSubview(status)
+                self.pendingStatus = status
+            }
+            if let status = self.pendingStatus, let component = self.component {
+                if status.text != component.strings.VoiceOver_Chat_Sending { status.text = component.strings.VoiceOver_Chat_Sending }
+                if status.textColor != component.theme.list.itemSecondaryTextColor { status.textColor = component.theme.list.itemSecondaryTextColor }
+                let frame = self.date.view?.frame ?? .zero
+                if status.frame != frame { status.frame = frame }
+            }
+            self.pendingStatus?.alpha = clockAlpha
+            self.date.view?.alpha = 1.0 - clockAlpha
+            self.pendingClock?.backgroundColor = self.component?.theme.list.itemBlocksBackgroundColor
+            self.pendingClock?.center = CGPoint(x: self.avatarContainer.frame.maxX - 5.5, y: self.avatarContainer.frame.maxY - 5.5)
+            self.pendingClock?.alpha = clockAlpha
+            self.clockMinute.setAffineTransform(CGAffineTransform(rotationAngle: time * 4.2))
+            self.clockHour.setAffineTransform(CGAffineTransform(rotationAngle: time * 4.2 / 12.0 - .pi / 2.0))
+        }
+
+        public func resetTransferPresentation() {
+            self.transferPresentation = nil
+            self.amount.view?.transform = .identity
+            self.amountIcon.view?.transform = .identity
+            self.amountIcon.view?.alpha = 1.0
+            self.pendingClock?.removeFromSuperview()
+            self.pendingClock = nil
+            self.pendingStatus?.removeFromSuperview()
+            self.pendingStatus = nil
+            self.date.view?.alpha = 1.0
+        }
 
         override public init(frame: CGRect) {
             super.init(frame: frame)
@@ -498,6 +577,9 @@ public final class WalletTransactionItemComponent: Component {
             transition: ComponentTransition
         ) -> CGSize {
             self.component = component
+            self.amount.view?.transform = .identity
+            self.amountIcon.view?.transform = .identity
+            if !component.animatesPendingTransfer { self.resetTransferPresentation() }
 
             if let content = component.content {
                 return self.updateCustomContent(
@@ -615,7 +697,7 @@ public final class WalletTransactionItemComponent: Component {
             let isPending = transaction.status == .pending
                 && transaction.collectible == nil
                 && !isServiceTransaction
-            if isPending {
+            if isPending && !component.animatesPendingTransfer {
                 amountColor = component.theme.list.itemSecondaryTextColor
                 amountIconColor = component.theme.list.itemSecondaryTextColor
             }
@@ -683,7 +765,7 @@ public final class WalletTransactionItemComponent: Component {
                 self.avatarContainer.isHidden = true
             }
 
-            if isPending, avatarPeer != nil || serviceIconName != nil {
+            if isPending && !component.animatesPendingTransfer, avatarPeer != nil || serviceIconName != nil {
                 let backgroundDiameter: CGFloat = 14.0
                 let indicatorDiameter: CGFloat = 9.0
                 let circlePoint = CGPoint(
@@ -849,7 +931,7 @@ public final class WalletTransactionItemComponent: Component {
             let amountIconComponent: AnyComponent<Empty>
             if transaction.collectible == nil && transaction.currency == .ton {
                 amountIconComponent = AnyComponent(WalletTransactionGramIconComponent(
-                    isPending: isPending,
+                    isPending: isPending && !component.animatesPendingTransfer,
                     pendingColor: component.theme.list.itemSecondaryTextColor,
                     tintColor: isPending ? nil : amountIconColor
                 ))
@@ -1172,6 +1254,9 @@ public final class WalletTransactionItemComponent: Component {
                 )
             }
 
+            if let presentation = self.transferPresentation, component.animatesPendingTransfer {
+                self.applyTransferPresentation(expansion: presentation.expansion, iconAlpha: presentation.iconAlpha, iconScale: presentation.iconScale, clockAlpha: presentation.clockAlpha, time: presentation.time)
+            }
             return CGSize(width: availableSize.width, height: contentHeight)
         }
     }

@@ -83,39 +83,39 @@ private func walletSendShortAddress(_ address: String) -> String {
     return "\(address.prefix(4))…\(address.suffix(4))"
 }
 
-@MainActor
-private func walletPresentTransferSuccess(on controller: ViewController, context: AccountContext, presentationData: PresentationData, peer: EnginePeer) {
-    controller.present(
-        UndoOverlayController(
-            presentationData: presentationData,
-            content: .emoji(name: "Celebrate", text: presentationData.strings.Wallet_Transfer_Success(peer.compactDisplayTitle).string, interactive: true),
-            position: .bottom,
-            action: { [weak controller] action in
-                guard case .info = action,
-                      let navigationController = controller?.navigationController as? NavigationController else {
-                    return false
-                }
-                context.sharedContext.navigateToChatController(NavigateToChatControllerParams(
-                    navigationController: navigationController,
-                    chatController: nil,
-                    context: context,
-                    chatLocation: .peer(peer),
-                    subject: nil,
-                    botStart: nil,
-                    updateTextInputState: nil,
-                    keepStack: .always,
-                    useExisting: true,
-                    purposefulAction: nil,
-                    scrollToEndIfExists: false,
-                    activateMessageSearch: nil,
-                    animated: true
-                ))
-                return true
-            }
-        ),
-        in: .current
-    )
-    HapticFeedback().success()
+public final class WalletSendTransferAnimationSource {
+    public let diamond: InteractiveDiamondComponent.View
+    public weak var window: UIWindow?
+    public let center: CGPoint
+    public let width: CGFloat
+    public let rotation: CGFloat
+
+    init(diamond: InteractiveDiamondComponent.View, window: UIWindow, center: CGPoint, width: CGFloat, rotation: CGFloat) {
+        self.diamond = diamond
+        self.window = window
+        self.center = center
+        self.width = width
+        self.rotation = rotation
+    }
+
+    public static func capture(diamond: InteractiveDiamondComponent.View, width: CGFloat) -> WalletSendTransferAnimationSource? {
+        guard let window = diamond.window else { return nil }
+        let layer = diamond.layer.presentation() ?? diamond.layer
+        let windowLayer = window.layer.presentation() ?? window.layer
+        let center = layer.convert(CGPoint(x: layer.bounds.midX, y: layer.bounds.midY), to: windowLayer)
+        let left = layer.convert(CGPoint(x: layer.bounds.midX - width * 0.5, y: layer.bounds.midY), to: windowLayer)
+        let right = layer.convert(CGPoint(x: layer.bounds.midX + width * 0.5, y: layer.bounds.midY), to: windowLayer)
+        return WalletSendTransferAnimationSource(diamond: diamond, window: window, center: center,
+            width: hypot(right.x - left.x, right.y - left.y), rotation: atan2(right.y - left.y, right.x - left.x))
+    }
+}
+
+/// Returns true when the destination accepts the transfer animation.
+public typealias WalletSendTransferAnimation = (String, WalletSendTransferAnimationSource?) -> Bool
+
+// Allows the send form to configure the preview returned by SharedAccountContext without a module cycle.
+public protocol WalletSendTransferAnimationController: AnyObject {
+    var transferAnimation: WalletSendTransferAnimation? { get set }
 }
 
 @MainActor
@@ -169,7 +169,6 @@ fileprivate final class WalletPeerTransferSubmission {
     private let context: AccountContext
     private let updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)
     private let peer: EnginePeer
-    private let displaySuccessToast: Bool
     private weak var controller: WalletSendScreen?
     private weak var navigationController: NavigationController?
     private weak var parentController: ViewController?
@@ -187,7 +186,7 @@ fileprivate final class WalletPeerTransferSubmission {
     private var confirmationObserved = false
     private var observationStopped = false
     private var isInvalidated = false
-    private let closeForm: () -> Void
+    private let closeForm: (String?) -> Void
     private let presentErrorOnForm: (WalletContext.WalletError) -> Bool
     private var closeRequested = false
     private var isAuthorized = false
@@ -201,15 +200,13 @@ fileprivate final class WalletPeerTransferSubmission {
         context: AccountContext,
         updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>),
         peer: EnginePeer,
-        displaySuccessToast: Bool,
         controller: WalletSendScreen,
-        closeForm: @escaping () -> Void,
+        closeForm: @escaping (String?) -> Void,
         presentErrorOnForm: @escaping (WalletContext.WalletError) -> Bool
     ) {
         self.context = context
         self.updatedPresentationData = updatedPresentationData
         self.peer = peer
-        self.displaySuccessToast = displaySuccessToast
         self.controller = controller
         self.closeForm = closeForm
         self.presentErrorOnForm = presentErrorOnForm
@@ -385,7 +382,7 @@ fileprivate final class WalletPeerTransferSubmission {
         if self.controller == nil {
             self.formDisappeared = true
         } else {
-            self.closeForm()
+            self.closeForm(self.pendingRegistration?.id ?? self.preparedTransfer?.id)
         }
     }
 
@@ -425,9 +422,6 @@ fileprivate final class WalletPeerTransferSubmission {
             self.withCurrentAccount { [self] in
                 self.detachFromForm()
                 self.dismissSubmissionUnknown()
-                if self.displaySuccessToast, let presenter = self.resultPresenter {
-                    walletPresentTransferSuccess(on: presenter, context: self.context, presentationData: self.updatedPresentationData.initial, peer: self.peer)
-                }
             }
             return
         }
@@ -510,7 +504,7 @@ private final class WalletSendScreenComponent: Component {
     let initialAddress: String
     let initialAmountNanograms: Int64?
     let walletContext: WalletContext
-    let displaySuccessToast: Bool
+    let transferAnimation: WalletSendTransferAnimation?
     let completed: (() -> Void)?
 
     init(
@@ -522,7 +516,7 @@ private final class WalletSendScreenComponent: Component {
         initialAddress: String,
         initialAmountNanograms: Int64?,
         walletContext: WalletContext,
-        displaySuccessToast: Bool,
+        transferAnimation: WalletSendTransferAnimation?,
         completed: (() -> Void)?
     ) {
         self.context = context
@@ -533,7 +527,7 @@ private final class WalletSendScreenComponent: Component {
         self.initialAddress = initialAddress
         self.initialAmountNanograms = initialAmountNanograms
         self.walletContext = walletContext
-        self.displaySuccessToast = displaySuccessToast
+        self.transferAnimation = transferAnimation
         self.completed = completed
     }
 
@@ -560,9 +554,6 @@ private final class WalletSendScreenComponent: Component {
             return false
         }
         if lhs.walletContext !== rhs.walletContext {
-            return false
-        }
-        if lhs.displaySuccessToast != rhs.displaySuccessToast {
             return false
         }
         return true
@@ -618,6 +609,7 @@ private final class WalletSendScreenComponent: Component {
         private var lastKnownFee: Int64?
         private var pendingSend: WalletSendTransferRequest?
         private var sendRevision = 0
+        private var isClosingAfterRegistration = false
         private var scheduledSendRevision: Int?
         private var scheduledSigningAccessRevision: Int?
         private var isPreparingActualTransfer = false
@@ -1684,20 +1676,12 @@ private final class WalletSendScreenComponent: Component {
                 context: component.context,
                 updatedPresentationData: self.currentPresentationData(for: component),
                 peer: peer,
-                displaySuccessToast: component.displaySuccessToast,
                 controller: controller,
-                closeForm: { [weak self, weak controller] in
+                closeForm: { [weak self, weak controller] transferId in
                     guard let self, self.isVisible, let controller,
                           self.component?.walletContext === component.walletContext,
                           self.component?.peer?.id == peer.id else { return }
-                    self.isVisible = false
-                    let parentController = controller.parentController()
-                    component.completed?()
-                    if let parentController {
-                        parentController.dismiss(animated: true)
-                    } else {
-                        controller.dismiss()
-                    }
+                    self.closeAfterTransferRegistration(transferId, component: component, controller: controller)
                 },
                 presentErrorOnForm: { [weak self] error in
                     guard let self, self.isVisible,
@@ -1711,6 +1695,64 @@ private final class WalletSendScreenComponent: Component {
             )
             self.requestUpdate(transition: .immediate)
             submission.start(walletContext: component.walletContext, request: request)
+        }
+
+        private func closeAfterTransferRegistration(_ transferId: String?, component: WalletSendScreenComponent, controller: WalletSendScreen) {
+            guard !self.isClosingAfterRegistration else { return }
+            self.isClosingAfterRegistration = true
+            let close: () -> Void = { [weak self, weak controller] in
+                guard let self, let controller, self.isVisible else { return }
+                self.isVisible = false
+                let parentController = controller.parentController()
+                component.completed?()
+                if let parentController {
+                    parentController.dismiss(animated: true)
+                } else {
+                    controller.dismiss()
+                }
+            }
+            guard let transferId, let transferAnimation = component.transferAnimation else {
+                close()
+                return
+            }
+            let revision = self.sendRevision
+            let launch: () -> Void = { [weak self, weak controller] in
+                guard let self, self.isVisible, self.sendRevision == revision,
+                      controller?.peerTransferSubmission != nil else {
+                    self?.isClosingAfterRegistration = false
+                    return
+                }
+                let presentationId = "pending:\(transferId)"
+                let stillExists = component.walletContext.stateValue.transactions.items.contains(where: {
+                    $0.presentationId == presentationId && $0.status != .failed
+                })
+                if stillExists {
+                    let source = UIAccessibility.isReduceMotionEnabled ? nil : (self.amountField as? WalletSendAnimatedAmountField)?.takeTransferDiamond()
+                    if !transferAnimation(presentationId, source) {
+                        source?.diamond.isRenderingEnabled = false
+                        source?.diamond.removeFromSuperview()
+                    }
+                }
+                close()
+            }
+            guard !UIAccessibility.isReduceMotionEnabled else {
+                launch()
+                return
+            }
+            let switchedFromFiat = self.inputMode == .fiat
+            if switchedFromFiat {
+                // Presentation only: never use toggleInputMode here, which rounds the amount.
+                self.inputMode = .gram
+                self.requestUpdate(transition: .easeInOut(duration: 0.25))
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + (switchedFromFiat ? 0.54 : 0.0)) { [weak self] in
+                guard let self, self.isVisible, self.sendRevision == revision else {
+                    self?.isClosingAfterRegistration = false
+                    return
+                }
+                (self.amountField as? WalletSendAnimatedAmountField)?.spinForTransfer()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.18, execute: launch)
+            }
         }
 
         private func openTransferPreview(_ request: WalletSendTransferRequest) {
@@ -1744,6 +1786,7 @@ private final class WalletSendScreenComponent: Component {
                 initialFee: initialFee,
                 dismissSendScreen: dismissSendScreen
             )
+            (previewController as? WalletSendTransferAnimationController)?.transferAnimation = component.transferAnimation
             self.transferPreviewController = previewController
             self.cancelPendingSend()
             if self.isEstimatingFee {
@@ -1764,6 +1807,7 @@ private final class WalletSendScreenComponent: Component {
 
         private func cancelPendingSend() {
             guard !self.isSubmittingTransfer else { return }
+            self.isClosingAfterRegistration = false
             self.sendRevision &+= 1
             self.scheduledSendRevision = nil
             self.pendingSend = nil
@@ -2689,7 +2733,7 @@ private final class WalletSendScreenComponent: Component {
                         ))
                     ),
                     isEnabled: canSend,
-                    displaysProgress: self.isResolvingSigningAccess || self.isPreparingTransfer,
+                    displaysProgress: self.isResolvingSigningAccess || self.isPreparingTransfer || self.isSubmittingTransfer,
                     action: { [weak self] in
                         self?.send()
                     }
@@ -2801,8 +2845,8 @@ public final class WalletSendScreen: ViewControllerComponentContainer, Attachmen
         initialAddress: String = "",
         initialAmountNanograms: Int64? = nil,
         refreshBalanceOnOpen: Bool = true,
-        displaySuccessToast: Bool = true,
         allowOpenRecipientChat: Bool = true,
+        transferAnimation: WalletSendTransferAnimation? = nil,
         completed: (() -> Void)? = nil
     ) {
         self.walletContext = walletContext
@@ -2825,7 +2869,7 @@ public final class WalletSendScreen: ViewControllerComponentContainer, Attachmen
                 initialAddress: initialAddress,
                 initialAmountNanograms: initialAmountNanograms,
                 walletContext: walletContext,
-                displaySuccessToast: displaySuccessToast,
+                transferAnimation: transferAnimation,
                 completed: completed
             ),
             navigationBarAppearance: .none,
@@ -2845,6 +2889,7 @@ public final class WalletSendScreen: ViewControllerComponentContainer, Attachmen
         address: String,
         initialAmountNanograms: Int64? = nil,
         refreshBalanceOnOpen: Bool = true,
+        transferAnimation: WalletSendTransferAnimation? = nil,
         completed: (() -> Void)? = nil
     ) {
         self.walletContext = walletContext
@@ -2867,7 +2912,7 @@ public final class WalletSendScreen: ViewControllerComponentContainer, Attachmen
                 initialAddress: address,
                 initialAmountNanograms: initialAmountNanograms,
                 walletContext: walletContext,
-                displaySuccessToast: true,
+                transferAnimation: transferAnimation,
                 completed: completed
             ),
             navigationBarAppearance: .none,

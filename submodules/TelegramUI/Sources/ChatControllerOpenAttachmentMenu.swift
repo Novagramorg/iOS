@@ -629,7 +629,6 @@ extension ChatControllerImpl {
                             useDefaultAccent: false,
                             peer: peer,
                             walletContext: walletContext,
-                            displaySuccessToast: false,
                             allowOpenRecipientChat: false,
                             completed: { [weak self, weak attachmentController] in
                                 attachmentController?.attachmentButton = nil

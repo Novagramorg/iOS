@@ -342,7 +342,7 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
         NotificationCenter.default.removeObserver(self)
     }
 
-    func update(style: DiamondStyle) {
+    func update(style: DiamondStyle, preservingMotion: Bool = false) {
         guard self.diamondStyle != style else { return }
         if self.lastTime != nil {
             self.updateMotion(at: CACurrentMediaTime())
@@ -357,7 +357,8 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
         } else if !style.backgroundStars && !self.isCompletingTransfer {
             self.starBursts.removeAll(where: { !$0.isFromTap })
         }
-        if previous.animationMode != style.animationMode || previous.referenceAnimationLoops != style.referenceAnimationLoops {
+        let modeChanged = previous.animationMode != style.animationMode || previous.referenceAnimationLoops != style.referenceAnimationLoops
+        if modeChanged && !preservingMotion {
             self.resetAnimation()
         } else {
             self.updateMotionStyle()
@@ -365,6 +366,9 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
                 self.motion.changeReferenceAppearance(from: previous.appearance, to: style.appearance, time: self.elapsed)
             }
             self.onPoseUpdated?(self.pose)
+            if modeChanged {
+                self.updateAnimationState()
+            }
             self.setNeedsUpdate()
         }
     }

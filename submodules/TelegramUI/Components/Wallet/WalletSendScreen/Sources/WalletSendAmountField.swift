@@ -302,7 +302,7 @@ final class WalletSendAmountTextField: UITextField {
 
 class WalletSendAmountField: UIView, UITextFieldDelegate {
     let contentView = UIView()
-    let gramIcon = ComponentView<Empty>()
+    var gramIcon = ComponentView<Empty>()
     let fiatIcon = ComponentView<Empty>()
     let textField = WalletSendAmountTextField(frame: .zero)
     let suffix = ComponentView<Empty>()

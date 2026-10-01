@@ -24,6 +24,7 @@ import ListSectionComponent
 import ListActionItemComponent
 import WalletCollectibleItemComponent
 import WalletTransactionItemComponent
+import WalletTransactionScreen
 import InfoParagraphComponent
 import MultilineTextComponent
 import HorizontalTabsComponent
@@ -129,6 +130,44 @@ private final class LazySectionView: UIView {
     private var width: CGFloat = 0.0
     private var currentVisibleRange: Range<Int>?
 
+    private final class LiftedItem {
+        weak var parent: UIView?
+        weak var view: ListSectionContentView.ItemView?
+        init(view: ListSectionContentView.ItemView) { self.parent = view.superview; self.view = view }
+    }
+    private var liftedIds = Set<AnyHashable>()
+    private var liftedItems: [AnyHashable: LiftedItem] = [:]
+
+    func itemFrame(id: AnyHashable) -> CGRect? {
+        guard let index = self.items.firstIndex(where: { $0.id == id }) else { return nil }
+        return CGRect(x: 0.0, y: self.itemLayout.itemOffset(at: index), width: self.width, height: self.items[index].height)
+    }
+
+    func itemView(id: AnyHashable) -> ListSectionContentView.ItemView? {
+        return self.contentView.itemViews[id]
+    }
+
+    func setLiftedItems(_ ids: Set<AnyHashable>) {
+        self.liftedIds = ids
+        for (id, item) in self.liftedItems where !ids.contains(id) || self.contentView.itemViews[id] !== item.view {
+            if let view = item.view {
+                view.transform = .identity
+                view.layer.zPosition = 0.0
+                view.separatorLayer.isHidden = false
+                if self.contentView.itemViews[id] === view { item.parent?.addSubview(view) }
+            }
+            self.liftedItems.removeValue(forKey: id)
+        }
+        for id in ids {
+            guard let view = self.contentView.itemViews[id], view.superview != nil else { continue }
+            if view.superview !== self {
+                self.liftedItems[id] = LiftedItem(view: view)
+                // Same coordinates as the section's content container, but outside its rounded clip.
+                self.addSubview(view)
+            }
+        }
+    }
+
     override init(frame: CGRect) {
         self.contentView = ListSectionContentView(frame: CGRect())
         self.topPlaceholderView = ListSectionContentView.ItemView()
@@ -219,6 +258,7 @@ private final class LazySectionView: UIView {
             return
         }
         self.currentVisibleRange = visibleRange
+        for item in self.liftedItems.values { item.view?.transform = .identity }
         var readyItems: [ListSectionContentView.ReadyItem] = []
         if let visibleRange {
             let topHeight = self.itemLayout.itemOffset(at: visibleRange.lowerBound)
@@ -291,6 +331,7 @@ private final class LazySectionView: UIView {
             view: self.contentView,
             frame: CGRect(origin: CGPoint(), size: updateResult.size)
         )
+        self.setLiftedItems(self.liftedIds)
     }
 
     func clearVisibleItems() {
@@ -722,6 +763,17 @@ private final class WalletScreenComponent: Component {
         private let transactionTabsBackgroundView = GlassBackgroundView()
         private let transactionTabs = ComponentView<Empty>()
         private let transactionsSection = LazySectionView()
+        private var pendingTransferAnimations: [String: WalletPendingTransferAnimation] = [:]
+        private var newTransferPresentationIds = Set<String>()
+        private var pendingTransferToReveal: String?
+        private var transferDisplayLink: SharedDisplayLinkDriver.Link?
+        private var transferScreenVisible = true
+        private var isReturningForTransfer = false
+        private var transferApplicationActive = true
+        private let transferActivityDisposable = MetaDisposable()
+        private var transferMotionObserver: NSObjectProtocol?
+        private var isUpdatingTransferAnimations = false
+
         private let collectiblesSection = LazySectionView()
         private let emptyTransactionsInfo = ComponentView<Empty>()
         private let emptyTransactionsFooter = ComponentView<Empty>()
@@ -793,7 +845,7 @@ private final class WalletScreenComponent: Component {
 
         private var cardScrollOffset: CGFloat {
             let fraction = self.cardTransitionFraction
-            return max(0.0, self.scrollView.contentOffset.y) - self.cardTransitionDistance * 0.6 * fraction * (1.0 - fraction)
+            return self.scrollView.contentOffset.y - self.cardTransitionDistance * 0.6 * fraction * (1.0 - fraction)
         }
 
         private func currentPresentationData(for component: WalletScreenComponent) -> (initial: PresentationData, signal: Signal<PresentationData, NoError>) {
@@ -858,6 +910,9 @@ private final class WalletScreenComponent: Component {
             )
             
             self.transactionsSection.layer.anchorPoint = CGPoint(x: 0.5, y: 0.0)
+            self.transferMotionObserver = NotificationCenter.default.addObserver(forName: UIAccessibility.reduceMotionStatusDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
+                self?.updatePendingTransferAnimations()
+            }
             self.collectiblesSection.layer.anchorPoint = CGPoint(x: 0.5, y: 0.0)
         }
 
@@ -867,6 +922,7 @@ private final class WalletScreenComponent: Component {
 
         override func didMoveToWindow() {
             super.didMoveToWindow()
+            self.updatePendingTransferAnimations()
 
             if self.window == nil {
                 self.dismissGramTooltip(animated: false)
@@ -894,6 +950,9 @@ private final class WalletScreenComponent: Component {
         }
 
         deinit {
+            self.transferDisplayLink?.invalidate()
+            self.transferActivityDisposable.dispose()
+            if let observer = self.transferMotionObserver { NotificationCenter.default.removeObserver(observer) }
             self.restorationSession?.invalidate()
             (self.card.view as? WalletCardComponent.View)?.setBalanceTransitionContainer(nil)
             self.walletStateDisposable?.dispose()
@@ -1762,15 +1821,136 @@ private final class WalletScreenComponent: Component {
             return tabsSize
         }
 
+        func setTransferAnimationsVisible(_ visible: Bool) {
+            self.transferScreenVisible = visible
+            if visible { self.isReturningForTransfer = false }
+            self.updatePendingTransferAnimations()
+        }
+
+        private func observePendingTransfers(_ state: WalletContext.State) {
+            let transactions = Dictionary(state.transactions.items.map { ($0.presentationId, $0) }, uniquingKeysWith: { first, _ in first })
+            for (id, animation) in self.pendingTransferAnimations {
+                guard let transaction = transactions[id], transaction.status != .failed else {
+                    animation.suspend()
+                    self.pendingTransferAnimations.removeValue(forKey: id)
+                    continue
+                }
+                animation.isPending = transaction.status == .pending
+                if !animation.isPending && !animation.isFlying && (!animation.isVisible || !self.transferScreenVisible || !self.transferApplicationActive) {
+                    self.pendingTransferAnimations.removeValue(forKey: id)
+                }
+            }
+            self.newTransferPresentationIds.formIntersection(transactions.keys)
+            for transaction in state.transactions.items where transaction.status == .pending && transaction.currency == .ton
+                && transaction.direction == .outgoing && transaction.kind != .deployContract && transaction.kind != .keyChange
+                && transaction.collectible == nil && transaction.isVisibleInWalletHistory {
+                guard self.pendingTransferAnimations[transaction.presentationId] == nil else { continue }
+                self.pendingTransferAnimations[transaction.presentationId] = WalletPendingTransferAnimation(id: transaction.presentationId)
+                if let previous = self.walletState, !previous.transactions.items.contains(where: { $0.presentationId == transaction.presentationId }) {
+                    self.newTransferPresentationIds.insert(transaction.presentationId)
+                }
+            }
+        }
+
+        private func receiveTransferAnimation(id: String, source: WalletSendTransferAnimationSource?) -> Bool {
+            guard self.transferApplicationActive,
+                  let transaction = self.walletState?.transactions.items.first(where: { $0.presentationId == id }),
+                  transaction.status != .failed, transaction.isVisibleInWalletHistory else { return false }
+            if let source, source.window == nil { return false }
+            let animation = self.pendingTransferAnimations[id] ?? WalletPendingTransferAnimation(id: id)
+            animation.isPending = transaction.status == .pending
+            self.pendingTransferAnimations[id] = animation
+            self.pendingTransferToReveal = id
+            self.selectedSection = .transactions
+            self.isReturningForTransfer = !self.transferScreenVisible
+            if let source { animation.launch(source, at: CACurrentMediaTime()) }
+            self.componentState?.updated(transition: .immediate)
+            self.updatePendingTransferAnimations()
+            return true
+        }
+
+        private func revealNewTransfer() {
+            if self.pendingTransferToReveal == nil {
+                self.pendingTransferToReveal = self.walletState?.transactions.items.first(where: {
+                    self.newTransferPresentationIds.contains($0.presentationId)
+                })?.presentationId
+            }
+            guard self.pendingTransferToReveal != nil else { return }
+            self.selectedSection = .transactions
+            self.componentState?.updated(transition: .immediate)
+        }
+
+        private func revealPendingTransferIfNeeded() {
+            guard let id = self.pendingTransferToReveal, self.selectedSection == .transactions,
+                  let frame = self.transactionsSection.itemFrame(id: AnyHashable(id)) else { return }
+            self.pendingTransferToReveal = nil
+            self.newTransferPresentationIds.remove(id)
+            let rect = self.transactionsSection.convert(frame, to: self.scrollView)
+            let top = (self.environment?.navigationHeight ?? 0.0) + 16.0
+            let bottom: CGFloat = 24.0
+            let visible = self.scrollView.bounds.inset(by: UIEdgeInsets(top: top, left: 0.0, bottom: bottom, right: 0.0))
+            if !visible.contains(rect) {
+                let y = max(-self.scrollView.contentInset.top, min(rect.minY - top,
+                    self.scrollView.contentSize.height - self.scrollView.bounds.height + self.scrollView.contentInset.bottom))
+                self.scrollView.setContentOffset(CGPoint(x: 0.0, y: y), animated: false)
+                self.transactionsSection.updateVisibleBounds(self.visibleBounds(for: self.transactionsSection.frame, viewportSize: self.scrollView.bounds.size), force: true, transition: .immediate)
+            }
+        }
+
+        private func updatePendingTransferAnimations() {
+            guard !self.isUpdatingTransferAnimations else { return }
+            self.isUpdatingTransferAnimations = true
+            defer { self.isUpdatingTransferAnimations = false }
+            let active = self.transferApplicationActive
+                && ((self.transferScreenVisible && self.window != nil) || (self.isReturningForTransfer && self.pendingTransferAnimations.values.contains(where: { $0.isFlying })))
+            let now = CACurrentMediaTime()
+            var needsFrames = false
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            self.transactionsSection.setLiftedItems(Set(self.pendingTransferAnimations.keys.map { AnyHashable($0) }))
+            if let theme = self.environment?.theme {
+                for (id, animation) in self.pendingTransferAnimations {
+                    let row = self.transactionsSection.itemView(id: AnyHashable(id))
+                    func findContent(_ view: UIView) -> WalletTransactionItemComponent.View? {
+                        if let view = view as? WalletTransactionItemComponent.View { return view }
+                        for subview in view.subviews {
+                            if let result = findContent(subview) { return result }
+                        }
+                        return nil
+                    }
+                    let content = row.flatMap { findContent($0) }
+                    animation.bind(row: row, content: content, theme: theme)
+                    if active && animation.isFlying && (row?.window == nil || self.pendingTransferToReveal == id) {
+                        needsFrames = animation.waitForFlightLayout(at: now) || needsFrames
+                        continue
+                    }
+                    let visible = active && self.selectedSection == .transactions && row?.window != nil
+                        && row.map { self.scrollView.bounds.intersects($0.convert($0.bounds, to: self.scrollView)) } == true
+                    animation.update(at: now, visible: visible)
+                    if animation.finished {
+                        self.pendingTransferAnimations.removeValue(forKey: id)
+                    } else if visible && (!UIAccessibility.isReduceMotionEnabled || animation.completion != nil) {
+                        needsFrames = true
+                    }
+                }
+            }
+            self.transactionsSection.setLiftedItems(Set(self.pendingTransferAnimations.keys.map { AnyHashable($0) }))
+            CATransaction.commit()
+            if needsFrames {
+                if self.transferDisplayLink == nil {
+                    self.transferDisplayLink = SharedDisplayLinkDriver.shared.add(framesPerSecond: .max, { [weak self] _ in
+                        self?.updatePendingTransferAnimations()
+                    })
+                }
+            } else {
+                self.transferDisplayLink?.invalidate()
+                self.transferDisplayLink = nil
+            }
+        }
+
         private func updateScrolling(transition: ComponentTransition) {
+            self.updatePendingTransferAnimations()
             let fraction = self.cardTransitionFraction
-            ComponentTransition.immediate.setPosition(
-                view: self.topContentContainerView,
-                position: CGPoint(
-                    x: self.topContentContainerView.bounds.midX,
-                    y: self.topContentContainerView.bounds.midY + min(0.0, self.scrollView.contentOffset.y)
-                )
-            )
             let edgeEffectAlpha = max(0.0, min(1.0, self.scrollView.contentOffset.y / 20.0))
             transition.setAlpha(view: self.topEdgeEffectView, alpha: edgeEffectAlpha)
             if let cardView = self.card.view as? WalletCardComponent.View {
@@ -2181,6 +2361,7 @@ private final class WalletScreenComponent: Component {
         }
 
         private func routeToSend(address: String?) {
+            self.newTransferPresentationIds.removeAll()
             self.abandonRestoration()
             guard let component = self.component, let controller = self.environment?.controller() else {
                 return
@@ -2196,7 +2377,7 @@ private final class WalletScreenComponent: Component {
                     }
                     return component.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: userId))
                 }
-                |> deliverOnMainQueue).start(next: { [weak controller] peer in
+                |> deliverOnMainQueue).start(next: { [weak self, weak controller] peer in
                     guard let controller, controller.navigationController?.viewControllers.last === controller else {
                         return
                     }
@@ -2208,7 +2389,6 @@ private final class WalletScreenComponent: Component {
                             walletContext: component.walletContext,
                             initialAddress: address,
                             refreshBalanceOnOpen: false,
-                            displaySuccessToast: false,
                             completed: { [weak controller] in
                                 guard let navigationController = controller?.navigationController as? NavigationController else {
                                     return
@@ -2219,7 +2399,11 @@ private final class WalletScreenComponent: Component {
                             }
                         )
                     } else {
-                        sendScreen = WalletSendScreen(context: component.context, walletContext: component.walletContext, address: address, refreshBalanceOnOpen: false)
+                        sendScreen = WalletSendScreen(context: component.context, walletContext: component.walletContext, address: address, refreshBalanceOnOpen: false, transferAnimation: { [weak self] id, source in
+                            return self?.receiveTransferAnimation(id: id, source: source) ?? false
+                        }, completed: { [weak self] in
+                            self?.revealNewTransfer()
+                        })
                     }
                     sendScreen.navigationPresentation = .modal
                     controller.push(sendScreen)
@@ -2227,7 +2411,13 @@ private final class WalletScreenComponent: Component {
             } else {
                 let peerSelectionScreen = WalletPeerSelectionScreen(
                     context: component.context,
-                    walletContext: component.walletContext
+                    walletContext: component.walletContext,
+                    transferAnimation: { [weak self] id, source in
+                        return self?.receiveTransferAnimation(id: id, source: source) ?? false
+                    },
+                    returnedToWallet: { [weak self] in
+                        self?.revealNewTransfer()
+                    }
                 )
                 peerSelectionScreen.navigationPresentation = .modal
                 controller.push(peerSelectionScreen)
@@ -2383,13 +2573,20 @@ private final class WalletScreenComponent: Component {
             guard let component = self.component, let controller = self.environment?.controller() else {
                 return
             }
-            controller.push(component.context.sharedContext.makeWalletTransactionScreen(
+            self.newTransferPresentationIds.removeAll()
+            controller.push(WalletTransactionScreen(
                 context: component.context,
                 updatedPresentationData: self.currentPresentationData(for: component),
                 walletContext: component.walletContext,
                 transaction: transaction,
                 fromChat: false,
-                decryptCommentOnOpen: false
+                decryptCommentOnOpen: false,
+                transferAnimation: { [weak self] id, source in
+                    return self?.receiveTransferAnimation(id: id, source: source) ?? false
+                },
+                returnedToWallet: { [weak self] in
+                    self?.revealNewTransfer()
+                }
             ))
         }
 
@@ -2813,7 +3010,16 @@ private final class WalletScreenComponent: Component {
                 self.suppressedCollectiblesWalletAddress = nil
                 let subscribedContext = component.walletContext
                 self.walletContext = subscribedContext
+                self.pendingTransferAnimations.removeAll()
+                self.newTransferPresentationIds.removeAll()
+                self.pendingTransferToReveal = nil
+                self.isReturningForTransfer = false
                 self.walletState = nil
+                self.transferActivityDisposable.set((component.context.sharedContext.applicationBindings.applicationIsActive
+                |> distinctUntilChanged |> deliverOnMainQueue).start(next: { [weak self] active in
+                    self?.transferApplicationActive = active
+                    self?.updatePendingTransferAnimations()
+                }))
                 self.walletStateDisposable = (subscribedContext.state
                 |> deliverOnMainQueue).start(next: { [weak self] walletState in
                     guard let self, self.walletContext === subscribedContext else {
@@ -2831,6 +3037,7 @@ private final class WalletScreenComponent: Component {
                         }
                     }
                     self.updateSuppressedCollectibles(walletState)
+                    self.observePendingTransfers(walletState)
                     self.walletState = walletState
                     if previousPhase != walletState.phase {
                         self.reloadPreviousWallets()
@@ -3119,7 +3326,7 @@ private final class WalletScreenComponent: Component {
             ComponentTransition.immediate.setFrame(
                 view: self.topContentContainerView,
                 frame: CGRect(
-                    origin: CGPoint(x: 0.0, y: min(0.0, self.scrollView.contentOffset.y)),
+                    origin: .zero,
                     size: CGSize(width: availableSize.width, height: contentHeight)
                 )
             )
@@ -3221,7 +3428,8 @@ private final class WalletScreenComponent: Component {
                                     strings: itemStrings,
                                     dateTimeFormat: itemDateTimeFormat,
                                     transaction: transaction,
-                                    walletAddress: walletInfo?.address
+                                    walletAddress: walletInfo?.address,
+                                    animatesPendingTransfer: self?.pendingTransferAnimations[transaction.presentationId] != nil
                                 )),
                                 contentInsets: UIEdgeInsets(top: 9.0, left: 0.0, bottom: 8.0, right: 0.0),
                                 separatorInset: 62.0,
@@ -3517,6 +3725,8 @@ private final class WalletScreenComponent: Component {
             self.updateVisibleSections(transition: .immediate)
             self.loadMoreItemsIfNeeded()
 
+            self.revealPendingTransferIfNeeded()
+            self.updatePendingTransferAnimations()
             return availableSize
         }
     }
@@ -3604,8 +3814,14 @@ public final class WalletScreen: ViewControllerComponentContainer {
         guard let componentView = self.node.hostView.componentView as? WalletScreenComponent.View else {
             return
         }
+        componentView.setTransferAnimationsVisible(true)
         componentView.refreshTwoStepAuth()
         componentView.reloadPreviousWallets()
+    }
+
+    override public func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        (self.node.hostView.componentView as? WalletScreenComponent.View)?.setTransferAnimationsVisible(false)
     }
 
     override public func viewDidDisappear(_ animated: Bool) {

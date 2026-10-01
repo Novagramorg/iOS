@@ -886,7 +886,9 @@ private final class WalletTransactionContentComponent: Component {
         private let controlButtons = ComponentView<Empty>()
         private let keyUpdateHeader = ComponentView<Empty>()
         private let collectibleHeader = ComponentView<Empty>()
-        private let gramAnimation = ComponentView<Empty>()
+        private var gramAnimation = ComponentView<Empty>()
+        private var isReturningToWallet = false
+        private var hasTransferredDiamond = false
         private let amount = ComponentView<Empty>()
         private let usdValue = ComponentView<Empty>()
         private let processingDot = ComponentView<Empty>()
@@ -935,6 +937,7 @@ private final class WalletTransactionContentComponent: Component {
         private let commentCredentialChangesDisposable = MetaDisposable()
         private var preparedTransfer: WalletContext.PreparedTransfer?
         private var submittedTransfer: WalletContext.PendingTransfer?
+        private weak var transferResultNavigationController: NavigationController?
         private var displayedFee: Int64?
         private var preparedTransferNeedsRefresh = false
         private var dismissSendScreen: (() -> Void)?
@@ -999,7 +1002,7 @@ private final class WalletTransactionContentComponent: Component {
         }
 
         @objc private func gramAnimationTapped() {
-            guard let animationView = self.gramAnimation.view as? InteractiveDiamondComponent.View, !animationView.isPlaying else {
+            guard !self.isReturningToWallet, let animationView = self.gramAnimation.view as? InteractiveDiamondComponent.View, !animationView.isPlaying else {
                 return
             }
             animationView.playOnce()
@@ -1063,6 +1066,8 @@ private final class WalletTransactionContentComponent: Component {
             self.preparingForSend = false
             self.latestWalletState = nil
             self.didShowSuccess = false
+            self.isReturningToWallet = false
+            self.hasTransferredDiamond = false
             self.commentRevision += 1
 
             switch mode {
@@ -1160,7 +1165,11 @@ private final class WalletTransactionContentComponent: Component {
                         self.commentWalletIdentity = walletIdentity
                     }
                     self.latestWalletState = state
-                    if !self.isUpdating {
+                    if self.previewOperation == .submitting, let preparedTransfer = self.preparedTransfer,
+                       state.pendingTransfers.contains(where: { $0.id == preparedTransfer.id }) {
+                        self.returnToWalletWithPendingTransfer(id: preparedTransfer.id)
+                    }
+                    if !self.isUpdating && !self.isClosing {
                         self.componentState?.updated(transition: .easeInOut(duration: 0.2))
                     }
                 }))
@@ -1231,7 +1240,9 @@ private final class WalletTransactionContentComponent: Component {
             self.gaslessInfoDisposable.set(nil)
             (controller as? WalletTransactionScreen)?.cancelFirstGramsSuggestion()
             (controller as? WalletTransactionScreen)?.cancelCommentDecryptionOnOpen()
-            self.invalidateCommentSession()
+            if !self.isReturningToWallet {
+                self.invalidateCommentSession()
+            }
             self.resetCommentDecryption()
             switch self.previewOperation {
             case .submitting:
@@ -1843,6 +1854,7 @@ private final class WalletTransactionContentComponent: Component {
                 return
             }
             self.submittedTransfer = nil
+            self.transferResultNavigationController = self.environment?.controller()?.navigationController as? NavigationController
             self.previewOperation = .submitting
             self.submissionStage = .waitingForPreviousTransfer
             self.componentState?.updated(transition: .easeInOut(duration: 0.2))
@@ -1854,33 +1866,35 @@ private final class WalletTransactionContentComponent: Component {
                     self.commentSession = nil
                 }
             })
-            |> deliverOnMainQueue).start(next: { [weak self] pendingTransfer in
-                guard let self else {
-                    return
-                }
+            // Keep observing the submission after the preview closes so failures still reach the wallet.
+            |> deliverOnMainQueue).start(next: { [self] pendingTransfer in
+                self.transferDisposable.set(nil)
                 self.submittedTransfer = pendingTransfer
                 self.submissionStage = nil
                 self.preparedTransferNeedsRefresh = false
-                self.dismissSendScreenIfNeeded()
                 switch pendingTransfer.status {
                 case .submissionUnknown:
+                    self.dismissSendScreenIfNeeded()
                     self.previewOperation = .submissionUnknown
                     self.invalidateCommentSession()
                     self.componentState?.updated(transition: .easeInOut(duration: 0.2))
                     self.presentSubmissionUnknown()
                 case .broadcasting, .pending, .confirmed:
-                    self.previewOperation = .confirmed
                     self.invalidateCommentSession()
+                    self.returnToWalletWithPendingTransfer(id: pendingTransfer.id)
+                    if self.isReturningToWallet {
+                        self.previewOperation = .confirmed
+                        return
+                    }
+                    self.dismissSendScreenIfNeeded()
+                    self.previewOperation = .confirmed
                     self.componentState?.updated(transition: .easeInOut(duration: 0.25))
-                    self.showSuccessIfNeeded(
-                        address: pendingTransfer.recipient,
-                        isCollectible: pendingTransfer.collectibleAddress != nil
-                    )
+                    if pendingTransfer.collectibleAddress != nil {
+                        self.showCollectibleSuccessIfNeeded(address: pendingTransfer.recipient)
+                    }
                 }
-            }, error: { [weak self] error in
-                guard let self else {
-                    return
-                }
+            }, error: { [self] error in
+                self.transferDisposable.set(nil)
                 switch error {
                 case .preparedTransferExpired, .preparedTransferNotFound:
                     self.preparedTransferNeedsRefresh = true
@@ -1892,6 +1906,39 @@ private final class WalletTransactionContentComponent: Component {
                 self.componentState?.updated(transition: .easeInOut(duration: 0.2))
                 self.presentTransferError(error)
             }))
+        }
+
+        private func returnToWalletWithPendingTransfer(id: String) {
+            guard !self.isClosing, !self.isReturningToWallet, self.previewSource?.collectible == nil,
+                  let controller = self.environment?.controller() as? WalletTransactionPreviewScreen,
+                  let transferAnimation = controller.transferAnimation else { return }
+            self.isReturningToWallet = true
+
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            let source: WalletSendTransferAnimationSource?
+            if !UIAccessibility.isReduceMotionEnabled, self.commentSessionAvailable,
+               self.environment?.isVisible == true,
+               let diamond = self.gramAnimation.view as? InteractiveDiamondComponent.View {
+                source = WalletSendTransferAnimationSource.capture(diamond: diamond, width: 78.0)
+            } else {
+                source = nil
+            }
+            if let source {
+                self.hasTransferredDiamond = true
+                self.gramAnimation = ComponentView<Empty>()
+                source.diamond.prepareForWalletTransfer()
+                source.diamond.spin(-10.0, decay: 0.9)
+            }
+            if !transferAnimation("pending:\(id)", source) {
+                source?.diamond.isRenderingEnabled = false
+                source?.diamond.removeFromSuperview()
+            }
+            CATransaction.commit()
+
+            // Remove the input form and recipient selection while the preview still covers them.
+            self.dismissSendScreenIfNeeded()
+            self.close()
         }
 
         private func discardCurrentPreparedTransfer() {
@@ -1906,7 +1953,7 @@ private final class WalletTransactionContentComponent: Component {
             )
         }
 
-        private func showSuccessIfNeeded(address: String, isCollectible: Bool) {
+        private func showCollectibleSuccessIfNeeded(address: String) {
             guard !self.didShowSuccess,
                   let component = self.component,
                   let controller = self.environment?.controller() else {
@@ -1917,7 +1964,7 @@ private final class WalletTransactionContentComponent: Component {
             controller.present(
                 UndoOverlayController(
                     presentationData: presentationData,
-                    content: .emoji(name: "Celebrate", text: isCollectible ? presentationData.strings.Wallet_Transfer_CollectibleSuccess(walletTransactionShortAddress(address)).string : presentationData.strings.Wallet_Transfer_Success(walletTransactionShortAddress(address)).string),
+                    content: .emoji(name: "Celebrate", text: presentationData.strings.Wallet_Transfer_CollectibleSuccess(walletTransactionShortAddress(address)).string),
                     position: .bottom,
                     action: { _ in
                         return false
@@ -1928,7 +1975,7 @@ private final class WalletTransactionContentComponent: Component {
         }
 
         private func presentSubmissionUnknown() {
-            guard let component = self.component, let controller = self.environment?.controller() else {
+            guard let component = self.component, let controller = self.transferResultController else {
                 return
             }
             let strings = self.currentPresentationData(for: component).initial.strings
@@ -1944,7 +1991,7 @@ private final class WalletTransactionContentComponent: Component {
 
         private func presentTransferError(_ error: WalletContext.WalletError) {
             guard error != .authorizationCancelled else { return }
-            guard let component = self.component, let controller = self.environment?.controller() else {
+            guard let component = self.component, let controller = self.transferResultController else {
                 return
             }
             let strings = self.currentPresentationData(for: component).initial.strings
@@ -1972,6 +2019,17 @@ private final class WalletTransactionContentComponent: Component {
                 actions: [TextAlertAction(type: .defaultAction, title: strings.Common_OK, action: {
                 })]
             ), in: .window(.root))
+        }
+
+        private var transferResultController: ViewController? {
+            if self.isReturningToWallet {
+                let navigationController = self.transferResultNavigationController
+                    ?? self.component?.context.sharedContext.mainWindow?.viewController as? NavigationController
+                return navigationController?.viewControllers.reversed().first(where: {
+                    $0 !== self.environment?.controller()
+                }) as? ViewController
+            }
+            return self.environment?.controller()
         }
 
         private func copyAddress(_ address: String) {
@@ -2006,7 +2064,8 @@ private final class WalletTransactionContentComponent: Component {
                 return
             }
 
-            let refreshBalanceOnOpen = (controller as? WalletTransactionScreen)?.refreshBalanceOnSend ?? true
+            let transactionController = controller as? WalletTransactionScreen
+            let refreshBalanceOnOpen = transactionController?.refreshBalanceOnSend ?? true
             let sendScreen: WalletSendScreen
             switch transactionPeer {
             case let .user(peer, counterpartyAddress, _):
@@ -2016,7 +2075,9 @@ private final class WalletTransactionContentComponent: Component {
                     peer: peer,
                     walletContext: walletContext,
                     initialAddress: address ?? "",
-                    refreshBalanceOnOpen: refreshBalanceOnOpen
+                    refreshBalanceOnOpen: refreshBalanceOnOpen,
+                    transferAnimation: transactionController?.transferAnimation,
+                    completed: transactionController?.returnedToWallet
                 )
             case .address:
                 guard let counterpartyAddress = transactionPeer.address else {
@@ -2027,7 +2088,9 @@ private final class WalletTransactionContentComponent: Component {
                     context: component.context,
                     walletContext: walletContext,
                     address: address,
-                    refreshBalanceOnOpen: refreshBalanceOnOpen
+                    refreshBalanceOnOpen: refreshBalanceOnOpen,
+                    transferAnimation: transactionController?.transferAnimation,
+                    completed: transactionController?.returnedToWallet
                 )
             case .onramp, .unsupported:
                 return
@@ -2286,7 +2349,8 @@ private final class WalletTransactionContentComponent: Component {
                 self?.close(animated: animated)
             })
             (environment.controller() as? WalletTransactionPreviewScreen)?.invalidateCommentSession = { [weak self] in
-                self?.invalidateCommentSession()
+                guard let self, !self.isReturningToWallet else { return }
+                self.invalidateCommentSession()
             }
             (environment.controller() as? WalletTransactionScreen)?.setCommentVisibilityAction(id: incomingModeId, action: { [weak self] visible, leavingTransaction in
                 self?.commentVisibilityUpdated(visible, leavingTransaction: leavingTransaction)
@@ -2443,21 +2507,23 @@ private final class WalletTransactionContentComponent: Component {
             } else {
                 if displaysGramHeader {
                     let animationSize = CGSize(width: 118.0, height: 118.0)
-                    let _ = self.gramAnimation.update(
-                        transition: transition,
-                        component: AnyComponent(InteractiveDiamondComponent(
-                            size: animationSize,
-                            diamondWidth: 78.0,
-                            isVisible: environment.isVisible,
-                            theme: theme,
-                            animationMode: .lottie(loop: false),
-                            animateOnAppear: true
-                        )),
-                        environment: {},
-                        containerSize: animationSize
-                    )
+                    if !self.isReturningToWallet {
+                        let _ = self.gramAnimation.update(
+                            transition: transition,
+                            component: AnyComponent(InteractiveDiamondComponent(
+                                size: animationSize,
+                                diamondWidth: 78.0,
+                                isVisible: environment.isVisible,
+                                theme: theme,
+                                animationMode: .lottie(loop: false),
+                                animateOnAppear: true
+                            )),
+                            environment: {},
+                            containerSize: animationSize
+                        )
+                    }
                     contentHeight = 10.0
-                    if let animationView = self.gramAnimation.view as? InteractiveDiamondComponent.View {
+                    if !self.hasTransferredDiamond, let animationView = self.gramAnimation.view as? InteractiveDiamondComponent.View {
                         animationView.isRenderingEnabled = environment.isVisible
                         if animationView.superview == nil {
                             animationView.isUserInteractionEnabled = true
@@ -3754,6 +3820,8 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
     private let accountContext: AccountContext
     fileprivate let walletPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?
     private let navigationWalletContext: WalletContext?
+    fileprivate let transferAnimation: WalletSendTransferAnimation?
+    fileprivate let returnedToWallet: (() -> Void)?
     private let fromChat: Bool
     private let openExplorer: (String) -> Void
     private let stateDisposable = MetaDisposable()
@@ -3785,7 +3853,9 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
         walletContext: WalletContext? = nil,
         transaction: WalletContext.Transaction,
         fromChat: Bool,
-        decryptCommentOnOpen: Bool = false
+        decryptCommentOnOpen: Bool = false,
+        transferAnimation: WalletSendTransferAnimation? = nil,
+        returnedToWallet: (() -> Void)? = nil
     ) {
         let initialState = walletContext?.stateValue.transactions
         var initialTransactions = initialState?.items.filter(\.isVisibleInWalletHistory) ?? []
@@ -3804,6 +3874,8 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
         self.accountContext = context
         self.walletPresentationData = updatedPresentationData
         self.navigationWalletContext = walletContext
+        self.transferAnimation = transferAnimation
+        self.returnedToWallet = returnedToWallet
         self.fromChat = fromChat
         self.openExplorer = openExplorer
         self.checkFirstGramsOnAppear = !decryptCommentOnOpen && transaction.direction == .incoming && transaction.currency == .ton && transaction.collectible == nil
@@ -4142,7 +4214,8 @@ public final class WalletTransactionScreen: ViewControllerComponentContainer, Wa
     }
 }
 
-public final class WalletTransactionPreviewScreen: ViewControllerComponentContainer, WalletTransactionContentController {
+public final class WalletTransactionPreviewScreen: ViewControllerComponentContainer, WalletTransactionContentController, WalletSendTransferAnimationController {
+    public var transferAnimation: WalletSendTransferAnimation?
     fileprivate let walletPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?
     private let currentCloseId: String
     private var closeActions: [String: (Bool) -> Void] = [:]

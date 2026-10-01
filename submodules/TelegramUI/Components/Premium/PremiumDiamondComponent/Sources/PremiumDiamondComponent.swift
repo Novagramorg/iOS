@@ -143,6 +143,7 @@ public final class InteractiveDiamondComponent: Component {
         private var pressStart: (position: CGPoint, time: CFTimeInterval)?
         private var dragSamples: [(x: CGFloat, time: CFTimeInterval)] = []
         private var landingFeedback: DispatchWorkItem?
+        private var isWalletTransfer = false
 
         public override var isUserInteractionEnabled: Bool {
             didSet {
@@ -396,6 +397,14 @@ public final class InteractiveDiamondComponent: Component {
         }
 
         private func applyExpansion() {
+            if self.isWalletTransfer {
+                self.diamondLayer.usesHighFrameRate = true
+                self.diamondLayer.interactionScale = 1.0
+                self.diamondLayer.refractionStrength = 0.0
+                self.diamondLayer.position = CGPoint(x: self.bounds.midX, y: self.bounds.midY)
+                self.diamondLayer.renderSize = CGSize(width: 150.0, height: 150.0)
+                return
+            }
             let expanded = self.isHolding || self.expansion != nil || self.diamondLayer.isGrowthAnimating
             self.diamondLayer.usesHighFrameRate = expanded || self.diamondLayer.hasTransferAnimation
             self.diamondLayer.interactionScale = self.expansionStyle != .centered ? 1.0 : Float(1.0 + 2.75 * self.grip)
@@ -413,7 +422,6 @@ public final class InteractiveDiamondComponent: Component {
                 let halfWidth = self.diamondWidth * CGFloat(self.diamondLayer.pose.grow * self.diamondLayer.zoom) * self.walletScale * 0.55
                 self.diamondLayer.position.x = restingCenter.x + max(0.0, halfWidth - self.walletLeftInset)
             }
-            // Keep particles in card coordinates when growth nudges the gem away from the left edge.
             self.diamondLayer.starOffset = self.expansionStyle == .wallet
                 ? CGPoint(x: restingCenter.x - self.diamondLayer.position.x, y: restingCenter.y - self.diamondLayer.position.y)
                 : .zero
@@ -481,6 +489,44 @@ public final class InteractiveDiamondComponent: Component {
 
         public func spin(_ velocity: Float, decay: Float) {
             self.diamondLayer.spin(velocity, decay: decay)
+        }
+
+        public func prepareForWalletTransfer() {
+            self.cancelInteraction()
+            self.isWalletTransfer = true
+            self.isUserInteractionEnabled = false
+            self.onExpansionChanged = nil
+            self.onLanding = nil
+            self.onMotionUpdated = nil
+            self.onRefractionUpdated = nil
+            self.scrollTiltProvider = nil
+            self.updateRefractionSource(nil)
+            self.bounds = CGRect(x: 0.0, y: 0.0, width: 150.0, height: 150.0)
+            self.applyExpansion()
+        }
+
+        public func updateWalletTransfer(width: CGFloat, rotationSpeed: Float, completion: Bool, isDark: Bool) {
+            self.diamondLayer.lightBackground = !isDark
+            var style = self.diamondLayer.diamondStyle
+            let startsCompletion = completion && !style.backgroundStars
+            style.animationMode = .continuous
+            style.appearance = .blue
+            style.widthPoints = Float(width)
+            style.rotationSpeed = rotationSpeed
+            style.swayScale = 2.4
+            style.floatAmplitude = 0.0
+            style.backgroundStars = completion
+            style.steadyStars = false
+            style.starZoom = 0.55
+            style.starEmission = 0.3
+            style.burstSize = 0.7
+            style.burstFadeInDuration = 0.0
+            self.diamondLayer.update(style: style, preservingMotion: true)
+            if startsCompletion {
+                self.spin(12.0, decay: 0.7)
+                self.diamondLayer.emitStarBurst()
+            }
+            self.applyExpansion()
         }
 
         public func pushFromBelow(strength: Float = 1.0) {
