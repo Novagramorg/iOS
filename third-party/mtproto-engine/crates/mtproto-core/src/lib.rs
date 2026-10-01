@@ -5,6 +5,8 @@ pub mod crypto;
 pub mod handshake;
 pub mod message;
 pub mod msg_id;
+pub mod rpc;
+pub mod session;
 pub mod tl;
 pub mod transport;
 

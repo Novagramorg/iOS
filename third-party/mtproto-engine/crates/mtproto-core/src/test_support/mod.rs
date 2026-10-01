@@ -35,5 +35,6 @@ pub fn hex_to_bytes(hex: &str) -> Vec<u8> {
 }
 
 mod server_handshake;
+pub mod server_peer;
 
 pub use server_handshake::{ServerHandshake, ServerHandshakeBehavior, ServerHandshakeOutcome};

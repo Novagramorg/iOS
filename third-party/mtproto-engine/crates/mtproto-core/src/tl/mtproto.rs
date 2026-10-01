@@ -471,10 +471,8 @@ impl<'a> ServiceMessage<'a> {
                 let count = reader.read_vector_header_or_bare(MAX_VECTOR_ITEMS)?;
                 let mut salts = Vec::with_capacity(count.min(64));
                 for _ in 0..count {
-                    let offset = reader.position();
-                    let found = reader.read_u32()?;
-                    if found != ids::FUTURE_SALT {
-                        return Err(TlError::UnexpectedConstructor { offset, found });
+                    if reader.peek_u32()? == ids::FUTURE_SALT {
+                        reader.read_u32()?;
                     }
                     salts.push(FutureSalt {
                         valid_since: reader.read_i32()?,
@@ -805,7 +803,7 @@ mod tests {
     }
 
     #[test]
-    fn future_salts_accepts_bare_and_boxed_vectors() {
+    fn future_salts_accepts_bare_and_boxed_items() {
         for boxed in [false, true] {
             let mut writer = Writer::new();
             writer.write_u32(ids::FUTURE_SALTS);
@@ -816,7 +814,9 @@ mod tests {
             }
             writer.write_i32(2);
             for salt in [1i64, 2] {
-                writer.write_u32(ids::FUTURE_SALT);
+                if boxed {
+                    writer.write_u32(ids::FUTURE_SALT);
+                }
                 writer.write_i32(900 + salt as i32);
                 writer.write_i32(2000 + salt as i32);
                 writer.write_i64(salt);
