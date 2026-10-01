@@ -774,7 +774,10 @@ extension WalletContextImpl {
 
     func previousWalletRecoveryPhrase(id: String, session: PasscodeSession? = nil, operationId: UUID) async throws -> [String] {
         return try await self.performOperation(.recoveringPhrase, operationId: operationId, session: session) {
-            try await self.runtime.revealArchivedRecoveryPhrase(recordId: id)
+            let serverStateRevision = self.serverStateMutationRevision
+            let words = try await self.runtime.revealArchivedRecoveryPhrase(recordId: id)
+            guard self.serverStateMutationRevision == serverStateRevision else { throw CancellationError() }
+            return words
         }
     }
 
@@ -787,14 +790,16 @@ extension WalletContextImpl {
                 guard walletEngineAddressesEqual(info.address, expectedWallet.address),
                       info.publicKey == expectedWallet.publicKey else { throw WalletError.storage(.identityMismatch) }
             }
+            let serverStateRevision = self.serverStateMutationRevision
             if info.canSign {
-                return try await self.runtime.revealRecoveryPhrase()
+                let words = try await self.runtime.revealRecoveryPhrase()
+                guard self.serverStateMutationRevision == serverStateRevision else { throw CancellationError() }
+                return words
             }
             guard info.canExportPhrase,
                   case let .ready(_, _, _, address, publicKey, _) = self.serverWalletState else {
                 throw WalletError.unavailable
             }
-            let serverStateRevision = self.serverStateMutationRevision
             let words = try await exportWalletSecretPhrase(
                 engine: self.engine,
                 password: password,
@@ -810,28 +815,29 @@ extension WalletContextImpl {
                 await self.discardReplacementForCleanup(recordId: prepared.recordId)
                 throw WalletError.storage(.identityMismatch)
             }
-            let generation = await self.prepareForRuntimeIdentityChange(
-                preserveCurrentWalletState: true
-            )
-            let activation: WalletEngineActivation
             do {
-                activation = try await self.runtime.commitReplacement(
+                guard self.serverStateMutationRevision == serverStateRevision else { throw CancellationError() }
+                let generation = await self.prepareForRuntimeIdentityChange(
+                    preserveCurrentWalletState: true
+                )
+                let activation = try await self.runtime.commitReplacement(
                     recordId: prepared.recordId,
                     serverAddress: address,
                     serverPublicKey: publicKey,
                     serverStateRevision: serverStateRevision
                 )
+                guard self.serverStateMutationRevision == serverStateRevision else { throw CancellationError() }
+                if let state = self.serverWalletState {
+                    _ = self.installRuntimeActivation(
+                        state: state,
+                        activation: activation,
+                        generation: generation,
+                        preserveCurrentWalletState: true
+                    )
+                }
             } catch {
                 await self.discardReplacementForCleanup(recordId: prepared.recordId)
                 throw error
-            }
-            if let state = self.serverWalletState {
-                _ = self.installRuntimeActivation(
-                    state: state,
-                    activation: activation,
-                    generation: generation,
-                    preserveCurrentWalletState: true
-                )
             }
             return words
         }
@@ -1708,9 +1714,10 @@ extension WalletContextImpl {
         operationId: UUID
     ) async throws -> PreparedTransfer {
         return try await self.performOperation(.preparingTransfer, operationId: operationId) {
-            guard case let .wallet(info) = self.currentState.phase,
-                  info.canSign,
-                  let recipient = normalizedMainnetAddress(address),
+            guard case let .wallet(info) = self.currentState.phase, info.canSign else {
+                throw WalletError.unavailable
+            }
+            guard let recipient = normalizedMainnetAddress(address),
                   let nft = normalizedMainnetAddress(collectible.address) else {
                 throw WalletError.invalidAddress
             }
@@ -2382,7 +2389,7 @@ extension WalletContextImpl {
                     activeOperation: nil
                 )
                 if activeOperation.defersServerWalletState {
-                    if (activeOperation == .disablingBackup || !operationCompleted),
+                    if (activeOperation == .disablingBackup || activeOperation == .recoveringPhrase || !operationCompleted),
                        let deferred = self.deferredServerWalletState {
                         self.applyServerWalletState(deferred.state, refreshIfStreamingUnavailable: deferred.refreshIfStreamingUnavailable,
                             balanceOverlayRevision: deferred.balanceOverlayRevision)

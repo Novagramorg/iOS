@@ -10,7 +10,7 @@ import PresentationDataUtils
 import ComponentFlow
 import ViewControllerComponent
 import SheetComponent
-import BalancedTextComponent
+import MultilineTextComponent
 import BundleIconComponent
 import GlassBarButtonComponent
 import ButtonComponent
@@ -866,8 +866,6 @@ private final class WalletReceiveSheetContent: Component {
                 keyPath: "transform.scale",
                 timingFunction: timingFunction
             )
-            // Keep the destination live: a snapshot with afterScreenUpdates: false
-            // may still contain the previous frame immediately after updating it.
             for (index, contentView) in [previousSnapshot, self.cardView].enumerated() {
                 let faceView = UIView(frame: flipView.bounds)
                 faceView.clipsToBounds = true
@@ -1084,7 +1082,7 @@ private final class WalletReceiveSheetContent: Component {
 
             let explanationSize = self.explanation.update(
                 transition: .immediate,
-                component: AnyComponent(BalancedTextComponent(
+                component: AnyComponent(MultilineTextComponent(
                     text: .plain(NSAttributedString(
                         string: environment.strings.Wallet_Receive_Text,
                         font: Font.regular(15.0),

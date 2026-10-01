@@ -828,6 +828,15 @@ private final class WalletPeerSelectionScreenComponent: Component {
                 pasteButtonFrame.origin.y = floor(searchFieldFrame.midY - pasteButtonFrame.height / 2.0)
                 ComponentTransition.immediate.setFrame(view: pasteButtonView, frame: pasteButtonFrame)
             }
+
+            if self.activeSearch == nil {
+                var buttonsMinX = scanQrFrame.minX
+                if self.hasPasteboardText && self.hasSpaceForPasteButton, let pasteButtonView = self.pasteButton.view {
+                    buttonsMinX = min(buttonsMinX, pasteButtonView.frame.minX)
+                }
+                let placeholderOrigin = placeholderNode.labelNode.view.convert(CGPoint(), to: self.navigationGlassContainer.contentView)
+                placeholderNode.maximumPlaceholderWidth = max(0.0, buttonsMinX - 8.0 - placeholderOrigin.x)
+            }
         }
 
         private func subscribeToRecentPeers(context: AccountContext) {

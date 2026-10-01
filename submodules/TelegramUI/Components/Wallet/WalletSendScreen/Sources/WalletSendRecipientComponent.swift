@@ -1,6 +1,7 @@
 import Foundation
 import UIKit
 import Display
+import SwiftSignalKit
 import AppBundle
 import AccountContext
 import TelegramCore
@@ -11,7 +12,6 @@ import AvatarComponent
 import BundleIconComponent
 import MultilineTextComponent
 import PlainButtonComponent
-import ShimmeringMask
 
 final class WalletSendRecipientComponent: Component {
     let context: AccountContext
@@ -60,6 +60,17 @@ final class WalletSendRecipientComponent: Component {
     }
 
     final class View: UIView {
+        private enum AddressPhase {
+            case loading
+            case revealing
+            case ready
+        }
+
+        private static let alphabet = Array("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789")
+        private static let flipDuration = 0.14
+        private static let sweepDuration = 0.4
+        private static let settleDuration = 0.546
+
         private let backgroundView = UIView()
         private let avatar = ComponentView<Empty>()
         private let tonIconView = UIImageView()
@@ -67,8 +78,20 @@ final class WalletSendRecipientComponent: Component {
         private let username = ComponentView<Empty>()
         private let address = ComponentView<Empty>()
         private let infoButton = ComponentView<Empty>()
-        private var shimmerView: ShimmeringMaskView?
-        private var placeholderLines: [UIView] = []
+        private var component: WalletSendRecipientComponent?
+        private var addressPhase: AddressPhase = .ready
+        private var animationElapsed: CFTimeInterval = 0
+        private var revealElapsed: CFTimeInterval = 0
+        private var lastAnimationTimestamp: CFTimeInterval?
+        private var animationTimer: Foundation.Timer?
+        private var isAnimationVisible = false
+        private var applicationIsActive = false
+        private let applicationIsActiveDisposable = MetaDisposable()
+        private var formattedAddressLines: [String] = []
+        private var addressAttributes: [NSAttributedString.Key: Any] = [:]
+        private var addressTextWidth: CGFloat = 0
+        private var addressSize: CGSize = .zero
+        private var renderedAddress: NSAttributedString?
 
         override init(frame: CGRect) {
             super.init(frame: frame)
@@ -86,6 +109,122 @@ final class WalletSendRecipientComponent: Component {
 
         required init?(coder: NSCoder) {
             fatalError("init(coder:) has not been implemented")
+        }
+
+        deinit {
+            self.animationTimer?.invalidate()
+            self.applicationIsActiveDisposable.dispose()
+        }
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            self.updateAnimationActivity()
+        }
+
+        func setAnimationVisible(_ isVisible: Bool) {
+            guard self.isAnimationVisible != isVisible else { return }
+            self.isAnimationVisible = isVisible
+            self.updateAnimationActivity()
+        }
+
+        private func advanceAnimation(to timestamp: CFTimeInterval) {
+            guard let previousTimestamp = self.lastAnimationTimestamp else { return }
+            let delta = max(0.0, timestamp - previousTimestamp)
+            self.lastAnimationTimestamp = timestamp
+            self.animationElapsed += delta
+            if self.addressPhase == .revealing {
+                self.revealElapsed += delta
+                if self.revealElapsed >= Self.settleDuration {
+                    self.addressPhase = .ready
+                }
+            }
+        }
+
+        private func updateAnimationActivity() {
+            let timestamp = CACurrentMediaTime()
+            self.advanceAnimation(to: timestamp)
+            let reduceMotion = UIAccessibility.isReduceMotionEnabled
+            if reduceMotion && self.addressPhase == .revealing {
+                self.addressPhase = .ready
+            }
+            self.updateAddressText()
+
+            let shouldAnimate = self.component != nil && self.addressPhase != .ready
+                && self.isAnimationVisible && self.window != nil && self.applicationIsActive && !reduceMotion
+            if shouldAnimate {
+                if self.animationTimer == nil {
+                    self.lastAnimationTimestamp = timestamp
+                    let timer = Foundation.Timer(timeInterval: 0.035, repeats: true, block: { [weak self] _ in
+                        self?.updateAnimationActivity()
+                    })
+                    self.animationTimer = timer
+                    RunLoop.main.add(timer, forMode: .common)
+                }
+            } else {
+                self.animationTimer?.invalidate()
+                self.animationTimer = nil
+                self.lastAnimationTimestamp = nil
+            }
+        }
+
+        private func updateAddressText(force: Bool = false) {
+            guard let component = self.component else { return }
+            let total = self.formattedAddressLines.reduce(0) { $0 + $1.count }
+            let tick = Int(self.animationElapsed / Self.flipDuration)
+            let attributedAddress = NSMutableAttributedString()
+            var place = 0
+            for (row, line) in self.formattedAddressLines.enumerated() {
+                if row != 0 {
+                    attributedAddress.append(NSAttributedString(string: "\n", attributes: self.addressAttributes))
+                }
+                for (column, group) in line.split(separator: " ").enumerated() {
+                    if column != 0 {
+                        attributedAddress.append(NSAttributedString(string: " ", attributes: self.addressAttributes))
+                        place += 1
+                    }
+                    let color = (row + column).isMultiple(of: 2)
+                        ? component.theme.list.itemPrimaryTextColor
+                        : component.theme.list.itemSecondaryTextColor
+                    for character in group {
+                        let settled = self.addressPhase == .ready || (self.addressPhase == .revealing
+                            && self.revealElapsed >= Self.sweepDuration * Double(place) / Double(max(total - 1, 1)))
+                        var attributes = self.addressAttributes
+                        attributes[.foregroundColor] = settled ? color : color.withMultipliedAlpha(0.35)
+                        let displayedCharacter: Character
+                        if settled {
+                            displayedCharacter = character
+                        } else {
+                            let hash = (place &* 2_654_435_761) ^ (tick &* 40_503)
+                            displayedCharacter = Self.alphabet[(hash & 0x7fff_ffff) % Self.alphabet.count]
+                        }
+                        attributedAddress.append(NSAttributedString(string: String(displayedCharacter), attributes: attributes))
+                        place += 1
+                    }
+                }
+            }
+            guard force || self.renderedAddress?.isEqual(to: attributedAddress) != true else { return }
+            self.renderedAddress = attributedAddress
+
+            self.addressSize = self.address.update(
+                transition: .immediate,
+                component: AnyComponent(PlainButtonComponent(
+                    content: AnyComponent(MultilineTextComponent(
+                        text: .plain(attributedAddress),
+                        maximumNumberOfLines: 0,
+                        lineSpacing: 0.2
+                    )),
+                    action: { [weak self] in self?.component?.copyAddress() },
+                    isEnabled: !component.isLoading && !component.address.isEmpty,
+                    animateScale: false
+                )),
+                environment: {},
+                containerSize: CGSize(width: self.addressTextWidth, height: .greatestFiniteMagnitude)
+            )
+            if let addressView = self.address.view as? PlainButtonComponent.View {
+                addressView.isAccessibilityElement = !component.isLoading && !component.address.isEmpty
+                addressView.accessibilityLabel = component.address
+                addressView.contentView?.accessibilityElementsHidden = true
+            }
         }
 
         private static func addressLines(_ address: String, groupsPerLine: Int) -> [String] {
@@ -108,7 +247,32 @@ final class WalletSendRecipientComponent: Component {
         }
 
         func update(component: WalletSendRecipientComponent, availableSize: CGSize, transition: ComponentTransition) -> CGSize {
+            self.advanceAnimation(to: CACurrentMediaTime())
+            let contextChanged = self.component?.context !== component.context
+            if contextChanged {
+                self.applicationIsActive = false
+            }
             let hasPeer = component.peer != nil
+            let displaysPlaceholder = hasPeer && (component.isLoading || component.address.isEmpty)
+            if self.component?.peer?.id != component.peer?.id || self.component?.address != component.address || self.component?.isLoading != component.isLoading {
+                let continuesLoading = self.component?.peer?.id == component.peer?.id
+                    && self.addressPhase == .loading
+                if !continuesLoading {
+                    self.animationElapsed = 0
+                }
+                self.revealElapsed = 0
+                if displaysPlaceholder {
+                    self.addressPhase = .loading
+                } else if hasPeer && continuesLoading {
+                    self.addressPhase = .revealing
+                } else {
+                    self.addressPhase = .ready
+                }
+            }
+            self.component = component
+            if UIAccessibility.isReduceMotionEnabled && self.addressPhase == .revealing {
+                self.addressPhase = .ready
+            }
             let canOpenInfo = !component.isLoading && !component.address.isEmpty
             let textOriginX: CGFloat = 60.0
             let textWidth = max(1.0, availableSize.width - textOriginX - 42.0)
@@ -128,40 +292,12 @@ final class WalletSendRecipientComponent: Component {
                 groupsPerLine -= 1
             }
 
-            let displaysPlaceholder = hasPeer && component.isLoading
             let addressText = displaysPlaceholder ? String(repeating: "0", count: 48) : (component.address.isEmpty ? "—" : component.address)
-            let addressLines = Self.addressLines(addressText, groupsPerLine: groupsPerLine)
-            let attributedAddress = NSMutableAttributedString()
-            for (row, line) in addressLines.enumerated() {
-                if row != 0 {
-                    attributedAddress.append(NSAttributedString(string: "\n", attributes: addressAttributes))
-                }
-                for (column, group) in line.split(separator: " ").enumerated() {
-                    if column != 0 {
-                        attributedAddress.append(NSAttributedString(string: " ", attributes: addressAttributes))
-                    }
-                    var groupAttributes = addressAttributes
-                    groupAttributes[.foregroundColor] = (row + column).isMultiple(of: 2)
-                        ? component.theme.list.itemPrimaryTextColor
-                        : component.theme.list.itemSecondaryTextColor
-                    attributedAddress.append(NSAttributedString(string: String(group), attributes: groupAttributes))
-                }
-            }
-            let addressSize = self.address.update(
-                transition: transition,
-                component: AnyComponent(PlainButtonComponent(
-                    content: AnyComponent(MultilineTextComponent(
-                        text: .plain(attributedAddress),
-                        maximumNumberOfLines: 0,
-                        lineSpacing: 0.2
-                    )),
-                    action: component.copyAddress,
-                    isEnabled: canOpenInfo,
-                    animateScale: false
-                )),
-                environment: {},
-                containerSize: CGSize(width: textWidth, height: .greatestFiniteMagnitude)
-            )
+            self.formattedAddressLines = Self.addressLines(addressText, groupsPerLine: groupsPerLine)
+            self.addressAttributes = addressAttributes
+            self.addressTextWidth = textWidth
+            self.updateAddressText(force: true)
+            let addressSize = self.addressSize
 
             let avatarSize = CGSize(width: 36.0, height: 36.0)
             var nameSize: CGSize = .zero
@@ -275,11 +411,7 @@ final class WalletSendRecipientComponent: Component {
                     self.addSubview(addressView)
                 }
                 addressView.isUserInteractionEnabled = canOpenInfo
-                addressView.isAccessibilityElement = !displaysPlaceholder
-                addressView.accessibilityLabel = component.address
                 transition.setFrame(view: addressView, frame: addressFrame)
-                let addressVisibilityTransition: ComponentTransition = displaysPlaceholder ? .immediate : transition
-                addressVisibilityTransition.setAlpha(view: addressView, alpha: displaysPlaceholder ? 0.0 : 1.0)
             }
             if let infoButtonView = self.infoButton.view {
                 if infoButtonView.superview == nil {
@@ -290,40 +422,16 @@ final class WalletSendRecipientComponent: Component {
                 transition.setAlpha(view: infoButtonView, alpha: 1.0)
             }
 
-            if displaysPlaceholder {
-                let shimmerView: ShimmeringMaskView
-                if let current = self.shimmerView {
-                    shimmerView = current
-                } else {
-                    shimmerView = ShimmeringMaskView(peakAlpha: 0.3, duration: 1.6)
-                    shimmerView.isUserInteractionEnabled = false
-                    shimmerView.accessibilityElementsHidden = true
-                    self.shimmerView = shimmerView
-                    self.addSubview(shimmerView)
-                }
-                while self.placeholderLines.count > addressLines.count {
-                    self.placeholderLines.removeLast().removeFromSuperview()
-                }
-                while self.placeholderLines.count < addressLines.count {
-                    let lineView = UIView()
-                    lineView.layer.cornerRadius = 5.0
-                    shimmerView.contentView.addSubview(lineView)
-                    self.placeholderLines.append(lineView)
-                }
-                let lineHeight = addressSize.height / CGFloat(max(1, addressLines.count))
-                for (index, lineView) in self.placeholderLines.enumerated() {
-                    let lineWidth = min(textWidth, ceil((addressLines[index] as NSString).size(withAttributes: addressAttributes).width))
-                    lineView.backgroundColor = component.theme.list.itemSecondaryTextColor.withMultipliedAlpha(0.2)
-                    transition.setFrame(view: lineView, frame: CGRect(x: 0.0, y: floorToScreenPixels(CGFloat(index) * lineHeight + (lineHeight - 10.0) / 2.0), width: lineWidth, height: 10.0))
-                }
-                transition.setFrame(view: shimmerView, frame: addressFrame)
-                shimmerView.update(size: addressFrame.size, containerWidth: size.width, offsetX: addressFrame.minX, gradientWidth: 80.0, transition: transition)
-            } else {
-                self.shimmerView?.removeFromSuperview()
-                self.shimmerView = nil
-                self.placeholderLines.removeAll()
+            if contextChanged {
+                self.applicationIsActiveDisposable.set((component.context.sharedContext.applicationBindings.applicationIsActive
+                |> distinctUntilChanged
+                |> deliverOnMainQueue).start(next: { [weak self] isActive in
+                    guard let self else { return }
+                    self.applicationIsActive = isActive
+                    self.updateAnimationActivity()
+                }))
             }
-
+            self.updateAnimationActivity()
             return size
         }
     }

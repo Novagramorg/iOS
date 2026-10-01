@@ -30,7 +30,6 @@ import HorizontalTabsComponent
 import GlassBackgroundComponent
 import WalletSendScreen
 import WalletPeerSelectionScreen
-import TooltipUI
 import SettingsUI
 import UndoUI
 import WalletAuthorizationUI
@@ -687,7 +686,7 @@ private final class WalletScreenComponent: Component {
         }
     }
 
-    final class View: UIView, UIScrollViewDelegate {
+    final class View: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegate {
         private enum SelectedSection: Equatable {
             case transactions
             case collectibles
@@ -714,6 +713,9 @@ private final class WalletScreenComponent: Component {
         private let additionalBalancesSection = ComponentView<Empty>()
         private let earningsIcon = UIImage(bundleImageName: "Wallet/TransactionGram")?.withRenderingMode(.alwaysOriginal)
         private let card = ComponentView<Empty>()
+        private var gramTooltip: ComponentView<Empty>?
+        private let gramTooltipTapGestureRecognizer = UITapGestureRecognizer()
+        private var gramTooltipTimer: Foundation.Timer?
         private let addFundsButton = ComponentView<Empty>()
         private let sendButton = ComponentView<Empty>()
         private let accountProtectionSection = ComponentView<Empty>()
@@ -766,6 +768,8 @@ private final class WalletScreenComponent: Component {
         private var isAwaitingAccountProtectionResult = false
         private var isUpdating = false
         private var isGramTooltipPresentationPending = false
+        private var gramTooltipGeneration = 0
+        private var isDismissingGramTooltip = false
         private var didPresentGramTooltip = false
         private var gramTooltipWalletAddress: String?
         private var isResolvingSigningAccess = false
@@ -821,6 +825,13 @@ private final class WalletScreenComponent: Component {
             super.init(frame: frame)
 
             self.scrollView.delegate = self
+            self.gramTooltipTapGestureRecognizer.addTarget(self, action: #selector(self.gramTooltipTap(_:)))
+            self.gramTooltipTapGestureRecognizer.delegate = self
+            self.gramTooltipTapGestureRecognizer.cancelsTouchesInView = false
+            self.gramTooltipTapGestureRecognizer.delaysTouchesBegan = false
+            self.gramTooltipTapGestureRecognizer.delaysTouchesEnded = false
+            self.gramTooltipTapGestureRecognizer.isEnabled = false
+            self.addGestureRecognizer(self.gramTooltipTapGestureRecognizer)
             self.topEdgeEffectView.alpha = 0.0
             self.topEdgeEffectView.isUserInteractionEnabled = false
 
@@ -854,6 +865,16 @@ private final class WalletScreenComponent: Component {
             fatalError("init(coder:) has not been implemented")
         }
 
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+
+            if self.window == nil {
+                self.dismissGramTooltip(animated: false)
+            } else if let cardView = self.card.view as? WalletCardComponent.View {
+                self.maybePresentGramTooltip(cardView: cardView)
+            }
+        }
+
         override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
             guard let result = super.hitTest(point, with: event) else {
                 return nil
@@ -884,6 +905,7 @@ private final class WalletScreenComponent: Component {
             self.twoStepAuthDataDisposable?.dispose()
             self.loadMoreDisposable.dispose()
             self.gramTooltipDisposable.dispose()
+            self.gramTooltipTimer?.invalidate()
             self.signingAccessDisposable.dispose()
             self.peerAddressDisposable.dispose()
         }
@@ -1263,6 +1285,9 @@ private final class WalletScreenComponent: Component {
             guard scrollView === self.scrollView, !self.isUpdating else {
                 return
             }
+            if self.isGramTooltipPresentationPending || (self.gramTooltip != nil && !self.isDismissingGramTooltip) {
+                self.dismissGramTooltip(animated: true)
+            }
             self.updateScrolling(transition: .immediate)
             self.updateVisibleSections(transition: .immediate)
             self.loadMoreItemsIfNeeded()
@@ -1406,20 +1431,21 @@ private final class WalletScreenComponent: Component {
         }
 
         private func maybePresentGramTooltip(cardView: WalletCardComponent.View) {
-            guard let walletInfo = self.walletInfo else {
-                return
-            }
-            if self.gramTooltipWalletAddress != walletInfo.address {
-                self.gramTooltipWalletAddress = walletInfo.address
-                self.isGramTooltipPresentationPending = false
+            let walletAddress = self.walletInfo?.address
+            if self.gramTooltipWalletAddress != walletAddress {
+                self.dismissGramTooltip(animated: false)
+                self.gramTooltipWalletAddress = walletAddress
                 self.didPresentGramTooltip = false
-                self.gramTooltipDisposable.set(nil)
             }
             
-            guard !self.isGramTooltipPresentationPending,
+            guard let walletAddress,
+                  !self.isGramTooltipPresentationPending,
                   !self.didPresentGramTooltip,
                   self.cardTransitionFraction == 0.0,
+                  !self.scrollView.isDragging,
+                  !self.scrollView.isDecelerating,
                   self.environment?.isVisible == true,
+                  cardView.window != nil,
                   !cardView.gramIconFrame.isEmpty else {
                 return
             }
@@ -1427,11 +1453,12 @@ private final class WalletScreenComponent: Component {
             guard let component = self.component else {
                 return
             }
-            let walletAddress = walletInfo.address
+            self.gramTooltipGeneration += 1
+            let generation = self.gramTooltipGeneration
             self.isGramTooltipPresentationPending = true
             self.gramTooltipDisposable.set((ApplicationSpecificNotice.getWalletGramTooltip(accountManager: component.context.sharedContext.accountManager)
             |> deliverOnMainQueue).start(next: { [weak self, weak cardView] count in
-                guard let self else {
+                guard let self, self.gramTooltipGeneration == generation else {
                     return
                 }
                 self.isGramTooltipPresentationPending = false
@@ -1447,33 +1474,119 @@ private final class WalletScreenComponent: Component {
                 }
                 
                 guard self.cardTransitionFraction == 0.0,
+                      !self.scrollView.isDragging,
+                      !self.scrollView.isDecelerating,
                       self.environment?.isVisible == true,
                       let cardView,
                       cardView.window != nil,
                       !cardView.gramIconFrame.isEmpty,
-                      let controller = self.environment?.controller() else {
+                      self.card.view === cardView else {
                     return
                 }
 
+                let tooltip = ComponentView<Empty>()
+                self.gramTooltip = tooltip
+                self.isDismissingGramTooltip = false
+                self.updateGramTooltip()
+                guard let tooltipView = tooltip.view as? WalletTooltipComponent.View, tooltipView.superview === cardView else {
+                    self.gramTooltip = nil
+                    return
+                }
                 self.didPresentGramTooltip = true
-                let sourceFrame = cardView.convert(cardView.gramIconFrame, to: nil).offsetBy(dx: 0.0, dy: -4.0)
-                let strings = component.context.sharedContext.currentPresentationData.with { $0 }.strings
-                let tooltipScreen = TooltipScreen(
-                    account: component.context.account,
-                    sharedContext: component.context.sharedContext,
-                    text: .attributedString(text: NSAttributedString(string: strings.Wallet_GramTooltip, font: Font.medium(11.0), textColor: .white)),
-                    style: .gradient(UIColor(rgb: 0x47bafe), UIColor(rgb: 0x44b5ff), -2.0),
-                    arrowStyle: .small,
-                    location: .point(sourceFrame, .bottom),
-                    displayDuration: .default,
-                    inset: 26.0,
-                    shouldDismissOnTouch: { _, _ in
-                        return .dismiss(consume: false)
+                self.gramTooltipTapGestureRecognizer.isEnabled = true
+                tooltipView.animateIn()
+                let timer = Foundation.Timer(timeInterval: 5.0, repeats: false, block: { [weak self, weak tooltipView] _ in
+                    guard let self, let tooltipView, self.gramTooltip?.view === tooltipView else {
+                        return
                     }
-                )
-                controller.present(tooltipScreen, in: .current)
+                    self.dismissGramTooltip(animated: true)
+                })
+                self.gramTooltipTimer = timer
+                RunLoop.main.add(timer, forMode: .common)
                 let _ = ApplicationSpecificNotice.incrementWalletGramTooltip(accountManager: component.context.sharedContext.accountManager).startStandalone()
             }))
+        }
+
+        private func updateGramTooltip() {
+            guard let tooltip = self.gramTooltip,
+                  let environment = self.environment,
+                  let cardView = self.card.view as? WalletCardComponent.View else {
+                return
+            }
+            let leftInset = environment.safeInsets.left + 26.0
+            let rightInset = environment.safeInsets.right + 26.0
+            let availableWidth = self.scrollView.bounds.width - leftInset - rightInset
+            guard availableWidth > 22.0 else {
+                return
+            }
+            let tooltipSize = tooltip.update(
+                transition: .immediate,
+                component: AnyComponent(WalletTooltipComponent(text: environment.strings.Wallet_GramTooltip)),
+                environment: {},
+                containerSize: CGSize(width: min(614.0, availableWidth), height: 10000.0)
+            )
+            guard let tooltipView = tooltip.view as? WalletTooltipComponent.View else {
+                return
+            }
+            if tooltipView.superview !== cardView {
+                tooltipView.layer.zPosition = (cardView.layer.sublayers?.map { $0.zPosition }.max() ?? 0.0) + 1.0
+                cardView.addSubview(tooltipView)
+            }
+            tooltipView.isHidden = cardView.gramIconFrame.isEmpty
+            let sourceFrame = cardView.gramIconFrame.offsetBy(dx: 0.0, dy: -4.0)
+            let availableFrame = cardView.convert(CGRect(x: leftInset, y: 0.0, width: availableWidth, height: 0.0), from: self)
+            let tooltipFrame = CGRect(
+                origin: CGPoint(
+                    x: max(availableFrame.minX, min(availableFrame.maxX - tooltipSize.width, sourceFrame.midX - tooltipSize.width * 0.5)),
+                    y: sourceFrame.minY - 10.0 - tooltipSize.height
+                ),
+                size: tooltipSize
+            )
+            ComponentTransition.immediate.setFrame(view: tooltipView, frame: tooltipFrame)
+            tooltipView.updateArrowPosition(sourceFrame.midX - tooltipFrame.minX)
+        }
+
+        private func dismissGramTooltip(animated: Bool) {
+            self.gramTooltipGeneration += 1
+            self.isGramTooltipPresentationPending = false
+            self.gramTooltipDisposable.set(nil)
+            self.gramTooltipTimer?.invalidate()
+            self.gramTooltipTimer = nil
+            self.gramTooltipTapGestureRecognizer.isEnabled = false
+
+            guard let tooltipView = self.gramTooltip?.view as? WalletTooltipComponent.View else {
+                self.gramTooltip = nil
+                self.isDismissingGramTooltip = false
+                return
+            }
+            if animated {
+                guard !self.isDismissingGramTooltip else {
+                    return
+                }
+                self.isDismissingGramTooltip = true
+                tooltipView.animateOut(completion: { [weak self, weak tooltipView] in
+                    guard let self, let tooltipView, self.gramTooltip?.view === tooltipView else {
+                        return
+                    }
+                    tooltipView.removeFromSuperview()
+                    self.gramTooltip = nil
+                    self.isDismissingGramTooltip = false
+                })
+            } else {
+                self.gramTooltip = nil
+                self.isDismissingGramTooltip = false
+                tooltipView.removeFromSuperview()
+            }
+        }
+
+        @objc private func gramTooltipTap(_ gestureRecognizer: UITapGestureRecognizer) {
+            if gestureRecognizer.state == .ended {
+                self.dismissGramTooltip(animated: true)
+            }
+        }
+
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+            return gestureRecognizer === self.gramTooltipTapGestureRecognizer || otherGestureRecognizer === self.gramTooltipTapGestureRecognizer
         }
 
         private func loadMoreItemsIfNeeded() {
@@ -1651,7 +1764,6 @@ private final class WalletScreenComponent: Component {
 
         private func updateScrolling(transition: ComponentTransition) {
             let fraction = self.cardTransitionFraction
-            // Cancel only the downward bounce for the content surrounding the card.
             ComponentTransition.immediate.setPosition(
                 view: self.topContentContainerView,
                 position: CGPoint(
@@ -1711,6 +1823,7 @@ private final class WalletScreenComponent: Component {
             }
             self.updateBalanceTransition(transition: transition)
             self.updateBalanceClipping(transition: transition)
+            self.updateGramTooltip()
         }
 
         private func updateBalanceClipping(transition: ComponentTransition) {
@@ -2305,13 +2418,21 @@ private final class WalletScreenComponent: Component {
             self.componentState?.updated(transition: .easeInOut(duration: 0.25))
         }
 
-        private func updateSuppressedCollectiblesWalletIdentity(_ state: WalletContext.State) {
+        private func updateSuppressedCollectibles(_ state: WalletContext.State) {
             switch state.phase {
             case let .wallet(info):
                 if let currentAddress = self.suppressedCollectiblesWalletAddress, currentAddress != info.address {
                     self.suppressedCollectibleAddresses.removeAll()
                 }
                 self.suppressedCollectiblesWalletAddress = info.address
+                let collectibles = state.collectibles
+                if let previous = self.walletState?.collectibles,
+                   previous.generation == collectibles.generation,
+                   previous.isRefreshing || previous.isLoadingMore,
+                   !collectibles.isRefreshing, !collectibles.isLoadingMore,
+                   collectibles.error == nil, collectibles.nextOffset == nil {
+                    self.suppressedCollectibleAddresses.formIntersection(collectibles.items.map(\.address))
+                }
             case .restoring:
                 break
             case .creating, .empty, .failed:
@@ -2664,6 +2785,13 @@ private final class WalletScreenComponent: Component {
             }
 
             let environment = environment[EnvironmentType.self].value
+            if self.component?.context !== component.context || self.walletContext !== component.walletContext {
+                self.dismissGramTooltip(animated: false)
+                self.gramTooltipWalletAddress = nil
+                self.didPresentGramTooltip = false
+            } else if !environment.isVisible {
+                self.dismissGramTooltip(animated: false)
+            }
             self.component = component
             self.environment = environment
             self.componentState = state
@@ -2702,7 +2830,7 @@ private final class WalletScreenComponent: Component {
                             self.abandonRestoration()
                         }
                     }
-                    self.updateSuppressedCollectiblesWalletIdentity(walletState)
+                    self.updateSuppressedCollectibles(walletState)
                     self.walletState = walletState
                     if previousPhase != walletState.phase {
                         self.reloadPreviousWallets()
@@ -2887,9 +3015,12 @@ private final class WalletScreenComponent: Component {
                               currentCardView === cardView else {
                             return
                         }
-                        self.updateScrolling(transition: .immediate)
+                        if self.scrollView.contentOffset.y > self.cardTransitionStart {
+                            self.updateScrolling(transition: .immediate)
+                        } else {
+                            self.updateGramTooltip()
+                        }
                     }
-                    self.maybePresentGramTooltip(cardView: cardView)
                 }
             }
 
@@ -3380,6 +3511,9 @@ private final class WalletScreenComponent: Component {
             }
 
             self.updateScrolling(transition: contentLayoutTransition)
+            if let cardView = self.card.view as? WalletCardComponent.View {
+                self.maybePresentGramTooltip(cardView: cardView)
+            }
             self.updateVisibleSections(transition: .immediate)
             self.loadMoreItemsIfNeeded()
 

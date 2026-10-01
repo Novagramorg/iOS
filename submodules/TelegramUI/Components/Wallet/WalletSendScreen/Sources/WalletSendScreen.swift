@@ -572,6 +572,7 @@ private final class WalletSendScreenComponent: Component {
         private let controlButtons = ComponentView<Empty>()
         private let title = ComponentView<Empty>()
         private let recipient = ComponentView<Empty>()
+        private var isRecipientScreenVisible = true
         private var recipientInfoAlert: AlertScreen?
         private weak var copyAddressToast: UndoOverlayController?
         private let amountField: WalletSendAmountField = WalletSendAnimatedAmountField()
@@ -756,6 +757,13 @@ private final class WalletSendScreenComponent: Component {
             self.signingAccessDisposable.dispose()
         }
 
+        func viewWillAppear() {
+            self.isRecipientScreenVisible = true
+            if let recipientView = self.recipient.view as? WalletSendRecipientComponent.View {
+                recipientView.setAnimationVisible(recipientView.alpha > 0.0)
+            }
+        }
+
         func viewDidAppear() {
             self.isVisible = true
             Haptics.prime()
@@ -768,6 +776,8 @@ private final class WalletSendScreenComponent: Component {
 
         func viewWillDisappear() {
             self.isVisible = false
+            self.isRecipientScreenVisible = false
+            (self.recipient.view as? WalletSendRecipientComponent.View)?.setAnimationVisible(false)
             Haptics.cancelRefusal()
             self.needsAmountFocus = false
             self.copyAddressToast?.dismiss()
@@ -2052,8 +2062,10 @@ private final class WalletSendScreenComponent: Component {
                     recipientView.accessibilityElementsHidden = false
                     transition.setFrame(view: recipientView, frame: frame)
                     transition.setAlpha(view: recipientView, alpha: 1.0)
+                    (recipientView as? WalletSendRecipientComponent.View)?.setAnimationVisible(self.isRecipientScreenVisible)
                 }
             } else if let recipientView = self.recipient.view {
+                (recipientView as? WalletSendRecipientComponent.View)?.setAnimationVisible(false)
                 recipientView.isUserInteractionEnabled = false
                 recipientView.accessibilityElementsHidden = true
                 transition.setAlpha(view: recipientView, alpha: 0.0)
@@ -2881,6 +2893,8 @@ public final class WalletSendScreen: ViewControllerComponentContainer, Attachmen
 
     override public func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+
+        (self.node.hostView.componentView as? WalletSendScreenComponent.View)?.viewWillAppear()
 
         if self.gaslessInfoDisposable == nil {
             self.gaslessInfoDisposable = self.walletContext.beginGaslessInfoUpdates()

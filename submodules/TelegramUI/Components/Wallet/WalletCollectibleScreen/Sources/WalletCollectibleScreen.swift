@@ -25,6 +25,8 @@ import WalletContext
 import WalletPagerComponent
 import WalletCollectibleHeaderComponent
 import WalletPeerSelectionScreen
+import WalletAuthorizationUI
+import PasscodeCore
 
 private func walletCollectibleRarityText(_ rarity: StarGift.UniqueGift.Attribute.Rarity?, strings: PresentationStrings) -> String {
     guard let rarity else {
@@ -1098,9 +1100,17 @@ public final class WalletCollectibleScreen: ViewControllerComponentContainer {
     private let walletContext: WalletContext
     private let openExternalUrl: (String, PresentationTheme) -> Void
     private let collectibleSent: (String) -> Void
+    private let walletPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)
     private let stateDisposable = MetaDisposable()
     private let loadMoreDisposable = MetaDisposable()
     private var screenUpdatesDisposable: Disposable?
+    private let signingAccessDisposable = MetaDisposable()
+    private var restorationSession: PasscodeSession?
+    private var restorationGeneration = 0
+    private var pendingSigningTransfer: (collectible: WalletContext.Collectible, wallet: WalletContext.WalletInfo)?
+    private var signingAccessRestored = false
+    private weak var recoveryPhraseImportController: ViewController?
+    private var isScreenVisible = false
 
     private var collectiblesState: WalletContext.CollectiblesState
     private var collectibles: [WalletContext.Collectible]
@@ -1141,6 +1151,7 @@ public final class WalletCollectibleScreen: ViewControllerComponentContainer {
         self.walletContext = walletContext
         self.openExternalUrl = openExternalUrl
         self.collectibleSent = collectibleSent
+        self.walletPresentationData = updatedPresentationData
         self.collectiblesState = initialState
         self.collectibles = initialCollectibles
         self.currentAddress = collectible.address
@@ -1186,7 +1197,16 @@ public final class WalletCollectibleScreen: ViewControllerComponentContainer {
 
         self.stateDisposable.set((walletContext.state
         |> deliverOnMainQueue).start(next: { [weak self] state in
-            self?.collectiblesStateUpdated(state.collectibles)
+            guard let self else { return }
+            if let pending = self.pendingSigningTransfer {
+                if case let .wallet(info) = state.phase,
+                   info.address == pending.wallet.address, info.publicKey == pending.wallet.publicKey {
+                    self.resumeTransferAfterSigningAccess()
+                } else {
+                    self.abandonRestoration()
+                }
+            }
+            self.collectiblesStateUpdated(state.collectibles)
         }))
         self.requestLoadMoreIfNeeded(index: initialIndex)
     }
@@ -1196,6 +1216,8 @@ public final class WalletCollectibleScreen: ViewControllerComponentContainer {
     }
 
     deinit {
+        self.signingAccessDisposable.dispose()
+        self.restorationSession?.invalidate()
         self.screenUpdatesDisposable?.dispose()
         self.stateDisposable.dispose()
         self.loadMoreDisposable.dispose()
@@ -1208,6 +1230,7 @@ public final class WalletCollectibleScreen: ViewControllerComponentContainer {
 
     public override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        self.isScreenVisible = true
         if self.screenUpdatesDisposable == nil {
             self.screenUpdatesDisposable = self.walletContext.beginCollectiblesScreenUpdates()
         }
@@ -1221,6 +1244,8 @@ public final class WalletCollectibleScreen: ViewControllerComponentContainer {
 
     public override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        self.isScreenVisible = false
+        self.abandonRestoration()
         self.dismissAllTooltips()
     }
 
@@ -1291,6 +1316,121 @@ public final class WalletCollectibleScreen: ViewControllerComponentContainer {
     }
 
     private func openTransfer(_ collectible: WalletContext.Collectible) {
+        guard self.isScreenVisible, self.pendingSigningTransfer == nil,
+              self.recoveryPhraseImportController == nil else { return }
+        guard case let .wallet(info) = self.walletContext.stateValue.phase else { return }
+        if info.canSign {
+            self.routeToTransfer(collectible)
+        } else if info.canExportPhrase {
+            self.pendingSigningTransfer = (collectible, info)
+            let generation = self.restorationGeneration
+            self.signingAccessDisposable.set(performWalletAuthorizedOperation(
+                context: self.accountContext,
+                updatedPresentationData: self.walletPresentationData,
+                present: { [weak self] alert in
+                    self?.present(alert, in: .window(.root))
+                },
+                operation: { [weak self] password -> Signal<[String], WalletContext.WalletError> in
+                    guard let self, self.restorationGeneration == generation,
+                          self.signingWalletMatches(info) else { return .fail(.authorizationCancelled) }
+                    return self.restorationAuthorization()
+                    |> mapToSignal { [weak self] session in
+                        guard let self, self.restorationGeneration == generation,
+                              self.signingWalletMatches(info) else { return .fail(.authorizationCancelled) }
+                        return self.walletContext.recoveryPhrase(password: password, session: session)
+                    }
+                },
+                next: { [weak self] _ in
+                    guard let self, self.restorationGeneration == generation else { return }
+                    self.signingAccessRestored = true
+                    self.resumeTransferAfterSigningAccess()
+                },
+                failed: { [weak self] error in
+                    guard let self, self.restorationGeneration == generation else { return }
+                    self.finishRestoration(error: error, collectible: collectible, wallet: info)
+                }
+            ))
+        } else {
+            let importController = self.accountContext.sharedContext.makeWalletImportScreen(
+                context: self.accountContext,
+                mode: .enterRecoveryPhrase,
+                completion: { [weak self] in
+                    self?.recoveryPhraseImportController?.dismiss(animated: true)
+                    self?.recoveryPhraseImportController = nil
+                }
+            )
+            self.recoveryPhraseImportController = importController
+            self.push(importController)
+        }
+    }
+
+    private func signingWalletMatches(_ expected: WalletContext.WalletInfo) -> Bool {
+        guard case let .wallet(info) = self.walletContext.stateValue.phase else { return false }
+        return info.address == expected.address && info.publicKey == expected.publicKey
+    }
+
+    private func restorationAuthorization() -> Signal<PasscodeSession, WalletContext.WalletError> {
+        if let session = self.restorationSession, session.isValid { return .single(session) }
+        let generation = self.restorationGeneration
+        return self.walletContext.beginWalletFlow(reason: "Restore wallet")
+        |> deliverOnMainQueue
+        |> mapToSignal { [weak self] session -> Signal<PasscodeSession, WalletContext.WalletError> in
+            guard let self, self.restorationGeneration == generation else {
+                session.invalidate()
+                return .fail(.authorizationCancelled)
+            }
+            self.restorationSession?.invalidate()
+            self.restorationSession = session
+            return .single(session)
+        }
+    }
+
+    private func resumeTransferAfterSigningAccess() {
+        guard self.signingAccessRestored, self.pendingSigningTransfer != nil else { return }
+        let generation = self.restorationGeneration
+        Queue.mainQueue().justDispatch { [weak self] in
+            guard let self, self.restorationGeneration == generation, self.isScreenVisible,
+                  let pending = self.pendingSigningTransfer,
+                  self.signingWalletMatches(pending.wallet),
+                  case let .wallet(info) = self.walletContext.stateValue.phase,
+                  info.canSign, self.walletContext.stateValue.activeOperation == nil else { return }
+            self.abandonRestoration()
+            self.routeToTransfer(pending.collectible)
+        }
+    }
+
+    private func abandonRestoration() {
+        self.restorationGeneration &+= 1
+        self.pendingSigningTransfer = nil
+        self.signingAccessRestored = false
+        self.signingAccessDisposable.set(nil)
+        self.restorationSession?.invalidate()
+        self.restorationSession = nil
+    }
+
+    private func finishRestoration(error: WalletContext.WalletError, collectible: WalletContext.Collectible, wallet: WalletContext.WalletInfo) {
+        self.abandonRestoration()
+        guard error != .authorizationCancelled, self.isScreenVisible, self.signingWalletMatches(wallet) else { return }
+        let strings = self.walletPresentationData.initial.strings
+        let message = walletAuthorizationErrorMessage(error, strings: strings)
+        let generation = self.restorationGeneration
+        self.present(textAlertController(
+            context: self.accountContext,
+            updatedPresentationData: self.walletPresentationData,
+            title: message?.title ?? strings.Wallet_RestoreErrorTitle,
+            text: message?.text ?? strings.Wallet_NetworkError,
+            actions: [
+                TextAlertAction(type: .genericAction, title: strings.Common_Cancel, action: {}),
+                TextAlertAction(type: .defaultAction, title: strings.Wallet_Retry, action: { [weak self] in
+                    guard let self, self.restorationGeneration == generation, self.signingWalletMatches(wallet) else { return }
+                    self.openTransfer(collectible)
+                })
+            ],
+            dismissOnOutsideTap: false
+        ), in: .window(.root))
+    }
+
+    private func routeToTransfer(_ collectible: WalletContext.Collectible) {
         let peerSelectionScreen = WalletPeerSelectionScreen(
             context: self.accountContext,
             walletContext: self.walletContext,
