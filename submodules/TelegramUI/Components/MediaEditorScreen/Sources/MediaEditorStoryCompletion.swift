@@ -83,17 +83,70 @@ extension MediaEditorScreenImpl {
         self.dismissAllTooltips()
     }
     
-    private func processSingleItem() {
+    private func processSingleItem(preparedRandomId: Int64? = nil, collagePrepared: Bool = false) {
         guard let mediaEditor = self.node.mediaEditor, let subject = self.node.subject, let actualSubject = self.node.actualSubject else {
             return
         }
         
+        if let collage = self.collage, preparedRandomId == nil, !collagePrepared {
+            self.prepareCollageMedia(collage) { [weak self] success in
+                if success {
+                    self?.processSingleItem(collagePrepared: true)
+                } else {
+                    self?.didComplete = false
+                }
+            }
+            return
+        }
+        if self.collage != nil, preparedRandomId == nil {
+            let randomId: Int64
+            if case let .draft(_, id) = actualSubject, let id {
+                randomId = id
+            } else {
+                randomId = Int64.random(in: .min ... .max)
+            }
+            self.saveCollageForPublication(id: randomId, completion: { [weak self] result in
+                guard let self else {
+                    return
+                }
+                switch result {
+                case let .success(draft):
+                    do {
+                        guard let resolved = try draft.collage?.resolve(engine: self.context.engine), resolved.missingCount == 0, let collage = resolved.collage, let subject = mediaEditorCollageSubject(collage) else {
+                            throw MediaEditorCollageDraftSaveError.mediaUnavailable
+                        }
+                        if let lease = self.collage?.fileLease {
+                            self.collageSourceLeases.append(lease)
+                        }
+                        self.collage = collage
+                        self.collagePublicationImagePath = collage.isVideo ? nil : draft.fullPath(engine: self.context.engine)
+                        self.node.subject = subject
+                        mediaEditor.updateCollageSources(collage, values: draft.values)
+                        self.processSingleItem(preparedRandomId: randomId)
+                    } catch {
+                        self.didComplete = false
+                        self.presentCollageAlert(text: self.context.sharedContext.currentPresentationData.with { $0 }.strings.Login_UnknownError)
+                    }
+                case let .failure(error):
+                    self.didComplete = false
+                    if error == .cancelled {
+                        return
+                    }
+                    let strings = self.context.sharedContext.currentPresentationData.with { $0 }.strings
+                    self.presentCollageAlert(text: strings.Login_UnknownError)
+                }
+            })
+            return
+        }
+
         var caption = self.node.getCaption()
         caption = convertMarkdownToAttributes(caption)
         
         var hasEntityChanges = false
         let randomId: Int64
-        if case let .draft(_, id) = actualSubject, let id {
+        if let preparedRandomId {
+            randomId = preparedRandomId
+        } else if case let .draft(_, id) = actualSubject, let id {
             randomId = id
         } else {
             randomId = Int64.random(in: .min ... .max)
@@ -138,9 +191,12 @@ extension MediaEditorScreenImpl {
         }
         
         if self.isEmbeddedEditor && !(hasAnyChanges || hasEntityChanges) {
-            self.saveDraft(id: randomId, isEdit: true)
+            if self.collage == nil {
+                self.saveDraft(id: randomId, isEdit: true)
+            }
             
             self.completion([MediaEditorScreenImpl.Result(media: nil, mediaAreas: [], caption: caption, coverTimestamp: mediaEditor.values.coverImageTimestamp, options: self.state.privacy, stickers: stickers, music: mediaEditor.values.audioTrack?.file, randomId: randomId)], { [weak self] finished in
+                self?.removePublishedCollageDraft()
                 self?.node.animateOut(finished: true, saveDraft: false, completion: { [weak self] in
                     self?.dismiss()
                     Queue.mainQueue().justDispatch {
@@ -163,7 +219,9 @@ extension MediaEditorScreenImpl {
         }
         
         if mediaEditor.resultIsVideo {
-            self.saveDraft(id: randomId)
+            if self.collage == nil {
+                self.saveDraft(id: randomId)
+            }
             
             var firstFrame: Signal<(UIImage?, UIImage?), NoError>
             let firstFrameTime: CMTime
@@ -193,8 +251,8 @@ extension MediaEditorScreenImpl {
                 
                 firstFrame = .single((image, nil))
             case let .image(image, _, _, _, _):
-                let tempImagePath = NSTemporaryDirectory() + "\(Int64.random(in: Int64.min ... Int64.max)).jpg"
-                if let data = image.jpegData(compressionQuality: 0.85) {
+                let tempImagePath = self.collagePublicationImagePath ?? NSTemporaryDirectory() + "\(Int64.random(in: Int64.min ... Int64.max)).jpg"
+                if self.collagePublicationImagePath == nil, let data = image.jpegData(compressionQuality: 0.85) {
                     try? data.write(to: URL(fileURLWithPath: tempImagePath))
                 }
                 videoResult = .single(.imageFile(path: tempImagePath))
@@ -247,6 +305,10 @@ extension MediaEditorScreenImpl {
             case let .videoCollage(items):
                 var maxDurationItem: (Double, Subject.VideoCollageItem)?
                 for item in items {
+                    if item.isMain {
+                        maxDurationItem = (item.content.duration, item)
+                        break
+                    }
                     switch item.content {
                     case .image:
                         break
@@ -442,7 +504,7 @@ extension MediaEditorScreenImpl {
                 duration = 3.0
                 
                 firstFrame = .single((image, nil))
-            case .multiple:
+            case .multiple, .collage:
                 fatalError()
             }
             
@@ -491,6 +553,7 @@ extension MediaEditorScreenImpl {
                                 self.node.entitiesView.invalidate()
                                 Logger.shared.log("MediaEditor", "Completed with video \(videoResult)")
                                 self.completion([MediaEditorScreenImpl.Result(media: .video(video: videoResult, coverImage: coverImage, values: values, duration: duration, dimensions: values.resultDimensions), mediaAreas: mediaAreas, caption: caption, coverTimestamp: values.coverImageTimestamp, options: self.state.privacy, stickers: stickers, music: values.audioTrack?.file, randomId: randomId)], { [weak self] finished in
+                                    self?.removePublishedCollageDraft()
                                     self?.node.animateOut(finished: true, saveDraft: false, completion: { [weak self] in
                                         self?.dismiss()
                                         Queue.mainQueue().justDispatch {
@@ -506,11 +569,13 @@ extension MediaEditorScreenImpl {
                 }
             })
         
-            if case let .draft(draft, id) = actualSubject, id == nil {
+            if self.collage == nil, case let .draft(draft, id) = actualSubject, id == nil {
                 removeStoryDraft(engine: self.context.engine, path: draft.path, delete: false)
             }
         } else if let image = mediaEditor.resultImage {
-            self.saveDraft(id: randomId)
+            if self.collage == nil {
+                self.saveDraft(id: randomId)
+            }
             
             var values = mediaEditor.values
             var outputDimensions: CGSize?
@@ -538,6 +603,7 @@ extension MediaEditorScreenImpl {
                         self.node.entitiesView.invalidate()
                         Logger.shared.log("MediaEditor", "Completed with image \(resultImage)")
                         self.completion([MediaEditorScreenImpl.Result(media: .image(image: resultImage, dimensions: PixelDimensions(resultImage.size)), mediaAreas: mediaAreas, caption: caption, coverTimestamp: nil, options: self.state.privacy, stickers: stickers, music: values.audioTrack?.file, randomId: randomId)], { [weak self] finished in
+                            self?.removePublishedCollageDraft()
                             self?.node.animateOut(finished: true, saveDraft: false, completion: { [weak self] in
                                 self?.dismiss()
                                 Queue.mainQueue().justDispatch {
@@ -545,7 +611,7 @@ extension MediaEditorScreenImpl {
                                 }
                             })
                         })
-                        if case let .draft(draft, id) = actualSubject, id == nil {
+                        if self.collage == nil, case let .draft(draft, id) = actualSubject, id == nil {
                             removeStoryDraft(engine: self.context.engine, path: draft.path, delete: true)
                         }
                     }, { [weak self] in

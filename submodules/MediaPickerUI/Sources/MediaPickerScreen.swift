@@ -77,13 +77,40 @@ final class MediaPickerInteraction {
 }
 
 private struct MediaPickerGridEntry: Comparable, Identifiable {
-    let stableId: Int
+    enum StableId: Hashable {
+        case asset(Int)
+        case media(Int)
+        case draft(String)
+    }
+
+    let index: Int
     let content: MediaPickerGridItemContent
     let selectable: Bool
     let stories: Bool
+
+    var stableId: StableId {
+        switch self.content {
+        case let .asset(_, index):
+            return .asset(index)
+        case let .media(_, index):
+            return .media(index)
+        case let .draft(draft, _):
+            return .draft(draft.path)
+        }
+    }
+
+    private var isDraft: Bool {
+        if case .draft = self.content {
+            return true
+        }
+        return false
+    }
     
     static func <(lhs: MediaPickerGridEntry, rhs: MediaPickerGridEntry) -> Bool {
-        return lhs.stableId < rhs.stableId
+        if lhs.isDraft != rhs.isDraft {
+            return lhs.isDraft
+        }
+        return lhs.index < rhs.index
     }
     
     func item(context: AccountContext, interaction: MediaPickerInteraction, theme: PresentationTheme, strings: PresentationStrings) -> MediaPickerGridItem {
@@ -991,7 +1018,6 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
             let previousState = self.state
             self.state = state
             
-            var stableId: Int = 0
             var entries: [MediaPickerGridEntry] = []
             
             var updateLayout = false
@@ -1023,8 +1049,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                     
                     var draftIndex = 0
                     for draft in drafts {
-                        entries.append(MediaPickerGridEntry(stableId: stableId, content: .draft(draft, draftIndex), selectable: selectable, stories: stories))
-                        stableId += 1
+                        entries.append(MediaPickerGridEntry(index: draftIndex, content: .draft(draft, draftIndex), selectable: selectable, stories: stories))
                         draftIndex += 1
                     }
                     
@@ -1035,8 +1060,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                         } else {
                             index = totalCount - i - 1
                         }
-                        entries.append(MediaPickerGridEntry(stableId: stableId, content: .asset(fetchResult, index), selectable: selectable, stories: stories))
-                        stableId += 1
+                        entries.append(MediaPickerGridEntry(index: i, content: .asset(fetchResult, index), selectable: selectable, stories: stories))
                     }
                     
                     if case let .assets(previousFetchResult, _, _, _, previousCameraAccess) = previousState, previousFetchResult == nil || previousCameraAccess != cameraAccess {
@@ -1146,8 +1170,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
             case let .media(media):
                 let count = media.count
                 for i in 0 ..< count {
-                    entries.append(MediaPickerGridEntry(stableId: stableId, content: .media(media[i], i), selectable: true, stories: stories))
-                    stableId += 1
+                    entries.append(MediaPickerGridEntry(index: i, content: .media(media[i], i), selectable: true, stories: stories))
                 }
             }
         
