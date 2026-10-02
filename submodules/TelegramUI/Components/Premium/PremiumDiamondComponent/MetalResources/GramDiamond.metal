@@ -621,7 +621,7 @@ float3 interior(float3 p, float3 direction, float pavilion, constant Uniforms &u
     float3 accumulated = 0;
     float weight = 0.60;
     float3 origin = p + direction * 0.004;
-    for (uint bounce = 0; bounce < 2; ++bounce) {
+    for (uint bounce = 0; bounce < 0; ++bounce) {
         float3 n = float3(0, 1, 0);
         float distance = nearestExit(origin, direction, planes, uint(u.viewport.z), n);
         if (distance > 100) { break; }
