@@ -635,13 +635,20 @@ func initializedNetwork(accountId: AccountRecordId, arguments: NetworkInitializa
             
             let resolvedEngine = resolveNetworkEngine(accountId: accountId, context: context, factory: arguments.networkEngineFactory, settings: networkEngineSettings, appConfiguration: appConfiguration, isAppExtension: isAppExtension)
             let rustEngineDisabled = networkEngineRustDisabled(appConfiguration: appConfiguration)
+            // Live engine switching (the server kill switch, a WEB proxy turned on and off) is macOS only.
+            // On iOS the engine changes only through the Debug Settings switch, at the next launch: no
+            // wrapper is created, so switchEngine/disableRustEngine have nothing to act on and the
+            // network runs the resolved engine directly, exactly as without a factory.
+            #if os(macOS)
             let prefersRustEngine = (networkEngineSettings?.engine ?? NetworkEngineSettings.defaultSettings.engine) == .rust
             let rustEngineWaitsForWebProxy = arguments.networkEngineFactory != nil && !rustEngineDisabled && resolvedEngine.kind == .mtProtoKit && prefersRustEngine && initialActiveServer?.isWebProxy == true
-            // Live switching (the server kill switch, a WEB proxy turned on and off) only ever moves a
-            // network off Rust, or back to Rust after a WEB proxy, so it is needed only while Rust is in
-            // play. Otherwise MtProtoKit runs directly, exactly as without a factory: an iOS build that
-            // links the Rust engine but leaves it off must behave like one that does not link it.
+            // Live switching only ever moves a network off Rust, or back to Rust after a WEB proxy, so it
+            // is needed only while Rust is in play; otherwise MtProtoKit runs directly.
             let switchingEngine = arguments.networkEngineFactory != nil && (resolvedEngine.kind == .rust || rustEngineWaitsForWebProxy) ? SwitchingNetworkEngine(engine: resolvedEngine) : nil
+            #else
+            let rustEngineWaitsForWebProxy = false
+            let switchingEngine: SwitchingNetworkEngine? = nil
+            #endif
             let engine: NetworkEngine = switchingEngine ?? resolvedEngine
             
             let connectionStatus = Promise<ConnectionStatus>(.waitingForNetwork)

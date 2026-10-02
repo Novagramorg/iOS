@@ -1538,6 +1538,9 @@ public class Account {
         |> distinctUntilChanged).start(next: { activeServer in
             network.updateProxySettings(activeServer)
         }))
+        #if os(macOS)
+        // The live kill switch is macOS only. On iOS the engine changes only through the Debug Settings
+        // switch; mtproto_engine_rust_disabled is honoured when the network starts (resolveNetworkEngine).
         self.managedOperationsDisposable.add((postbox.preferencesView(keys: [PreferencesKeys.appConfiguration])
         |> map { view -> Bool in
             let appConfiguration = view.values[PreferencesKeys.appConfiguration]?.get(AppConfiguration.self) ?? .defaultValue
@@ -1547,6 +1550,7 @@ public class Account {
         |> filter { $0 }).start(next: { _ in
             network.disableRustEngine(reason: "mtproto_engine_rust_disabled")
         }))
+        #endif
 
         if !supplementary {
             let mediaBox = postbox.mediaBox
