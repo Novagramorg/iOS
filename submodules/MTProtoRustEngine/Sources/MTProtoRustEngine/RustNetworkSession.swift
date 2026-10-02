@@ -90,6 +90,7 @@ final class RustNetworkSession: NetworkEngineSession {
     private var heldRequests: [RustPendingRequest] = []
     private var verifyingRequests: [UInt64: RustPendingRequest] = [:]
     private var sinks: [NetworkEngineUpdateSink] = []
+    private var dropObservers: [(NetworkEngineConnectionDrop) -> Void] = []
 
     private var externallyPaused = true
     private var appliedPaused = true
@@ -303,6 +304,12 @@ final class RustNetworkSession: NetworkEngineSession {
     func addUpdateSink(_ sink: NetworkEngineUpdateSink) {
         self.queue.async { [weak self] in
             self?.sinks.append(sink)
+        }
+    }
+
+    func observeConnectionDrops(_ observer: @escaping (NetworkEngineConnectionDrop) -> Void) {
+        self.queue.async { [weak self] in
+            self?.dropObservers.append(observer)
         }
     }
 
@@ -578,6 +585,12 @@ final class RustNetworkSession: NetworkEngineSession {
             rustEngineLog("\(self.logPrefix) auth key creation failed: \(event.text)")
         case .transportFlood:
             rustEngineLog("\(self.logPrefix) transport flood (-429)")
+        case .connectionDropped:
+            let drop = NetworkEngineConnectionDrop(reason: event.text, answered: (event.flags & 1) != 0, age: event.value1)
+            rustEngineLog("\(self.logPrefix) connection dropped: \(drop.reason), answered \(drop.answered), after \(drop.age) s")
+            for observer in self.dropObservers {
+                observer(drop)
+            }
         case .closed:
             break
         }
@@ -612,7 +625,7 @@ final class RustNetworkSession: NetworkEngineSession {
         rustEngineImportantLog("\(self.logPrefix) response for #\(pending.engineId) \(pending.request.shortMetadata.description) could not be parsed")
         self.invalidateInitialization()
         let errorContext = pending.errorState.applyParseFailure()
-        let gateAllowsRetry = pending.request.shouldContinueAfterError(NetworkEngineErrorContext(floodWaitSeconds: errorContext.floodWaitSeconds, floodWaitErrorText: errorContext.floodWaitErrorText, internalServerErrorCount: errorContext.internalServerErrorCount))
+        let gateAllowsRetry = pending.errorState.parseFailures < RustEngineParseFailurePolicy.maxAttempts && pending.request.shouldContinueAfterError(NetworkEngineErrorContext(floodWaitSeconds: errorContext.floodWaitSeconds, floodWaitErrorText: errorContext.floodWaitErrorText, internalServerErrorCount: errorContext.internalServerErrorCount))
         if pending.isCancelled || pending.isFinished {
             return
         }

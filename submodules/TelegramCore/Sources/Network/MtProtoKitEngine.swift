@@ -236,12 +236,11 @@ private final class MtProtoKitRequestService: NetworkEngineRequestService {
         mtRequest.needsTimeoutTimer = request.options.needsTimeoutTimer
         mtRequest.expectedResponseSize = request.options.expectedResponseSize
         
-        let shouldContinueAfterError = request.shouldContinueAfterError
         mtRequest.shouldContinueExecutionWithErrorContext = { errorContext in
             guard let errorContext = errorContext else {
                 return true
             }
-            return shouldContinueAfterError(NetworkEngineErrorContext(errorContext))
+            return request.shouldContinueAfterError(NetworkEngineErrorContext(errorContext))
         }
         
         if let acknowledged = request.acknowledged {
@@ -256,18 +255,17 @@ private final class MtProtoKitRequestService: NetworkEngineRequestService {
             }
         }
         
-        let completed = request.completed
         mtRequest.completed = { (boxedResponse, info, error) -> () in
             if !pendingRequests.complete(pending) {
                 return
             }
             let responseInfo = NetworkEngineResponseInfo(info)
             if let error = error {
-                completed(.failure(NetworkEngineRequestFailure(error: error, info: responseInfo)))
+                request.completed(.failure(NetworkEngineRequestFailure(error: error, info: responseInfo)))
             } else if let boxedResponse = boxedResponse {
-                completed(.success(NetworkEngineResponse(result: boxedResponse, info: responseInfo)))
+                request.completed(.success(NetworkEngineResponse(result: boxedResponse, info: responseInfo)))
             } else {
-                completed(.success(NetworkEngineResponse(result: boxedResponse as Any, info: responseInfo)))
+                request.completed(.success(NetworkEngineResponse(result: boxedResponse as Any, info: responseInfo)))
             }
         }
         

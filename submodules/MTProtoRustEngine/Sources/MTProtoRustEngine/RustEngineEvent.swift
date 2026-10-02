@@ -30,6 +30,7 @@ enum RustEngineEventKind: UInt32 {
     case addressResult = 25
     case closed = 26
     case retryDecisionRequired = 27
+    case connectionDropped = 29
 }
 
 struct RustEngineEvent {

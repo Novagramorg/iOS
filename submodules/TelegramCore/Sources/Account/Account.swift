@@ -1551,6 +1551,9 @@ public class Account {
             network.disableRustEngine(reason: "mtproto_engine_rust_disabled")
         }))
         #endif
+        if !supplementary {
+            self.managedOperationsDisposable.add(managedNetworkTelemetryReports(postbox: postbox, network: network).start())
+        }
 
         if !supplementary {
             let mediaBox = postbox.mediaBox

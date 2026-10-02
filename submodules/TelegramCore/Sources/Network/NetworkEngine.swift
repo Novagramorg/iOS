@@ -89,9 +89,6 @@ public final class NetworkEngineRequest {
     /// request with `500 TL_PARSING_ERROR` and clear the auth key's `apiInitializationHash`.
     public let parse: (Data) -> Any?
     public let options: NetworkEngineRequestOptions
-    /// Asked on `FLOOD_WAIT_X`, `FLOOD_PREMIUM_WAIT_X` and `500`/`-500` errors. `true` retries the
-    /// request after the wait (2 seconds for server errors), `false` completes it with the error.
-    public let shouldContinueAfterError: (NetworkEngineErrorContext) -> Bool
     /// When set, the request is sent wrapped in `invokeAfterMsg` pointing at the latest earlier
     /// pending request whose metadata this closure accepts.
     public let dependsOn: ((WrappedRequestMetadata) -> Bool)?
@@ -99,8 +96,12 @@ public final class NetworkEngineRequest {
     public let acknowledged: (() -> Void)?
     /// When set, called with the receive progress of the response packet and the packet length.
     public let progress: ((Float, Int) -> Void)?
-    /// Called exactly once, unless the request is cancelled first.
-    public let completed: (Result<NetworkEngineResponse, NetworkEngineRequestFailure>) -> Void
+    private let shouldContinueAfterErrorImpl: (NetworkEngineErrorContext) -> Bool
+    private let completedImpl: (Result<NetworkEngineResponse, NetworkEngineRequestFailure>) -> Void
+    /// Set by `NetworkTelemetry` before the request reaches an engine, and only read afterwards.
+    var telemetry: NetworkTelemetry?
+    var telemetryInfo: NetworkTelemetryRequestInfo?
+    var telemetryProgress = NetworkTelemetryRequestProgress()
     
     init(
         payload: Data,
@@ -119,11 +120,35 @@ public final class NetworkEngineRequest {
         self.shortMetadata = shortMetadata
         self.parse = parse
         self.options = options
-        self.shouldContinueAfterError = shouldContinueAfterError
+        self.shouldContinueAfterErrorImpl = shouldContinueAfterError
         self.dependsOn = dependsOn
         self.acknowledged = acknowledged
         self.progress = progress
-        self.completed = completed
+        self.completedImpl = completed
+    }
+    
+    /// Asked on `FLOOD_WAIT_X`, `FLOOD_PREMIUM_WAIT_X` and `500`/`-500` errors. `true` retries the
+    /// request after the wait (2 seconds for server errors), `false` completes it with the error.
+    public func shouldContinueAfterError(_ context: NetworkEngineErrorContext) -> Bool {
+        let result = self.shouldContinueAfterErrorImpl(context)
+        if let telemetry = self.telemetry {
+            telemetry.errorHandled(request: self, context: context, retried: result)
+        }
+        return result
+    }
+    
+    /// Called by the engine exactly once, unless the request is cancelled first.
+    public func completed(_ result: Result<NetworkEngineResponse, NetworkEngineRequestFailure>) {
+        if let telemetry = self.telemetry, let info = self.telemetryInfo {
+            telemetry.completed(request: self, info: info, result: result)
+        }
+        self.completedImpl(result)
+    }
+    
+    deinit {
+        if let telemetry = self.telemetry, let info = self.telemetryInfo, !self.telemetryProgress.finished {
+            telemetry.released(request: self, info: info)
+        }
     }
 }
 
@@ -174,6 +199,8 @@ public protocol NetworkEngineRequestService: AnyObject {
     /// Submits a request from any thread without blocking. Disposing the returned disposable
     /// cancels the request; it is safe from any thread, at any time, also after the session is gone.
     /// No callback of the request may run after its cancellation has been processed.
+    /// Returns `EmptyDisposable` exactly when the request is refused and will never complete (its
+    /// session is gone); `NetworkTelemetry` records such a request as dropped.
     func add(_ request: NetworkEngineRequest) -> Disposable
 }
 
@@ -194,6 +221,28 @@ public protocol NetworkEngineSession: AnyObject {
     /// the session never calls back for a moved request, and disposing the disposable `add`
     /// returned for it cancels it on `service`. `completion` runs once every request has moved.
     func movePendingRequests(to service: NetworkEngineRequestService, completion: @escaping () -> Void)
+    /// Calls `observer` whenever the engine gives up on one of the session's connections. Engines
+    /// that cannot tell why need not call it.
+    func observeConnectionDrops(_ observer: @escaping (NetworkEngineConnectionDrop) -> Void)
+}
+
+public extension NetworkEngineSession {
+    func observeConnectionDrops(_ observer: @escaping (NetworkEngineConnectionDrop) -> Void) {
+    }
+}
+
+/// A connection the engine gave up on: which of its checks decided, whether the session had taken
+/// a packet from it, and seconds since it started connecting.
+public struct NetworkEngineConnectionDrop: Equatable {
+    public var reason: String
+    public var answered: Bool
+    public var age: Double
+
+    public init(reason: String, answered: Bool, age: Double) {
+        self.reason = reason
+        self.answered = answered
+        self.age = age
+    }
 }
 
 public enum NetworkEngineSessionRole: Equatable {

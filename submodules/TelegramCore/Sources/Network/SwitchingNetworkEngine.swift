@@ -94,6 +94,7 @@ private struct SwitchingState {
     var isOnline = false
     var isStopped = false
     var sinks: [NetworkEngineUpdateSink] = []
+    var dropObservers: [(NetworkEngineConnectionDrop) -> Void] = []
 }
 
 private final class SwitchingCore {
@@ -158,6 +159,7 @@ private final class SwitchingCore {
         self.state.pointee.currentDelegate = sessionDelegate
         self.state.pointee.draining[previousGeneration] = previous
         let sinks = self.state.pointee.sinks
+        let dropObservers = self.state.pointee.dropObservers
         let isPaused = self.state.pointee.isPaused
         let isOnline = self.state.pointee.isOnline
         self.lock.unlock()
@@ -165,6 +167,9 @@ private final class SwitchingCore {
         self.delegateBox?.setGeneration(generation)
         for sink in sinks {
             replacement.addUpdateSink(sink)
+        }
+        for observer in dropObservers {
+            replacement.observeConnectionDrops(observer)
         }
         replacement.setPaused(isPaused)
         replacement.setOnline(isOnline)
@@ -250,6 +255,14 @@ private final class SwitchingCore {
         session?.addUpdateSink(sink)
     }
 
+    func observeConnectionDrops(_ observer: @escaping (NetworkEngineConnectionDrop) -> Void) {
+        self.lock.lock()
+        self.state.pointee.dropObservers.append(observer)
+        let session = self.state.pointee.current
+        self.lock.unlock()
+        session?.observeConnectionDrops(observer)
+    }
+
     func stop() {
         self.lock.lock()
         if self.state.pointee.isStopped {
@@ -263,6 +276,7 @@ private final class SwitchingCore {
         self.state.pointee.currentDelegate = nil
         self.state.pointee.draining.removeAll()
         self.state.pointee.sinks.removeAll()
+        self.state.pointee.dropObservers.removeAll()
         self.lock.unlock()
         for session in sessions {
             session.stop()
@@ -311,6 +325,10 @@ final class SwitchingNetworkSession: NetworkEngineSession {
 
     func addUpdateSink(_ sink: NetworkEngineUpdateSink) {
         self.core.addUpdateSink(sink)
+    }
+
+    func observeConnectionDrops(_ observer: @escaping (NetworkEngineConnectionDrop) -> Void) {
+        self.core.observeConnectionDrops(observer)
     }
 
     func stop() {

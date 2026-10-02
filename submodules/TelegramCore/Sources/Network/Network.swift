@@ -33,6 +33,10 @@ final class WrappedFunctionDescription: CustomStringConvertible {
     var description: String {
         return apiFunctionDescription(of: self.desc)
     }
+    
+    var name: String {
+        return self.desc.name
+    }
 }
 
 final class WrappedShortFunctionDescription: CustomStringConvertible {
@@ -44,6 +48,10 @@ final class WrappedShortFunctionDescription: CustomStringConvertible {
     
     var description: String {
         return apiShortFunctionDescription(of: self.desc)
+    }
+    
+    var name: String {
+        return self.desc.name
     }
 }
 
@@ -70,6 +78,17 @@ public class WrappedRequestShortMetadata: NSObject {
     
     override public var description: String {
         return self.shortMetadata.description
+    }
+    
+    /// The API method name alone, without parameters, or nil when the request is not an API function.
+    var functionName: String? {
+        if let value = self.shortMetadata as? WrappedShortFunctionDescription {
+            return value.name
+        } else if let value = self.shortMetadata as? WrappedFunctionDescription {
+            return value.name
+        } else {
+            return nil
+        }
     }
 }
 
@@ -650,7 +669,20 @@ func initializedNetwork(accountId: AccountRecordId, arguments: NetworkInitializa
             let rustEngineWaitsForWebProxy = false
             let switchingEngine: SwitchingNetworkEngine? = nil
             #endif
-            let engine: NetworkEngine = switchingEngine ?? resolvedEngine
+            let telemetryDirectory = basePath + "/network-telemetry"
+            let telemetryConfiguration = NetworkTelemetryConfiguration.with(appConfiguration: appConfiguration)
+            let telemetry: NetworkTelemetry?
+            if networkTelemetryShouldRecord(supplementary: supplementary, isAppExtension: isAppExtension, configuration: telemetryConfiguration) {
+                telemetry = NetworkTelemetry.shared(directory: telemetryDirectory, layer: Int32(serialization.currentLayer()), app: arguments.appVersion, system: networkTelemetrySystemVersion(), variant: telemetryConfiguration.variant, stalledAfter: networkTelemetryOverrides.stalledAfter ?? NetworkTelemetry.stalledAfter, watchEvery: networkTelemetryOverrides.watchEvery ?? NetworkTelemetry.watchEvery)
+            } else {
+                telemetry = nil
+                if !supplementary && !isAppExtension {
+                    Queue.concurrentBackgroundQueue().async {
+                        try? FileManager.default.removeItem(atPath: telemetryDirectory)
+                    }
+                }
+            }
+            let engine: NetworkEngine = telemetry.flatMap { RecordingNetworkEngine(engine: switchingEngine ?? resolvedEngine, telemetry: $0) } ?? switchingEngine ?? resolvedEngine
             
             let connectionStatus = Promise<ConnectionStatus>(.waitingForNetwork)
             
@@ -662,7 +694,7 @@ func initializedNetwork(accountId: AccountRecordId, arguments: NetworkInitializa
                 useExperimentalFeatures = false
             }
             
-            let network = Network(queue: queue, datacenterId: datacenterId, context: context, engine: engine, switchingEngine: switchingEngine, engineFactory: arguments.networkEngineFactory, rustEngineDisabled: rustEngineDisabled, rustEngineWaitsForWebProxy: rustEngineWaitsForWebProxy, mainSession: mainSession, mainSessionDelegate: mainSessionDelegate, _connectionStatus: connectionStatus, basePath: basePath, appDataDisposable: appDataDisposable, encryptionProvider: arguments.encryptionProvider, useRequestTimeoutTimers: useRequestTimeoutTimers, useBetaFeatures: arguments.useBetaFeatures, useExperimentalFeatures: useExperimentalFeatures, baseTcpConnectionInterfaceFactory: baseTcpConnectionInterfaceFactory, isAppExtension: isAppExtension, initialWebProxyActive: initialActiveServer?.isWebProxy == true)
+            let network = Network(queue: queue, datacenterId: datacenterId, context: context, engine: engine, switchingEngine: switchingEngine, engineFactory: arguments.networkEngineFactory, rustEngineDisabled: rustEngineDisabled, rustEngineWaitsForWebProxy: rustEngineWaitsForWebProxy, mainSession: mainSession, mainSessionDelegate: mainSessionDelegate, telemetry: telemetry, _connectionStatus: connectionStatus, basePath: basePath, appDataDisposable: appDataDisposable, encryptionProvider: arguments.encryptionProvider, useRequestTimeoutTimers: useRequestTimeoutTimers, useBetaFeatures: arguments.useBetaFeatures, useExperimentalFeatures: useExperimentalFeatures, baseTcpConnectionInterfaceFactory: baseTcpConnectionInterfaceFactory, isAppExtension: isAppExtension, initialWebProxyActive: initialActiveServer?.isWebProxy == true)
             
             if let data = appConfiguration.data, let notifyInterval = data["upload_premium_speedup_notify_period"] as? Double {
                 network.updateNetworkSpeedLimitedEventNotifyInterval(value: notifyInterval)
@@ -826,6 +858,9 @@ public final class Network: NSObject {
     let requestService: NetworkEngineRequestService
     let basePath: String
     private let mainSessionDelegate: NetworkMainSessionDelegate
+    /// Records requests and failures of every session, whichever engine runs them. Nil unless
+    /// `network_telemetry_enabled` was set when the network started (always set in Debug builds).
+    public let telemetry: NetworkTelemetry?
     private let useRequestTimeoutTimers: Bool
     private let baseTcpConnectionInterfaceFactory: ((MTTcpConnectionInterfaceDelegate, DispatchQueue) -> MTTcpConnectionInterface)?
     private let isAppExtension: Bool
@@ -893,7 +928,7 @@ public final class Network: NSObject {
         return self.engine.kind
     }
     
-    fileprivate init(queue: Queue, datacenterId: Int, context: MTContext, engine: NetworkEngine, switchingEngine: SwitchingNetworkEngine?, engineFactory: NetworkEngineFactory?, rustEngineDisabled: Bool, rustEngineWaitsForWebProxy: Bool, mainSession: NetworkEngineSession, mainSessionDelegate: NetworkMainSessionDelegate, _connectionStatus: Promise<ConnectionStatus>, basePath: String, appDataDisposable: Disposable, encryptionProvider: EncryptionProvider, useRequestTimeoutTimers: Bool, useBetaFeatures: Bool, useExperimentalFeatures: Bool, baseTcpConnectionInterfaceFactory: ((MTTcpConnectionInterfaceDelegate, DispatchQueue) -> MTTcpConnectionInterface)?, isAppExtension: Bool, initialWebProxyActive: Bool) {
+    fileprivate init(queue: Queue, datacenterId: Int, context: MTContext, engine: NetworkEngine, switchingEngine: SwitchingNetworkEngine?, engineFactory: NetworkEngineFactory?, rustEngineDisabled: Bool, rustEngineWaitsForWebProxy: Bool, mainSession: NetworkEngineSession, mainSessionDelegate: NetworkMainSessionDelegate, telemetry: NetworkTelemetry?, _connectionStatus: Promise<ConnectionStatus>, basePath: String, appDataDisposable: Disposable, encryptionProvider: EncryptionProvider, useRequestTimeoutTimers: Bool, useBetaFeatures: Bool, useExperimentalFeatures: Bool, baseTcpConnectionInterfaceFactory: ((MTTcpConnectionInterfaceDelegate, DispatchQueue) -> MTTcpConnectionInterface)?, isAppExtension: Bool, initialWebProxyActive: Bool) {
         self.encryptionProvider = encryptionProvider
         
         self.queue = queue
@@ -908,6 +943,7 @@ public final class Network: NSObject {
         self.mainSession = mainSession
         self.requestService = mainSession.requestService
         self.mainSessionDelegate = mainSessionDelegate
+        self.telemetry = telemetry
         self._connectionStatus = _connectionStatus
         self.appDataDisposable = appDataDisposable
         self.basePath = basePath

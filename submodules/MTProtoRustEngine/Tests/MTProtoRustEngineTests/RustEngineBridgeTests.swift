@@ -96,6 +96,7 @@ final class RustEngineBridgeTests: XCTestCase {
             (.transportFlood, MTEventKindTransportFlood), (.networkUsage, MTEventKindNetworkUsage),
             (.addressResult, MTEventKindAddressResult), (.closed, MTEventKindClosed),
             (.retryDecisionRequired, MTEventKindRetryDecisionRequired),
+            (.connectionDropped, MTEventKindConnectionDropped),
         ]
         for (kind, raw) in pairs {
             XCTAssertEqual(kind.rawValue, raw.rawValue)
