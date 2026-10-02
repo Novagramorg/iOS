@@ -434,17 +434,18 @@ through the protected local storage path.
 
 For context, the [backup codec](../submodules/WalletContext/Sources/WalletPhraseCodec.swift)
 normalizes mnemonic words to lowercase, joins them with spaces, and pads the UTF-8
-text with spaces to **215 bytes**, then prepends `08 dd 90 8b d7` to form a
-**220-byte mnemonic block**. [WalletBackupCrypto](../submodules/WalletBackupCrypto/Sources/WalletBackupCrypto.mm)
-splits that entire block into three 220-byte XOR shares, all required for recovery:
-two random shares and a third equal to the block XOR both. Each raw share is
-encrypted for one of three 32-byte holder public keys using the tde2e ECDH/message
-APIs and a distinct ephemeral key, without a per-share TL prefix. Export uses a
-fresh client key pair, decrypts and XORs all three complete shares, then verifies
-the block's length, prefix, and canonical phrase encoding. The derived 32-byte
-public key must match the expected wallet identity before local installation.
-Older backups that prefixed each 215-byte share remain readable: XOR of three
-identical prefixes restores that prefix, so no migration or fallback is needed.
+text with spaces to **215 bytes**. [WalletBackupCrypto](../submodules/WalletBackupCrypto/Sources/WalletBackupCrypto.mm)
+splits that text into three 215-byte XOR shares, all required for recovery:
+two random shares and a third equal to the text XOR both. It prepends
+`08 dd 90 8b d7` to **each share after splitting**, then encrypts the resulting
+220-byte payload for its 32-byte holder public key using the tde2e ECDH/message
+APIs and a distinct ephemeral key. Export uses a fresh client key pair, decrypts
+and XORs the three complete payloads, validates and removes the reconstructed
+prefix, and verifies canonical phrase encoding of the remaining 215 bytes.
+The derived 32-byte public key must match the expected wallet identity before
+local installation. XOR of three identical prefixes restores that prefix, so
+this reader also supports interim backups that split an already-prefixed
+220-byte mnemonic block; no migration or separate fallback is needed.
 The local passcode is not an input to this backup encryption.
 
 ## Destructive reset and fresh installations
@@ -481,17 +482,6 @@ and cannot erase records in an old group the app can no longer access. It remove
 local wallet data; it does not delete a server backup.
 
 ## Verification coverage and limits
-
-The isolated macOS backup suite builds the production phrase codec and
-WalletBackupCrypto with real tde2e, without the Telegram application or WalletEngine:
-
-```sh
-rtk proxy ./build-input/bazel-9.2.0-darwin-arm64 test //submodules/WalletContext:WalletBackupTests --test_output=errors
-```
-
-It checks exact mnemonic encoding and validation, independent protocol and legacy
-share fixtures, holder encryption and client recovery, and rejection of malformed
-shares, ciphertext, keys, and outer envelope sets.
 
 The standalone suites exercise production cryptography and injectable security
 logic without building the full application:
