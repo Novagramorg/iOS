@@ -410,7 +410,7 @@ public final class WalletCardComponent: Component {
                 fractionalText = component.dateTimeFormat.decimalSeparator + fractionalDigits
             } else {
                 integralText = formattedBalance
-                fractionalText = component.dateTimeFormat.decimalSeparator + "00"
+                fractionalText = ""
             }
 
             let secondaryText: String
