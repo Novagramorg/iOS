@@ -482,6 +482,10 @@ Load-bearing, and none of it shows up as a build error:
   probe's `EphemeralMain` auth action completes without contacting the server whenever the main
   session's own temporary key is stored, so it always answers "not removed" and a session terminated
   from another device would never log out.
+- **Off means untouched.** `Network` wraps the engine in `SwitchingNetworkEngine` (the live kill
+  switch, live WEB-proxy moves) only while Rust is in play: it resolved to Rust, or Rust was chosen
+  and waits for a WEB proxy to go away. With the switch off, iOS runs plain MtProtoKit sessions,
+  exactly as a build without the factory; do not make the wrapper depend on the factory alone.
 - `Network.isUserOnline` (from `Account.shouldKeepOnlinePresence`, wired on iOS only) reaches every
   session through `NetworkEngineSession.setOnline`; the Rust engine then uses tdlib's online
   keepalive timing. macOS, where Rust is the default, stays offline-timed until that cadence is

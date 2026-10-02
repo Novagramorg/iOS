@@ -634,7 +634,14 @@ func initializedNetwork(accountId: AccountRecordId, arguments: NetworkInitializa
             #endif*/
             
             let resolvedEngine = resolveNetworkEngine(accountId: accountId, context: context, factory: arguments.networkEngineFactory, settings: networkEngineSettings, appConfiguration: appConfiguration, isAppExtension: isAppExtension)
-            let switchingEngine = arguments.networkEngineFactory != nil ? SwitchingNetworkEngine(engine: resolvedEngine) : nil
+            let rustEngineDisabled = networkEngineRustDisabled(appConfiguration: appConfiguration)
+            let prefersRustEngine = (networkEngineSettings?.engine ?? NetworkEngineSettings.defaultSettings.engine) == .rust
+            let rustEngineWaitsForWebProxy = arguments.networkEngineFactory != nil && !rustEngineDisabled && resolvedEngine.kind == .mtProtoKit && prefersRustEngine && initialActiveServer?.isWebProxy == true
+            // Live switching (the server kill switch, a WEB proxy turned on and off) only ever moves a
+            // network off Rust, or back to Rust after a WEB proxy, so it is needed only while Rust is in
+            // play. Otherwise MtProtoKit runs directly, exactly as without a factory: an iOS build that
+            // links the Rust engine but leaves it off must behave like one that does not link it.
+            let switchingEngine = arguments.networkEngineFactory != nil && (resolvedEngine.kind == .rust || rustEngineWaitsForWebProxy) ? SwitchingNetworkEngine(engine: resolvedEngine) : nil
             let engine: NetworkEngine = switchingEngine ?? resolvedEngine
             
             let connectionStatus = Promise<ConnectionStatus>(.waitingForNetwork)
@@ -647,8 +654,6 @@ func initializedNetwork(accountId: AccountRecordId, arguments: NetworkInitializa
                 useExperimentalFeatures = false
             }
             
-            let rustEngineDisabled = networkEngineRustDisabled(appConfiguration: appConfiguration)
-            let rustEngineWaitsForWebProxy = switchingEngine != nil && !rustEngineDisabled && resolvedEngine.kind == .mtProtoKit && (networkEngineSettings?.engine ?? NetworkEngineSettings.defaultSettings.engine) == .rust && initialActiveServer?.isWebProxy == true
             let network = Network(queue: queue, datacenterId: datacenterId, context: context, engine: engine, switchingEngine: switchingEngine, engineFactory: arguments.networkEngineFactory, rustEngineDisabled: rustEngineDisabled, rustEngineWaitsForWebProxy: rustEngineWaitsForWebProxy, mainSession: mainSession, mainSessionDelegate: mainSessionDelegate, _connectionStatus: connectionStatus, basePath: basePath, appDataDisposable: appDataDisposable, encryptionProvider: arguments.encryptionProvider, useRequestTimeoutTimers: useRequestTimeoutTimers, useBetaFeatures: arguments.useBetaFeatures, useExperimentalFeatures: useExperimentalFeatures, baseTcpConnectionInterfaceFactory: baseTcpConnectionInterfaceFactory, isAppExtension: isAppExtension, initialWebProxyActive: initialActiveServer?.isWebProxy == true)
             
             if let data = appConfiguration.data, let notifyInterval = data["upload_premium_speedup_notify_period"] as? Double {

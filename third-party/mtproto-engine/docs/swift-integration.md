@@ -351,8 +351,8 @@ exactly as `MTTcpConnection` does; iOS only.
    ping cadence keeps the cellular radio active while the app is in front. Reachability changes and
    sleep/wake (pause/resume) still reconnect at once.
 3. **Foreign-DC token race** (gap 1): fixed by `72d7e51f95`; the token gate now survives a key swap.
-4. **Transport.** No NWConnection and no WEB proxy carrier; a WEB proxy chosen while running leaves the
-   Rust sessions disconnected until restart (then MtProtoKit is used).
+4. **Transport.** No NWConnection and no WEB proxy carrier. A WEB proxy chosen while running moves a
+   Rust network to MtProtoKit live (`SwitchingNetworkEngine`), and turning it off moves it back.
 5. **Several Rust static libraries** (wallet, tlottie, MTProto) share one copy of the Rust standard
    library in the iOS app: they are built by the same `rules_rust` toolchain, so each archive embeds
    identical std members and ld64 loads a member only for a still-undefined symbol (measured: one
