@@ -746,6 +746,11 @@ class WalletSendAmountField: UIView, UITextFieldDelegate {
               range.length >= 0, range.length <= length - range.location,
               !string.isEmpty || range.length > 0 else { return false }
 
+        if text == "0" + dateTimeFormat.decimalSeparator, range.location == length, range.length == 0,
+           string == dateTimeFormat.decimalSeparator || string == "." || string == "," {
+            return false
+        }
+
         guard let edit = walletSendReplacingAmountText(
             text, range: range, replacement: string,
             mode: self.mode, rate: self.rate, decimalSeparator: dateTimeFormat.decimalSeparator
