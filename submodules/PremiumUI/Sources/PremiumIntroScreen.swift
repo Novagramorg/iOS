@@ -3032,6 +3032,7 @@ private final class PremiumIntroScreenComponent: CombinedComponent {
         
         var topContentOffset: CGFloat?
         var bottomContentOffset: CGFloat?
+        let scrollExternalState = ScrollComponent<ViewControllerComponentContainer.Environment>.ExternalState()
         
         var hasIdleAnimations = true
         
@@ -3437,6 +3438,7 @@ private final class PremiumIntroScreenComponent: CombinedComponent {
         let coin = Child(PremiumCoinComponent.self)
         let title = Child(MultilineTextComponent.self)
         let secondaryTitle = Child(MultilineTextWithEntitiesComponent.self)
+        let topEdgeEffect = Child(EdgeEffectComponent.self)
         let bottomEdgeEffect = Child(EdgeEffectComponent.self)
         let button = Child(ButtonComponent.self)
         
@@ -3451,10 +3453,11 @@ private final class PremiumIntroScreenComponent: CombinedComponent {
                         
             let background = background.update(component: Rectangle(color: environment.theme.list.blocksBackgroundColor), environment: {}, availableSize: context.availableSize, transition: context.transition)
             
-            var starIsVisible = true
-            if let topContentOffset = state.topContentOffset, topContentOffset >= 123.0 {
-                starIsVisible = false
-            }
+            let topInset: CGFloat = environment.navigationHeight - 56.0
+            let headerSize = CGSize(width: min(414.0, context.availableSize.width), height: 220.0)
+            let headerOriginY = topInset - 30.0
+            let headerVisibleOriginY = headerOriginY - (state.topContentOffset ?? 0.0)
+            let starIsVisible = headerVisibleOriginY + headerSize.height > 0.0 && headerVisibleOriginY < context.availableSize.height
 
             var isIntro = true
             if case .profile = context.component.source {
@@ -3470,7 +3473,7 @@ private final class PremiumIntroScreenComponent: CombinedComponent {
                         isVisible: starIsVisible,
                         hasIdleAnimations: state.hasIdleAnimations
                     ),
-                    availableSize: CGSize(width: min(414.0, context.availableSize.width), height: 220.0),
+                    availableSize: headerSize,
                     transition: context.transition
                 )
             } else if case let .emojiStatus(_, fileId, _, _) = context.component.source, case let .accountContext(accountContext) = context.component.screenContext {
@@ -3485,7 +3488,7 @@ private final class PremiumIntroScreenComponent: CombinedComponent {
                         isVisible: starIsVisible,
                         hasIdleAnimations: state.hasIdleAnimations
                     ),
-                    availableSize: CGSize(width: min(414.0, context.availableSize.width), height: 220.0),
+                    availableSize: headerSize,
                     transition: context.transition
                 )
             } else if case let .premiumGift(file) = context.component.source, case let .accountContext(accountContext) = context.component.screenContext {
@@ -3501,7 +3504,7 @@ private final class PremiumIntroScreenComponent: CombinedComponent {
                         isVisible: starIsVisible,
                         hasIdleAnimations: state.hasIdleAnimations
                     ),
-                    availableSize: CGSize(width: min(414.0, context.availableSize.width), height: 220.0),
+                    availableSize: headerSize,
                     transition: context.transition
                 )
             } else {
@@ -3517,7 +3520,7 @@ private final class PremiumIntroScreenComponent: CombinedComponent {
                             UIColor(rgb: 0xe26bd3)
                         ]
                     ),
-                    availableSize: CGSize(width: min(414.0, context.availableSize.width), height: 220.0),
+                    availableSize: headerSize,
                     transition: context.transition
                 )
             }
@@ -3728,6 +3731,7 @@ private final class PremiumIntroScreenComponent: CombinedComponent {
                         copyLink: context.component.copyLink,
                         shareLink: context.component.shareLink
                     )),
+                    externalState: state.scrollExternalState,
                     contentInsets: UIEdgeInsets(top: environment.navigationHeight, left: 0.0, bottom: bottomPanelHeight, right: 0.0),
                     contentOffsetUpdated: { [weak state] topContentOffset, bottomContentOffset in
                         state?.topContentOffset = topContentOffset
@@ -3749,14 +3753,41 @@ private final class PremiumIntroScreenComponent: CombinedComponent {
                 transition: context.transition
             )
             
-            let topInset: CGFloat = environment.navigationHeight - 56.0
-            
             context.add(background
                 .position(CGPoint(x: context.availableSize.width / 2.0, y: context.availableSize.height / 2.0))
             )
             
             context.add(scrollContent
                 .position(CGPoint(x: context.availableSize.width / 2.0, y: context.availableSize.height / 2.0))
+                .clipsToBounds(true)
+            )
+
+            if let scrollView = state.scrollExternalState.scrollView {
+                context.addWithExternalContainer(header
+                    .position(CGPoint(x: context.availableSize.width / 2.0, y: headerOriginY + header.size.height / 2.0)),
+                    container: scrollView
+                )
+            }
+
+            let topEdgeEffectSize = CGSize(width: context.availableSize.width, height: environment.navigationHeight + 44.0)
+            let topEdgeEffect = topEdgeEffect.update(
+                component: EdgeEffectComponent(
+                    color: environment.theme.list.blocksBackgroundColor,
+                    blur: true,
+                    alpha: 0.75,
+                    size: topEdgeEffectSize,
+                    edge: .top,
+                    edgeSize: 64.0
+                ),
+                availableSize: topEdgeEffectSize,
+                transition: context.transition
+            )
+            context.add(topEdgeEffect
+                .position(CGPoint(x: context.availableSize.width / 2.0, y: topEdgeEffectSize.height / 2.0 - 20.0))
+                .opacity(max(0.0, min(1.0, (state.topContentOffset ?? 0.0) / 20.0)))
+                .appear(ComponentTransition.Appear { _, view, _ in
+                    view.isUserInteractionEnabled = false
+                })
             )
                         
             let titleOffset: CGFloat
@@ -3786,12 +3817,6 @@ private final class PremiumIntroScreenComponent: CombinedComponent {
                 titleOffset = 0.0
                 titleAlpha = state.otherPeerName != nil ? 0.0 : 1.0
             }
-            
-            context.addWithExternalContainer(header
-                .position(CGPoint(x: context.availableSize.width / 2.0, y: topInset + header.size.height / 2.0 - 30.0 - titleOffset * titleScale))
-                .scale(titleScale),
-                container: context.component.overNavigationContainer
-            )
             
             context.addWithExternalContainer(title
                 .position(CGPoint(x: context.availableSize.width / 2.0, y: max(topInset + 160.0 - titleOffset, navigationTitleCenterY)))
@@ -4091,7 +4116,7 @@ public final class PremiumIntroScreen: ViewControllerComponentContainer {
             shareLink: { link in
                 shareLinkImpl?(link)
             }
-        ), navigationBarAppearance: .default, presentationMode: modal ? .modal : .default, theme: forceDark ? .dark : .default, updatedPresentationData: screenContext.updatedPresentationData, baseNavigationColors: baseNavigationColors)
+        ), navigationBarAppearance: .transparent, presentationMode: modal ? .modal : .default, theme: forceDark ? .dark : .default, updatedPresentationData: screenContext.updatedPresentationData, baseNavigationColors: baseNavigationColors)
         
         self._hasGlassStyle = true
                 

@@ -15,6 +15,7 @@ swift_library(
         "//submodules/Display",
         "//submodules/ComponentFlow",
         "//submodules/ContextUI",
+        "//submodules/TelegramUI/Components/GlassBackgroundComponent",
         "//submodules/TelegramUI/Components/Wallet/WalletSendKeyboardComponent",
         "//submodules/TelegramCore",
         "//submodules/TelegramPresentationData",
