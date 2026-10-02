@@ -572,6 +572,7 @@ swift_library(
         "//submodules/TelegramUI/Components/Chat/ChatRichTextEditorComposer",
         "//submodules/WalletContext",
         "//submodules/PasscodeCore",
+        "//submodules/MTProtoRustEngine:MTProtoRustEngine",
     ] + select({
         "@build_bazel_rules_apple//apple:ios_arm64": appcenter_targets,
         "//build-system:ios_sim_arm64": [],

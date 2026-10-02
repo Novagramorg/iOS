@@ -84,6 +84,7 @@ final class RustNetworkSession: NetworkEngineSession {
 
     private var externallyPaused = true
     private var appliedPaused = true
+    private var appliedOnline = false
     private var holdForReplacementKey = false
     private var holdForUnsupportedProxy = false
 
@@ -271,6 +272,23 @@ final class RustNetworkSession: NetworkEngineSession {
         }
     }
 
+    func setOnline(_ online: Bool) {
+        self.queue.async { [weak self] in
+            guard let self = self, !self.isStopped.with({ $0 }) else {
+                return
+            }
+            if self.appliedOnline == online {
+                return
+            }
+            self.appliedOnline = online
+            rustEngineLog("\(self.logPrefix) \(online ? "online" : "offline")")
+            guard let engine = self.engine, self.handle != 0 else {
+                return
+            }
+            mt_session_set_online(engine, self.handle, online ? 1 : 0)
+        }
+    }
+
     func addUpdateSink(_ sink: NetworkEngineUpdateSink) {
         self.queue.async { [weak self] in
             self?.sinks.append(sink)
@@ -419,9 +437,13 @@ final class RustNetworkSession: NetworkEngineSession {
         case .verificationRequired:
             self.handleVerificationRequired(event)
         case .authorizationRequired:
-            rustEngineImportantLog("\(self.logPrefix) authorization required: 401 \(event.text)")
-            if self.isMain {
+            let action = rustEngineAuthorizationRequiredAction(isMain: self.isMain)
+            rustEngineImportantLog("\(self.logPrefix) authorization required: 401 \(event.text), \(action)")
+            switch action {
+            case .logOut:
                 self.delegate?.networkSessionAuthorizationRequired()
+            case .ignore:
+                break
             }
         case .softAuthReset:
             rustEngineImportantLog("\(self.logPrefix) soft auth reset: \(event.text)")

@@ -102,6 +102,56 @@ use_repo(
     "wallet_engine_crates",
 )
 
+# Third-party crates of the Rust MTProto engine (third-party/mtproto-engine). Every version is pinned
+# with `=` to third-party/mtproto-engine/Cargo.lock. Kept apart from wallet_engine_crates so the two
+# lockfiles move independently. Repin only this repository:
+#   CARGO_BAZEL_REPIN=1 CARGO_BAZEL_REPIN_ONLY=mtproto_engine_crates ./build-input/bazel-9.2.0-darwin-arm64 build //third-party/mtproto-engine:mtproto_engine_ffi_archive
+mtproto_engine_crates = use_extension("@rules_rust//crate_universe:extensions.bzl", "crate")
+mtproto_engine_crates.spec(package = "aes", features = ["zeroize"], repositories = ["mtproto_engine_crates"], version = "=0.8.4")
+mtproto_engine_crates.spec(package = "base64", repositories = ["mtproto_engine_crates"], version = "=0.22.1")
+mtproto_engine_crates.spec(package = "flate2", default_features = False, features = ["rust_backend"], repositories = ["mtproto_engine_crates"], version = "=1.1.10")
+mtproto_engine_crates.spec(package = "getrandom", repositories = ["mtproto_engine_crates"], version = "=0.3.4")
+mtproto_engine_crates.spec(package = "hmac", repositories = ["mtproto_engine_crates"], version = "=0.12.1")
+mtproto_engine_crates.spec(package = "libc", repositories = ["mtproto_engine_crates"], version = "=0.2.189")
+mtproto_engine_crates.spec(package = "mio", features = ["net", "os-poll"], repositories = ["mtproto_engine_crates"], version = "=1.2.2")
+mtproto_engine_crates.spec(package = "num-bigint", repositories = ["mtproto_engine_crates"], version = "=0.4.8")
+mtproto_engine_crates.spec(package = "num-integer", repositories = ["mtproto_engine_crates"], version = "=0.1.47")
+mtproto_engine_crates.spec(package = "num-traits", repositories = ["mtproto_engine_crates"], version = "=0.2.19")
+mtproto_engine_crates.spec(package = "sha1", repositories = ["mtproto_engine_crates"], version = "=0.10.7")
+# `asm` selects sha2's aarch64 SHA-256 backend (src/sha256/aarch64.rs). Cargo enables it only for
+# aarch64 via a target-specific dependency, which Bazel does not read.
+mtproto_engine_crates.spec(package = "sha2", features = ["asm"], repositories = ["mtproto_engine_crates"], version = "=0.10.9")
+mtproto_engine_crates.spec(package = "thiserror", repositories = ["mtproto_engine_crates"], version = "=2.0.17")
+mtproto_engine_crates.spec(package = "zeroize", repositories = ["mtproto_engine_crates"], version = "=1.9.0")
+# ARMv8 AES instructions. Cargo gets this from third-party/mtproto-engine/.cargo/config.toml, which
+# Bazel does not read. Without it the engine silently runs software AES (~15x slower).
+mtproto_engine_crates.annotation(crate = "aes", repositories = ["mtproto_engine_crates"], rustc_flags = ["--cfg", "aes_armv8", "-Copt-level=3"])
+# rules_rust builds these at the compilation mode's opt-level (0 under --configuration=debug_*).
+# They hold the engine's non-generic hot code (hashing, inflate, checksums, DH bignum math), which
+# does not inline into the -Copt-level=3 engine crates. Generic-only crates (cipher, digest, hmac,
+# inout, ...) are instantiated inside the engine crates and need no annotation.
+mtproto_engine_crates.annotation(crate = "sha1", repositories = ["mtproto_engine_crates"], rustc_flags = ["-Copt-level=3"])
+mtproto_engine_crates.annotation(crate = "sha2", repositories = ["mtproto_engine_crates"], rustc_flags = ["-Copt-level=3"])
+mtproto_engine_crates.annotation(crate = "flate2", repositories = ["mtproto_engine_crates"], rustc_flags = ["-Copt-level=3"])
+mtproto_engine_crates.annotation(crate = "miniz_oxide", repositories = ["mtproto_engine_crates"], rustc_flags = ["-Copt-level=3"])
+mtproto_engine_crates.annotation(crate = "adler2", repositories = ["mtproto_engine_crates"], rustc_flags = ["-Copt-level=3"])
+mtproto_engine_crates.annotation(crate = "simd-adler32", repositories = ["mtproto_engine_crates"], rustc_flags = ["-Copt-level=3"])
+mtproto_engine_crates.annotation(crate = "crc32fast", repositories = ["mtproto_engine_crates"], rustc_flags = ["-Copt-level=3"])
+mtproto_engine_crates.annotation(crate = "num-bigint", repositories = ["mtproto_engine_crates"], rustc_flags = ["-Copt-level=3"])
+mtproto_engine_crates.annotation(crate = "num-integer", repositories = ["mtproto_engine_crates"], rustc_flags = ["-Copt-level=3"])
+mtproto_engine_crates.from_specs(
+    name = "mtproto_engine_crates",
+    cargo_lockfile = "//third-party/mtproto-engine:Cargo.Bazel.lock",
+    supported_platform_triples = [
+        "aarch64-apple-darwin",
+        "aarch64-apple-ios",
+        "aarch64-apple-ios-sim",
+        "x86_64-apple-darwin",
+        "x86_64-apple-ios",
+    ],
+)
+use_repo(mtproto_engine_crates, "mtproto_engine_crates")
+
 bazel_dep(name = "rules_go", version = "0.60.0", repo_name = "io_bazel_rules_go")
 
 go_sdk = use_extension("@io_bazel_rules_go//go:extensions.bzl", "go_sdk")

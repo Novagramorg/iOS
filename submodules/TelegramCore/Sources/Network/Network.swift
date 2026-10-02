@@ -828,6 +828,12 @@ public final class Network: NSObject {
     
     public let shouldExplicitelyKeepWorkerConnections = Promise<Bool>(false)
     public let shouldKeepBackgroundDownloadConnections = Promise<Bool>(false)
+
+    /// The user is actively using this account: the app is in the foreground and this is the
+    /// primary account (`Account.shouldKeepOnlinePresence`). Forwarded to every session through
+    /// `NetworkEngineSession.setOnline`, which engines use to choose keepalive timing.
+    public let isUserOnline = Promise<Bool>(false)
+    private let isUserOnlineDisposable = MetaDisposable()
     
     public var mockConnectionStatus: ConnectionStatus? {
         didSet {
@@ -958,6 +964,10 @@ public final class Network: NSObject {
             }
         }))
 
+        self.isUserOnlineDisposable.set((self.isUserOnline.get() |> distinctUntilChanged |> deliverOn(queue)).start(next: { [weak self] value in
+            self?.mainSession.setOnline(value)
+        }))
+
         // The carrier runs exactly while MTProto does. SharedWakeupManager already folds
         // foreground state, audio sessions, background extensions, processing tasks and the
         // explicit-extension grace timer into shouldBeServiceTaskMaster, which reaches us as
@@ -1007,6 +1017,7 @@ public final class Network: NSObject {
     
     deinit {
         self.shouldKeepConnectionDisposable.dispose()
+        self.isUserOnlineDisposable.dispose()
         self.webProxyCarrierDemandDisposable.dispose()
         WebProxyTransport.shared.setCarrierDemand(self.webProxyLeaseToken, wanted: false)
         self.appDataDisposable.dispose()
@@ -1058,7 +1069,7 @@ public final class Network: NSObject {
             return shouldKeepConnection || shouldExplicitelyKeepWorkerConnections || (continueInBackground && shouldKeepBackgroundDownloadConnections)
         }
         |> distinctUntilChanged
-        return Download(queue: self.queue, engine: self.engine, datacenterId: datacenterId, isMedia: isMedia, isCdn: isCdn, context: self.context, masterDatacenterId: self.datacenterId, usageInfo: usageCalculationInfo(basePath: self.basePath, category: (tag as? TelegramMediaResourceFetchTag)?.statsCategory), shouldKeepConnection: shouldKeepWorkerConnection, useRequestTimeoutTimers: self.useRequestTimeoutTimers)
+        return Download(queue: self.queue, engine: self.engine, datacenterId: datacenterId, isMedia: isMedia, isCdn: isCdn, context: self.context, masterDatacenterId: self.datacenterId, usageInfo: usageCalculationInfo(basePath: self.basePath, category: (tag as? TelegramMediaResourceFetchTag)?.statsCategory), shouldKeepConnection: shouldKeepWorkerConnection, isUserOnline: self.isUserOnline.get(), useRequestTimeoutTimers: self.useRequestTimeoutTimers)
     }
     
     private func worker(datacenterId: Int, isCdn: Bool, isMedia: Bool, tag: MediaResourceFetchTag?) -> Signal<Download, NoError> {

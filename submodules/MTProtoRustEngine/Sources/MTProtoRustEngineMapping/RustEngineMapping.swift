@@ -212,6 +212,25 @@ public func rustEngineMissingKeyAction(isCdn: Bool, requiresForeignAuthToken: Bo
     }
 }
 
+/// What a main-session `401` (other than `SESSION_PASSWORD_NEEDED` / `AUTH_KEY_PERM_EMPTY`) does.
+/// It logs the account out, exactly as `MtProtoKitEngine` does, because that is how a session
+/// terminated from another device drops the account and its local data.
+///
+/// Do not route it through `MTContext.checkIfLoggedOut` (integration.md R1's suggestion): that probe
+/// runs an `EphemeralMain` auth action, and `-[MTDatacenterAuthAction execute:]` completes at once,
+/// without contacting the server, when the context already stores a key for that selector, which the
+/// main session's own temporary key always is. The probe then reports "not removed" every time, and
+/// a terminated session never logs out.
+public enum RustEngineAuthorizationRequiredAction: Equatable {
+    case logOut
+    /// Workers re-transfer their authorization through `authTokenRequired` instead.
+    case ignore
+}
+
+public func rustEngineAuthorizationRequiredAction(isMain: Bool) -> RustEngineAuthorizationRequiredAction {
+    return isMain ? .logOut : .ignore
+}
+
 /// A worker re-transfers its authorization after every `401` except `SESSION_PASSWORD_NEEDED`
 /// (`MTRequestMessageService` calls `requestMessageServiceAuthorizationRequired:` for those).
 public func rustEngineWorkerShouldTransferAuthToken(code: Int32, text: String) -> Bool {

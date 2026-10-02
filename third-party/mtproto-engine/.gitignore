@@ -1,3 +1,4 @@
 /target
-/build
+# Directory only: a bare `/build` also ignores the Bazel `BUILD` file on a case-insensitive file system.
+/build/
 *.profraw

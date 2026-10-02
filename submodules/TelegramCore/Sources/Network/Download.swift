@@ -46,8 +46,9 @@ class Download: NSObject {
     let useRequestTimeoutTimers: Bool
     
     private var shouldKeepConnectionDisposable: Disposable?
-    
-    init(queue: Queue, engine: NetworkEngine, datacenterId: Int, isMedia: Bool, isCdn: Bool, context: MTContext, masterDatacenterId: Int, usageInfo: MTNetworkUsageCalculationInfo?, shouldKeepConnection: Signal<Bool, NoError>, useRequestTimeoutTimers: Bool) {
+    private var isUserOnlineDisposable: Disposable?
+
+    init(queue: Queue, engine: NetworkEngine, datacenterId: Int, isMedia: Bool, isCdn: Bool, context: MTContext, masterDatacenterId: Int, usageInfo: MTNetworkUsageCalculationInfo?, shouldKeepConnection: Signal<Bool, NoError>, isUserOnline: Signal<Bool, NoError>, useRequestTimeoutTimers: Bool) {
         self.datacenterId = datacenterId
         self.isCdn = isCdn
         self.context = context
@@ -70,11 +71,15 @@ class Download: NSObject {
                 }
             }
         })
+        self.isUserOnlineDisposable = (isUserOnline |> distinctUntilChanged |> deliverOn(queue)).start(next: { [weak session] value in
+            session?.setOnline(value)
+        })
     }
-    
+
     deinit {
         self.session.stop()
         self.shouldKeepConnectionDisposable?.dispose()
+        self.isUserOnlineDisposable?.dispose()
     }
     
     private func addRequest(_ request: NetworkEngineRequest) -> Disposable {

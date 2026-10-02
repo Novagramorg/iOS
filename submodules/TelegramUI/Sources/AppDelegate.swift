@@ -50,6 +50,7 @@ import WalletContext
 import WalletSendScreen
 import PasscodeCore
 import LiquidGlassShapes
+import MTProtoRustEngine
 
 #if DEBUG
 import AlertComponent
@@ -676,7 +677,11 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             encryptionProvider: OpenSSLEncryptionProvider(),
             deviceModelName: nil,
             useBetaFeatures: !buildConfig.isAppStoreBuild,
-            isICloudEnabled: buildConfig.isICloudEnabled
+            isICloudEnabled: buildConfig.isICloudEnabled,
+            // Only the main app passes a factory: extensions stay on MtProtoKit. Whether the Rust
+            // engine runs is decided per account by resolveNetworkEngine (Debug Settings switch,
+            // mtproto_engine_rust_disabled, the factory's own declines).
+            networkEngineFactory: RustNetworkEngineFactory()
         )
         
         guard let appGroupUrl = maybeAppGroupUrl else {

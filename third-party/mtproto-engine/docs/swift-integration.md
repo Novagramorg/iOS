@@ -71,14 +71,26 @@ Files (`PKG/`):
 - The package is linked to the **Telegram** app target only (Packages group + Frameworks phase +
   `packageProductDependencies` in `Telegram.xcodeproj`). TelegramShare does not link it, and
   `MAC/TelegramShare/ShareViewController.swift` passes no factory. `MAC/Telegram-Mac/app/AppDelegate.swift`
-  passes `networkEngineFactory: RustNetworkEngineFactory()`. No iOS call site passes a factory yet,
-  and there is no Bazel `BUILD` file for the package yet.
+  passes `networkEngineFactory: RustNetworkEngineFactory()`. On iOS, `TelegramUI/Sources/AppDelegate.swift`
+  passes it too; the Bazel targets are `//third-party/mtproto-engine:MTProtoEngineFFI` and
+  `//submodules/MTProtoRustEngine:MTProtoRustEngine` (see the iOS bullet below).
 - Manual rebuild: `sh core-xprojects/mtproto-engine/mtproto-engine/build.sh submodules/telegram-ios/third-party/mtproto-engine core-xprojects/mtproto-engine/build submodules/telegram-ios/submodules/MTProtoRustEngine`
   (needs `cargo` on `PATH` or in `~/.cargo/bin`).
 - Tests: `cd PKG && swift test` (builds TelegramCore once, several minutes cold; then seconds).
+- iOS (Bazel): `third-party/mtproto-engine/BUILD` builds `mtproto_core` and `mtproto_engine` as
+  `rust_library` and `mtproto_engine_ffi_archive` as `rust_static_library` with pinned
+  `-Copt-level=3 -Ccodegen-units=1 -Cpanic=abort` and **no LTO**, from the `mtproto_engine_crates`
+  crate_universe repository pinned `=` to `Cargo.lock` (`MODULE.bazel`; `--cfg aes_armv8`, sha2's
+  `asm` feature and `-Copt-level=3` for the crates with non-generic hot code are applied there by
+  hand). `scripts/verify-ios-link.sh <unstripped binary>` checks
+  one shared std and the ARMv8 AES / SHA-256 backends. The mapping tests run as the host `swift_test`
+  `//submodules/MTProtoRustEngine:MTProtoRustEngineMappingTests`. Linking the engine costs
+  +435,385 bytes of `release_arm64` `.ipa` and +853,904 bytes of `TelegramUIFramework` (measured
+  2026-10-02 against `a4dc711011`).
 
 The release profile uses thin LTO, so the archive members carry an `__LLVM,__bitcode` section that
-Apple's `nm` cannot read (`nm --no-llvm-bc` works). The linker ignores it.
+Apple's `nm` cannot read (`nm --no-llvm-bc` works). The linker ignores it. That is the macOS
+xcframework only; the iOS Bazel build has no LTO on purpose (§14, risk 5).
 
 ## 3. Threading
 
@@ -259,7 +271,7 @@ a transfer on resume, and opens the gate on `contextDatacenterAuthTokenUpdated` 
 | APNS / reCAPTCHA verification without a value | request parked forever (macOS verifiers complete empty) | fails with `403 APNS_PUSH_TIMEOUT` / `403 RECAPTCHA_TIMEOUT` | requested; uses TelegramCore's literals |
 | `AUTH_KEY_PERM_EMPTY` | drops the whole packet, transport reset, waits for a key with no transactions | engine parks the request (backoff); wrapper pauses the session until the replacement key arrives | same effect without an FFI to drop a key without losing requests |
 | Callback queue | one global manager queue | one serial queue per session | parallelism; ordering per session is kept |
-| Liveness | 12 s response timer after a write, no pings | engine pings (`online = 0`: ~60 s, disconnect after ~135 s without reads), 5 s timer only for `needsTimeoutTimer` | see risks |
+| Liveness | 12 s response timer after a write, no pings | engine pings with tdlib's timing, `online` following `Network.isUserOnline` (wired on iOS only; macOS stays offline-timed): online, ping every ~1–2 s and disconnect after ~5–7 s; offline (background, secondary accounts) ~60 s and ~135 s without reads; 5 s timer only for `needsTimeoutTimer` | see risks |
 | Worker connections | kept while resumed | idle workers disconnect after 60 s | engine default; reconnect on the next request |
 | Token gating | only at transport reset; a 401 parks only that request | engine gates every request while the token is missing | engine semantics; same outcome once the token arrives |
 | IPv6 | chosen per connection by scheme stats | IPv6 addresses appended only when MTContext would consider IPv6 at creation/refresh | the engine cycles a fixed list |
@@ -270,9 +282,24 @@ a transfer on resume, and opens the gate on `contextDatacenterAuthTokenUpdated` 
 | Cancelling an in-flight request with `expectedResponseSize >= 512 KB` | new session id + transport reset | engine sends `rpc_drop_answer` and resets the connection, session kept | engine semantics |
 | Proxy connection issues | `MTConnectionProbing` (proxy unreachable while the internet is reachable) | engine flag: proxy set, not connected, 3+ failed attempts | engine semantics |
 | Key rejected while the context already has a newer key | drops it and asks for another | installs the newer key | avoids rebind storms (R14) |
-| Network type | wifi/cellular per socket | always `0` (wifi/other) | engine does not report the interface |
+| Network type | wifi/cellular per socket | cellular when the socket's local address is on a `pdp_ip*` interface | same accounting (`72d7e51f95`) |
+| Main-session `401` | logs out | logs out (`rustEngineAuthorizationRequiredAction`) | R1's `checkIfLoggedOut` probe cannot confirm it: its `EphemeralMain` auth action completes on the stored temporary key without contacting the server (§14, risk 1) |
 
 ## 12. Known gaps and FFI requests
+
+Status (2026-10-02): items 1, 2, 4, 5 and 6 are fixed in the engine by `72d7e51f95` (token gate
+across key swaps, `set_auth_key(None)` keeps requests, live `set_obfuscation_dc_id`, connect
+timeouts report the address, `NetworkUsage` reports cellular). Item 7 is addressed by
+`RustEngineEndToEndTests`, which drives the `mtproto-testserver` binary. Item 8: the iOS Bazel
+targets exist (§2); `build.sh` still builds no iOS slices, which iOS does not use. Item 3 remains
+open. The design agreed for iOS: mirror MtProtoKit's selection, i.e. own sockets when
+`context.makeTcpConnectionInterface` is nil and the injected interface (Network.framework,
+the WEB proxy carrier) when set; a host-stream C ABI (`open`/`write`/`read`/`close` callbacks,
+host-to-engine `connected`/`received`/`closed` keyed by session and a never-reused `conn_id`, one
+outstanding read as back-pressure); an optional `readAvailableDataWithMaxLength:` on
+`MTTcpConnectionInterface`; no name resolution in Rust on that path (it would leak the WEB relay's
+hostname); the engine as the only byte counter; the carrier paired with the WEB proxy setting
+exactly as `MTTcpConnection` does; iOS only.
 
 1. **Token gate lost on key install.** `RpcClient::new` starts with `auth_token_ready = true` and
    `SessionRuntime::set_auth_token_ready` is a no-op without an `rpc`. Requests the engine re-queued
@@ -309,18 +336,28 @@ a transfer on resume, and opens the gate on `contextDatacenterAuthTokenUpdated` 
 1. **Logout path.** `AuthorizationRequired` is forwarded exactly like MtProtoKitEngine does, so any main
    session `401` other than `SESSION_PASSWORD_NEEDED` logs the account out. If the engine ever sends a
    request with a key the server does not associate with the authorization and gets
-   `AUTH_KEY_UNREGISTERED` instead of `AUTH_KEY_PERM_EMPTY`, that is irreversible. integration.md R1
-   suggests routing the callback through `MTContext.checkIfLoggedOut` while the engine is experimental;
-   that is not done here because it changes the seam's contract.
-2. **Liveness.** With `online = 0` a silently dead connection is detected by unanswered-query state
-   requests (~60 s) or the 135 s read/ping timeouts; MtProtoKit closes after 12 s without a response.
-   Reachability changes and sleep/wake (pause/resume) still reconnect at once.
-3. **Foreign-DC token race** (gap 1): after `-404` on such a worker, re-queued requests can reach the
-   server before the authorization is re-imported; the engine then parks them on the `401`.
+   `AUTH_KEY_UNREGISTERED` instead of `AUTH_KEY_PERM_EMPTY`, that is irreversible. integration.md R1's
+   suggestion, routing the callback through `MTContext.checkIfLoggedOut`, does **not** work and was
+   withdrawn (2026-10-02): `checkIfAuthKeyRemovedWithContext` runs an `EphemeralMain` auth action, and
+   `-[MTDatacenterAuthAction execute:]` completes at once when the context stores a key for that
+   selector, which the main session's own temporary key always is. The probe never reaches the server,
+   always reports "not removed", and a session terminated from another device never logged out. A
+   working safety net needs a different confirmation (for example a rebind of a fresh temporary key
+   and logging out on a second `401`).
+2. **Liveness.** Sessions follow `Network.isUserOnline` (`Account.shouldKeepOnlinePresence`, wired on iOS
+   only). Online, a
+   dead connection is dropped after about `2.5 × max(2, 1.5·rtt + 1)` s; offline (background, secondary
+   accounts) it still takes ~60–135 s, where MtProtoKit closes after 12 s without a response. The online
+   ping cadence keeps the cellular radio active while the app is in front. Reachability changes and
+   sleep/wake (pause/resume) still reconnect at once.
+3. **Foreign-DC token race** (gap 1): fixed by `72d7e51f95`; the token gate now survives a key swap.
 4. **Transport.** No NWConnection and no WEB proxy carrier; a WEB proxy chosen while running leaves the
    Rust sessions disconnected until restart (then MtProtoKit is used).
-5. **Two Rust static libraries** (wallet, MTProto) carry their own copy of the Rust standard library.
-   They link today (same toolchain); a toolchain mismatch only duplicates code, but watch for
-   duplicate-symbol link errors if either library changes its panic/allocator setup.
+5. **Several Rust static libraries** (wallet, tlottie, MTProto) share one copy of the Rust standard
+   library in the iOS app: they are built by the same `rules_rust` toolchain, so each archive embeds
+   identical std members and ld64 loads a member only for a still-undefined symbol (measured: one
+   `core`/`alloc`/`std` crate in `TelegramUIFramework`). That breaks if a library is LTO'd into its own
+   archive (std is then internalized and duplicated, as in the macOS xcframework) or built by another
+   toolchain. `scripts/verify-ios-link.sh` checks it.
 6. The xcframework is built from whatever is in `third-party/mtproto-engine`; the framework stamp
    changes with every edit there, so `configure_frameworks.sh` rebuilds it.

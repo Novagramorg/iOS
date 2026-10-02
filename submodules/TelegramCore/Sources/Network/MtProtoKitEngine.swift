@@ -321,6 +321,10 @@ private final class MtProtoKitSession: NSObject, NetworkEngineSession, MTRequest
             self.mtProto.resume()
         }
     }
+
+    func setOnline(_ online: Bool) {
+        // MtProtoKit has no keepalive whose timing depends on presence.
+    }
     
     func addUpdateSink(_ sink: NetworkEngineUpdateSink) {
         self.mtProto.add(MtProtoKitUpdateSinkService(sink: sink))

@@ -189,4 +189,13 @@ final class RustEngineMappingTests: XCTestCase {
         XCTAssertNil(rustEngineOptionalText(""))
         XCTAssertEqual(rustEngineOptionalText("FLOOD_WAIT_5"), "FLOOD_WAIT_5")
     }
+
+    func testMainSessionAuthorizationRequiredLogsOut() {
+        // A main-session 401 must reach Network.loggedOut, as with MtProtoKit: a session terminated
+        // from another device has to drop the account. Routing it through MTContext.checkIfLoggedOut
+        // instead never logged out, because that probe completes on the session's own stored
+        // temporary key without contacting the server.
+        XCTAssertEqual(rustEngineAuthorizationRequiredAction(isMain: true), .logOut)
+        XCTAssertEqual(rustEngineAuthorizationRequiredAction(isMain: false), .ignore)
+    }
 }
