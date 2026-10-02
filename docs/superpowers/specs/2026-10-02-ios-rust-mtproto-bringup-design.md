@@ -154,10 +154,12 @@ and logs the 401 text with `rustEngineImportantLog`. Worker sessions keep their 
 ### 4. Foreground liveness
 
 - The seam gains `NetworkEngineSession.setOnline(_ online: Bool)`. `MtProtoKitEngine`: no-op. The
-  Rust wrapper: `mt_session_set_online`; the latest value is also used as `setup.online` for
-  sessions created afterwards (a pure helper in the mapping module decides the creation value).
-- `Network` gains an online input and forwards it to its main session and to the worker sessions
-  it creates.
+  Rust wrapper: `mt_session_set_online`, deduplicated on the session queue.
+- Sessions are created offline (`setup.online = 0` stays). `Network` gains an online input
+  (`isUserOnline`, a `Promise<Bool>(false)`) and forwards it to its main session and to every
+  worker session it creates; because the promise replays its current value on subscription, a
+  session created later receives the current value immediately, so no creation-time state lives
+  in the wrapper.
 - `Account` drives that input from its existing `shouldKeepOnlinePresence`
   (`primary && inForeground`, `SharedWakeupManager.swift:1150`). Only the visible account gets
   fast liveness; background service tasks and secondary accounts keep the slow timing.
@@ -170,9 +172,10 @@ and logs the 401 text with `rustEngineImportantLog`. Worker sessions keep their 
 
 Automated:
 
-- Host `swift_test` for the mapping module, including the two new helpers: main-session 401 maps
-  to "probe" and never to "log out"; a session's creation-time `online` is the latest value set
-  before creation.
+- Host `swift_test` for the mapping module, including the new helper: a main-session 401 maps to
+  "probe" and never to "log out".
+- Online wiring has no unit test (TelegramCore has no test target); it is checked through the
+  wrapper's `online`/`offline` log lines in the manual pass.
 - Crypto instruction check on the built `TelegramUIFramework`: the engine's AES and SHA-256 code
   must contain ARMv8 `aese`/`aesd` and `sha256h` instructions. Deterministic, and it catches a
   missing `aes_armv8`/`asm` that would otherwise silently fall back to software.
