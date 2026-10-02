@@ -2536,6 +2536,34 @@ private final class GiftViewSheetContent: CombinedComponent {
                     Queue.mainQueue().after(2.5) {
                         starsContext?.load(force: true)
                     }
+                }, error: { [weak self] error in
+                    guard let self else {
+                        return
+                    }
+                    self.inProgress = false
+                    self.scheduledUpgradeCommit = false
+                    self.updated()
+
+                    let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
+                    let text: String
+                    switch error {
+                    case .generic:
+                        text = presentationData.strings.Login_UnknownError
+                    case .alreadyUpgraded:
+                        text = presentationData.strings.Login_UnknownError
+                    }
+                    if let controller = self.getController() as? GiftViewScreen {
+                        controller.showBalance = self.inUpgradePreview && self.upgradeForm != nil
+                        controller.present(textAlertController(
+                            context: self.context,
+                            title: nil,
+                            text: text,
+                            actions: [
+                                TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})
+                            ],
+                            parseMarkdown: false
+                        ), in: .window(.root))
+                    }
                 })
             }
             
