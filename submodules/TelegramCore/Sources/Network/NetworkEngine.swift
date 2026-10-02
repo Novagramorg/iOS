@@ -186,6 +186,10 @@ public protocol NetworkEngineSession: AnyObject {
     func addUpdateSink(_ sink: NetworkEngineUpdateSink)
     /// Tears a worker session down. The main session is never stopped explicitly.
     func stop()
+    /// Moves every request that has not completed to `service`, as if it had been added there:
+    /// the session never calls back for a moved request, and disposing the disposable `add`
+    /// returned for it cancels it on `service`. `completion` runs once every request has moved.
+    func movePendingRequests(to service: NetworkEngineRequestService, completion: @escaping () -> Void)
 }
 
 public enum NetworkEngineSessionRole: Equatable {

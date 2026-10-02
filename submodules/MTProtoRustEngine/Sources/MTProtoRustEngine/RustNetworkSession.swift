@@ -5,12 +5,17 @@ import TelegramCore
 import MTProtoEngineFFI
 import MTProtoRustEngineMapping
 
+struct RustRequestControl {
+    var isCancelled = false
+    var moved: Disposable?
+}
+
 final class RustPendingRequest {
     let request: NetworkEngineRequest
     let localId: UInt64
     let flags: UInt32
     let expectedResponseSize: UInt32
-    let cancelled = Atomic<Bool>(value: false)
+    let control = Atomic<RustRequestControl>(value: RustRequestControl())
     var engineId: UInt64 = 0
     var isInEngine = false
     var isFinished = false
@@ -27,7 +32,7 @@ final class RustPendingRequest {
     }
 
     var isCancelled: Bool {
-        return self.cancelled.with { $0 }
+        return self.control.with { $0.isCancelled }
     }
 
     func releaseResources() {
@@ -292,13 +297,56 @@ final class RustNetworkSession: NetworkEngineSession {
         self.queue.async { [weak self] in
             self?.submit(pending)
         }
-        let cancelled = pending.cancelled
+        let control = pending.control
         let queue = self.queue
         return ActionDisposable { [weak self] in
-            let _ = cancelled.swap(true)
-            queue.async {
-                self?.cancel(localId: localId)
+            var moved: Disposable?
+            let _ = control.modify { current in
+                var updated = current
+                updated.isCancelled = true
+                moved = current.moved
+                return updated
             }
+            if let moved = moved {
+                moved.dispose()
+            } else {
+                queue.async {
+                    self?.cancel(localId: localId)
+                }
+            }
+        }
+    }
+
+    func movePendingRequests(to service: NetworkEngineRequestService, completion: @escaping () -> Void) {
+        self.queue.async { [weak self] in
+            guard let self = self else {
+                completion()
+                return
+            }
+            let pendings = self.activeRequests.filter { !$0.isFinished && !$0.isCancelled }
+            for pending in pendings {
+                let engineId = pending.engineId
+                let wasInEngine = pending.isInEngine
+                self.finish(pending)
+                if wasInEngine, engineId != 0, let engine = self.engine, self.handle != 0 {
+                    mt_session_cancel(engine, self.handle, engineId)
+                }
+                let disposable = service.add(pending.request)
+                var isCancelled = false
+                let _ = pending.control.modify { current in
+                    var updated = current
+                    updated.moved = disposable
+                    isCancelled = current.isCancelled
+                    return updated
+                }
+                if isCancelled {
+                    disposable.dispose()
+                }
+            }
+            if !pendings.isEmpty {
+                rustEngineImportantLog("\(self.logPrefix) moved \(pendings.count) unanswered requests to another engine")
+            }
+            completion()
         }
     }
 
