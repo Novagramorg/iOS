@@ -49,6 +49,10 @@
 // The error auth.bindTempAuthKey answered with, when a bind failed.
 @property (nonatomic, strong) MTRpcError * _Nullable bindError;
 
+// Creates a new key even when the context already holds one for the selector,
+// so a temporary key can be replaced before it expires.
+@property (nonatomic) bool replacesExistingKey;
+
 - (void)complete;
 - (void)fail;
 
@@ -72,3 +76,10 @@
 + (MTQueue * _Nonnull)managerQueue;
 
 @end
+
+// The dc field of p_q_inner_data_dc / p_q_inner_data_temp_dc: the datacenter id,
+// plus 10000 on the test servers, negative on a media-only (non-CDN) address.
+int32_t MTDatacenterAuthInnerDataDatacenterId(NSInteger datacenterId, bool isTestingEnvironment, bool media, bool cdn);
+
+// Serialized p_q_inner_data_dc, or p_q_inner_data_temp_dc with expires_in when temporary.
+NSData * _Nonnull MTDatacenterAuthInnerData(NSData * _Nonnull pq, NSData * _Nonnull p, NSData * _Nonnull q, NSData * _Nonnull nonce, NSData * _Nonnull serverNonce, NSData * _Nonnull newNonce, int32_t datacenterId, bool temporary, int32_t expiresIn);

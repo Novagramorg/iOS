@@ -55,7 +55,7 @@
     int64_t bindingMessageId = [sessionInfo generateClientMessageId:NULL];
     int32_t bindingSeqNo = [sessionInfo takeSeqNo:true];
     
-    int32_t expiresAt = (int32_t)([mtProto.context globalTime] + mtProto.context.tempKeyExpiration);
+    int32_t expiresAt = (int32_t)(_ephemeralKey.validUntilTimestamp + [mtProto.context globalTimeDifference]);
     
     int64_t randomId = 0;
     arc4random_buf(&randomId, 8);

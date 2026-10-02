@@ -198,6 +198,12 @@ static MTDatacenterAuthInfoMapKeyStruct parseAuthInfoMapKeyInteger(NSNumber *key
     NSMutableDictionary<NSNumber *, NSNumber *> *_datacenterTransferAuthFailureCounts;
     NSMutableDictionary<NSNumber *, MTTimer *> *_datacenterTransferAuthRetryTimers;
     
+    MTTimer *_tempKeyRefreshTimer;
+    NSMutableDictionary<NSNumber *, MTDatacenterAuthAction *> *_tempKeyRefreshActions;
+    NSMutableDictionary<NSNumber *, NSNumber *> *_tempKeyRefreshRetryAt;
+    NSMutableSet<NSNumber *> *_tempKeysInUse;
+    bool _refreshesTemporaryKeys;
+    
     NSMutableDictionary<NSNumber *, NSNumber *> *_datacenterCheckKeyRemovedActionTimestamps;
     NSMutableDictionary<NSNumber *, id<MTDisposable> > *_datacenterCheckKeyRemovedActions;
     
@@ -293,6 +299,9 @@ static NSTimeInterval MTRetryDelayForFailureCount(NSUInteger failureCount) {
         _datacenterAuthRetryTimers = [[NSMutableDictionary alloc] init];
         _datacenterTransferAuthFailureCounts = [[NSMutableDictionary alloc] init];
         _datacenterTransferAuthRetryTimers = [[NSMutableDictionary alloc] init];
+        _tempKeyRefreshActions = [[NSMutableDictionary alloc] init];
+        _tempKeyRefreshRetryAt = [[NSMutableDictionary alloc] init];
+        _tempKeysInUse = [[NSMutableSet alloc] init];
         _datacenterCheckKeyRemovedActionTimestamps = [[NSMutableDictionary alloc] init];
         _datacenterCheckKeyRemovedActions = [[NSMutableDictionary alloc] init];
         
@@ -372,6 +381,11 @@ static void copyKeychainDictionaryKey(NSString * _Nonnull group, NSString * _Non
     NSDictionary *fetchPublicKeysActions = _fetchPublicKeysActions;
     _fetchPublicKeysActions = nil;
     
+    NSDictionary *tempKeyRefreshActions = _tempKeyRefreshActions;
+    _tempKeyRefreshActions = nil;
+    MTTimer *tempKeyRefreshTimer = _tempKeyRefreshTimer;
+    _tempKeyRefreshTimer = nil;
+    
     NSMutableArray<MTTimer *> *retryTimers = [[NSMutableArray alloc] init];
     [retryTimers addObjectsFromArray:_datacenterAuthRetryTimers.allValues];
     [retryTimers addObjectsFromArray:_datacenterTransferAuthRetryTimers.allValues];
@@ -396,6 +410,13 @@ static void copyKeychainDictionaryKey(NSString * _Nonnull group, NSString * _Non
             MTDatacenterAuthAction *action = datacenterAuthActions[key];
             [action cancel];
         }
+        
+        for (NSNumber *key in tempKeyRefreshActions)
+        {
+            MTDatacenterAuthAction *action = tempKeyRefreshActions[key];
+            [action cancel];
+        }
+        [tempKeyRefreshTimer invalidate];
         
         for (NSNumber *nDatacenterId in datacenterTransferAuthActions)
         {
@@ -489,6 +510,8 @@ static void copyKeychainDictionaryKey(NSString * _Nonnull group, NSString * _Non
                         }
                     }
                 }
+                
+                [self _scheduleTempKeyRefresh];
             }
             
             NSDictionary *datacenterPublicKeysById = [keychain dictionaryForKey:@"datacenterPublicKeysById" group:@"ephemeral"];
@@ -783,6 +806,7 @@ static void copyKeychainDictionaryKey(NSString * _Nonnull group, NSString * _Non
             NSNumber *infoKey = authInfoMapIntegerKey((int32_t)datacenterId, selector);
             
             bool wasNil = _datacenterAuthInfoById[infoKey] == nil;
+            int64_t previousAuthKeyId = _datacenterAuthInfoById[infoKey].authKeyId;
             
             if (authInfo != nil) {
                 _datacenterAuthInfoById[infoKey] = authInfo;
@@ -808,6 +832,16 @@ static void copyKeychainDictionaryKey(NSString * _Nonnull group, NSString * _Non
                     if ([listener respondsToSelector:@selector(contextDatacenterAuthInfoUpdated:datacenterId:authInfo:selector:)])
                         [listener contextDatacenterAuthInfoUpdated:self datacenterId:datacenterId authInfo:authInfo selector:selector];
                 }
+            }
+            
+            if (selector != MTDatacenterAuthInfoSelectorPersistent) {
+                if (authInfo != nil && previousAuthKeyId != authInfo.authKeyId) {
+                    [_tempKeyRefreshRetryAt removeObjectForKey:infoKey];
+                }
+                if (authInfo != nil) {
+                    [_tempKeysInUse addObject:infoKey];
+                }
+                [self _scheduleTempKeyRefresh];
             }
             
             if (wasNil && authInfo != nil && selector == MTDatacenterAuthInfoSelectorPersistent) {
@@ -1129,6 +1163,10 @@ static void copyKeychainDictionaryKey(NSString * _Nonnull group, NSString * _Non
     [[MTContext contextQueue] dispatchOnQueue:^{
         NSNumber *infoKey = authInfoMapIntegerKey((int32_t)datacenterId, selector);
         result = _datacenterAuthInfoById[infoKey];
+        if (result != nil && selector != MTDatacenterAuthInfoSelectorPersistent && ![_tempKeysInUse containsObject:infoKey]) {
+            [_tempKeysInUse addObject:infoKey];
+            [self _scheduleTempKeyRefresh];
+        }
     } synchronous:true];
     
     return result;
@@ -1732,6 +1770,121 @@ static void copyKeychainDictionaryKey(NSString * _Nonnull group, NSString * _Non
             }
         }
     }];
+}
+
+- (bool)refreshesTemporaryKeys {
+    __block bool result = false;
+    [[MTContext contextQueue] dispatchOnQueue:^{
+        result = _refreshesTemporaryKeys;
+    } synchronous:true];
+    return result;
+}
+
+- (void)setRefreshesTemporaryKeys:(bool)refreshesTemporaryKeys {
+    [[MTContext contextQueue] dispatchOnQueue:^{
+        _refreshesTemporaryKeys = refreshesTemporaryKeys;
+        [self _scheduleTempKeyRefresh];
+    }];
+}
+
+- (int32_t)_tempKeyRefreshMargin {
+    return MAX((int32_t)1, MIN((int32_t)(60 * 60), _tempKeyExpiration / 4));
+}
+
+- (bool)_tempKeyCanBeRefreshed:(NSNumber *)infoKey {
+    MTDatacenterAuthInfoMapKeyStruct parsedKey = parseAuthInfoMapKeyInteger(infoKey);
+    if (parsedKey.selector != MTDatacenterAuthInfoSelectorEphemeralMain && parsedKey.selector != MTDatacenterAuthInfoSelectorEphemeralMedia) {
+        return false;
+    }
+    if (!_refreshesTemporaryKeys || ![_tempKeysInUse containsObject:infoKey]) {
+        return false;
+    }
+    MTDatacenterAuthInfo *authInfo = _datacenterAuthInfoById[infoKey];
+    if (authInfo == nil || authInfo.validUntilTimestamp == INT32_MAX || (int64_t)authInfo.validUntilTimestamp <= (int64_t)[NSDate date].timeIntervalSince1970) {
+        return false;
+    }
+    if (_datacenterAuthInfoById[authInfoMapIntegerKey(parsedKey.datacenterId, MTDatacenterAuthInfoSelectorPersistent)] == nil) {
+        return false;
+    }
+    return _datacenterAuthActions[infoKey] == nil && _tempKeyRefreshActions[infoKey] == nil;
+}
+
+- (void)_scheduleTempKeyRefresh {
+    [_tempKeyRefreshTimer invalidate];
+    _tempKeyRefreshTimer = nil;
+    if (_tempKeyRefreshActions == nil) {
+        return;
+    }
+    
+    int32_t margin = [self _tempKeyRefreshMargin];
+    int64_t earliest = INT64_MAX;
+    for (NSNumber *infoKey in _datacenterAuthInfoById) {
+        if (![self _tempKeyCanBeRefreshed:infoKey]) {
+            continue;
+        }
+        int64_t dueAt = (int64_t)_datacenterAuthInfoById[infoKey].validUntilTimestamp - margin;
+        NSNumber *retryAt = _tempKeyRefreshRetryAt[infoKey];
+        if (retryAt != nil) {
+            dueAt = MAX(dueAt, [retryAt longLongValue]);
+        }
+        earliest = MIN(earliest, dueAt);
+    }
+    if (earliest == INT64_MAX) {
+        return;
+    }
+    
+    NSTimeInterval delay = MIN(300.0, MAX(1.0, (NSTimeInterval)(earliest - (int64_t)[NSDate date].timeIntervalSince1970)));
+    __weak MTContext *weakSelf = self;
+    _tempKeyRefreshTimer = [self _startRetryTimerWithDelay:delay block:^{
+        __strong MTContext *strongSelf = weakSelf;
+        if (strongSelf == nil) {
+            return;
+        }
+        strongSelf->_tempKeyRefreshTimer = nil;
+        [strongSelf _refreshExpiringTempKeys];
+    }];
+}
+
+- (void)_refreshExpiringTempKeys {
+    int64_t now = (int64_t)[NSDate date].timeIntervalSince1970;
+    int32_t margin = [self _tempKeyRefreshMargin];
+    for (NSNumber *infoKey in [_datacenterAuthInfoById allKeys]) {
+        if (![self _tempKeyCanBeRefreshed:infoKey]) {
+            continue;
+        }
+        if ((int64_t)_datacenterAuthInfoById[infoKey].validUntilTimestamp - margin > now || [_tempKeyRefreshRetryAt[infoKey] longLongValue] > now) {
+            continue;
+        }
+        MTDatacenterAuthInfoMapKeyStruct parsedKey = parseAuthInfoMapKeyInteger(infoKey);
+        if (MTLogEnabled()) {
+            MTLog(@"[MTContext#%" PRIxPTR ": temp key %lld for %d selector %d expires at %d, creating its replacement]", (intptr_t)self, _datacenterAuthInfoById[infoKey].authKeyId, (int)parsedKey.datacenterId, (int)parsedKey.selector, _datacenterAuthInfoById[infoKey].validUntilTimestamp);
+        }
+        __weak MTContext *weakSelf = self;
+        MTDatacenterAuthAction *action = [self makeAuthActionWithSelector:parsedKey.selector isCdn:false skipBind:false completion:^(MTDatacenterAuthAction *action, bool success) {
+            [[MTContext contextQueue] dispatchOnQueue:^{
+                __strong MTContext *strongSelf = weakSelf;
+                if (strongSelf == nil || strongSelf->_tempKeyRefreshActions[infoKey] != action) {
+                    return;
+                }
+                [strongSelf->_tempKeyRefreshActions removeObjectForKey:infoKey];
+                if (success) {
+                    [strongSelf->_tempKeyRefreshRetryAt removeObjectForKey:infoKey];
+                } else if ([MTDatacenterAuthAction bindErrorMeansPermanentKeyIsUnknown:action.bindError]) {
+                    if (MTLogEnabled()) {
+                        MTLog(@"[MTContext#%" PRIxPTR ": the server no longer knows the permanent key for %d, not replacing its temp key early]", (intptr_t)strongSelf, (int)parsedKey.datacenterId);
+                    }
+                    strongSelf->_tempKeyRefreshRetryAt[infoKey] = @(INT64_MAX);
+                } else {
+                    strongSelf->_tempKeyRefreshRetryAt[infoKey] = @((int64_t)[NSDate date].timeIntervalSince1970 + 60);
+                }
+                [strongSelf _scheduleTempKeyRefresh];
+            }];
+        }];
+        action.replacesExistingKey = true;
+        _tempKeyRefreshActions[infoKey] = action;
+        [action execute:self datacenterId:parsedKey.datacenterId];
+    }
+    [self _scheduleTempKeyRefresh];
 }
 
 - (MTTimer *)_startRetryTimerWithDelay:(NSTimeInterval)delay block:(dispatch_block_t)block {

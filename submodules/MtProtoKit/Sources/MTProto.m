@@ -1913,22 +1913,12 @@ static const NSUInteger MTMaxUnacknowledgedMessageCount = 64;
     }];
 }
 
-static NSString *dumpHexString(NSData *data, int maxLength) {
-    const unsigned char *dataBuffer = (const unsigned char *)[data bytes];
-    if (dataBuffer == NULL)
-        return [NSString string];
-    
-    NSUInteger dataLength = MIN(data.length, 128);
-    NSMutableString *hexString = [NSMutableString stringWithCapacity:(dataLength * 2)];
-    
-    for (int i = 0; i < (int)dataLength; i++) {
-        [hexString appendString:[NSString stringWithFormat:@"%02lx", (unsigned long)dataBuffer[i]]];
+static uint32_t parsedBodyConstructor(NSData *data, NSUInteger bodyOffset) {
+    uint32_t constructor = 0;
+    if (data.length >= bodyOffset + 4) {
+        [data getBytes:&constructor range:NSMakeRange(bodyOffset, 4)];
     }
-    if (dataLength < data.length) {
-        [hexString appendString:@"..."];
-    }
-    
-    return hexString;
+    return constructor;
 }
 
 - (void)transportHasIncomingData:(MTTransport *)transport scheme:(MTTransportScheme *)scheme networkType:(int32_t)networkType data:(NSData *)data transactionId:(id)transactionId requestTransactionAfterProcessing:(bool)requestTransactionAfterProcessing decodeResult:(void (^)(id transactionId, bool success))decodeResult
@@ -2047,9 +2037,9 @@ static NSString *dumpHexString(NSData *data, int maxLength) {
             }
             if (parseError) {
                 if (MTLogEnabled()) {
-                    MTLogWithPrefix(_getLogPrefix, @"[MTProto#%p@%p incoming data parse error, header: %d:%@]", self, _context, (int)decryptedData.length, dumpHexString(decryptedData, 128));
+                    MTLogWithPrefix(_getLogPrefix, @"[MTProto#%p@%p incoming data parse error, %d bytes, constructor %08x]", self, _context, (int)decryptedData.length, parsedBodyConstructor(decryptedData, _useUnauthorizedMode ? 20 : 32));
                 }
-                MTShortLog(@"[MTProto#%p@%p incoming data parse error, header: %d:%@]", self, _context, (int)decryptedData.length, dumpHexString(decryptedData, 128));
+                MTShortLog(@"[MTProto#%p@%p incoming data parse error, %d bytes, constructor %08x]", self, _context, (int)decryptedData.length, parsedBodyConstructor(decryptedData, _useUnauthorizedMode ? 20 : 32));
                 
                 if (!_useUnauthorizedMode) {
                     [_context reportTransportSchemeFailureForDatacenterId:_datacenterId transportScheme:scheme];
@@ -2088,6 +2078,24 @@ static NSString *dumpHexString(NSData *data, int maxLength) {
     }];
 }
                                   
+- (bool)_adoptReplacementKeyForSelector:(MTDatacenterAuthInfoSelector)selector {
+    int64_t rejectedKeyId = _validAuthInfo.authInfo.authKeyId;
+    if (rejectedKeyId == 0) {
+        return false;
+    }
+    MTDatacenterAuthInfo *currentAuthInfo = [_context authInfoForDatacenterWithId:_datacenterId selector:selector];
+    if (currentAuthInfo == nil || currentAuthInfo.authKeyId == rejectedKeyId) {
+        return false;
+    }
+    if (MTLogEnabled()) {
+        MTLogWithPrefix(_getLogPrefix, @"[MTProto#%p@%p key %lld rejected, the context already holds its replacement %lld]", self, _context, rejectedKeyId, currentAuthInfo.authKeyId);
+    }
+    _validAuthInfo = nil;
+    [self resetTransport];
+    [self requestTransportTransaction];
+    return true;
+}
+
 - (void)handleMissingKey:(MTTransportScheme *)scheme {
     NSAssert([[MTProto managerQueue] isCurrentQueue], @"invalid queue");
     
@@ -2125,6 +2133,10 @@ static NSString *dumpHexString(NSData *data, int maxLength) {
     } else {
         MTDatacenterAuthInfoSelector authInfoSelector;
         [self getAuthKeyForCurrentScheme:scheme createIfNeeded:false authInfoSelector:&authInfoSelector];
+        
+        if ((authInfoSelector == MTDatacenterAuthInfoSelectorEphemeralMain || authInfoSelector == MTDatacenterAuthInfoSelectorEphemeralMedia) && [self _adoptReplacementKeyForSelector:authInfoSelector]) {
+            return;
+        }
         
         if (_requiredAuthToken != nil && _authTokenMasterDatacenterId != _datacenterId) {
             _validAuthInfo = nil;
@@ -2612,6 +2624,18 @@ static bool isBytesEqualConstTime(uint8_t const *bytes1, uint8_t const *bytes2, 
                     return;
                 }
             } else {
+                return;
+            }
+            
+            if (authInfo != nil && _useExplicitAuthKey == nil && _validAuthInfo != nil && _validAuthInfo.selector == selector && _validAuthInfo.authInfo.authKeyId != authInfo.authKeyId && (_mtState & MTProtoStateAwaitingDatacenterAuthorization) == 0) {
+                if (MTLogEnabled()) {
+                    MTLogWithPrefix(_getLogPrefix, @"[MTProto#%p@%p key for selector %d replaced: %lld -> %lld]", self, _context, (int)selector, _validAuthInfo.authInfo.authKeyId, authInfo.authKeyId);
+                }
+                _validAuthInfo = nil;
+                if ((_mtState & MTProtoStatePaused) == 0) {
+                    [self resetTransport];
+                    [self requestTransportTransaction];
+                }
                 return;
             }
             
