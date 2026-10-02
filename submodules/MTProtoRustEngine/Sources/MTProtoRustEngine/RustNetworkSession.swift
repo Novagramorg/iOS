@@ -78,7 +78,8 @@ final class RustNetworkSession: NetworkEngineSession {
     private let listener: RustContextListener
     private weak var delegate: NetworkEngineSessionDelegate?
     private let usageManager: MTNetworkUsageManager?
-    private let selector: MTDatacenterAuthInfoSelector
+    private var selector: MTDatacenterAuthInfoSelector
+    private var obfuscationDatacenterId: Int16
     private let isStopped = Atomic<Bool>(value: false)
     private var handle: MTSessionHandle = 0
     private var logPrefix: String
@@ -161,11 +162,8 @@ final class RustNetworkSession: NetworkEngineSession {
         self.schemes = schemes
         self.addressFingerprint = RustNetworkSession.fingerprint(schemes)
         let preferForMedia = schemes.first?.address.preferForMedia ?? false
-        if self.isCdn || !context.useTempAuthKeys {
-            self.selector = .persistent
-        } else {
-            self.selector = preferForMedia ? .ephemeralMedia : .ephemeralMain
-        }
+        self.selector = RustNetworkSession.authInfoSelector(context: context, isCdn: self.isCdn, preferForMedia: preferForMedia)
+        self.obfuscationDatacenterId = rustEngineObfuscationDatacenterId(datacenterId: datacenterId, isTestingEnvironment: context.isTestingEnvironment, preferForMedia: preferForMedia)
         self.holdForUnsupportedProxy = self.apiEnvironment.socksProxySettings?.webProxy ?? false
         self.logPrefix = "[MTProtoRust#0 dc\(datacenterId) \(roleName)]"
 
@@ -174,7 +172,7 @@ final class RustNetworkSession: NetworkEngineSession {
         let arena = RustEngineArena()
         var setup = MTSessionSetup()
         setup.datacenter_id = Int32(datacenterId)
-        setup.obfuscation_dc_id = rustEngineObfuscationDatacenterId(datacenterId: datacenterId, isTestingEnvironment: context.isTestingEnvironment, preferForMedia: preferForMedia)
+        setup.obfuscation_dc_id = self.obfuscationDatacenterId
         setup.role = rustEngineSessionRole(isMain: self.isMain, isCdn: self.isCdn, datacenterId: datacenterId, masterDatacenterId: self.masterDatacenterId).rawValue
         setup.framing = UInt8(MTFramingAbridged)
         let addresses = RustNetworkSession.makeAddresses(schemes, arena: arena)
@@ -1040,12 +1038,51 @@ final class RustNetworkSession: NetworkEngineSession {
         }
         self.schemes = schemes
         self.addressFingerprint = fingerprint
+        var selector = self.selector
+        var obfuscationDatacenterId = self.obfuscationDatacenterId
+        if let preferForMedia = schemes.first?.address.preferForMedia {
+            selector = RustNetworkSession.authInfoSelector(context: self.context, isCdn: self.isCdn, preferForMedia: preferForMedia)
+            obfuscationDatacenterId = rustEngineObfuscationDatacenterId(datacenterId: self.datacenterId, isTestingEnvironment: self.context.isTestingEnvironment, preferForMedia: preferForMedia)
+        }
+        let suspended = (selector != self.selector || obfuscationDatacenterId != self.obfuscationDatacenterId) && !self.appliedPaused
+        if suspended {
+            mt_session_set_paused(engine, self.handle, 1)
+        }
+        if obfuscationDatacenterId != self.obfuscationDatacenterId {
+            self.obfuscationDatacenterId = obfuscationDatacenterId
+            mt_session_set_obfuscation_dc_id(engine, self.handle, obfuscationDatacenterId)
+        }
         let arena = RustEngineArena()
         let addresses = RustNetworkSession.makeAddresses(schemes, arena: arena)
         withExtendedLifetime(arena) {
             mt_session_set_addresses(engine, self.handle, arena.array(addresses), addresses.count)
         }
         rustEngineLog("\(self.logPrefix) addresses updated: \(fingerprint.joined(separator: ", "))")
+        if selector != self.selector {
+            self.switchSelector(to: selector)
+        }
+        if suspended && !self.appliedPaused {
+            mt_session_set_paused(engine, self.handle, 0)
+        }
+    }
+
+    private func switchSelector(to selector: MTDatacenterAuthInfoSelector) {
+        rustEngineImportantLog("\(self.logPrefix) addresses moved from selector \(self.selector.rawValue) to \(selector.rawValue)")
+        self.selector = selector
+        self.rejectedKeyId = nil
+        if let authInfo = self.context.authInfoForDatacenter(withId: self.datacenterId, selector: selector) {
+            self.install(authInfo)
+            return
+        }
+        self.awaitingKey = true
+        self.holdForReplacementKey = true
+        self.applyPaused()
+        self.reportConnectionState()
+        self.updateConnectionWatchdog()
+        rustEngineLog("\(self.logPrefix) waiting for an auth key (selector \(selector.rawValue))")
+        if !self.externallyPaused {
+            self.requestAwaitedKey()
+        }
     }
 
     private func invalidateInitialization() {
@@ -1234,6 +1271,13 @@ extension RustNetworkSession {
             hasInitHash: initHash != nil ? 1 : 0,
             initHash: arena.string(initHash)
         )
+    }
+
+    fileprivate static func authInfoSelector(context: MTContext, isCdn: Bool, preferForMedia: Bool) -> MTDatacenterAuthInfoSelector {
+        if isCdn || !context.useTempAuthKeys {
+            return .persistent
+        }
+        return preferForMedia ? .ephemeralMedia : .ephemeralMain
     }
 
     fileprivate static func loadSchemes(context: MTContext, datacenterId: Int, isMedia: Bool, apiEnvironment: MTApiEnvironment) -> [MTTransportScheme] {

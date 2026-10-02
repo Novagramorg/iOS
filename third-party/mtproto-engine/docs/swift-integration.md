@@ -201,7 +201,12 @@ reset (pause + resume), as MtProtoKit resets its transport.
 All sessions: created paused, `framing = Abridged` (the engine switches to padded intermediate for
 `dd`/`ee` secrets), `online = 0`, `request_timeout = 5`, `time_difference` from the context,
 obfuscation tag `dc` (+10000 in the test environment, negative for media addresses). The selector and
-the obfuscation tag are fixed when the session is created.
+the obfuscation tag follow the address class, as MtProtoKit picks the selector per transport scheme: when
+an address update moves a session between media and other addresses, it pauses the engine session,
+sets the new tag and addresses, and installs the context's key for the new selector, or holds until that
+key exists. A backup config fetch can drop a datacenter's media addresses; a session that kept the media
+selector then sent its media key to a main address, got `-404`, and could not get a replacement, because
+media keys are only created on media addresses (`enforceMedia`).
 
 Pause: `setPaused` from TelegramCore is combined with two internal holds (replacement key pending,
 unsupported proxy); the engine is paused while any is set. Resume re-reads schemes, re-asks for an
@@ -285,14 +290,9 @@ a transfer on resume, and opens the gate on `contextDatacenterAuthTokenUpdated` 
 3. **No injected transport.** `context.makeTcpConnectionInterface` (NWConnection on macOS 14+, WEB
    proxy carrier) cannot be used; the engine always opens its own sockets. Needs a byte-stream
    callback interface in the C ABI.
-4. **`obfuscation_dc_id` cannot be updated** after creation (`set_addresses` keeps it), so a session
-   whose address class changes keeps the old tag.
-5. **No `AddressResult` on connect timeouts**, hence the Swift watchdog.
-6. **Network interface** is not reported with `NetworkUsage`; iOS cellular accounting needs it.
-7. **No Swift test against the fake server.** `mtproto-testserver` is Rust only; an FFI such as
-   `mt_testserver_start(keys) -> port` / `mt_testserver_stop` (test builds only) would let an XCTest
-   drive `RustNetworkSession` end to end.
-8. iOS: no Bazel `BUILD` for the package or the xcframework, no iOS slices in `build.sh`.
+4. **No `AddressResult` on connect timeouts**, hence the Swift watchdog.
+5. **Network interface** is not reported with `NetworkUsage`; iOS cellular accounting needs it.
+6. iOS: no Bazel `BUILD` for the package or the xcframework, no iOS slices in `build.sh`.
 
 ## 13. Tests
 
@@ -302,7 +302,11 @@ a transfer on resume, and opens the gate on `contextDatacenterAuthTokenUpdated` 
   verification literals.
 - `MTProtoRustEngineTests`: arena and string bridging, `MTEvent` copy, event kinds and flags against
   the C header, listener selectors as the Objective-C runtime sees them, engine start and request ids,
-  raw session create/destroy through the routing table.
+  raw session create/destroy through the routing table. `RustEngineEndToEndTests` runs
+  `RustNetworkSession` against the `mtproto-testserver` binary (`cargo build -p mtproto-testserver`
+  first): completion, cancellation, flood waits, dropped connections, salt changes, a worker sharing the
+  main session's engine, and a media worker following its addresses between media and main keys. It
+  needs the shared logger that `RustEngineBridgeTests` installs, so run the whole test target.
 
 ## 14. Risks (not yet exercised at runtime)
 
