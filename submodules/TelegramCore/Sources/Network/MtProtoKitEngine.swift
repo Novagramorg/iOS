@@ -129,15 +129,100 @@ final class MtProtoKitEngine: NetworkEngine {
     }
 }
 
+private final class MtProtoKitPendingRequest {
+    let request: NetworkEngineRequest
+    let internalId: Any!
+    let sequence: Int
+    var isTaken = false
+    var isCancelled = false
+    var moved: Disposable?
+
+    init(request: NetworkEngineRequest, internalId: Any!, sequence: Int) {
+        self.request = request
+        self.internalId = internalId
+        self.sequence = sequence
+    }
+}
+
+private final class MtProtoKitPendingRequests {
+    private let lock = NSLock()
+    private var requests: [ObjectIdentifier: MtProtoKitPendingRequest] = [:]
+    private var nextSequence = 0
+
+    func insert(request: NetworkEngineRequest, internalId: Any!) -> MtProtoKitPendingRequest {
+        self.lock.lock()
+        let pending = MtProtoKitPendingRequest(request: request, internalId: internalId, sequence: self.nextSequence)
+        self.nextSequence += 1
+        self.requests[ObjectIdentifier(pending)] = pending
+        self.lock.unlock()
+        return pending
+    }
+
+    func complete(_ pending: MtProtoKitPendingRequest) -> Bool {
+        self.lock.lock()
+        defer {
+            self.lock.unlock()
+        }
+        if pending.isTaken {
+            return false
+        }
+        self.requests.removeValue(forKey: ObjectIdentifier(pending))
+        return true
+    }
+
+    func cancel(_ pending: MtProtoKitPendingRequest) -> Disposable? {
+        self.lock.lock()
+        defer {
+            self.lock.unlock()
+        }
+        pending.isCancelled = true
+        self.requests.removeValue(forKey: ObjectIdentifier(pending))
+        return pending.moved
+    }
+
+    func takeAll() -> [MtProtoKitPendingRequest] {
+        self.lock.lock()
+        let taken = self.requests.values.filter { !$0.isCancelled }.sorted(by: { $0.sequence < $1.sequence })
+        for pending in taken {
+            pending.isTaken = true
+        }
+        self.requests.removeAll()
+        self.lock.unlock()
+        return taken
+    }
+
+    func setMoved(_ pending: MtProtoKitPendingRequest, disposable: Disposable) -> Bool {
+        self.lock.lock()
+        pending.moved = disposable
+        let isCancelled = pending.isCancelled
+        self.lock.unlock()
+        return isCancelled
+    }
+}
+
 private final class MtProtoKitRequestService: NetworkEngineRequestService {
     private let requestService: MTRequestMessageService
+    private let pendingRequests = MtProtoKitPendingRequests()
     
     init(requestService: MTRequestMessageService) {
         self.requestService = requestService
     }
     
+    func movePendingRequests(to service: NetworkEngineRequestService) {
+        for pending in self.pendingRequests.takeAll() {
+            self.requestService.removeRequest(byInternalId: pending.internalId)
+            let disposable = service.add(pending.request)
+            if self.pendingRequests.setMoved(pending, disposable: disposable) {
+                disposable.dispose()
+            }
+        }
+    }
+    
     func add(_ request: NetworkEngineRequest) -> Disposable {
         let mtRequest = MTRequest()
+        let internalId: Any! = mtRequest.internalId
+        let pendingRequests = self.pendingRequests
+        let pending = pendingRequests.insert(request: request, internalId: internalId)
         
         let parse = request.parse
         mtRequest.setPayload(request.payload, metadata: request.metadata, shortMetadata: request.shortMetadata, responseParser: { response in
@@ -173,6 +258,9 @@ private final class MtProtoKitRequestService: NetworkEngineRequestService {
         
         let completed = request.completed
         mtRequest.completed = { (boxedResponse, info, error) -> () in
+            if !pendingRequests.complete(pending) {
+                return
+            }
             let responseInfo = NetworkEngineResponseInfo(info)
             if let error = error {
                 completed(.failure(NetworkEngineRequestFailure(error: error, info: responseInfo)))
@@ -192,13 +280,15 @@ private final class MtProtoKitRequestService: NetworkEngineRequestService {
             }
         }
         
-        let internalId: Any! = mtRequest.internalId
-        
         let requestService = self.requestService
         requestService.add(mtRequest)
         
         return ActionDisposable { [weak requestService] in
-            requestService?.removeRequest(byInternalId: internalId)
+            if let moved = pendingRequests.cancel(pending) {
+                moved.dispose()
+            } else {
+                requestService?.removeRequest(byInternalId: internalId)
+            }
         }
     }
 }
@@ -235,6 +325,7 @@ private final class MtProtoKitUpdateSinkService: NSObject, MTMessageService {
 private final class MtProtoKitSession: NSObject, NetworkEngineSession, MTRequestMessageServiceDelegate {
     let datacenterId: Int
     let requestService: NetworkEngineRequestService
+    private let mtProtoKitRequestService: MtProtoKitRequestService
     
     private let context: MTContext
     private let role: NetworkEngineSessionRole
@@ -280,7 +371,8 @@ private final class MtProtoKitSession: NSObject, NetworkEngineSession, MTRequest
             self.connectionStatusDelegate = nil
         }
         
-        self.requestService = MtProtoKitRequestService(requestService: self.mtRequestService)
+        self.mtProtoKitRequestService = MtProtoKitRequestService(requestService: self.mtRequestService)
+        self.requestService = self.mtProtoKitRequestService
         
         super.init()
         
@@ -330,5 +422,10 @@ private final class MtProtoKitSession: NSObject, NetworkEngineSession, MTRequest
         self.mtProto.remove(self.mtRequestService)
         self.mtProto.stop()
         self.mtProto.finalizeSession()
+    }
+    
+    func movePendingRequests(to service: NetworkEngineRequestService, completion: @escaping () -> Void) {
+        self.mtProtoKitRequestService.movePendingRequests(to: service)
+        completion()
     }
 }
