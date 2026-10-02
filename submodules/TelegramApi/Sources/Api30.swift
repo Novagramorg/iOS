@@ -1511,6 +1511,257 @@ public extension Api {
                 return nil
             }
         }
+        public static func parse_userFullWithGramAddress(_ reader: BufferReader) -> UserFull? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Int32?
+            _2 = reader.readInt32()
+            var _3: Int64?
+            _3 = reader.readInt64()
+            var _4: String?
+            if Int(_1 ?? 0) & Int(1 << 1) != 0 {
+                _4 = parseString(reader)
+            }
+            var _5: Api.PeerSettings?
+            if let signature = reader.readInt32() {
+                _5 = Api.parse(reader, signature: signature) as? Api.PeerSettings
+            }
+            var _6: Api.Photo?
+            if Int(_1 ?? 0) & Int(1 << 21) != 0 {
+                if let signature = reader.readInt32() {
+                    _6 = Api.parse(reader, signature: signature) as? Api.Photo
+                }
+            }
+            var _7: Api.Photo?
+            if Int(_1 ?? 0) & Int(1 << 2) != 0 {
+                if let signature = reader.readInt32() {
+                    _7 = Api.parse(reader, signature: signature) as? Api.Photo
+                }
+            }
+            var _8: Api.Photo?
+            if Int(_1 ?? 0) & Int(1 << 22) != 0 {
+                if let signature = reader.readInt32() {
+                    _8 = Api.parse(reader, signature: signature) as? Api.Photo
+                }
+            }
+            var _9: Api.PeerNotifySettings?
+            if let signature = reader.readInt32() {
+                _9 = Api.parse(reader, signature: signature) as? Api.PeerNotifySettings
+            }
+            var _10: Api.BotInfo?
+            if Int(_1 ?? 0) & Int(1 << 3) != 0 {
+                if let signature = reader.readInt32() {
+                    _10 = Api.parse(reader, signature: signature) as? Api.BotInfo
+                }
+            }
+            var _11: Int32?
+            if Int(_1 ?? 0) & Int(1 << 6) != 0 {
+                _11 = reader.readInt32()
+            }
+            var _12: Int32?
+            _12 = reader.readInt32()
+            var _13: Int32?
+            if Int(_1 ?? 0) & Int(1 << 11) != 0 {
+                _13 = reader.readInt32()
+            }
+            var _14: Int32?
+            if Int(_1 ?? 0) & Int(1 << 14) != 0 {
+                _14 = reader.readInt32()
+            }
+            var _15: Api.ChatTheme?
+            if Int(_1 ?? 0) & Int(1 << 15) != 0 {
+                if let signature = reader.readInt32() {
+                    _15 = Api.parse(reader, signature: signature) as? Api.ChatTheme
+                }
+            }
+            var _16: String?
+            if Int(_1 ?? 0) & Int(1 << 16) != 0 {
+                _16 = parseString(reader)
+            }
+            var _17: Api.ChatAdminRights?
+            if Int(_1 ?? 0) & Int(1 << 17) != 0 {
+                if let signature = reader.readInt32() {
+                    _17 = Api.parse(reader, signature: signature) as? Api.ChatAdminRights
+                }
+            }
+            var _18: Api.ChatAdminRights?
+            if Int(_1 ?? 0) & Int(1 << 18) != 0 {
+                if let signature = reader.readInt32() {
+                    _18 = Api.parse(reader, signature: signature) as? Api.ChatAdminRights
+                }
+            }
+            var _19: Api.WallPaper?
+            if Int(_1 ?? 0) & Int(1 << 24) != 0 {
+                if let signature = reader.readInt32() {
+                    _19 = Api.parse(reader, signature: signature) as? Api.WallPaper
+                }
+            }
+            var _20: Api.PeerStories?
+            if Int(_1 ?? 0) & Int(1 << 25) != 0 {
+                if let signature = reader.readInt32() {
+                    _20 = Api.parse(reader, signature: signature) as? Api.PeerStories
+                }
+            }
+            var _21: Api.BusinessWorkHours?
+            if Int(_2 ?? 0) & Int(1 << 0) != 0 {
+                if let signature = reader.readInt32() {
+                    _21 = Api.parse(reader, signature: signature) as? Api.BusinessWorkHours
+                }
+            }
+            var _22: Api.BusinessLocation?
+            if Int(_2 ?? 0) & Int(1 << 1) != 0 {
+                if let signature = reader.readInt32() {
+                    _22 = Api.parse(reader, signature: signature) as? Api.BusinessLocation
+                }
+            }
+            var _23: Api.BusinessGreetingMessage?
+            if Int(_2 ?? 0) & Int(1 << 2) != 0 {
+                if let signature = reader.readInt32() {
+                    _23 = Api.parse(reader, signature: signature) as? Api.BusinessGreetingMessage
+                }
+            }
+            var _24: Api.BusinessAwayMessage?
+            if Int(_2 ?? 0) & Int(1 << 3) != 0 {
+                if let signature = reader.readInt32() {
+                    _24 = Api.parse(reader, signature: signature) as? Api.BusinessAwayMessage
+                }
+            }
+            var _25: Api.BusinessIntro?
+            if Int(_2 ?? 0) & Int(1 << 4) != 0 {
+                if let signature = reader.readInt32() {
+                    _25 = Api.parse(reader, signature: signature) as? Api.BusinessIntro
+                }
+            }
+            var _26: Api.Birthday?
+            if Int(_2 ?? 0) & Int(1 << 5) != 0 {
+                if let signature = reader.readInt32() {
+                    _26 = Api.parse(reader, signature: signature) as? Api.Birthday
+                }
+            }
+            var _27: Int64?
+            if Int(_2 ?? 0) & Int(1 << 6) != 0 {
+                _27 = reader.readInt64()
+            }
+            var _28: Int32?
+            if Int(_2 ?? 0) & Int(1 << 6) != 0 {
+                _28 = reader.readInt32()
+            }
+            var _29: Int32?
+            if Int(_2 ?? 0) & Int(1 << 8) != 0 {
+                _29 = reader.readInt32()
+            }
+            var _30: Api.StarRefProgram?
+            if Int(_2 ?? 0) & Int(1 << 11) != 0 {
+                if let signature = reader.readInt32() {
+                    _30 = Api.parse(reader, signature: signature) as? Api.StarRefProgram
+                }
+            }
+            var _31: Api.BotVerification?
+            if Int(_2 ?? 0) & Int(1 << 12) != 0 {
+                if let signature = reader.readInt32() {
+                    _31 = Api.parse(reader, signature: signature) as? Api.BotVerification
+                }
+            }
+            var _32: Int64?
+            if Int(_2 ?? 0) & Int(1 << 14) != 0 {
+                _32 = reader.readInt64()
+            }
+            var _33: Api.DisallowedGiftsSettings?
+            if Int(_2 ?? 0) & Int(1 << 15) != 0 {
+                if let signature = reader.readInt32() {
+                    _33 = Api.parse(reader, signature: signature) as? Api.DisallowedGiftsSettings
+                }
+            }
+            var _34: Api.StarsRating?
+            if Int(_2 ?? 0) & Int(1 << 17) != 0 {
+                if let signature = reader.readInt32() {
+                    _34 = Api.parse(reader, signature: signature) as? Api.StarsRating
+                }
+            }
+            var _35: Api.StarsRating?
+            if Int(_2 ?? 0) & Int(1 << 18) != 0 {
+                if let signature = reader.readInt32() {
+                    _35 = Api.parse(reader, signature: signature) as? Api.StarsRating
+                }
+            }
+            var _36: Int32?
+            if Int(_2 ?? 0) & Int(1 << 18) != 0 {
+                _36 = reader.readInt32()
+            }
+            var _37: Api.ProfileTab?
+            if Int(_2 ?? 0) & Int(1 << 20) != 0 {
+                if let signature = reader.readInt32() {
+                    _37 = Api.parse(reader, signature: signature) as? Api.ProfileTab
+                }
+            }
+            var _38: Api.Document?
+            if Int(_2 ?? 0) & Int(1 << 21) != 0 {
+                if let signature = reader.readInt32() {
+                    _38 = Api.parse(reader, signature: signature) as? Api.Document
+                }
+            }
+            var _39: Api.TextWithEntities?
+            if Int(_2 ?? 0) & Int(1 << 22) != 0 {
+                if let signature = reader.readInt32() {
+                    _39 = Api.parse(reader, signature: signature) as? Api.TextWithEntities
+                }
+            }
+            var _40: Int64?
+            if Int(_2 ?? 0) & Int(1 << 25) != 0 {
+                _40 = reader.readInt64()
+            }
+            var _41: String?
+            if Int(_2 ?? 0) & Int(1 << 27) != 0 {
+                _41 = parseString(reader)
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = _3 != nil
+            let _c4 = (Int(_1 ?? 0) & Int(1 << 1) == 0) || _4 != nil
+            let _c5 = _5 != nil
+            let _c6 = (Int(_1 ?? 0) & Int(1 << 21) == 0) || _6 != nil
+            let _c7 = (Int(_1 ?? 0) & Int(1 << 2) == 0) || _7 != nil
+            let _c8 = (Int(_1 ?? 0) & Int(1 << 22) == 0) || _8 != nil
+            let _c9 = _9 != nil
+            let _c10 = (Int(_1 ?? 0) & Int(1 << 3) == 0) || _10 != nil
+            let _c11 = (Int(_1 ?? 0) & Int(1 << 6) == 0) || _11 != nil
+            let _c12 = _12 != nil
+            let _c13 = (Int(_1 ?? 0) & Int(1 << 11) == 0) || _13 != nil
+            let _c14 = (Int(_1 ?? 0) & Int(1 << 14) == 0) || _14 != nil
+            let _c15 = (Int(_1 ?? 0) & Int(1 << 15) == 0) || _15 != nil
+            let _c16 = (Int(_1 ?? 0) & Int(1 << 16) == 0) || _16 != nil
+            let _c17 = (Int(_1 ?? 0) & Int(1 << 17) == 0) || _17 != nil
+            let _c18 = (Int(_1 ?? 0) & Int(1 << 18) == 0) || _18 != nil
+            let _c19 = (Int(_1 ?? 0) & Int(1 << 24) == 0) || _19 != nil
+            let _c20 = (Int(_1 ?? 0) & Int(1 << 25) == 0) || _20 != nil
+            let _c21 = (Int(_2 ?? 0) & Int(1 << 0) == 0) || _21 != nil
+            let _c22 = (Int(_2 ?? 0) & Int(1 << 1) == 0) || _22 != nil
+            let _c23 = (Int(_2 ?? 0) & Int(1 << 2) == 0) || _23 != nil
+            let _c24 = (Int(_2 ?? 0) & Int(1 << 3) == 0) || _24 != nil
+            let _c25 = (Int(_2 ?? 0) & Int(1 << 4) == 0) || _25 != nil
+            let _c26 = (Int(_2 ?? 0) & Int(1 << 5) == 0) || _26 != nil
+            let _c27 = (Int(_2 ?? 0) & Int(1 << 6) == 0) || _27 != nil
+            let _c28 = (Int(_2 ?? 0) & Int(1 << 6) == 0) || _28 != nil
+            let _c29 = (Int(_2 ?? 0) & Int(1 << 8) == 0) || _29 != nil
+            let _c30 = (Int(_2 ?? 0) & Int(1 << 11) == 0) || _30 != nil
+            let _c31 = (Int(_2 ?? 0) & Int(1 << 12) == 0) || _31 != nil
+            let _c32 = (Int(_2 ?? 0) & Int(1 << 14) == 0) || _32 != nil
+            let _c33 = (Int(_2 ?? 0) & Int(1 << 15) == 0) || _33 != nil
+            let _c34 = (Int(_2 ?? 0) & Int(1 << 17) == 0) || _34 != nil
+            let _c35 = (Int(_2 ?? 0) & Int(1 << 18) == 0) || _35 != nil
+            let _c36 = (Int(_2 ?? 0) & Int(1 << 18) == 0) || _36 != nil
+            let _c37 = (Int(_2 ?? 0) & Int(1 << 20) == 0) || _37 != nil
+            let _c38 = (Int(_2 ?? 0) & Int(1 << 21) == 0) || _38 != nil
+            let _c39 = (Int(_2 ?? 0) & Int(1 << 22) == 0) || _39 != nil
+            let _c40 = (Int(_2 ?? 0) & Int(1 << 25) == 0) || _40 != nil
+            let _c41 = (Int(_2 ?? 0) & Int(1 << 27) == 0) || _41 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 && _c10 && _c11 && _c12 && _c13 && _c14 && _c15 && _c16 && _c17 && _c18 && _c19 && _c20 && _c21 && _c22 && _c23 && _c24 && _c25 && _c26 && _c27 && _c28 && _c29 && _c30 && _c31 && _c32 && _c33 && _c34 && _c35 && _c36 && _c37 && _c38 && _c39 && _c40 && _c41 {
+                return Api.UserFull.userFull(Cons_userFull(flags: _1!, flags2: _2!, id: _3!, about: _4, settings: _5!, personalPhoto: _6, profilePhoto: _7, fallbackPhoto: _8, notifySettings: _9!, botInfo: _10, pinnedMsgId: _11, commonChatsCount: _12!, folderId: _13, ttlPeriod: _14, theme: _15, privateForwardName: _16, botGroupAdminRights: _17, botBroadcastAdminRights: _18, wallpaper: _19, stories: _20, businessWorkHours: _21, businessLocation: _22, businessGreetingMessage: _23, businessAwayMessage: _24, businessIntro: _25, birthday: _26, personalChannelId: _27, personalChannelMessage: _28, stargiftsCount: _29, starrefProgram: _30, botVerification: _31, sendPaidMessagesStars: _32, disallowedGifts: _33, starsRating: _34, starsMyPendingRating: _35, starsMyPendingRatingDate: _36, mainTab: _37, savedMusic: _38, note: _39, botManagerId: _40))
+            }
+            else {
+                return nil
+            }
+        }
     }
 }
 public extension Api {
