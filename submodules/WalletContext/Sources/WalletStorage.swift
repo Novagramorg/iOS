@@ -107,11 +107,22 @@ actor WalletEngineStorage {
     private let secretService: String
     private let journalService: String
 
+    static let descriptorServicePrefix = "org.telegram.ton-wallet.engine.v2.descriptor."
+    static let journalServicePrefix = "org.telegram.ton-wallet.engine.v2.journal."
+
     init(namespace: String) {
         self.namespace = namespace
-        self.descriptorService = "org.telegram.ton-wallet.engine.v2.descriptor.\(namespace)"
-        self.secretService = WalletVault.service(namespace: namespace)
-        self.journalService = "org.telegram.ton-wallet.engine.v2.journal.\(namespace)"
+        self.descriptorService = Self.scoped(Self.descriptorServicePrefix + namespace)
+        self.secretService = Self.scoped(WalletVault.service(namespace: namespace))
+        self.journalService = Self.scoped(Self.journalServicePrefix + namespace)
+    }
+
+    private static func scoped(_ service: String) -> String {
+        #if os(macOS)
+        return PasscodeKeychainScope.service(service)
+        #else
+        return service
+        #endif
     }
 
     func loadDescriptor() throws -> WalletEngineDescriptorRecord? {

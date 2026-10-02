@@ -13,11 +13,13 @@ public struct PasscodeConfiguration: Equatable, Sendable {
     public let appGroupIdentifier: String
     public let processRole: ProcessRole
     public let biometricKeychainService: String?
+    public let keychainScope: String?
 
-    public init(appGroupIdentifier: String, processRole: ProcessRole, biometricKeychainService: String? = nil) {
+    public init(appGroupIdentifier: String, processRole: ProcessRole, biometricKeychainService: String? = nil, keychainScope: String? = nil) {
         self.appGroupIdentifier = appGroupIdentifier
         self.processRole = processRole
         self.biometricKeychainService = biometricKeychainService
+        self.keychainScope = keychainScope
     }
 }
 
@@ -52,6 +54,13 @@ public final class PasscodeEnvironment: @unchecked Sendable {
         guard configuration.processRole != .mainApp || privateAccessGroup != nil else { throw PasscodeError.unavailable }
         self.configuration = configuration
         self.resolvePrivateAccessGroup = privateAccessGroup
+    }
+
+    public var keychainScope: String? {
+        self.mutex.lock()
+        defer { self.mutex.unlock() }
+        guard let scope = self.configuration?.keychainScope, !scope.isEmpty else { return nil }
+        return scope
     }
 
     public var isMainApp: Bool {
@@ -110,7 +119,7 @@ final class PasscodeKeychain: PasscodeStorage {
     func query(_ account: String) throws -> [String: Any] {
         var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: try account.hasPrefix("biometric.") ? self.environment.biometricKeychainService() : "org.telegram.passcode.v1",
+            kSecAttrService as String: try self.service(account),
             kSecAttrAccount as String: account,
             kSecAttrSynchronizable as String: false
         ]
@@ -120,12 +129,21 @@ final class PasscodeKeychain: PasscodeStorage {
         return query
     }
 
+    private func service(_ account: String) throws -> String {
+        let service = try account.hasPrefix("biometric.") ? self.environment.biometricKeychainService() : "org.telegram.passcode.v1"
+        #if os(macOS)
+        return PasscodeKeychainScope.service(service, environment: self.environment)
+        #else
+        return service
+        #endif
+    }
+
     func read(_ account: String, context: LAContext? = nil) throws -> Data? {
         if let value = try self.rawRead(account, context: context) {
             return value
         }
         #if os(macOS)
-        if !account.hasPrefix("biometric.") {
+        if !account.hasPrefix("biometric."), self.environment.keychainScope == nil {
             return self.adoptGroupedItem(account)
         }
         #endif

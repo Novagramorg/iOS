@@ -30,5 +30,9 @@ let package = Package(
                            .product(name: "TelegramCore", package: "TelegramCore", condition: nil)],
             path: "Sources",
             sources: ["AccountManagerIntegration.swift"]),
+        .testTarget(
+            name: "PasscodeCoreTests",
+            dependencies: ["PasscodeCore"],
+            path: "Tests/PasscodeCoreTests"),
     ]
 )

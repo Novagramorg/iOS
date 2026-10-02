@@ -62,9 +62,9 @@ public struct WalletSecretEnvelope: Codable, Equatable, Sendable {
 
 @available(macOS 10.15, *)
 enum WalletVault {
-    private static let prefix = "org.telegram.ton-wallet.vault.v1.envelope."
+    static let envelopeServicePrefix = "org.telegram.ton-wallet.vault.v1.envelope."
 
-    static func service(namespace: String) -> String { self.prefix + namespace }
+    static func service(namespace: String) -> String { self.envelopeServicePrefix + namespace }
 
     static func keychainAccessGroup() throws -> String? {
         #if os(macOS)
@@ -93,6 +93,16 @@ enum WalletVault {
         return try envelope.decrypt(vaultId: namespace, access: access)
     }
 
+    static let unscopedServicePrefix = "org.telegram.ton-wallet."
+
+    static func servicePrefix(environment: PasscodeEnvironment) -> String {
+        #if os(macOS)
+        return PasscodeKeychainScope.service(self.unscopedServicePrefix, environment: environment)
+        #else
+        return self.unscopedServicePrefix
+        #endif
+    }
+
     static func removeAll(environment: PasscodeEnvironment = .shared) throws {
         try self.removeAll(environment: environment, readAttributes: { query in
             var result: CFTypeRef?
@@ -112,9 +122,10 @@ enum WalletVault {
         let (status, result) = readAttributes(query)
         if status == errSecItemNotFound { return }
         guard status == errSecSuccess, let items = result as? [[String: Any]] else { throw PasscodeError.keychain(status) }
+        let servicePrefix = self.servicePrefix(environment: environment)
         for item in items {
             guard let service = item[kSecAttrService as String] as? String,
-                  service.hasPrefix("org.telegram.ton-wallet."),
+                  service.hasPrefix(servicePrefix),
                   let account = item[kSecAttrAccount as String] as? String else { continue }
             var deletion: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
                 kSecAttrService as String: service, kSecAttrAccount as String: account,
@@ -381,6 +392,15 @@ public func setWalletBiometricsEnabled(_ enabled: Bool, session: PasscodeSession
 public func authenticateWalletBiometrics(namespace: String, lifetime: PasscodeSession.Lifetime = .standard, context: LAContext, credentials: PasscodeCredentialStore = .shared) throws -> PasscodeSession {
     return try credentials.authenticateBiometrics(context: context, scope: .resource(namespace: namespace), lifetime: lifetime)
 }
+
+#if os(macOS)
+/// Copies this build's wallets and wallet passcode items into its keychain scope, each wallet's descriptor last;
+/// see `PasscodeKeychainScope`.
+@available(macOS 10.15, *)
+public func migrateWalletKeychainScope(environment: PasscodeEnvironment = .shared) -> PasscodeKeychainScope.Migration {
+    return PasscodeKeychainScope.migrateLegacyItems(walletServicePrefixes: [WalletVault.envelopeServicePrefix, WalletEngineStorage.journalServicePrefix, WalletEngineStorage.descriptorServicePrefix], environment: environment)
+}
+#endif
 
 @available(macOS 10.15, *)
 public func resetWalletLocalSecrets(environment: PasscodeEnvironment = .shared, credentials: PasscodeCredentialStore = .shared) throws {
