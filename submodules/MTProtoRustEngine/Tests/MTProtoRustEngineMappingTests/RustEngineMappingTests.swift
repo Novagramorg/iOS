@@ -189,4 +189,29 @@ final class RustEngineMappingTests: XCTestCase {
         XCTAssertNil(rustEngineOptionalText(""))
         XCTAssertEqual(rustEngineOptionalText("FLOOD_WAIT_5"), "FLOOD_WAIT_5")
     }
+
+    func testZeroSecondFloodWaitIsRetryable() {
+        // MtProtoKit retries every FLOOD_WAIT_X / FLOOD_PREMIUM_WAIT_X the request's gate accepts,
+        // X = 0 included. The engine delegates FLOOD_WAIT_0 with 0 seconds and the flood text.
+        XCTAssertTrue(rustEngineRetryDecisionIsRetryable(code: 420, floodWaitText: rustEngineOptionalText("FLOOD_WAIT_0")))
+        XCTAssertTrue(rustEngineRetryDecisionIsRetryable(code: 420, floodWaitText: rustEngineOptionalText("FLOOD_PREMIUM_WAIT_0")))
+        XCTAssertTrue(rustEngineRetryDecisionIsRetryable(code: 420, floodWaitText: rustEngineOptionalText("FLOOD_WAIT_5")))
+    }
+
+    func testServerErrorsAreRetryableAndOtherDelegatedErrorsAreNot() {
+        XCTAssertTrue(rustEngineRetryDecisionIsRetryable(code: 500, floodWaitText: nil))
+        XCTAssertTrue(rustEngineRetryDecisionIsRetryable(code: -500, floodWaitText: nil))
+        // Decided on the event at hand, never on a flood wait an earlier attempt reported.
+        XCTAssertFalse(rustEngineRetryDecisionIsRetryable(code: -503, floodWaitText: rustEngineOptionalText("")))
+        XCTAssertFalse(rustEngineRetryDecisionIsRetryable(code: 400, floodWaitText: nil))
+    }
+
+    func testMainSessionAuthorizationRequiredLogsOut() {
+        // A main-session 401 must reach Network.loggedOut, as with MtProtoKit: a session terminated
+        // from another device has to drop the account. Routing it through MTContext.checkIfLoggedOut
+        // instead never logged out, because that probe completes on the session's own stored
+        // temporary key without contacting the server.
+        XCTAssertEqual(rustEngineAuthorizationRequiredAction(isMain: true), .logOut)
+        XCTAssertEqual(rustEngineAuthorizationRequiredAction(isMain: false), .ignore)
+    }
 }

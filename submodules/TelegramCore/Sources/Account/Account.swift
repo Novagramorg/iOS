@@ -1329,6 +1329,11 @@ public class Account {
         self.contactSyncManager = ContactSyncManager(postbox: postbox, network: network, accountPeerId: peerId, stateManager: self.stateManager)
         self.localInputActivityManager = PeerInputActivityManager()
         self.accountPresenceManager = AccountPresenceManager(shouldKeepOnlinePresence: self.shouldKeepOnlinePresence.get(), network: network)
+        #if os(iOS)
+        // iOS only for now: the Rust engine is the macOS default, and its online keepalive cadence
+        // (pings every 1-2 s while the account is in front) has not been measured there.
+        network.isUserOnline.set(self.shouldKeepOnlinePresence.get())
+        #endif
         let _ = (postbox.transaction { transaction -> Void in
             transaction.updatePeerPresencesInternal(presences: [peerId: TelegramUserPresence(status: .present(until: Int32.max - 1), lastActivity: 0)], merge: { _, updated in return updated })
             transaction.setNeedsPeerGroupMessageStatsSynchronization(groupId: Namespaces.PeerGroup.archive, namespace: Namespaces.Message.Cloud)
@@ -1533,6 +1538,9 @@ public class Account {
         |> distinctUntilChanged).start(next: { activeServer in
             network.updateProxySettings(activeServer)
         }))
+        #if os(macOS)
+        // The live kill switch is macOS only. On iOS the engine changes only through the Debug Settings
+        // switch; mtproto_engine_rust_disabled is honoured when the network starts (resolveNetworkEngine).
         self.managedOperationsDisposable.add((postbox.preferencesView(keys: [PreferencesKeys.appConfiguration])
         |> map { view -> Bool in
             let appConfiguration = view.values[PreferencesKeys.appConfiguration]?.get(AppConfiguration.self) ?? .defaultValue
@@ -1542,6 +1550,7 @@ public class Account {
         |> filter { $0 }).start(next: { _ in
             network.disableRustEngine(reason: "mtproto_engine_rust_disabled")
         }))
+        #endif
 
         if !supplementary {
             let mediaBox = postbox.mediaBox

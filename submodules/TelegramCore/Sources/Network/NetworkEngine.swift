@@ -183,6 +183,10 @@ public protocol NetworkEngineSession: AnyObject {
     var requestService: NetworkEngineRequestService { get }
     /// Sessions are created paused. Pausing drops the transport; resuming reconnects.
     func setPaused(_ paused: Bool)
+    /// The user is actively using the account (app in the foreground, primary account). An engine
+    /// may use it to choose keepalive timing. Sessions start offline; `Network` applies its current
+    /// value right after creating a session.
+    func setOnline(_ online: Bool)
     func addUpdateSink(_ sink: NetworkEngineUpdateSink)
     /// Tears a worker session down. The main session is never stopped explicitly.
     func stop()

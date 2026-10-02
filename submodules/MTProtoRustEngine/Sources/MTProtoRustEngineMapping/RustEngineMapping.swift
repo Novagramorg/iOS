@@ -212,6 +212,25 @@ public func rustEngineMissingKeyAction(isCdn: Bool, requiresForeignAuthToken: Bo
     }
 }
 
+/// What a main-session `401` (other than `SESSION_PASSWORD_NEEDED` / `AUTH_KEY_PERM_EMPTY`) does.
+/// It logs the account out, exactly as `MtProtoKitEngine` does, because that is how a session
+/// terminated from another device drops the account and its local data.
+///
+/// Do not route it through `MTContext.checkIfLoggedOut` (integration.md R1's suggestion): that probe
+/// runs an `EphemeralMain` auth action, and `-[MTDatacenterAuthAction execute:]` completes at once,
+/// without contacting the server, when the context already stores a key for that selector, which the
+/// main session's own temporary key always is. The probe then reports "not removed" every time, and
+/// a terminated session never logs out.
+public enum RustEngineAuthorizationRequiredAction: Equatable {
+    case logOut
+    /// Workers re-transfer their authorization through `authTokenRequired` instead.
+    case ignore
+}
+
+public func rustEngineAuthorizationRequiredAction(isMain: Bool) -> RustEngineAuthorizationRequiredAction {
+    return isMain ? .logOut : .ignore
+}
+
 /// A worker re-transfers its authorization after every `401` except `SESSION_PASSWORD_NEEDED`
 /// (`MTRequestMessageService` calls `requestMessageServiceAuthorizationRequired:` for those).
 public func rustEngineWorkerShouldTransferAuthToken(code: Int32, text: String) -> Bool {
@@ -296,6 +315,16 @@ public enum RustEngineVerificationKind: Int32, Equatable {
 
     public static let failureCode: Int32 = 403
     public static let timeout: Double = 20.0
+}
+
+/// Whether a delegated retry decision may retry at all, before the request's own
+/// `shouldContinueAfterError` is asked. MtProtoKit retries `500`/`-500` and every `FLOOD_WAIT_X` /
+/// `FLOOD_PREMIUM_WAIT_X`, `X = 0` included (`MTRequestMessageService`). The engine marks a flood wait
+/// by sending its text (`MTEvent.text2`) with the decision, so this decides on that text and never on
+/// the wait length: `FLOOD_WAIT_0` arrives with 0 seconds. It looks only at the current event, not at
+/// the request's cumulative error state, so an earlier flood wait cannot make a later error retryable.
+public func rustEngineRetryDecisionIsRetryable(code: Int32, floodWaitText: String?) -> Bool {
+    return code == 500 || code == -500 || floodWaitText != nil
 }
 
 /// `NetworkEngineErrorContext.floodWaitErrorText` from the event's `text2`, which is empty when unset.

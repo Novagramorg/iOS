@@ -634,7 +634,21 @@ func initializedNetwork(accountId: AccountRecordId, arguments: NetworkInitializa
             #endif*/
             
             let resolvedEngine = resolveNetworkEngine(accountId: accountId, context: context, factory: arguments.networkEngineFactory, settings: networkEngineSettings, appConfiguration: appConfiguration, isAppExtension: isAppExtension)
-            let switchingEngine = arguments.networkEngineFactory != nil ? SwitchingNetworkEngine(engine: resolvedEngine) : nil
+            let rustEngineDisabled = networkEngineRustDisabled(appConfiguration: appConfiguration)
+            // Live engine switching (the server kill switch, a WEB proxy turned on and off) is macOS only.
+            // On iOS the engine changes only through the Debug Settings switch, at the next launch: no
+            // wrapper is created, so switchEngine/disableRustEngine have nothing to act on and the
+            // network runs the resolved engine directly, exactly as without a factory.
+            #if os(macOS)
+            let prefersRustEngine = (networkEngineSettings?.engine ?? NetworkEngineSettings.defaultSettings.engine) == .rust
+            let rustEngineWaitsForWebProxy = arguments.networkEngineFactory != nil && !rustEngineDisabled && resolvedEngine.kind == .mtProtoKit && prefersRustEngine && initialActiveServer?.isWebProxy == true
+            // Live switching only ever moves a network off Rust, or back to Rust after a WEB proxy, so it
+            // is needed only while Rust is in play; otherwise MtProtoKit runs directly.
+            let switchingEngine = arguments.networkEngineFactory != nil && (resolvedEngine.kind == .rust || rustEngineWaitsForWebProxy) ? SwitchingNetworkEngine(engine: resolvedEngine) : nil
+            #else
+            let rustEngineWaitsForWebProxy = false
+            let switchingEngine: SwitchingNetworkEngine? = nil
+            #endif
             let engine: NetworkEngine = switchingEngine ?? resolvedEngine
             
             let connectionStatus = Promise<ConnectionStatus>(.waitingForNetwork)
@@ -647,8 +661,6 @@ func initializedNetwork(accountId: AccountRecordId, arguments: NetworkInitializa
                 useExperimentalFeatures = false
             }
             
-            let rustEngineDisabled = networkEngineRustDisabled(appConfiguration: appConfiguration)
-            let rustEngineWaitsForWebProxy = switchingEngine != nil && !rustEngineDisabled && resolvedEngine.kind == .mtProtoKit && (networkEngineSettings?.engine ?? NetworkEngineSettings.defaultSettings.engine) == .rust && initialActiveServer?.isWebProxy == true
             let network = Network(queue: queue, datacenterId: datacenterId, context: context, engine: engine, switchingEngine: switchingEngine, engineFactory: arguments.networkEngineFactory, rustEngineDisabled: rustEngineDisabled, rustEngineWaitsForWebProxy: rustEngineWaitsForWebProxy, mainSession: mainSession, mainSessionDelegate: mainSessionDelegate, _connectionStatus: connectionStatus, basePath: basePath, appDataDisposable: appDataDisposable, encryptionProvider: arguments.encryptionProvider, useRequestTimeoutTimers: useRequestTimeoutTimers, useBetaFeatures: arguments.useBetaFeatures, useExperimentalFeatures: useExperimentalFeatures, baseTcpConnectionInterfaceFactory: baseTcpConnectionInterfaceFactory, isAppExtension: isAppExtension, initialWebProxyActive: initialActiveServer?.isWebProxy == true)
             
             if let data = appConfiguration.data, let notifyInterval = data["upload_premium_speedup_notify_period"] as? Double {
@@ -854,6 +866,12 @@ public final class Network: NSObject {
     
     public let shouldExplicitelyKeepWorkerConnections = Promise<Bool>(false)
     public let shouldKeepBackgroundDownloadConnections = Promise<Bool>(false)
+
+    /// The user is actively using this account: the app is in the foreground and this is the
+    /// primary account (`Account.shouldKeepOnlinePresence`). Forwarded to every session through
+    /// `NetworkEngineSession.setOnline`, which engines use to choose keepalive timing.
+    public let isUserOnline = Promise<Bool>(false)
+    private let isUserOnlineDisposable = MetaDisposable()
     
     public var mockConnectionStatus: ConnectionStatus? {
         didSet {
@@ -988,6 +1006,10 @@ public final class Network: NSObject {
             }
         }))
 
+        self.isUserOnlineDisposable.set((self.isUserOnline.get() |> distinctUntilChanged |> deliverOn(queue)).start(next: { [weak self] value in
+            self?.mainSession.setOnline(value)
+        }))
+
         // The carrier runs exactly while MTProto does. SharedWakeupManager already folds
         // foreground state, audio sessions, background extensions, processing tasks and the
         // explicit-extension grace timer into shouldBeServiceTaskMaster, which reaches us as
@@ -1044,6 +1066,7 @@ public final class Network: NSObject {
     
     deinit {
         self.shouldKeepConnectionDisposable.dispose()
+        self.isUserOnlineDisposable.dispose()
         self.webProxyCarrierDemandDisposable.dispose()
         WebProxyTransport.shared.setCarrierDemand(self.webProxyLeaseToken, wanted: false)
         self.appDataDisposable.dispose()
@@ -1134,7 +1157,7 @@ public final class Network: NSObject {
             return shouldKeepConnection || shouldExplicitelyKeepWorkerConnections || (continueInBackground && shouldKeepBackgroundDownloadConnections)
         }
         |> distinctUntilChanged
-        return Download(queue: self.queue, engine: self.engine, datacenterId: datacenterId, isMedia: isMedia, isCdn: isCdn, context: self.context, masterDatacenterId: self.datacenterId, usageInfo: usageCalculationInfo(basePath: self.basePath, category: (tag as? TelegramMediaResourceFetchTag)?.statsCategory), shouldKeepConnection: shouldKeepWorkerConnection, useRequestTimeoutTimers: self.useRequestTimeoutTimers)
+        return Download(queue: self.queue, engine: self.engine, datacenterId: datacenterId, isMedia: isMedia, isCdn: isCdn, context: self.context, masterDatacenterId: self.datacenterId, usageInfo: usageCalculationInfo(basePath: self.basePath, category: (tag as? TelegramMediaResourceFetchTag)?.statsCategory), shouldKeepConnection: shouldKeepWorkerConnection, isUserOnline: self.isUserOnline.get(), useRequestTimeoutTimers: self.useRequestTimeoutTimers)
     }
     
     private func worker(datacenterId: Int, isCdn: Bool, isMedia: Bool, tag: MediaResourceFetchTag?) -> Signal<Download, NoError> {

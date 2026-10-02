@@ -451,6 +451,48 @@ A run of adjacent unsupported blocks collapses to one pill, and the chat wallpap
 renderer through `InstantPageV2RenderContext.wallpaperBackgroundNode`. Details in
 [`docs/instantpage-richtext.md`](docs/instantpage-richtext.md) under "Unsupported blocks".
 
+## Rust MTProto engine on iOS
+
+The Rust MTProto engine (`third-party/mtproto-engine`, Swift wrapper `submodules/MTProtoRustEngine`)
+is linked into every iOS build and selected at runtime: Debug Settings ▸ `Rust MTProto [Restart App]`
+writes `networkEngineSettings` (applies at the next launch), and the `Engine:` row under it shows what
+the account actually runs — the factory still declines (extensions, WEB proxy, DC address overrides)
+and the `mtproto_engine_rust_disabled` app config forces MtProtoKit. MtProtoKit stays the iOS default.
+Wrapper internals, measured results and open items: `third-party/mtproto-engine/docs/swift-integration.md`.
+
+Load-bearing, and none of it shows up as a build error:
+
+- **No `-Clto` on the engine's Bazel targets.** Every `rust_static_library` in the app shares ONE std:
+  the archives embed identical std members and ld64 pulls a member only for an undefined symbol
+  (measured: one `core`/`alloc`/`std` alongside wallet-engine and tlottie). LTO internalizes std into
+  the archive and duplicates it.
+- **Hardware crypto is re-applied by hand** in `MODULE.bazel`: Bazel reads neither
+  `.cargo/config.toml` (`--cfg aes_armv8`, now a `crate.annotation` on `aes`) nor target-specific
+  Cargo features (sha2's `asm`, now in the spec). Without them crypto silently runs ~15x slower.
+  `third-party/mtproto-engine/scripts/verify-ios-link.sh <unstripped binary>` checks both and the
+  single std. The crates holding non-generic hot code (`aes`, `sha1`, `sha2`, `flate2`, `miniz_oxide`,
+  `adler2`, `simd-adler32`, `crc32fast`, `num-bigint`, `num-integer`) also carry `-Copt-level=3`
+  annotations: rules_rust otherwise builds them at opt-level 0 under `--configuration=debug_*`.
+- **Repin only the engine's crates:** `CARGO_BAZEL_REPIN=1 CARGO_BAZEL_REPIN_ONLY=mtproto_engine_crates`.
+  A bare `CARGO_BAZEL_REPIN=1` also re-resolves the wallet's loosely pinned crates.
+- `third-party/mtproto-engine/.gitignore` ignores `/build/`, not `/build`: on a case-insensitive file
+  system the bare pattern also ignores the Bazel `BUILD` file, which then exists only locally.
+- A main-session `401` on the Rust engine logs out, exactly as MtProtoKit does
+  (`rustEngineAuthorizationRequiredAction`). **Never gate it on `MTContext.checkIfLoggedOut`**: that
+  probe's `EphemeralMain` auth action completes without contacting the server whenever the main
+  session's own temporary key is stored, so it always answers "not removed" and a session terminated
+  from another device would never log out.
+- **On iOS the engine changes only through the Debug switch.** Live switching
+  (`SwitchingNetworkEngine`: the live `mtproto_engine_rust_disabled` kill switch and the live
+  WEB-proxy moves) is macOS only (`#if os(macOS)` in `initializedNetwork` and `Account`); Telegram-Mac
+  uses it. On iOS no wrapper exists, `Network.switchEngine`/`disableRustEngine` have nothing to act
+  on, and the network runs the engine resolved at launch directly, so with the switch off it is
+  exactly a build without the factory. Even on macOS the wrapper exists only while Rust is in play.
+- `Network.isUserOnline` (from `Account.shouldKeepOnlinePresence`, wired on iOS only) reaches every
+  session through `NetworkEngineSession.setOnline`; the Rust engine then uses tdlib's online
+  keepalive timing. macOS, where Rust is the default, stays offline-timed until that cadence is
+  measured there.
+
 ## WEB proxy carrier (`tg://webproxy`)
 
 A third proxy kind beside SOCKS5 and MTProxy. MtProtoKit's obfuscated2 transform runs

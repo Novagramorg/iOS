@@ -52,7 +52,9 @@ public final class LiquidMorphTransition {
         self.animation = animation
         generation += 1
         let transitionGeneration = generation
+        let frameRateClaim = LiquidMorphFrameRateBoost.shared.claim(screen: container.window?.windowScene?.screen)
         let finished = { [self] in
+            frameRateClaim.end()
             // UIKit calls our completion before its own cleanup. Hand views back only
             // after that cleanup, keeping the coordinator alive through the callback.
             DispatchQueue.main.async { [self, animation] in
@@ -67,5 +69,78 @@ public final class LiquidMorphTransition {
         }
         animation.start(completion: finished)
         return true
+    }
+}
+
+/// Holds the display at 120 Hz while any morph moves, on screens that support it.
+///
+/// UIKit ticks the morph from its in-process animation manager, not with Core Animation
+/// animations, and that manager's display link requests a 48-120 Hz range rather than a fixed
+/// rate. On a 120 Hz iPhone the morph visibly ran slower than Telegram's own animations until
+/// the rate was pinned (checked on device). CoreList pins its scroll flights the same way
+/// (`PhysicsScrollEngine.maxRefreshRange`), after measuring that a range with a low floor let
+/// the system throttle to about 80 Hz.
+@available(iOS 26.0, *)
+private final class LiquidMorphFrameRateBoost {
+    /// One morph's hold on the boost. It ends once: at the morph's completion or after
+    /// `maximumDuration`, whichever comes first, so a completion UIKit never delivers cannot keep
+    /// the display at 120 Hz.
+    final class Claim {
+        private var isEnded = false
+
+        fileprivate init() {
+        }
+
+        func end() {
+            assert(Thread.isMainThread)
+            if self.isEnded {
+                return
+            }
+            self.isEnded = true
+            LiquidMorphFrameRateBoost.shared.release()
+        }
+    }
+
+    private final class Target: NSObject {
+        @objc func tick() {
+        }
+    }
+
+    /// UIKit reports a morph complete only once every spring has settled, about 1.3 s after an
+    /// opening starts and 1.6 s after a close (iOS 27 simulator). The visible motion ends sooner:
+    /// recorded at about 0.75 s for an opening and 0.7 s for a close, after which frames differ only
+    /// by anti-aliasing noise. One second covers the motion with margin.
+    private static let maximumDuration: Double = 1.0
+
+    static let shared = LiquidMorphFrameRateBoost()
+
+    private var displayLink: CADisplayLink?
+    private var count = 0
+
+    func claim(screen: UIScreen?) -> Claim {
+        assert(Thread.isMainThread)
+        self.count += 1
+        if self.displayLink == nil, let screen, screen.maximumFramesPerSecond >= 120 {
+            let displayLink = CADisplayLink(target: Target(), selector: #selector(Target.tick))
+            displayLink.preferredFrameRateRange = CAFrameRateRange(minimum: 120.0, maximum: 120.0, preferred: 120.0)
+            displayLink.add(to: .main, forMode: .common)
+            self.displayLink = displayLink
+        }
+        let claim = Claim()
+        // Holds the claim strongly, so the deadline fires even if the morph is torn down without
+        // completing.
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.maximumDuration) {
+            claim.end()
+        }
+        return claim
+    }
+
+    private func release() {
+        assert(Thread.isMainThread)
+        self.count -= 1
+        if self.count == 0, let displayLink = self.displayLink {
+            self.displayLink = nil
+            displayLink.invalidate()
+        }
     }
 }

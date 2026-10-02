@@ -91,6 +91,7 @@ private struct SwitchingState {
     var generation = 0
     var draining: [Int: NetworkEngineSession] = [:]
     var isPaused = true
+    var isOnline = false
     var isStopped = false
     var sinks: [NetworkEngineUpdateSink] = []
 }
@@ -158,6 +159,7 @@ private final class SwitchingCore {
         self.state.pointee.draining[previousGeneration] = previous
         let sinks = self.state.pointee.sinks
         let isPaused = self.state.pointee.isPaused
+        let isOnline = self.state.pointee.isOnline
         self.lock.unlock()
 
         self.delegateBox?.setGeneration(generation)
@@ -165,6 +167,7 @@ private final class SwitchingCore {
             replacement.addUpdateSink(sink)
         }
         replacement.setPaused(isPaused)
+        replacement.setOnline(isOnline)
 
         Queue.concurrentDefaultQueue().after(max(drainTimeout, 0.0), { [core = self] in
             core.finishDraining(generation: previousGeneration)
@@ -222,6 +225,20 @@ private final class SwitchingCore {
         self.lock.unlock()
         for session in sessions {
             session.setPaused(paused)
+        }
+    }
+
+    func setOnline(_ online: Bool) {
+        self.lock.lock()
+        if self.state.pointee.isStopped {
+            self.lock.unlock()
+            return
+        }
+        self.state.pointee.isOnline = online
+        let sessions = (self.state.pointee.current.map { [$0] } ?? []) + Array(self.state.pointee.draining.values)
+        self.lock.unlock()
+        for session in sessions {
+            session.setOnline(online)
         }
     }
 
@@ -286,6 +303,10 @@ final class SwitchingNetworkSession: NetworkEngineSession {
 
     func setPaused(_ paused: Bool) {
         self.core.setPaused(paused)
+    }
+
+    func setOnline(_ online: Bool) {
+        self.core.setOnline(online)
     }
 
     func addUpdateSink(_ sink: NetworkEngineUpdateSink) {

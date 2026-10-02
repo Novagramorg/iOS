@@ -188,6 +188,8 @@ private enum DebugControllerEntry: ItemListNodeEntry {
     case disableVideoAspectScaling(Bool)
     case enableNetworkFramework(Bool)
     case enableNetworkExperiments(Bool)
+    case rustMTProtoEngine(Bool)
+    case networkEngineInfo(String)
     case restorePurchases(PresentationTheme)
     case logTranslationRecognition(Bool)
     case resetTranslationStates
@@ -214,7 +216,7 @@ private enum DebugControllerEntry: ItemListNodeEntry {
             return DebugControllerSection.experiments.rawValue
         case .logTranslationRecognition, .resetTranslationStates:
             return DebugControllerSection.translation.rawValue
-        case .disableVideoAspectScaling, .enableNetworkFramework, .enableNetworkExperiments:
+        case .disableVideoAspectScaling, .enableNetworkFramework, .enableNetworkExperiments, .rustMTProtoEngine, .networkEngineInfo:
             return DebugControllerSection.videoExperiments2.rawValue
         case .hostInfo, .versionInfo:
             return DebugControllerSection.info.rawValue
@@ -361,14 +363,18 @@ private enum DebugControllerEntry: ItemListNodeEntry {
             return 102
         case .enableNetworkExperiments:
             return 103
-        case .hostInfo:
+        case .rustMTProtoEngine:
             return 104
-        case .versionInfo:
+        case .networkEngineInfo:
             return 105
-        case .collectCpuProfile:
+        case .hostInfo:
             return 106
-        case .sendProfileLogs:
+        case .versionInfo:
             return 107
+        case .collectCpuProfile:
+            return 108
+        case .sendProfileLogs:
+            return 109
         }
     }
     
@@ -1620,6 +1626,16 @@ private enum DebugControllerEntry: ItemListNodeEntry {
                     }).start()
                 }
             })
+        case let .rustMTProtoEngine(value):
+            return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: "Rust MTProto [Restart App]", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                let _ = updateNetworkEngineSettings(accountManager: arguments.sharedContext.accountManager, { settings in
+                    var settings = settings
+                    settings.engine = value ? .rust : .mtProtoKit
+                    return settings
+                }).start()
+            })
+        case let .networkEngineInfo(text):
+            return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
         case .restorePurchases:
             return ItemListActionItem(presentationData: presentationData, systemStyle: .glass, title: "Restore Purchases", kind: .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: {
                 arguments.context?.inAppPurchaseManager?.restorePurchases(completion: { state in
@@ -1773,7 +1789,7 @@ private enum DebugControllerEntry: ItemListNodeEntry {
     }
 }
 
-private func debugControllerEntries(context: AccountContext?, sharedContext: SharedAccountContext, presentationData: PresentationData, loggingSettings: LoggingSettings, mediaInputSettings: MediaInputSettings, experimentalSettings: ExperimentalUISettings, networkSettings: NetworkSettings?, hasLegacyAppData: Bool, useBetaFeatures: Bool) -> [DebugControllerEntry] {
+private func debugControllerEntries(context: AccountContext?, sharedContext: SharedAccountContext, presentationData: PresentationData, loggingSettings: LoggingSettings, mediaInputSettings: MediaInputSettings, experimentalSettings: ExperimentalUISettings, networkSettings: NetworkSettings?, networkEngineSettings: NetworkEngineSettings, hasLegacyAppData: Bool, useBetaFeatures: Bool) -> [DebugControllerEntry] {
     var entries: [DebugControllerEntry] = []
 
     let isMainApp = sharedContext.applicationBindings.isMainApp
@@ -1889,6 +1905,13 @@ private func debugControllerEntries(context: AccountContext?, sharedContext: Sha
         entries.append(.disableVideoAspectScaling(experimentalSettings.disableVideoAspectScaling))
         entries.append(.enableNetworkFramework(networkSettings?.useNetworkFramework ?? useBetaFeatures))
         entries.append(.enableNetworkExperiments(networkSettings?.useExperimentalDownload ?? true))
+        entries.append(.rustMTProtoEngine(networkEngineSettings.engine == .rust))
+        if let context {
+            // The engine this account actually runs. The switch alone does not say: the factory
+            // still declines (WEB proxy, DC address overrides) and mtproto_engine_rust_disabled
+            // forces MtProtoKit.
+            entries.append(.networkEngineInfo("Engine: \(context.account.network.engineKind.rawValue)"))
+        }
     }
 
     if let backupHostOverride = networkSettings?.backupHostOverride {
@@ -1935,7 +1958,7 @@ public func debugController(sharedContext: SharedAccountContext, context: Accoun
         preferencesSignal = .single(nil)
     }
     
-    let signal = combineLatest(sharedContext.presentationData, sharedContext.accountManager.sharedData(keys: Set([SharedDataKeys.loggingSettings, ApplicationSpecificSharedDataKeys.mediaInputSettings, ApplicationSpecificSharedDataKeys.experimentalUISettings])), preferencesSignal)
+    let signal = combineLatest(sharedContext.presentationData, sharedContext.accountManager.sharedData(keys: Set([SharedDataKeys.loggingSettings, ApplicationSpecificSharedDataKeys.mediaInputSettings, ApplicationSpecificSharedDataKeys.experimentalUISettings, SharedDataKeys.networkEngineSettings])), preferencesSignal)
     |> map { presentationData, sharedData, preferences -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let loggingSettings: LoggingSettings
         if let value = sharedData.entries[SharedDataKeys.loggingSettings]?.get(LoggingSettings.self) {
@@ -1954,6 +1977,7 @@ public func debugController(sharedContext: SharedAccountContext, context: Accoun
         let experimentalSettings: ExperimentalUISettings = sharedData.entries[ApplicationSpecificSharedDataKeys.experimentalUISettings]?.get(ExperimentalUISettings.self) ?? ExperimentalUISettings.defaultSettings
         
         let networkSettings: NetworkSettings? = preferences?.get(NetworkSettings.self)
+        let networkEngineSettings: NetworkEngineSettings = sharedData.entries[SharedDataKeys.networkEngineSettings]?.get(NetworkEngineSettings.self) ?? NetworkEngineSettings.defaultSettings
         
         var leftNavigationButton: ItemListNavigationButton?
         if modal {
@@ -1968,7 +1992,7 @@ public func debugController(sharedContext: SharedAccountContext, context: Accoun
         }
         
         let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Debug"), leftNavigationButton: leftNavigationButton, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
-        let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: debugControllerEntries(context: context, sharedContext: sharedContext, presentationData: presentationData, loggingSettings: loggingSettings, mediaInputSettings: mediaInputSettings, experimentalSettings: experimentalSettings, networkSettings: networkSettings, hasLegacyAppData: hasLegacyAppData, useBetaFeatures: useBetaFeatures), style: .blocks)
+        let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: debugControllerEntries(context: context, sharedContext: sharedContext, presentationData: presentationData, loggingSettings: loggingSettings, mediaInputSettings: mediaInputSettings, experimentalSettings: experimentalSettings, networkSettings: networkSettings, networkEngineSettings: networkEngineSettings, hasLegacyAppData: hasLegacyAppData, useBetaFeatures: useBetaFeatures), style: .blocks)
         
         return (controllerState, (listState, arguments))
     }
