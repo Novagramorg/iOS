@@ -1579,7 +1579,10 @@ extension WalletContextImpl {
             } else {
                 body = resolved.body
             }
-            let resolvedSendAll = sendAll && !resolved.hasLinkAmount
+            let feesAreCovered = WalletContext.useWalletTransferApi
+                && !WalletContext.isSelfTransfer(recipient: resolved.address, walletAddress: info.address)
+                && WalletContext.isGaslessEligible(amount: resolved.amount, gaslessInfo: self.currentState.gaslessInfo.currentValue, minimumAmount: self.transferGaslessMinAmount)
+            let resolvedSendAll = sendAll && !resolved.hasLinkAmount && !feesAreCovered
             let sendAmount: SendAmount = resolvedSendAll
                 ? .all
                 : .exact(nanograms: String(resolved.amount))
@@ -1602,14 +1605,21 @@ extension WalletContextImpl {
                case .engineDefault = resolved.expiration,
                let estimatedFee, estimatedFee >= 0,
                let balance = self.currentState.balance.currentValue,
-               resolved.amount < balance, estimatedFee < balance - resolved.amount {
+               resolved.amount <= balance,
+               feesAreCovered || (resolved.amount < balance && estimatedFee < balance - resolved.amount) {
                 fee = estimatedFee
                 // Bound the local request; signing still obtains fresh chain state and its own validUntil.
                 expiresAt = Int32(clamping: Int64(currentWalletTimestamp()) + 300)
             } else {
+                // External-message emulation requires funds for fees. Estimate with zero value
+                // when gasless covers them; the signed intent keeps the exact requested amount.
+                let previewIntent = feesAreCovered ? SendIntent(
+                    expiration: resolved.expiration,
+                    messages: [resolved.destination.message(amount: .exact(nanograms: "0"), body: body)]
+                ) : intent
                 let preview: SendPreview
                 do {
-                    preview = try await self.runtime.previewSend(intent: intent)
+                    preview = try await self.runtime.previewSend(intent: previewIntent)
                 } catch {
                     try Task.checkCancellation()
                     guard !self.isShutdown, self.activationGeneration == activationGeneration else { throw WalletError.unavailable }
@@ -1618,7 +1628,7 @@ extension WalletContextImpl {
                     try await Task.sleep(nanoseconds: 1_000_000_000)
                     try Task.checkCancellation()
                     guard !self.isShutdown, self.activationGeneration == activationGeneration else { throw WalletError.unavailable }
-                    preview = try await self.runtime.previewSend(intent: intent)
+                    preview = try await self.runtime.previewSend(intent: previewIntent)
                 }
                 try Task.checkCancellation()
                 guard !self.isShutdown, self.activationGeneration == activationGeneration else { throw WalletError.unavailable }
@@ -1635,7 +1645,7 @@ extension WalletContextImpl {
                 effectiveAmount = resolved.amount - fee
             } else {
                 if let balance = self.currentState.balance.currentValue,
-                   resolved.amount > balance || fee > balance - resolved.amount {
+                   resolved.amount > balance || (!feesAreCovered && fee > balance - resolved.amount) {
                     let (required, overflow) = resolved.amount.addingReportingOverflow(fee)
                     throw WalletError.insufficientBalance(required: overflow ? Int64.max : required)
                 }
