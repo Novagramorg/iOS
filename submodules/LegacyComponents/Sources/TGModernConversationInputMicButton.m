@@ -295,8 +295,11 @@ static const CGFloat outerCircleMinScale = innerCircleRadius / outerCircleRadius
     centerPoint.y += _centerOffset.y;
     _innerCircleView.center = centerPoint;
     _outerCircleView.center = centerPoint;
-    _decoration.center = centerPoint;
-    _innerIconWrapperView.center = CGPointMake(CGRectGetMidX(_decoration.bounds), CGRectGetMidY(_decoration.bounds));
+    // A decoration the host is flying into the sent message is positioned by the flight.
+    if (!_decorationAnimatesOutExternally) {
+        _decoration.center = centerPoint;
+        _innerIconWrapperView.center = CGPointMake(CGRectGetMidX(_decoration.bounds), CGRectGetMidY(_decoration.bounds));
+    }
     
     _lockPanelWrapperView.frame = CGRectMake(floor(centerPoint.x - _lockPanelWrapperView.frame.size.width / 2.0f), floor(centerPoint.y - 122.0f - _lockPanelWrapperView.frame.size.height / 2.0f), _lockPanelWrapperView.frame.size.width, _lockPanelWrapperView.frame.size.height);
     
@@ -579,7 +582,10 @@ static const CGFloat outerCircleMinScale = innerCircleRadius / outerCircleRadius
     [UIView animateWithDuration:0.18 animations:^{
         _innerCircleView.transform = CGAffineTransformMakeScale(0.2f, 0.2f);
         _outerCircleView.transform = CGAffineTransformMakeScale(0.2f, 0.2f);
-        if (toSmallSize) {
+        if (_decorationAnimatesOutExternally) {
+            // The host is flying the decoration into the sent message; only the icon on it fades.
+            _innerIconWrapperView.alpha = 0.0f;
+        } else if (toSmallSize) {
             _decoration.transform = CGAffineTransformConcat(CGAffineTransformMakeScale(0.33f, 0.33f), CGAffineTransformMakeTranslation(0, 2 - TGScreenPixel));
             //_innerIconWrapperView.transform = CGAffineTransformConcat(CGAffineTransformMakeScale(0.492f, 0.492f), CGAffineTransformMakeTranslation(-TGScreenPixel, 1));
         } else {
@@ -603,8 +609,11 @@ static const CGFloat outerCircleMinScale = innerCircleRadius / outerCircleRadius
         _stopButton.alpha = 0.0f;
     } completion:^(BOOL finished) {
         if (finished || [[[LegacyComponentsGlobals provider] applicationInstance] applicationState] == UIApplicationStateBackground) {
-            [_presentation dismiss];
-            _presentation = nil;
+            // A host flying the decoration out dismisses the presentation itself, once the decoration has arrived.
+            if (!_decorationAnimatesOutExternally) {
+                [_presentation dismiss];
+                _presentation = nil;
+            }
             
             id<TGModernConversationInputMicButtonDelegate> delegate = _delegate;
             if ([delegate respondsToSelector:@selector(micButtonInteractionUpdateCancelTranslation:)])
@@ -969,7 +978,9 @@ static const CGFloat outerCircleMinScale = innerCircleRadius / outerCircleRadius
         
         _innerCircleView.transform = transform;
         //_innerIconWrapperView.transform = transform;
-        _decoration.transform = transform;
+        if (!_decorationAnimatesOutExternally) {
+            _decoration.transform = transform;
+        }
     }
 }
 

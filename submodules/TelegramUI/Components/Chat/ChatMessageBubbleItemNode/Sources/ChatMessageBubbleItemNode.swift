@@ -1219,20 +1219,18 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         }
     }
 
-    public func animateFromMicInput(micInputNode: UIView, transition: CombinedTransition) -> ContextExtractedContentContainingNode? {
+    /// The voice message's play button, flying in from the recording blob the same way the blob flies: the caller
+    /// moves it along the blob's path, and it shrinks from the blob's centre circle (`sourceSize`) to its own size on
+    /// the same curve, appearing quickly as the blob fades out. So it animates from where the blob was even when the
+    /// blob does not fly.
+    public func animateFromMicInput(sourceSize: CGSize, transition: CombinedTransition) -> ContextExtractedContentContainingNode? {
         for contentNode in self.contentNodes {
             if let contentNode = contentNode as? ChatMessageFileBubbleContentNode {
                 let statusContainerNode = contentNode.interactiveFileNode.statusContainerNode
-                let scale = statusContainerNode.contentRect.height / 100.0
-                micInputNode.transform = CGAffineTransform(scaleX: scale, y: scale)
-                micInputNode.center = CGPoint(x: statusContainerNode.contentRect.midX, y: statusContainerNode.contentRect.midY)
-                statusContainerNode.contentNode.view.addSubview(micInputNode)
-
-                transition.horizontal.updateAlpha(layer: micInputNode.layer, alpha: 0.0, completion: { [weak micInputNode] _ in
-                    micInputNode?.removeFromSuperview()
-                })
-
-                transition.horizontal.animateTransformScale(node: statusContainerNode.contentNode, from: 1.0 / scale)
+                if sourceSize.width > 0.0, statusContainerNode.contentRect.width > 0.0 {
+                    transition.vertical.animateTransformScale(node: statusContainerNode.contentNode, from: sourceSize.width / statusContainerNode.contentRect.width)
+                }
+                statusContainerNode.contentNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.06)
                 
                 contentNode.interactiveFileNode.animateSent()
 

@@ -22,14 +22,6 @@ import ChatMediaInputStickerGridItem
 import AccountContext
 import ChatInputAccessoryPanel
 
-private func convertAnimatingSourceRect(_ rect: CGRect, fromView: UIView, toView: UIView?) -> CGRect {
-    if let presentationLayer = fromView.layer.presentation() {
-        return presentationLayer.convert(rect, to: toView?.layer)
-    } else {
-        return fromView.layer.convert(rect, to: toView?.layer)
-    }
-}
-
 /// The eased progress `animation` will be at when the frame this runloop turn is composing hits the
 /// screen — 0.0 for one that has not started yet.
 ///
@@ -230,6 +222,25 @@ private func convertAnimatingSourceRectFromWindow(_ windowRect: CGRect, toView: 
         r = parent.convert(adjustedR, to: child)
     }
     return r
+}
+
+/// `rect` of `sourceView` as it renders now, converted into `toView` as it renders now. The source is read through its
+/// presentation layers when it is in `toView`'s window, and through the windows' frames when it is in another one (the
+/// keyboard's, see `convertAcrossWindows`); then `convertAnimatingSourceRectFromWindow` accounts for any movement
+/// `toView`'s ancestors are in the middle of. An animation that runs inside a chat item needs this: the list leaves
+/// the item's model at its destination while it scrolls a new message in, so a plain conversion starts the flight off
+/// by the remaining scroll.
+private func convertRenderedSourceRect(_ rect: CGRect, from sourceView: UIView, toAnimatingView toView: UIView) -> CGRect {
+    guard let toWindow = toView.window else {
+        return sourceView.convertAcrossWindows(rect, to: toView)
+    }
+    let windowRect: CGRect
+    if sourceView.window === toWindow, let presentationLayer = sourceView.layer.presentation() {
+        windowRect = presentationLayer.convert(rect, to: nil)
+    } else {
+        windowRect = sourceView.convertAcrossWindows(rect, to: toWindow)
+    }
+    return convertAnimatingSourceRectFromWindow(windowRect, toView: toView)
 }
 
 private final class OverlayTransitionContainerNode: ViewControllerTracingNode {
@@ -634,7 +645,7 @@ public final class ChatMessageTransitionNodeImpl: ASDisplayNode, ChatMessageTran
 
                 self.containerNode.addSubnode(self.contextSourceNode.contentNode)
 
-                let targetAbsoluteRect = self.contextSourceNode.view.convert(self.contextSourceNode.contentRect, to: self.view)
+                let targetAbsoluteRect = self.contextSourceNode.view.convertAcrossWindows(self.contextSourceNode.contentRect, to: self.view)
 
                 let sourceRect = convertAnimatingSourceRectFromWindow(initialTextInput.sourceRect, toView: self.view)
                 let sourceBackgroundAbsoluteRect = initialTextInput.backgroundView.frame.offsetBy(dx: sourceRect.minX, dy: sourceRect.minY)
@@ -652,7 +663,7 @@ public final class ChatMessageTransitionNodeImpl: ASDisplayNode, ChatMessageTran
                     if let storedFrameBeforeDismissed = replyPanel.storedFrameBeforeDismissed {
                         replySourceAbsoluteFrame = convertAnimatingSourceRectFromWindow(storedFrameBeforeDismissed, toView: self.view)
                     } else {
-                        replySourceAbsoluteFrame = replyPanelParentView.convert(replyPanelFrame, to: self.view)
+                        replySourceAbsoluteFrame = replyPanelParentView.convertAcrossWindows(replyPanelFrame, to: self.view)
                     }
 
                     replySourceAbsoluteFrame.origin.x -= sourceAbsoluteRect.minX - self.contextSourceNode.contentRect.minX
@@ -777,19 +788,19 @@ public final class ChatMessageTransitionNodeImpl: ASDisplayNode, ChatMessageTran
                 switch stickerMediaInput {
                 case let .inputPanel(sourceItemNode):
                     stickerSource = Sticker(imageNode: sourceItemNode.imageNode, animationNode: sourceItemNode.animationNode, placeholderNode: sourceItemNode.placeholderNode, imageLayer: nil, relativeSourceRect: sourceItemNode.imageNode.frame)
-                    sourceAbsoluteRect = sourceItemNode.view.convert(sourceItemNode.imageNode.frame, to: self.view)
+                    sourceAbsoluteRect = convertRenderedSourceRect(sourceItemNode.imageNode.frame, from: sourceItemNode.view, toAnimatingView: self.view)
                 case let .mediaPanel(sourceItemNode):
                     stickerSource = Sticker(imageNode: sourceItemNode.imageNode, animationNode: sourceItemNode.animationNode, placeholderNode: sourceItemNode.placeholderNode, imageLayer: nil, relativeSourceRect: sourceItemNode.imageNode.frame)
-                    sourceAbsoluteRect = sourceItemNode.view.convert(sourceItemNode.imageNode.frame, to: self.view)
+                    sourceAbsoluteRect = convertRenderedSourceRect(sourceItemNode.imageNode.frame, from: sourceItemNode.view, toAnimatingView: self.view)
                 case let .universal(sourceContainerView, sourceRect, sourceLayer):
                     stickerSource = Sticker(imageNode: nil, animationNode: nil, placeholderNode: nil, imageLayer: sourceLayer, relativeSourceRect: sourceLayer.frame)
-                    sourceAbsoluteRect = convertAnimatingSourceRect(sourceRect, fromView: sourceContainerView, toView: self.view)
+                    sourceAbsoluteRect = convertRenderedSourceRect(sourceRect, from: sourceContainerView, toAnimatingView: self.view)
                 case let .emptyPanel(sourceItemNode):
                     stickerSource = Sticker(imageNode: sourceItemNode.stickerNode.imageNode, animationNode: sourceItemNode.stickerNode.animationNode, placeholderNode: nil, imageLayer: nil, relativeSourceRect: sourceItemNode.stickerNode.imageNode.frame)
-                    sourceAbsoluteRect = sourceItemNode.stickerNode.view.convert(sourceItemNode.stickerNode.imageNode.frame, to: self.view)
+                    sourceAbsoluteRect = convertRenderedSourceRect(sourceItemNode.stickerNode.imageNode.frame, from: sourceItemNode.stickerNode.view, toAnimatingView: self.view)
                 }
 
-                let targetAbsoluteRect = self.contextSourceNode.view.convert(self.contextSourceNode.contentRect, to: self.view)
+                let targetAbsoluteRect = self.contextSourceNode.view.convertAcrossWindows(self.contextSourceNode.contentRect, to: self.view)
 
                 var sourceReplyPanel: ReplyPanel?
                 if let replyPanel, let replyPanelTransitionData = replyPanel.transitionData, let replyPanelParentView = replyPanel.superview {
@@ -799,7 +810,7 @@ public final class ChatMessageTransitionNodeImpl: ASDisplayNode, ChatMessageTran
                     if let storedFrameBeforeDismissed = replyPanel.storedFrameBeforeDismissed {
                         replySourceAbsoluteFrame = self.view.convert(storedFrameBeforeDismissed, from: nil)
                     } else {
-                        replySourceAbsoluteFrame = replyPanelParentView.convert(replyPanelFrame, to: self.view)
+                        replySourceAbsoluteFrame = replyPanelParentView.convertAcrossWindows(replyPanelFrame, to: self.view)
                     }
                     
                     replySourceAbsoluteFrame.origin.x -= sourceAbsoluteRect.midX - self.contextSourceNode.contentRect.midX
@@ -890,40 +901,37 @@ public final class ChatMessageTransitionNodeImpl: ASDisplayNode, ChatMessageTran
                 }
             case let .audioMicInput(audioMicInput):
                 if let (container, localRect) = audioMicInput.micButton.contentContainer {
-                    let snapshotView = container.snapshotView(afterScreenUpdates: false)
-                    if let snapshotView = snapshotView {
-                        let sourceAbsoluteRect = container.convert(localRect, to: self.view)
-                        snapshotView.frame = sourceAbsoluteRect
+                    // No snapshot of the blob: it flies itself, in its own container, along the same path as the
+                    // play button here in the chat, crossfading into it at the start.
+                    let sourceAbsoluteRect = convertRenderedSourceRect(localRect, from: container, toAnimatingView: self.view)
 
-                        container.isHidden = true
+                    let combinedTransition = CombinedTransition(horizontal: .animated(duration: horizontalDuration, curve: ChatMessageTransitionNodeImpl.horizontalAnimationCurve), vertical: .animated(duration: verticalDuration, curve: ChatMessageTransitionNodeImpl.verticalAnimationCurve))
 
-                        let combinedTransition = CombinedTransition(horizontal: .animated(duration: horizontalDuration, curve: ChatMessageTransitionNodeImpl.horizontalAnimationCurve), vertical: .animated(duration: verticalDuration, curve: ChatMessageTransitionNodeImpl.verticalAnimationCurve))
+                    if let itemNode = self.itemNode as? ChatMessageBubbleItemNode {
+                        if let contextContainer = itemNode.animateFromMicInput(sourceSize: sourceAbsoluteRect.size, transition: combinedTransition) {
+                            self.containerNode.addSubnode(contextContainer.contentNode)
 
-                        if let itemNode = self.itemNode as? ChatMessageBubbleItemNode {
-                            if let contextContainer = itemNode.animateFromMicInput(micInputNode: snapshotView, transition: combinedTransition) {
-                                self.containerNode.addSubnode(contextContainer.contentNode)
+                            let targetAbsoluteRect = contextContainer.view.convertAcrossWindows(contextContainer.contentRect, to: self.view)
 
-                                let targetAbsoluteRect = contextContainer.view.convert(contextContainer.contentRect, to: self.view)
+                            self.containerNode.frame = targetAbsoluteRect.offsetBy(dx: -contextContainer.contentRect.minX, dy: -contextContainer.contentRect.minY)
+                            contextContainer.updateAbsoluteRect?(self.containerNode.frame, UIScreen.main.bounds.size)
 
-                                self.containerNode.frame = targetAbsoluteRect.offsetBy(dx: -contextContainer.contentRect.minX, dy: -contextContainer.contentRect.minY)
-                                contextContainer.updateAbsoluteRect?(self.containerNode.frame, UIScreen.main.bounds.size)
-                                self.containerNode.layer.animatePosition(from: CGPoint(x: 0.0, y: sourceAbsoluteRect.midY - targetAbsoluteRect.midY), to: CGPoint(), duration: verticalDuration, delay: delay, mediaTimingFunction: ChatMessageTransitionNodeImpl.verticalAnimationCurve.mediaTimingFunction, additive: true, force: true, completion: { [weak self, weak contextContainer, weak container] _ in
-                                    guard let strongSelf = self else {
-                                        return
-                                    }
-                                    if let contextContainer = contextContainer {
-                                        contextContainer.isExtractedToContextPreview = false
-                                        contextContainer.isExtractedToContextPreviewUpdated?(false)
-                                        contextContainer.addSubnode(contextContainer.contentNode)
-                                    }
+                            let _ = audioMicInput.micButton.animateDecorationToSentMessage(targetRect: targetAbsoluteRect, in: self.view, duration: verticalDuration, horizontalCurve: ChatMessageTransitionNodeImpl.horizontalAnimationCurve, verticalCurve: ChatMessageTransitionNodeImpl.verticalAnimationCurve)
 
-                                    container?.isHidden = false
+                            self.containerNode.layer.animatePosition(from: CGPoint(x: 0.0, y: sourceAbsoluteRect.midY - targetAbsoluteRect.midY), to: CGPoint(), duration: verticalDuration, delay: delay, mediaTimingFunction: ChatMessageTransitionNodeImpl.verticalAnimationCurve.mediaTimingFunction, additive: true, force: true, completion: { [weak self, weak contextContainer] _ in
+                                guard let strongSelf = self else {
+                                    return
+                                }
+                                if let contextContainer = contextContainer {
+                                    contextContainer.isExtractedToContextPreview = false
+                                    contextContainer.isExtractedToContextPreviewUpdated?(false)
+                                    contextContainer.addSubnode(contextContainer.contentNode)
+                                }
 
-                                    strongSelf.endAnimation()
-                                })
+                                strongSelf.endAnimation()
+                            })
 
-                                self.containerNode.layer.animatePosition(from: CGPoint(x: sourceAbsoluteRect.midX - targetAbsoluteRect.midX, y: 0.0), to: CGPoint(), duration: horizontalDuration, delay: delay, mediaTimingFunction: ChatMessageTransitionNodeImpl.horizontalAnimationCurve.mediaTimingFunction, additive: true)
-                            }
+                            self.containerNode.layer.animatePosition(from: CGPoint(x: sourceAbsoluteRect.midX - targetAbsoluteRect.midX, y: 0.0), to: CGPoint(), duration: horizontalDuration, delay: delay, mediaTimingFunction: ChatMessageTransitionNodeImpl.horizontalAnimationCurve.mediaTimingFunction, additive: true)
                         }
                     }
                 }
@@ -939,7 +947,7 @@ public final class ChatMessageTransitionNodeImpl: ASDisplayNode, ChatMessageTran
                     self.containerNode.addSubnode(self.contextSourceNode.contentNode)
 
                     let sourceAbsoluteRect = videoMessage.view.frame
-                    let targetAbsoluteRect = self.contextSourceNode.view.convert(self.contextSourceNode.contentRect, to: self.view)
+                    let targetAbsoluteRect = self.contextSourceNode.view.convertAcrossWindows(self.contextSourceNode.contentRect, to: self.view)
 
                     videoMessage.view.frame = videoMessage.view.frame.offsetBy(dx: targetAbsoluteRect.midX - sourceAbsoluteRect.midX, dy: targetAbsoluteRect.midY - sourceAbsoluteRect.midY)
 
@@ -971,7 +979,7 @@ public final class ChatMessageTransitionNodeImpl: ASDisplayNode, ChatMessageTran
 
                             self.containerNode.addSubnode(self.contextSourceNode.contentNode)
 
-                            let targetAbsoluteRect = self.contextSourceNode.view.convert(self.contextSourceNode.contentRect, to: self.view)
+                            let targetAbsoluteRect = self.contextSourceNode.view.convertAcrossWindows(self.contextSourceNode.contentRect, to: self.view)
                             let sourceBackgroundAbsoluteRect = snapshotView.frame
                             let sourceAbsoluteRect = CGRect(origin: CGPoint(x: sourceBackgroundAbsoluteRect.midX - self.contextSourceNode.contentRect.size.width / 2.0, y: sourceBackgroundAbsoluteRect.midY - self.contextSourceNode.contentRect.size.height / 2.0), size: self.contextSourceNode.contentRect.size)
 
@@ -1035,7 +1043,7 @@ public final class ChatMessageTransitionNodeImpl: ASDisplayNode, ChatMessageTran
                             targetContentRects = itemNode.animateContentFromGroupedMediaInput(transition: combinedTransition)
                         }
                         
-                        let targetAbsoluteRect = self.contextSourceNode.view.convert(self.contextSourceNode.contentRect, to: self.view)
+                        let targetAbsoluteRect = self.contextSourceNode.view.convertAcrossWindows(self.contextSourceNode.contentRect, to: self.view)
 
                         func boundingRect(for views: [UIView]) -> CGRect {
                             var minX: CGFloat = .greatestFiniteMagnitude
@@ -1302,7 +1310,8 @@ public final class ChatMessageTransitionNodeImpl: ASDisplayNode, ChatMessageTran
             
             self.animatingItemNodes.append(animatingItemNode)
             switch source {
-            case .audioMicInput, .videoMessage, .mediaInput, .groupedMediaInput:
+            // Voice messages animate inside the chat, as text does: the blob flies itself, above it.
+            case .videoMessage, .mediaInput, .groupedMediaInput:
                 let overlayController = OverlayTransitionContainerController()
                 overlayController.displayNode.addSubnode(animatingItemNode)
                 animatingItemNode.overlayController = overlayController

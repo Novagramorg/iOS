@@ -95,6 +95,16 @@ full-screen windows on the same display that is the identity, which is the answe
 `-convertPoint:toWindow:` would have given had it accepted the pair. Note the `screen` *getter* is not
 deprecated (only `-setScreen:` is), so reading it does not trip `-warnings-as-errors`.
 
+In Swift, use `UIView.convertAcrossWindows(_:to:)` (Display, `UIKitUtils.swift`), which does exactly that
+and falls back to a plain `convert` when the two views share a window or a screen. It was written for the
+second victim: sending a voice message, a round video or media with the keyboard up. Those send animations
+(`ChatMessageTransitionNode`, sources `.audioMicInput`, `.videoMessage`, `.mediaInput`,
+`.groupedMediaInput`) run in a global overlay, which is the keyboard window while the keyboard is up, and
+converted the sent bubble's rect from the app window into it: `CGRect.null`, then an invalid-frame assertion
+in `-[ASDisplayNode setFrame:]` (debug) or a skipped frame and a misplaced animation (release). Text sends
+animate inside the item node and never cross windows; so do sticker sends, which are the other users of the
+file's layer-level `convertAnimatingSourceRect…` helpers.
+
 ## A layer that renders nothing receives no touches
 
 **`-hitTest:` is not the whole story.** A view whose layer renders nothing at all — `backgroundColor`
