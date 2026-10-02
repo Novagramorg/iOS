@@ -1883,7 +1883,6 @@ private final class WalletTransactionContentComponent: Component {
                     self.invalidateCommentSession()
                     self.returnToWalletWithPendingTransfer(id: pendingTransfer.id)
                     if self.isReturningToWallet {
-                        self.previewOperation = .confirmed
                         return
                     }
                     self.dismissSendScreenIfNeeded()
@@ -1910,14 +1909,20 @@ private final class WalletTransactionContentComponent: Component {
 
         private func returnToWalletWithPendingTransfer(id: String) {
             guard !self.isClosing, !self.isReturningToWallet, self.previewSource?.collectible == nil,
+                  let walletContext = self.walletContext,
                   let controller = self.environment?.controller() as? WalletTransactionPreviewScreen,
                   let transferAnimation = controller.transferAnimation else { return }
+            let presentationId = "pending:\(id)"
+            guard walletContext.stateValue.transactions.items.contains(where: {
+                $0.presentationId == presentationId && $0.status != .failed
+            }) else { return }
             self.isReturningToWallet = true
 
             CATransaction.begin()
             CATransaction.setDisableActions(true)
             let source: WalletSendTransferAnimationSource?
             if !UIAccessibility.isReduceMotionEnabled, self.commentSessionAvailable,
+               UIApplication.shared.applicationState != .background,
                self.environment?.isVisible == true,
                let diamond = self.gramAnimation.view as? InteractiveDiamondComponent.View {
                 source = WalletSendTransferAnimationSource.capture(diamond: diamond, width: 78.0, spinStartedAt: CACurrentMediaTime())
@@ -1931,7 +1936,7 @@ private final class WalletTransactionContentComponent: Component {
                 Haptics.hit(0.95)
                 source.diamond.spin(-10.0, decay: 0.9)
             }
-            if !transferAnimation("pending:\(id)", source) {
+            if !transferAnimation(presentationId, source) {
                 source?.diamond.isRenderingEnabled = false
                 source?.diamond.removeFromSuperview()
             }

@@ -61,7 +61,8 @@ final class WalletSendAnimatedRateButton: UIControl {
             }
         }
         self.addTarget(self, action: #selector(self.pressed), for: .touchUpInside)
-        NotificationCenter.default.addObserver(self, selector: #selector(self.stopAnimations), name: UIApplication.willResignActiveNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(self.applicationWillResignActive), name: UIApplication.willResignActiveNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(self.stopAnimations), name: UIApplication.didEnterBackgroundNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(self.reduceMotionStatusChanged), name: UIAccessibility.reduceMotionStatusDidChangeNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(self.resumePresentation), name: UIApplication.didBecomeActiveNotification, object: nil)
     }
@@ -70,6 +71,10 @@ final class WalletSendAnimatedRateButton: UIControl {
     deinit {
         self.displayLink?.invalidate()
         NotificationCenter.default.removeObserver(self)
+    }
+
+    @objc private func applicationWillResignActive() {
+        self.updateTouchEffect(isActive: false)
     }
 
     @objc private func stopAnimations() {
@@ -96,7 +101,7 @@ final class WalletSendAnimatedRateButton: UIControl {
     }
 
     private func updateTouchEffect(isActive: Bool = true) {
-        let isEnabled = isActive && self.window != nil && self.visible && self.isEnabled && !UIAccessibility.isReduceMotionEnabled
+        let isEnabled = isActive && UIApplication.shared.applicationState == .active && self.window != nil && self.visible && self.isEnabled && !UIAccessibility.isReduceMotionEnabled
         self.glassHighlightRecognizer.isEnabled = isEnabled
         if !isEnabled {
             self.layer.removeAnimation(forKey: "sublayerTransform")

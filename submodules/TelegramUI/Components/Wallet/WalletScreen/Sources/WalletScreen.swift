@@ -770,8 +770,8 @@ private final class WalletScreenComponent: Component {
         private var transferDisplayLink: SharedDisplayLinkDriver.Link?
         private var transferScreenVisible = true
         private var isReturningForTransfer = false
-        private var transferApplicationActive = true
-        private let transferActivityDisposable = MetaDisposable()
+        private var transferApplicationInForeground = UIApplication.shared.applicationState != .background
+        private let transferForegroundDisposable = MetaDisposable()
         private var transferMotionObserver: NSObjectProtocol?
         private var isUpdatingTransferAnimations = false
 
@@ -952,7 +952,7 @@ private final class WalletScreenComponent: Component {
 
         deinit {
             self.transferDisplayLink?.invalidate()
-            self.transferActivityDisposable.dispose()
+            self.transferForegroundDisposable.dispose()
             if let observer = self.transferMotionObserver { NotificationCenter.default.removeObserver(observer) }
             self.restorationSession?.invalidate()
             (self.card.view as? WalletCardComponent.View)?.setBalanceTransitionContainer(nil)
@@ -1862,7 +1862,7 @@ private final class WalletScreenComponent: Component {
                     continue
                 }
                 animation.isPending = transaction.status == .pending
-                if !animation.isPending && !animation.isFlying && (!animation.isVisible || !self.transferScreenVisible || !self.transferApplicationActive) {
+                if !animation.isPending && !animation.isFlying && (!animation.isVisible || !self.transferScreenVisible || !self.transferApplicationInForeground) {
                     self.pendingTransferAnimations.removeValue(forKey: id)
                 }
             }
@@ -1879,7 +1879,7 @@ private final class WalletScreenComponent: Component {
         }
 
         private func receiveTransferAnimation(id: String, source: WalletSendTransferAnimationSource?) -> Bool {
-            guard self.transferApplicationActive,
+            guard self.transferApplicationInForeground,
                   let transaction = self.walletState?.transactions.items.first(where: { $0.presentationId == id }),
                   transaction.status != .failed, transaction.isVisibleInWalletHistory else { return false }
             if let source, source.window == nil { return false }
@@ -1927,7 +1927,7 @@ private final class WalletScreenComponent: Component {
             guard !self.isUpdatingTransferAnimations else { return }
             self.isUpdatingTransferAnimations = true
             defer { self.isUpdatingTransferAnimations = false }
-            let active = self.transferApplicationActive
+            let active = self.transferApplicationInForeground
                 && ((self.transferScreenVisible && self.window != nil) || (self.isReturningForTransfer && self.pendingTransferAnimations.values.contains(where: { $0.isFlying })))
             let now = CACurrentMediaTime()
             var needsFrames = false
@@ -3041,9 +3041,9 @@ private final class WalletScreenComponent: Component {
                 self.pendingTransferToReveal = nil
                 self.isReturningForTransfer = false
                 self.walletState = nil
-                self.transferActivityDisposable.set((component.context.sharedContext.applicationBindings.applicationIsActive
-                |> distinctUntilChanged |> deliverOnMainQueue).start(next: { [weak self] active in
-                    self?.transferApplicationActive = active
+                self.transferForegroundDisposable.set((component.context.sharedContext.applicationBindings.applicationInForeground
+                |> distinctUntilChanged |> deliverOnMainQueue).start(next: { [weak self] foreground in
+                    self?.transferApplicationInForeground = foreground
                     self?.updatePendingTransferAnimations()
                 }))
                 self.walletStateDisposable = (subscribedContext.state

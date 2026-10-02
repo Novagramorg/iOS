@@ -203,7 +203,7 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
     }
 
     var animationState: (time: Float, transferEnergy: Float?)? {
-        guard self.isInHierarchy, self.isApplicationActive, self.isRenderingEnabled, !self.reduceMotion else {
+        guard self.isInHierarchy, self.isApplicationInForeground, self.isRenderingEnabled, !self.reduceMotion else {
             return nil
         }
         return (self.elapsed, self.transferAnimation?.presentation(at: self.elapsed).energy)
@@ -271,7 +271,7 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
     private var elapsed: Float = 0
     private var lastTime: CFTimeInterval?
     private var displayLink: SharedDisplayLinkDriver.Link?
-    private var isApplicationActive = UIApplication.shared.applicationState == .active
+    private var isApplicationInForeground = UIApplication.shared.applicationState != .background
     private var reduceMotion = false
     private var didAnimateAppearance = false
     private var didSetReady = false
@@ -298,8 +298,8 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
         self.didExitHierarchy = { [weak self] in
             self?.updateAnimationState()
         }
-        NotificationCenter.default.addObserver(self, selector: #selector(self.applicationDidBecomeActive), name: UIApplication.didBecomeActiveNotification, object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(self.applicationWillResignActive), name: UIApplication.willResignActiveNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(self.applicationWillEnterForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(self.applicationDidEnterBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
         //NotificationCenter.default.addObserver(self, selector: #selector(self.reduceMotionChanged), name: UIAccessibility.reduceMotionStatusDidChangeNotification, object: nil)
     }
 
@@ -401,7 +401,7 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
     }
 
     func spin(_ velocity: Float, decay: Float = 0.7) {
-        guard self.isInHierarchy, self.isApplicationActive, self.isRenderingEnabled,
+        guard self.isInHierarchy, self.isApplicationInForeground, self.isRenderingEnabled,
               !self.reduceMotion, !UIAccessibility.isReduceMotionEnabled else { return }
         self.updateMotion(at: CACurrentMediaTime())
         self.motion.spin(velocity, decay: decay)
@@ -409,7 +409,7 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
     }
 
     func pushFromBelow(strength: Float) {
-        guard self.isInHierarchy, self.isApplicationActive, self.isRenderingEnabled,
+        guard self.isInHierarchy, self.isApplicationInForeground, self.isRenderingEnabled,
               !self.reduceMotion, !UIAccessibility.isReduceMotionEnabled else { return }
         self.updateMotion(at: CACurrentMediaTime())
         self.motion.pushFromBelow(strength: strength)
@@ -417,7 +417,7 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
     }
 
     func emitStarBurst() {
-        guard self.diamondStyle.backgroundStars, self.isInHierarchy, self.isApplicationActive, self.isRenderingEnabled,
+        guard self.diamondStyle.backgroundStars, self.isInHierarchy, self.isApplicationInForeground, self.isRenderingEnabled,
               !self.reduceMotion, !UIAccessibility.isReduceMotionEnabled else { return }
         self.updateMotion(at: CACurrentMediaTime())
         self.addStarBurst()
@@ -434,7 +434,7 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
         self.cancelTransferCompletion()
         if isSending {
             self.transferAnimation = DiamondTransferAnimation(phase: .sending, startTime: self.elapsed)
-        } else if animateCompletion && self.isInHierarchy && self.isApplicationActive && self.isRenderingEnabled
+        } else if animateCompletion && self.isInHierarchy && self.isApplicationInForeground && self.isRenderingEnabled
             && !self.reduceMotion && !UIAccessibility.isReduceMotionEnabled {
             self.transferAnimation = DiamondTransferAnimation(phase: .completion, startTime: self.elapsed)
             self.motion.spin(self.diamondStyle.rotationSpeed < 0 ? -11 : 11, decay: 0.7)
@@ -477,13 +477,13 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
         self.motion.stopSpin()
     }
 
-    @objc private func applicationDidBecomeActive() {
-        self.isApplicationActive = true
+    @objc private func applicationWillEnterForeground() {
+        self.isApplicationInForeground = true
         self.updateAnimationState()
     }
 
-    @objc private func applicationWillResignActive() {
-        self.isApplicationActive = false
+    @objc private func applicationDidEnterBackground() {
+        self.isApplicationInForeground = false
         self.updateAnimationState()
     }
 
@@ -499,7 +499,7 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
     }
 
     private func updateAnimationState() {
-        let isVisible = self.isInHierarchy && self.isApplicationActive && self.isRenderingEnabled
+        let isVisible = self.isInHierarchy && self.isApplicationInForeground && self.isRenderingEnabled
         if isVisible && self.diamondStyle.animateOnAppear && !self.didAnimateAppearance {
             self.didAnimateAppearance = true
             if !self.reduceMotion && !UIAccessibility.isReduceMotionEnabled {
@@ -578,7 +578,7 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
         let style = self.effectiveStyle
         self.motion.swayScale = style.swayScale
         let scrollTilt: Float
-        if self.isInHierarchy && self.isApplicationActive && self.isRenderingEnabled && !self.reduceMotion {
+        if self.isInHierarchy && self.isApplicationInForeground && self.isRenderingEnabled && !self.reduceMotion {
             scrollTilt = self.scrollTiltProvider?(time) ?? 0.0
         } else {
             scrollTilt = 0.0
@@ -617,7 +617,7 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
 
     @objc func handleTap(_ gesture: UITapGestureRecognizer) {
         guard gesture.state == .ended, let view = gesture.view,
-              self.isInHierarchy, self.isApplicationActive, self.isRenderingEnabled, !self.motion.isDragging,
+              self.isInHierarchy, UIApplication.shared.applicationState == .active, self.isRenderingEnabled, !self.motion.isDragging,
               !self.reduceMotion, !UIAccessibility.isReduceMotionEnabled else { return }
         let point = gesture.location(in: view)
         let horizontalOffset = point.x - view.bounds.midX
@@ -675,7 +675,6 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
     }
 
     @objc func handlePan(_ gesture: UIPanGestureRecognizer) {
-        guard self.isInHierarchy && self.isApplicationActive && self.isRenderingEnabled else { return }
         self.updateDrag(
             state: gesture.state,
             translation: gesture.translation(in: gesture.view),
@@ -692,7 +691,7 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
 
     func updateDrag(state: UIGestureRecognizer.State, translation: CGPoint = .zero, velocity: CGPoint = .zero, scale: CGFloat = 100.0, releaseImpulse: Float? = nil, playFlingHaptic: Bool = true, allowsFlingBurst: Bool = false, tapSpinDirection: Float? = nil) {
         if state != .cancelled && state != .failed {
-            guard self.isInHierarchy && self.isApplicationActive && self.isRenderingEnabled else { return }
+            guard self.isInHierarchy && UIApplication.shared.applicationState == .active && self.isRenderingEnabled else { return }
         }
         let now = CACurrentMediaTime()
         self.updateMotion(at: now)
@@ -763,7 +762,7 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
 
     func update(context: MetalEngineSubjectContext) {
         let canvasSize = self.renderSize ?? self.bounds.size
-        guard self.isInHierarchy, self.isApplicationActive, self.isRenderingEnabled, canvasSize.width > 0.0, canvasSize.height > 0.0 else { return }
+        guard self.isInHierarchy, self.isApplicationInForeground, self.isRenderingEnabled, canvasSize.width > 0.0, canvasSize.height > 0.0 else { return }
         let pixelsPerPoint = UIScreen.main.scale
         let size = RenderSize(width: Int(ceil(canvasSize.width * pixelsPerPoint)), height: Int(ceil(canvasSize.height * pixelsPerPoint)))
         let motion = self.motion

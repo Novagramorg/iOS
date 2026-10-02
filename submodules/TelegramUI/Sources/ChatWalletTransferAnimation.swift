@@ -90,6 +90,7 @@ final class ChatWalletTransferAnimation {
     private var displayLink: SharedDisplayLinkDriver.Link?
     private var activityDisposable: Disposable?
     private var isApplicationActive = UIApplication.shared.applicationState == .active
+    private var isApplicationInForeground = UIApplication.shared.applicationState != .background
 
     init(controller: ChatControllerImpl) {
         self.controller = controller
@@ -103,12 +104,20 @@ final class ChatWalletTransferAnimation {
             }
             return false
         }
-        self.activityDisposable = (controller.context.sharedContext.applicationBindings.applicationIsActive
-        |> distinctUntilChanged
-        |> deliverOnMainQueue).start(next: { [weak self] active in
+        self.activityDisposable = (combineLatest(
+            controller.context.sharedContext.applicationBindings.applicationIsActive,
+            controller.context.sharedContext.applicationBindings.applicationInForeground
+        ) |> deliverOnMainQueue).start(next: { [weak self] active, foreground in
             guard let self else { return }
             self.isApplicationActive = active
-            if !active { self.cancelAll() }
+            self.isApplicationInForeground = foreground
+            if !foreground {
+                self.cancelAll()
+            } else if !active {
+                for id in Array(self.arrivals.keys) {
+                    self.cancelArrival(id)
+                }
+            }
         })
     }
 
@@ -190,7 +199,7 @@ final class ChatWalletTransferAnimation {
     }
 
     func prepare(id: String) {
-        guard self.isApplicationActive, !UIAccessibility.isReduceMotionEnabled,
+        guard self.isApplicationInForeground, !UIAccessibility.isReduceMotionEnabled,
               id.hasPrefix("pending:"), self.flights[id] == nil, !self.endedFlights.contains(id),
               let controller = self.controller, let peerId = controller.chatLocation.peerId,
               let state = controller.context.walletContext?.stateValue,
@@ -209,7 +218,7 @@ final class ChatWalletTransferAnimation {
     }
 
     func receive(id: String, source: WalletSendTransferAnimationSource?) -> Bool {
-        guard self.isApplicationActive, !UIAccessibility.isReduceMotionEnabled,
+        guard self.isApplicationInForeground, !UIAccessibility.isReduceMotionEnabled,
               id.hasPrefix("pending:"), self.flights[id]?.source == nil, !self.endedFlights.contains(id),
               let controller = self.controller, controller.isNodeLoaded,
               let peerId = controller.chatLocation.peerId,
@@ -284,7 +293,7 @@ final class ChatWalletTransferAnimation {
     }
 
     private func update() {
-        guard self.isApplicationActive, let controller = self.controller, controller.isNodeLoaded,
+        guard self.isApplicationInForeground, let controller = self.controller, controller.isNodeLoaded,
               controller.view.window != nil else {
             self.cancelAll()
             return

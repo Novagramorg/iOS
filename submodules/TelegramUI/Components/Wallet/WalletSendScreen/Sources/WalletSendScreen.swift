@@ -1725,20 +1725,23 @@ private final class WalletSendScreenComponent: Component {
                 close()
                 return
             }
-            controller.transferAnimationWillStart?("pending:\(transferId)")
             let revision = self.sendRevision
+            let presentationId = "pending:\(transferId)"
+            var spinStartedAt: CFTimeInterval?
             let launch: () -> Void = { [weak self, weak controller] in
                 guard let self, self.isVisible, self.sendRevision == revision,
+                      self.component?.walletContext === component.walletContext,
                       controller?.peerTransferSubmission != nil else {
                     self?.isClosingAfterRegistration = false
                     return
                 }
-                let presentationId = "pending:\(transferId)"
                 let stillExists = component.walletContext.stateValue.transactions.items.contains(where: {
                     $0.presentationId == presentationId && $0.status != .failed
                 })
                 if stillExists {
-                    let source = UIAccessibility.isReduceMotionEnabled ? nil : (self.amountField as? WalletSendAnimatedAmountField)?.takeTransferDiamond()
+                    let animate = self.commentSessionAvailable && UIApplication.shared.applicationState != .background
+                        && !UIAccessibility.isReduceMotionEnabled
+                    let source = animate ? (self.amountField as? WalletSendAnimatedAmountField)?.takeTransferDiamond(spinStartedAt: spinStartedAt) : nil
                     if !transferAnimation(presentationId, source) {
                         source?.diamond.isRenderingEnabled = false
                         source?.diamond.removeFromSuperview()
@@ -1746,10 +1749,12 @@ private final class WalletSendScreenComponent: Component {
                 }
                 close()
             }
-            guard !UIAccessibility.isReduceMotionEnabled else {
+            guard self.commentSessionAvailable, UIApplication.shared.applicationState != .background,
+                  !UIAccessibility.isReduceMotionEnabled else {
                 launch()
                 return
             }
+            controller.transferAnimationWillStart?(presentationId)
             let switchedFromFiat = self.inputMode == .fiat
             if switchedFromFiat {
                 self.inputMode = .gram
@@ -1760,6 +1765,12 @@ private final class WalletSendScreenComponent: Component {
                     self?.isClosingAfterRegistration = false
                     return
                 }
+                guard self.commentSessionAvailable, UIApplication.shared.applicationState != .background,
+                      !UIAccessibility.isReduceMotionEnabled else {
+                    launch()
+                    return
+                }
+                spinStartedAt = CACurrentMediaTime()
                 (self.amountField as? WalletSendAnimatedAmountField)?.spinForTransfer()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.18, execute: launch)
             }

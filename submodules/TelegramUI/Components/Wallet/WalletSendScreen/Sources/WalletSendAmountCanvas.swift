@@ -267,7 +267,7 @@ private final class WalletSendAmountLayer: MetalEngineSubjectLayer, MetalEngineS
 
     func update(context: MetalEngineSubjectContext) {
         guard let renderer, let glyphAtlas, isRenderingEnabled, !bounds.isEmpty,
-              UIApplication.shared.applicationState == .active else { return }
+              UIApplication.shared.applicationState != .background else { return }
         let scale = displayScale
         let viewport = bounds.size
         let sprites = self.sprites
@@ -399,7 +399,7 @@ final class WalletSendAmountCanvas: UIView {
     }
 
     private func requestFrame() {
-        metalLayer.isRenderingEnabled = isRenderingEnabled && window != nil && UIApplication.shared.applicationState == .active
+        metalLayer.isRenderingEnabled = isRenderingEnabled && window != nil && UIApplication.shared.applicationState != .background
         guard metalLayer.isRenderingEnabled else { return }
         metalLayer.sprites = sprites
         metalLayer.frameDuration = frameDuration

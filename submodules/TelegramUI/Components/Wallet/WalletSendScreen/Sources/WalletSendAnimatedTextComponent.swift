@@ -78,7 +78,7 @@ final class WalletSendAnimatedTextComponent: Component {
         private var textSize = CGSize.zero
         private var widthFrom: CGFloat = 0.0
         private var frameDuration = 1.0 / 120.0
-        private var applicationIsActive = UIApplication.shared.applicationState == .active
+        private var isApplicationInForeground = UIApplication.shared.applicationState != .background
         private var glyphsAvailable = false
         var animationFrameUpdated: (() -> Void)?
 
@@ -87,7 +87,7 @@ final class WalletSendAnimatedTextComponent: Component {
         }
 
         var canAnimate: Bool {
-            return self.component?.isVisible == true && self.applicationIsActive && self.window != nil && self.glyphsAvailable
+            return self.component?.isVisible == true && self.isApplicationInForeground && self.window != nil && self.glyphsAvailable
         }
 
         var isAnimating: Bool {
@@ -112,8 +112,8 @@ final class WalletSendAnimatedTextComponent: Component {
             self.canvas.onFrameReady = { [weak self] in
                 self?.updateRendererVisibility()
             }
-            NotificationCenter.default.addObserver(self, selector: #selector(self.applicationWillResignActive), name: UIApplication.willResignActiveNotification, object: nil)
-            NotificationCenter.default.addObserver(self, selector: #selector(self.applicationDidBecomeActive), name: UIApplication.didBecomeActiveNotification, object: nil)
+            NotificationCenter.default.addObserver(self, selector: #selector(self.applicationDidEnterBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
+            NotificationCenter.default.addObserver(self, selector: #selector(self.applicationWillEnterForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
             NotificationCenter.default.addObserver(self, selector: #selector(self.finishMotion), name: UIAccessibility.reduceMotionStatusDidChangeNotification, object: nil)
         }
 
@@ -126,13 +126,13 @@ final class WalletSendAnimatedTextComponent: Component {
             NotificationCenter.default.removeObserver(self)
         }
 
-        @objc private func applicationWillResignActive() {
-            self.applicationIsActive = false
+        @objc private func applicationDidEnterBackground() {
+            self.isApplicationInForeground = false
             self.finishMotion()
         }
 
-        @objc private func applicationDidBecomeActive() {
-            self.applicationIsActive = true
+        @objc private func applicationWillEnterForeground() {
+            self.isApplicationInForeground = true
             self.renderFrame()
         }
 
@@ -204,7 +204,7 @@ final class WalletSendAnimatedTextComponent: Component {
         }
 
         private func updateRendererVisibility() {
-            let usesMetal = self.glyphsAvailable && self.canvas.hasFrame && self.component?.isVisible == true && self.applicationIsActive && self.window != nil
+            let usesMetal = self.glyphsAvailable && self.canvas.hasFrame && self.component?.isVisible == true && self.isApplicationInForeground && self.window != nil
             self.canvas.isHidden = !usesMetal
             self.title.view?.isHidden = usesMetal
         }
@@ -232,7 +232,7 @@ final class WalletSendAnimatedTextComponent: Component {
                 width: ceil((max(self.widthFrom, self.textSize.width, width) + max(0.0, offsetX) + 2.0 * padding) / 64.0) * 64.0,
                 height: self.textSize.height + 2.0 * padding
             )
-            self.canvas.isRenderingEnabled = self.component?.isVisible == true && self.applicationIsActive && self.window != nil
+            self.canvas.isRenderingEnabled = self.component?.isVisible == true && self.isApplicationInForeground && self.window != nil
             self.canvas.frameDuration = self.frameDuration
             let canvasSprites = sprites.map { sprite -> WalletSendAmountSprite in
                 var sprite = sprite

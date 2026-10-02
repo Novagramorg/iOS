@@ -812,7 +812,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
 
     private func updateCardBackgroundRotation(_ state: InteractiveDiamondComponent.MotionState?) {
         guard let state, self.visibility != .none,
-              UIApplication.shared.applicationState == .active, !UIAccessibility.isReduceMotionEnabled,
+              UIApplication.shared.applicationState != .background, !UIAccessibility.isReduceMotionEnabled,
               !self.isAwaitingTransferFlight, let window = self.cardIcon?.window else {
             self.stopCardBackgroundMotion()
             return
