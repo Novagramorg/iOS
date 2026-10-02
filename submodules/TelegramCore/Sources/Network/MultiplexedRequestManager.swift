@@ -99,6 +99,8 @@ private final class MultiplexedRequestManagerContext {
     
     private let queue: Queue
     private let takeWorker: (MultiplexedRequestTarget, MediaResourceFetchTag?, Bool) -> Download?
+    private let cdnMaxRequestsPerWorker: Int
+    private let cdnMaxWorkersPerTarget: Int
     
     private let priorityContext = RequestManagerPriorityContext()
     private var queuedRequests: [RequestData] = []
@@ -107,8 +109,10 @@ private final class MultiplexedRequestManagerContext {
     private var targetContexts: [MultiplexedRequestTargetKey: [RequestTargetContext]] = [:]
     private var emptyTargetDisposables: [MultiplexedRequestTargetTimerKey: Disposable] = [:]
     
-    init(queue: Queue, takeWorker: @escaping (MultiplexedRequestTarget, MediaResourceFetchTag?, Bool) -> Download?) {
+    init(queue: Queue, cdnMaxRequestsPerWorker: Int, cdnMaxWorkersPerTarget: Int, takeWorker: @escaping (MultiplexedRequestTarget, MediaResourceFetchTag?, Bool) -> Download?) {
         self.queue = queue
+        self.cdnMaxRequestsPerWorker = cdnMaxRequestsPerWorker
+        self.cdnMaxWorkersPerTarget = cdnMaxWorkersPerTarget
         self.takeWorker = takeWorker
     }
     
@@ -202,7 +206,17 @@ private final class MultiplexedRequestManagerContext {
         }
     }
     
-    private func isTargetSaturated(_ targetKey: MultiplexedRequestTargetKey, maxRequestsPerWorker: Int, maxWorkersPerTarget: Int) -> Bool {
+    private func limits(_ target: MultiplexedRequestTarget) -> (requestsPerWorker: Int, workersPerTarget: Int) {
+        switch target {
+        case .main:
+            return (3, 4)
+        case .cdn:
+            return (self.cdnMaxRequestsPerWorker, self.cdnMaxWorkersPerTarget)
+        }
+    }
+    
+    private func isTargetSaturated(_ targetKey: MultiplexedRequestTargetKey) -> Bool {
+        let (maxRequestsPerWorker, maxWorkersPerTarget) = self.limits(targetKey.target)
         guard let contexts = self.targetContexts[targetKey], contexts.count >= maxWorkersPerTarget else {
             return false
         }
@@ -215,14 +229,11 @@ private final class MultiplexedRequestManagerContext {
     }
     
     private func updateState() {
-        let maxRequestsPerWorker = 3
-        let maxWorkersPerTarget = 4
-        
         var checkedTargets = Set<MultiplexedRequestTargetKey>()
         var hasAvailableTarget = false
         for request in self.queuedRequests {
             let targetKey = MultiplexedRequestTargetKey(target: request.target, continueInBackground: request.continueInBackground)
-            if checkedTargets.insert(targetKey).inserted, !self.isTargetSaturated(targetKey, maxRequestsPerWorker: maxRequestsPerWorker, maxWorkersPerTarget: maxWorkersPerTarget) {
+            if checkedTargets.insert(targetKey).inserted, !self.isTargetSaturated(targetKey) {
                 hasAvailableTarget = true
                 break
             }
@@ -257,6 +268,7 @@ private final class MultiplexedRequestManagerContext {
             if saturatedTargets.contains(targetKey) {
                 continue
             }
+            let (maxRequestsPerWorker, maxWorkersPerTarget) = self.limits(request.target)
             
             if self.targetContexts[targetKey] == nil {
                 self.targetContexts[targetKey] = []
@@ -373,10 +385,10 @@ final class MultiplexedRequestManager {
     private let queue = Queue()
     private let context: QueueLocalObject<MultiplexedRequestManagerContext>
     
-    init(takeWorker: @escaping (MultiplexedRequestTarget, MediaResourceFetchTag?, Bool) -> Download?) {
+    init(cdnMaxRequestsPerWorker: Int = 3, cdnMaxWorkersPerTarget: Int = 4, takeWorker: @escaping (MultiplexedRequestTarget, MediaResourceFetchTag?, Bool) -> Download?) {
         let queue = self.queue
         self.context = QueueLocalObject(queue: self.queue, generate: {
-            return MultiplexedRequestManagerContext(queue: queue, takeWorker: takeWorker)
+            return MultiplexedRequestManagerContext(queue: queue, cdnMaxRequestsPerWorker: cdnMaxRequestsPerWorker, cdnMaxWorkersPerTarget: cdnMaxWorkersPerTarget, takeWorker: takeWorker)
         })
     }
     
