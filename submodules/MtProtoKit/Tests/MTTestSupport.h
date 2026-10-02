@@ -21,6 +21,7 @@ bool MTTestWaitUntil(NSTimeInterval timeout, bool (^condition)(void));
 // addresses it is given, so a connection that gets a transport keeps
 // connecting and never exchanges a message.
 MTContext *MTTestMakeContext(bool useTempAuthKeys);
+MTContext *MTTestMakeContextWithEncryptionProvider(bool useTempAuthKeys, id<EncryptionProvider> encryptionProvider);
 
 MTDatacenterAuthInfo *MTTestMakeAuthInfo(void);
 MTDatacenterAddress *MTTestMakeAddress(bool preferForMedia);

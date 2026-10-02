@@ -241,6 +241,13 @@ public func rustEngineRequiresForeignAuthToken(isMain: Bool, isCdn: Bool, datace
     return !isMain && !isCdn && datacenterId != masterDatacenterId
 }
 
+/// Whether a session's clock becomes the app's (`MTContext.globalTimeDifference`). A CDN is run by a
+/// third party and only serves encrypted file parts, so its time stays inside its own session: it
+/// must not move auto-delete timers, outgoing dates or the clock other sessions start from.
+public func rustEngineSharesTimeDifference(isCdn: Bool) -> Bool {
+    return !isCdn
+}
+
 public func rustEngineSessionRole(isMain: Bool, isCdn: Bool, datacenterId: Int, masterDatacenterId: Int) -> RustEngineSessionRole {
     if isMain {
         return .main

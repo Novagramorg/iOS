@@ -3,10 +3,11 @@
 #import <MtProtoKit/MTDatacenterAuthInfo.h>
 
 @class MTRpcError;
+@class MTProto;
 
 @interface MTBindKeyMessageService : NSObject <MTMessageService>
 
 - (instancetype)initWithPersistentKey:(MTDatacenterAuthKey *)persistentKey ephemeralKey:(MTDatacenterAuthKey *)ephemeralKey completion:(void (^)(bool success, MTRpcError *error))completion;
 
--(void)complete;
+- (void)mtProtoAuthKeyRejected:(MTProto *)mtProto;
 @end

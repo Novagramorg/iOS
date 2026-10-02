@@ -72,6 +72,28 @@ private let maxCdnFailuresBeforeFallback = 4
 private let maxCdnReuploadsPerBlock = 3
 private let maxCdnTokenRefreshes = 3
 
+func cdnRedirectKeyMaterialIsValid(encryptionKey: Data, encryptionIv: Data) -> Bool {
+    return encryptionKey.count == 32 && encryptionIv.count == 16
+}
+
+private let cdnHashBlockLength: Int64 = 128 * 1024
+
+func cdnPartLengthIsAcceptable(offset: Int64, requestedLength: Int64, receivedLength: Int64, knownSize: Int64?) -> Bool {
+    if receivedLength > requestedLength {
+        return false
+    }
+    if let knownSize {
+        if offset + receivedLength > knownSize {
+            return false
+        }
+        return receivedLength == requestedLength || offset + receivedLength == knownSize
+    }
+    if receivedLength == requestedLength {
+        return true
+    }
+    return (offset + receivedLength) % cdnHashBlockLength != 0
+}
+
 private final class FetchImpl {
     private final class PendingPart {
         let partRange: Range<Int64>
@@ -945,14 +967,17 @@ private final class FetchImpl {
                                 let bytes = fileData.bytes
                                 return .data(data: bytes.makeData(), verifyPartHashData: nil)
                             case let .fileCdnRedirect(fileCdnRedirectData):
-                                let (dcId, fileToken, encryptionKey, encryptionIv, fileHashes) = (fileCdnRedirectData.dcId, fileCdnRedirectData.fileToken, fileCdnRedirectData.encryptionKey, fileCdnRedirectData.encryptionIv, fileCdnRedirectData.fileHashes)
+                                let (dcId, fileToken, encryptionKey, encryptionIv, fileHashes) = (fileCdnRedirectData.dcId, fileCdnRedirectData.fileToken, fileCdnRedirectData.encryptionKey.makeData(), fileCdnRedirectData.encryptionIv.makeData(), fileCdnRedirectData.fileHashes)
                                 let _ = fileHashes
+                                if !cdnRedirectKeyMaterialIsValid(encryptionKey: encryptionKey, encryptionIv: encryptionIv) {
+                                    return .cdnFailure(sourceDatacenterId: sourceDatacenterId, error: "CDN_REDIRECT_KEY_INVALID")
+                                }
                                 return .cdnRedirect(CdnData(
                                     id: Int(dcId),
                                     sourceDatacenterId: sourceDatacenterId,
                                     fileToken: fileToken.makeData(),
-                                    encryptionKey: encryptionKey.makeData(),
-                                    encryptionIv: encryptionIv.makeData()
+                                    encryptionKey: encryptionKey,
+                                    encryptionIv: encryptionIv
                                 ))
                             }
                         }
@@ -983,6 +1008,10 @@ private final class FetchImpl {
                     
                     switch result {
                     case let .data(data, verifyPartHashData):
+                        if case let .cdn(cdnData) = state.fetchLocation, !cdnPartLengthIsAcceptable(offset: fetchRange.lowerBound, requestedLength: requestedLength, receivedLength: Int64(data.count), knownSize: self.knownSize) {
+                            self.fallBackToMaster(sourceDatacenterId: cdnData.sourceDatacenterId, reason: "\(data.count) of \(requestedLength) bytes at \(fetchRange.lowerBound), known size \(String(describing: self.knownSize))")
+                            break
+                        }
                         if self.fastDownloads {
                             self.adaptWindow(state: state, latency: CFAbsoluteTimeGetCurrent() - requestStarted, bytes: Int64(data.count))
                         }
@@ -1041,6 +1070,10 @@ private final class FetchImpl {
                             ))
                         }
                     case let .cdnFailure(sourceDatacenterId, error):
+                        if error == "CDN_REDIRECT_KEY_INVALID" && self.cdnDisabled {
+                            self.state = .failed
+                            break
+                        }
                         let tokenExpired = error == "FILE_TOKEN_INVALID" && self.cdnTokenRefreshes < maxCdnTokenRefreshes
                         if tokenExpired {
                             self.cdnTokenRefreshes += 1

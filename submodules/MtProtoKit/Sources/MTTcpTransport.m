@@ -488,7 +488,9 @@ static const NSTimeInterval MTTcpTransportSleepWatchdogTimeout = 60.0;
         if (transportContext.connection != nil && [transportContext.connection.internalId isEqual:transactionId])
         {
             transportContext.connectionIsValid = true;
-            [transportContext.connectionBehaviour connectionValidDataReceived];
+            if (!self.incomingDataIsUnauthenticated) {
+                [transportContext.connectionBehaviour connectionValidDataReceived];
+            }
         }
         
         [self stopConnectionWatchdogTimer];

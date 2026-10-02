@@ -539,7 +539,9 @@ final class RustNetworkSession: NetworkEngineSession {
         case .update:
             self.handleUpdate(event, previousWasUpdatesReset: previousKind == .updatesReset)
         case .timeDifferenceUpdated:
-            self.context.setGlobalTimeDifference(event.value1)
+            if rustEngineSharesTimeDifference(isCdn: self.isCdn) {
+                self.context.setGlobalTimeDifference(event.value1)
+            }
         case .saltsUpdated:
             self.mergeSalts(event.salts)
         case .pong:

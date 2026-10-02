@@ -381,7 +381,12 @@ private enum MultipartFetchSource {
                                                 }
                                             }
                                             parsedPartHashes.removeAll()
-                                            return .fail(.switchToCdn(id: dcId, token: fileToken.makeData(), key: encryptionKey.makeData(), iv: encryptionIv.makeData(), partHashes: parsedPartHashes))
+                                            let key = encryptionKey.makeData()
+                                            let iv = encryptionIv.makeData()
+                                            if !cdnRedirectKeyMaterialIsValid(encryptionKey: key, encryptionIv: iv) {
+                                                return .fail(.fatal)
+                                            }
+                                            return .fail(.switchToCdn(id: dcId, token: fileToken.makeData(), key: key, iv: iv, partHashes: parsedPartHashes))
                                     }
                                 }
                         }

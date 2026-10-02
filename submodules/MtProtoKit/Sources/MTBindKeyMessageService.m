@@ -23,6 +23,8 @@
     
     int64_t _currentMessageId;
     id _currentTransactionId;
+    
+    NSUInteger _authKeyRejections;
 }
 
 @end
@@ -140,7 +142,17 @@
     }
 }
 
+- (void)finishWithSuccess:(bool)success error:(MTRpcError *)error {
+    void (^completion)(bool, MTRpcError *) = _completion;
+    _completion = nil;
+    if (completion) {
+        completion(success, error);
+    }
+}
+
 - (void)mtProto:(MTProto *)mtProto receivedMessage:(MTIncomingMessage *)message authInfoSelector:(MTDatacenterAuthInfoSelector)authInfoSelector networkType:(int32_t)networkType {
+    _authKeyRejections = 0;
+    
     if ([message.body isKindOfClass:[MTRpcResultMessage class]]) {
         MTRpcResultMessage *rpcResultMessage = message.body;
         if (rpcResultMessage.requestMessageId == _currentMessageId) {
@@ -165,13 +177,21 @@
                     success = true;
                 }
             }
-            _completion(success, error);
+            [self finishWithSuccess:success error:error];
         }
     }
 }
 
--(void)complete {
-    _completion(true, nil);
+- (void)mtProtoAuthKeyRejected:(MTProto *)mtProto {
+    _authKeyRejections += 1;
+    
+    if (MTLogEnabled()) {
+        MTLog(@"[MTBindKeyMessageService#%p temp key %" PRId64 " rejected (%d in a row)]", self, _ephemeralKey.authKeyId, (int)_authKeyRejections);
+    }
+    
+    if (_authKeyRejections >= 2) {
+        [self finishWithSuccess:false error:nil];
+    }
 }
 
 @end

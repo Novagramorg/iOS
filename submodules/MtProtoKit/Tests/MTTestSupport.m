@@ -54,6 +54,10 @@ MTContext *MTTestMakeContext(bool useTempAuthKeys) {
     // The encryption provider is only reached once a connection exchanges
     // messages; these connections never get that far.
     id<EncryptionProvider> encryptionProvider = (id<EncryptionProvider>)[[NSObject alloc] init];
+    return MTTestMakeContextWithEncryptionProvider(useTempAuthKeys, encryptionProvider);
+}
+
+MTContext *MTTestMakeContextWithEncryptionProvider(bool useTempAuthKeys, id<EncryptionProvider> encryptionProvider) {
     return [[MTContext alloc] initWithSerialization:[[MTTestSerialization alloc] init] encryptionProvider:encryptionProvider apiEnvironment:[[MTApiEnvironment alloc] init] isTestingEnvironment:true useTempAuthKeys:useTempAuthKeys];
 }
 

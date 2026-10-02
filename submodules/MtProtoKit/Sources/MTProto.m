@@ -304,6 +304,7 @@ static const NSUInteger MTMaxUnacknowledgedMessageCount = 64;
             [self removeMessageService:_transport];
         
         _transport = transport;
+        _transport.incomingDataIsUnauthenticated = _useUnauthorizedMode;
         if (!keepTransportActive) {
             [previousTransport stop];
         }
@@ -2105,13 +2106,11 @@ static NSString *dumpHexString(NSData *data, int maxLength) {
     }
     
     if (_useExplicitAuthKey != nil) {
-        if (scheme.media) {
-            for (NSInteger i = (NSInteger)_messageServices.count - 1; i >= 0; i--)
-            {
-                MTBindKeyMessageService* messageService = (MTBindKeyMessageService *)_messageServices[(NSUInteger)i];
-                if ([messageService respondsToSelector:@selector(complete)]) {
-                    [messageService complete];
-                }
+        for (NSInteger i = (NSInteger)_messageServices.count - 1; i >= 0; i--)
+        {
+            MTBindKeyMessageService* messageService = (MTBindKeyMessageService *)_messageServices[(NSUInteger)i];
+            if ([messageService respondsToSelector:@selector(mtProtoAuthKeyRejected:)]) {
+                [messageService mtProtoAuthKeyRejected:self];
             }
         }
     } else if (_cdn) {

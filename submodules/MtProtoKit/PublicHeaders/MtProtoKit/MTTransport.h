@@ -45,6 +45,7 @@
 @property (nonatomic, strong, readonly) MTSocksProxySettings * _Nullable proxySettings;
 @property (nonatomic) bool simultaneousTransactionsEnabled;
 @property (nonatomic) bool reportTransportConnectionContextUpdateStates;
+@property (atomic) bool incomingDataIsUnauthenticated;
 @property (nonatomic, strong) NSString * _Nullable (^ _Nullable getLogPrefix)();
 
 - (instancetype _Nonnull)initWithDelegate:(id<MTTransportDelegate> _Nullable)delegate context:(MTContext * _Nonnull)context datacenterId:(NSInteger)datacenterId schemes:(NSArray<MTTransportScheme *> * _Nonnull)schemes proxySettings:(MTSocksProxySettings * _Null_unspecified)proxySettings usageCalculationInfo:(MTNetworkUsageCalculationInfo * _Nullable)usageCalculationInfo getLogPrefix:(NSString * _Nullable (^ _Nullable)())getLogPrefix;

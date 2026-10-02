@@ -8,7 +8,7 @@
 
 @protocol MTDatacenterAuthMessageServiceDelegate <NSObject>
 
-- (void)authMessageServiceCompletedWithAuthKey:(MTDatacenterAuthKey *)authKey timestamp:(int64_t)timestamp;
+- (void)authMessageServiceCompletedWithAuthKey:(MTDatacenterAuthKey *)authKey timestamp:(int64_t)timestamp serverSalt:(int64_t)serverSalt;
 
 @end
 

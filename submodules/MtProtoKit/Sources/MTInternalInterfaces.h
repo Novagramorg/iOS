@@ -3,9 +3,11 @@
 #import <MtProtoKit/MTDatacenterAuthInfo.h>
 #import <MtProtoKit/MTDatacenterTransferAuthAction.h>
 #import <MtProtoKit/MTBackupAddressSignals.h>
+#import <MtProtoKit/MTProto.h>
 
 @class MTRequest;
 @class MTRpcError;
+@class MTQueue;
 
 // Module-private interfaces shared by MtProtoKit's sources and its tests.
 //
@@ -62,5 +64,11 @@
 // Applies a getConfig address list to the context, touching only the
 // datacenters whose address set actually changed. Returns whether any did.
 + (bool)applyAddressList:(NSDictionary<NSNumber *, NSArray *> * _Nonnull)addressList toContext:(MTContext * _Nonnull)context;
+
+@end
+
+@interface MTProto ()
+
++ (MTQueue * _Nonnull)managerQueue;
 
 @end

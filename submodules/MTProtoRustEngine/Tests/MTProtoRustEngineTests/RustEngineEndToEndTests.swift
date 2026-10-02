@@ -2,6 +2,7 @@ import XCTest
 import SwiftSignalKit
 import MtProtoKit
 import EncryptionProvider
+import MTProtoEngineFFI
 @testable import TelegramCore
 @testable import MTProtoRustEngine
 
@@ -567,6 +568,34 @@ final class RustEngineEndToEndTests: XCTestCase {
             }
         }
         XCTAssertTrue(persisted, "MTContext must stay the single writer of salts")
+    }
+
+    func testOnlyNonCdnSessionsMoveTheAppClock() {
+        let datacenterId = RustEngineEndToEndTests.datacenterId
+        let cdn = self.engine.makeSession(datacenterId: datacenterId, role: .worker(masterDatacenterId: datacenterId, isMedia: false, isCdn: true), usageCalculationInfo: nil, delegate: nil)
+        let main = self.engine.makeSession(datacenterId: datacenterId, role: .main, usageCalculationInfo: nil, delegate: nil)
+        defer {
+            cdn.stop()
+            main.stop()
+        }
+        guard let cdnSession = cdn as? RustNetworkSession, let mainSession = main as? RustNetworkSession else {
+            XCTFail("the Rust engine made a session of another type")
+            return
+        }
+        let initial = self.context.globalTimeDifference()
+        let deliver: (RustNetworkSession, Double) -> Void = { session, difference in
+            var event = MTEvent()
+            event.kind = MTEventKindTimeDifferenceUpdated
+            event.value1 = difference
+            session.handleEngineEvent(withUnsafePointer(to: &event) { RustEngineEvent($0) })
+            MTContext.contextQueue().dispatch(onQueue: {}, synchronous: true)
+        }
+
+        deliver(cdnSession, initial + 86_400.0)
+        XCTAssertEqual(self.context.globalTimeDifference(), initial, "a CDN must not set the app-wide clock")
+
+        deliver(mainSession, initial + 30.0)
+        XCTAssertEqual(self.context.globalTimeDifference(), initial + 30.0)
     }
 
     func testWorkerSessionSharesTheEngineWithTheMainSession() {

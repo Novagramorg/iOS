@@ -101,18 +101,18 @@
         [self fail];
 }
 
-- (void)authMessageServiceCompletedWithAuthKey:(MTDatacenterAuthKey *)authKey timestamp:(int64_t)timestamp {
-    [self completeWithAuthKey:authKey timestamp:timestamp];
+- (void)authMessageServiceCompletedWithAuthKey:(MTDatacenterAuthKey *)authKey timestamp:(int64_t)timestamp serverSalt:(int64_t)serverSalt {
+    [self completeWithAuthKey:authKey timestamp:timestamp serverSalt:serverSalt];
 }
 
-- (void)completeWithAuthKey:(MTDatacenterAuthKey *)authKey timestamp:(int64_t)timestamp {
+- (void)completeWithAuthKey:(MTDatacenterAuthKey *)authKey timestamp:(int64_t)timestamp serverSalt:(int64_t)serverSalt {
     if (MTLogEnabled()) {
         MTLog(@"[MTDatacenterAuthAction#%p@%p: completeWithAuthKey %lld selector %d]", self, _context, authKey.authKeyId, _authKeyInfoSelector);
     }
     
     switch (_authKeyInfoSelector) {
         case MTDatacenterAuthInfoSelectorPersistent: {
-            MTDatacenterAuthInfo *authInfo = [[MTDatacenterAuthInfo alloc] initWithAuthKey:authKey.authKey authKeyId:authKey.authKeyId validUntilTimestamp:INT32_MAX saltSet:@[[[MTDatacenterSaltInfo alloc] initWithSalt:0 firstValidMessageId:timestamp lastValidMessageId:timestamp + (29.0 * 60.0) * 4294967296]] authKeyAttributes:nil];
+            MTDatacenterAuthInfo *authInfo = [[MTDatacenterAuthInfo alloc] initWithAuthKey:authKey.authKey authKeyId:authKey.authKeyId validUntilTimestamp:INT32_MAX saltSet:@[[[MTDatacenterSaltInfo alloc] initWithSalt:serverSalt firstValidMessageId:timestamp lastValidMessageId:timestamp + (29.0 * 60.0) * 4294967296]] authKeyAttributes:nil];
             
             MTContext *context = _context;
             [context updateAuthInfoForDatacenterWithId:_datacenterId authInfo:authInfo selector:_authKeyInfoSelector];
@@ -125,7 +125,7 @@
             MTContext *mainContext = _context;
             if (mainContext != nil) {
                 if (_skipBind) {
-                    MTDatacenterAuthInfo *authInfo = [[MTDatacenterAuthInfo alloc] initWithAuthKey:authKey.authKey authKeyId:authKey.authKeyId validUntilTimestamp:authKey.validUntilTimestamp saltSet:@[[[MTDatacenterSaltInfo alloc] initWithSalt:0 firstValidMessageId:timestamp lastValidMessageId:timestamp + (29.0 * 60.0) * 4294967296]] authKeyAttributes:nil];
+                    MTDatacenterAuthInfo *authInfo = [[MTDatacenterAuthInfo alloc] initWithAuthKey:authKey.authKey authKeyId:authKey.authKeyId validUntilTimestamp:authKey.validUntilTimestamp saltSet:@[[[MTDatacenterSaltInfo alloc] initWithSalt:serverSalt firstValidMessageId:timestamp lastValidMessageId:timestamp + (29.0 * 60.0) * 4294967296]] authKeyAttributes:nil];
                     
                     [_context updateAuthInfoForDatacenterWithId:_datacenterId authInfo:authInfo selector:_authKeyInfoSelector];
                     
@@ -161,7 +161,7 @@
                             [strongSelf->_bindMtProto stop];
                             
                             if (success) {
-                                MTDatacenterAuthInfo *authInfo = [[MTDatacenterAuthInfo alloc] initWithAuthKey:authKey.authKey authKeyId:authKey.authKeyId validUntilTimestamp:authKey.validUntilTimestamp saltSet:@[[[MTDatacenterSaltInfo alloc] initWithSalt:0 firstValidMessageId:timestamp lastValidMessageId:timestamp + (29.0 * 60.0) * 4294967296]] authKeyAttributes:nil];
+                                MTDatacenterAuthInfo *authInfo = [[MTDatacenterAuthInfo alloc] initWithAuthKey:authKey.authKey authKeyId:authKey.authKeyId validUntilTimestamp:authKey.validUntilTimestamp saltSet:@[[[MTDatacenterSaltInfo alloc] initWithSalt:serverSalt firstValidMessageId:timestamp lastValidMessageId:timestamp + (29.0 * 60.0) * 4294967296]] authKeyAttributes:nil];
                                 
                                 [strongSelf->_context updateAuthInfoForDatacenterWithId:strongSelf->_datacenterId authInfo:authInfo selector:strongSelf->_authKeyInfoSelector];
                                 

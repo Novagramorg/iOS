@@ -136,6 +136,11 @@ final class RustEngineMappingTests: XCTestCase {
         XCTAssertFalse(rustEngineRequiresForeignAuthToken(isMain: false, isCdn: true, datacenterId: 4, masterDatacenterId: 2))
     }
 
+    func testOnlyNonCdnSessionsShareTheirTimeDifference() {
+        XCTAssertTrue(rustEngineSharesTimeDifference(isCdn: false))
+        XCTAssertFalse(rustEngineSharesTimeDifference(isCdn: true))
+    }
+
     func testObfuscationDatacenterId() {
         XCTAssertEqual(rustEngineObfuscationDatacenterId(datacenterId: 2, isTestingEnvironment: false, preferForMedia: false), 2)
         XCTAssertEqual(rustEngineObfuscationDatacenterId(datacenterId: 2, isTestingEnvironment: false, preferForMedia: true), -2)
