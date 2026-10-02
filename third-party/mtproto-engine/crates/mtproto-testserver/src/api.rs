@@ -38,16 +38,41 @@ pub struct FileSpec {
     pub cdn: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CdnFault {
+    #[default]
+    None,
+    CorruptData,
+    EndlessReupload,
+    NoHashes,
+    TokenInvalid,
+}
+
+impl CdnFault {
+    pub const ALL: [CdnFault; 4] = [CdnFault::CorruptData, CdnFault::EndlessReupload, CdnFault::NoHashes, CdnFault::TokenInvalid];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            CdnFault::None => "none",
+            CdnFault::CorruptData => "corrupt-data",
+            CdnFault::EndlessReupload => "endless-reupload",
+            CdnFault::NoHashes => "no-hashes",
+            CdnFault::TokenInvalid => "token-invalid",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct WorldOptions {
     pub main_datacenter_id: i32,
     pub cdn_datacenter_id: i32,
     pub reupload_needed: bool,
+    pub cdn_fault: CdnFault,
 }
 
 impl Default for WorldOptions {
     fn default() -> Self {
-        Self { main_datacenter_id: 2, cdn_datacenter_id: 203, reupload_needed: true }
+        Self { main_datacenter_id: 2, cdn_datacenter_id: 203, reupload_needed: true, cdn_fault: CdnFault::None }
     }
 }
 
@@ -320,7 +345,7 @@ impl ApiWorld {
         }
         state.stats.get_file += 1;
         *state.stats.file_requests.entry((file_id, offset)).or_insert(0) += 1;
-        if file.cdn {
+        if file.cdn && flags & 2 != 0 {
             state.stats.cdn_redirects += 1;
             let mut token = vec![0u8; 16];
             state.rng.fill(&mut token);
@@ -371,6 +396,9 @@ impl ApiWorld {
             state.stats.invalid_ranges += 1;
             return ApiReply::Error(400, "LIMIT_INVALID".into());
         }
+        if self.options.cdn_fault == CdnFault::TokenInvalid {
+            return ApiReply::Error(400, "FILE_TOKEN_INVALID".into());
+        }
         let reupload_needed = self.options.reupload_needed;
         let request_token: Vec<u8> = state.rng.array::<16>().to_vec();
         let files = &state.files;
@@ -381,7 +409,7 @@ impl ApiWorld {
             return ApiReply::Error(400, "FILE_TOKEN_INVALID".into());
         };
         let block = offset / MEGABYTE;
-        if reupload_needed && !entry.uploaded.contains(&block) {
+        if reupload_needed && (!entry.uploaded.contains(&block) || self.options.cdn_fault == CdnFault::EndlessReupload) {
             entry.request_tokens.insert(request_token.clone(), block);
             state.stats.reupload_needed += 1;
             let mut writer = Writer::new();
@@ -392,6 +420,9 @@ impl ApiWorld {
         let end = (offset + limit).min(file.size);
         let length = end.saturating_sub(offset) as usize;
         let mut data = file_content(file.id, offset, length);
+        if self.options.cdn_fault == CdnFault::CorruptData && length > 0 {
+            data[length / 2] ^= 0x5a;
+        }
         AesCtr::new(&entry.key, &cdn_iv(&entry.iv, offset)).apply(&mut data);
         state.stats.get_cdn_file += 1;
         state.stats.bytes_served += length as u64;
@@ -422,6 +453,10 @@ impl ApiWorld {
         entry.uploaded.insert(block);
         state.stats.reuploads += 1;
         let mut writer = Writer::new();
+        if self.options.cdn_fault == CdnFault::NoHashes {
+            writer.write_vector_header(0);
+            return ApiReply::Result(writer.into_inner());
+        }
         write_file_hashes(&mut writer, file.id, file.size, block * MEGABYTE, MEGABYTE);
         ApiReply::Result(writer.into_inner())
     }
@@ -441,6 +476,10 @@ impl ApiWorld {
         };
         state.stats.hash_requests += 1;
         let mut writer = Writer::new();
+        if self.options.cdn_fault == CdnFault::NoHashes {
+            writer.write_vector_header(0);
+            return ApiReply::Result(writer.into_inner());
+        }
         write_file_hashes(&mut writer, file.id, file.size, offset.max(0) as u64, MEGABYTE);
         ApiReply::Result(writer.into_inner())
     }
@@ -464,8 +503,12 @@ mod tests {
     }
 
     fn get_file(file_id: i64, offset: i64, limit: i32) -> Vec<u8> {
+        get_file_with_flags(0, file_id, offset, limit)
+    }
+
+    fn get_file_with_flags(flags: i32, file_id: i64, offset: i64, limit: i32) -> Vec<u8> {
         let mut writer = Writer::new();
-        writer.write_i32(0);
+        writer.write_i32(flags);
         writer.write_u32(INPUT_DOCUMENT_FILE_LOCATION);
         writer.write_i64(file_id);
         writer.write_i64(42);
@@ -546,7 +589,13 @@ mod tests {
         import.write_bytes(reader.read_bytes().unwrap());
         result(world.handle(4, 1, AUTH_IMPORT_AUTHORIZATION, import.as_slice()));
 
-        let redirect = result(world.handle(4, 1, UPLOAD_GET_FILE, &get_file(3, 0, 131_072)));
+        let direct = result(world.handle(4, 1, UPLOAD_GET_FILE, &get_file(3, 0, 131_072)));
+        assert_ne!(
+            u32::from_le_bytes(direct[..4].try_into().unwrap()),
+            UPLOAD_FILE_CDN_REDIRECT,
+            "a client without cdn_supported is served by the file's DC"
+        );
+        let redirect = result(world.handle(4, 1, UPLOAD_GET_FILE, &get_file_with_flags(2, 3, 0, 131_072)));
         let mut reader = Reader::new(&redirect);
         assert_eq!(reader.read_u32().unwrap(), UPLOAD_FILE_CDN_REDIRECT);
         assert_eq!(reader.read_i32().unwrap(), 203);
@@ -602,5 +651,86 @@ mod tests {
         unknown.write_i64(0);
         unknown.write_i32(131_072);
         assert_eq!(error(world.handle(203, 9, UPLOAD_GET_CDN_FILE, unknown.as_slice())).1, "FILE_TOKEN_INVALID");
+    }
+
+    fn redirected(fault: CdnFault) -> (ApiWorld, Vec<u8>, [u8; 32], [u8; 16]) {
+        let files = [FileSpec { id: 3, datacenter_id: 4, size: 2 * MEGABYTE + 5000, cdn: true }];
+        let world = ApiWorld::new(WorldOptions { cdn_fault: fault, ..WorldOptions::default() }, &files, 7);
+        let mut export = Writer::new();
+        export.write_i32(4);
+        let exported = result(world.handle(2, 1, AUTH_EXPORT_AUTHORIZATION, export.as_slice()));
+        let mut reader = Reader::new(&exported);
+        reader.read_u32().unwrap();
+        let mut import = Writer::new();
+        import.write_i64(reader.read_i64().unwrap());
+        import.write_bytes(reader.read_bytes().unwrap());
+        result(world.handle(4, 1, AUTH_IMPORT_AUTHORIZATION, import.as_slice()));
+        let redirect = result(world.handle(4, 1, UPLOAD_GET_FILE, &get_file_with_flags(2, 3, 0, 131_072)));
+        let mut reader = Reader::new(&redirect);
+        assert_eq!(reader.read_u32().unwrap(), UPLOAD_FILE_CDN_REDIRECT);
+        reader.read_i32().unwrap();
+        let token = reader.read_bytes().unwrap().to_vec();
+        let key: [u8; 32] = reader.read_bytes().unwrap().try_into().unwrap();
+        let iv: [u8; 16] = reader.read_bytes().unwrap().try_into().unwrap();
+        (world, token, key, iv)
+    }
+
+    fn cdn_part(world: &ApiWorld, token: &[u8], offset: u64) -> Vec<u8> {
+        let mut request = Writer::new();
+        request.write_bytes(token);
+        request.write_i64(offset as i64);
+        request.write_i32(131_072);
+        result(world.handle(203, 9, UPLOAD_GET_CDN_FILE, request.as_slice()))
+    }
+
+    fn reupload_after(world: &ApiWorld, token: &[u8], needed: &[u8]) -> Vec<u8> {
+        let mut reader = Reader::new(needed);
+        assert_eq!(reader.read_u32().unwrap(), UPLOAD_CDN_FILE_REUPLOAD_NEEDED);
+        let mut reupload = Writer::new();
+        reupload.write_bytes(token);
+        reupload.write_bytes(reader.read_bytes().unwrap());
+        result(world.handle(4, 1, UPLOAD_REUPLOAD_CDN_FILE, reupload.as_slice()))
+    }
+
+    #[test]
+    fn cdn_faults_misbehave_as_configured() {
+        let (world, token, _, _) = redirected(CdnFault::TokenInvalid);
+        let mut request = Writer::new();
+        request.write_bytes(&token);
+        request.write_i64(0);
+        request.write_i32(131_072);
+        assert_eq!(error(world.handle(203, 9, UPLOAD_GET_CDN_FILE, request.as_slice())).1, "FILE_TOKEN_INVALID");
+
+        let (world, token, _, _) = redirected(CdnFault::EndlessReupload);
+        for _ in 0..3 {
+            let needed = cdn_part(&world, &token, 0);
+            reupload_after(&world, &token, &needed);
+        }
+        assert_eq!(Reader::new(&cdn_part(&world, &token, 0)).read_u32().unwrap(), UPLOAD_CDN_FILE_REUPLOAD_NEEDED);
+
+        let (world, token, _, _) = redirected(CdnFault::NoHashes);
+        let needed = cdn_part(&world, &token, 0);
+        assert_eq!(parse_vector_header(&mut Reader::new(&reupload_after(&world, &token, &needed))), Some(0));
+        let mut hash_request = Writer::new();
+        hash_request.write_bytes(&token);
+        hash_request.write_i64(0);
+        let hashes = result(world.handle(4, 1, UPLOAD_GET_CDN_FILE_HASHES, hash_request.as_slice()));
+        assert_eq!(parse_vector_header(&mut Reader::new(&hashes)), Some(0));
+
+        let (world, token, key, iv) = redirected(CdnFault::CorruptData);
+        let needed = cdn_part(&world, &token, 0);
+        let hashes = reupload_after(&world, &token, &needed);
+        let encrypted = cdn_part(&world, &token, 0);
+        let mut reader = Reader::new(&encrypted);
+        assert_eq!(reader.read_u32().unwrap(), UPLOAD_CDN_FILE);
+        let mut data = reader.read_bytes().unwrap().to_vec();
+        AesCtr::new(&key, &cdn_iv(&iv, 0)).apply(&mut data);
+        assert_ne!(data, file_content(3, 0, 131_072));
+        let mut reader = Reader::new(&hashes);
+        parse_vector_header(&mut reader).unwrap();
+        reader.read_u32().unwrap();
+        reader.read_i64().unwrap();
+        reader.read_i32().unwrap();
+        assert_eq!(reader.read_bytes().unwrap(), sha256(&file_content(3, 0, 131_072)));
     }
 }

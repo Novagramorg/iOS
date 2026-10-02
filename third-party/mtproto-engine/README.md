@@ -136,6 +136,14 @@ Rebuild `MTProtoEngineFFI.xcframework` first, otherwise the bench links the prev
 - `--suite quick|full`: downloads (photos, DC 4 videos, CDN), scrolling with cancellations, main-session
   probes during downloads, small requests; on perfect, broadband, 3G, lossy, flaky, blackhole and outage
   networks. The report adds served/needed bytes and re-fetched parts.
+- `tc/bigfile*/wan`: one 40–80 MB file at a time over a 100 ms RTT, 200 Mbit/s path, direct and through
+  the CDN. This is where the in-flight window decides throughput.
+- `tc/cdn-hostile/*`: the CDN corrupts data, asks for a reupload forever, returns no hashes, or rejects
+  the file token. A client must finish from the file's own DC without accepting a single bad byte.
+
+The fake file DC redirects to the CDN only when `upload.getFile` sets `cdn_supported`, like the real
+server. TelegramCore sets it only with the Rust engine, so the CDN rows compare the Rust engine's CDN
+path with MtProtoKit downloading the same file directly.
 - `--suite torture`: numbered calls through `Network.request` while the server injects one fault class
   at 1 % (or all of them mixed), plus a clean million-call run. Columns: wrong results, double
   completions, server-side duplicate executions, req/s, CPU, peak RSS and how the process exited.

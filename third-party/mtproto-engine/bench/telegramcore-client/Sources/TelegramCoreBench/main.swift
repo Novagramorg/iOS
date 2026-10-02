@@ -473,8 +473,7 @@ final class FileDownload {
     let index: Int
     private let queue: Queue
     private let disposable = MetaDisposable()
-    private var parts: [Int64: Int] = [:]
-    private var received: Int64 = 0
+    private var covered = IndexSet()
     private var finished = false
     private let completion: (FileDownload, Bool) -> Void
 
@@ -528,16 +527,14 @@ final class FileDownload {
                 self.finish(success: false)
                 return
             }
-            if self.parts[resourceOffset] == nil {
-                self.parts[resourceOffset] = slice.count
-                self.received += Int64(slice.count)
+            if !slice.isEmpty {
+                self.covered.insert(integersIn: Int(resourceOffset) ..< Int(resourceOffset) + slice.count)
             }
-            if self.received >= self.file.size {
+            if self.covered.contains(integersIn: 0 ..< Int(self.file.size)) {
                 self.finish(success: true)
             }
         case .reset:
-            self.parts.removeAll()
-            self.received = 0
+            self.covered.removeAll()
         case let .resourceSizeUpdated(size):
             if size != self.file.size {
                 self.recorder.addVerifyFailure()

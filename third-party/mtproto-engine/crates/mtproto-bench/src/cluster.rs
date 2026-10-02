@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 
 use mtproto_engine::mtproto_core::crypto::{SecureRandom, XorShiftRandom};
 use mtproto_netsim::{NetSim, Profile};
-use mtproto_testserver::api::{ApiWorld, FileSpec, WorldOptions};
+use mtproto_testserver::api::{ApiWorld, CdnFault, FileSpec, WorldOptions};
 use mtproto_testserver::chaos::{ChaosConfig, Fault};
 use mtproto_testserver::{SERVER_SALT, ServerOptions, TestServer, random_key};
 
@@ -38,6 +38,7 @@ pub struct ClusterScenario {
     pub profile: String,
     pub files: Vec<FileSpec>,
     pub reupload: bool,
+    pub cdn_fault: CdnFault,
     pub concurrency: usize,
     pub requests: usize,
     pub rate: f64,
@@ -103,6 +104,7 @@ fn scenario(name: &str, workload: &str, profile: &str, files: Vec<FileSpec>, con
         profile: profile.into(),
         files,
         reupload: true,
+        cdn_fault: CdnFault::None,
         concurrency,
         requests: 0,
         rate: 20.0,
@@ -254,6 +256,7 @@ pub fn suite(quick: bool) -> Vec<ClusterScenario> {
     let photos = |seed: u64, count: usize| files(seed, count, MAIN_DC, 40_000, 400_000, false, 1_000);
     let videos = |seed: u64, count: usize| files(seed, count, FILE_DC, 4 << 20, 16 << 20, false, 2_000);
     let cdn_videos = |seed: u64, count: usize| files(seed, count, FILE_DC, 3 << 20, 10 << 20, true, 3_000);
+    let big_files = |seed: u64, count: usize, cdn: bool| files(seed, count, FILE_DC, 40 << 20, 80 << 20, cdn, 4_000);
     let mut mixed_files = photos(11, scale(40, 20));
     mixed_files.extend(videos(12, scale(3, 2)));
     mixed_files.extend(cdn_videos(13, scale(2, 1)));
@@ -267,8 +270,17 @@ pub fn suite(quick: bool) -> Vec<ClusterScenario> {
         scenario("tc/photos/lossy", "tc-download", "lossy", photos(5, scale(40, 20)), 8),
         scenario("tc/videos-dc4/flaky", "tc-download", "flaky", videos(6, scale(3, 2)), 3),
         scenario("tc/cdn/flaky", "tc-download", "flaky", cdn_videos(7, scale(3, 2)), 3),
+        scenario("tc/bigfile/wan", "tc-download", "wan", big_files(14, scale(3, 2), false), 1),
+        scenario("tc/bigfile-cdn/wan", "tc-download", "wan", big_files(15, scale(3, 2), true), 1),
         scenario("tc/mixed/blackholes", "tc-mixed", "blackholes", mixed_files.clone(), 8),
     ];
+    for (index, fault) in CdnFault::ALL.into_iter().enumerate() {
+        let mut hostile_cdn =
+            scenario(&format!("tc/cdn-hostile/{}", fault.name()), "tc-download", "broadband", cdn_videos(20 + index as u64, 2), 2);
+        hostile_cdn.cdn_fault = fault;
+        hostile_cdn.deadline = 60.0;
+        scenarios.push(hostile_cdn);
+    }
     let mut scroll = scenario("tc/scroll/broadband", "tc-scroll", "broadband", photos(8, scale(200, 100)), 12);
     scroll.cancel_fraction = 0.5;
     scenarios.push(scroll);
@@ -318,7 +330,12 @@ fn extra_number(output: &str, field: &str) -> usize {
 
 pub fn run(scenario: &ClusterScenario, binary: &str, engine: &str, seed: u64) -> ClusterResult {
     let world = Arc::new(ApiWorld::new(
-        WorldOptions { main_datacenter_id: MAIN_DC, cdn_datacenter_id: CDN_DC, reupload_needed: scenario.reupload },
+        WorldOptions {
+            main_datacenter_id: MAIN_DC,
+            cdn_datacenter_id: CDN_DC,
+            reupload_needed: scenario.reupload,
+            cdn_fault: scenario.cdn_fault,
+        },
         &scenario.files,
         seed,
     ));

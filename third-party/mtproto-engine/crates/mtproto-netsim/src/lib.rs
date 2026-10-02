@@ -114,6 +114,16 @@ impl Profile {
         }
     }
 
+    pub fn wan() -> Self {
+        Self {
+            name: "wan".into(),
+            latency: Duration::from_millis(50),
+            jitter: Duration::from_millis(5),
+            bandwidth: Some(200_000_000 / 8),
+            ..Self::perfect()
+        }
+    }
+
     pub fn mobile_3g() -> Self {
         Self {
             name: "3g".into(),
@@ -174,6 +184,7 @@ impl Profile {
         match name {
             "perfect" => Some(Self::perfect()),
             "broadband" => Some(Self::broadband()),
+            "wan" => Some(Self::wan()),
             "3g" => Some(Self::mobile_3g()),
             "lossy" => Some(Self::lossy()),
             "flaky" => Some(Self::flaky()),
@@ -191,6 +202,7 @@ impl Profile {
         &[
             "perfect",
             "broadband",
+            "wan",
             "3g",
             "lossy",
             "flaky",
