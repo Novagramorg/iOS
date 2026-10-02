@@ -616,8 +616,9 @@ final class RustNetworkSession: NetworkEngineSession {
             mt_session_decide_retry(engine, self.handle, event.requestId, 0)
             return
         }
-        let errorContext = pending.errorState.applyRetryDecision(floodWaitSeconds: event.integer1, floodWaitErrorText: rustEngineOptionalText(event.text2), serverErrors: event.integer2)
-        let retryable = event.code == 500 || event.code == -500 || errorContext.floodWaitSeconds > 0
+        let floodWaitText = rustEngineOptionalText(event.text2)
+        let errorContext = pending.errorState.applyRetryDecision(floodWaitSeconds: event.integer1, floodWaitErrorText: floodWaitText, serverErrors: event.integer2)
+        let retryable = rustEngineRetryDecisionIsRetryable(code: event.code, floodWaitText: floodWaitText)
         let retry = retryable && pending.request.shouldContinueAfterError(NetworkEngineErrorContext(floodWaitSeconds: errorContext.floodWaitSeconds, floodWaitErrorText: errorContext.floodWaitErrorText, internalServerErrorCount: errorContext.internalServerErrorCount))
         rustEngineLog("\(self.logPrefix) #\(event.requestId) \(event.code) \(event.text): \(retry ? "retry" : "fail")")
         mt_session_decide_retry(engine, self.handle, event.requestId, retry ? 1 : 0)

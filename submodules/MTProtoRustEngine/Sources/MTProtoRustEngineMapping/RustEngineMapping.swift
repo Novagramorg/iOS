@@ -317,6 +317,16 @@ public enum RustEngineVerificationKind: Int32, Equatable {
     public static let timeout: Double = 20.0
 }
 
+/// Whether a delegated retry decision may retry at all, before the request's own
+/// `shouldContinueAfterError` is asked. MtProtoKit retries `500`/`-500` and every `FLOOD_WAIT_X` /
+/// `FLOOD_PREMIUM_WAIT_X`, `X = 0` included (`MTRequestMessageService`). The engine marks a flood wait
+/// by sending its text (`MTEvent.text2`) with the decision, so this decides on that text and never on
+/// the wait length: `FLOOD_WAIT_0` arrives with 0 seconds. It looks only at the current event, not at
+/// the request's cumulative error state, so an earlier flood wait cannot make a later error retryable.
+public func rustEngineRetryDecisionIsRetryable(code: Int32, floodWaitText: String?) -> Bool {
+    return code == 500 || code == -500 || floodWaitText != nil
+}
+
 /// `NetworkEngineErrorContext.floodWaitErrorText` from the event's `text2`, which is empty when unset.
 public func rustEngineOptionalText(_ text: String) -> String? {
     return text.isEmpty ? nil : text
