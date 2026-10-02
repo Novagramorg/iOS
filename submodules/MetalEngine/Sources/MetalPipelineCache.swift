@@ -26,12 +26,17 @@ import Metal
 /// `ios_killswitch_disable_metal_pipeline_cache` app configuration key); pipelines are then compiled as they were before
 /// this cache existed.
 ///
+/// **Currently switched off in the app** (`isSwitchedOff`): a save still crashed inside Metal on iOS 26.3 with the
+/// guard in place (2026-10-02), so the guard does not cover every path there.
+///
 /// Thread-safe, and never makes a caller wait for another thread's compile or save.
 public final class MetalPipelineCache {
     private static let maxArchiveSize = 16 * 1024 * 1024
     /// Remembers the killswitch across launches: the archive is opened at launch, before any app configuration is
     /// loaded.
     private static let isArchiveDisabledKey = "MetalPipelineCache.isArchiveDisabled"
+    /// Keeps the app's cache from using an archive at all, as the killswitch does, until saving is understood.
+    private static let isSwitchedOff = true
 
     private let device: MTLDevice
     /// Guards every use of the archive, whose thread safety is not documented. A caller that finds it held (another
@@ -60,13 +65,14 @@ public final class MetalPipelineCache {
                 .appendingPathComponent("MetalPipelineCache", isDirectory: true)
                 .appendingPathComponent(Bundle.main.bundleIdentifier ?? "default", isDirectory: true)
         }
-        self.init(device: device, directoryUrl: directoryUrl)
+        self.init(device: device, directoryUrl: directoryUrl, isSwitchedOff: MetalPipelineCache.isSwitchedOff)
     }
 
-    init(device: MTLDevice, directoryUrl: URL?) {
+    /// `isSwitchedOff` behaves like the killswitch for this instance: no archive, and the directory is deleted.
+    init(device: MTLDevice, directoryUrl: URL?, isSwitchedOff: Bool = false) {
         self.device = device
 
-        let isArchiveDisabled = UserDefaults.standard.bool(forKey: MetalPipelineCache.isArchiveDisabledKey)
+        let isArchiveDisabled = isSwitchedOff || UserDefaults.standard.bool(forKey: MetalPipelineCache.isArchiveDisabledKey)
 
         var url: URL?
         var archive: AnyObject?

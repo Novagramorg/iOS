@@ -142,6 +142,17 @@ final class MetalPipelineCacheTests: XCTestCase {
         XCTAssertFalse(relaunched.isSaveEnabled)
     }
 
+    func testSwitchedOffCacheCompilesDirectlyAndDeletesArchives() throws {
+        let device = try self.makeDevice()
+        try self.saveArchive(device: device)
+
+        let cache = MetalPipelineCache(device: device, directoryUrl: self.directoryUrl, isSwitchedOff: true)
+        XCTAssertFalse(cache.isSaveEnabled)
+        XCTAssertFalse(cache.isFresh, "nothing to fill without an archive")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: self.directoryUrl.path))
+        XCTAssertNotNil(cache.makeComputePipelineState(descriptor: try self.makeNewComputeDescriptor(device: device)))
+    }
+
     func testUnfinishedSaveOfAnotherVersionIsForgotten() throws {
         let device = try self.makeDevice()
         let otherMarkerUrl = MetalPipelineCache.saveMarkerUrl(archiveUrl: self.directoryUrl.appendingPathComponent("pipelines-0.metallib"))
