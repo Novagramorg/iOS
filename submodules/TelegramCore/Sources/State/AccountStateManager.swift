@@ -440,7 +440,7 @@ public final class AccountStateManager {
                             strongSelf.addUpdateGroups(groups)
                         }
                     }))
-                    self.network.mtProto.add(self.updateService)
+                    self.network.addUpdateSink(self.updateService!)
                 }
                 self.operationDisposable.set(nil)
                 self.replaceOperations(with: .pollDifference(self.getNextId(), AccountFinalStateEvents()))

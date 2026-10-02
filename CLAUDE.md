@@ -274,6 +274,24 @@ Three measured facts that are invisible from the code and each cost an investiga
   undocumented threshold. Watch for `NavigationBackgroundNode(color: .clear)`, whose `updateColor`
   early-return means the colour is never assigned even once.
 
+## Swift 6.4: `[weak]` in a local closure that also captures a `var`
+
+Swift 6.4 (Xcode 27) miscompiles this shape, at `-Onone` as well as `-O`: a closure literal stored in
+a local `let`, with a `[weak x]`/`[unowned x]` capture list, that **also captures a mutable local** and
+never escapes (only called directly). `MandatoryAllocBoxToStack` moves the capture box to the stack and
+destroys it right after the closure is formed, before the closure is ever called. For an NSObject-derived
+`x` the load then reads a dead slot (on device it had been reused as a `swift_beginAccess` record and
+crashed in `objc_msgSend`; macOS 27 traps "not in the weak references table"); for a native Swift class
+it silently returns nil, so `guard let x else { return }` skips the work. Closures passed straight to a
+non-escaping parameter, or a declared `weak var w = x` captured instead, are compiled correctly.
+
+Write such a closure with a strong capture (`{ [self] i in`), which cannot cycle because it never
+escapes. It has bitten twice: `processPollOptionItem` (ComposePollScreen, 2026-09-25) and the
+identical `processTodoItemItem` (ComposeTodoScreen, 2026-10-02, App Store crash on 12.10/35210).
+In a binary the fingerprint is a weak/unowned `…Init` whose stack slot gets `…Destroy`ed before the
+first call to a closure specialized as `Arg[n] = Stack Promoted from Box`; a scan of every binary in
+the 2026-10-02 debug build found no other site.
+
 ## Per-module `-O` and pixel loops
 
 Almost every submodule builds `-Onone` under `--configuration=debug_*`. Exactly **two** override it with

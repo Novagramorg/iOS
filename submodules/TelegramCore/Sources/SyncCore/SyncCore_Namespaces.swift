@@ -647,6 +647,7 @@ private enum SharedDataKeyValues: Int32 {
     case wallapersState = 8
     case chatThemes = 10
     case deviceContacts = 11
+    case networkEngineSettings = 12
 }
 
 public struct SharedDataKeys {
@@ -707,6 +708,12 @@ public struct SharedDataKeys {
     public static let deviceContacts: ValueBoxKey = {
         let key = ValueBoxKey(length: 4)
         key.setInt32(0, value: SharedDataKeyValues.deviceContacts.rawValue)
+        return key
+    }()
+    
+    public static let networkEngineSettings: ValueBoxKey = {
+        let key = ValueBoxKey(length: 4)
+        key.setInt32(0, value: SharedDataKeyValues.networkEngineSettings.rawValue)
         return key
     }()
 }
