@@ -33,7 +33,7 @@ fn read_into(socket: &mut TcpStream, stream: &mut TransportStream) -> bool {
 
 fn main() {
     let start = Instant::now();
-    let mut rng = OsRandom;
+    let mut rng = OsRandom::new();
     let address = std::env::args().nth(1).unwrap_or_else(|| "149.154.167.51:443".into());
     let dc_id: i32 = std::env::args().nth(2).map(|v| v.parse().unwrap()).unwrap_or(2);
     let mut socket = TcpStream::connect(&address).expect("connect");

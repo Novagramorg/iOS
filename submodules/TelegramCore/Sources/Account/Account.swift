@@ -1533,6 +1533,15 @@ public class Account {
         |> distinctUntilChanged).start(next: { activeServer in
             network.updateProxySettings(activeServer)
         }))
+        self.managedOperationsDisposable.add((postbox.preferencesView(keys: [PreferencesKeys.appConfiguration])
+        |> map { view -> Bool in
+            let appConfiguration = view.values[PreferencesKeys.appConfiguration]?.get(AppConfiguration.self) ?? .defaultValue
+            return networkEngineRustDisabled(appConfiguration: appConfiguration)
+        }
+        |> distinctUntilChanged
+        |> filter { $0 }).start(next: { _ in
+            network.disableRustEngine(reason: "mtproto_engine_rust_disabled")
+        }))
 
         if !supplementary {
             let mediaBox = postbox.mediaBox

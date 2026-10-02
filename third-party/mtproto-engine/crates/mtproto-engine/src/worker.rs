@@ -1,5 +1,6 @@
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
 
@@ -46,17 +47,21 @@ pub enum Command {
 struct ThreadResolver {
     sender: Sender<Command>,
     waker: Arc<Waker>,
-    in_flight: HashMap<(String, u16), Vec<SessionHandle>>,
+    in_flight: HashMap<(String, u16), (Vec<SessionHandle>, f64)>,
 }
 
 impl Resolve for ThreadResolver {
     fn resolve(&mut self, session: SessionHandle, host: &str, port: u16) -> Resolution {
         let key = (host.to_string(), port);
-        if let Some(waiting) = self.in_flight.get_mut(&key) {
+        let now = clock::monotonic_seconds();
+        if let Some((waiting, started_at)) = self.in_flight.get_mut(&key) {
             if !waiting.contains(&session) {
                 waiting.push(session);
             }
-            return Resolution::Pending;
+            if now - *started_at < crate::session_runtime::RESOLVE_WAIT {
+                return Resolution::Pending;
+            }
+            *started_at = now;
         }
         let sender = self.sender.clone();
         let waker = self.waker.clone();
@@ -70,7 +75,7 @@ impl Resolve for ThreadResolver {
         if spawned.is_err() {
             return Resolution::Resolved(Vec::new());
         }
-        self.in_flight.insert((host, port), vec![session]);
+        self.in_flight.entry((host, port)).or_insert_with(|| (vec![session], now));
         Resolution::Pending
     }
 }
@@ -78,6 +83,7 @@ impl Resolve for ThreadResolver {
 pub struct Worker {
     poll: Poll,
     receiver: Receiver<Command>,
+    wake_pending: Arc<AtomicBool>,
     resolver: ThreadResolver,
     sessions: HashMap<SessionHandle, SessionRuntime>,
     tokens: HashMap<Token, SessionHandle>,
@@ -97,19 +103,21 @@ impl Worker {
         receiver: Receiver<Command>,
         sender: Sender<Command>,
         waker: Arc<Waker>,
+        wake_pending: Arc<AtomicBool>,
         callbacks: Arc<dyn EngineCallbacks>,
         config: EngineConfig,
     ) -> Self {
         Self {
             poll,
             receiver,
+            wake_pending,
             resolver: ThreadResolver { sender, waker, in_flight: HashMap::new() },
             sessions: HashMap::new(),
             tokens: HashMap::new(),
             next_token: 1,
             callbacks,
             config,
-            rng: OsRandom,
+            rng: OsRandom::new(),
             scratch: vec![0u8; 256 * 1024],
             network_available: true,
             last_shrink: clock::monotonic_seconds(),
@@ -182,6 +190,7 @@ impl Worker {
                     self.more_readable.push_back(handle);
                 }
             }
+            self.wake_pending.store(false, Ordering::SeqCst);
             if !self.drain_commands(now) {
                 self.shutdown(now);
                 return;
@@ -307,12 +316,12 @@ impl Worker {
                 }
                 Command::FailRequest(handle, id, code, message) => {
                     if let Some(session) = self.sessions.get_mut(&handle) {
-                        session.fail_request(id, code, &message, now);
+                        session.fail_request(id, code, &message, now, &self.callbacks);
                     }
                 }
                 Command::DecideRetry(handle, id, retry) => {
                     if let Some(session) = self.sessions.get_mut(&handle) {
-                        session.decide_retry(id, retry, now);
+                        session.decide_retry(id, retry, now, &self.callbacks);
                     }
                 }
                 Command::InvalidateInitialization(handle) => {
@@ -342,7 +351,12 @@ impl Worker {
                     }
                 }
                 Command::Resolved { host, port, addresses } => {
-                    let waiting = self.resolver.in_flight.remove(&(host.clone(), port)).unwrap_or_default();
+                    let waiting = self
+                        .resolver
+                        .in_flight
+                        .remove(&(host.clone(), port))
+                        .map(|(waiting, _)| waiting)
+                        .unwrap_or_default();
                     for handle in waiting {
                         if let Some(session) = self.sessions.get_mut(&handle) {
                             session.on_resolved(&host, port, addresses.clone(), now);

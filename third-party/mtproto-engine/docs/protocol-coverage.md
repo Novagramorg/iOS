@@ -310,6 +310,56 @@ hardening pass.
 | U01 | Updates from CDN sessions | cdn ("must not accept") | — | — | Dropped in the RPC layer for `SessionRole::Cdn` (was left to the host) | `rpc::cdn_sessions_never_forward_updates` | fixed |
 | P05–P08 | Temp key binding (`bind_auth_key_inner`, gate until bound, `initConnection` after bind, `ENCRYPTED_MESSAGE_INVALID` rule) | api/pfs | Yes | Yes | Not in Rust yet; keys (including temporary ones) are created and bound by MTContext | — | gap |
 
+## 16. Final hardening pass (2026-10-02)
+
+Found by four parallel reviews (transport, runtime/FFI, crypto/handshake, Swift bridge), by profiling one
+million requests through TelegramCore, and by a new stateful adversary in the test server. Every row was
+checked against tdlib's source (`third-party/td`, 1.8.49).
+
+| ID | Condition | tdlib | MtProtoKit | Rust engine | Tests | Δ |
+|---|---|---|---|---|---|---|
+| L10 | Bytes arrive but prove nothing: a frame header announcing 8 MiB then 1 byte per 300 ms, Nop frames, quick-ack noise, replayed server packets | Ping timeout fed only by pongs and decrypted packets (replays count); read timeout by any byte | Any byte resets its timers | Only packets with a new msg_id refresh liveness; raw bytes count only for a frame in progress that keeps ≥ 512 B/s after a 15 s grace (was: any byte, so the ping, read, probe and request timeouts never fired) | `engine::trickling_or_noisy_connections_are_abandoned_and_requests_complete` (all three modes) | fixed |
+| L11 | Large uploads on a slow uplink: no byte comes back until a part is fully sent | Read timeout `rtt × 3.5` with no write progress | Response timeout 12 s + size / 12 KB/s | Every packet ≥ 4 KiB extends a transmit grace by size / 8 KiB/s during which no liveness timeout fires; bytes acknowledged by TCP count as progress while ≥ 16 KiB are queued (was: probe and read timeouts restarted the upload forever: 18 connections, never finished) | `engine::slow_uplink_uploads_complete_without_reconnect_loops` (netsim `slow-uplink` with backpressure) | fixed |
+| L12 | Every connection answered with -444, -403, -1 or another non-flood transport error | `mtproto_error_flood_control`: at most 3 attempts per 8 s | Retries | Exponential 1 → 16 s backoff (tdlib desktop cap); from the second consecutive rejection the address counts as failed so others are tried (was: about one reconnect a second to the same address, forever) | `engine::persistent_transport_rejections_back_off`, `engine::other_transport_errors_reconnect_quickly` | fixed |
+| L13 | DNS answers for proxy or DC host names | Cached 60–299 s, errors not cached | Resolved per connection | Cached 299 s, re-resolved once every cached address failed, cleared on reset and network change; answers for a host no longer targeted are ignored; a lookup stuck for 30 s may start again (was: cached for the session's lifetime, lookups never expired) | `session_runtime::tests::resolved_addresses_expire_and_are_refreshed_after_every_one_failed` | fixed |
+| L14 | The OS says the network is unavailable | Hard gate on the app's network flag | Hint only | Gate, but a session with work still probes every 30 s, and a packet received while marked offline corrects the flag (false negatives under VPNs cannot strand the app) | `engine::network_unavailable_blocks_connections` | better |
+| L15 | Engine idle | — | — | No wakeup without pending usage bytes (was every 2 s per connection); the connection race and racer timeouts are real deadlines now (they relied on that tick) | `engine::connect_race_reaches_a_live_address_when_the_first_one_swallows_syns` | fixed |
+| L16 | Racing an `ee` (fake-TLS) address | — | — | A promoted racer starts its session at TCP connect, and the silent-race probe is sent once TLS completes (was: never sent, so the race always lost) | engine race tests | fixed |
+| L17 | Write buffer under sustained backpressure | — | — | Compacted once the written prefix is ≥ 64 KiB and half the buffer (was: grew by every byte uploaded on the connection) | `connection::tests::a_never_empty_write_buffer_stays_bounded` | fixed |
+| E24 | Negative error codes other than -500 (`-503 Timeout`) | Retried with 1 → 60 s backoff for at most 60 s, then 429; off for bot callbacks | Surfaced | Surfaced at once, like MtProtoKit, since TelegramCore and the wallet were written against it (was: retried every 2 s forever through the Swift retry decision) | `rpc::other_negative_codes_surface_like_mtprotokit` | fixed |
+| E25 | Repeated 500 / -500 with a delegated retry decision | 1 → 60 s backoff | Fixed delay | 2 → 16 s backoff (was fixed 2 s) | `rpc::delegated_server_error_retries_back_off` | fixed |
+| B10 | `bad_msg_notification` 17 while earlier queries are still being answered | Closes the session at once and resends everything: queries executed but not yet answered run twice | Resets the session | Stops sending and collects answers still in flight on the old session for up to RTT estimate (1–5 s), then resets and resends only what is left (removes the duplicate execution seen under server clock warps) | `bad_msg_17_drains_answers_in_flight_before_resetting`, `bad_msg_17_drain_gives_up_after_its_deadline` | better |
+| K10 | Clock offset and salt events reaching MTContext (each one a keychain and Postbox write) | — | After time syncs only | Forwarded only when the offset moves by ≥ 1 s or the salt set changes (was: on every new maximum above 0.1 ms) | engine tests | fixed |
+| K11 | `fail_request` / retry decision for a request queued before the session has a key | — | — | Removes it and reports `Failed` (was ignored, the request ran later anyway) | engine tests | fixed |
+| H10 | `res_pq` with 65 536 fingerprints, none known | — | — | The error carries only the count (was: a 1.3 MB log line per attempt) | `hs::` tests | fixed |
+| C10 | Per-packet CPU | — | — | `dispatch_ready` walks only parked requests, query state counters replace scans, randomness comes from a 256-byte pool refilled by the OS (one syscall per 256 bytes instead of several per packet), engine wakeups are coalesced, a 1 ms send delay batches bursts into containers (tdlib's `QUERY_DELAY`), AES-IGE builds one key schedule instead of two, gunzip reserves at most the deflate bound. One million requests through TelegramCore: CPU 11.8 → 8.8 s, packets 29 k → 8.9 k, p50 1.16 → 0.92 ms (MtProtoKit: 73.5 s, 7.46 ms) | all suites | fixed |
+| S10 | Swift: the first `AuthKeyRequired` of a keyless session | — | — | The mailbox buffers events until the session attaches (was: dropped if delivered before `init` finished, and the session never asked for a key) | bench suites | fixed |
+| S11 | Swift: per-event and per-request overhead | — | — | Events are coalesced into one queue hop per burst, the routing lock is an unfair lock, cancellation goes by request id instead of a weak reference (no side table per request) | million-request bench | fixed |
+| S12 | Swift: connection watchdog | Config recoverer retries backup sources while connecting stays broken | Re-armed for every connection attempt | Re-armed with 20 → 320 s backoff while unhealthy, reset on resume, transport scheme revalidated on recovery (was: fired once per outage) | — | fixed |
+| S13 | Swift: system wake | — | — | Connections are reset on `NSWorkspace.didWakeNotification` (kevent timeouts do not count sleep) | — | new |
+
+Adversary added to `mtproto-testserver` (`Fault::ADAPTIVE` plus `Fault::AdaptiveTrickle`): `a-reconnect-ambush`
+(bad salt, then bad_msg 16, then a cut on the first packets of a connection), `a-kill-on-retransmit` (cuts the
+connection when the client retransmits or asks for state, three times per message), `a-time-warp` (the server
+clock jumps ±10–60 minutes), `a-lazy-redelivery` (executes, cuts, and redelivers only when asked), `a-slow-drip`
+(answers trickle out in 1–48 byte pieces), `a-trickle` (the connection is held with one of the L10 streams).
+`torture/apocalypse` mixes all ordinary and adaptive faults on a flaky network; `torture/apocalypse-hostile` adds
+every hostile fault. The cluster servers now validate client msg_id times like the real server.
+
+Verification on the final code, through TelegramCore with both engines (`mtproto-bench tc`, suites `quick`,
+`torture-quick` with 27 scenarios and `hostile-quick` with 20): the Rust engine completed every request of every
+scenario with 0 wrong results and 0 duplicate executions (the `loop/*` scenarios keep their 2 doomed requests
+pending by design, at 0.5 s CPU against MtProtoKit's 51 s). MtProtoKit stalled in 7 torture scenarios (rotate-salt,
+transport-flood, all-faults, all-faults-flaky, a-time-warp, a-trickle, apocalypse-hostile) and executed requests
+twice in 12 (up to 8,086). Fuzzing: 14 targets, 10.1 million cases (3,000 of them 30–90 simulated days of soak),
+0 failures. `cargo test --workspace`: 371 tests; `MTProtoRustEngineTests`: 37.
+
+`a-slow-drip` is the one scenario where MtProtoKit finishes sooner (167–250 against 116–123 requests/s). The test
+server drips the whole reply to the client packet that drew the fault and reads nothing meanwhile, and the engine
+batches up to 130 messages into one container (tdlib's 1 ms `QUERY_DELAY`), so its dripped batches averaged 43
+replies against MtProtoKit's 23 (`TC_BENCH_STATS=1` prints the server's counts). A real server keeps reading while
+a slow write drains, so batching was left as it is.
+
 ## Not covered (deliberately)
 
 - **HTTP transport** (`http_wait`, long poll): the engine only speaks TCP transports (T22).

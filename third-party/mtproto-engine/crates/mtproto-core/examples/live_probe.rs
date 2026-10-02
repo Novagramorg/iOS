@@ -44,7 +44,7 @@ fn probe(
 ) {
     println!("== {label} ({address}, dc {dc_id}, temp={temp:?}, {framing:?})");
     let started = Instant::now();
-    let mut rng = OsRandom;
+    let mut rng = OsRandom::new();
     let mut socket = TcpStream::connect(address).expect("connect");
     socket.set_read_timeout(Some(Duration::from_secs(15))).unwrap();
     socket.set_nodelay(true).unwrap();
@@ -127,7 +127,7 @@ impl Shape for ServiceMessage<'_> {
 
 fn rand_i64() -> i64 {
     use mtproto_core::crypto::SecureRandom;
-    OsRandom.next_u64() as i64
+    OsRandom::new().next_u64() as i64
 }
 
 fn main() {

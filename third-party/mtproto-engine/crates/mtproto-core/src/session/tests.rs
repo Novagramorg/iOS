@@ -242,6 +242,55 @@ fn bad_msg_17_resets_session() {
 }
 
 #[test]
+fn bad_msg_17_drains_answers_in_flight_before_resetting() {
+    let mut h = Harness::new();
+    let old_session = h.session.session_id();
+    h.session.send(QueryId(1), query_body(1), QueryOptions::default(), h.now);
+    let first_packet = h.flush().unwrap();
+    let first_id = h.sent_query(&first_packet, 1);
+    h.session.send(QueryId(2), query_body(2), QueryOptions::default(), h.now);
+    let second_packet = h.flush().unwrap();
+    let second_id = h.sent_query(&second_packet, 2);
+    h.server.server_time -= 600.0;
+    h.deliver(vec![Outgoing::Service(bad_msg_notification(second_id, 1, 17))]).unwrap();
+    assert!(!h.events().iter().any(|event| matches!(event, SessionEvent::LocalSessionReset { .. })), "draining");
+    assert_eq!(h.session.session_id(), old_session);
+    assert!(h.flush().is_none(), "nothing is sent on a session the server now rejects");
+    h.deliver(vec![Outgoing::Content(rpc_result(first_id, &query_body(1)))]).unwrap();
+    let events = h.events();
+    assert!(events.iter().any(|event| matches!(event, SessionEvent::Result { id: QueryId(1), .. })));
+    assert!(events.iter().any(|event| matches!(event, SessionEvent::LocalSessionReset { .. })));
+    let packet = h.flush().unwrap();
+    assert_ne!(h.session.session_id(), old_session);
+    assert_eq!(packet.header.session_id, h.session.session_id());
+    h.sent_query(&packet, 2);
+    assert!(
+        packet.messages.iter().all(|message| query_tag(&message.body) != Some(1)),
+        "the answered query stays answered"
+    );
+}
+
+#[test]
+fn bad_msg_17_drain_gives_up_after_its_deadline() {
+    let mut h = Harness::new();
+    let old_session = h.session.session_id();
+    h.session.send(QueryId(1), query_body(1), QueryOptions::default(), h.now);
+    h.flush().unwrap();
+    h.session.send(QueryId(2), query_body(2), QueryOptions::default(), h.now);
+    let second_packet = h.flush().unwrap();
+    let second_id = h.sent_query(&second_packet, 2);
+    h.server.server_time -= 600.0;
+    h.deliver(vec![Outgoing::Service(bad_msg_notification(second_id, 1, 17))]).unwrap();
+    let deadline = h.session.poll_timeout(h.now).unwrap();
+    assert!(deadline <= h.now.mono + RESET_DRAIN_MAX + 0.01);
+    h.advance(RESET_DRAIN_MAX + 0.1);
+    let packet = h.flush().unwrap();
+    assert_ne!(h.session.session_id(), old_session);
+    h.sent_query(&packet, 1);
+    h.sent_query(&packet, 2);
+}
+
+#[test]
 fn bad_msg_32_resets_session_and_keeps_processing_container() {
     let mut h = Harness::new();
     h.session.send(QueryId(1), query_body(1), QueryOptions::default(), h.now);

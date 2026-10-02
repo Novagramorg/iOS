@@ -639,6 +639,10 @@ fn gzip_declared_size(data: &[u8]) -> Option<usize> {
     is_gzip.then(|| u32::from_le_bytes(data[data.len() - 4..].try_into().expect("4 bytes")) as usize)
 }
 
+fn deflate_bound(compressed: usize) -> usize {
+    compressed.saturating_sub(18).saturating_mul(1032).saturating_add(64)
+}
+
 fn read_bounded(mut reader: impl Read, capacity_hint: usize, limit: usize, output: &mut Vec<u8>) -> TlResult<()> {
     output.reserve_exact(capacity_hint.min(limit));
     let mut chunk = [0u8; INFLATE_CHUNK];
@@ -669,8 +673,10 @@ fn inflate(data: &[u8], limit: usize) -> (TlResult<()>, Vec<u8>) {
         Some(declared) if declared > limit => {
             Err(TlError::Gzip(format!("declared unpacked size {declared} exceeds {limit} bytes")))
         }
-        Some(declared) => read_bounded(GzDecoder::new(data), declared, declared, &mut output)
-            .map_err(|_| TlError::Gzip(format!("unpacked data does not match its declared size {declared}"))),
+        Some(declared) => {
+            read_bounded(GzDecoder::new(data), declared.min(deflate_bound(data.len())), declared, &mut output)
+                .map_err(|_| TlError::Gzip(format!("unpacked data does not match its declared size {declared}")))
+        }
         None => read_bounded(ZlibDecoder::new(data), (data.len() * 4).min(INFLATE_CHUNK * 4), limit, &mut output),
     };
     (result, output)

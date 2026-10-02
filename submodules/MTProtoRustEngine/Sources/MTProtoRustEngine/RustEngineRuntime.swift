@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(AppKit)
+import AppKit
+#endif
 import SwiftSignalKit
 import MtProtoKit
 import TelegramCore
@@ -18,12 +21,84 @@ func rustEngineImportantLog(_ text: String) {
     Logger.shared.shortLog(rustEngineLogTag, text)
 }
 
+final class RustEngineLock {
+    private let pointer: UnsafeMutablePointer<os_unfair_lock>
+
+    init() {
+        self.pointer = UnsafeMutablePointer<os_unfair_lock>.allocate(capacity: 1)
+        self.pointer.initialize(to: os_unfair_lock())
+    }
+
+    deinit {
+        self.pointer.deinitialize(count: 1)
+        self.pointer.deallocate()
+    }
+
+    func lock() {
+        os_unfair_lock_lock(self.pointer)
+    }
+
+    func unlock() {
+        os_unfair_lock_unlock(self.pointer)
+    }
+}
+
 final class RustEngineMailbox {
-    weak var session: RustNetworkSession?
     let queue: Queue
+    private let lock = RustEngineLock()
+    private weak var session: RustNetworkSession?
+    private var isAttached = false
+    private var pending: [RustEngineEvent] = []
+    private var isDrainScheduled = false
 
     init(queue: Queue) {
         self.queue = queue
+    }
+
+    func attach(_ session: RustNetworkSession) {
+        self.lock.lock()
+        self.session = session
+        self.isAttached = true
+        let schedule = !self.pending.isEmpty && !self.isDrainScheduled
+        if schedule {
+            self.isDrainScheduled = true
+        }
+        self.lock.unlock()
+        if schedule {
+            self.queue.async {
+                self.drain()
+            }
+        }
+    }
+
+    func post(_ event: RustEngineEvent) {
+        self.lock.lock()
+        self.pending.append(event)
+        let schedule = self.isAttached && !self.isDrainScheduled
+        if schedule {
+            self.isDrainScheduled = true
+        }
+        self.lock.unlock()
+        if schedule {
+            self.queue.async {
+                self.drain()
+            }
+        }
+    }
+
+    private func drain() {
+        self.lock.lock()
+        let events = self.pending
+        self.pending = []
+        self.isDrainScheduled = false
+        let session = self.session
+        self.lock.unlock()
+        guard let session = session else {
+            return
+        }
+        for event in events {
+            session.handleEngineEvent(event)
+        }
     }
 }
 
@@ -64,7 +139,8 @@ final class RustEngineRuntime: NSObject, MTNetworkAvailabilityDelegate {
     }()
 
     private(set) var engine: OpaquePointer?
-    private let lock = NSLock()
+    private let lock = RustEngineLock()
+    private var wakeObserver: NSObjectProtocol?
     private var mailboxes: [MTSessionHandle: RustEngineMailbox] = [:]
     private var networkAvailability: MTNetworkAvailability?
     private var isNetworkAvailableValue: Bool = true
@@ -84,6 +160,16 @@ final class RustEngineRuntime: NSObject, MTNetworkAvailabilityDelegate {
 
     private func start() {
         self.networkAvailability = MTNetworkAvailability(delegate: self)
+        #if canImport(AppKit)
+        let engine = self.engine
+        self.wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: nil, using: { _ in
+            guard let engine = engine else {
+                return
+            }
+            rustEngineImportantLog("[MTProtoRust] system woke up, resetting connections")
+            mt_engine_reset_connections(engine)
+        })
+        #endif
     }
 
     var isNetworkAvailable: Bool {
@@ -127,12 +213,7 @@ final class RustEngineRuntime: NSObject, MTNetworkAvailabilityDelegate {
         self.lock.lock()
         let mailbox = self.mailboxes[handle]
         self.lock.unlock()
-        guard let mailbox = mailbox else {
-            return
-        }
-        mailbox.queue.async {
-            mailbox.session?.handleEngineEvent(event)
-        }
+        mailbox?.post(event)
     }
 
     func networkAvailabilityChanged(_ networkAvailability: MTNetworkAvailability!, networkIsAvailable: Bool) {

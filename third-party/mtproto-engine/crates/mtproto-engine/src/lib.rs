@@ -9,7 +9,7 @@ mod types;
 mod worker;
 
 use std::io;
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::mpsc::{Sender, channel};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
@@ -28,7 +28,16 @@ use worker::{Command, WAKER_TOKEN, Worker};
 struct WorkerHandle {
     sender: Mutex<Sender<Command>>,
     waker: Arc<Waker>,
+    wake_pending: Arc<AtomicBool>,
     thread: Mutex<Option<JoinHandle<()>>>,
+}
+
+impl WorkerHandle {
+    fn notify(&self) {
+        if !self.wake_pending.swap(true, Ordering::SeqCst) {
+            let _ = self.waker.wake();
+        }
+    }
 }
 
 struct EngineInner {
@@ -57,13 +66,27 @@ impl Engine {
         for index in 0..count {
             let poll = Poll::new()?;
             let waker = Arc::new(Waker::new(poll.registry(), WAKER_TOKEN)?);
+            let wake_pending = Arc::new(AtomicBool::new(false));
             let (sender, receiver) = channel();
-            let worker = Worker::new(poll, receiver, sender.clone(), waker.clone(), callbacks.clone(), config.clone());
+            let worker = Worker::new(
+                poll,
+                receiver,
+                sender.clone(),
+                waker.clone(),
+                wake_pending.clone(),
+                callbacks.clone(),
+                config.clone(),
+            );
             let thread = std::thread::Builder::new()
                 .name(if index == 0 { "mtproto-main".into() } else { format!("mtproto-worker-{index}") })
                 .stack_size(512 * 1024)
                 .spawn(move || worker.run())?;
-            inner.workers.push(WorkerHandle { sender: Mutex::new(sender), waker, thread: Mutex::new(Some(thread)) });
+            inner.workers.push(WorkerHandle {
+                sender: Mutex::new(sender),
+                waker,
+                wake_pending,
+                thread: Mutex::new(Some(thread)),
+            });
         }
         Ok(Self { inner: Arc::new(inner) })
     }
@@ -83,19 +106,17 @@ impl Engine {
 
     fn post(&self, handle: SessionHandle, command: Command) {
         let worker = self.worker_for(handle);
-        if let Ok(sender) = worker.sender.lock()
-            && sender.send(command).is_ok()
-        {
-            let _ = worker.waker.wake();
+        let sent = worker.sender.lock().is_ok_and(|sender| sender.send(command).is_ok());
+        if sent {
+            worker.notify();
         }
     }
 
     fn broadcast(&self, make: impl Fn() -> Command) {
         for worker in &self.inner.workers {
-            if let Ok(sender) = worker.sender.lock()
-                && sender.send(make()).is_ok()
-            {
-                let _ = worker.waker.wake();
+            let sent = worker.sender.lock().is_ok_and(|sender| sender.send(make()).is_ok());
+            if sent {
+                worker.notify();
             }
         }
     }

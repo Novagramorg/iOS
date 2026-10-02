@@ -4,7 +4,7 @@ use std::io::{ErrorKind, Read, Write};
 use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream};
 use std::os::fd::AsRawFd;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, channel};
+use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, SyncSender, channel, sync_channel};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -51,6 +51,7 @@ pub struct Profile {
     pub refuse_probability: f64,
     pub connect_delay: Duration,
     pub dpi: Option<Dpi>,
+    pub queue_limit: Option<usize>,
 }
 
 impl Profile {
@@ -68,6 +69,19 @@ impl Profile {
             refuse_probability: 0.0,
             connect_delay: Duration::ZERO,
             dpi: None,
+            queue_limit: None,
+        }
+    }
+
+    pub fn slow_uplink() -> Self {
+        Self {
+            name: "slow-uplink".into(),
+            latency: Duration::from_millis(20),
+            jitter: Duration::from_millis(2),
+            bandwidth: Some(30_000),
+            max_chunk: 4096,
+            queue_limit: Some(64 * 1024),
+            ..Self::perfect()
         }
     }
 
@@ -184,6 +198,7 @@ impl Profile {
         match name {
             "perfect" => Some(Self::perfect()),
             "broadband" => Some(Self::broadband()),
+            "slow-uplink" => Some(Self::slow_uplink()),
             "wan" => Some(Self::wan()),
             "3g" => Some(Self::mobile_3g()),
             "lossy" => Some(Self::lossy()),
@@ -202,6 +217,7 @@ impl Profile {
         &[
             "perfect",
             "broadband",
+            "slow-uplink",
             "wan",
             "3g",
             "lossy",
@@ -341,6 +357,9 @@ impl NetSim {
     pub fn start_with(upstream: Upstream, profile: Profile, seed: u64, bind: &str) -> std::io::Result<Self> {
         let listener = TcpListener::bind(bind)?;
         listener.set_nonblocking(true)?;
+        if let Some(limit) = profile.queue_limit {
+            set_receive_buffer(&listener, limit);
+        }
         let address = listener.local_addr()?;
         let rate = profile.bandwidth.map(|value| value as f64);
         let shared = Arc::new(Shared {
@@ -475,9 +494,25 @@ fn socks5_accept(client: &mut TcpStream) -> Option<SocketAddr> {
     Some(target)
 }
 
+fn set_receive_buffer(socket: &impl AsRawFd, bytes: usize) {
+    let value = bytes.min(i32::MAX as usize) as libc::c_int;
+    unsafe {
+        libc::setsockopt(
+            socket.as_raw_fd(),
+            libc::SOL_SOCKET,
+            libc::SO_RCVBUF,
+            &value as *const libc::c_int as *const libc::c_void,
+            std::mem::size_of::<libc::c_int>() as libc::socklen_t,
+        );
+    }
+}
+
 fn handle_connection(mut client: TcpStream, upstream: Upstream, shared: Arc<Shared>) {
     let _ = client.set_nonblocking(false);
     let profile = shared.profile.lock().unwrap().clone();
+    if let Some(limit) = profile.queue_limit {
+        set_receive_buffer(&client, limit);
+    }
     let mut random = Random(shared.seed.fetch_add(0x9e37_79b9_7f4a_7c15, Ordering::Relaxed) | 1);
     let outage = shared.outage_until.lock().unwrap().is_some_and(|until| Instant::now() < until);
     if outage || random.unit() < profile.refuse_probability {
@@ -583,7 +618,20 @@ fn spawn_direction(
     seed: u64,
     dpi: Option<Dpi>,
 ) -> JoinHandle<()> {
-    let (sender, receiver): (Sender<Chunk>, Receiver<Chunk>) = channel();
+    let (queue_limit, max_chunk) = {
+        let profile = shared.profile.lock().unwrap();
+        (profile.queue_limit, profile.max_chunk.max(1))
+    };
+    let (sender, receiver): (ChunkSender, Receiver<Chunk>) = match queue_limit {
+        Some(limit) => {
+            let (sender, receiver) = sync_channel((limit / max_chunk).max(2));
+            (ChunkSender::Bounded(sender), receiver)
+        }
+        None => {
+            let (sender, receiver) = channel();
+            (ChunkSender::Unbounded(sender), receiver)
+        }
+    };
     let writer = {
         let shared = shared.clone();
         let control = control.clone();
@@ -637,6 +685,20 @@ fn spawn_direction(
         }
         let _ = writer.join();
     })
+}
+
+enum ChunkSender {
+    Unbounded(Sender<Chunk>),
+    Bounded(SyncSender<Chunk>),
+}
+
+impl ChunkSender {
+    fn send(&self, chunk: Chunk) -> Result<(), ()> {
+        match self {
+            ChunkSender::Unbounded(sender) => sender.send(chunk).map_err(|_| ()),
+            ChunkSender::Bounded(sender) => sender.send(chunk).map_err(|_| ()),
+        }
+    }
 }
 
 fn deliver(
@@ -740,6 +802,37 @@ mod tests {
         stream.read_exact(&mut reply).unwrap();
         assert_eq!(&reply, b"hello");
         assert!(started.elapsed() >= Duration::from_millis(100));
+    }
+
+    #[test]
+    fn queue_limit_pushes_back_on_the_sender() {
+        let upstream = echo_server();
+        let sim = NetSim::start(upstream, Profile::slow_uplink(), 4).unwrap();
+        let mut stream = TcpStream::connect(sim.address).unwrap();
+        stream.set_nonblocking(true).unwrap();
+        let chunk = vec![1u8; 16 * 1024];
+        let mut accepted = 0usize;
+        let started = Instant::now();
+        while started.elapsed() < Duration::from_millis(500) {
+            match stream.write(&chunk) {
+                Ok(written) => accepted += written,
+                Err(error) if error.kind() == ErrorKind::WouldBlock => std::thread::sleep(Duration::from_millis(5)),
+                Err(error) => panic!("{error}"),
+            }
+        }
+        let mut unsent: libc::c_int = 0;
+        let mut length = std::mem::size_of::<libc::c_int>() as libc::socklen_t;
+        unsafe {
+            libc::getsockopt(
+                stream.as_raw_fd(),
+                libc::SOL_SOCKET,
+                libc::SO_NWRITE,
+                (&mut unsent as *mut libc::c_int).cast(),
+                &mut length,
+            );
+        }
+        let consumed = accepted - unsent as usize;
+        assert!(consumed < 1024 * 1024, "the relay consumed {consumed} bytes of a 30 KB/s link in 0.5 s");
     }
 
     #[test]

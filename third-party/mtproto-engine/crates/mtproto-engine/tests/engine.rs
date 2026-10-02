@@ -1166,3 +1166,88 @@ fn destroying_the_auth_key_on_logout_reaches_the_server() {
         ))));
     engine.shutdown();
 }
+
+#[test]
+fn trickling_or_noisy_connections_are_abandoned_and_requests_complete() {
+    std::thread::scope(|scope| {
+        for mode in [0u64, 1, 2] {
+            scope.spawn(move || {
+                let key = random_key(60 + mode);
+                let server = TestServer::start(vec![key.clone()], ServerOptions::default());
+                let collector = Arc::new(Collector::default());
+                let engine = engine(&collector, 1);
+                let session = engine.create_session(setup(&server, &key, SessionRole::Main));
+                let started = Instant::now();
+                engine.send(session, raw_request(1, call(TAG_TRICKLE_ONCE, &mode.to_le_bytes())));
+                assert!(
+                    collector.wait(Duration::from_secs(60), |events| completions(events, session) == 1),
+                    "mode {mode}: the request never completed"
+                );
+                let elapsed = started.elapsed();
+                if mode == 0 {
+                    assert!(elapsed >= Duration::from_secs(10), "mode {mode}: a progressing frame gets its grace");
+                }
+                assert!(elapsed < Duration::from_secs(45), "mode {mode}: abandoned after {elapsed:?}");
+                assert!(server.with_stats(|stats| stats.connections) >= 2, "mode {mode}: reconnected");
+                engine.shutdown();
+            });
+        }
+    });
+}
+
+#[test]
+fn persistent_transport_rejections_back_off() {
+    let key = random_key(70);
+    let server = TestServer::start(vec![key.clone()], ServerOptions { reject_with: Some(-444), ..Default::default() });
+    let collector = Arc::new(Collector::default());
+    let engine = engine(&collector, 1);
+    let session = engine.create_session(setup(&server, &key, SessionRole::Main));
+    engine.send(session, request(1, 1));
+    std::thread::sleep(Duration::from_secs(10));
+    let connections = server.with_stats(|stats| stats.connections);
+    assert!((3..=6).contains(&connections), "{connections} connections in 10 s");
+    assert!(collector.count(|event| matches!(event, EngineEvent::AddressResult { success: false, .. })) >= 1);
+    engine.shutdown();
+}
+
+#[test]
+fn slow_uplink_uploads_complete_without_reconnect_loops() {
+    let key = random_key(80);
+    let server = TestServer::start(vec![key.clone()], ServerOptions::default());
+    let sim = mtproto_netsim::NetSim::start(server.address, mtproto_netsim::Profile::slow_uplink(), 7).unwrap();
+    let collector = Arc::new(Collector::default());
+    let engine = engine(&collector, 1);
+    let mut worker = setup(&server, &key, SessionRole::Worker { requires_auth_token: false });
+    worker.addresses = vec![DcAddress { host: "127.0.0.1".into(), port: sim.address.port(), secret: None }];
+    let session = engine.create_session(worker);
+    let mut state = 0x9e37_79b9_7f4a_7c15u64;
+    let mut payload: Vec<u8> = (0..256 * 1024)
+        .map(|_| {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            state as u8
+        })
+        .collect();
+    payload[..4].copy_from_slice(&16u32.to_le_bytes());
+    let started = Instant::now();
+    for id in 1..=2u64 {
+        engine.send(session, raw_request(id, call(TAG_SIZED, &payload)));
+    }
+    assert!(
+        collector.wait(Duration::from_secs(60), |events| completions(events, session) == 2),
+        "uploads never finished; {} connections",
+        sim.stats().connections
+    );
+    let stats = sim.stats();
+    assert!(
+        started.elapsed() > Duration::from_secs(8),
+        "the link really was slow ({:?}, {} bytes up, {} down, {} connections)",
+        started.elapsed(),
+        stats.bytes_up,
+        stats.bytes_down,
+        stats.connections
+    );
+    assert!(sim.stats().connections <= 2, "{} connections: the upload was restarted", sim.stats().connections);
+    engine.shutdown();
+}

@@ -30,6 +30,8 @@ struct Arguments {
     var stallExit = 0.0
     var duration = 10.0
     var seed: UInt64 = 1
+    var switchEngineAt: [Double] = []
+    var switchEngineTo = "other"
 
     static func parse() -> Arguments {
         var result = Arguments()
@@ -52,6 +54,8 @@ struct Arguments {
             case "--trickle": result.trickle = Double(value) ?? result.trickle
             case "--stall-exit": result.stallExit = Double(value) ?? result.stallExit
             case "--duration": result.duration = Double(value) ?? result.duration
+            case "--switch-engine-at": result.switchEngineAt = value.split(separator: ",").compactMap { Double($0) }.filter { $0 > 0.0 }
+            case "--switch-engine-to": result.switchEngineTo = value
             default: fail("unknown argument \(argument)")
             }
         }
@@ -390,6 +394,7 @@ final class Recorder {
     var compact = false
     private(set) var lastProgressAt = 0.0
     var stalled = false
+    var engineSwitched = false
 
     func elapsed() -> Double {
         return Double(DispatchTime.now().uptimeNanoseconds &- self.start) / 1e9
@@ -457,7 +462,7 @@ final class Recorder {
         let throughput = elapsed > 0 ? Double(self.bytes) / 1e6 / elapsed : 0
         var output = "{\"engine\":\"\(engine)\",\"workload\":\"\(workload)\",\"completed\":\(self.completed),\"failed\":\(failed),\"elapsed\":\(formatNumber(elapsed)),"
         output += "\"latency_ms\":{\"p50\":\(formatNumber(latency.p50)),\"p95\":\(formatNumber(latency.p95)),\"p99\":\(formatNumber(latency.p99)),\"max\":\(formatNumber(latency.max))},"
-        output += "\"bytes\":\(self.bytes),\"throughput_mbps\":\(formatNumber(throughput)),\"verify_failures\":\(self.verifyFailures),\"cancellations\":\(self.cancellations),\"double_completions\":\(self.doubleCompletions),\"stalled\":\(self.stalled ? 1 : 0),\"issued\":\(self.sent.count),\"requests\":["
+        output += "\"bytes\":\(self.bytes),\"throughput_mbps\":\(formatNumber(throughput)),\"verify_failures\":\(self.verifyFailures),\"cancellations\":\(self.cancellations),\"double_completions\":\(self.doubleCompletions),\"stalled\":\(self.stalled ? 1 : 0),\"engine_switched\":\(self.engineSwitched ? 1 : 0),\"issued\":\(self.sent.count),\"requests\":["
         if !self.compact {
             output += zip(self.sent, self.done).map { "[\(formatNumber($0)),\($1.map(formatNumber) ?? "null")]" }.joined(separator: ",")
         }
@@ -642,6 +647,7 @@ final class Bench {
         var latencyFromProbes = false
         self.queue.async {
             self.scheduleInjections()
+            self.scheduleEngineSwitch()
             switch workload {
             case "tc-download", "tc-scroll":
                 self.startNextFiles(scroll: workload == "tc-scroll")
@@ -723,6 +729,36 @@ final class Bench {
             self.queue.after(interval, tick)
         }
         tick()
+    }
+
+    func scheduleEngineSwitch() {
+        let times = self.arguments.switchEngineAt.sorted()
+        if times.isEmpty {
+            return
+        }
+        let network = self.network
+        let recorder = self.recorder
+        let fixedTarget: NetworkEngineKind?
+        switch self.arguments.switchEngineTo {
+        case "rust":
+            fixedTarget = .rust
+        case "mtprotokit":
+            fixedTarget = .mtProtoKit
+        default:
+            fixedTarget = nil
+        }
+        var accepted = 0
+        for time in times {
+            self.queue.after(time, {
+                let from = network.engineKind
+                let target = fixedTarget ?? (from == .rust ? .mtProtoKit : .rust)
+                if network.switchEngine(to: target, reason: "bench") && network.engineKind == target {
+                    accepted += 1
+                }
+                recorder.engineSwitched = accepted == times.count
+                writeStderr("engine switch \(from.rawValue) -> \(target.rawValue), now \(network.engineKind.rawValue), \(accepted)/\(times.count) accepted")
+            })
+        }
     }
 
     func scheduleInjections() {

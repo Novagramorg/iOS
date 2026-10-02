@@ -26,8 +26,8 @@ pub enum HandshakeError {
     NonceMismatch,
     #[error("server nonce mismatch")]
     ServerNonceMismatch,
-    #[error("no known RSA key among server fingerprints {0:?}")]
-    UnknownFingerprints(Vec<i64>),
+    #[error("no known RSA key among {0} server fingerprints")]
+    UnknownFingerprints(usize),
     #[error("pq has an invalid length {0}")]
     BadPq(usize),
     #[error("failed to factorize pq")]
@@ -144,7 +144,7 @@ impl Handshake {
                         self.config.public_keys.iter().find(|key| key.fingerprint() == *fingerprint)
                     })
                     .cloned()
-                    .ok_or_else(|| HandshakeError::UnknownFingerprints(res_pq.fingerprints.clone()))?;
+                    .ok_or(HandshakeError::UnknownFingerprints(res_pq.fingerprints.len()))?;
                 if res_pq.pq.is_empty() || res_pq.pq.len() > 8 {
                     return Err(HandshakeError::BadPq(res_pq.pq.len()));
                 }

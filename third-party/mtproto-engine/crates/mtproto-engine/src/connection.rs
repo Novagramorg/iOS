@@ -34,6 +34,8 @@ enum Phase {
     Ready,
 }
 
+pub const WRITE_COMPACT_THRESHOLD: usize = 64 * 1024;
+
 pub enum ChunkStatus {
     Data { became_ready: bool },
     WouldBlock,
@@ -53,12 +55,13 @@ pub struct Connection {
     pub address_index: usize,
     pub started_at: f64,
     pub established_at: Option<f64>,
-    pub last_read_at: f64,
+    pub last_progress_at: f64,
     pub received_packet: bool,
     pub received_bytes: bool,
     pub cellular: bool,
     pub bytes_in: u64,
     pub bytes_out: u64,
+    written_total: u64,
 }
 
 impl Connection {
@@ -88,12 +91,13 @@ impl Connection {
             address_index,
             started_at: now,
             established_at: None,
-            last_read_at: now,
+            last_progress_at: now,
             received_packet: false,
             received_bytes: false,
             cellular: false,
             bytes_in: 0,
             bytes_out: 0,
+            written_total: 0,
         })
     }
 
@@ -155,12 +159,13 @@ impl Connection {
     fn move_transport_output(&mut self) {
         if self.transport.has_outgoing() {
             let data = self.transport.take_outgoing();
-            if self.write_offset == self.write_buffer.len() {
-                self.write_buffer.clear();
-                self.write_offset = 0;
-            }
+            self.compact_write_buffer();
             self.write_buffer.extend_from_slice(&data);
         }
+    }
+
+    fn compact_write_buffer(&mut self) {
+        compact_written_prefix(&mut self.write_buffer, &mut self.write_offset);
     }
 
     pub fn send_packet(
@@ -185,6 +190,7 @@ impl Connection {
                 Ok(written) => {
                     self.write_offset += written;
                     self.bytes_out += written as u64;
+                    self.written_total += written as u64;
                 }
                 Err(error) if error.kind() == ErrorKind::WouldBlock => break,
                 Err(error) if error.kind() == ErrorKind::Interrupted => continue,
@@ -210,6 +216,10 @@ impl Connection {
         Ok(())
     }
 
+    pub fn acknowledged_bytes(&self) -> Option<u64> {
+        kernel_send_queue(&self.socket).map(|queued| self.written_total.saturating_sub(queued as u64))
+    }
+
     pub fn outbound_backlog(&self) -> Option<usize> {
         let unsent = self.write_buffer.len() - self.write_offset;
         kernel_send_queue(&self.socket).map(|queued| unsent + queued)
@@ -232,7 +242,6 @@ impl Connection {
         };
         self.bytes_in += read as u64;
         self.received_bytes = true;
-        self.last_read_at = now;
         let mut became_ready = false;
         if matches!(self.phase, Phase::Connecting) {
             became_ready = self.handle_writable(registry, now)?;
@@ -296,6 +305,16 @@ impl Connection {
     }
 }
 
+fn compact_written_prefix(buffer: &mut Vec<u8>, offset: &mut usize) {
+    if *offset == buffer.len() {
+        buffer.clear();
+        *offset = 0;
+    } else if *offset >= WRITE_COMPACT_THRESHOLD && *offset * 2 >= buffer.len() {
+        buffer.drain(..*offset);
+        *offset = 0;
+    }
+}
+
 #[cfg(target_vendor = "apple")]
 #[allow(unsafe_code)]
 fn kernel_send_queue(socket: &mio::net::TcpStream) -> Option<usize> {
@@ -317,4 +336,44 @@ fn kernel_send_queue(socket: &mio::net::TcpStream) -> Option<usize> {
 #[cfg(not(target_vendor = "apple"))]
 fn kernel_send_queue(_socket: &mio::net::TcpStream) -> Option<usize> {
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_never_empty_write_buffer_stays_bounded() {
+        let mut buffer = Vec::new();
+        let mut offset = 0usize;
+        let packet = vec![7u8; 512 * 1024];
+        let mut written_total = 0usize;
+        for round in 0..2048 {
+            compact_written_prefix(&mut buffer, &mut offset);
+            buffer.extend_from_slice(&packet);
+            let unsent = buffer.len() - offset;
+            let write = (unsent - 1).min(400 * 1024 + (round % 7) * 50 * 1024);
+            offset += write;
+            written_total += write;
+            assert!(buffer.len() - offset >= 1, "the socket never fully drains in this test");
+            assert!(buffer.capacity() <= 64 * 1024 * 1024, "round {round}: capacity {}", buffer.capacity());
+        }
+        assert!(written_total > 512 * 1024 * 1024, "the test pushed real volume through");
+        assert!(buffer.capacity() <= 64 * 1024 * 1024);
+        assert_eq!(&buffer[offset..], &vec![7u8; buffer.len() - offset][..], "unsent bytes are preserved in order");
+    }
+
+    #[test]
+    fn compaction_keeps_unsent_bytes_in_order() {
+        let mut buffer: Vec<u8> = (0..200_000u32).map(|value| value as u8).collect();
+        let mut offset = 150_000usize;
+        compact_written_prefix(&mut buffer, &mut offset);
+        assert_eq!(offset, 0);
+        assert_eq!(buffer.len(), 50_000);
+        assert_eq!(buffer[0], 150_000u32 as u8);
+        let mut small: Vec<u8> = vec![1; 1000];
+        let mut small_offset = 10;
+        compact_written_prefix(&mut small, &mut small_offset);
+        assert_eq!((small.len(), small_offset), (1000, 10), "small prefixes are left alone");
+    }
 }

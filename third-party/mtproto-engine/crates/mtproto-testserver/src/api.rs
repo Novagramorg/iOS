@@ -49,7 +49,8 @@ pub enum CdnFault {
 }
 
 impl CdnFault {
-    pub const ALL: [CdnFault; 4] = [CdnFault::CorruptData, CdnFault::EndlessReupload, CdnFault::NoHashes, CdnFault::TokenInvalid];
+    pub const ALL: [CdnFault; 4] =
+        [CdnFault::CorruptData, CdnFault::EndlessReupload, CdnFault::NoHashes, CdnFault::TokenInvalid];
 
     pub fn name(self) -> &'static str {
         match self {
@@ -409,7 +410,8 @@ impl ApiWorld {
             return ApiReply::Error(400, "FILE_TOKEN_INVALID".into());
         };
         let block = offset / MEGABYTE;
-        if reupload_needed && (!entry.uploaded.contains(&block) || self.options.cdn_fault == CdnFault::EndlessReupload) {
+        if reupload_needed && (!entry.uploaded.contains(&block) || self.options.cdn_fault == CdnFault::EndlessReupload)
+        {
             entry.request_tokens.insert(request_token.clone(), block);
             state.stats.reupload_needed += 1;
             let mut writer = Writer::new();

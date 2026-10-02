@@ -1,5 +1,5 @@
-use aes::Aes256;
 use aes::cipher::{BlockDecrypt, BlockEncrypt, KeyInit, generic_array::GenericArray};
+use aes::{Aes256, Aes256Dec, Aes256Enc};
 use zeroize::Zeroize;
 
 use super::CryptoError;
@@ -66,11 +66,41 @@ impl Drop for AesIge {
 }
 
 pub fn aes_ige_encrypt(key: &[u8; 32], iv: &[u8; 32], data: &mut [u8]) -> Result<(), CryptoError> {
-    AesIge::new(key, iv).encrypt(data)
+    if !data.len().is_multiple_of(16) {
+        return Err(CryptoError::UnalignedLength(data.len()));
+    }
+    let cipher = Aes256Enc::new(GenericArray::from_slice(key));
+    let mut c_prev = block_from(&iv[..16]);
+    let mut p_prev = block_from(&iv[16..]);
+    for chunk in data.chunks_exact_mut(16) {
+        let plain = block_from(chunk);
+        let mut x = GenericArray::from(xor_block(&plain, &c_prev));
+        cipher.encrypt_block(&mut x);
+        let cipher_block = xor_block(&x.into(), &p_prev);
+        chunk.copy_from_slice(&cipher_block);
+        c_prev = cipher_block;
+        p_prev = plain;
+    }
+    Ok(())
 }
 
 pub fn aes_ige_decrypt(key: &[u8; 32], iv: &[u8; 32], data: &mut [u8]) -> Result<(), CryptoError> {
-    AesIge::new(key, iv).decrypt(data)
+    if !data.len().is_multiple_of(16) {
+        return Err(CryptoError::UnalignedLength(data.len()));
+    }
+    let cipher = Aes256Dec::new(GenericArray::from_slice(key));
+    let mut c_prev = block_from(&iv[..16]);
+    let mut p_prev = block_from(&iv[16..]);
+    for chunk in data.chunks_exact_mut(16) {
+        let cipher_block = block_from(chunk);
+        let mut x = GenericArray::from(xor_block(&cipher_block, &p_prev));
+        cipher.decrypt_block(&mut x);
+        let plain = xor_block(&x.into(), &c_prev);
+        chunk.copy_from_slice(&plain);
+        c_prev = cipher_block;
+        p_prev = plain;
+    }
+    Ok(())
 }
 
 #[inline(always)]

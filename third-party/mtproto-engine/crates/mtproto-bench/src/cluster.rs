@@ -51,6 +51,7 @@ pub struct ClusterScenario {
     pub inject: Option<(f64, Vec<Route>)>,
     pub proxy: Option<ProxyKind>,
     pub duration: f64,
+    pub switch_engine_at: Vec<f64>,
 }
 
 #[derive(Debug, Clone)]
@@ -81,6 +82,7 @@ pub struct ClusterResult {
     pub client_bytes: usize,
     pub loop_rejections: usize,
     pub stalled: bool,
+    pub engine_switched: bool,
     pub exit: String,
     pub error: Option<String>,
 }
@@ -117,6 +119,7 @@ fn scenario(name: &str, workload: &str, profile: &str, files: Vec<FileSpec>, con
         inject: None,
         proxy: None,
         duration: 10.0,
+        switch_engine_at: Vec::new(),
     }
 }
 
@@ -210,10 +213,87 @@ pub fn torture_suite(quick: bool) -> Vec<ClusterScenario> {
         scale(100_000, 5_000),
         Some(ChaosConfig::mixed(29, 0.0005)),
     ));
+    for (index, fault) in Fault::ADAPTIVE.into_iter().enumerate() {
+        let mut chaos = ChaosConfig::only(31 + index as u64, fault, 0.01);
+        match fault {
+            Fault::AdaptiveReconnectAmbush => chaos.faults = vec![(fault, 0.3)],
+            Fault::AdaptiveKillOnRetransmit => {
+                chaos.faults =
+                    vec![(fault, 0.5), (Fault::DropAfterExecution, 0.002), (Fault::DropBeforeExecution, 0.002)]
+            }
+            _ => {}
+        }
+        scenarios.push(torture(&format!("torture/{}", fault.name()), "perfect", scale(50_000, 3_000), Some(chaos)));
+    }
+    let mut trickle = torture(
+        "torture/a-trickle",
+        "perfect",
+        scale(10_000, 2_000),
+        Some(ChaosConfig::only(37, Fault::AdaptiveTrickle, 0.002)),
+    );
+    trickle.deadline = if quick { 300.0 } else { 1800.0 };
+    trickle.stall_exit = 60.0;
+    scenarios.push(trickle);
+    scenarios.push(torture(
+        "torture/apocalypse",
+        "flaky",
+        scale(100_000, 5_000),
+        Some(ChaosConfig::apocalypse(41, 0.001, false)),
+    ));
+    scenarios.push(torture(
+        "torture/apocalypse-hostile",
+        "flaky",
+        scale(100_000, 5_000),
+        Some(ChaosConfig::apocalypse(43, 0.0005, true)),
+    ));
     if !quick {
         scenarios.push(torture("torture/million-clean", "perfect", 1_000_000, None));
     }
     scenarios
+}
+
+pub fn killswitch_suite() -> Vec<ClusterScenario> {
+    let switched = |mut scenario: ClusterScenario, at: &[f64]| {
+        scenario.switch_engine_at = at.to_vec();
+        scenario.deadline = 120.0;
+        scenario.stall_exit = 20.0;
+        scenario
+    };
+    let mut burst = scenario("killswitch/burst", "tc-torture", "perfect", Vec::new(), 256);
+    burst.requests = 50_000;
+    let mut faults = scenario("killswitch/faults-flaky", "tc-torture", "flaky", Vec::new(), 256);
+    faults.requests = 5_000;
+    faults.chaos = Some(ChaosConfig::mixed(29, 0.0005));
+    let mut outage = scenario(
+        "killswitch/during-outage",
+        "tc-mixed",
+        "broadband",
+        files(9, 300, MAIN_DC, 40_000, 400_000, false, 1_000),
+        8,
+    );
+    outage.outage = Some((3.0, 6.0));
+    outage.rate = 10.0;
+    let big = |name: &str, seed: u64, cdn: bool| {
+        scenario(name, "tc-download", "wan", files(seed, 2, FILE_DC, 40 << 20, 80 << 20, cdn, 4_000), 1)
+    };
+    let mut flap_burst = scenario("killswitch/flap-burst", "tc-torture", "perfect", Vec::new(), 256);
+    flap_burst.requests = 50_000;
+    let mut flap_faults = scenario("killswitch/flap-faults-flaky", "tc-torture", "flaky", Vec::new(), 256);
+    flap_faults.requests = 5_000;
+    flap_faults.chaos = Some(ChaosConfig::mixed(31, 0.0005));
+    vec![
+        switched(burst, &[0.15]),
+        switched(faults, &[2.0]),
+        switched(big("killswitch/bigfile-wan", 14, false), &[1.5]),
+        switched(big("killswitch/bigfile-cdn-wan", 15, true), &[1.5]),
+        switched(
+            scenario("killswitch/photos-lossy", "tc-download", "lossy", files(5, 20, MAIN_DC, 40_000, 400_000, false, 1_000), 8),
+            &[1.0],
+        ),
+        switched(outage, &[5.0]),
+        switched(flap_burst, &[0.1, 0.2, 0.3, 0.4, 0.5, 0.6]),
+        switched(flap_faults, &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]),
+    ]
 }
 
 pub fn hostile_suite(quick: bool) -> Vec<ClusterScenario> {
@@ -275,8 +355,13 @@ pub fn suite(quick: bool) -> Vec<ClusterScenario> {
         scenario("tc/mixed/blackholes", "tc-mixed", "blackholes", mixed_files.clone(), 8),
     ];
     for (index, fault) in CdnFault::ALL.into_iter().enumerate() {
-        let mut hostile_cdn =
-            scenario(&format!("tc/cdn-hostile/{}", fault.name()), "tc-download", "broadband", cdn_videos(20 + index as u64, 2), 2);
+        let mut hostile_cdn = scenario(
+            &format!("tc/cdn-hostile/{}", fault.name()),
+            "tc-download",
+            "broadband",
+            cdn_videos(20 + index as u64, 2),
+            2,
+        );
         hostile_cdn.cdn_fault = fault;
         hostile_cdn.deadline = 60.0;
         scenarios.push(hostile_cdn);
@@ -359,6 +444,7 @@ pub fn run(scenario: &ClusterScenario, binary: &str, engine: &str, seed: u64) ->
                 secret: (datacenter_id == MAIN_DC && scenario.proxy == Some(ProxyKind::FakeTls))
                     .then(|| crate::args::unhex(FAKE_TLS_SECRET)),
                 socks5: datacenter_id == MAIN_DC && scenario.proxy == Some(ProxyKind::Socks5),
+                validate_msg_id_time: true,
                 ..ServerOptions::default()
             },
         )
@@ -443,6 +529,9 @@ pub fn run(scenario: &ClusterScenario, binary: &str, engine: &str, seed: u64) ->
     std::fs::write(&config_path, config).expect("write config");
 
     let label = format!("tc-{engine}");
+    let switch_times =
+        scenario.switch_engine_at.iter().map(|time| time.to_string()).collect::<Vec<_>>().join(",");
+    let switch_times = if switch_times.is_empty() { "0".to_string() } else { switch_times };
     let started = Instant::now();
     let child = Command::new(binary)
         .args([
@@ -472,6 +561,10 @@ pub fn run(scenario: &ClusterScenario, binary: &str, engine: &str, seed: u64) ->
             &scenario.stall_exit.to_string(),
             "--duration",
             &scenario.duration.to_string(),
+            "--switch-engine-at",
+            &switch_times,
+            "--switch-engine-to",
+            "other",
         ])
         .stdout(Stdio::piped())
         .stderr(if std::env::var_os("TC_BENCH_STDERR").is_some() { Stdio::inherit() } else { Stdio::null() })
@@ -503,6 +596,7 @@ pub fn run(scenario: &ClusterScenario, binary: &str, engine: &str, seed: u64) ->
         client_bytes: 0,
         loop_rejections: 0,
         stalled: false,
+        engine_switched: false,
         exit: String::new(),
         error: None,
     };
@@ -543,9 +637,39 @@ pub fn run(scenario: &ClusterScenario, binary: &str, engine: &str, seed: u64) ->
     result.cancellations = extra_number(line, "cancellations");
     result.double_completions = extra_number(line, "double_completions");
     result.stalled = extra_number(line, "stalled") == 1;
+    result.engine_switched = extra_number(line, "engine_switched") == 1;
     result.issued = extra_number(line, "issued");
     main_server.with_stats(|stats| {
         result.duplicate_executions = stats.duplicate_executions;
+        if std::env::var_os("TC_BENCH_DUPLICATES").is_some() {
+            for record in &stats.duplicate_records {
+                eprintln!("duplicate: {record}");
+            }
+        }
+        if std::env::var_os("TC_BENCH_STATS").is_some() {
+            eprintln!(
+                "server: packets {} bytes {} pings {} state_requests {} retransmissions {} in_container {} duplicate_msg_ids {} redelivered {} future_salts {} sessions {} bad_msgs {} chaos {:?} dripped {} packets {} bytes calls_per_packet {:?}",
+                stats.client_packets,
+                stats.client_bytes,
+                stats.pings,
+                stats.state_requests,
+                stats.retransmissions,
+                stats.retransmissions_in_container,
+                stats.duplicate_msg_ids,
+                stats.redelivered_answers,
+                stats.future_salts_requests,
+                stats.session_ids.len(),
+                stats.bad_msgs_sent,
+                stats.chaos_injected,
+                stats.dripped_packets,
+                stats.dripped_bytes,
+                {
+                    let mut histogram: Vec<_> = stats.calls_per_packet.iter().map(|(k, v)| (*k, *v)).collect();
+                    histogram.sort();
+                    histogram
+                }
+            );
+        }
         result.chaos_injected = stats.chaos_injected.values().sum();
         result.client_packets = stats.client_packets;
         result.client_bytes = stats.client_bytes;
@@ -673,7 +797,12 @@ pub fn torture_markdown(results: &[ClusterResult]) -> String {
             result.client_packets,
             result.client_bytes as f64 / 1e6,
             result.loop_rejections,
-            if result.stalled { format!("{} (stalled)", result.exit) } else { result.exit.clone() },
+            match (result.stalled, result.engine_switched) {
+                (true, true) => format!("{} (stalled, switched)", result.exit),
+                (true, false) => format!("{} (stalled)", result.exit),
+                (false, true) => format!("{} (switched)", result.exit),
+                (false, false) => result.exit.clone(),
+            },
         ));
     }
     out

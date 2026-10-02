@@ -7,6 +7,7 @@ import MTProtoRustEngineMapping
 
 final class RustPendingRequest {
     let request: NetworkEngineRequest
+    let localId: UInt64
     let flags: UInt32
     let expectedResponseSize: UInt32
     let cancelled = Atomic<Bool>(value: false)
@@ -18,8 +19,9 @@ final class RustPendingRequest {
     var verificationDisposable: MTDisposable?
     var verificationTimer: SwiftSignalKit.Timer?
 
-    init(request: NetworkEngineRequest, flags: UInt32, expectedResponseSize: UInt32) {
+    init(request: NetworkEngineRequest, localId: UInt64, flags: UInt32, expectedResponseSize: UInt32) {
         self.request = request
+        self.localId = localId
         self.flags = flags
         self.expectedResponseSize = expectedResponseSize
     }
@@ -78,6 +80,7 @@ final class RustNetworkSession: NetworkEngineSession {
 
     private var pendingById: [UInt64: RustPendingRequest] = [:]
     private var activeRequests: [RustPendingRequest] = []
+    private var activeByLocalId: [UInt64: RustPendingRequest] = [:]
     private var heldRequests: [RustPendingRequest] = []
     private var verifyingRequests: [UInt64: RustPendingRequest] = [:]
     private var sinks: [NetworkEngineUpdateSink] = []
@@ -103,7 +106,11 @@ final class RustNetworkSession: NetworkEngineSession {
     private var lastNetworkIsCellular = false
     private var lastReportedState: NetworkEngineConnectionState?
     private var connectionWatchdog: SwiftSignalKit.Timer?
+    private var connectionWatchdogDelay: Double = RustNetworkSession.connectionWatchdogInitialDelay
     private var connectionProblemsReported = false
+
+    private static let connectionWatchdogInitialDelay: Double = 20.0
+    private static let connectionWatchdogMaxDelay: Double = 320.0
 
     init(runtime: RustEngineRuntime, context: MTContext, datacenterId: Int, role: NetworkEngineSessionRole, usageCalculationInfo: MTNetworkUsageCalculationInfo?, delegate: NetworkEngineSessionDelegate?) {
         self.runtime = runtime
@@ -195,7 +202,7 @@ final class RustNetworkSession: NetworkEngineSession {
         self.handle = handle
         self.logPrefix = "[MTProtoRust#\(handle) dc\(datacenterId) \(roleName)]"
 
-        self.mailbox.session = self
+        self.mailbox.attach(self)
         self.listener.session = self
         requestService.session = self
 
@@ -207,7 +214,7 @@ final class RustNetworkSession: NetworkEngineSession {
             rustEngineLog("\(self.logPrefix) created, key \(authInfo != nil ? "present" : "missing") selector \(self.selector.rawValue), \(addresses.count) addresses, token \(self.requiresForeignAuthToken ? (self.authTokenReady ? "ready" : "missing") : "not required")")
         }
 
-        if self.requiresForeignAuthToken && !self.authTokenReady && self.installedKeyId != nil, let engine = self.engine, handle != 0 {
+        if self.requiresForeignAuthToken && !self.authTokenReady, let engine = self.engine, handle != 0 {
             mt_session_set_auth_token_ready(engine, handle, 0)
         }
     }
@@ -258,6 +265,7 @@ final class RustNetworkSession: NetworkEngineSession {
             rustEngineImportantLog("\(self.logPrefix) \(paused ? "pause" : "resume")")
             if !paused {
                 self.refreshSchemes()
+                self.resetConnectionWatchdogBackoff()
             }
             self.applyPaused()
             if !paused {
@@ -279,21 +287,26 @@ final class RustNetworkSession: NetworkEngineSession {
 
     func add(_ request: NetworkEngineRequest) -> Disposable {
         let flags = rustEngineRequestFlags(wantsQuickAck: request.acknowledged != nil, wantsProgress: request.progress != nil, needsTimeoutTimer: request.options.needsTimeoutTimer, withoutUpdates: self.withoutUpdates)
-        let pending = RustPendingRequest(request: request, flags: flags, expectedResponseSize: rustEngineExpectedResponseSize(request.options.expectedResponseSize))
+        let localId = self.runtime.nextRequestId()
+        let pending = RustPendingRequest(request: request, localId: localId, flags: flags, expectedResponseSize: rustEngineExpectedResponseSize(request.options.expectedResponseSize))
         self.queue.async { [weak self] in
             self?.submit(pending)
         }
         let cancelled = pending.cancelled
         let queue = self.queue
-        return ActionDisposable { [weak self, weak pending] in
+        return ActionDisposable { [weak self] in
             let _ = cancelled.swap(true)
             queue.async {
-                guard let self = self, let pending = pending else {
-                    return
-                }
-                self.cancel(pending)
+                self?.cancel(localId: localId)
             }
         }
+    }
+
+    private func cancel(localId: UInt64) {
+        guard let pending = self.activeByLocalId[localId] else {
+            return
+        }
+        self.cancel(pending)
     }
 
     private func submit(_ pending: RustPendingRequest) {
@@ -301,6 +314,7 @@ final class RustNetworkSession: NetworkEngineSession {
             return
         }
         self.activeRequests.append(pending)
+        self.activeByLocalId[pending.localId] = pending
         self.sendToEngine(pending)
         self.updateConnectionWatchdog()
     }
@@ -368,7 +382,7 @@ final class RustNetworkSession: NetworkEngineSession {
         if pending.engineId != 0, self.verifyingRequests[pending.engineId] === pending {
             self.verifyingRequests.removeValue(forKey: pending.engineId)
         }
-        if let index = self.activeRequests.firstIndex(where: { $0 === pending }) {
+        if self.activeByLocalId.removeValue(forKey: pending.localId) != nil, let index = self.activeRequests.firstIndex(where: { $0 === pending }) {
             self.activeRequests.remove(at: index)
         }
         if let index = self.heldRequests.firstIndex(where: { $0 === pending }) {
@@ -581,7 +595,8 @@ final class RustNetworkSession: NetworkEngineSession {
             return
         }
         let errorContext = pending.errorState.applyRetryDecision(floodWaitSeconds: event.integer1, floodWaitErrorText: rustEngineOptionalText(event.text2), serverErrors: event.integer2)
-        let retry = pending.request.shouldContinueAfterError(NetworkEngineErrorContext(floodWaitSeconds: errorContext.floodWaitSeconds, floodWaitErrorText: errorContext.floodWaitErrorText, internalServerErrorCount: errorContext.internalServerErrorCount))
+        let retryable = event.code == 500 || event.code == -500 || errorContext.floodWaitSeconds > 0
+        let retry = retryable && pending.request.shouldContinueAfterError(NetworkEngineErrorContext(floodWaitSeconds: errorContext.floodWaitSeconds, floodWaitErrorText: errorContext.floodWaitErrorText, internalServerErrorCount: errorContext.internalServerErrorCount))
         rustEngineLog("\(self.logPrefix) #\(event.requestId) \(event.code) \(event.text): \(retry ? "retry" : "fail")")
         mt_session_decide_retry(engine, self.handle, event.requestId, retry ? 1 : 0)
     }
@@ -751,7 +766,7 @@ final class RustNetworkSession: NetworkEngineSession {
             self.context.removeTokenForDatacenter(withId: self.datacenterId)
             if self.authTokenReady {
                 self.authTokenReady = false
-                if let engine = self.engine, self.handle != 0, self.installedKeyId != nil {
+                if let engine = self.engine, self.handle != 0 {
                     mt_session_set_auth_token_ready(engine, self.handle, 0)
                 }
             }
@@ -846,7 +861,7 @@ final class RustNetworkSession: NetworkEngineSession {
         }
         self.authTokenReady = true
         rustEngineLog("\(self.logPrefix) auth token ready")
-        if let engine = self.engine, self.handle != 0, self.installedKeyId != nil {
+        if let engine = self.engine, self.handle != 0 {
             mt_session_set_auth_token_ready(engine, self.handle, 1)
         }
     }
@@ -1053,21 +1068,33 @@ final class RustNetworkSession: NetworkEngineSession {
         }
     }
 
+    private func resetConnectionWatchdogBackoff() {
+        self.connectionWatchdogDelay = RustNetworkSession.connectionWatchdogInitialDelay
+    }
+
     private func updateConnectionWatchdog() {
-        let wantsConnection = !self.appliedPaused && self.installedKeyId != nil && !self.schemes.isEmpty && (self.isMain || !self.activeRequests.isEmpty) && self.runtime.isNetworkAvailable
         let isHealthy = self.lastConnectionFlags.map { $0.isConnected && !$0.isUpdatingConnectionContext } ?? false
         if isHealthy {
+            if self.connectionProblemsReported, let scheme = self.schemes.first {
+                self.context.revalidateTransportScheme(forDatacenterId: self.datacenterId, transportScheme: scheme, media: self.isMedia)
+            }
             self.connectionProblemsReported = false
-        }
-        if isHealthy || !wantsConnection {
+            self.resetConnectionWatchdogBackoff()
             self.connectionWatchdog?.invalidate()
             self.connectionWatchdog = nil
             return
         }
-        if self.connectionWatchdog != nil || self.connectionProblemsReported {
+        let wantsConnection = !self.appliedPaused && self.installedKeyId != nil && !self.schemes.isEmpty && (self.isMain || !self.activeRequests.isEmpty) && self.runtime.isNetworkAvailable
+        if !wantsConnection {
+            self.connectionWatchdog?.invalidate()
+            self.connectionWatchdog = nil
             return
         }
-        let timer = SwiftSignalKit.Timer(timeout: 20.0, repeat: false, completion: { [weak self] in
+        if self.connectionWatchdog != nil {
+            return
+        }
+        let delay = self.connectionWatchdogDelay
+        let timer = SwiftSignalKit.Timer(timeout: delay, repeat: false, completion: { [weak self] in
             guard let self = self else {
                 return
             }
@@ -1076,12 +1103,14 @@ final class RustNetworkSession: NetworkEngineSession {
                 return
             }
             self.connectionProblemsReported = true
+            self.connectionWatchdogDelay = min(delay * 2.0, RustNetworkSession.connectionWatchdogMaxDelay)
             guard let scheme = self.schemes.first else {
                 return
             }
-            rustEngineImportantLog("\(self.logPrefix) no response for 20 s, invalidating the transport scheme")
+            rustEngineImportantLog("\(self.logPrefix) no response for \(Int(delay)) s, invalidating the transport scheme")
             self.context.reportTransportSchemeFailure(forDatacenterId: self.datacenterId, transportScheme: scheme)
             self.context.invalidateTransportScheme(forDatacenterId: self.datacenterId, transportScheme: scheme, isProbablyHttp: false, media: self.isMedia)
+            self.updateConnectionWatchdog()
         }, queue: self.queue)
         self.connectionWatchdog = timer
         timer.start()

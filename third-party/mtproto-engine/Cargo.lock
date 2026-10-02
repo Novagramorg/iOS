@@ -300,6 +300,7 @@ dependencies = [
  "libc",
  "mio",
  "mtproto-core",
+ "mtproto-netsim",
  "mtproto-testserver",
 ]
 
