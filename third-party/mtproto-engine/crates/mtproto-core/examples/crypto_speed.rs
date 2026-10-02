@@ -18,7 +18,8 @@ fn main() {
     let auth_key = AuthKey::new([3u8; 256]);
     let header = MessageHeader { salt: 1, session_id: 2, msg_id: 4, seq_no: 1 };
     let body = vec![9u8; 512 * 1024];
-    let packet = encrypt_message(&auth_key, &header, &body, Side::Server, PaddingPolicy::default(), &mut OsRandom);
+    let packet =
+        encrypt_message(&auth_key, &header, &body, Side::Server, PaddingPolicy::default(), &mut OsRandom::new());
     let rounds = 128;
     let started = Instant::now();
     for _ in 0..rounds {

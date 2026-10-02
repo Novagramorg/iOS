@@ -192,7 +192,7 @@ fn print_message(msg_id: i64, body: &[u8], indent: &str, to_ack: &mut Vec<i64>, 
 }
 
 fn handshake(address: &str, dc_id: i32) -> Probe {
-    let mut rng = OsRandom;
+    let mut rng = OsRandom::new();
     let mut connection = connect(address, dc_id, &mut rng);
     let (mut handshake, mut packet) = Handshake::start(
         HandshakeConfig {

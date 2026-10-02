@@ -44,6 +44,7 @@ pub const TAG_RESEND_REQ_ONCE: u32 = 1016;
 pub const TAG_MSG_COPY: u32 = 1017;
 pub const TAG_GARBAGE_SIBLINGS: u32 = 1018;
 pub const TAG_GZIP: u32 = 1019;
+pub const TAG_TRICKLE_ONCE: u32 = 1020;
 pub const SERVER_PING_ID: i64 = 0x5e57_9149;
 pub const LARGE_SIZE: usize = 1024 * 1024;
 pub const SERVER_SALT: i64 = 0x5a17;
@@ -97,6 +98,7 @@ pub struct ServerOptions {
     pub datacenter_id: i32,
     pub api: Option<Arc<api::ApiWorld>>,
     pub chaos: Option<chaos::ChaosConfig>,
+    pub reject_with: Option<i32>,
 }
 
 #[derive(Debug, Default)]
@@ -119,6 +121,8 @@ pub struct Stats {
     pub redelivered_answers: usize,
     pub chaos_injected: HashMap<&'static str, usize>,
     pub unique_executions: HashMap<(u32, u64), u32>,
+    pub first_executions: HashMap<(u32, u64), (i64, i64)>,
+    pub duplicate_records: Vec<String>,
     pub duplicate_executions: usize,
     pub bad_msgs_sent: usize,
     pub session_ids: HashSet<i64>,
@@ -126,6 +130,9 @@ pub struct Stats {
     pub client_packets: usize,
     pub client_bytes: usize,
     pub loop_rejections: usize,
+    pub dripped_packets: usize,
+    pub dripped_bytes: usize,
+    pub calls_per_packet: HashMap<usize, usize>,
 }
 
 struct SessionState {
@@ -178,6 +185,8 @@ struct Shared {
     bad_salt_sent: bool,
     handshake_faults: VecDeque<HandshakeFault>,
     doomed: HashMap<(u32, u64), chaos::Fault>,
+    retransmit_kills: HashMap<i64, u32>,
+    lazy_sessions: HashSet<i64>,
 }
 
 pub struct TestServer {
@@ -204,6 +213,8 @@ impl TestServer {
             bad_salt_sent: false,
             handshake_faults: options.handshake_faults.iter().copied().collect(),
             doomed: HashMap::new(),
+            retransmit_kills: HashMap::new(),
+            lazy_sessions: HashSet::new(),
         }));
         let stop = Arc::new(AtomicBool::new(false));
         let thread = {
@@ -343,6 +354,26 @@ impl Wire {
         } else {
             self.stream.write_all(&frame)
         }
+    }
+
+    fn send_frame_drip(&mut self, payload: &[u8], rng: &mut XorShiftRandom) -> std::io::Result<()> {
+        let mut frame = Vec::new();
+        encode_frame(self.framing, payload, false, &mut self.rng, &mut frame);
+        let obfuscation = self.obfuscation.as_mut().expect("obfuscation");
+        obfuscation.encryptor.apply(&mut frame);
+        let bytes = if self.tls {
+            let mut out = Vec::new();
+            self.tls_writer.write(&frame, &mut out);
+            out
+        } else {
+            frame
+        };
+        for chunk in bytes.chunks(1 + (rng.next_u64() % 48) as usize) {
+            self.stream.write_all(chunk)?;
+            self.stream.flush()?;
+            std::thread::sleep(Duration::from_micros(500 + rng.next_u64() % 2500));
+        }
+        Ok(())
     }
 
     fn send_quick_ack(&mut self, token: u32) -> std::io::Result<()> {
@@ -541,6 +572,11 @@ fn serve_frames_inner(
     let mut handshake_stalled = false;
     let mut resent_for: HashSet<i64> = HashSet::new();
     let mut chaos_rng = XorShiftRandom::new(options.chaos.as_ref().map_or(1, |chaos| chaos.seed) ^ wire.rng.next_u64());
+    let mut encrypted_packets = 0usize;
+    let ambush = options.chaos.as_ref().is_some_and(|chaos| {
+        chaos::ChaosConfig::chance(&mut chaos_rng, chaos.rate(chaos::Fault::AdaptiveReconnectAmbush))
+    });
+    let kill_rate = options.chaos.as_ref().map_or(0.0, |chaos| chaos.rate(chaos::Fault::AdaptiveKillOnRetransmit));
     loop {
         if stop.load(Ordering::Relaxed) {
             return Ok(());
@@ -612,6 +648,12 @@ fn serve_frames_inner(
             }
             continue;
         }
+        if let Some(code) = options.reject_with {
+            shared.lock().unwrap().stats.transport_errors_sent += 1;
+            wire.send_frame(&code.to_le_bytes())?;
+            let _ = wire.stream.shutdown(Shutdown::Both);
+            return Ok(());
+        }
         let key = shared.lock().unwrap().keys.get(&auth_key_id).cloned();
         let Some(key) = key else {
             wire.send_frame(&(-404i32).to_le_bytes())?;
@@ -619,6 +661,8 @@ fn serve_frames_inner(
             return Ok(());
         };
         let plaintext = decrypted_plaintext(&key, &packet);
+        encrypted_packets += 1;
+        let ambush_step = if ambush && encrypted_packets <= 3 { Some(encrypted_packets) } else { None };
         if quick_ack {
             let hash = mtproto_core::crypto::sha256_parts(&[&key.bytes()[88..120], &plaintext]);
             wire.send_quick_ack(u32::from_le_bytes(hash[..4].try_into().unwrap()) & 0x7fff_ffff)?;
@@ -634,6 +678,9 @@ fn serve_frames_inner(
         let mut hostile_raw: Option<RawHostile> = None;
         let mut hostile_quick_acks: Vec<u32> = Vec::new();
         let mut resend: Vec<(i64, i32, Vec<u8>)> = Vec::new();
+        let mut kill_now = false;
+        let mut drip = false;
+        let mut trickle: Option<i32> = None;
         {
             let mut guard = shared.lock().unwrap();
             let shared_ref = &mut *guard;
@@ -655,13 +702,14 @@ fn serve_frames_inner(
             });
             session.peer.server_time = server_now(session.clock_offset);
             session.peer.salt = salt;
-            if resent_for.insert(session_id) {
+            if resent_for.insert(session_id) && !shared_ref.lazy_sessions.remove(&session_id) {
                 resend = session.unacked.clone();
             }
             let stats = &mut shared_ref.stats;
             stats.session_ids.insert(session_id);
             stats.client_packets += 1;
             stats.client_bytes += packet.len();
+            *stats.calls_per_packet.entry(decoded.messages.len()).or_insert(0) += 1;
             let message_time = msg_id_time(decoded.header.msg_id);
             let server_time = server_now(session.clock_offset);
             let time_error = if !options.validate_msg_id_time {
@@ -676,6 +724,17 @@ fn serve_frames_inner(
             if let Some(code) = time_error {
                 stats.bad_msgs_sent += 1;
                 outgoing.push((sp::bad_msg_notification(decoded.header.msg_id, decoded.header.seq_no, code), false));
+            } else if let Some(step @ 1..=2) = ambush_step {
+                *stats.chaos_injected.entry(chaos::Fault::AdaptiveReconnectAmbush.name()).or_insert(0) += 1;
+                if step == 1 {
+                    let fresh = salt.wrapping_add((chaos_rng.next_u64() >> 1) as i64 | 1);
+                    shared_ref.salt = fresh;
+                    shared_ref.previous_salt = None;
+                    outgoing.push((sp::bad_server_salt(decoded.header.msg_id, decoded.header.seq_no, fresh), false));
+                } else {
+                    stats.bad_msgs_sent += 1;
+                    outgoing.push((sp::bad_msg_notification(decoded.header.msg_id, decoded.header.seq_no, 16), false));
+                }
             } else if decoded.header.salt != salt
                 && !shared_ref
                     .previous_salt
@@ -683,7 +742,24 @@ fn serve_frames_inner(
             {
                 outgoing.push((sp::bad_server_salt(decoded.header.msg_id, decoded.header.seq_no, salt), false));
             } else {
-                for message in &decoded.messages {
+                if ambush_step == Some(3) {
+                    close_after = true;
+                }
+                let recovery_target = decoded.messages.iter().find_map(|message| {
+                    (session.received.contains(&message.msg_id) || message.constructor() == ids::MSGS_STATE_REQ)
+                        .then_some(message.msg_id)
+                });
+                if let Some(target) = recovery_target
+                    && chaos::ChaosConfig::chance(&mut chaos_rng, kill_rate)
+                {
+                    let kills = shared_ref.retransmit_kills.entry(target).or_insert(0);
+                    if *kills < 3 {
+                        *kills += 1;
+                        *stats.chaos_injected.entry(chaos::Fault::AdaptiveKillOnRetransmit.name()).or_insert(0) += 1;
+                        kill_now = true;
+                    }
+                }
+                for message in decoded.messages.iter().filter(|_| !kill_now) {
                     if !session.received.insert(message.msg_id) {
                         stats.duplicate_msg_ids += 1;
                         let cached = session
@@ -857,6 +933,20 @@ fn serve_frames_inner(
                                 *entry += 1;
                                 if *entry > 1 {
                                     stats.duplicate_executions += 1;
+                                    let first = stats.first_executions.get(&(tag, key)).copied().unwrap_or((0, 0));
+                                    if stats.duplicate_records.len() < 64 {
+                                        stats.duplicate_records.push(format!(
+                                            "key {key}: first session {:x} msg {:x}, again session {:x} msg {:x} container {:?} fault {:?}",
+                                            first.0,
+                                            first.1,
+                                            session_id,
+                                            message.msg_id,
+                                            message.container_id,
+                                            fault.map(chaos::Fault::name)
+                                        ));
+                                    }
+                                } else {
+                                    stats.first_executions.insert((tag, key), (session_id, message.msg_id));
                                 }
                             }
                             let reply = sp::rpc_result(message.msg_id, &result_body(tag, &payload));
@@ -868,6 +958,30 @@ fn serve_frames_inner(
                                         session.unacked.push((msg_id, 1, reply));
                                         session.answer_ids.insert(message.msg_id, msg_id);
                                         close_after = true;
+                                    }
+                                    chaos::Fault::AdaptiveLazyRedelivery => {
+                                        let msg_id = session.peer.next_msg_id(true);
+                                        session.unacked.push((msg_id, 1, reply));
+                                        session.answer_ids.insert(message.msg_id, msg_id);
+                                        shared_ref.lazy_sessions.insert(session_id);
+                                        close_after = true;
+                                    }
+                                    chaos::Fault::AdaptiveTimeWarp => {
+                                        let magnitude = 600.0 + (chaos_rng.next_u64() % 3000) as f64;
+                                        let delta = if chaos_rng.next_u64() & 1 == 0 { magnitude } else { -magnitude };
+                                        session.clock_offset = (session.clock_offset + delta).clamp(-7200.0, 7200.0);
+                                        session.peer.server_time = server_now(session.clock_offset);
+                                        outgoing.push((reply, true));
+                                    }
+                                    chaos::Fault::AdaptiveSlowDrip => {
+                                        drip = true;
+                                        outgoing.push((reply, true));
+                                    }
+                                    chaos::Fault::AdaptiveTrickle => {
+                                        trickle = Some((chaos_rng.next_u64() % 3) as i32);
+                                        let msg_id = session.peer.next_msg_id(true);
+                                        session.unacked.push((msg_id, 1, reply));
+                                        session.answer_ids.insert(message.msg_id, msg_id);
                                     }
                                     chaos::Fault::RotateSalt => {
                                         shared_ref.salt = salt.wrapping_add((chaos_rng.next_u64() >> 1) as i64 | 1);
@@ -1142,6 +1256,10 @@ fn serve_frames_inner(
                                     outgoing.push((sp::gzip_packed(&body), false));
                                 }
                                 TAG_KEY_UNKNOWN => transport_error = Some(-404),
+                                TAG_TRICKLE_ONCE if count == 1 => {
+                                    session.received.remove(&message.msg_id);
+                                    trickle = Some(payload_word(0));
+                                }
                                 TAG_FLOOD_ONCE if count == 1 => {
                                     outgoing.push((sp::rpc_error(message.msg_id, 420, "FLOOD_WAIT_1"), true))
                                 }
@@ -1192,6 +1310,20 @@ fn serve_frames_inner(
                 }
             }
         }
+        if kill_now {
+            let _ = wire.stream.shutdown(Shutdown::Both);
+            return Ok(());
+        }
+        if let Some(mode) = trickle {
+            let mut guard = shared.lock().unwrap();
+            if let Some(session) = guard.sessions.get_mut(&session_id) {
+                for (body, content) in &outgoing {
+                    seal_tracked(session, body, *content);
+                }
+            }
+            drop(guard);
+            return trickle_forever(&mut wire, mode, &stop, &mut chaos_rng);
+        }
         if let Some(duration) = stall {
             std::thread::sleep(duration);
         }
@@ -1233,14 +1365,52 @@ fn serve_frames_inner(
             let _ = wire.stream.shutdown(Shutdown::Both);
             return Ok(());
         }
+        if drip {
+            let mut guard = shared.lock().unwrap();
+            guard.stats.dripped_packets += packets.len();
+            guard.stats.dripped_bytes += packets.iter().map(Vec::len).sum::<usize>();
+        }
         for packet in packets {
-            wire.send_frame(&packet)?;
+            if drip {
+                wire.send_frame_drip(&packet, &mut chaos_rng)?;
+            } else {
+                wire.send_frame(&packet)?;
+            }
         }
         if close_after {
             let _ = wire.stream.shutdown(Shutdown::Both);
             return Ok(());
         }
     }
+}
+
+fn trickle_forever(wire: &mut Wire, mode: i32, stop: &AtomicBool, rng: &mut XorShiftRandom) -> std::io::Result<()> {
+    let started = Instant::now();
+    if mode == 0 {
+        let declared = 8u32 << 20;
+        let header = match wire.framing {
+            Framing::Abridged => {
+                let words = declared / 4;
+                vec![0x7f, words as u8, (words >> 8) as u8, (words >> 16) as u8]
+            }
+            _ => declared.to_le_bytes().to_vec(),
+        };
+        if wire.send_raw_frame(header).is_err() {
+            return Ok(());
+        }
+    }
+    while !stop.load(Ordering::Relaxed) && started.elapsed() < Duration::from_secs(90) {
+        std::thread::sleep(Duration::from_millis(300));
+        let sent = match mode {
+            0 => wire.send_raw_frame(vec![0x55]),
+            1 => wire.send_frame(&0u32.to_le_bytes()),
+            _ => wire.send_quick_ack(rng.next_u64() as u32 & 0x7fff_ffff),
+        };
+        if sent.is_err() {
+            break;
+        }
+    }
+    Ok(())
 }
 
 fn track_answer(session: &mut SessionState, msg_id: i64, reply: &[u8]) {

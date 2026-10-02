@@ -73,6 +73,7 @@ public final class PasscodeEntryController: ViewController {
     private let credentialLockDisposable = MetaDisposable()
     
     private let biometricsDisposable = MetaDisposable()
+    private let biometricAuthenticationDisposable = MetaDisposable()
     private var hasOngoingBiometricsRequest = false
     private var skipNextBiometricsRequest = false
     private var biometricPresentationFallback: (@MainActor () -> Void)?
@@ -116,6 +117,7 @@ public final class PasscodeEntryController: ViewController {
                 strongSelf.authenticationContext?.invalidate()
                 strongSelf.authenticationContext = nil
                 strongSelf.biometricsDisposable.set(nil)
+                strongSelf.biometricAuthenticationDisposable.set(nil)
                 strongSelf.checkingCode = false
                 strongSelf.hasOngoingBiometricsRequest = false
                 if strongSelf.isNodeLoaded {
@@ -140,6 +142,7 @@ public final class PasscodeEntryController: ViewController {
     deinit {
         self.presentationDataDisposable?.dispose()
         self.biometricsDisposable.dispose()
+        self.biometricAuthenticationDisposable.dispose()
         self.inBackgroundDisposable?.dispose()
         self.credentialLockDisposable.dispose()
         self.authenticationLifecycle.dismiss()
@@ -316,11 +319,14 @@ public final class PasscodeEntryController: ViewController {
         self.authenticationContext = context
         let scope = self.authenticationScope
         let lifetime = self.authenticationLifetime
+        let biometricAuthentication = self.appLockContext.beginBiometricAuthentication()
+        self.biometricAuthenticationDisposable.set(biometricAuthentication)
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             let result = Result {
                 try validatedPasscodeBiometricSession(authenticateBiometrics(context), scope: scope, lifetime: lifetime)
             }
             DispatchQueue.main.async {
+                biometricAuthentication.dispose()
                 guard let self, self.authenticationLifecycle.acceptsResult(generation: generation) else {
                     if case let .success(session) = result { session.invalidate() }
                     context.invalidate()
@@ -409,8 +415,11 @@ public final class PasscodeEntryController: ViewController {
         
         self.hasOngoingBiometricsRequest = true
         let generation = self.authenticationLifecycle.generation
+        let biometricAuthentication = self.appLockContext.beginBiometricAuthentication()
+        self.biometricAuthenticationDisposable.set(biometricAuthentication)
         
         self.biometricsDisposable.set((LocalAuth.auth(reason: self.presentationData.strings.EnterPasscode_TouchId) |> deliverOnMainQueue).start(next: { [weak self] result, evaluatedPolicyDomainState in
+            biometricAuthentication.dispose()
             guard let strongSelf = self, strongSelf.authenticationLifecycle.acceptsResult(generation: generation) else {
                 return
             }
@@ -503,6 +512,7 @@ public final class PasscodeEntryController: ViewController {
         self.authenticationContext?.invalidate()
         self.authenticationContext = nil
         self.biometricsDisposable.set(nil)
+        self.biometricAuthenticationDisposable.set(nil)
         self.checkingCode = false
         self.hasOngoingBiometricsRequest = false
         if self.isNodeLoaded {

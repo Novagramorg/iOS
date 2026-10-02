@@ -330,6 +330,8 @@ public func passcodeOptionsController(context: AccountContext, focusOnItemTag: P
     })
     
     var activeBiometricContext: LAContext?
+    let biometricAuthenticationDisposable = MetaDisposable()
+    actionsDisposable.add(biometricAuthenticationDisposable)
     var isControllerAvailable: () -> Bool = { false }
     var isControllerOnTop: () -> Bool = { false }
     let updateState: () -> Void = {
@@ -378,6 +380,7 @@ public func passcodeOptionsController(context: AccountContext, focusOnItemTag: P
         if !foreground || locked || !current {
             activeBiometricContext?.invalidate()
             activeBiometricContext = nil
+            biometricAuthenticationDisposable.set(nil)
         }
         updateState()
     }))
@@ -401,6 +404,8 @@ public func passcodeOptionsController(context: AccountContext, focusOnItemTag: P
             authenticationContext.localizedFallbackTitle = ""
             authenticationContext.touchIDAuthenticationAllowableReuseDuration = 0
             activeBiometricContext = authenticationContext
+            let biometricAuthentication: Disposable? = biometrics && enabled ? context.sharedContext.appLockContext.beginBiometricAuthentication() : nil
+            biometricAuthenticationDisposable.set(biometricAuthentication)
             DispatchQueue.global(qos: .userInitiated).async {
                 let result = Result {
                     if biometrics {
@@ -411,6 +416,7 @@ public func passcodeOptionsController(context: AccountContext, focusOnItemTag: P
                 }
                 authenticationContext.invalidate()
                 DispatchQueue.main.async {
+                    biometricAuthentication?.dispose()
                     switch result {
                     case .success: finish(nil)
                     case let .failure(error): finish(error)
@@ -716,6 +722,7 @@ public func passcodeOptionsController(context: AccountContext, focusOnItemTag: P
         if !isControllerAvailable() || controller.isBeingDismissed {
             sessionState.close()
             activeBiometricContext?.invalidate()
+            biometricAuthenticationDisposable.set(nil)
         }
     }
     presentControllerImpl = { [weak controller] c, p in

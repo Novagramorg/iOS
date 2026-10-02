@@ -6,16 +6,18 @@
 #include <array>
 #include <cstdint>
 #include <string>
-#include <vector>
 
 NSErrorDomain const WalletBackupCryptoErrorDomain = @"org.telegram.wallet-backup-crypto";
 
 namespace {
 
-constexpr std::uint32_t kDecryptedKeyPartSignature = 0x8b90dd08;
 constexpr std::uint32_t kObservedEnvelopeWrapperSignature = 0x1ea87158;
 constexpr std::size_t kPublicKeyLength = 32;
 constexpr std::size_t kShareCount = 3;
+constexpr std::size_t kMnemonicBackupSize = 215;
+constexpr char kMnemonicBackupPrefix[] = "\x08\xdd\x90\x8b\xd7";
+constexpr std::size_t kMnemonicBackupPrefixSize = sizeof(kMnemonicBackupPrefix) - 1;
+constexpr std::size_t kMnemonicBackupPayloadSize = kMnemonicBackupPrefixSize + kMnemonicBackupSize;
 constexpr std::size_t kObservedEnvelopeWrapperHeaderLength = 16;
 
 NSError *makeError(WalletBackupCryptoErrorCode code, NSString *message) {
@@ -49,13 +51,6 @@ bool fillSecureRandom(std::string &value) {
     ) == errSecSuccess;
 }
 
-void appendLittleEndian32(std::string &value, std::uint32_t number) {
-    value.push_back(static_cast<char>(number & 0xff));
-    value.push_back(static_cast<char>((number >> 8) & 0xff));
-    value.push_back(static_cast<char>((number >> 16) & 0xff));
-    value.push_back(static_cast<char>((number >> 24) & 0xff));
-}
-
 std::uint32_t readLittleEndian32(const char *bytes) {
     const auto *value = reinterpret_cast<const unsigned char *>(bytes);
     return static_cast<std::uint32_t>(value[0])
@@ -74,25 +69,6 @@ struct EncryptedShareEnvelope {
     std::uint32_t wrapperCount = 0;
     std::uint32_t wrapperSetId = 0;
 };
-
-bool appendTlBytes(std::string &value, const std::string &bytes) {
-    if (value.size() % 4 != 0 || bytes.size() > 0x00ffffff) {
-        return false;
-    }
-    if (bytes.size() < 254) {
-        value.push_back(static_cast<char>(bytes.size()));
-    } else {
-        value.push_back(static_cast<char>(254));
-        value.push_back(static_cast<char>(bytes.size() & 0xff));
-        value.push_back(static_cast<char>((bytes.size() >> 8) & 0xff));
-        value.push_back(static_cast<char>((bytes.size() >> 16) & 0xff));
-    }
-    value.append(bytes);
-    while (value.size() % 4 != 0) {
-        value.push_back('\0');
-    }
-    return true;
-}
 
 bool parseTrailingTlBytes(
     const std::string &value,
@@ -186,53 +162,6 @@ NSString *tde2eErrorDescription(const tde2e_api::Error &error) {
     return [NSString stringWithFormat:@"tde2e(%d): %@", static_cast<int>(error.code), message];
 }
 
-std::string serializeDecryptedKeyPart(const std::string &share) {
-    std::string result;
-    result.reserve(8 + share.size() + 4);
-    appendLittleEndian32(result, kDecryptedKeyPartSignature);
-    if (!appendTlBytes(result, share)) {
-        return {};
-    }
-    return result;
-}
-
-bool parseDecryptedKeyPart(const std::string &payload, std::string &share) {
-    if (payload.size() < 8 || readLittleEndian32(payload.data()) != kDecryptedKeyPartSignature) {
-        return false;
-    }
-    const auto *bytes = reinterpret_cast<const unsigned char *>(payload.data());
-    std::size_t offset = 4;
-    std::size_t length = 0;
-    if (bytes[offset] < 254) {
-        length = bytes[offset];
-        offset += 1;
-    } else if (bytes[offset] == 254) {
-        if (payload.size() < offset + 4) {
-            return false;
-        }
-        length = static_cast<std::size_t>(bytes[offset + 1])
-            | (static_cast<std::size_t>(bytes[offset + 2]) << 8)
-            | (static_cast<std::size_t>(bytes[offset + 3]) << 16);
-        offset += 4;
-    } else {
-        return false;
-    }
-    if (length == 0 || length > payload.size() - offset) {
-        return false;
-    }
-    const std::size_t paddedEnd = (offset + length + 3) & ~static_cast<std::size_t>(3);
-    if (paddedEnd != payload.size()) {
-        return false;
-    }
-    for (std::size_t index = offset + length; index < paddedEnd; ++index) {
-        if (bytes[index] != 0) {
-            return false;
-        }
-    }
-    share.assign(payload.data() + offset, length);
-    return true;
-}
-
 bool destroyKey(tde2e_api::AnyKeyId keyId) {
     return tde2e_api::key_destroy(keyId).is_ok();
 }
@@ -265,13 +194,8 @@ bool encryptShare(const std::string &share, NSData *holderPublicKey, std::string
         return false;
     }
     const auto sharedKeyId = sharedResult.value();
-    const std::string payload = serializeDecryptedKeyPart(share);
-    if (payload.empty()) {
-        destroyKey(sharedKeyId);
-        destroyKey(holderKeyId);
-        destroyKey(privateKeyId);
-        return false;
-    }
+    std::string payload(kMnemonicBackupPrefix, kMnemonicBackupPrefixSize);
+    payload.append(share);
     auto encryptedResult = tde2e_api::encrypt_message_for_one(sharedKeyId, payload);
     destroyKey(sharedKeyId);
     destroyKey(holderKeyId);
@@ -409,20 +333,23 @@ bool encryptShare(const std::string &share, NSData *holderPublicKey, std::string
             );
             return nil;
         }
-        if (!parseDecryptedKeyPart(decryptedResult.value(), shares[index])) {
-            setError(error, WalletBackupCryptoErrorInvalidPayload, @"A decrypted share has an invalid TL payload");
+        if (decryptedResult.value().size() != kMnemonicBackupPayloadSize) {
+            setError(error, WalletBackupCryptoErrorInvalidPayload, @"A decrypted share payload must be 220 bytes");
             return nil;
         }
+        shares[index] = decryptedResult.value();
     }
-    if (shares[0].size() != shares[1].size() || shares[0].size() != shares[2].size()) {
-        setError(error, WalletBackupCryptoErrorInvalidPayload, @"Secret shares have different sizes");
-        return nil;
-    }
-    std::string secret(shares[0].size(), '\0');
+    // XORing the complete payloads preserves the prefix: H XOR H XOR H = H.
+    // This also reads interim backups that split the prefixed mnemonic block.
+    std::string secret(kMnemonicBackupPayloadSize, '\0');
     for (std::size_t index = 0; index < secret.size(); ++index) {
         secret[index] = shares[0][index] ^ shares[1][index] ^ shares[2][index];
     }
-    return dataFromString(secret);
+    if (secret.compare(0, kMnemonicBackupPrefixSize, kMnemonicBackupPrefix, kMnemonicBackupPrefixSize) != 0) {
+        setError(error, WalletBackupCryptoErrorInvalidPayload, @"The reconstructed mnemonic has an invalid prefix");
+        return nil;
+    }
+    return dataFromString(secret.substr(kMnemonicBackupPrefixSize));
 }
 
 - (nullable NSData *)decryptAndCombineBackupEnvelopes:(NSArray<NSData *> *)envelopes {
@@ -443,8 +370,8 @@ bool encryptShare(const std::string &share, NSData *holderPublicKey, std::string
 + (nullable NSArray<NSData *> *)encryptSecret:(NSData *)secret
                           holderPublicKeys:(NSArray<NSData *> *)holderPublicKeys
                                      error:(NSError **)error {
-    if (secret.length == 0 || secret.length > 0x00ffffff || holderPublicKeys.count != kShareCount) {
-        setError(error, WalletBackupCryptoErrorInvalidInput, @"A non-empty secret and exactly three holders are required");
+    if (secret.length != kMnemonicBackupSize || holderPublicKeys.count != kShareCount) {
+        setError(error, WalletBackupCryptoErrorInvalidInput, @"A 215-byte mnemonic text and exactly three holders are required");
         return nil;
     }
     for (NSData *publicKey in holderPublicKeys) {

@@ -216,6 +216,13 @@ exists. Changing or disabling an existing passcode requires a live, matching,
 passcode-origin management or settings session. Unprotected and biometric resource
 sessions cannot be promoted into that authority.
 
+Setting a passcode when none exists, including after passcode removal, automatically
+enables wallet protection (Confirm with Passcode). The new passcode wrapper,
+`protectionEnabled = true`, and removal of `unprotectedKey` are committed in the
+same credential-item update, preserving the existing access key. Changing an
+existing passcode preserves the user's protection setting. Setup does not enable
+wallet biometrics, and legacy passcode migration retains its existing behavior.
+
 A passcode change rewraps the **same access key** with new salt/KDF parameters and
 nonce, increments the revision, and marks the record managed. Wallet envelopes
 and their DEKs do not change. Authorization is rechecked after derivation and
@@ -425,16 +432,21 @@ from silently bypassing protection through backup. Explicit restoration retains
 the existing Telegram account/2FA requirements and installs the recovered phrase
 through the protected local storage path.
 
-For context, the existing [backup codec](../submodules/WalletContext/Sources/WalletBackup.swift)
+For context, the [backup codec](../submodules/WalletContext/Sources/WalletPhraseCodec.swift)
 normalizes mnemonic words to lowercase, joins them with spaces, and pads the UTF-8
-payload with spaces to **215 bytes**. [WalletBackupCrypto](../submodules/WalletBackupCrypto/Sources/WalletBackupCrypto.mm)
-produces three XOR shares, all required for recovery: two random shares and a third
-equal to the secret XOR both. Each share is encrypted for one of three 32-byte
-holder public keys using the tde2e ECDH/message APIs and an ephemeral key. Export
-uses a fresh client key pair, decrypts all three parts, verifies canonical phrase
-encoding, and checks the derived 32-byte public key against the expected wallet
-identity before local installation. The local passcode is not an input to this
-backup encryption.
+text with spaces to **215 bytes**. [WalletBackupCrypto](../submodules/WalletBackupCrypto/Sources/WalletBackupCrypto.mm)
+splits that text into three 215-byte XOR shares, all required for recovery:
+two random shares and a third equal to the text XOR both. It prepends
+`08 dd 90 8b d7` to **each share after splitting**, then encrypts the resulting
+220-byte payload for its 32-byte holder public key using the tde2e ECDH/message
+APIs and a distinct ephemeral key. Export uses a fresh client key pair, decrypts
+and XORs the three complete payloads, validates and removes the reconstructed
+prefix, and verifies canonical phrase encoding of the remaining 215 bytes.
+The derived 32-byte public key must match the expected wallet identity before
+local installation. XOR of three identical prefixes restores that prefix, so
+this reader also supports interim backups that split an already-prefixed
+220-byte mnemonic block; no migration or separate fallback is needed.
+The local passcode is not an input to this backup encryption.
 
 ## Destructive reset and fresh installations
 

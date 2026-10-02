@@ -32,40 +32,6 @@ func withWalletBackupRotationRetry<Value>(
 }
 
 @available(macOS 10.15, *)
-private enum WalletPhraseCodec {
-    private static let encodedLength = 215
-
-    static func encode(words: [String]) -> Data? {
-        let words = words
-        .flatMap { value in
-            value.split(whereSeparator: { $0.isWhitespace }).map(String.init)
-        }
-        .map { $0.lowercased() }
-        guard !words.isEmpty else {
-            return nil
-        }
-        guard var result = words.joined(separator: " ").data(using: .utf8), result.count <= encodedLength else {
-            return nil
-        }
-        result.append(Data(repeating: 0x20, count: encodedLength - result.count))
-        return result
-    }
-
-    static func decode(_ data: Data) -> [String]? {
-        guard let value = String(data: data, encoding: .utf8) else {
-            return nil
-        }
-        let words = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        .split(whereSeparator: { $0.isWhitespace })
-        .map { String($0).lowercased() }
-        guard !words.isEmpty, encode(words: words) == data else {
-            return nil
-        }
-        return words
-    }
-}
-
-@available(macOS 10.15, *)
 func encryptedWalletBackupParts(
     engine: TelegramEngine,
     words: [String]

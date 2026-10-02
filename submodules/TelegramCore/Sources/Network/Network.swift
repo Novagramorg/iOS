@@ -386,13 +386,31 @@ public struct NetworkInitializationArguments {
 private let cloudDataContext = Atomic<CloudDataContext?>(value: nil)
 #endif
 
+func networkEngineRustDisabled(appConfiguration: AppConfiguration) -> Bool {
+    guard let data = appConfiguration.data, let value = data["mtproto_engine_rust_disabled"] else {
+        return false
+    }
+    switch value {
+    case let value as Bool:
+        return value
+    case let value as Double:
+        return value != 0.0
+    case let value as String:
+        return !["", "0", "false", "no"].contains(value.lowercased())
+    case is NSNull:
+        return false
+    default:
+        return true
+    }
+}
+
 private func resolveNetworkEngine(accountId: AccountRecordId, context: MTContext, factory: NetworkEngineFactory?, settings: NetworkEngineSettings?, appConfiguration: AppConfiguration, isAppExtension: Bool) -> NetworkEngine {
     let preferredEngine = settings?.engine ?? NetworkEngineSettings.defaultSettings.engine
     guard let factory = factory else {
         Logger.shared.log("Network", "Account \(accountId.int64): engine mtProtoKit (no factory, preferred \(preferredEngine.rawValue))")
         return MtProtoKitEngine(context: context)
     }
-    if let data = appConfiguration.data, let _ = data["mtproto_engine_rust_disabled"] {
+    if networkEngineRustDisabled(appConfiguration: appConfiguration) {
         Logger.shared.log("Network", "Account \(accountId.int64): engine mtProtoKit (mtproto_engine_rust_disabled, preferred \(preferredEngine.rawValue))")
         return MtProtoKitEngine(context: context)
     }
@@ -615,7 +633,9 @@ func initializedNetwork(accountId: AccountRecordId, arguments: NetworkInitializa
             context.beginExplicitBackupAddressDiscovery()
             #endif*/
             
-            let engine = resolveNetworkEngine(accountId: accountId, context: context, factory: arguments.networkEngineFactory, settings: networkEngineSettings, appConfiguration: appConfiguration, isAppExtension: isAppExtension)
+            let resolvedEngine = resolveNetworkEngine(accountId: accountId, context: context, factory: arguments.networkEngineFactory, settings: networkEngineSettings, appConfiguration: appConfiguration, isAppExtension: isAppExtension)
+            let switchingEngine = arguments.networkEngineFactory != nil ? SwitchingNetworkEngine(engine: resolvedEngine) : nil
+            let engine: NetworkEngine = switchingEngine ?? resolvedEngine
             
             let connectionStatus = Promise<ConnectionStatus>(.waitingForNetwork)
             
@@ -627,7 +647,9 @@ func initializedNetwork(accountId: AccountRecordId, arguments: NetworkInitializa
                 useExperimentalFeatures = false
             }
             
-            let network = Network(queue: queue, datacenterId: datacenterId, context: context, engine: engine, mainSession: mainSession, mainSessionDelegate: mainSessionDelegate, _connectionStatus: connectionStatus, basePath: basePath, appDataDisposable: appDataDisposable, encryptionProvider: arguments.encryptionProvider, useRequestTimeoutTimers: useRequestTimeoutTimers, useBetaFeatures: arguments.useBetaFeatures, useExperimentalFeatures: useExperimentalFeatures, baseTcpConnectionInterfaceFactory: baseTcpConnectionInterfaceFactory, isAppExtension: isAppExtension, initialWebProxyActive: initialActiveServer?.isWebProxy == true)
+            let rustEngineDisabled = networkEngineRustDisabled(appConfiguration: appConfiguration)
+            let rustEngineWaitsForWebProxy = switchingEngine != nil && !rustEngineDisabled && resolvedEngine.kind == .mtProtoKit && (networkEngineSettings?.engine ?? NetworkEngineSettings.defaultSettings.engine) == .rust && initialActiveServer?.isWebProxy == true
+            let network = Network(queue: queue, datacenterId: datacenterId, context: context, engine: engine, switchingEngine: switchingEngine, engineFactory: arguments.networkEngineFactory, rustEngineDisabled: rustEngineDisabled, rustEngineWaitsForWebProxy: rustEngineWaitsForWebProxy, mainSession: mainSession, mainSessionDelegate: mainSessionDelegate, _connectionStatus: connectionStatus, basePath: basePath, appDataDisposable: appDataDisposable, encryptionProvider: arguments.encryptionProvider, useRequestTimeoutTimers: useRequestTimeoutTimers, useBetaFeatures: arguments.useBetaFeatures, useExperimentalFeatures: useExperimentalFeatures, baseTcpConnectionInterfaceFactory: baseTcpConnectionInterfaceFactory, isAppExtension: isAppExtension, initialWebProxyActive: initialActiveServer?.isWebProxy == true)
             
             if let data = appConfiguration.data, let notifyInterval = data["upload_premium_speedup_notify_period"] as? Double {
                 network.updateNetworkSpeedLimitedEventNotifyInterval(value: notifyInterval)
@@ -783,6 +805,10 @@ public final class Network: NSObject {
     public let context: MTContext
     private var networkHelper: NetworkHelper?
     private let engine: NetworkEngine
+    private let switchingEngine: SwitchingNetworkEngine?
+    private let engineFactory: NetworkEngineFactory?
+    private let rustEngineDisabled: Atomic<Bool>
+    private let rustEngineWaitsForWebProxy: Atomic<Bool>
     let mainSession: NetworkEngineSession
     let requestService: NetworkEngineRequestService
     let basePath: String
@@ -854,7 +880,7 @@ public final class Network: NSObject {
         return self.engine.kind
     }
     
-    fileprivate init(queue: Queue, datacenterId: Int, context: MTContext, engine: NetworkEngine, mainSession: NetworkEngineSession, mainSessionDelegate: NetworkMainSessionDelegate, _connectionStatus: Promise<ConnectionStatus>, basePath: String, appDataDisposable: Disposable, encryptionProvider: EncryptionProvider, useRequestTimeoutTimers: Bool, useBetaFeatures: Bool, useExperimentalFeatures: Bool, baseTcpConnectionInterfaceFactory: ((MTTcpConnectionInterfaceDelegate, DispatchQueue) -> MTTcpConnectionInterface)?, isAppExtension: Bool, initialWebProxyActive: Bool) {
+    fileprivate init(queue: Queue, datacenterId: Int, context: MTContext, engine: NetworkEngine, switchingEngine: SwitchingNetworkEngine?, engineFactory: NetworkEngineFactory?, rustEngineDisabled: Bool, rustEngineWaitsForWebProxy: Bool, mainSession: NetworkEngineSession, mainSessionDelegate: NetworkMainSessionDelegate, _connectionStatus: Promise<ConnectionStatus>, basePath: String, appDataDisposable: Disposable, encryptionProvider: EncryptionProvider, useRequestTimeoutTimers: Bool, useBetaFeatures: Bool, useExperimentalFeatures: Bool, baseTcpConnectionInterfaceFactory: ((MTTcpConnectionInterfaceDelegate, DispatchQueue) -> MTTcpConnectionInterface)?, isAppExtension: Bool, initialWebProxyActive: Bool) {
         self.encryptionProvider = encryptionProvider
         
         self.queue = queue
@@ -862,6 +888,10 @@ public final class Network: NSObject {
         self.context = context
         self._contextProxyId = ValuePromise((context.apiEnvironment.socksProxySettings as MTSocksProxySettings?).flatMap(NetworkContextProxyId.init(settings:)), ignoreRepeated: true)
         self.engine = engine
+        self.switchingEngine = switchingEngine
+        self.engineFactory = engineFactory
+        self.rustEngineDisabled = Atomic(value: rustEngineDisabled)
+        self.rustEngineWaitsForWebProxy = Atomic(value: rustEngineWaitsForWebProxy)
         self.mainSession = mainSession
         self.requestService = mainSession.requestService
         self.mainSessionDelegate = mainSessionDelegate
@@ -1013,6 +1043,13 @@ public final class Network: NSObject {
                 return nil
             }
         }
+        if activeServer?.isWebProxy == true {
+            if self.engineKind == .rust && self.switchEngine(to: .mtProtoKit, reason: "WEB proxy") {
+                let _ = self.rustEngineWaitsForWebProxy.swap(true)
+            }
+        } else if self.rustEngineWaitsForWebProxy.swap(false) {
+            self.switchEngine(to: .rust, reason: "WEB proxy turned off")
+        }
     }
     
     deinit {
@@ -1041,6 +1078,45 @@ public final class Network: NSObject {
         }
     }
     
+    public var isRustEngineDisabled: Bool {
+        return self.rustEngineDisabled.with { $0 }
+    }
+
+    public func disableRustEngine(reason: String) {
+        let _ = self.rustEngineDisabled.swap(true)
+        let _ = self.rustEngineWaitsForWebProxy.swap(false)
+        self.switchEngine(to: .mtProtoKit, reason: reason)
+    }
+
+    @discardableResult
+    public func switchEngine(to kind: NetworkEngineKind, reason: String) -> Bool {
+        guard let switchingEngine = self.switchingEngine else {
+            return kind == self.engine.kind
+        }
+        if kind == .rust && self.rustEngineDisabled.with({ $0 }) {
+            Logger.shared.log("Network", "Engine switch to rust refused, the server disabled it: \(reason)")
+            return false
+        }
+        let context = self.context
+        let engineFactory = self.engineFactory
+        let isAppExtension = self.isAppExtension
+        return switchingEngine.switchEngine(to: kind, drainTimeout: 5.0, makeEngine: {
+            let replacement: NetworkEngine?
+            switch kind {
+            case .mtProtoKit:
+                replacement = MtProtoKitEngine(context: context)
+            case .rust:
+                replacement = engineFactory?.makeEngine(context: context, isAppExtension: isAppExtension)
+            }
+            if replacement == nil {
+                Logger.shared.log("Network", "Engine switch to \(kind.rawValue) declined: \(reason)")
+            } else {
+                Logger.shared.log("Network", "Switching the engine to \(kind.rawValue): \(reason)")
+            }
+            return replacement
+        })
+    }
+
     fileprivate func mainSessionAuthorizationRequired() {
         Logger.shared.log("Network", "requestMessageServiceAuthorizationRequired")
         self.loggedOut?()

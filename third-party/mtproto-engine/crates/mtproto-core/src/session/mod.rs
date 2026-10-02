@@ -15,7 +15,7 @@ use crate::tl::{Reader, TlError, Writer, ids};
 
 pub const ACK_DELAY: f64 = 30.0;
 pub const MAX_PENDING_ACKS: usize = 100;
-pub const QUERY_DELAY: f64 = 0.0;
+pub const QUERY_DELAY: f64 = 0.001;
 pub const FUTURE_SALTS_RETRY: f64 = 60.0;
 pub const FUTURE_SALTS_COUNT: i32 = 64;
 pub const MAX_IDS_PER_SERVICE_MESSAGE: usize = 8192;
@@ -54,6 +54,10 @@ pub const PROTOCOL_ERROR_PREFIX: &str = "PROTOCOL_ERROR_BAD_MSG_";
 pub const PROTOCOL_REJECTED: &str = "PROTOCOL_ERROR_REJECTED";
 pub const MAX_QUERY_REJECTIONS: u32 = 12;
 pub const MAX_SERVER_RESENDS: u32 = 8;
+pub const TRANSMIT_GRACE_MIN_SIZE: usize = 4 * 1024;
+pub const RESET_DRAIN_MIN: f64 = 1.0;
+pub const RESET_DRAIN_MAX: f64 = 5.0;
+pub const TRANSMIT_GRACE_RATE: f64 = 8.0 * 1024.0;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Now {
@@ -264,6 +268,8 @@ pub struct Session {
     seq_no: i32,
 
     queries: HashMap<QueryId, Query>,
+    pending_queries: usize,
+    unknown_queries: usize,
     pending: VecDeque<QueryId>,
     by_msg_id: HashMap<i64, QueryId>,
     containers: HashMap<i64, Vec<i64>>,
@@ -310,6 +316,8 @@ pub struct Session {
     probe_drained: bool,
     probe_backoff: f64,
     received_on_connection: bool,
+    fresh_packets: u64,
+    transmit_grace_until: f64,
     last_future_salts_at: Option<f64>,
     unknown_since: Option<f64>,
     dropped_answer_bytes: usize,
@@ -318,6 +326,7 @@ pub struct Session {
     need_destroy_auth_key: bool,
     sent_destroy_auth_key: bool,
     pending_reset: bool,
+    drain_reset_at: Option<f64>,
 
     events: VecDeque<SessionEvent>,
 }
@@ -345,6 +354,8 @@ impl Session {
             last_msg_id: 0,
             seq_no: 0,
             queries: HashMap::new(),
+            pending_queries: 0,
+            unknown_queries: 0,
             pending: VecDeque::new(),
             by_msg_id: HashMap::new(),
             containers: HashMap::new(),
@@ -388,6 +399,8 @@ impl Session {
             probe_drained: false,
             probe_backoff: 1.0,
             received_on_connection: false,
+            fresh_packets: 0,
+            transmit_grace_until: 0.0,
             last_future_salts_at: None,
             unknown_since: None,
             dropped_answer_bytes: 0,
@@ -395,6 +408,7 @@ impl Session {
             need_destroy_auth_key: false,
             sent_destroy_auth_key: false,
             pending_reset: false,
+            drain_reset_at: None,
             events: VecDeque::new(),
         }
     }
@@ -432,12 +446,53 @@ impl Session {
     }
 
     pub fn has_unanswered_queries(&self) -> bool {
-        self.queries.values().any(|query| query.state != QueryState::Pending)
+        self.queries.len() > self.pending_queries
     }
 
     pub fn has_unknown_queries(&self) -> bool {
-        self.queries.values().any(|query| query.state == QueryState::Unknown)
+        self.unknown_queries > 0
     }
+
+    fn awaits_old_session_answers(&self) -> bool {
+        self.queries.len() > self.pending_queries + self.unknown_queries
+    }
+
+    fn finish_drain_reset(&mut self, now: Now, rng: &mut impl SecureRandom) -> bool {
+        let Some(at) = self.drain_reset_at else {
+            return false;
+        };
+        if now.mono < at && self.awaits_old_session_answers() {
+            return false;
+        }
+        self.drain_reset_at = None;
+        self.reset(rng);
+        self.send_before(now.mono);
+        true
+    }
+
+    fn count_transition(pending: &mut usize, unknown: &mut usize, from: Option<QueryState>, to: Option<QueryState>) {
+        match from {
+            Some(QueryState::Pending) => *pending -= 1,
+            Some(QueryState::Unknown) => *unknown -= 1,
+            _ => {}
+        }
+        match to {
+            Some(QueryState::Pending) => *pending += 1,
+            Some(QueryState::Unknown) => *unknown += 1,
+            _ => {}
+        }
+    }
+
+    #[cfg(debug_assertions)]
+    fn debug_check_counts(&self) {
+        let pending = self.queries.values().filter(|query| query.state == QueryState::Pending).count();
+        let unknown = self.queries.values().filter(|query| query.state == QueryState::Unknown).count();
+        assert_eq!(pending, self.pending_queries, "pending query count");
+        assert_eq!(unknown, self.unknown_queries, "unknown query count");
+    }
+
+    #[cfg(not(debug_assertions))]
+    fn debug_check_counts(&self) {}
 
     pub fn is_performing_service_tasks(&self) -> bool {
         self.has_unknown_queries() || !self.service_requests.is_empty() || !self.to_resend_answer.is_empty()
@@ -550,6 +605,10 @@ impl Session {
         self.outbound_backlog?;
         let since = self.unanswered_ping_since()?;
         Some(since.max(self.outbound_progress_at) + self.probe_timeout())
+    }
+
+    pub fn fresh_packets(&self) -> u64 {
+        self.fresh_packets
     }
 
     pub fn note_bytes_received(&mut self, now: Now) {
@@ -666,6 +725,7 @@ impl Session {
                 retransmit_refused: false,
             },
         );
+        self.pending_queries += 1;
         self.pending.push_back(id);
         self.send_before(now.mono + QUERY_DELAY);
     }
@@ -674,6 +734,7 @@ impl Session {
         let Some(query) = self.queries.remove(&id) else {
             return CancelOutcome::NotFound;
         };
+        Self::count_transition(&mut self.pending_queries, &mut self.unknown_queries, Some(query.state), None);
         self.to_retransmit.retain(|other| *other != id);
         match query.state {
             QueryState::Pending => {
@@ -754,6 +815,7 @@ impl Session {
         for query in self.queries.values_mut() {
             if query.state == QueryState::Sent && !query.acknowledged && query.connection_epoch == epoch {
                 query.state = QueryState::Unknown;
+                self.unknown_queries += 1;
                 query.may_have_arrived = true;
             }
         }
@@ -770,6 +832,7 @@ impl Session {
         self.outbound_backlog = None;
         self.probe_episode = None;
         self.probe_drained = false;
+        self.transmit_grace_until = 0.0;
     }
 
     pub fn connection_rejected(&mut self, now: Now) {
@@ -797,6 +860,7 @@ impl Session {
     }
 
     pub fn reset(&mut self, rng: &mut impl SecureRandom) {
+        self.drain_reset_at = None;
         let previous_session_id = self.session_id;
         self.session_id = rng.next_u64() as i64;
         self.seq_no = 0;
@@ -857,6 +921,12 @@ impl Session {
             return None;
         }
         let released = (query.msg_id, query.container_id);
+        Self::count_transition(
+            &mut self.pending_queries,
+            &mut self.unknown_queries,
+            Some(query.state),
+            Some(QueryState::Pending),
+        );
         query.state = QueryState::Pending;
         query.msg_id = 0;
         query.container_id = 0;
@@ -949,6 +1019,9 @@ impl Session {
                 }
             }
             FailureKind::Other => {
+                if query.state != QueryState::Unknown {
+                    self.unknown_queries += 1;
+                }
                 query.state = QueryState::Unknown;
                 query.retransmit_refused = true;
                 let msg_id = query.msg_id;
@@ -1045,6 +1118,7 @@ impl Session {
             }
             if query.state == QueryState::Unknown {
                 query.state = QueryState::Sent;
+                self.unknown_queries -= 1;
             }
             query.acknowledged = true;
             query.rejections = 0;
@@ -1127,9 +1201,6 @@ impl Session {
             return Err(SessionError::EvenServerMsgId(header.msg_id));
         }
         self.sync_wall_clock(now);
-        self.last_read_at = now.mono;
-        self.last_pong_at = now.mono;
-        self.received_on_connection = true;
         let body = decrypted.body();
         let mode = match self.received.peek(header.msg_id) {
             DuplicateCheck::New => Mode::Process,
@@ -1146,6 +1217,12 @@ impl Session {
                 self.reset_server_time(header.msg_id, now);
             }
             self.received.check(header.msg_id);
+        }
+        if mode == Mode::Process {
+            self.last_read_at = now.mono;
+            self.last_pong_at = now.mono;
+            self.received_on_connection = true;
+            self.fresh_packets += 1;
         }
         let mut context = PacketContext::new(mode, budget);
         self.process_message(&mut context, header.msg_id, header.seq_no, body, 0, now);
@@ -1171,6 +1248,7 @@ impl Session {
             self.reset(rng);
             self.send_before(now.mono);
         }
+        self.finish_drain_reset(now, rng);
         if self.to_ack.len() >= MAX_PENDING_ACKS {
             self.send_before(now.mono);
         }
@@ -1509,7 +1587,10 @@ impl Session {
             17 => {
                 self.reset_server_time(msg_id, now);
                 self.message_failed(bad_msg_id, FailureKind::Other, now);
-                self.pending_reset = true;
+                if self.drain_reset_at.is_none() {
+                    let grace = self.rtt_estimate().clamp(RESET_DRAIN_MIN, RESET_DRAIN_MAX);
+                    self.drain_reset_at = Some(now.mono + grace);
+                }
             }
             20 => self.message_failed(bad_msg_id, FailureKind::Other, now),
             32 | 33 => {
@@ -1619,10 +1700,15 @@ impl Session {
 
     fn complete_query(&mut self, id: QueryId, msg_id: i64) {
         if let Some(query) = self.queries.remove(&id) {
+            Self::count_transition(&mut self.pending_queries, &mut self.unknown_queries, Some(query.state), None);
             self.by_msg_id.remove(&msg_id);
             self.detach_from_container(query.container_id, msg_id);
-            self.to_retransmit.retain(|other| *other != id);
-            self.awaited_answers.retain(|_, awaited| awaited.query != Some(id));
+            if !self.to_retransmit.is_empty() {
+                self.to_retransmit.retain(|other| *other != id);
+            }
+            if !self.awaited_answers.is_empty() {
+                self.awaited_answers.retain(|_, awaited| awaited.query != Some(id));
+            }
         }
         self.refresh_unknown_tracking();
     }
@@ -1842,13 +1928,17 @@ impl Session {
         if let Some(change) = self.salts.next_change_time() {
             deadline = deadline.min(now.mono + (change - server_time).max(0.0));
         }
-        deadline = deadline.min(self.liveness_at() + self.ping_disconnect_delay() + 0.002);
-        deadline = deadline.min(self.last_read_at + self.read_disconnect_delay() + 0.002);
+        let grace = self.transmit_grace_until;
+        deadline = deadline.min((self.liveness_at() + self.ping_disconnect_delay() + 0.002).max(grace));
+        deadline = deadline.min((self.last_read_at + self.read_disconnect_delay() + 0.002).max(grace));
         if let Some(since) = self.unknown_since {
             deadline = deadline.min(since + STATE_REQUEST_RETRY);
         }
+        if let Some(at) = self.drain_reset_at {
+            deadline = deadline.min(at);
+        }
         if let Some(at) = self.probe_deadline() {
-            deadline = deadline.min(at + 0.002).min(self.backlog_sampled_at + BACKLOG_SAMPLE_INTERVAL);
+            deadline = deadline.min((at + 0.002).max(grace)).min(self.backlog_sampled_at + BACKLOG_SAMPLE_INTERVAL);
         }
         for request in self.service_requests.values() {
             deadline = deadline.min(request.sent_at() + STATE_REQUEST_RETRY + 0.002);
@@ -1862,13 +1952,14 @@ impl Session {
         }
         self.sync_wall_clock(now);
         self.refresh_busy(now);
-        if self.liveness_at() + self.ping_disconnect_delay() < now.mono {
+        let transmitting = now.mono < self.transmit_grace_until;
+        if !transmitting && self.liveness_at() + self.ping_disconnect_delay() < now.mono {
             return Err(SessionError::PingTimeout);
         }
-        if self.last_read_at + self.read_disconnect_delay() < now.mono {
+        if !transmitting && self.last_read_at + self.read_disconnect_delay() < now.mono {
             return Err(SessionError::ReadTimeout);
         }
-        if self.probe_deadline().is_some_and(|at| at < now.mono) {
+        if !transmitting && self.probe_deadline().is_some_and(|at| at < now.mono) {
             if self.received_on_connection {
                 self.probe_backoff = (self.probe_backoff * 2.0).min(PROBE_BACKOFF_MAX);
             }
@@ -1968,7 +2059,8 @@ impl Session {
 
     pub fn poll_transmit(&mut self, now: Now, rng: &mut impl SecureRandom) -> Option<Transmit> {
         self.sync_wall_clock(now);
-        if !self.must_flush(now) {
+        self.finish_drain_reset(now, rng);
+        if self.drain_reset_at.is_some() || !self.must_flush(now) {
             return None;
         }
         let transmit = self.flush_packet(now, rng);
@@ -2027,6 +2119,12 @@ impl Session {
                     deferred.push(id);
                     continue;
                 }
+                Self::count_transition(
+                    &mut self.pending_queries,
+                    &mut self.unknown_queries,
+                    Some(query.state),
+                    Some(QueryState::Sent),
+                );
                 query.state = QueryState::Sent;
                 query.connection_epoch = epoch;
                 query.may_have_arrived = true;
@@ -2067,6 +2165,12 @@ impl Session {
                 let body = Self::query_wire_body(query);
                 total += body.len();
                 wants_quick_ack |= query.options.quick_ack;
+                Self::count_transition(
+                    &mut self.pending_queries,
+                    &mut self.unknown_queries,
+                    Some(query.state),
+                    Some(QueryState::Sent),
+                );
                 query.state = QueryState::Sent;
                 query.msg_id = msg_id;
                 query.seq_no = seq_no;
@@ -2284,6 +2388,10 @@ impl Session {
             seq_no,
         };
         let packet = encrypt_message(&self.auth_key, &header, &body, Side::Client, self.config.padding, rng);
+        if packet.data.len() >= TRANSMIT_GRACE_MIN_SIZE {
+            let start = self.transmit_grace_until.max(now.mono);
+            self.transmit_grace_until = start + packet.data.len() as f64 / TRANSMIT_GRACE_RATE;
+        }
         let quick_ack_token = if wants_quick_ack {
             let token = packet.quick_ack_token & 0x7fff_ffff;
             let ids: Vec<QueryId> = query_messages
@@ -2308,6 +2416,7 @@ impl Session {
     }
 
     pub fn poll_event(&mut self) -> Option<SessionEvent> {
+        self.debug_check_counts();
         self.events.pop_front()
     }
 

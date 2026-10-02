@@ -1,3 +1,5 @@
+use zeroize::Zeroize;
+
 pub trait SecureRandom {
     fn fill(&mut self, buffer: &mut [u8]);
 
@@ -35,15 +37,59 @@ impl<T: SecureRandom + ?Sized> SecureRandom for Box<T> {
     }
 }
 
-#[derive(Debug, Default, Clone, Copy)]
-pub struct OsRandom;
+const OS_RANDOM_POOL: usize = 256;
+
+pub struct OsRandom {
+    pool: [u8; OS_RANDOM_POOL],
+    available: usize,
+}
+
+impl OsRandom {
+    pub fn new() -> Self {
+        Self { pool: [0; OS_RANDOM_POOL], available: 0 }
+    }
+}
+
+impl Default for OsRandom {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl std::fmt::Debug for OsRandom {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.debug_struct("OsRandom").finish_non_exhaustive()
+    }
+}
+
+impl Drop for OsRandom {
+    fn drop(&mut self) {
+        self.pool.zeroize();
+    }
+}
 
 impl SecureRandom for OsRandom {
     fn fill(&mut self, buffer: &mut [u8]) {
         if buffer.is_empty() {
             return;
         }
-        getrandom::fill(buffer).expect("operating system random source failed");
+        if buffer.len() > OS_RANDOM_POOL / 2 {
+            getrandom::fill(buffer).expect("operating system random source failed");
+            return;
+        }
+        let mut offset = 0;
+        while offset < buffer.len() {
+            if self.available == 0 {
+                getrandom::fill(&mut self.pool).expect("operating system random source failed");
+                self.available = OS_RANDOM_POOL;
+            }
+            let start = OS_RANDOM_POOL - self.available;
+            let take = (buffer.len() - offset).min(self.available);
+            buffer[offset..offset + take].copy_from_slice(&self.pool[start..start + take]);
+            self.pool[start..start + take].zeroize();
+            self.available -= take;
+            offset += take;
+        }
     }
 }
 
@@ -120,10 +166,33 @@ mod tests {
 
     #[test]
     fn os_random_produces_distinct_values() {
-        let mut rng = OsRandom;
+        let mut rng = OsRandom::new();
         let a: [u8; 32] = rng.array();
         let b: [u8; 32] = rng.array();
         assert_ne!(a, b);
+    }
+
+    #[test]
+    fn os_random_pool_never_repeats_or_keeps_handed_out_bytes() {
+        let mut rng = OsRandom::new();
+        let mut seen = std::collections::HashSet::new();
+        for _ in 0..4096 {
+            assert!(seen.insert(rng.next_u64()), "a 64-bit value repeated");
+            let start = OS_RANDOM_POOL - rng.available;
+            assert!(rng.pool[..start].iter().all(|byte| *byte == 0), "consumed pool bytes are wiped");
+        }
+        let mut odd = [0u8; 7];
+        for _ in 0..100 {
+            rng.fill(&mut odd);
+            assert!(rng.available <= OS_RANDOM_POOL);
+        }
+        let mut large = [0u8; 4096];
+        rng.fill(&mut large);
+        assert!(large.iter().any(|byte| *byte != 0));
+        let mut other = OsRandom::new();
+        let first: [u8; 32] = rng.array();
+        let second: [u8; 32] = other.array();
+        assert_ne!(first, second, "independent pools");
     }
 
     #[test]

@@ -544,6 +544,7 @@ public final class PasscodeCredentialStore: @unchecked Sendable {
         guard !Task.isCancelled else { throw PasscodeError.cancelled }
         if let access { try self.requirePasscodeManagement(access) }
         var record = try self.existingOrCreate()
+        let isInitialSetup = record.kind == nil
         var key: Data
         if record.kind != nil {
             guard let access else { throw PasscodeError.authenticationRequired }
@@ -559,6 +560,10 @@ public final class PasscodeCredentialStore: @unchecked Sendable {
         var committed = false
         defer { if !committed { session?.invalidate() } }
         try self.wrap(code: code, kind: kind, key: key, record: &record)
+        if isInitialSetup {
+            record.protectionEnabled = true
+            record.unprotectedKey = nil
+        }
         record.managedPasscode = true
         record.revision &+= 1
         if let access { _ = try self.validatedRecord(access) }

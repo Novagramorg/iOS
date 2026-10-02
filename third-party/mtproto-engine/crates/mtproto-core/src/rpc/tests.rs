@@ -253,7 +253,7 @@ fn server_errors_retry_with_backoff_or_fail() {
     h.advance(1.1);
     let calls = h.flush_calls();
     assert_eq!(calls.len(), 1);
-    h.reply(vec![Outgoing::Content(rpc_error(calls[0].0, -503, "Timeout"))]);
+    h.reply(vec![Outgoing::Content(rpc_error(calls[0].0, -500, "Timeout"))]);
     h.advance(2.1);
     assert!(h.flush_calls().is_empty(), "second retry waits 4s");
     h.advance(2.0);
@@ -583,8 +583,6 @@ fn msg_wait_errors_wait_for_the_dependency_with_any_code() {
 fn negative_and_normalized_codes_are_retried_as_server_errors() {
     for (code, message) in [
         (-500, "SOMETHING"),
-        (-503, "Timeout"),
-        (-1, "X"),
         (0, "ZERO_CODE"),
         (12345, "HUGE"),
         (500, "INTERDC_2_CALL_ERROR"),
@@ -600,6 +598,41 @@ fn negative_and_normalized_codes_are_retried_as_server_errors() {
         assert!(failed_with(&h.events(), 1).is_none(), "{code} {message}");
         h.advance(SERVER_ERROR_RETRY_DELAY + 0.1);
         assert_eq!(h.flush_calls().len(), 1, "{code} {message}");
+    }
+}
+
+#[test]
+fn other_negative_codes_surface_like_mtprotokit() {
+    for (code, message) in [(-503, "Timeout"), (-1, "X"), (-400, "NEGATIVE")] {
+        let mut h = Harness::new(SessionRole::Main, Some("h1"));
+        let flags =
+            RequestFlags { retry_server_errors: true, delegate_retry_decisions: true, ..RequestFlags::default() };
+        h.send(1, flags);
+        let calls = h.flush_calls();
+        h.reply(vec![Outgoing::Content(rpc_error(calls[0].0, code, message))]);
+        let events = h.events();
+        assert_eq!(failed_with(&events, 1), Some((code, message.into())), "{code} {message}");
+        assert!(!events.iter().any(|event| matches!(event, RpcEvent::RetryDecisionRequired { .. })));
+        h.advance(30.0);
+        assert!(h.flush_calls().is_empty(), "{code} {message}: sent exactly once");
+    }
+}
+
+#[test]
+fn delegated_server_error_retries_back_off() {
+    let mut h = Harness::new(SessionRole::Main, Some("h1"));
+    let flags = RequestFlags { delegate_retry_decisions: true, ..RequestFlags::default() };
+    h.send(1, flags);
+    let mut expected = [2.0, 4.0, 8.0, 16.0, 16.0].into_iter();
+    for round in 0..5 {
+        let calls = h.flush_calls();
+        assert_eq!(calls.len(), 1, "round {round}");
+        h.reply(vec![Outgoing::Content(rpc_error(calls[0].0, 500, "INTERNAL"))]);
+        h.client.decide_retry(RequestId(1), true, h.now);
+        let delay = expected.next().unwrap();
+        h.advance(delay - 0.1);
+        assert!(h.flush_calls().is_empty(), "round {round}: waits {delay} s");
+        h.advance(0.2);
     }
 }
 
@@ -800,7 +833,7 @@ fn msg_wait_errors_without_a_dependency_follow_their_code() {
     let mut h = Harness::new(SessionRole::Main, Some("h1"));
     let events = h.single_error(SessionRole::Main, 400, "MSG_WAIT_FAILED");
     assert_eq!(failed_with(&events, 1), Some((400, "MSG_WAIT_FAILED".into())), "no hot loop without a dependency");
-    let events = h.single_error(SessionRole::Main, -503, "MSG_WAIT_TIMEOUT");
+    let events = h.single_error(SessionRole::Main, -500, "MSG_WAIT_TIMEOUT");
     assert!(failed_with(&events, 1).is_none(), "retried as a server error");
     h.advance(SERVER_ERROR_RETRY_DELAY + 0.1);
     assert_eq!(h.flush_calls().len(), 1);

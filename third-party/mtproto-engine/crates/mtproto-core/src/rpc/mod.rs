@@ -1,6 +1,6 @@
 mod wrap;
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{BTreeMap, HashMap, VecDeque};
 
 pub use wrap::{
     ApiEnvironment, ClientProxy, INIT_CONNECTION, INPUT_CLIENT_PROXY, INVOKE_WITH_APNS_SECRET, INVOKE_WITH_RECAPTCHA,
@@ -159,6 +159,7 @@ pub enum SessionRole {
 #[derive(Debug, Clone)]
 struct RequestState {
     request: RpcRequest,
+    seq: u64,
     wrapped_with_init: bool,
     in_session: bool,
     not_before: f64,
@@ -190,7 +191,10 @@ pub struct RpcClient {
     environment: Option<ApiEnvironment>,
     stored_init_hash: Option<String>,
     requests: HashMap<RequestId, RequestState>,
-    order: VecDeque<RequestId>,
+    order: BTreeMap<u64, RequestId>,
+    parked: BTreeMap<u64, RequestId>,
+    next_seq: u64,
+    timeout_timer_in_session: usize,
     events: VecDeque<RpcEvent>,
     auth_token_ready: bool,
     temporary_key_reported: Option<(u64, f64)>,
@@ -209,7 +213,10 @@ impl RpcClient {
             environment,
             stored_init_hash,
             requests: HashMap::new(),
-            order: VecDeque::new(),
+            order: BTreeMap::new(),
+            parked: BTreeMap::new(),
+            next_seq: 0,
+            timeout_timer_in_session: 0,
             events: VecDeque::new(),
             auth_token_ready: true,
             temporary_key_reported: None,
@@ -245,7 +252,7 @@ impl RpcClient {
     }
 
     pub fn has_timeout_timer_requests(&self) -> bool {
-        self.requests.values().any(|state| state.request.flags.timeout_timer && state.in_session)
+        self.timeout_timer_in_session > 0
     }
 
     pub fn needs_initialization(&self) -> bool {
@@ -297,10 +304,13 @@ impl RpcClient {
             });
             return;
         }
+        let seq = self.next_seq;
+        self.next_seq += 1;
         self.requests.insert(
             id,
             RequestState {
                 request,
+                seq,
                 wrapped_with_init: false,
                 in_session: false,
                 not_before: 0.0,
@@ -318,7 +328,8 @@ impl RpcClient {
                 temporary_key_rejections: 0,
             },
         );
-        self.order.push_back(id);
+        self.order.insert(seq, id);
+        self.parked.insert(seq, id);
         self.dispatch_ready(now);
     }
 
@@ -341,10 +352,9 @@ impl RpcClient {
     }
 
     pub fn cancel(&mut self, id: RequestId, now: Now) -> bool {
-        let Some(state) = self.requests.remove(&id) else {
+        let Some(state) = self.remove_request(id) else {
             return false;
         };
-        self.order.retain(|other| *other != id);
         if state.in_session
             && let CancelOutcome::RemovedInFlight { msg_id } = self.session.cancel(id.into())
         {
@@ -363,8 +373,7 @@ impl RpcClient {
     }
 
     pub fn fail_request(&mut self, id: RequestId, code: i32, message: &str, now: Now) {
-        if let Some(state) = self.requests.remove(&id) {
-            self.order.retain(|other| *other != id);
+        if let Some(state) = self.remove_request(id) {
             if state.in_session {
                 self.session.cancel(id.into());
             }
@@ -410,26 +419,30 @@ impl RpcClient {
     }
 
     fn dispatch_ready(&mut self, now: Now) {
-        let ids: Vec<RequestId> = self.order.iter().copied().collect();
-        for id in ids {
+        self.debug_check_bookkeeping();
+        if self.parked.is_empty() {
+            return;
+        }
+        let candidates: Vec<RequestId> = self.parked.values().copied().collect();
+        let initialize = self.needs_initialization();
+        for id in candidates {
             let ready = self.requests.get(&id).is_some_and(|state| self.is_ready(state, now));
             if !ready {
                 continue;
             }
-            let initialize = self.needs_initialization();
-            let environment = self.environment.clone();
             let invoke_after = self
                 .requests
                 .get(&id)
                 .and_then(|state| state.request.invoke_after)
                 .filter(|dependency| self.requests.get(dependency).is_some_and(|other| other.in_session))
                 .map(QueryId::from);
+            let environment = self.environment.as_ref();
             let state = self.requests.get_mut(&id).expect("ready request exists");
             let without_updates = state.request.flags.without_updates
-                || environment.as_ref().is_some_and(|environment| environment.disable_updates);
+                || environment.is_some_and(|environment| environment.disable_updates);
             let body = wrap_request(
                 &state.request.body,
-                if initialize { environment.as_ref() } else { None },
+                if initialize { environment } else { None },
                 without_updates,
                 state.verification.as_ref(),
             );
@@ -437,22 +450,65 @@ impl RpcClient {
             state.in_session = true;
             state.rejected_key = None;
             state.sent_at_unix = now.unix;
+            if state.request.flags.timeout_timer {
+                self.timeout_timer_in_session += 1;
+            }
+            self.parked.remove(&state.seq);
             let options = QueryOptions { quick_ack: state.request.flags.quick_ack, invoke_after };
             self.session.send(id.into(), body, options, now);
         }
     }
 
-    fn requeue(&mut self, id: RequestId, delay: f64, now: Now) {
+    fn leave_session(&mut self, id: RequestId) {
         if let Some(state) = self.requests.get_mut(&id) {
-            state.in_session = false;
-            state.not_before = now.mono + delay.max(0.0);
+            if state.in_session {
+                state.in_session = false;
+                if state.request.flags.timeout_timer {
+                    self.timeout_timer_in_session -= 1;
+                }
+            }
+            self.parked.insert(state.seq, id);
         }
     }
 
-    fn finish(&mut self, id: RequestId) -> Option<RequestState> {
+    fn remove_request(&mut self, id: RequestId) -> Option<RequestState> {
         let state = self.requests.remove(&id)?;
-        self.order.retain(|other| *other != id);
+        self.order.remove(&state.seq);
+        self.parked.remove(&state.seq);
+        if state.in_session && state.request.flags.timeout_timer {
+            self.timeout_timer_in_session -= 1;
+        }
         Some(state)
+    }
+
+    #[cfg(debug_assertions)]
+    fn debug_check_bookkeeping(&self) {
+        assert_eq!(self.order.len(), self.requests.len(), "every request is ordered");
+        let mut parked = 0;
+        let mut timeout_timer = 0;
+        for (seq, id) in &self.order {
+            let state = self.requests.get(id).expect("ordered request exists");
+            assert_eq!(state.seq, *seq, "order key matches the request");
+            assert_eq!(self.parked.contains_key(seq), !state.in_session, "parked iff not in session");
+            parked += usize::from(!state.in_session);
+            timeout_timer += usize::from(state.in_session && state.request.flags.timeout_timer);
+        }
+        assert_eq!(parked, self.parked.len(), "parked holds only live requests");
+        assert_eq!(timeout_timer, self.timeout_timer_in_session, "timeout timer count");
+    }
+
+    #[cfg(not(debug_assertions))]
+    fn debug_check_bookkeeping(&self) {}
+
+    fn requeue(&mut self, id: RequestId, delay: f64, now: Now) {
+        if let Some(state) = self.requests.get_mut(&id) {
+            state.not_before = now.mono + delay.max(0.0);
+        }
+        self.leave_session(id);
+    }
+
+    fn finish(&mut self, id: RequestId) -> Option<RequestState> {
+        self.remove_request(id)
     }
 
     fn handle_session_event(&mut self, event: SessionEvent, now: Now) {
@@ -539,8 +595,8 @@ impl RpcClient {
                         self.auth_token_ready = false;
                         if let Some(state) = self.requests.get_mut(&id) {
                             state.waiting_for_token = true;
-                            state.in_session = false;
                         }
+                        self.leave_session(id);
                         return;
                     }
                 }
@@ -561,13 +617,13 @@ impl RpcClient {
                 let server_errors = state.server_errors;
                 let flood_wait_seconds = state.flood_wait_seconds;
                 let flood_wait_text = state.flood_wait_text.clone();
-                state.in_session = false;
                 state.pending_decision = Some(PendingDecision {
                     code,
                     message: message.clone(),
-                    delay: SERVER_ERROR_RETRY_DELAY,
+                    delay: server_error_delay(server_errors),
                     response_time,
                 });
+                self.leave_session(id);
                 self.events.push_back(RpcEvent::RetryDecisionRequired {
                     id,
                     code,
@@ -579,8 +635,7 @@ impl RpcClient {
                 return;
             }
             if flags.retry_server_errors {
-                let delay = (SERVER_ERROR_RETRY_DELAY * f64::from(1u32 << (state.server_errors - 1).min(3)))
-                    .min(SERVER_ERROR_MAX_RETRY_DELAY);
+                let delay = server_error_delay(state.server_errors);
                 self.requeue(id, delay, now);
                 return;
             }
@@ -594,9 +649,9 @@ impl RpcClient {
                 let state = self.requests.get_mut(&id).expect("request exists");
                 state.flood_wait_seconds = seconds;
                 state.flood_wait_text = Some(message.clone());
-                state.in_session = false;
                 state.pending_decision = Some(PendingDecision { code, message: message.clone(), delay, response_time });
                 let server_errors = state.server_errors;
+                self.leave_session(id);
                 self.events.push_back(RpcEvent::RetryDecisionRequired {
                     id,
                     code,
@@ -671,17 +726,17 @@ impl RpcClient {
                 .min(TEMPORARY_KEY_MAX_RETRY_DELAY);
             state.temporary_key_rejections += 1;
             state.rejected_key = Some(key);
-            state.in_session = false;
             state.not_before = now.mono + delay;
         }
+        self.leave_session(id);
     }
 
     fn park_for_verification(&mut self, id: RequestId, kind: VerificationKind, _now: Now) {
         if let Some(state) = self.requests.get_mut(&id) {
             state.pending_verification = true;
-            state.in_session = false;
             state.verification = None;
         }
+        self.leave_session(id);
         self.events.push_back(RpcEvent::VerificationRequired { id, kind });
     }
 
@@ -744,7 +799,7 @@ impl RpcClient {
 
     pub fn poll_timeout(&mut self, now: Now) -> Option<f64> {
         let mut deadline = self.session.poll_timeout(now).unwrap_or(f64::INFINITY);
-        for state in self.requests.values() {
+        for state in self.parked.values().filter_map(|id| self.requests.get(id)) {
             if !state.in_session
                 && state.not_before > now.mono
                 && state.rejected_key.is_none_or(|key| key == self.session.auth_key_id())
@@ -775,8 +830,9 @@ impl RpcClient {
     }
 
     pub fn into_requests(mut self) -> Vec<RpcRequest> {
-        let mut requests = Vec::with_capacity(self.order.len());
-        for id in self.order.drain(..) {
+        let order = std::mem::take(&mut self.order);
+        let mut requests = Vec::with_capacity(order.len());
+        for id in order.into_values() {
             if let Some(state) = self.requests.remove(&id) {
                 requests.push(state.request);
             }
@@ -790,7 +846,12 @@ impl RpcClient {
 }
 
 fn is_server_error(code: i32) -> bool {
-    code == 500 || code < 0
+    code == 500 || code == -500
+}
+
+fn server_error_delay(server_errors: u32) -> f64 {
+    (SERVER_ERROR_RETRY_DELAY * f64::from(1u32 << server_errors.saturating_sub(1).min(3)))
+        .min(SERVER_ERROR_MAX_RETRY_DELAY)
 }
 
 fn is_local_terminal_error(message: &str) -> bool {
