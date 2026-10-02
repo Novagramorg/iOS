@@ -11,6 +11,7 @@ public final class LensTransitionContainer: UIView {
     private var morph: AnyObject?
     private var sourcePreview: UITargetedPreview?
     private var sourceVisibilityAssertion: AnyObject?
+    private var menuVisibilityAssertion: AnyObject?
     private weak var originalSourceView: UIView?
     private var isPresenting = false
     private var pendingLayout: (CGSize, CGFloat, Bool)?
@@ -128,7 +129,14 @@ public final class LensTransitionContainer: UIView {
             // source transform, as UIKit does for its dismissal preview.
             let attachment = destination.target.container.convert(destination.target.center, to: self)
             let menu = self.makeMenuPreview()
-            if morph.animate(from: menu, to: destination, attachment: attachment, in: self, sourceIdentity: originalSourceView, interruptingCurrent: interruptsPresentation, alongsideAnimations: alongsideAnimations, completion: { [weak self] in
+            if morph.animate(from: menu, to: destination, attachment: attachment, in: self, sourceIdentity: originalSourceView, interruptingCurrent: interruptsPresentation, alongsideAnimations: { [weak self] in
+                // The menu is this morph's source. UIKit puts it back on screen, fully open,
+                // when it tears the morph down, and our completion (which hides it) only runs
+                // a main-queue turn later; a frame in between showed the open menu once. Hold
+                // it hidden until then, as opening holds the button for the menu's lifetime.
+                self?.menuVisibilityAssertion = LiquidMorphTransition.sourceVisibilityAssertion(for: menu.view)
+                alongsideAnimations()
+            }, completion: { [weak self] in
                 self?.finishDismissal()
                 completion()
             }) {
@@ -157,6 +165,7 @@ public final class LensTransitionContainer: UIView {
         self.sourceVisibilityAssertion = nil
         self.restoreSourceViews()
         self.backgroundView.alpha = 0.0
+        self.menuVisibilityAssertion = nil
         self.morph = nil
         self.sourcePreview = nil
         self.originalSourceView = nil
