@@ -30,10 +30,11 @@ extension ChatControllerImpl {
             return .single([])
         }
         |> mapToSignal { addresses -> Signal<WalletSendRequest.Recipient, NoError> in
-            guard let userAddress = addresses.first(where: { WalletContext.transferAddress(from: $0.address) == normalizedAddress }) else {
+            guard let userAddress = addresses.first(where: { WalletContext.transferAddress(from: $0.address) == normalizedAddress }),
+                  let userId = userAddress.userId else {
                 return .single(.address(address))
             }
-            return context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: userAddress.userId))
+            return context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: userId))
             |> map { peer -> WalletSendRequest.Recipient in
                 guard let peer, case .user = peer else {
                     return .address(address)
@@ -90,8 +91,8 @@ extension ChatControllerImpl {
                 self.openUrl(baseUrl + encodedAddress, concealed: false)
             })))
 
-            items.append(.separator)
             if case let .peer(peer, _) = recipient {
+                items.append(.separator)
                 let avatarSize = CGSize(width: 28.0, height: 28.0)
                 let avatarSignal = peerAvatarCompleteImage(account: self.context.account, peer: peer, size: avatarSize)
                 let subtitle = NSMutableAttributedString(string: self.presentationData.strings.Wallet_ViewProfile)
@@ -103,9 +104,6 @@ extension ChatControllerImpl {
                     dismiss(.default)
                     self?.openPeer(peer: peer, navigation: .info(ChatControllerInteractionNavigateToPeer.InfoParams(ignoreInSavedMessages: true)), fromMessage: nil)
                 })))
-            } else {
-                let emptyAction: ((ContextMenuActionItem.Action) -> Void)? = nil
-                items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.Wallet_UnlinkedAddress, textLayout: .multiline, textFont: .small, icon: { _ in return nil }, action: emptyAction)))
             }
 
             let controller = makeContextController(presentationData: self.presentationData, source: source, items: .single(ContextController.Items(content: .list(items))), recognizer: params.gesture, gesture: nil, disableScreenshots: false)

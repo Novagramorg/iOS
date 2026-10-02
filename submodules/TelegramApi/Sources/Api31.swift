@@ -174,16 +174,18 @@ public extension Api {
 public extension Api {
     enum WalletUserAddress: TypeConstructorDescription {
         public class Cons_walletUserAddress: TypeConstructorDescription {
-            public var userId: Int64
+            public var flags: Int32
+            public var userId: Int64?
             public var address: String
             public var publicKey: Buffer
-            public init(userId: Int64, address: String, publicKey: Buffer) {
+            public init(flags: Int32, userId: Int64?, address: String, publicKey: Buffer) {
+                self.flags = flags
                 self.userId = userId
                 self.address = address
                 self.publicKey = publicKey
             }
             public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("walletUserAddress", [("userId", ConstructorParameterDescription(self.userId)), ("address", ConstructorParameterDescription(self.address)), ("publicKey", ConstructorParameterDescription(self.publicKey))])
+                return ("walletUserAddress", [("flags", ConstructorParameterDescription(self.flags)), ("userId", ConstructorParameterDescription(self.userId)), ("address", ConstructorParameterDescription(self.address)), ("publicKey", ConstructorParameterDescription(self.publicKey))])
             }
         }
         case walletUserAddress(Cons_walletUserAddress)
@@ -192,9 +194,12 @@ public extension Api {
             switch self {
             case .walletUserAddress(let _data):
                 if boxed {
-                    buffer.appendInt32(-1581738523)
+                    buffer.appendInt32(-25628980)
                 }
-                serializeInt64(_data.userId, buffer: buffer, boxed: false)
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 0) != 0 {
+                    serializeInt64(_data.userId!, buffer: buffer, boxed: false)
+                }
                 serializeString(_data.address, buffer: buffer, boxed: false)
                 serializeBytes(_data.publicKey, buffer: buffer, boxed: false)
                 break
@@ -204,22 +209,27 @@ public extension Api {
         public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .walletUserAddress(let _data):
-                return ("walletUserAddress", [("userId", ConstructorParameterDescription(_data.userId)), ("address", ConstructorParameterDescription(_data.address)), ("publicKey", ConstructorParameterDescription(_data.publicKey))])
+                return ("walletUserAddress", [("flags", ConstructorParameterDescription(_data.flags)), ("userId", ConstructorParameterDescription(_data.userId)), ("address", ConstructorParameterDescription(_data.address)), ("publicKey", ConstructorParameterDescription(_data.publicKey))])
             }
         }
 
         public static func parse_walletUserAddress(_ reader: BufferReader) -> WalletUserAddress? {
-            var _1: Int64?
-            _1 = reader.readInt64()
-            var _2: String?
-            _2 = parseString(reader)
-            var _3: Buffer?
-            _3 = parseBytes(reader)
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Int64?
+            if Int(_1 ?? 0) & Int(1 << 0) != 0 {
+                _2 = reader.readInt64()
+            }
+            var _3: String?
+            _3 = parseString(reader)
+            var _4: Buffer?
+            _4 = parseBytes(reader)
             let _c1 = _1 != nil
-            let _c2 = _2 != nil
+            let _c2 = (Int(_1 ?? 0) & Int(1 << 0) == 0) || _2 != nil
             let _c3 = _3 != nil
-            if _c1 && _c2 && _c3 {
-                return Api.WalletUserAddress.walletUserAddress(Cons_walletUserAddress(userId: _1!, address: _2!, publicKey: _3!))
+            let _c4 = _4 != nil
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.WalletUserAddress.walletUserAddress(Cons_walletUserAddress(flags: _1!, userId: _2, address: _3!, publicKey: _4!))
             }
             else {
                 return nil

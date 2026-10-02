@@ -1505,6 +1505,13 @@ private final class WalletScreenComponent: Component {
             })
         }
 
+        private var displayBalance: Int64? {
+            guard let balance = self.walletState?.balance.currentValue else {
+                return nil
+            }
+            return balance.magnitude < 1_000_000 ? 0 : balance
+        }
+
         private var walletInfo: WalletContext.WalletInfo? {
             guard let walletState = self.walletState else {
                 return nil
@@ -2925,7 +2932,7 @@ private final class WalletScreenComponent: Component {
                 transition: transition,
                 component: AnyComponent(WalletNavigationBalanceComponent(
                     theme: environment.theme,
-                    balance: self.walletState?.balance.currentValue,
+                    balance: self.displayBalance,
                     fiatCurrency: self.walletState?.fiat.selectedCurrency ?? .usd,
                     fiatRate: self.walletState?.fiat.selectedRate,
                     dateTimeFormat: environment.dateTimeFormat
@@ -3198,7 +3205,7 @@ private final class WalletScreenComponent: Component {
                 transition: transition,
                 component: AnyComponent(WalletCardComponent(
                     theme: environment.theme,
-                    balance: self.walletState?.balance.currentValue,
+                    balance: self.displayBalance,
                     fiatCurrency: fiatCurrency,
                     fiatRate: fiatRate,
                     dateTimeFormat: environment.dateTimeFormat,

@@ -2767,6 +2767,22 @@ public extension Api.functions.bots {
     }
 }
 public extension Api.functions.bots {
+    static func addUsername(bot: Api.InputUser, username: String) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Bool>) {
+        let buffer = Buffer()
+        buffer.appendInt32(889307274)
+        bot.serialize(buffer, true)
+        serializeString(username, buffer: buffer, boxed: false)
+        return (FunctionDescription(name: "bots.addUsername", parameters: [("bot", ConstructorParameterDescription(bot)), ("username", ConstructorParameterDescription(username))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Bool? in
+            let reader = BufferReader(buffer)
+            var result: Api.Bool?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.Bool
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.bots {
     static func allowSendMessage(bot: Api.InputUser) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Updates>) {
         let buffer = Buffer()
         buffer.appendInt32(-248323089)
@@ -2830,11 +2846,12 @@ public extension Api.functions.bots {
     }
 }
 public extension Api.functions.bots {
-    static func checkUsername(username: String) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Bool>) {
+    static func checkUsername(flags: Int32, username: String) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Bool>) {
         let buffer = Buffer()
-        buffer.appendInt32(-2014174821)
+        buffer.appendInt32(-475247519)
+        serializeInt32(flags, buffer: buffer, boxed: false)
         serializeString(username, buffer: buffer, boxed: false)
-        return (FunctionDescription(name: "bots.checkUsername", parameters: [("username", ConstructorParameterDescription(username))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Bool? in
+        return (FunctionDescription(name: "bots.checkUsername", parameters: [("flags", ConstructorParameterDescription(flags)), ("username", ConstructorParameterDescription(username))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Bool? in
             let reader = BufferReader(buffer)
             var result: Api.Bool?
             if let signature = reader.readInt32() {
@@ -3109,6 +3126,22 @@ public extension Api.functions.bots {
             var result: Api.DataJSON?
             if let signature = reader.readInt32() {
                 result = Api.parse(reader, signature: signature) as? Api.DataJSON
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.bots {
+    static func removeUsername(bot: Api.InputUser, username: String) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Bool>) {
+        let buffer = Buffer()
+        buffer.appendInt32(-956033923)
+        bot.serialize(buffer, true)
+        serializeString(username, buffer: buffer, boxed: false)
+        return (FunctionDescription(name: "bots.removeUsername", parameters: [("bot", ConstructorParameterDescription(bot)), ("username", ConstructorParameterDescription(username))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Bool? in
+            let reader = BufferReader(buffer)
+            var result: Api.Bool?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.Bool
             }
             return result
         })

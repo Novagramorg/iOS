@@ -66,10 +66,11 @@ private func walletPeerSelectionResolvePeer(context: AccountContext, address: St
         return .single([])
     }
     |> mapToSignal { addresses -> Signal<WalletPeerSelectionResolvedPeer?, NoError> in
-        guard let userAddress = addresses.first(where: { WalletContext.transferAddress(from: $0.address) == normalizedAddress }) else {
+        guard let userAddress = addresses.first(where: { WalletContext.transferAddress(from: $0.address) == normalizedAddress }),
+              let userId = userAddress.userId else {
             return .single(nil)
         }
-        return context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: userAddress.userId))
+        return context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: userId))
         |> map { peer -> WalletPeerSelectionResolvedPeer? in
             guard let peer, walletPeerSelectionIsEligiblePeer(peer, accountPeerId: context.account.peerId) else {
                 return nil

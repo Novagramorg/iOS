@@ -71,11 +71,11 @@ public enum WalletState: Equatable, Sendable {
 }
 
 public struct WalletUserAddress: Equatable {
-    public let userId: EnginePeer.Id
+    public let userId: EnginePeer.Id?
     public let address: String
     public let publicKey: Data
 
-    public init(userId: EnginePeer.Id, address: String, publicKey: Data) {
+    public init(userId: EnginePeer.Id?, address: String, publicKey: Data) {
         self.userId = userId
         self.address = address
         self.publicKey = publicKey
@@ -302,10 +302,12 @@ private extension WalletUserAddress {
         switch apiAddress {
         case let .walletUserAddress(address):
             self.init(
-                userId: EnginePeer.Id(
-                    namespace: Namespaces.Peer.CloudUser,
-                    id: PeerId.Id._internalFromInt64Value(address.userId)
-                ),
+                userId: address.userId.map { userId in
+                    EnginePeer.Id(
+                        namespace: Namespaces.Peer.CloudUser,
+                        id: PeerId.Id._internalFromInt64Value(userId)
+                    )
+                },
                 address: address.address,
                 publicKey: address.publicKey.makeData()
             )
@@ -413,7 +415,7 @@ func _internal_getWalletState(account: Account) -> Signal<WalletState, WalletGet
 
 private struct CachedWalletUserAddresses: Codable {
     struct Address: Codable {
-        let userId: Int64
+        let userId: Int64?
         let address: String
         let publicKey: Data
     }
@@ -422,12 +424,12 @@ private struct CachedWalletUserAddresses: Codable {
     let timestamp: Int32
 
     init(addresses: [WalletUserAddress], timestamp: Int32) {
-        self.addresses = addresses.map { Address(userId: $0.userId.toInt64(), address: $0.address, publicKey: $0.publicKey) }
+        self.addresses = addresses.map { Address(userId: $0.userId?.toInt64(), address: $0.address, publicKey: $0.publicKey) }
         self.timestamp = timestamp
     }
 
     var userAddresses: [WalletUserAddress] {
-        return self.addresses.map { WalletUserAddress(userId: PeerId($0.userId), address: $0.address, publicKey: $0.publicKey) }
+        return self.addresses.map { WalletUserAddress(userId: $0.userId.map { PeerId($0) }, address: $0.address, publicKey: $0.publicKey) }
     }
 }
 

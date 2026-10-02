@@ -835,7 +835,7 @@ private final class WalletSendScreenComponent: Component {
             guard self.amountSource == .manual, self.amount > 0, let walletBalance = self.walletBalance else {
                 return false
             }
-            return self.amount == walletBalance
+            return self.amount == walletBalance && !self.feesAreCovered(amount: self.amount)
         }
 
         private var commentEncrypted: Bool {
