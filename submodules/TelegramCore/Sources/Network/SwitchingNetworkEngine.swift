@@ -2,332 +2,227 @@ import Foundation
 import SwiftSignalKit
 import MtProtoKit
 
-private final class SwitchingRequestEntry {
-    let id: Int
-    let request: NetworkEngineRequest
-    var generation: Int
-    var disposable: Disposable?
+private final class SwitchingLock {
+    private let pointer: UnsafeMutablePointer<os_unfair_lock>
 
-    init(id: Int, request: NetworkEngineRequest, generation: Int) {
-        self.id = id
-        self.request = request
-        self.generation = generation
+    init() {
+        self.pointer = UnsafeMutablePointer<os_unfair_lock>.allocate(capacity: 1)
+        self.pointer.initialize(to: os_unfair_lock())
+    }
+
+    deinit {
+        self.pointer.deinitialize(count: 1)
+        self.pointer.deallocate()
+    }
+
+    @inline(__always)
+    func lock() {
+        os_unfair_lock_lock(self.pointer)
+    }
+
+    @inline(__always)
+    func unlock() {
+        os_unfair_lock_unlock(self.pointer)
+    }
+}
+
+private final class SwitchingDelegateBox {
+    weak var delegate: NetworkEngineSessionDelegate?
+    private let lock = SwitchingLock()
+    private let generation: UnsafeMutablePointer<Int>
+
+    init(delegate: NetworkEngineSessionDelegate?) {
+        self.delegate = delegate
+        self.generation = UnsafeMutablePointer<Int>.allocate(capacity: 1)
+        self.generation.initialize(to: 0)
+    }
+
+    deinit {
+        self.generation.deinitialize(count: 1)
+        self.generation.deallocate()
+    }
+
+    func setGeneration(_ value: Int) {
+        self.lock.lock()
+        self.generation.pointee = value
+        self.lock.unlock()
+    }
+
+    func isCurrent(_ value: Int) -> Bool {
+        self.lock.lock()
+        let current = self.generation.pointee
+        self.lock.unlock()
+        return current == value
     }
 }
 
 private final class SwitchingSessionDelegate: NetworkEngineSessionDelegate {
-    weak var session: SwitchingNetworkSession?
-    let generation: Int
+    private let box: SwitchingDelegateBox
+    private let generation: Int
 
-    init(generation: Int) {
+    init(box: SwitchingDelegateBox, generation: Int) {
+        self.box = box
         self.generation = generation
     }
 
     func networkSessionAuthorizationRequired() {
-        guard let session = self.session, session.isCurrent(generation: self.generation) else {
-            return
+        if self.box.isCurrent(self.generation) {
+            self.box.delegate?.networkSessionAuthorizationRequired()
         }
-        session.delegate?.networkSessionAuthorizationRequired()
     }
 
     func networkSessionSoftAuthReset() {
-        guard let session = self.session, session.isCurrent(generation: self.generation) else {
-            return
+        if self.box.isCurrent(self.generation) {
+            self.box.delegate?.networkSessionSoftAuthReset()
         }
-        session.delegate?.networkSessionSoftAuthReset()
     }
 
     func networkSessionConnectionStateChanged(_ state: NetworkEngineConnectionState) {
-        guard let session = self.session, session.isCurrent(generation: self.generation) else {
-            return
+        if self.box.isCurrent(self.generation) {
+            self.box.delegate?.networkSessionConnectionStateChanged(state)
         }
-        session.delegate?.networkSessionConnectionStateChanged(state)
     }
 }
 
-private final class SwitchingRequestService: NetworkEngineRequestService {
-    weak var session: SwitchingNetworkSession?
-
-    func add(_ request: NetworkEngineRequest) -> Disposable {
-        guard let session = self.session else {
-            return EmptyDisposable
-        }
-        return session.add(request)
-    }
+private struct SwitchingState {
+    var current: NetworkEngineSession?
+    var currentService: NetworkEngineRequestService?
+    var currentDelegate: SwitchingSessionDelegate?
+    var generation = 0
+    var draining: [Int: NetworkEngineSession] = [:]
+    var isPaused = true
+    var isOnline = false
+    var isStopped = false
+    var sinks: [NetworkEngineUpdateSink] = []
 }
 
-final class SwitchingNetworkSession: NetworkEngineSession {
+private final class SwitchingCore {
     let datacenterId: Int
-    var requestService: NetworkEngineRequestService {
-        return self.switchingRequestService
-    }
-
-    fileprivate weak var delegate: NetworkEngineSessionDelegate?
-
     private let role: NetworkEngineSessionRole
     private let usageCalculationInfo: MTNetworkUsageCalculationInfo?
-    private let hasDelegate: Bool
-    private let switchingRequestService = SwitchingRequestService()
-    private let lock = NSLock()
-    private var current: NetworkEngineSession
-    private var currentDelegate: SwitchingSessionDelegate?
-    private var generation = 0
-    private var draining: [Int: NetworkEngineSession] = [:]
-    private var entries: [Int: SwitchingRequestEntry] = [:]
-    private var nextEntryId = 0
-    private var isPaused = true
-    private var isOnline = false
-    private var isStopped = false
-    private var sinks: [NetworkEngineUpdateSink] = []
+    private let delegateBox: SwitchingDelegateBox?
+    private let lock = SwitchingLock()
+    private let state: UnsafeMutablePointer<SwitchingState>
 
     init(engine: NetworkEngine, datacenterId: Int, role: NetworkEngineSessionRole, usageCalculationInfo: MTNetworkUsageCalculationInfo?, delegate: NetworkEngineSessionDelegate?) {
         self.datacenterId = datacenterId
         self.role = role
         self.usageCalculationInfo = usageCalculationInfo
-        self.delegate = delegate
-        self.hasDelegate = delegate != nil
-        let sessionDelegate = delegate != nil ? SwitchingSessionDelegate(generation: 0) : nil
-        self.currentDelegate = sessionDelegate
-        self.current = engine.makeSession(datacenterId: datacenterId, role: role, usageCalculationInfo: usageCalculationInfo, delegate: sessionDelegate)
-        sessionDelegate?.session = self
-        self.switchingRequestService.session = self
+        self.delegateBox = delegate.map { SwitchingDelegateBox(delegate: $0) }
+        self.state = UnsafeMutablePointer<SwitchingState>.allocate(capacity: 1)
+        self.state.initialize(to: SwitchingState())
+        let sessionDelegate = self.delegateBox.map { SwitchingSessionDelegate(box: $0, generation: 0) }
+        let session = engine.makeSession(datacenterId: datacenterId, role: role, usageCalculationInfo: usageCalculationInfo, delegate: sessionDelegate)
+        self.state.pointee.current = session
+        self.state.pointee.currentService = session.requestService
+        self.state.pointee.currentDelegate = sessionDelegate
     }
 
-    fileprivate func isCurrent(generation: Int) -> Bool {
-        self.lock.lock()
-        defer {
-            self.lock.unlock()
-        }
-        return self.generation == generation
+    deinit {
+        self.state.deinitialize(count: 1)
+        self.state.deallocate()
     }
 
-    fileprivate func add(_ request: NetworkEngineRequest) -> Disposable {
+    func add(_ request: NetworkEngineRequest) -> Disposable {
         self.lock.lock()
-        if self.isStopped {
-            self.lock.unlock()
+        let service = self.state.pointee.isStopped ? nil : self.state.pointee.currentService
+        self.lock.unlock()
+        guard let service = service else {
             return EmptyDisposable
         }
-        let id = self.nextEntryId
-        self.nextEntryId += 1
-        var generation = self.generation
-        var target = self.current
-        if !self.draining.isEmpty, let dependsOn = request.dependsOn {
-            var dependency: SwitchingRequestEntry?
-            for entry in self.entries.values where self.draining[entry.generation] != nil && dependsOn(entry.request.metadata) {
-                if let current = dependency, current.id > entry.id {
-                    continue
-                }
-                dependency = entry
-            }
-            if let dependency, let session = self.draining[dependency.generation] {
-                generation = dependency.generation
-                target = session
-            }
-        }
-        self.entries[id] = SwitchingRequestEntry(id: id, request: request, generation: generation)
-        self.lock.unlock()
-
-        self.submit(entryId: id, request: request, generation: generation, to: target)
-
-        return ActionDisposable { [weak self] in
-            self?.cancel(entryId: id)
-        }
-    }
-
-    private func submit(entryId: Int, request: NetworkEngineRequest, generation: Int, to session: NetworkEngineSession) {
-        let disposable = session.requestService.add(self.wrap(request, entryId: entryId, generation: generation))
-        self.lock.lock()
-        if let entry = self.entries[entryId], entry.generation == generation {
-            entry.disposable = disposable
-            self.lock.unlock()
-        } else {
-            self.lock.unlock()
-            disposable.dispose()
-        }
-    }
-
-    private func isLive(entryId: Int, generation: Int) -> Bool {
-        self.lock.lock()
-        defer {
-            self.lock.unlock()
-        }
-        return self.entries[entryId]?.generation == generation
-    }
-
-    private func wrap(_ request: NetworkEngineRequest, entryId: Int, generation: Int) -> NetworkEngineRequest {
-        var acknowledged: (() -> Void)?
-        if let requestAcknowledged = request.acknowledged {
-            acknowledged = { [weak self] in
-                if let self, self.isLive(entryId: entryId, generation: generation) {
-                    requestAcknowledged()
-                }
-            }
-        }
-        var progress: ((Float, Int) -> Void)?
-        if let requestProgress = request.progress {
-            progress = { [weak self] value, packetLength in
-                if let self, self.isLive(entryId: entryId, generation: generation) {
-                    requestProgress(value, packetLength)
-                }
-            }
-        }
-        let completed = request.completed
-        return NetworkEngineRequest(
-            payload: request.payload,
-            metadata: request.metadata,
-            shortMetadata: request.shortMetadata,
-            parse: request.parse,
-            options: request.options,
-            shouldContinueAfterError: request.shouldContinueAfterError,
-            dependsOn: request.dependsOn,
-            acknowledged: acknowledged,
-            progress: progress,
-            completed: { [weak self] result in
-                guard let self else {
-                    return
-                }
-                self.lock.lock()
-                guard let entry = self.entries[entryId], entry.generation == generation else {
-                    self.lock.unlock()
-                    return
-                }
-                self.entries.removeValue(forKey: entryId)
-                let drained = self.drainedGenerations()
-                self.lock.unlock()
-                completed(result)
-                self.scheduleFinishDraining(generations: drained)
-            }
-        )
-    }
-
-    private func scheduleFinishDraining(generations: [Int]) {
-        if generations.isEmpty {
-            return
-        }
-        Queue.concurrentDefaultQueue().async { [weak self] in
-            guard let self else {
-                return
-            }
-            for generation in generations {
-                self.finishDraining(generation: generation)
-            }
-        }
-    }
-
-    private func drainedGenerations() -> [Int] {
-        if self.draining.isEmpty {
-            return []
-        }
-        var waiting = Set<Int>()
-        for entry in self.entries.values where self.draining[entry.generation] != nil {
-            waiting.insert(entry.generation)
-        }
-        return self.draining.keys.filter { !waiting.contains($0) }
-    }
-
-    private func cancel(entryId: Int) {
-        self.lock.lock()
-        let entry = self.entries.removeValue(forKey: entryId)
-        let drained = self.drainedGenerations()
-        self.lock.unlock()
-        entry?.disposable?.dispose()
-        self.scheduleFinishDraining(generations: drained)
+        return service.add(request)
     }
 
     func switchEngine(to engine: NetworkEngine, drainTimeout: Double) {
         self.lock.lock()
-        if self.isStopped {
+        if self.state.pointee.isStopped {
             self.lock.unlock()
             return
         }
-        let generation = self.generation + 1
+        let generation = self.state.pointee.generation + 1
         self.lock.unlock()
 
-        let sessionDelegate = self.hasDelegate ? SwitchingSessionDelegate(generation: generation) : nil
-        sessionDelegate?.session = self
+        let sessionDelegate = self.delegateBox.map { SwitchingSessionDelegate(box: $0, generation: generation) }
         let replacement = engine.makeSession(datacenterId: self.datacenterId, role: self.role, usageCalculationInfo: self.usageCalculationInfo, delegate: sessionDelegate)
 
         self.lock.lock()
-        if self.isStopped || self.generation + 1 != generation {
+        guard !self.state.pointee.isStopped, self.state.pointee.generation + 1 == generation, let previous = self.state.pointee.current else {
             self.lock.unlock()
             replacement.stop()
             return
         }
-        self.generation = generation
-        let previous = self.current
         let previousGeneration = generation - 1
-        self.current = replacement
-        self.currentDelegate = sessionDelegate
-        self.draining[previousGeneration] = previous
-        let sinks = self.sinks
-        let isPaused = self.isPaused
-        let isOnline = self.isOnline
-        let hasPendingRequests = self.entries.values.contains(where: { $0.generation == previousGeneration })
+        self.state.pointee.generation = generation
+        self.state.pointee.current = replacement
+        self.state.pointee.currentService = replacement.requestService
+        self.state.pointee.currentDelegate = sessionDelegate
+        self.state.pointee.draining[previousGeneration] = previous
+        let sinks = self.state.pointee.sinks
+        let isPaused = self.state.pointee.isPaused
+        let isOnline = self.state.pointee.isOnline
         self.lock.unlock()
 
+        self.delegateBox?.setGeneration(generation)
         for sink in sinks {
             replacement.addUpdateSink(sink)
         }
         replacement.setPaused(isPaused)
         replacement.setOnline(isOnline)
 
-        if hasPendingRequests {
-            Queue.concurrentDefaultQueue().after(drainTimeout, { [weak self] in
-                self?.finishDraining(generation: previousGeneration)
-            })
-        } else {
-            self.scheduleFinishDraining(generations: [previousGeneration])
-        }
+        Queue.concurrentDefaultQueue().after(max(drainTimeout, 0.0), { [core = self] in
+            core.finishDraining(generation: previousGeneration)
+        })
     }
 
     private func finishDraining(generation drainedGeneration: Int) {
         self.lock.lock()
-        guard let session = self.draining.removeValue(forKey: drainedGeneration) else {
+        guard let session = self.state.pointee.draining.removeValue(forKey: drainedGeneration) else {
             self.lock.unlock()
             return
         }
-        let target = self.current
-        let targetGeneration = self.generation
-        var moved: [SwitchingRequestEntry] = []
-        var cancelled: [Disposable] = []
-        if !self.isStopped {
-            for entry in self.entries.values where entry.generation == drainedGeneration {
-                entry.generation = targetGeneration
-                if let disposable = entry.disposable {
-                    cancelled.append(disposable)
-                }
-                entry.disposable = nil
-                moved.append(entry)
-            }
-        }
-        let sinks = self.sinks
+        let target = self.state.pointee.isStopped ? nil : self.state.pointee.currentService
+        let sinks = self.state.pointee.sinks
         self.lock.unlock()
 
-        for disposable in cancelled {
-            disposable.dispose()
+        guard let target = target else {
+            session.stop()
+            return
         }
-        session.stop()
-        moved.sort(by: { $0.id < $1.id })
-        for entry in moved {
-            self.submit(entryId: entry.id, request: entry.request, generation: targetGeneration, to: target)
+        session.movePendingRequests(to: target, completion: {
+            session.stop()
+            for sink in sinks {
+                sink.networkSessionDidReset()
+            }
+        })
+    }
+
+    func movePendingRequests(to service: NetworkEngineRequestService, completion: @escaping () -> Void) {
+        self.lock.lock()
+        let sessions = (self.state.pointee.current.map { [$0] } ?? []) + Array(self.state.pointee.draining.values)
+        self.lock.unlock()
+        if sessions.isEmpty {
+            completion()
+            return
         }
-        if !moved.isEmpty {
-            Logger.shared.log("Network", "Engine switch: dc\(self.datacenterId) moved \(moved.count) unanswered requests to the new engine")
-        }
-        for sink in sinks {
-            sink.networkSessionDidReset()
+        let remaining = Atomic<Int>(value: sessions.count)
+        for session in sessions {
+            session.movePendingRequests(to: service, completion: {
+                if remaining.modify({ $0 - 1 }) == 0 {
+                    completion()
+                }
+            })
         }
     }
 
     func setPaused(_ paused: Bool) {
         self.lock.lock()
-        self.isPaused = paused
-        let sessions = [self.current] + Array(self.draining.values)
-        let isStopped = self.isStopped
-        self.lock.unlock()
-        if isStopped {
+        if self.state.pointee.isStopped {
+            self.lock.unlock()
             return
         }
+        self.state.pointee.isPaused = paused
+        let sessions = (self.state.pointee.current.map { [$0] } ?? []) + Array(self.state.pointee.draining.values)
+        self.lock.unlock()
         for session in sessions {
             session.setPaused(paused)
         }
@@ -335,13 +230,13 @@ final class SwitchingNetworkSession: NetworkEngineSession {
 
     func setOnline(_ online: Bool) {
         self.lock.lock()
-        self.isOnline = online
-        let sessions = [self.current] + Array(self.draining.values)
-        let isStopped = self.isStopped
-        self.lock.unlock()
-        if isStopped {
+        if self.state.pointee.isStopped {
+            self.lock.unlock()
             return
         }
+        self.state.pointee.isOnline = online
+        let sessions = (self.state.pointee.current.map { [$0] } ?? []) + Array(self.state.pointee.draining.values)
+        self.lock.unlock()
         for session in sessions {
             session.setOnline(online)
         }
@@ -349,30 +244,81 @@ final class SwitchingNetworkSession: NetworkEngineSession {
 
     func addUpdateSink(_ sink: NetworkEngineUpdateSink) {
         self.lock.lock()
-        self.sinks.append(sink)
-        let session = self.current
+        self.state.pointee.sinks.append(sink)
+        let session = self.state.pointee.current
         self.lock.unlock()
-        session.addUpdateSink(sink)
+        session?.addUpdateSink(sink)
     }
 
     func stop() {
         self.lock.lock()
-        if self.isStopped {
+        if self.state.pointee.isStopped {
             self.lock.unlock()
             return
         }
-        self.isStopped = true
-        let sessions = [self.current] + Array(self.draining.values)
-        self.draining.removeAll()
-        let disposables = self.entries.values.compactMap(\.disposable)
-        self.entries.removeAll()
+        self.state.pointee.isStopped = true
+        let sessions = (self.state.pointee.current.map { [$0] } ?? []) + Array(self.state.pointee.draining.values)
+        self.state.pointee.current = nil
+        self.state.pointee.currentService = nil
+        self.state.pointee.currentDelegate = nil
+        self.state.pointee.draining.removeAll()
+        self.state.pointee.sinks.removeAll()
         self.lock.unlock()
-        for disposable in disposables {
-            disposable.dispose()
-        }
         for session in sessions {
             session.stop()
         }
+    }
+}
+
+private final class SwitchingRequestService: NetworkEngineRequestService {
+    private let core: SwitchingCore
+
+    init(core: SwitchingCore) {
+        self.core = core
+    }
+
+    func add(_ request: NetworkEngineRequest) -> Disposable {
+        return self.core.add(request)
+    }
+}
+
+final class SwitchingNetworkSession: NetworkEngineSession {
+    let datacenterId: Int
+    let requestService: NetworkEngineRequestService
+    private let core: SwitchingCore
+
+    init(engine: NetworkEngine, datacenterId: Int, role: NetworkEngineSessionRole, usageCalculationInfo: MTNetworkUsageCalculationInfo?, delegate: NetworkEngineSessionDelegate?) {
+        self.datacenterId = datacenterId
+        self.core = SwitchingCore(engine: engine, datacenterId: datacenterId, role: role, usageCalculationInfo: usageCalculationInfo, delegate: delegate)
+        self.requestService = SwitchingRequestService(core: self.core)
+    }
+
+    deinit {
+        self.core.stop()
+    }
+
+    func switchEngine(to engine: NetworkEngine, drainTimeout: Double) {
+        self.core.switchEngine(to: engine, drainTimeout: drainTimeout)
+    }
+
+    func setPaused(_ paused: Bool) {
+        self.core.setPaused(paused)
+    }
+
+    func setOnline(_ online: Bool) {
+        self.core.setOnline(online)
+    }
+
+    func addUpdateSink(_ sink: NetworkEngineUpdateSink) {
+        self.core.addUpdateSink(sink)
+    }
+
+    func stop() {
+        self.core.stop()
+    }
+
+    func movePendingRequests(to service: NetworkEngineRequestService, completion: @escaping () -> Void) {
+        self.core.movePendingRequests(to: service, completion: completion)
     }
 }
 
@@ -385,17 +331,16 @@ private final class WeakSwitchingSession {
 }
 
 final class SwitchingNetworkEngine: NetworkEngine {
-    private let lock = NSLock()
+    private let lock = SwitchingLock()
     private let switchLock = NSLock()
     private var engine: NetworkEngine
     private var sessions: [WeakSwitchingSession] = []
 
     var kind: NetworkEngineKind {
         self.lock.lock()
-        defer {
-            self.lock.unlock()
-        }
-        return self.engine.kind
+        let kind = self.engine.kind
+        self.lock.unlock()
+        return kind
     }
 
     init(engine: NetworkEngine) {

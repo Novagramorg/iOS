@@ -35,8 +35,9 @@ fn main() {
                     let mut tags: Vec<_> = stats.executions.iter().collect();
                     tags.sort();
                     let tags: Vec<String> = tags.iter().map(|(tag, count)| format!("\"{tag}\":{count}")).collect();
+                    let dc_ids: Vec<String> = stats.obfuscation_dc_ids.iter().map(|id| id.to_string()).collect();
                     format!(
-                        "{{\"connections\":{},\"executions\":{},\"init_connections\":{},\"state_requests\":{},\"pings\":{},\"closed_by_client\":{},\"duplicate_msg_ids\":{},\"redelivered_answers\":{},\"tags\":{{{}}}}}",
+                        "{{\"connections\":{},\"executions\":{},\"init_connections\":{},\"state_requests\":{},\"pings\":{},\"closed_by_client\":{},\"duplicate_msg_ids\":{},\"redelivered_answers\":{},\"obfuscation_dc_ids\":[{}],\"tags\":{{{}}}}}",
                         stats.connections,
                         executions,
                         stats.init_connections,
@@ -45,6 +46,7 @@ fn main() {
                         stats.closed_by_client,
                         stats.duplicate_msg_ids,
                         stats.redelivered_answers,
+                        dc_ids.join(","),
                         tags.join(",")
                     )
                 });

@@ -1702,7 +1702,7 @@ func _internal_sendStarsPaymentForm(account: Account, formId: Int64, source: Bot
             }
         }
         |> `catch` { error -> Signal<SendBotPaymentResult, SendBotPaymentFormError> in
-            if error.errorCode == 406 {
+            if error.errorCode == 406 || error.errorDescription == "STARGIFT_ALREADY_UPGRADED" {
                 return .fail(.serverProvided(error.errorDescription))
             } else if error.errorDescription == "BOT_PRECHECKOUT_FAILED" {
                 return .fail(.precheckoutFailed)

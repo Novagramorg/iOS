@@ -56,9 +56,12 @@ extension WalletContextImpl {
         }
         let resolved = try resolveTransferInput(address: address, amount: amount, comment: comment)
         let resolvedSendAll = sendAll && !resolved.hasLinkAmount
+        let feesAreCovered = WalletContext.useWalletTransferApi
+            && !WalletContext.isSelfTransfer(recipient: resolved.address, walletAddress: info.address)
+            && WalletContext.isGaslessEligible(amount: resolved.amount, gaslessInfo: self.currentState.gaslessInfo.currentValue, minimumAmount: self.transferGaslessMinAmount)
         let fee = max(0, estimatedFee ?? 0)
         // An estimate cannot reject a transfer; preparation falls back to emulation if the estimate does not fit.
-        let displayAmount = resolvedSendAll && fee < resolved.amount ? resolved.amount - fee : resolved.amount
+        let displayAmount = resolvedSendAll && !feesAreCovered && fee < resolved.amount ? resolved.amount - fee : resolved.amount
         let encrypted = commentEncrypted && resolved.comment?.isEmpty == false
         let pendingComment = encrypted ? nil : resolved.comment
         let registration = WalletContext.PendingTransferRegistration(
@@ -93,9 +96,7 @@ extension WalletContextImpl {
         let pending = PendingTransfer(
             id: registration.id, recipient: resolved.address, amount: displayAmount,
             comment: pendingComment, commentEncrypted: encrypted,
-            expectedGasless: WalletContext.useWalletTransferApi
-                && !WalletContext.isSelfTransfer(recipient: resolved.address, walletAddress: info.address)
-                && WalletContext.isGaslessEligible(amount: displayAmount, gaslessInfo: self.currentState.gaslessInfo.currentValue, minimumAmount: self.transferGaslessMinAmount),
+            expectedGasless: feesAreCovered,
             pendingMessage: pendingMessage, fee: estimatedFee,
             uiExpiresAt: walletPendingTransferUIExpirationTimestamp(from: self.transferSubmissionClock.now()),
             createdAt: createdAt, status: .broadcasting, isPreparing: true

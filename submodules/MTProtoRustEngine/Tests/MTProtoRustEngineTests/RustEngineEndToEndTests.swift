@@ -90,6 +90,10 @@ private final class TestServerProcess {
         return ((self.stats()["tags"] as? [String: Any])?["\(tag)"] as? NSNumber)?.intValue ?? 0
     }
 
+    func obfuscationDatacenterIds() -> [Int] {
+        return ((self.stats()["obfuscation_dc_ids"] as? [NSNumber]) ?? []).map { $0.intValue }
+    }
+
     private static func takeLine(_ buffer: inout Data) -> String? {
         guard let index = buffer.firstIndex(of: 0x0a) else {
             return nil
@@ -215,27 +219,9 @@ final class RustEngineEndToEndTests: XCTestCase {
         }
         self.server = try TestServerProcess(binary: binary)
 
-        let serialization = Serialization()
-        var apiEnvironment = MTApiEnvironment(deviceModelName: "MTProtoRustEngine end-to-end tests")
-        apiEnvironment.apiId = 9
-        apiEnvironment.appVersion = "1.0"
-        apiEnvironment.langPack = "macos"
-        apiEnvironment.layer = NSNumber(value: Int(serialization.currentLayer()))
-        apiEnvironment.disableUpdates = false
-        apiEnvironment = apiEnvironment.withUpdatedLangPackCode("en")
-        let context = MTContext(serialization: serialization, encryptionProvider: UnusedEncryptionProvider(), apiEnvironment: apiEnvironment, isTestingEnvironment: false, useTempAuthKeys: false)
-        context.keychain = InMemoryKeychain()
-        let address = MTDatacenterAddress(ip: self.server.address, port: UInt16(self.server.port), preferForMedia: false, restrictToTcp: false, cdn: false, preferForProxy: false, secret: nil)
-        context.updateAddressSetForDatacenter(withId: RustEngineEndToEndTests.datacenterId, addressSet: MTDatacenterAddressSet(addressList: [address]), forceUpdateSchemes: true)
-        let keyHash = MTSha1(self.server.key)
-        var authKeyId: Int64 = 0
-        _ = withUnsafeMutableBytes(of: &authKeyId) { buffer in
-            keyHash.copyBytes(to: buffer, from: keyHash.count - 8 ..< keyHash.count)
-        }
-        let now = Int64(Date().timeIntervalSince1970)
-        let saltInfo = MTDatacenterSaltInfo(salt: self.server.salt, firstValidMessageId: (now - 86_400) << 32, lastValidMessageId: (now + 86_400) << 32)!
-        let authInfo = MTDatacenterAuthInfo(authKey: self.server.key, authKeyId: authKeyId, validUntilTimestamp: Int32.max, saltSet: [saltInfo], authKeyAttributes: [:])!
-        context.updateAuthInfoForDatacenter(withId: RustEngineEndToEndTests.datacenterId, authInfo: authInfo, selector: .persistent)
+        let context = self.makeContext(useTempAuthKeys: false)
+        self.setAddress(of: context, preferForMedia: false)
+        context.updateAuthInfoForDatacenter(withId: RustEngineEndToEndTests.datacenterId, authInfo: self.authInfo(key: self.server.key), selector: .persistent)
         MTContext.contextQueue().dispatch(onQueue: {}, synchronous: true)
         self.context = context
 
@@ -252,6 +238,37 @@ final class RustEngineEndToEndTests: XCTestCase {
         self.context = nil
         self.server = nil
         super.tearDown()
+    }
+
+    private func makeContext(useTempAuthKeys: Bool) -> MTContext {
+        let serialization = Serialization()
+        var apiEnvironment = MTApiEnvironment(deviceModelName: "MTProtoRustEngine end-to-end tests")
+        apiEnvironment.apiId = 9
+        apiEnvironment.appVersion = "1.0"
+        apiEnvironment.langPack = "macos"
+        apiEnvironment.layer = NSNumber(value: Int(serialization.currentLayer()))
+        apiEnvironment.disableUpdates = false
+        apiEnvironment = apiEnvironment.withUpdatedLangPackCode("en")
+        let context = MTContext(serialization: serialization, encryptionProvider: UnusedEncryptionProvider(), apiEnvironment: apiEnvironment, isTestingEnvironment: false, useTempAuthKeys: useTempAuthKeys)
+        context.keychain = InMemoryKeychain()
+        return context
+    }
+
+    private func setAddress(of context: MTContext, preferForMedia: Bool) {
+        let address = MTDatacenterAddress(ip: self.server.address, port: UInt16(self.server.port), preferForMedia: preferForMedia, restrictToTcp: false, cdn: false, preferForProxy: false, secret: nil)
+        context.updateAddressSetForDatacenter(withId: RustEngineEndToEndTests.datacenterId, addressSet: MTDatacenterAddressSet(addressList: [address]), forceUpdateSchemes: true)
+        MTContext.contextQueue().dispatch(onQueue: {}, synchronous: true)
+    }
+
+    private func authInfo(key: Data) -> MTDatacenterAuthInfo {
+        let keyHash = MTSha1(key)
+        var authKeyId: Int64 = 0
+        _ = withUnsafeMutableBytes(of: &authKeyId) { buffer in
+            keyHash.copyBytes(to: buffer, from: keyHash.count - 8 ..< keyHash.count)
+        }
+        let now = Int64(Date().timeIntervalSince1970)
+        let saltInfo = MTDatacenterSaltInfo(salt: self.server.salt, firstValidMessageId: (now - 86_400) << 32, lastValidMessageId: (now + 86_400) << 32)!
+        return MTDatacenterAuthInfo(authKey: key, authKeyId: authKeyId, validUntilTimestamp: Int32.max, saltSet: [saltInfo], authKeyAttributes: [:])!
     }
 
     private static func append(_ value: UInt32, to data: inout Data) {
@@ -353,6 +370,54 @@ final class RustEngineEndToEndTests: XCTestCase {
         disposable.dispose()
         XCTAssertTrue(recorder.sawConnected)
         XCTAssertEqual(self.server.executions(tag: 7), 1)
+    }
+
+    func testMediaWorkerFollowsItsAddressesBetweenMediaAndMainKeys() {
+        let datacenterId = RustEngineEndToEndTests.datacenterId
+        let context = self.makeContext(useTempAuthKeys: true)
+        let serverKey = self.authInfo(key: self.server.key)
+        let unknownKey = self.authInfo(key: Data((0 ..< 256).map { _ in UInt8.random(in: 0 ... 255) }))
+        context.updateAuthInfoForDatacenter(withId: datacenterId, authInfo: serverKey, selector: .persistent)
+        context.updateAuthInfoForDatacenter(withId: datacenterId, authInfo: serverKey, selector: .ephemeralMain)
+        context.updateAuthInfoForDatacenter(withId: datacenterId, authInfo: unknownKey, selector: .ephemeralMedia)
+        self.setAddress(of: context, preferForMedia: true)
+        guard let engine = RustNetworkEngineFactory().makeEngine(context: context, isAppExtension: false) else {
+            XCTFail("factory declined a temporary key configuration")
+            return
+        }
+        let session = engine.makeSession(datacenterId: datacenterId, role: .worker(masterDatacenterId: datacenterId, isMedia: true, isCdn: false), usageCalculationInfo: nil, delegate: nil)
+        session.setPaused(false)
+        defer { session.stop() }
+
+        self.setAddress(of: context, preferForMedia: false)
+        guard self.completes(tag: 21, on: session) else {
+            return
+        }
+        XCTAssertEqual(self.server.obfuscationDatacenterIds().last, datacenterId)
+
+        context.updateAuthInfoForDatacenter(withId: datacenterId, authInfo: serverKey, selector: .ephemeralMedia)
+        self.setAddress(of: context, preferForMedia: true)
+        guard self.completes(tag: 22, on: session) else {
+            return
+        }
+        XCTAssertEqual(self.server.obfuscationDatacenterIds().last, -datacenterId)
+    }
+
+    private func completes(tag: UInt32, on session: NetworkEngineSession) -> Bool {
+        let done = XCTestExpectation(description: "request \(tag) completed")
+        let disposable = session.requestService.add(self.request(tag: tag) { result in
+            if case let .failure(failure) = result {
+                XCTFail("\(failure.error.errorCode) \(failure.error.errorDescription ?? "")")
+            }
+            done.fulfill()
+        })
+        let waited = XCTWaiter().wait(for: [done], timeout: RustEngineEndToEndTests.timeout)
+        disposable.dispose()
+        if waited != .completed {
+            XCTFail("request \(tag) did not complete")
+            return false
+        }
+        return true
     }
 
     func testConcurrentRequestsFromManyThreadsCompleteExactlyOnce() {

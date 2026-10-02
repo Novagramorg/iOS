@@ -1487,6 +1487,7 @@ public enum UpdateStarGiftPriceError {
 
 public enum UpgradeStarGiftError {
     case generic
+    case alreadyUpgraded
 }
 
 func _internal_buyStarGift(account: Account, slug: String, peerId: EnginePeer.Id, price: CurrencyAmount?, hideName: Bool = true, text: String? = nil, entities: [MessageTextEntity]? = nil) -> Signal<Never, BuyStarGiftError> {
@@ -1644,17 +1645,21 @@ func _internal_transferStarGift(account: Account, prepaid: Bool, reference: Star
 }
 
 func _internal_upgradeStarGift(account: Account, formId: Int64?, reference: StarGiftReference, keepOriginalInfo: Bool) -> Signal<ProfileGiftsContext.State.StarGift, UpgradeStarGiftError> {
+    let signal: Signal<ProfileGiftsContext.State.StarGift, UpgradeStarGiftError>
     if let formId {
         let source: BotPaymentInvoiceSource = .starGiftUpgrade(keepOriginalInfo: keepOriginalInfo, reference: reference)
-        return _internal_sendStarsPaymentForm(account: account, formId: formId, source: source)
-        |> mapError { _ -> UpgradeStarGiftError in
+        signal = _internal_sendStarsPaymentForm(account: account, formId: formId, source: source)
+        |> mapError { error -> UpgradeStarGiftError in
+            if case .serverProvided("STARGIFT_ALREADY_UPGRADED") = error {
+                return .alreadyUpgraded
+            }
             return .generic
         }
         |> mapToSignal { result in
             if case let .done(_, _, gift) = result, let gift {
                 return .single(gift)
             } else {
-                return .complete()
+                return .fail(.generic)
             }
         }
     } else {
@@ -1662,7 +1667,7 @@ func _internal_upgradeStarGift(account: Account, formId: Int64?, reference: Star
         if keepOriginalInfo {
             flags |= (1 << 0)
         }
-        return account.postbox.transaction { transaction in
+        signal = account.postbox.transaction { transaction in
             return reference.apiStarGiftReference(transaction: transaction)
         }
         |> castError(UpgradeStarGiftError.self)
@@ -1671,7 +1676,10 @@ func _internal_upgradeStarGift(account: Account, formId: Int64?, reference: Star
                 return .fail(.generic)
             }
             return account.network.request(Api.functions.payments.upgradeStarGift(flags: flags, stargift: starGift))
-            |> mapError { _ -> UpgradeStarGiftError in
+            |> mapError { error -> UpgradeStarGiftError in
+                if error.errorDescription == "STARGIFT_ALREADY_UPGRADED" {
+                    return .alreadyUpgraded
+                }
                 return .generic
             }
             |> mapToSignal { updates in
@@ -1722,6 +1730,49 @@ func _internal_upgradeStarGift(account: Account, formId: Int64?, reference: Star
                     }
                 }
                 return .fail(.generic)
+            }
+        }
+    }
+
+    return signal
+    |> `catch` { error -> Signal<ProfileGiftsContext.State.StarGift, UpgradeStarGiftError> in
+        guard case .alreadyUpgraded = error else {
+            return .fail(error)
+        }
+
+        return account.postbox.transaction { transaction in
+            return reference.apiStarGiftReference(transaction: transaction)
+        }
+        |> castError(UpgradeStarGiftError.self)
+        |> mapToSignal { starGift -> Signal<ProfileGiftsContext.State.StarGift, UpgradeStarGiftError> in
+            guard let starGift else {
+                return .fail(error)
+            }
+            return account.network.request(Api.functions.payments.getSavedStarGift(stargift: [starGift]))
+            |> mapError { _ in error }
+            |> mapToSignal { result -> Signal<ProfileGiftsContext.State.StarGift, UpgradeStarGiftError> in
+                return account.postbox.transaction { transaction -> Signal<ProfileGiftsContext.State.StarGift, UpgradeStarGiftError> in
+                    let peerId: PeerId
+                    if case let .peer(referencePeerId, _) = reference {
+                        peerId = referencePeerId
+                    } else {
+                        peerId = account.peerId
+                    }
+                    switch result {
+                    case let .savedStarGifts(data):
+                        let parsedPeers = AccumulatedPeers(transaction: transaction, chats: data.chats, users: data.users)
+                        updatePeers(transaction: transaction, accountPeerId: account.peerId, peers: parsedPeers)
+
+                        for apiGift in data.gifts {
+                            if let gift = ProfileGiftsContext.State.StarGift(apiSavedStarGift: apiGift, peerId: peerId, transaction: transaction), case .unique = gift.gift {
+                                return .single(gift)
+                            }
+                        }
+                        return .fail(error)
+                    }
+                }
+                |> castError(UpgradeStarGiftError.self)
+                |> switchToLatest
             }
         }
     }
