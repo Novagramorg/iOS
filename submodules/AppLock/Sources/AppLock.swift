@@ -67,6 +67,38 @@ private func getCoveringViewSnaphot(window: Window1) -> UIImage? {
     }).flatMap(applyScreenshotEffectToImage)
 }
 
+private struct AppLockBiometricAuthenticationState {
+    private var isApplicationActive = false
+    private var isApplicationInForeground = false
+    private var pendingRequests = Set<UUID>()
+    private(set) var suppressCoveringView = false
+
+    mutating func update(isApplicationActive: Bool, isApplicationInForeground: Bool) {
+        if !isApplicationInForeground {
+            self.pendingRequests.removeAll()
+            self.suppressCoveringView = false
+        } else if isApplicationActive {
+            self.suppressCoveringView = false
+        } else if self.isApplicationActive && self.isApplicationInForeground {
+            self.suppressCoveringView = !self.pendingRequests.isEmpty
+            self.pendingRequests.removeAll()
+        }
+        self.isApplicationActive = isApplicationActive
+        self.isApplicationInForeground = isApplicationInForeground
+    }
+
+    mutating func begin() -> UUID? {
+        guard self.isApplicationActive && self.isApplicationInForeground else { return nil }
+        let id = UUID()
+        self.pendingRequests.insert(id)
+        return id
+    }
+
+    mutating func end(_ id: UUID) {
+        self.pendingRequests.remove(id)
+    }
+}
+
 public final class AppLockContextImpl: AppLockContext {
     private let rootPath: String
     private let syncQueue = Queue()
@@ -102,7 +134,7 @@ public final class AppLockContextImpl: AppLockContext {
     
     private var lastActiveTimestamp: Double?
     private var lastActiveValue: Bool = false
-    private var suppressCoveringViewUntilActive = false
+    private var biometricAuthenticationState = AppLockBiometricAuthenticationState()
     private var suppressAutomaticBiometrics = false
     
     public init(rootPath: String, window: Window1?, rootController: UIViewController?, applicationBindings: TelegramApplicationBindings, accountManager: AccountManager<TelegramAccountManagerTypes>, presentationDataSignal: Signal<PresentationData, NoError>, lockIconInitialFrame: @escaping () -> CGRect?) {
@@ -134,6 +166,8 @@ public final class AppLockContextImpl: AppLockContext {
             guard let strongSelf = self else {
                 return
             }
+
+            strongSelf.biometricAuthenticationState.update(isApplicationActive: isApplicationActive, isApplicationInForeground: isApplicationInForeground)
             
             let passcodeSettings: PresentationPasscodeSettings = sharedData.entries[ApplicationSpecificSharedDataKeys.presentationPasscodeSettings]?.get(PresentationPasscodeSettings.self) ?? .defaultSettings
 
@@ -162,18 +196,6 @@ public final class AppLockContextImpl: AppLockContext {
                 strongSelf.lastActiveValue = false
             }
 
-            if isApplicationActive || !isApplicationInForeground {
-                strongSelf.suppressCoveringViewUntilActive = false
-            } else if !strongSelf.suppressCoveringViewUntilActive {
-                strongSelf.window?.forEachViewController { controller in
-                    if let controller = controller as? PasscodeEntryController, controller.isNodeLoaded, controller.view.window != nil {
-                        strongSelf.suppressCoveringViewUntilActive = true
-                        return false
-                    }
-                    return true
-                }
-            }
-            
             var shouldDisplayCoveringView = false
             var isCurrentlyLocked = false
             
@@ -186,7 +208,7 @@ public final class AppLockContextImpl: AppLockContext {
                 strongSelf.autolockTimeout.set(nil)
                 strongSelf.autolockReportTimeout.set(nil)
             } else {
-                if let _ = passcodeSettings.autolockTimeout, !isApplicationActive, !strongSelf.suppressCoveringViewUntilActive {
+                if let _ = passcodeSettings.autolockTimeout, !isApplicationActive, !strongSelf.biometricAuthenticationState.suppressCoveringView {
                     shouldDisplayCoveringView = true
                 }
                 
@@ -294,6 +316,20 @@ public final class AppLockContextImpl: AppLockContext {
     deinit {
         self.disposable?.dispose()
         self.autolockTimeoutDisposable?.dispose()
+    }
+
+    public func beginBiometricAuthentication() -> Disposable {
+        assert(Queue.mainQueue().isCurrent())
+        guard let id = self.biometricAuthenticationState.begin() else { return EmptyDisposable }
+        return ActionDisposable { [weak self] in
+            if Queue.mainQueue().isCurrent() {
+                self?.biometricAuthenticationState.end(id)
+            } else {
+                Queue.mainQueue().async { [weak self] in
+                    self?.biometricAuthenticationState.end(id)
+                }
+            }
+        }
     }
     
     private func updateTimestampRenewTimer(shouldRun: Bool) {

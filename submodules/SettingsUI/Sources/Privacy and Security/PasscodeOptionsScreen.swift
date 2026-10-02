@@ -82,6 +82,7 @@ private final class PasscodeOptionsScreenModel {
     private let statePromise = ValuePromise(PasscodeOptionsScreenState(), ignoreRepeated: true)
     private let disposables = DisposableSet()
     private var activeBiometricContext: LAContext?
+    private let biometricAuthenticationDisposable = MetaDisposable()
     private var refreshGeneration: UInt64 = 0
     private var hasAppeared = false
     private var reportedInitialError = false
@@ -139,6 +140,7 @@ private final class PasscodeOptionsScreenModel {
             if !foreground || locked || !current {
                 self.activeBiometricContext?.invalidate()
                 self.activeBiometricContext = nil
+                self.biometricAuthenticationDisposable.set(nil)
             }
             self.updateState()
         }))
@@ -150,6 +152,7 @@ private final class PasscodeOptionsScreenModel {
         self.disposables.dispose()
         self.sessionState.close()
         self.activeBiometricContext?.invalidate()
+        self.biometricAuthenticationDisposable.dispose()
     }
 
     private var isControllerAvailable: Bool {
@@ -192,6 +195,7 @@ private final class PasscodeOptionsScreenModel {
         self.sessionState.close()
         self.activeBiometricContext?.invalidate()
         self.activeBiometricContext = nil
+        self.biometricAuthenticationDisposable.dispose()
         self.disposables.dispose()
     }
 
@@ -482,6 +486,8 @@ private final class PasscodeOptionsScreenModel {
             authenticationContext.localizedFallbackTitle = ""
             authenticationContext.touchIDAuthenticationAllowableReuseDuration = 0
             self.activeBiometricContext = authenticationContext
+            let biometricAuthentication: Disposable? = biometrics && enabled ? self.context.sharedContext.appLockContext.beginBiometricAuthentication() : nil
+            self.biometricAuthenticationDisposable.set(biometricAuthentication)
             DispatchQueue.global(qos: .userInitiated).async { [weak self] in
                 let result = Result {
                     if biometrics {
@@ -492,6 +498,7 @@ private final class PasscodeOptionsScreenModel {
                 }
                 authenticationContext.invalidate()
                 DispatchQueue.main.async { [weak self] in
+                    biometricAuthentication?.dispose()
                     switch result {
                     case .success:
                         self?.finishOperation(operation, refreshProtection: true)
