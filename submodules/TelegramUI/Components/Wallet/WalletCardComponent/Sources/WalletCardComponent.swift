@@ -403,11 +403,7 @@ public final class WalletCardComponent: Component {
                 fractionalText = ""
             } else if let decimalRange = formattedBalance.range(of: component.dateTimeFormat.decimalSeparator) {
                 integralText = String(formattedBalance[..<decimalRange.lowerBound])
-                var fractionalDigits = String(formattedBalance[decimalRange.upperBound...])
-                while fractionalDigits.count < 2 {
-                    fractionalDigits.append("0")
-                }
-                fractionalText = component.dateTimeFormat.decimalSeparator + fractionalDigits
+                fractionalText = String(formattedBalance[decimalRange.lowerBound...])
             } else {
                 integralText = formattedBalance
                 fractionalText = ""

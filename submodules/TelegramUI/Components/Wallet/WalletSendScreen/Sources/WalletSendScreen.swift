@@ -572,6 +572,13 @@ private final class WalletSendScreenComponent: Component {
         private let title = ComponentView<Empty>()
         private let recipient = ComponentView<Empty>()
         private var isRecipientScreenVisible = true
+        private var openingStart: CFTimeInterval?
+        private var openingFinished = false
+        private var openingFinish: (start: CFTimeInterval, amount: WalletSendAmountIntro, recipientTime: Double)?
+        private var openingDisplayLink: SharedDisplayLinkDriver.Link?
+        private var openingInForeground = UIApplication.shared.applicationState != .background
+        private static let openingAnimationKey = "walletSendOpening"
+
         private var recipientInfoAlert: AlertScreen?
         private weak var copyAddressToast: UndoOverlayController?
         private let amountField: WalletSendAmountField = WalletSendAnimatedAmountField()
@@ -665,6 +672,12 @@ private final class WalletSendScreenComponent: Component {
             super.init(frame: frame)
 
             self.addSubview(self.amountField)
+            if !UIAccessibility.isReduceMotionEnabled {
+                (self.amountField as? WalletSendAnimatedAmountField)?.updateOpening(WalletSendAmountIntro(time: 0.0))
+            }
+            (self.amountField as? WalletSendAnimatedAmountField)?.openingInterrupted = { [weak self] in
+                self?.finishOpening(animated: true)
+            }
             self.rateButton.action = { [weak self] in self?.toggleInputMode() }
             self.amountField.amountUpdated = { [weak self] amount in
                 guard let self, !self.isPreparingTransfer, !self.isResolvingSigningAccess, !self.isSubmittingTransfer else {
@@ -746,6 +759,7 @@ private final class WalletSendScreenComponent: Component {
         }
 
         deinit {
+            self.openingDisplayLink?.invalidate()
             self.restorationSession?.invalidate()
             self.commentEnvironmentDisposable.dispose()
             self.commentCredentialChangesDisposable.dispose()
@@ -757,8 +771,100 @@ private final class WalletSendScreenComponent: Component {
             self.signingAccessDisposable.dispose()
         }
 
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            if self.window == nil {
+                if self.openingStart != nil { self.finishOpening(animated: false) }
+            } else {
+                self.updateOpening()
+            }
+        }
+
+        private func finishOpening(animated: Bool) {
+            guard !self.openingFinished else { return }
+            if animated, let start = self.openingStart, self.openingFinish == nil,
+               self.openingInForeground, !UIAccessibility.isReduceMotionEnabled {
+                let now = CACurrentMediaTime()
+                self.openingFinish = (now, WalletSendAmountIntro(time: now - start), now - start)
+                for view in [self.balanceText.view, self.sendButton.view].compactMap({ $0 }) {
+                    view.layer.removeAnimation(forKey: Self.openingAnimationKey)
+                }
+                self.updateOpening()
+                return
+            }
+            if animated, self.openingFinish != nil { return }
+            self.openingFinished = true
+            self.openingFinish = nil
+            self.openingDisplayLink?.invalidate()
+            self.openingDisplayLink = nil
+            (self.amountField as? WalletSendAnimatedAmountField)?.updateOpening(nil)
+            (self.recipient.view as? WalletSendRecipientComponent.View)?.updateOpening(time: nil)
+            for view in [self.balanceText.view, self.sendButton.view].compactMap({ $0 }) {
+                view.layer.removeAnimation(forKey: Self.openingAnimationKey)
+            }
+        }
+
+        private func updateOpening() {
+            guard !self.openingFinished else { return }
+            guard self.openingInForeground, self.isRecipientScreenVisible, !UIAccessibility.isReduceMotionEnabled else {
+                self.finishOpening(animated: false)
+                return
+            }
+            guard self.component != nil, !self.amountField.bounds.isEmpty else { return }
+            let now = CACurrentMediaTime()
+            if self.openingStart == nil, self.window != nil {
+                self.openingStart = now
+            }
+            let elapsed = self.openingStart.map { now - $0 } ?? 0.0
+            var amount = WalletSendAmountIntro(time: elapsed)
+            var recipientTime = elapsed
+            if let finish = self.openingFinish {
+                let p = min(1.0, max(0.0, (now - finish.start) / 0.15))
+                if p >= 1.0 { self.finishOpening(animated: false); return }
+                let k = p * p * (3.0 - 2.0 * p)
+                amount = finish.amount.finishing(CGFloat(k))
+                recipientTime = finish.recipientTime + (2.1 - finish.recipientTime) * k
+            } else if elapsed >= 2.1 {
+                self.finishOpening(animated: false)
+                return
+            }
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            (self.amountField as? WalletSendAnimatedAmountField)?.updateOpening(elapsed < WalletSendAmountIntro.duration || self.openingFinish != nil ? amount : nil)
+            (self.recipient.view as? WalletSendRecipientComponent.View)?.updateOpening(time: recipientTime)
+            CATransaction.commit()
+            if self.openingStart != nil {
+                // Additive animations leave model frames intact during keyboard/layout updates.
+                for view in [self.balanceText.view, self.sendButton.view].compactMap({ $0 }) where view.layer.animation(forKey: Self.openingAnimationKey) == nil {
+                    let duration = self.openingFinish.map { max(0.0, 0.15 - (now - $0.start)) }
+                        ?? max(0.0, WalletSendAmountIntro.duration - elapsed)
+                    guard duration > 0.0 else { continue }
+                    let samples = max(2, Int(ceil(duration * 120.0)))
+                    let animation = CAKeyframeAnimation(keyPath: "transform.translation.y")
+                    animation.values = (0 ... samples).map { index -> CGFloat in
+                        let dt = duration * Double(index) / Double(samples)
+                        if let finish = self.openingFinish {
+                            let p = min(1.0, max(0.0, (now + dt - finish.start) / 0.15))
+                            return finish.amount.rise * CGFloat(1.0 - p * p * (3.0 - 2.0 * p))
+                        }
+                        return index == samples ? 0.0 : WalletSendAmountIntro(time: elapsed + dt).rise
+                    }
+                    animation.duration = duration
+                    animation.isAdditive = true
+                    animation.calculationMode = .linear
+                    view.layer.add(animation, forKey: Self.openingAnimationKey)
+                }
+                if self.openingDisplayLink == nil {
+                    self.openingDisplayLink = SharedDisplayLinkDriver.shared.add(framesPerSecond: .max, { [weak self] _ in
+                        self?.updateOpening()
+                    })
+                }
+            }
+        }
+
         func viewWillAppear() {
             self.isRecipientScreenVisible = true
+            self.updateOpening()
             if let recipientView = self.recipient.view as? WalletSendRecipientComponent.View {
                 recipientView.setAnimationVisible(recipientView.alpha > 0.0)
             }
@@ -775,6 +881,7 @@ private final class WalletSendScreenComponent: Component {
         }
 
         func viewWillDisappear() {
+            self.finishOpening(animated: false)
             self.isVisible = false
             self.isRecipientScreenVisible = false
             (self.recipient.view as? WalletSendRecipientComponent.View)?.setAnimationVisible(false)
@@ -1372,6 +1479,7 @@ private final class WalletSendScreenComponent: Component {
             guard self.validateTransferAmount() else {
                 return
             }
+            self.finishOpening(animated: true)
             guard let feeRequest = self.currentFeeRequest else { return }
             self.sendRevision &+= 1
             if component.transferAnimation == nil || UIAccessibility.isReduceMotionEnabled {
@@ -1921,6 +2029,8 @@ private final class WalletSendScreenComponent: Component {
                     component.context.sharedContext.activeAccountContexts |> map { primary, _, _ in primary?.account.id == accountId }
                 ) |> deliverOnMainQueue).start(next: { [weak self] foreground, locked, current in
                     guard let self else { return }
+                    self.openingInForeground = foreground
+                    if !foreground { self.finishOpening(animated: false) }
                     self.commentSessionAvailable = foreground && !locked && current
                     if !self.commentSessionAvailable {
                         self.invalidateCommentSession()
@@ -2127,6 +2237,9 @@ private final class WalletSendScreenComponent: Component {
                     recipientView.accessibilityElementsHidden = false
                     transition.setFrame(view: recipientView, frame: frame)
                     transition.setAlpha(view: recipientView, alpha: 1.0)
+                    if self.openingFinished {
+                        (recipientView as? WalletSendRecipientComponent.View)?.updateOpening(time: nil)
+                    }
                     (recipientView as? WalletSendRecipientComponent.View)?.setAnimationVisible(self.isRecipientScreenVisible)
                 }
             } else if let recipientView = self.recipient.view {
@@ -2232,7 +2345,7 @@ private final class WalletSendScreenComponent: Component {
                 fiatCurrency: self.currentFiatCurrency,
                 dateTimeFormat: environment.dateTimeFormat,
                 theme: theme,
-                isVisible: environment.isVisible,
+                isVisible: environment.isVisible || (!self.openingFinished && self.isRecipientScreenVisible && self.openingInForeground),
                 transition: transition
             )
 
@@ -2781,6 +2894,10 @@ private final class WalletSendScreenComponent: Component {
                 sendButtonView.isUserInteractionEnabled = hasAmount
             }
 
+            if let keyboardView = self.keyboard.view {
+                self.bringSubviewToFront(keyboardView)
+            }
+
             if isInAttachmentMenu {
                 let isTabBarVisible = !isKeyboardVisible
                 if self.isAttachmentTabBarVisible != isTabBarVisible {
@@ -2792,6 +2909,7 @@ private final class WalletSendScreenComponent: Component {
                 }
             }
 
+            self.updateOpening()
             return availableSize
         }
     }

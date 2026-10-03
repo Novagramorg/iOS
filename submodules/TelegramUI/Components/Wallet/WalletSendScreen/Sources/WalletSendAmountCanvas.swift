@@ -14,6 +14,7 @@ private final class WalletSendAmountMetal {
         var uv: SIMD4<Float>
         var viewport: SIMD2<Float>
         var effect: SIMD2<Float>
+        var reveal: SIMD2<Float>
     }
     struct Blur {
         var radius: UInt32
@@ -61,9 +62,9 @@ private final class WalletSendAmountMetal {
         return atlas
     }
 
-    func quad(rect: CGRect, uv: SIMD4<Float>, color: SIMD4<Float>, viewport: CGSize, threshold: Float = -1) -> Quad {
+    func quad(rect: CGRect, uv: SIMD4<Float>, color: SIMD4<Float>, viewport: CGSize, threshold: Float = -1, reveal: SIMD2<Float> = .zero) -> Quad {
         return Quad(rect: SIMD4(Float(rect.minX), Float(rect.minY), Float(rect.width), Float(rect.height)),
-                    color: color, uv: uv, viewport: SIMD2(Float(viewport.width), Float(viewport.height)), effect: SIMD2(threshold, 0))
+                    color: color, uv: uv, viewport: SIMD2(Float(viewport.width), Float(viewport.height)), effect: SIMD2(threshold, 0), reveal: reveal)
     }
 
     func draw(_ texture: MTLTexture, rect: CGRect, uv: SIMD4<Float>, color: SIMD4<Float>, viewport: CGSize,
@@ -103,6 +104,7 @@ private final class WalletSendAmountLayer: MetalEngineSubjectLayer, MetalEngineS
     var isRenderingEnabled = false
     var frameDuration: Double = 1.0 / 120.0
     var sprites: [WalletSendAmountSprite] = []
+    var reveal: SIMD2<Float> = .zero
     var displayScale: CGFloat = 1
     var glyphAtlas: WalletSendAmountGlyphAtlas?
     var previousGlyphAtlases: [WalletSendAmountGlyphAtlas] = []
@@ -272,6 +274,7 @@ private final class WalletSendAmountLayer: MetalEngineSubjectLayer, MetalEngineS
         let viewport = bounds.size
         let sprites = self.sprites
         let frameDuration = self.frameDuration
+        let reveal = self.reveal
         let atlases = [glyphAtlas] + previousGlyphAtlases
         contentsScale = scale
     
@@ -280,7 +283,7 @@ private final class WalletSendAmountLayer: MetalEngineSubjectLayer, MetalEngineS
             if texturePool.count > 64 { texturePool.removeAll(keepingCapacity: true) }
             var batches: [Batch] = []
             func append(_ draw: Draw) {
-                let quad = renderer.quad(rect: draw.rect, uv: draw.uv, color: draw.color, viewport: viewport, threshold: draw.threshold)
+                let quad = renderer.quad(rect: draw.rect, uv: draw.uv, color: draw.color, viewport: viewport, threshold: draw.threshold, reveal: reveal)
                 if let last = batches.indices.last, batches[last].texture === draw.texture,
                    (batches[last].quads.count + 1) * MemoryLayout<WalletSendAmountMetal.Quad>.stride <= 4096 {
                     batches[last].quads.append(quad)
@@ -381,7 +384,8 @@ final class WalletSendAmountCanvas: UIView {
         atlasKey = key
     }
 
-    func update(sprites: [WalletSendAmountSprite], isAnimating: Bool) {
+    func update(sprites: [WalletSendAmountSprite], isAnimating: Bool, reveal: SIMD2<Float> = .zero) {
+        self.metalLayer.reveal = reveal
         self.sprites = sprites
         if !isAnimating, !metalLayer.previousGlyphAtlases.isEmpty, let atlas = metalLayer.glyphAtlas {
             let missing = (sprites.map { $0.glyph } + sprites.compactMap { $0.morph?.from }).filter { atlas.mask(for: $0) == nil }

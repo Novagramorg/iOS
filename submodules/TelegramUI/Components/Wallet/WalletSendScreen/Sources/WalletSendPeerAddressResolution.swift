@@ -17,7 +17,6 @@ struct WalletSendPeerAddressResolution {
 
     mutating func reset(resolvedAddress: WalletUserAddress?) {
         self.generation &+= 1
-        // A supplied recipient is already resolved; preserve its original address and key.
         self.recipient = resolvedAddress
         self.state = resolvedAddress == nil ? .notRequested : .resolved
     }

@@ -2307,7 +2307,7 @@ private final class WalletTransactionContentComponent: Component {
                         controller?.push(component.context.sharedContext.makeWalletInfoScreen(
                             context: component.context,
                             updatedPresentationData: self.currentPresentationData(for: component),
-                            mode: .gram,
+                            mode: .wallet,
                             completion: nil
                         ))
                     }
@@ -3133,7 +3133,7 @@ private final class WalletTransactionContentComponent: Component {
                             self.environment?.controller()?.push(component.context.sharedContext.makeWalletInfoScreen(
                                 context: component.context,
                                 updatedPresentationData: self.currentPresentationData(for: component),
-                                mode: .gram,
+                                mode: .wallet,
                                 completion: nil
                             ))
                         }

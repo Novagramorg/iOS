@@ -14,6 +14,34 @@ func walletSendAmountComponentGlyphs(_ view: UIView, origin: CGPoint) -> [Wallet
     }
 }
 
+// Shared with the screen's entrance clock; independent of amount-entry motion.
+struct WalletSendAmountIntro {
+    static let duration = 1.2
+    var progress: CGFloat = 1.0
+    var caret: CGFloat = 1.0
+    var lift: CGFloat { -48.0 * 4.0 * self.progress * (1.0 - self.progress) }
+    var scale: CGFloat { 1.0 + 5.0 * pow(max(0.0, 1.0 - self.progress), 1.25) }
+    var rise: CGFloat { 56.0 * (1.0 - self.progress) }
+
+    init(time: Double?) {
+        guard let time, time < Self.duration else { return }
+        let t = max(time - 0.18, 0.0)
+        let k = min(max((time - 0.78) / 0.2, 0.0), 1.0)
+        self.caret = CGFloat(k * k * (3.0 - 2.0 * k))
+        let omega = 2.0 * Double.pi / 0.9
+        let a = 0.8 * omega
+        let wd = omega * sqrt(1.0 - 0.8 * 0.8)
+        self.progress = CGFloat(1.0 - exp(-a * t) * (cos(wd * t) + (a - 1.2) / wd * sin(wd * t)))
+    }
+
+    func finishing(_ progress: CGFloat) -> WalletSendAmountIntro {
+        var result = self
+        result.progress += (1.0 - result.progress) * progress
+        result.caret += (1.0 - result.caret) * progress
+        return result
+    }
+}
+
 final class WalletSendAnimatedAmountField: WalletSendAmountField {
     private struct Layout {
         var width: CGFloat
@@ -86,6 +114,9 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
     private static let symbolPulseKey = "walletSendSymbolPulse"
     private let motion = WalletSendAmountMotion(liquid: true)
     private var displayLink: SharedDisplayLinkDriver.Link?
+    private var opening: WalletSendAmountIntro?
+    private var diamondIsExpanded = false
+    var openingInterrupted: (() -> Void)?
     private var previousMode: WalletSendInputMode?
     private var previousText = ""
     private var layoutFrom: Layout?
@@ -110,6 +141,40 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
 
     override var usesAnimatedPresentation: Bool { return true }
     private var hasTransferredDiamond = false
+
+    func updateOpening(_ value: WalletSendAmountIntro?) {
+        let wasOpening = self.opening != nil
+        guard value != nil || wasOpening else { return }
+        self.opening = value
+        if value != nil {
+            self.displayLink?.invalidate()
+            self.displayLink = nil
+        }
+        if wasOpening != (value != nil) {
+            self.resetCaretBlink()
+        }
+        guard self.currentLayout != nil, self.canvas.isAvailable else { return }
+        if value != nil || self.motion.isAnimating(at: CACurrentMediaTime()) {
+            self.renderFrame()
+            self.setNativeTextVisible(false)
+            if value == nil { self.startMotionDisplayLinkIfNeeded() }
+        } else {
+            self.finishMotion()
+        }
+        if value == nil {
+            (self.gramIcon.view as? InteractiveDiamondComponent.View)?.updateOpeningScale(nil)
+            self.layer.zPosition = self.diamondIsExpanded ? 1.0 : 0.0
+        }
+    }
+
+    private func startMotionDisplayLinkIfNeeded() {
+        guard self.displayLink == nil, self.opening == nil else { return }
+        self.displayLink = SharedDisplayLinkDriver.shared.add(framesPerSecond: .max, { [weak self] duration in
+            guard let self else { return }
+            self.frameDuration += (Double(duration) - self.frameDuration) * 0.3
+            self.renderFrame()
+        })
+    }
 
     func spinForTransfer() {
         guard !self.hasTransferredDiamond, self.isApplicationInForeground,
@@ -150,7 +215,7 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
         self.canvas.onFrameReady = { [weak self] in
             guard let self, self.visible, self.isApplicationInForeground, self.window != nil, !self.nativeInteraction else { return }
             self.setNativeTextVisible(false)
-            self.textField.displaysNativeCaret = !self.motion.isAnimating(at: CACurrentMediaTime())
+            self.textField.displaysNativeCaret = self.opening == nil && !self.motion.isAnimating(at: CACurrentMediaTime())
         }
         self.contentView.addSubview(self.canvas)
         self.caretView.isUserInteractionEnabled = false
@@ -160,6 +225,7 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
         self.contentView.addSubview(self.caretView)
         self.textField.usesCustomCaret = true
         self.textField.interactionBegan = { [weak self] in
+            self?.openingInterrupted?()
             self?.nativeInteraction = true
             self?.finishMotion()
         }
@@ -222,6 +288,7 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
             return hit
         }
         if event?.type == .touches, self.point(inside: point, with: event) {
+            self.openingInterrupted?()
             self.nativeInteraction = true
             self.finishMotion()
         }
@@ -281,8 +348,10 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
             }
             view.onExpansionChanged = { [weak self, weak view] expanded in
                 guard let self else { return }
-                self.layer.zPosition = expanded ? 1.0 : 0.0
+                self.diamondIsExpanded = expanded
+                self.layer.zPosition = expanded || self.opening != nil ? 1.0 : 0.0
                 if expanded {
+                    self.openingInterrupted?()
                     view?.layer.removeAnimation(forKey: Self.symbolPulseKey)
                 }
             }
@@ -468,13 +537,7 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
             self.textField.displaysNativeCaret = false
             self.renderFrame(at: now)
             self.setNativeTextVisible(false)
-            if self.displayLink == nil {
-                self.displayLink = SharedDisplayLinkDriver.shared.add(framesPerSecond: .max, { [weak self] duration in
-                    guard let self else { return }
-                    self.frameDuration += (Double(duration) - self.frameDuration) * 0.3
-                    self.renderFrame()
-                })
-            }
+            self.startMotionDisplayLinkIfNeeded()
         } else {
             self.layoutTo = targetLayout
             self.currentLayout = targetLayout
@@ -486,7 +549,7 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
         let wasRendering = self.rendering
         self.rendering = true
         defer { self.rendering = wasRendering }
-        let visible = visible || !self.canvas.isAvailable || !self.canvas.hasFrame
+        let visible = !self.canvas.isAvailable || (self.opening == nil && (visible || !self.canvas.hasFrame))
         if !visible { self.textField.displaysNativeCaret = false }
         self.textField.rendersText = visible
         if let placeholder = self.placeholder {
@@ -514,7 +577,7 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
     }
 
     private func renderFrame(at now: Double = CACurrentMediaTime()) {
-        guard self.motion.isAnimating(at: now), let layout = self.presentationLayout(at: now) else {
+        guard self.opening != nil || self.motion.isAnimating(at: now), let layout = self.presentationLayout(at: now) else {
             self.finishMotion()
             return
         }
@@ -535,17 +598,30 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
         let width = ceil(max(self.bounds.width, layout.width, self.layoutFrom?.width ?? 0, self.layoutTo?.width ?? 0) / 64.0) * 64.0
         self.canvas.frame = CGRect(x: -32.0, y: -32.0, width: width + 64.0, height: layout.height + 64.0)
         self.canvas.frameDuration = self.frameDuration
-        let sprites = self.motion.frame(at: now, frameDuration: self.frameDuration).map { sprite in
+        let frame = self.motion.frame(at: now, frameDuration: self.frameDuration)
+        var shift: CGFloat = 0.0
+        var alpha: CGFloat = 1.0
+        var reveal = SIMD2<Float>.zero
+        if let opening = self.opening, opening.progress < 1.0 {
+            let left = frame.map { $0.glyph.leadingEdge }.min() ?? 0.0
+            let right = frame.map { $0.glyph.leadingEdge + $0.glyph.width }.max() ?? 0.0
+            shift = (layout.width / 2.0 - 64.0 - (left + right) / 2.0) * (1.0 - opening.progress)
+            alpha = min(1.0, max(0.0, opening.progress) / 0.08)
+            let edge = layout.width / 2.0 + (layout.gram.midX - layout.width / 2.0) * opening.progress + 32.0
+            reveal = SIMD2(Float(edge - 4.0), Float(edge + 22.0))
+        }
+        let sprites = frame.map { sprite in
             var sprite = sprite
-            sprite.glyph.position.x += 32.0
+            sprite.glyph.position.x += 32.0 + shift
             sprite.glyph.position.y += 32.0
+            sprite.alpha *= alpha
             return sprite
         }
-        self.canvas.update(sprites: sprites, isAnimating: self.motion.isAnimating(at: now))
-        self.updateDiamondRefraction()
+        self.canvas.update(sprites: sprites, isAnimating: self.opening != nil || self.motion.isAnimating(at: now), reveal: reveal)
+        self.updateDiamondRefraction(textOffset: shift)
     }
 
-    private func updateDiamondRefraction() {
+    private func updateDiamondRefraction(textOffset: CGFloat) {
         guard let diamond = self.gramIcon.view as? InteractiveDiamondComponent.View else { return }
         guard self.mode == .gram,
               let glyph = self.motion.target.first(where: { $0.group == .integer && $0.text.first?.wholeNumberValue != nil }),
@@ -553,7 +629,7 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
             diamond.updateRefractionSource(nil)
             return
         }
-        let rect = self.contentView.convert(mask.rect.offsetBy(dx: glyph.position.x, dy: glyph.position.y), to: diamond)
+        let rect = self.contentView.convert(mask.rect.offsetBy(dx: glyph.position.x + textOffset, dy: glyph.position.y), to: diamond)
             .offsetBy(dx: -diamond.bounds.midX, dy: -diamond.bounds.midY)
         diamond.updateRefractionSource(InteractiveDiamondComponent.RefractionSource(texture: mask.texture, uv: mask.uv, rect: rect))
     }
@@ -573,6 +649,12 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
         self.caretView.frame = layout.caret
         self.caretView.backgroundColor = self.textField.caretColor
         self.caretView.isHidden = false
+        if let opening = self.opening, self.canvas.isAvailable, opening.caret < 1.0 {
+            self.resetCaretBlink()
+            self.caretView.alpha = opening.caret
+            return
+        }
+        self.caretView.alpha = 1.0
         self.contentView.bringSubviewToFront(self.caretView)
         guard self.caretView.layer.animation(forKey: Self.caretBlinkAnimationKey) == nil else { return }
 
@@ -601,8 +683,15 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
         for (view, rect) in [(self.gramIcon.view, layout.gram), (self.fiatIcon.view, layout.fiat)] {
             guard let view else { continue }
             view.bounds = CGRect(origin: .zero, size: rect.size)
-            view.center = CGPoint(x: rect.midX, y: rect.midY)
+            if let opening = self.opening, self.canvas.isAvailable {
+                view.center = CGPoint(x: layout.width / 2.0 + (rect.midX - layout.width / 2.0) * opening.progress,
+                                      y: rect.midY + opening.lift)
+            } else {
+                view.center = CGPoint(x: rect.midX, y: rect.midY)
+            }
         }
+        (self.gramIcon.view as? InteractiveDiamondComponent.View)?.updateOpeningScale(self.canvas.isAvailable ? self.opening?.scale : nil)
+        if self.opening != nil { self.layer.zPosition = 1.0 }
     }
 
     private func switchSymbols(timing: WalletSendAmountMotionTiming?, at now: Double) {
@@ -732,7 +821,7 @@ final class WalletSendAnimatedAmountField: WalletSendAmountField {
                 self.drawText(layout: layout, at: CACurrentMediaTime())
             }
             self.setNativeTextVisible(self.nativeInteraction || !self.visible || !self.isApplicationInForeground)
-            self.textField.displaysNativeCaret = true
+            self.textField.displaysNativeCaret = self.opening == nil || !self.canvas.isAvailable
             if let selection = self.textField.selectedTextRange, var layout = self.currentLayout {
                 layout.caret = self.textField.amountCaretRect(for: selection.end).offsetBy(dx: self.textField.frame.minX, dy: self.textField.frame.minY)
                 self.currentLayout = layout

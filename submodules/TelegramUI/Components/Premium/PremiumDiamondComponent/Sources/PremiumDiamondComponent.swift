@@ -144,6 +144,7 @@ public final class InteractiveDiamondComponent: Component {
         private var dragSamples: [(x: CGFloat, time: CFTimeInterval)] = []
         private var landingFeedback: DispatchWorkItem?
         private var isWalletTransfer = false
+        private var openingScale: CGFloat?
 
         public override var isUserInteractionEnabled: Bool {
             didSet {
@@ -406,8 +407,8 @@ public final class InteractiveDiamondComponent: Component {
                 return
             }
             let expanded = self.isHolding || self.expansion != nil || self.diamondLayer.isGrowthAnimating
-            self.diamondLayer.usesHighFrameRate = expanded || self.diamondLayer.hasTransferAnimation
-            self.diamondLayer.interactionScale = self.expansionStyle != .centered ? 1.0 : Float(1.0 + 2.75 * self.grip)
+            self.diamondLayer.usesHighFrameRate = expanded || self.openingScale != nil || self.diamondLayer.hasTransferAnimation
+            self.diamondLayer.interactionScale = (self.expansionStyle != .centered ? 1.0 : Float(1.0 + 2.75 * self.grip)) * Float(self.openingScale ?? 1.0)
             let refractionStrength = self.expansionStyle != .centered && self.diamondLayer.diamondStyle.dragGrow != 1.0
                 ? (self.diamondLayer.pose.grow - 1.0) / (self.diamondLayer.diamondStyle.dragGrow - 1.0)
                 : Float(self.grip)
@@ -426,7 +427,9 @@ public final class InteractiveDiamondComponent: Component {
                 ? CGPoint(x: restingCenter.x - self.diamondLayer.position.x, y: restingCenter.y - self.diamondLayer.position.y)
                 : .zero
             self.updateRefractionPosition()
-            if self.diamondLayer.isCompletingTransfer || self.diamondLayer.hasStarBursts {
+            if self.openingScale != nil {
+                self.diamondLayer.renderSize = CGSize(width: 320.0, height: 320.0)
+            } else if self.diamondLayer.isCompletingTransfer || self.diamondLayer.hasStarBursts {
                 self.diamondLayer.renderSize = self.expansionStyle == .wallet
                     ? self.walletStarCanvasSize
                     : CGSize(width: 240.0, height: 240.0)
@@ -487,6 +490,14 @@ public final class InteractiveDiamondComponent: Component {
             self.applyExpansion()
         }
 
+        /// The send screen changes the rendered width, keeping one surface for the whole entrance.
+        /// This is independent of holding the stone: it does not enable the lens or emit stars.
+        public func updateOpeningScale(_ scale: CGFloat?) {
+            guard self.openingScale != scale else { return }
+            self.openingScale = scale
+            self.applyExpansion()
+        }
+
         public func spin(_ velocity: Float, decay: Float) {
             self.diamondLayer.spin(velocity, decay: decay)
         }
@@ -494,6 +505,7 @@ public final class InteractiveDiamondComponent: Component {
         public func prepareForWalletTransfer() {
             self.cancelInteraction()
             self.isWalletTransfer = true
+            self.openingScale = nil
             self.isUserInteractionEnabled = false
             self.onExpansionChanged = nil
             self.onLanding = nil

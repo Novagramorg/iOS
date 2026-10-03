@@ -7,6 +7,7 @@ struct AmountQuad {
     float4 uv;
     float2 viewport;
     float2 effect;
+    float2 reveal;
 };
 
 struct AmountVertex {
@@ -14,6 +15,8 @@ struct AmountVertex {
     float2 uv;
     float4 color;
     float threshold [[flat]];
+    float localX;
+    float2 reveal [[flat]];
 };
 
 vertex AmountVertex walletAmountVertex(uint index [[vertex_id]], uint instance [[instance_id]],
@@ -23,7 +26,7 @@ vertex AmountVertex walletAmountVertex(uint index [[vertex_id]], uint instance [
     float2 uv = corners[index];
     float2 point = quad.rect.xy + uv * quad.rect.zw;
     return {float4(point.x / quad.viewport.x * 2 - 1, 1 - point.y / quad.viewport.y * 2, 0, 1),
-            quad.uv.xy + uv * quad.uv.zw, quad.color, quad.effect.x};
+            quad.uv.xy + uv * quad.uv.zw, quad.color, quad.effect.x, point.x, quad.reveal};
 }
 
 vertex AmountVertex walletAmountLayerVertex(uint index [[vertex_id]], uint instance [[instance_id]],
@@ -35,7 +38,7 @@ vertex AmountVertex walletAmountLayerVertex(uint index [[vertex_id]], uint insta
     float2 point = (quad.rect.xy + uv * quad.rect.zw) / quad.viewport;
     // MetalEngine's allocation is y-up; text and glyph UVs remain y-down.
     float2 surface = placement.xy + float2(point.x, 1 - point.y) * placement.zw;
-    return {float4(surface * 2 - 1, 0, 1), quad.uv.xy + uv * quad.uv.zw, quad.color, quad.effect.x};
+    return {float4(surface * 2 - 1, 0, 1), quad.uv.xy + uv * quad.uv.zw, quad.color, quad.effect.x, point.x * quad.viewport.x, quad.reveal};
 }
 
 fragment float4 walletAmountFragment(AmountVertex in [[stage_in]],
@@ -47,6 +50,9 @@ fragment float4 walletAmountFragment(AmountVertex in [[stage_in]],
         // the pixel crossing the contour, keeping the interior fully opaque.
         float edge = max(fwidth(alpha) * 0.5, 1.0 / 1024.0);
         alpha = smoothstep(in.threshold - edge, in.threshold + edge, alpha);
+    }
+    if (in.reveal.y > in.reveal.x) {
+        alpha *= saturate((in.localX - in.reveal.x) / (in.reveal.y - in.reveal.x));
     }
     alpha *= in.color.a;
     return float4(in.color.rgb * alpha, alpha);
