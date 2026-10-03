@@ -246,6 +246,11 @@ public struct NetworkFailureRecord: Codable, Equatable {
     public var latencyP50: Double?
     public var latencyP90: Double?
     public var latencySamples: Int32
+    /// On records of other sessions, the latency of the main session's latest small requests that
+    /// stayed connected throughout: close to the link's round trip (plus server time), which a
+    /// transfer's own latency does not show. The latest `latencyHistory` of them, however old.
+    public var mainLatencyP50: Double?
+    public var mainLatencyP90: Double?
     /// Bytes per second the latest uploads of `transferMinBytes` or more moved at together, over the
     /// time any of them was running, rounded up to a power of two. Nil without one in the last
     /// `transferWindow` seconds.
@@ -776,6 +781,7 @@ public final class NetworkTelemetry {
     private var lastCellular: Bool?
     private var inFlightEstimate: Int32?
     private var recentLatency = Array(repeating: NetworkTelemetryLatencyHistory(), count: NetworkTelemetryRole.allCases.count)
+    private var mainRoundTrip = NetworkTelemetryLatencyHistory()
     private var recentUploads = NetworkTelemetryTransferHistory()
     private var recentDownloads = NetworkTelemetryTransferHistory()
     private var recentDrops: [(time: Double, role: NetworkTelemetryRole, drop: NetworkTelemetryDrop)] = []
@@ -1159,6 +1165,9 @@ public final class NetworkTelemetry {
         if sample.countsLatency {
             self.recentLatency[sample.role.index].add(sample.duration)
         }
+        if sample.role == .main && sample.countsLatency && sample.countsRate && sample.uplinkBytes == 0 && sample.downlinkBytes == 0 {
+            self.mainRoundTrip.add(sample.duration)
+        }
         if sample.countsLatency && sample.countsRate {
             if sample.uplinkBytes > 0 {
                 self.recentUploads.add(start: sample.startedAt, end: sample.startedAt + sample.duration, bytes: sample.uplinkBytes)
@@ -1273,7 +1282,8 @@ public final class NetworkTelemetry {
     /// Call with `lock` held.
     private func appendFailure(_ request: NetworkTelemetryRequestDescription, errorState: NetworkTelemetryErrorState, failure: NetworkFailureClass, code: Int32, error: String, duration: Double, spannedSuspension: Bool, now: Double) {
         let samples = self.recentLatency[request.info.role.index].sorted
-        func percentile(_ p: Double) -> Double? {
+        let mainSamples = request.info.role == .main ? [] : self.mainRoundTrip.sorted
+        func percentile(_ p: Double, of samples: [Double]) -> Double? {
             if samples.isEmpty {
                 return nil
             }
@@ -1307,9 +1317,11 @@ public final class NetworkTelemetry {
             drops: self.recentDrops(role: request.info.role, now: now),
             sinceOnline: self.connectionState?.isConnected == true ? 0.0 : self.lastConnected.map { ((now - $0) * 1000.0).rounded() / 1000.0 },
             inFlight: self.inFlightEstimate,
-            latencyP50: percentile(0.5),
-            latencyP90: percentile(0.9),
+            latencyP50: percentile(0.5, of: samples),
+            latencyP90: percentile(0.9, of: samples),
             latencySamples: Int32(samples.count),
+            mainLatencyP50: percentile(0.5, of: mainSamples),
+            mainLatencyP90: percentile(0.9, of: mainSamples),
             uplinkRate: self.recentUploads.rate(now: now),
             downlinkRate: self.recentDownloads.rate(now: now),
             layer: self.layer,
