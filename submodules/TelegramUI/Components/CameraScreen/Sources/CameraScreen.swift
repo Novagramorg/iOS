@@ -371,8 +371,6 @@ private final class CameraScreenComponent: CombinedComponent {
             
             super.init()
                                    
-            self.setupVolumeButtonsHandler()
-            
             toggleCameraPositionAction.connect({ [weak self] in
                 if let self {
                     self.togglePosition(self.animateFlipAction)
@@ -496,6 +494,12 @@ private final class CameraScreenComponent: CombinedComponent {
         
         var volumeButtonsListenerActive = false {
             didSet {
+                guard self.volumeButtonsListenerActive != oldValue else {
+                    return
+                }
+                if self.volumeButtonsListenerActive {
+                    self.setupVolumeButtonsHandler()
+                }
                 self.volumeButtonsListenerShouldBeActive.set(self.volumeButtonsListenerActive)
             }
         }
@@ -2741,7 +2745,9 @@ public class CameraScreenImpl: ViewController, CameraScreen {
                 }
             }
             
-            self.idleTimerExtensionDisposable.set(self.context.sharedContext.applicationBindings.pushIdleTimerExtension())
+            if controller.isCameraActivated {
+                self.idleTimerExtensionDisposable.set(self.context.sharedContext.applicationBindings.pushIdleTimerExtension())
+            }
             
             self.authorizationStatusDisposables.add((DeviceAccess.authorizationStatus(subject: .camera(.video))
             |> deliverOnMainQueue).start(next: { [weak self] status in
@@ -2803,9 +2809,17 @@ public class CameraScreenImpl: ViewController, CameraScreen {
         }
         
         private func maybeSetupCamera() {
+            guard self.controller?.isCameraActivated == true else {
+                return
+            }
             if case .allowed = self.cameraAuthorizationStatus, case .allowed = self.microphoneAuthorizationStatus {
                 self.setupCamera()
             }
+        }
+
+        func activateCamera() {
+            self.idleTimerExtensionDisposable.set(self.context.sharedContext.applicationBindings.pushIdleTimerExtension())
+            self.maybeSetupCamera()
         }
         
         private func requestDeviceAccess() {
@@ -2854,7 +2868,7 @@ public class CameraScreenImpl: ViewController, CameraScreen {
                 }
                 let previousState = self.cameraState
                 self.cameraState = self.cameraState.updatedPosition(position).updatedFlashMode(flashMode)
-                if !self.animatingDualCameraPositionSwitch {
+                if self.cameraState != previousState && !self.animatingDualCameraPositionSwitch {
                     var transition: ComponentTransition = .easeInOut(duration: 0.2)
                     if previousState.flashMode != flashMode {
                         transition = transition.withUserData(CameraScreenTransition.flashModeChanged)
@@ -3620,7 +3634,7 @@ public class CameraScreenImpl: ViewController, CameraScreen {
         }
         
         func presentCollageManagementTooltipIfNeeded() {
-            guard self.collage?.results.isEmpty ?? true else {
+            guard self.cameraState.isCollageEnabled, self.collage?.results.isEmpty ?? true else {
                 return
             }
             let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
@@ -4191,10 +4205,47 @@ public class CameraScreenImpl: ViewController, CameraScreen {
         
         self.navigationPresentation = .flatModal
         
+        if mode != .story || holder != nil || resumeLiveStream || transitionIn != nil {
+            self.activateCamera()
+        }
+    }
+
+    fileprivate private(set) var isCameraActivated = false
+    private var cameraActivationLink: SharedDisplayLinkDriver.Link?
+
+    private func scheduleCameraActivation() {
+        guard !self.isCameraActivated, !self.isDismissed, self.cameraActivationLink == nil else {
+            return
+        }
+        var hasPresentedFrame = false
+        self.cameraActivationLink = SharedDisplayLinkDriver.shared.add(framesPerSecond: .max) { [weak self] _ in
+            guard let self, self.isViewLoaded, self.view.window != nil else {
+                return
+            }
+            guard hasPresentedFrame else {
+                hasPresentedFrame = true
+                return
+            }
+            self.cameraActivationLink?.invalidate()
+            self.cameraActivationLink = nil
+            guard !self.isDismissed else {
+                return
+            }
+            self.activateCamera()
+        }
+    }
+
+    private func activateCamera() {
+        guard !self.isCameraActivated else {
+            return
+        }
+        self.isCameraActivated = true
         self.requestAudioSession()
-        
-        if case .story = mode {
+        if case .story = self.mode {
             self.postingAvailabilityPromise.set(self.context.engine.messages.checkStoriesUploadAvailability(target: .myStories))
+        }
+        if self.isNodeLoaded {
+            self.node.activateCamera()
         }
     }
 
@@ -4203,12 +4254,13 @@ public class CameraScreenImpl: ViewController, CameraScreen {
     }
     
     deinit {
+        self.cameraActivationLink?.invalidate()
         self.audioSessionDisposable?.dispose()
         self.postingAvailabilityDisposable?.dispose()
         self.codeDisposable?.dispose()
         self.resolveCodeDisposable?.dispose()
         self.resolvePeerDisposable.dispose()
-        if #available(iOS 13.0, *) {
+        if #available(iOS 13.0, *), self.isCameraActivated {
             try? AVAudioSession.sharedInstance().setAllowHapticsAndSystemSoundsDuringRecording(false)
         }
     }
@@ -4587,6 +4639,8 @@ public class CameraScreenImpl: ViewController, CameraScreen {
         guard !self.isDismissed else {
             return
         }
+        self.cameraActivationLink?.invalidate()
+        self.cameraActivationLink = nil
         
         self.node.dismissAllTooltips()
         
@@ -4741,6 +4795,8 @@ public class CameraScreenImpl: ViewController, CameraScreen {
     }
     
     public override func dismiss(animated flag: Bool, completion: (() -> Void)? = nil) {
+        self.cameraActivationLink?.invalidate()
+        self.cameraActivationLink = nil
         if !flag {
             self.galleryController?.dismiss(animated: false)
         }
@@ -4759,6 +4815,7 @@ public class CameraScreenImpl: ViewController, CameraScreen {
 
         if !self.isDismissed {
             (self.displayNode as! Node).containerLayoutUpdated(layout: layout, transition: ComponentTransition(transition))
+            self.scheduleCameraActivation()
         }
     }
 }

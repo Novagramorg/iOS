@@ -142,6 +142,7 @@ public final class WalletCardComponent: Component {
         private var fractionalBalanceContentFrame: CGRect = .zero
         private var primaryBalanceBaseFrame: CGRect = .zero
         private var secondaryBalanceBaseFrame: CGRect = .zero
+        private var primaryBalanceScale: CGFloat = 1.0
         private var balanceTransitionFraction: CGFloat = 0.0
         private var balanceCollapseFraction: CGFloat = 0.0
         private var balanceScrollTransform = CATransform3DIdentity
@@ -337,9 +338,11 @@ public final class WalletCardComponent: Component {
             self.layer.masksToBounds = false
             self.currentSize = size
 
-            // Restore the untransformed bounds before laying out updated balance text.
-            for view in [self.integralBalance.view, self.fractionalBalance.view, self.gramDiamond.view].compactMap({ $0 }) {
-                ComponentTransition.immediate.setTransform(view: view, transform: CATransform3DIdentity)
+            for view in [self.integralBalance.view, self.fractionalBalance.view].compactMap({ $0 }) {
+                ComponentTransition.immediate.setTransform(view: view, transform: CATransform3DMakeScale(self.primaryBalanceScale, self.primaryBalanceScale, 1.0))
+            }
+            if let diamondView = self.gramDiamond.view {
+                ComponentTransition.immediate.setTransform(view: diamondView, transform: CATransform3DIdentity)
             }
 
             self.shadowView.bounds = CGRect(origin: .zero, size: size)
@@ -425,6 +428,28 @@ public final class WalletCardComponent: Component {
 
             let mainColor = UIColor.white
             let secondaryColor = UIColor(rgb: 0x6ddcff)
+            let qrSize = self.qrButton.update(
+                transition: transition,
+                component: AnyComponent(PlainButtonComponent(
+                    content: AnyComponent(BundleIconComponent(
+                        name: "Wallet/CardQr",
+                        tintColor: nil,
+                        scaleFactor: scale
+                    )),
+                    minSize: CGSize(width: 50.0, height: 38.0),
+                    action: { [weak self] in
+                        self?.component?.qrPressed()
+                    },
+                    animateAlpha: false
+                )),
+                environment: {},
+                containerSize: CGSize(width: 80.0 * scale, height: 80.0)
+            )
+            let qrFrame = CGRect(
+                origin: CGPoint(x: width - qrSize.width - 47.0 * scale, y: 82.0 * scale),
+                size: qrSize
+            )
+            let balanceRightEdge = qrFrame.minX - 10.0 * scale
             let integralFont = Font.with(
                 size: 22.0 * scale,
                 design: .round,
@@ -442,7 +467,7 @@ public final class WalletCardComponent: Component {
                 design: .round,
                 weight: .semibold
             )
-            let integralTextSize = self.integralBalance.update(
+            let unscaledIntegralTextSize = self.integralBalance.update(
                 transition: transition,
                 component: AnyComponent(AnimatedTextComponent(
                     font: integralFont,
@@ -455,7 +480,7 @@ public final class WalletCardComponent: Component {
                 environment: {},
                 containerSize: CGSize(width: width, height: 100.0)
             )
-            let fractionalSize = self.fractionalBalance.update(
+            let unscaledFractionalSize = self.fractionalBalance.update(
                 transition: transition,
                 component: AnyComponent(AnimatedTextComponent(
                     font: fractionalFont,
@@ -468,7 +493,7 @@ public final class WalletCardComponent: Component {
                 environment: {},
                 containerSize: CGSize(width: width, height: 100.0)
             )
-            let currencySize = self.currency.update(
+            let unscaledCurrencySize = self.currency.update(
                 transition: transition,
                 component: AnyComponent(AnimatedTextComponent(
                     font: currencyFont,
@@ -482,8 +507,17 @@ public final class WalletCardComponent: Component {
                 containerSize: CGSize(width: width, height: 100.0)
             )
 
-            let gramIconSize = CGSize(width: 30.0 * scale, height: 30.0 * scale)
-            let gramIconSpacing = gramIconSize.width + 3.25 * scale
+            let balanceOriginX = 20.0 * scale
+            let unscaledBalanceWidth = (33.25 + (fractionalText.isEmpty ? 0.0 : 1.0) + 5.0) * scale
+                + unscaledIntegralTextSize.width + unscaledFractionalSize.width + unscaledCurrencySize.width
+            let balanceScale = min(1.0, max(0.0, balanceRightEdge - balanceOriginX) / max(1.0, unscaledBalanceWidth))
+            self.primaryBalanceScale = balanceScale
+            let balanceContentScale = scale * balanceScale
+            let integralTextSize = CGSize(width: unscaledIntegralTextSize.width * balanceScale, height: unscaledIntegralTextSize.height * balanceScale)
+            let fractionalSize = CGSize(width: unscaledFractionalSize.width * balanceScale, height: unscaledFractionalSize.height * balanceScale)
+            let currencySize = CGSize(width: unscaledCurrencySize.width * balanceScale, height: unscaledCurrencySize.height * balanceScale)
+            let gramIconSize = CGSize(width: 30.0 * balanceContentScale, height: 30.0 * balanceContentScale)
+            let gramIconSpacing = gramIconSize.width + 3.25 * balanceContentScale
             let integralSize = CGSize(
                 width: gramIconSpacing + integralTextSize.width,
                 height: max(gramIconSize.height, integralTextSize.height)
@@ -491,27 +525,27 @@ public final class WalletCardComponent: Component {
             let mainCenterY = 94.0 * scale
             let integralOriginY = floor(mainCenterY - integralSize.height * 0.5)
             
-            let mainBaselineY = integralOriginY + floorToScreenPixels(integralFont.ascender)
-            var mainOriginX = 20.0 * scale
+            let mainBaselineY = integralOriginY + floorToScreenPixels(integralFont.ascender) * balanceScale
+            var mainOriginX = balanceOriginX
             let integralFrame = CGRect(
                 origin: CGPoint(x: mainOriginX, y: integralOriginY),
                 size: integralSize
             )
             mainOriginX += integralSize.width
             if !fractionalText.isEmpty {
-                mainOriginX += 1.0 * scale
+                mainOriginX += 1.0 * balanceContentScale
             }
             let fractionalFrame = CGRect(
                 origin: CGPoint(
                     x: mainOriginX,
-                    y: mainBaselineY - floorToScreenPixels(fractionalFont.ascender)
+                    y: mainBaselineY - floorToScreenPixels(fractionalFont.ascender) * balanceScale
                 ),
                 size: fractionalSize
             )
             mainOriginX += fractionalSize.width
-            mainOriginX += 5.0 * scale
+            mainOriginX += 5.0 * balanceContentScale
             let currencyFrame = CGRect(
-                origin: CGPoint(x: mainOriginX, y: mainBaselineY - floorToScreenPixels(currencyFont.ascender)),
+                origin: CGPoint(x: mainOriginX, y: mainBaselineY - floorToScreenPixels(currencyFont.ascender) * balanceScale),
                 size: currencySize
             )
 
@@ -539,8 +573,8 @@ public final class WalletCardComponent: Component {
 
             self.gramIconContentFrame = CGRect(
                 origin: CGPoint(
-                    x: integralFrame.minX - primaryBalanceBaseFrame.minX - scale,
-                    y: mainCenterY - primaryBalanceBaseFrame.minY - gramIconSize.height * 0.5 - 3.0 * scale
+                    x: integralFrame.minX - primaryBalanceBaseFrame.minX - balanceContentScale,
+                    y: mainCenterY - primaryBalanceBaseFrame.minY - gramIconSize.height * 0.5 - 3.0 * balanceContentScale
                 ),
                 size: gramIconSize
             )
@@ -549,45 +583,36 @@ public final class WalletCardComponent: Component {
                 if integralView.superview !== self.primaryBalanceContainerView {
                     self.primaryBalanceContainerView.addSubview(integralView)
                 }
-                transition.setFrame(
-                    view: integralView,
-                    frame: CGRect(
-                        origin: CGPoint(
-                            x: integralFrame.minX - primaryBalanceBaseFrame.minX + gramIconSpacing,
-                            y: integralFrame.minY - primaryBalanceBaseFrame.minY
-                        ),
-                        size: integralTextSize
-                    )
-                )
+                transition.setBounds(view: integralView, bounds: CGRect(origin: .zero, size: unscaledIntegralTextSize))
+                transition.setPosition(view: integralView, position: self.integralBalanceContentFrame.center)
+                transition.setScale(view: integralView, scale: balanceScale)
             }
             if let fractionalView = self.fractionalBalance.view {
                 fractionalView.isUserInteractionEnabled = false
                 if fractionalView.superview !== self.primaryBalanceContainerView {
                     self.primaryBalanceContainerView.addSubview(fractionalView)
                 }
-                transition.setFrame(
-                    view: fractionalView,
-                    frame: fractionalFrame.offsetBy(
-                        dx: -primaryBalanceBaseFrame.minX,
-                        dy: -primaryBalanceBaseFrame.minY
-                    )
-                )
+                transition.setBounds(view: fractionalView, bounds: CGRect(origin: .zero, size: unscaledFractionalSize))
+                transition.setPosition(view: fractionalView, position: self.fractionalBalanceContentFrame.center)
+                transition.setScale(view: fractionalView, scale: balanceScale)
             }
             if let currencyView = self.currency.view {
                 currencyView.isUserInteractionEnabled = false
                 if currencyView.superview !== self.primaryBalanceContainerView {
                     self.primaryBalanceContainerView.addSubview(currencyView)
                 }
-                transition.setFrame(
+                transition.setBounds(view: currencyView, bounds: CGRect(origin: .zero, size: unscaledCurrencySize))
+                transition.setPosition(
                     view: currencyView,
-                    frame: currencyFrame.offsetBy(
+                    position: currencyFrame.offsetBy(
                         dx: -primaryBalanceBaseFrame.minX,
                         dy: -primaryBalanceBaseFrame.minY
-                    )
+                    ).center
                 )
+                transition.setScale(view: currencyView, scale: balanceScale)
             }
 
-            let secondarySize = self.secondaryBalance.update(
+            let unscaledSecondarySize = self.secondaryBalance.update(
                 transition: transition,
                 component: AnyComponent(AnimatedTextComponent(
                     font: Font.with(
@@ -605,16 +630,18 @@ public final class WalletCardComponent: Component {
                 environment: {},
                 containerSize: CGSize(width: width, height: 100.0)
             )
+            let secondaryScale = min(1.0, max(0.0, balanceRightEdge - 24.0 * scale) / max(1.0, unscaledSecondarySize.width))
+            let secondarySize = CGSize(width: unscaledSecondarySize.width * secondaryScale, height: unscaledSecondarySize.height * secondaryScale)
             self.secondaryBalanceBaseFrame = CGRect(
                 origin: CGPoint(x: 24.0 * scale, y: 114.0 * scale),
                 size: secondarySize
             )
-            let diamondSize = CGSize(width: 96.0 * scale, height: 96.0 * scale)
+            let diamondSize = CGSize(width: 96.0 * balanceContentScale, height: 96.0 * balanceContentScale)
             let _ = self.gramDiamond.update(
                 transition: .immediate,
                 component: AnyComponent(InteractiveDiamondComponent(
                     size: diamondSize,
-                    diamondWidth: 26.0 * 1.09 * 0.8 * scale,
+                    diamondWidth: 26.0 * 1.09 * 0.8 * balanceContentScale,
                     isVisible: self.isDiamondRenderingEnabled,
                     theme: component.theme,
                     appearance: .white,
@@ -656,7 +683,6 @@ public final class WalletCardComponent: Component {
                         ))
                     }
                 }
-                // Clip only the diamond; balances must still travel into the navigation header.
                 ComponentTransition.immediate.setFrame(view: self.diamondClipView, frame: CGRect(
                     x: -primaryBalanceBaseFrame.minX, y: -primaryBalanceBaseFrame.minY,
                     width: size.width, height: size.height
@@ -683,10 +709,9 @@ public final class WalletCardComponent: Component {
                 if secondaryView.superview !== self.secondaryBalanceContainerView {
                     self.secondaryBalanceContainerView.addSubview(secondaryView)
                 }
-                transition.setFrame(
-                    view: secondaryView,
-                    frame: CGRect(origin: CGPoint(), size: secondarySize)
-                )
+                transition.setBounds(view: secondaryView, bounds: CGRect(origin: .zero, size: unscaledSecondarySize))
+                transition.setPosition(view: secondaryView, position: CGPoint(x: secondarySize.width * 0.5, y: secondarySize.height * 0.5))
+                transition.setScale(view: secondaryView, scale: secondaryScale)
             }
 
             let nameSize = self.name.update(
@@ -715,33 +740,13 @@ public final class WalletCardComponent: Component {
                     )
                 )
             }
-            let qrSize = self.qrButton.update(
-                transition: transition,
-                component: AnyComponent(PlainButtonComponent(
-                    content: AnyComponent(BundleIconComponent(
-                        name: "Wallet/CardQr",
-                        tintColor: nil,
-                        scaleFactor: scale
-                    )),
-                    minSize: CGSize(width: 50.0, height: 38.0),
-                    action: { [weak self] in
-                        self?.component?.qrPressed()
-                    },
-                    animateAlpha: false
-                )),
-                environment: {},
-                containerSize: CGSize(width: 80.0 * scale, height: 80.0)
-            )
             if let qrView = self.qrButton.view {
                 if qrView.superview !== self.foregroundView {
                     self.foregroundView.addSubview(qrView)
                 }
                 transition.setFrame(
                     view: qrView,
-                    frame: CGRect(
-                        origin: CGPoint(x: width - qrSize.width - 47.0 * scale, y: 82.0 * scale),
-                        size: qrSize
-                    )
+                    frame: qrFrame
                 )
             }
 
@@ -835,6 +840,7 @@ public final class WalletCardComponent: Component {
                 let frame = view.convert(view.bounds, to: self.primaryBalanceContainerView)
                 context.saveGState()
                 context.translateBy(x: frame.minX - sourceRect.minX, y: frame.minY - sourceRect.minY)
+                context.scaleBy(x: self.primaryBalanceScale, y: self.primaryBalanceScale)
                 view.layer.render(in: context)
                 context.restoreGState()
             }
@@ -1098,8 +1104,6 @@ public final class WalletCardComponent: Component {
                let primaryFrame, !primaryFrame.isEmpty,
                let secondaryFrame, !secondaryFrame.isEmpty,
                primaryCollapsedFrame == nil, secondaryCollapsedFrame == nil {
-                // Pitch compresses the rows without compressing the distance between their centers.
-                // Keep the visible gap tied to the layout while the card is tilted.
                 let primaryRenderedFrame = self.primaryBalanceContainerView.convert(self.primaryBalanceContainerView.bounds, to: balanceTransitionContainer)
                 let secondaryRenderedFrame = self.secondaryBalanceContainerView.convert(self.secondaryBalanceContainerView.bounds, to: balanceTransitionContainer)
                 let targetSpacing = max(0.0, secondaryFrame.minY - primaryFrame.maxY)
@@ -1150,13 +1154,12 @@ public final class WalletCardComponent: Component {
                 )
             }
 
-            // Match the text and icon separately: their proportions differ from the card's row.
             let targetTextFrame = contentFrame(textFrame, targetFrame: target?.text)
             let textScaleX = targetTextFrame.width / textFrame.width
             let textScaleY = targetTextFrame.height / textFrame.height
             for (view, frame) in [(self.integralBalance.view, self.integralBalanceContentFrame), (self.fractionalBalance.view, self.fractionalBalanceContentFrame)] {
                 if let view {
-                    ComponentTransition.immediate.setTransform(view: view, transform: CATransform3DMakeScale(textScaleX, textScaleY, 1.0))
+                    ComponentTransition.immediate.setTransform(view: view, transform: CATransform3DMakeScale(textScaleX * self.primaryBalanceScale, textScaleY * self.primaryBalanceScale, 1.0))
                     ComponentTransition.immediate.setPosition(view: view, position: CGPoint(
                         x: targetTextFrame.minX + (frame.midX - textFrame.minX) * textScaleX,
                         y: targetTextFrame.minY + (frame.midY - textFrame.minY) * textScaleY
@@ -1200,8 +1203,6 @@ public final class WalletCardComponent: Component {
             localTransform.m41 = origin.x - bounds.minX - bounds.width * anchor.x
             localTransform.m42 = origin.y - bounds.minY - bounds.height * anchor.y
 
-            // Invert the projected plane, since the clipping view flattens its children in 2D.
-            // A counter-rotation in 3D would still leave the gem compressed by the card's pitch.
             var projection = CATransform3DConcat(localTransform, self.balanceTransitionView.layer.transform)
             projection.m13 = 0.0
             projection.m23 = 0.0
@@ -1215,7 +1216,6 @@ public final class WalletCardComponent: Component {
                 return contentTransform
             }
 
-            // Retain the projected center and horizontal scale, with a square, front-facing image.
             let horizontalX = (projection.m11 * w - projection.m41 * projection.m14) / (w * w)
             let horizontalY = (projection.m12 * w - projection.m42 * projection.m14) / (w * w)
             let scale = hypot(horizontalX, horizontalY) * scaleX
@@ -1476,8 +1476,7 @@ public final class WalletCardComponent: Component {
                     pitch: followsCardTilt ? CGFloat(cardPitch) : 0.0,
                     roll: followsCardTilt ? CGFloat(self.currentCardY) : 0.0,
                     scale: 1.0 + 0.16 * CGFloat(tilt),
-                    leftInset: diamondCenter.x - 14.0 * scale,
-                    // The canvas stays centered on the gem; cover all four card edges with padding.
+                    leftInset: diamondCenter.x - 14.0 * scale * self.primaryBalanceScale,
                     starCanvasSize: CGSize(
                         width: 2.0 * (max(diamondCenter.x, self.currentSize.width - diamondCenter.x) + 2.0),
                         height: 2.0 * (max(diamondCenter.y, self.currentSize.height - diamondCenter.y) + 2.0)

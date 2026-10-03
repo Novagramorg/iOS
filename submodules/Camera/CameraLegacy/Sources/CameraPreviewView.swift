@@ -46,12 +46,18 @@ private class SimpleCapturePreviewLayer: AVCaptureVideoPreviewLayer {
 
 
 final class LegacyCameraSimplePreviewView: UIView, CameraSimplePreviewView {
+    private static let placeholderQueue = Queue(name: "CameraPlaceholder")
+    private static let cachedImages: NSCache<NSString, UIImage> = {
+        let cache = NSCache<NSString, UIImage>()
+        cache.countLimit = 2
+        cache.totalCostLimit = 16 * 1024 * 1024
+        return cache
+    }()
+
     func updateOrientation() {
         guard self.videoPreviewLayer.connection?.isVideoOrientationSupported == true else {
             return
         }
-        // Prefer the scene this view actually lives in; fall back to a connected window scene while
-        // the view is not yet in the hierarchy.
         let windowScene = self.window?.windowScene ?? UIApplication.shared.connectedScenes.first(where: { $0 is UIWindowScene }) as? UIWindowScene
         let statusBarOrientation = windowScene?.interfaceOrientation ?? .portrait
         let videoOrientation = statusBarOrientation.videoOrientation
@@ -59,40 +65,50 @@ final class LegacyCameraSimplePreviewView: UIView, CameraSimplePreviewView {
         self.videoPreviewLayer.removeAllAnimations()
     }
     
-    static func lastBackImage() -> UIImage {
-        let imagePath = NSTemporaryDirectory() + "backCameraImage.jpg"
-        if let data = try? Data(contentsOf: URL(fileURLWithPath: imagePath)), let image = UIImage(data: data) {
+    private static func cacheImage(_ image: UIImage, front: Bool) {
+        let cost = image.cgImage.map { $0.bytesPerRow * $0.height } ?? 0
+        self.cachedImages.setObject(image, forKey: front ? "front" : "back", cost: cost)
+    }
+
+    private static func lastImage(front: Bool) -> UIImage {
+        if let image = self.cachedImages.object(forKey: front ? "front" : "back") {
             return image
+        }
+        let imagePath = NSTemporaryDirectory() + (front ? "frontCameraImage.jpg" : "backCameraImage.jpg")
+        var result: UIImage
+        if let data = try? Data(contentsOf: URL(fileURLWithPath: imagePath)), let image = UIImage(data: data) {
+            result = image
+            if #available(iOS 15.0, *) {
+                result = image.preparingForDisplay() ?? image
+            }
         } else {
-            return UIImage(bundleImageName: "Camera/Placeholder")!
+            result = UIImage(bundleImageName: front ? "Camera/SelfiePlaceholder" : "Camera/Placeholder")!
+        }
+        self.cacheImage(result, front: front)
+        return result
+    }
+
+    private static func saveLastImage(_ image: UIImage, front: Bool) {
+        self.placeholderQueue.async {
+            self.cacheImage(image, front: front)
+            let imagePath = NSTemporaryDirectory() + (front ? "frontCameraImage.jpg" : "backCameraImage.jpg")
+            if let data = image.jpegData(compressionQuality: 0.6) {
+                try? data.write(to: URL(fileURLWithPath: imagePath))
+            }
         }
     }
-    
+
     static func saveLastBackImage(_ image: UIImage) {
-        let imagePath = NSTemporaryDirectory() + "backCameraImage.jpg"
-        if let data = image.jpegData(compressionQuality: 0.6) {
-            try? data.write(to: URL(fileURLWithPath: imagePath))
-        }
+        self.saveLastImage(image, front: false)
     }
-    
-    static func lastFrontImage() -> UIImage {
-        let imagePath = NSTemporaryDirectory() + "frontCameraImage.jpg"
-        if let data = try? Data(contentsOf: URL(fileURLWithPath: imagePath)), let image = UIImage(data: data) {
-            return image
-        } else {
-            return UIImage(bundleImageName: "Camera/SelfiePlaceholder")!
-        }
-    }
-    
+
     static func saveLastFrontImage(_ image: UIImage) {
-        let imagePath = NSTemporaryDirectory() + "frontCameraImage.jpg"
-        if let data = image.jpegData(compressionQuality: 0.6) {
-            try? data.write(to: URL(fileURLWithPath: imagePath))
-        }
+        self.saveLastImage(image, front: true)
     }
-        
+
     private var previewingDisposable: Disposable?
     private let placeholderView = UIImageView()
+    private var placeholderGeneration = 0
     
     init(frame: CGRect, main: Bool, roundVideo: Bool = false) {
         super.init(frame: frame)
@@ -124,14 +140,29 @@ final class LegacyCameraSimplePreviewView: UIView, CameraSimplePreviewView {
     }
     
     func removePlaceholder(delay: Double = 0.0) {
+        self.placeholderGeneration += 1
         UIView.animate(withDuration: 0.3, delay: delay) {
             self.placeholderView.alpha = 0.0
         }
     }
     
     func resetPlaceholder(front: Bool) {
-        self.placeholderView.image = front ? LegacyCameraSimplePreviewView.lastFrontImage() : LegacyCameraSimplePreviewView.lastBackImage()
+        self.placeholderGeneration += 1
+        let generation = self.placeholderGeneration
+        let cachedImage = Self.cachedImages.object(forKey: front ? "front" : "back")
+        self.placeholderView.image = cachedImage ?? UIImage(bundleImageName: front ? "Camera/SelfiePlaceholder" : "Camera/Placeholder")
         self.placeholderView.alpha = 1.0
+        if cachedImage == nil {
+            Self.placeholderQueue.async { [weak self] in
+                let image = LegacyCameraSimplePreviewView.lastImage(front: front)
+                Queue.mainQueue().async { [weak self] in
+                    guard let self, self.placeholderGeneration == generation else {
+                        return
+                    }
+                    self.placeholderView.image = image
+                }
+            }
+        }
     }
         
     private var _videoPreviewLayer: AVCaptureVideoPreviewLayer?

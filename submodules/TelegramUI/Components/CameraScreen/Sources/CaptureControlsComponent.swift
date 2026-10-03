@@ -161,7 +161,6 @@ private final class ShutterButtonContentComponent: Component {
             self.layer.addSublayer(self.progressLayer)
             
             self.chromeView.alpha = 0.9
-            self.chromeView.image = GlassBackgroundView.generateForegroundImage(size: CGSize(width: 26.0 * 2.0, height: 26.0 * 2.0), isDark: false, fillColor: .clear)
         }
 
         required init?(coder aDecoder: NSCoder) {
@@ -252,24 +251,6 @@ private final class ShutterButtonContentComponent: Component {
                 }
             }
             
-            let labelSize = self.label.update(
-                transition: .immediate,
-                component: AnyComponent(
-                    Text(text: component.strings.Camera_LiveStream_StartLiveStream, font: Font.semibold(17.0), color: .white)
-                ),
-                environment: {},
-                containerSize: availableSize
-            )
-            let labelFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((maximumShutterSize.width - labelSize.width) / 2.0), y: floorToScreenPixels((maximumShutterSize.height - labelSize.height) / 2.0)), size: labelSize)
-            if let labelView = self.label.view {
-                if labelView.superview == nil {
-                    labelView.alpha = 0.0
-                    labelView.isUserInteractionEnabled = false
-                    self.addSubview(labelView)
-                }
-                labelView.frame = labelFrame
-            }
-                        
             var innerColor: UIColor
             let innerSize: CGSize
             var ringSize: CGSize
@@ -323,6 +304,30 @@ private final class ShutterButtonContentComponent: Component {
                 ringWidth = 5.0
             }
             
+            // Live-stream chrome and text are invisible in photo/video mode.
+            if chromeAlpha > 0.0 && self.chromeView.image == nil {
+                self.chromeView.image = GlassBackgroundView.generateForegroundImage(size: CGSize(width: 52.0, height: 52.0), isDark: false, fillColor: .clear)
+            }
+            if labelAlpha > 0.0 || self.label.view != nil {
+                let labelSize = self.label.update(
+                    transition: .immediate,
+                    component: AnyComponent(
+                        Text(text: component.strings.Camera_LiveStream_StartLiveStream, font: Font.semibold(17.0), color: .white)
+                    ),
+                    environment: {},
+                    containerSize: availableSize
+                )
+                let labelFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((maximumShutterSize.width - labelSize.width) / 2.0), y: floorToScreenPixels((maximumShutterSize.height - labelSize.height) / 2.0)), size: labelSize)
+                if let labelView = self.label.view {
+                    if labelView.superview == nil {
+                        labelView.alpha = 0.0
+                        labelView.isUserInteractionEnabled = false
+                        self.addSubview(labelView)
+                    }
+                    labelView.frame = labelFrame
+                }
+            }
+
             transition.setAlpha(view: self.backgroundView, alpha: glassAlpha)
             transition.setAlpha(view: self.chromeView, alpha: chromeAlpha)
             
@@ -650,19 +655,35 @@ final class LockContentComponent: Component {
     }
 }
 
+private let galleryImageQueue = Queue(name: "CameraGalleryThumbnail")
+private let cachedGalleryImage = Atomic<UIImage?>(value: nil)
+
 private func lastStateImage() -> UIImage {
+    if let image = cachedGalleryImage.with({ $0 }) {
+        return image
+    }
     let imagePath = NSTemporaryDirectory() + "galleryImage.jpg"
     if let data = try? Data(contentsOf: URL(fileURLWithPath: imagePath)), let image = UIImage(data: data) {
-        return image
+        let preparedImage: UIImage
+        if #available(iOS 15.0, *) {
+            preparedImage = image.preparingForDisplay() ?? image
+        } else {
+            preparedImage = image
+        }
+        _ = cachedGalleryImage.swap(preparedImage)
+        return preparedImage
     } else {
         return UIImage(bundleImageName: "Camera/Placeholder")!
     }
 }
 
 private func saveLastStateImage(_ image: UIImage) {
-    let imagePath = NSTemporaryDirectory() + "galleryImage.jpg"
-    if let data = image.jpegData(compressionQuality: 0.6) {
-        try? data.write(to: URL(fileURLWithPath: imagePath))
+    galleryImageQueue.async {
+        _ = cachedGalleryImage.swap(image)
+        let imagePath = NSTemporaryDirectory() + "galleryImage.jpg"
+        if let data = image.jpegData(compressionQuality: 0.6) {
+            try? data.write(to: URL(fileURLWithPath: imagePath))
+        }
     }
 }
 
@@ -839,9 +860,23 @@ final class CaptureControlsComponent: Component {
         }
         
         override init() {
-            self.cachedAssetImage = ("", lastStateImage())
-            
+            let cachedImage = cachedGalleryImage.with({ $0 })
+            self.cachedAssetImage = ("", cachedImage ?? UIImage(bundleImageName: "Camera/Placeholder")!)
+
             super.init()
+
+            if cachedImage == nil {
+                galleryImageQueue.async { [weak self] in
+                    let image = lastStateImage()
+                    Queue.mainQueue().async { [weak self] in
+                        guard let self, self.cachedAssetImage?.0 == "" else {
+                            return
+                        }
+                        self.cachedAssetImage = ("", image)
+                        self.updated(transition: .immediate)
+                    }
+                }
+            }
         }
         
         deinit {
