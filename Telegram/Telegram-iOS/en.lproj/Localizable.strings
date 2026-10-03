@@ -16734,6 +16734,8 @@ Error: %8$@";
 
 "Notification.GramTransfer" = "%1$@ sent you %2$@";
 "Notification.GramTransferYou" = "You sent %1$@ %2$@";
+"Notification.GramTransfer.WithFiat" = "%1$@ sent you %2$@ (%3$@)";
+"Notification.GramTransfer.WithFiatYou" = "You sent %1$@ %2$@ (%3$@)";
 "Chat.GramTransfer.Received" = "received";
 "Chat.GramTransfer.Sent" = "sent";
 
@@ -16930,8 +16932,7 @@ Error: %8$@";
 "Wallet.Words.TooFastTitle" = "All Done?";
 "Wallet.Words.TooFastText" = "You didn't have enough time to write these words down.";
 "Wallet.Words.TooFastAction" = "OK, sorry";
-"Chat.GramTransfer.WithFiat" = "%1$@ sent you %2$@ (%3$@)";
-"Chat.GramTransfer.WithFiatYou" = "You sent %1$@ %2$@ (%3$@)";
+
 "Wallet.Sign.Fee" = "Fee: %@.";
 "Wallet.Sign.FeeWithFiat" = "Fee: %1$@ (%2$@).";
 "Wallet.Settings.WalletCreatedTitle" = "Wallet Created";
@@ -17066,9 +17067,16 @@ Error: %8$@";
 
 "Monetization.Withdraw.AmountTooSmallError" = "You cannot withdraw less than 10 Grams.";
 
-"MESSAGE_GRAM_TRANSFER" = "{1} sent you {2}";
-"MESSAGE_GRAM_TRANSFER_COMMENT" = "{1} sent you {2}: {3}";
+"MESSAGE_GRAM_TRANSFER" = "%1$@ sent you %2$@";
+"MESSAGE_GRAM_TRANSFER_COMMENT" = "%1$@ sent you %2$@: %3$@";
 "MESSAGE_WALLET_TONCONNECT_REQUEST" = "You have a TON Connect request";
-"MESSAGE_WALLET_TONCONNECT_REQUEST_DAPP" = "You have a TON Connect request from {2}";
+"MESSAGE_WALLET_TONCONNECT_REQUEST_DAPP" = "You have a TON Connect request from %@";
+"MESSAGE_GRAM_TRANSFER_UNKNOWN" = "You received %@";
+"MESSAGE_GRAM_TRANSFER_UNKNOWN_COMMENT" = "You received %@: %@";
 
 "Story.Editor.CollageDraftAllMediaMissing" = "None of the media in this collage are available anymore. This draft will be deleted.";
+
+"Notification.GramTransferUnknown" = "Someone sent you %@";
+"Notification.GramTransferUnknown.WithFiat" = "Someone sent you %1$@ (%2$@)";
+"Notification.GramTransfer.UnknownUser" = "UNKNOWN USER";
+

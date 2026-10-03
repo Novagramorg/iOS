@@ -1178,7 +1178,8 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
 
                             let peer: WalletContext.Transaction.Peer
                             if let enginePeer = message.peers[message.id.peerId].flatMap(EnginePeer.init),
-                               enginePeer.id.namespace == Namespaces.Peer.CloudUser {
+                               enginePeer.id.namespace == Namespaces.Peer.CloudUser,
+                               !enginePeer.id.isTelegramNotifications {
                                 peer = .user(enginePeer, address: peerAddress, domain: nil)
                             } else if !peerAddress.isEmpty {
                                 peer = .address(peerAddress, domain: nil)

@@ -1855,7 +1855,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                     insets: UIEdgeInsets()
                 ))
 
-                let peerName = item.message.peers[item.message.id.peerId].flatMap(EnginePeer.init)?.displayTitle(strings: item.presentationData.strings, displayOrder: item.presentationData.nameDisplayOrder).uppercased() ?? ""
+                let peerName = item.message.id.peerId.isTelegramNotifications ? item.presentationData.strings.Notification_GramTransfer_UnknownUser : item.message.peers[item.message.id.peerId].flatMap(EnginePeer.init)?.displayTitle(strings: item.presentationData.strings, displayOrder: item.presentationData.nameDisplayOrder).uppercased() ?? ""
                 let (nameLayout, nameApply) = makeNameLayout(TextNodeLayoutArguments(
                     attributedString: NSAttributedString(
                         string: peerName,
@@ -1883,7 +1883,7 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                     attributedString: NSAttributedString(
                         string: addressGroups.joined(separator: " "),
                         font: Font.with(size: 10.0, design: .monospace, weight: .medium),
-                        textColor: UIColor.black.withAlphaComponent(0.3),
+                        textColor: UIColor(rgb: 0x0036b2),
                         paragraphAlignment: .center
                     ),
                     backgroundColor: nil,
@@ -2378,11 +2378,11 @@ private func walletTransferServiceMessageString(
     let text: PresentationStrings.FormattedString
     if let fiatValue {
         text = isIncoming
-            ? strings.Chat_GramTransfer_WithFiat(peerName, amountText, fiatValue)
-            : strings.Chat_GramTransfer_WithFiatYou(peerName, amountText, fiatValue)
+            ? (message.id.peerId.isTelegramNotifications ? strings.Notification_GramTransferUnknown_WithFiat(amountText, fiatValue) : strings.Notification_GramTransfer_WithFiat(peerName, amountText, fiatValue))
+            : strings.Notification_GramTransfer_WithFiatYou(peerName, amountText, fiatValue)
     } else {
         text = isIncoming
-            ? strings.Notification_GramTransfer(peerName, amountText)
+            ? (message.id.peerId.isTelegramNotifications ? strings.Notification_GramTransferUnknown(amountText) : strings.Notification_GramTransfer(peerName, amountText))
             : strings.Notification_GramTransferYou(peerName, amountText)
     }
     let result = NSMutableAttributedString(string: text.string, font: regularFont, textColor: primaryTextColor)

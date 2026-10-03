@@ -1709,7 +1709,11 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                 )
                 let text: String
                 if message.effectivelyIncoming(accountPeerId) {
-                    text = strings.Notification_GramTransfer(compactAuthorName, amountText).string
+                    if message.id.peerId.isTelegramNotifications {
+                        text = strings.Notification_GramTransferUnknown(amountText).string
+                    } else {
+                        text = strings.Notification_GramTransfer(compactAuthorName, amountText).string
+                    }
                 } else {
                     let conversationPeerName = message.peers[message.id.peerId].flatMap(EnginePeer.init)?.compactDisplayTitle ?? compactAuthorName
                     text = strings.Notification_GramTransferYou(conversationPeerName, amountText).string
