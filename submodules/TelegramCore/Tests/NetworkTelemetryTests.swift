@@ -1244,6 +1244,10 @@ final class NetworkTelemetryTests: XCTestCase {
         h.telemetry.checkStalledRequests()
         h.fakeMain.drop("probe_timeout")
         h.fail(method: "messages.getHistory", code: 420, text: "FLOOD_WAIT_3")
+        let worker = h.worker(datacenterId: 2, isMedia: true, isCdn: false)
+        let part = getFileRequest()
+        h.send(part, on: worker.session)
+        worker.fake.service.fail(part, code: 400, text: "FILE_REFERENCE_EXPIRED")
         let report = h.telemetry.makeReport(maxFailures: 10)
         let events = networkTelemetryEvents(report: report, reportId: 7, failuresPerEvent: 10)
 
@@ -1257,7 +1261,16 @@ final class NetworkTelemetryTests: XCTestCase {
         guard case let .dictionary(chunk) = events[1].data, case let .array(records)? = chunk["records"] else {
             return XCTFail()
         }
-        XCTAssertEqual(keys(records.first), ["schema", "sequence", "hour", "uptime", "engine", "variant", "role", "datacenter", "method", "failure", "code", "error", "duration", "spanned_suspension", "retries", "flood_wait", "server_errors", "request_bytes", "expected_bytes", "cellular", "via_proxy", "user_online", "connection", "drops", "since_online", "in_flight", "latency_p50", "latency_p90", "latency_samples", "uplink_rate", "downlink_rate", "layer", "app", "system"])
+        let mainKeys: Set<String> = ["schema", "sequence", "hour", "uptime", "engine", "variant", "role", "datacenter", "method", "failure", "code", "error", "duration", "spanned_suspension", "retries", "flood_wait", "server_errors", "request_bytes", "expected_bytes", "cellular", "via_proxy", "user_online", "connection", "drops", "since_online", "in_flight", "latency_p50", "latency_p90", "latency_samples", "uplink_rate", "downlink_rate", "layer", "app", "system"]
+        XCTAssertEqual(keys(records.first), mainKeys)
+        let media = records.first { record in
+            guard case let .dictionary(fields) = record, case .string("media")? = fields["role"] else {
+                return false
+            }
+            return true
+        }
+        XCTAssertNotNil(media)
+        XCTAssertEqual(keys(media).subtracting(mainKeys), ["main_latency_p50", "main_latency_p90"], "a record of another session adds the main session's round trip and nothing else")
         guard case let .dictionary(record)? = records.first, case let .array(connection)? = record["connection"] else {
             return XCTFail()
         }
@@ -1563,6 +1576,39 @@ final class NetworkTelemetryTests: XCTestCase {
         h.mainSession.setOnline(false)
         h.fail(method: "help.getConfig", code: 500, text: "INTERNAL")
         XCTAssertEqual(h.telemetry.pendingFailures.map(\.userOnline), [true, true, false], "only the main session follows the user")
+    }
+
+    func testFailuresOfTransferSessionsCarryTheMainSessionsRoundTrip() {
+        let h = Harness()
+        h.connection(.online)
+        for duration in [0.1, 0.2, 0.3, 0.4, 0.5] {
+            h.succeed(method: "help.getConfig", after: duration)
+        }
+        let upload = uploadPartRequest(size: 30000)
+        h.send(upload)
+        h.clock.advance(4.0)
+        h.fakeMain.service.succeed(upload)
+        let worker = h.worker(datacenterId: 2, isMedia: true, isCdn: false)
+        let finished = getFileRequest()
+        h.send(finished, on: worker.session)
+        h.clock.advance(3.0)
+        worker.fake.service.succeed(finished)
+        let download = getFileRequest()
+        h.send(download, on: worker.session)
+        worker.fake.service.fail(download, code: 400, text: "FILE_REFERENCE_EXPIRED")
+        h.fail(method: "help.getConfig", code: 500, text: "INTERNAL")
+
+        let records = h.telemetry.pendingFailures
+        XCTAssertEqual(records.map(\.role), [.media, .main])
+        XCTAssertEqual(records.first?.mainLatencyP50 ?? 0.0, 0.3, accuracy: 0.0001)
+        XCTAssertEqual(records.first?.mainLatencyP90 ?? 0.0, 0.5, accuracy: 0.0001, "an upload part on the main session is not a round trip")
+        XCTAssertEqual(records.first?.latencyP50 ?? 0.0, 3.0, accuracy: 0.0001, "the media session's own latency is its download")
+        XCTAssertNil(records.last?.mainLatencyP50, "a main record already has it as its own latency")
+        guard let media = records.first, case let .dictionary(fields)? = networkTelemetryJSON(media) else {
+            return XCTFail()
+        }
+        XCTAssertNotNil(fields["main_latency_p50"])
+        XCTAssertNotNil(fields["main_latency_p90"])
     }
 
     func testConnectionDropsAreCountedByRoleAndCarriedByFailuresOfThatRole() {
