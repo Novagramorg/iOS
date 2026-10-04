@@ -4182,6 +4182,10 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         return WalletReceiveScreen(context: context, address: address)
     }
 
+    public func makeWalletReceiveScreen(context: AccountContext, address: String, appeared: @escaping () -> Void) -> ViewController {
+        return WalletReceiveScreen(context: context, address: address, appeared: appeared)
+    }
+
     public func makeWalletImportScreen(context: AccountContext, mode: WalletImportScreenMode, completion: (() -> Void)?) -> ViewController {
         guard let walletContext = context.walletContext else {
             preconditionFailure("Wallet is only available in the main account context")

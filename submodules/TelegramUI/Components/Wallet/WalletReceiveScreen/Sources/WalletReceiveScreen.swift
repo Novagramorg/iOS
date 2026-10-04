@@ -1626,6 +1626,9 @@ private final class WalletReceiveSheetComponent: CombinedComponent {
                     autoAnimateOut: false,
                     externalState: sheetExternalState,
                     animateOut: animateOut,
+                    didAppear: {
+                        (controller() as? WalletReceiveScreen)?.completeAppearance()
+                    },
                     onPan: {
                     },
                     willDismiss: {
@@ -1701,10 +1704,12 @@ private final class WalletReceiveSheetComponent: CombinedComponent {
 
 public final class WalletReceiveScreen: ViewControllerComponentContainer {
     private let context: AccountContext
+    private var appeared: (() -> Void)?
     private var animatedDismissCompletion: (() -> Void)?
 
-    public init(context: AccountContext, address: String) {
+    public init(context: AccountContext, address: String, appeared: (() -> Void)? = nil) {
         self.context = context
+        self.appeared = appeared
 
         super.init(
             context: context,
@@ -1726,6 +1731,12 @@ public final class WalletReceiveScreen: ViewControllerComponentContainer {
         super.viewDidLoad()
 
         self.view.disablesInteractiveModalDismiss = true
+    }
+
+    fileprivate func completeAppearance() {
+        let appeared = self.appeared
+        self.appeared = nil
+        appeared?()
     }
 
     fileprivate func completeAnimatedDismiss() {

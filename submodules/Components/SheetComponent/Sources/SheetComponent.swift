@@ -87,6 +87,7 @@ public final class SheetComponent<ChildEnvironmentType: Sendable & Equatable>: C
     public let animateOut: ActionSlot<Action<()>>
     public let onPan: () -> Void
     public let willDismiss: () -> Void
+    public let didAppear: () -> Void
     
     public init(
         content: AnyComponent<ChildEnvironmentType>,
@@ -100,6 +101,7 @@ public final class SheetComponent<ChildEnvironmentType: Sendable & Equatable>: C
         autoAnimateOut: Bool = true,
         externalState: ExternalState? = nil,
         animateOut: ActionSlot<Action<()>>,
+        didAppear: @escaping () -> Void = {},
         onPan: @escaping () -> Void = {},
         willDismiss: @escaping () -> Void = {}
     ) {
@@ -116,6 +118,7 @@ public final class SheetComponent<ChildEnvironmentType: Sendable & Equatable>: C
         self.animateOut = animateOut
         self.onPan = onPan
         self.willDismiss = willDismiss
+        self.didAppear = didAppear
     }
     
     public static func ==(lhs: SheetComponent, rhs: SheetComponent) -> Bool {
@@ -334,6 +337,11 @@ public final class SheetComponent<ChildEnvironmentType: Sendable & Equatable>: C
             self.scrollView.center = targetPosition.offsetBy(dx: 0.0, dy: offset)
             transition.animateView(allowUserInteraction: true, {
                 self.scrollView.center = targetPosition
+            }, completion: { [weak self] completed in
+                guard completed, let self, !self.isAnimatingOut else {
+                    return
+                }
+                self.component?.didAppear()
             })
             
             if let headerContent = self.headerView {

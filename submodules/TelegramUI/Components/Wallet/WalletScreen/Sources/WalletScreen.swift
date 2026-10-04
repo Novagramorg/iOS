@@ -767,6 +767,7 @@ private final class WalletScreenComponent: Component {
         private var pendingTransferAnimations: [String: WalletPendingTransferAnimation] = [:]
         private var newTransferPresentationIds = Set<String>()
         private var pendingTransferToReveal: String?
+        private var shouldRevealLatestTransactions = false
         private var transferDisplayLink: SharedDisplayLinkDriver.Link?
         private var transferScreenVisible = true
         private var isReturningForTransfer = false
@@ -1894,6 +1895,7 @@ private final class WalletScreenComponent: Component {
             animation.isPending = transaction.status == .pending
             self.pendingTransferAnimations[id] = animation
             self.pendingTransferToReveal = id
+            self.shouldRevealLatestTransactions = false
             self.selectedSection = .transactions
             self.isReturningForTransfer = !self.transferScreenVisible
             if let source { animation.launch(source, at: CACurrentMediaTime()) }
@@ -1902,15 +1904,38 @@ private final class WalletScreenComponent: Component {
             return true
         }
 
+        private func showTransactions() {
+            self.selectedSection = .transactions
+            self.pendingTransferToReveal = nil
+            self.shouldRevealLatestTransactions = true
+            self.componentState?.updated(transition: .immediate)
+        }
+
         private func revealNewTransfer() {
             if self.pendingTransferToReveal == nil {
                 self.pendingTransferToReveal = self.walletState?.transactions.items.first(where: {
                     self.newTransferPresentationIds.contains($0.presentationId)
                 })?.presentationId
             }
-            guard self.pendingTransferToReveal != nil else { return }
+            if self.pendingTransferToReveal == nil && !self.pendingTransferAnimations.values.contains(where: { $0.isFlying }) {
+                self.showTransactions()
+                return
+            }
+            self.shouldRevealLatestTransactions = false
             self.selectedSection = .transactions
             self.componentState?.updated(transition: .immediate)
+        }
+
+        private func revealLatestTransactionsIfNeeded(firstTransactionId: String?) {
+            guard self.shouldRevealLatestTransactions, self.selectedSection == .transactions else {
+                return
+            }
+            self.shouldRevealLatestTransactions = false
+            if let firstTransactionId, let frame = self.transactionsSection.itemFrame(id: AnyHashable(firstTransactionId)) {
+                self.scrollToTransactionIfNeeded(frame: frame)
+            } else {
+                self.scrollView.setContentOffset(.zero, animated: false)
+            }
         }
 
         private func revealPendingTransferIfNeeded() {
@@ -1918,6 +1943,10 @@ private final class WalletScreenComponent: Component {
                   let frame = self.transactionsSection.itemFrame(id: AnyHashable(id)) else { return }
             self.pendingTransferToReveal = nil
             self.newTransferPresentationIds.remove(id)
+            self.scrollToTransactionIfNeeded(frame: frame)
+        }
+
+        private func scrollToTransactionIfNeeded(frame: CGRect) {
             let rect = self.transactionsSection.convert(frame, to: self.scrollView)
             let top = (self.environment?.navigationHeight ?? 0.0) + 16.0
             let bottom: CGFloat = 24.0
@@ -2344,9 +2373,17 @@ private final class WalletScreenComponent: Component {
             guard let walletInfo = self.walletInfo else {
                 return
             }
+            let walletContext = component.walletContext
             controller.push(component.context.sharedContext.makeWalletReceiveScreen(
                 context: component.context,
-                address: walletInfo.address
+                address: walletInfo.address,
+                appeared: { [weak self, weak walletContext] in
+                    guard let self, let walletContext, self.walletContext === walletContext,
+                          self.walletInfo?.address == walletInfo.address else {
+                        return
+                    }
+                    self.showTransactions()
+                }
             ))
         }
 
@@ -2637,6 +2674,7 @@ private final class WalletScreenComponent: Component {
                         return
                     }
                     self.suppressCollectible(address: address)
+                    self.showTransactions()
                 }
             ))
         }
@@ -3046,6 +3084,7 @@ private final class WalletScreenComponent: Component {
                 self.pendingTransferAnimations.removeAll()
                 self.newTransferPresentationIds.removeAll()
                 self.pendingTransferToReveal = nil
+                self.shouldRevealLatestTransactions = false
                 self.isReturningForTransfer = false
                 self.walletState = nil
                 self.transferForegroundDisposable.set((component.context.sharedContext.applicationBindings.applicationInForeground
@@ -3067,6 +3106,7 @@ private final class WalletScreenComponent: Component {
                         default:
                             self.cancelWaltBalanceOpening()
                             self.abandonRestoration()
+                            self.shouldRevealLatestTransactions = false
                         }
                     }
                     self.updateSuppressedCollectibles(walletState)
@@ -3750,6 +3790,7 @@ private final class WalletScreenComponent: Component {
                 self.scrollView.verticalScrollIndicatorInsets = scrollInsets
             }
 
+            self.revealLatestTransactionsIfNeeded(firstTransactionId: transactions.first?.presentationId)
             self.updateScrolling(transition: contentLayoutTransition)
             if let cardView = self.card.view as? WalletCardComponent.View {
                 self.maybePresentGramTooltip(cardView: cardView)
