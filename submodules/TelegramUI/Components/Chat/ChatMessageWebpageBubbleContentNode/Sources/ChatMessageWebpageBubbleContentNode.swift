@@ -195,7 +195,7 @@ public final class ChatMessageWebpageBubbleContentNode: ChatMessageBubbleContent
     
     override public func asyncLayoutContent() -> (_ item: ChatMessageBubbleContentItem, _ layoutConstants: ChatMessageItemLayoutConstants, _ preparePosition: ChatMessageBubblePreparePosition, _ messageSelection: Bool?, _ constrainedSize: CGSize, _ avatarInset: CGFloat) -> (ChatMessageBubbleContentProperties, CGSize?, CGFloat, (CGSize, ChatMessageBubbleContentPosition) -> (CGFloat, (CGFloat) -> (CGSize, (ListViewItemUpdateAnimation, Bool, ListViewItemApply?) -> Void))) {
         let currentWebpage = self.webPage
-        let currentContentNodeLayout = self.contentNode.asyncLayout()
+        let currentContentNodeLayout = self.contentNode.asyncLayout(displayGiftIcon: true)
         
         return { [weak self] item, layoutConstants, preparePosition, _, constrainedSize, _ in
             var webPage: TelegramMediaWebpage?
@@ -217,7 +217,7 @@ public final class ChatMessageWebpageBubbleContentNode: ChatMessageBubbleContent
             } else {
                 let updatedContentNodeValue = ChatMessageAttachedContentNode()
                 updatedContentNode = updatedContentNodeValue
-                contentNodeLayout = updatedContentNodeValue.asyncLayout()
+                contentNodeLayout = updatedContentNodeValue.asyncLayout(displayGiftIcon: true)
             }
             
             var title: String?
