@@ -8,14 +8,18 @@ final class RustNetworkEngine: NetworkEngine {
 
     private let runtime: RustEngineRuntime
     private let context: MTContext
+    private let serverPublicKeys: [String]
+    private let httpPort: UInt16
 
-    init(runtime: RustEngineRuntime, context: MTContext) {
+    init(runtime: RustEngineRuntime, context: MTContext, serverPublicKeys: [String]? = nil, httpPort: UInt16 = 80) {
         self.runtime = runtime
         self.context = context
+        self.serverPublicKeys = serverPublicKeys ?? MTDatacenterAuthDefaultPublicKeys(!context.isTestingEnvironment)
+        self.httpPort = httpPort
     }
 
     func makeSession(datacenterId: Int, role: NetworkEngineSessionRole, usageCalculationInfo: MTNetworkUsageCalculationInfo?, delegate: NetworkEngineSessionDelegate?) -> NetworkEngineSession {
-        return RustNetworkSession(runtime: self.runtime, context: self.context, datacenterId: datacenterId, role: role, usageCalculationInfo: usageCalculationInfo, delegate: delegate)
+        return RustNetworkSession(runtime: self.runtime, context: self.context, datacenterId: datacenterId, role: role, usageCalculationInfo: usageCalculationInfo, delegate: delegate, serverPublicKeys: self.serverPublicKeys, httpPort: self.httpPort)
     }
 }
 

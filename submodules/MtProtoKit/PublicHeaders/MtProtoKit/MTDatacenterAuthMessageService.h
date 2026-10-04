@@ -12,6 +12,12 @@
 
 @end
 
+/// The RSA public keys, in PEM, that keys for the production or the test datacenters are made with.
+#ifdef __cplusplus
+extern "C"
+#endif
+NSArray<NSString *> *MTDatacenterAuthDefaultPublicKeys(bool isProduction);
+
 @interface MTDatacenterAuthMessageService : NSObject <MTMessageService>
 
 @property (nonatomic, weak) id<MTDatacenterAuthMessageServiceDelegate> delegate;

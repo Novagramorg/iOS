@@ -103,6 +103,11 @@ final class RustNetworkSession: NetworkEngineSession {
     private var rejectedKeyId: Int64?
     private var authTokenReady: Bool
 
+    private let runsPfs: Bool
+    private let httpPort: UInt16
+    private var temporaryKeyId: Int64?
+    private var madeTemporaryKey: (keyId: Int64, key: Data, salt: Int64)?
+
     private var schemes: [MTTransportScheme]
     private var addressFingerprint: [String]
     private var requestedSchemes = false
@@ -119,9 +124,11 @@ final class RustNetworkSession: NetworkEngineSession {
 
     private static let connectionWatchdogInitialDelay: Double = 20.0
     private static let connectionWatchdogMaxDelay: Double = 320.0
+    private static let temporaryKeyMinimumLifetime: Int32 = 300
 
-    init(runtime: RustEngineRuntime, context: MTContext, datacenterId: Int, role: NetworkEngineSessionRole, usageCalculationInfo: MTNetworkUsageCalculationInfo?, delegate: NetworkEngineSessionDelegate?) {
+    init(runtime: RustEngineRuntime, context: MTContext, datacenterId: Int, role: NetworkEngineSessionRole, usageCalculationInfo: MTNetworkUsageCalculationInfo?, delegate: NetworkEngineSessionDelegate?, serverPublicKeys: [String], httpPort: UInt16) {
         self.runtime = runtime
+        self.httpPort = httpPort
         self.engine = runtime.engine
         self.context = context
         self.datacenterId = datacenterId
@@ -143,6 +150,7 @@ final class RustNetworkSession: NetworkEngineSession {
             roleName = isCdn ? "cdn" : (isMedia ? "media" : "worker")
         }
         self.requiresForeignAuthToken = rustEngineRequiresForeignAuthToken(isMain: self.isMain, isCdn: self.isCdn, datacenterId: datacenterId, masterDatacenterId: self.masterDatacenterId)
+        self.runsPfs = rustEngineRunsPfs(isCdn: self.isCdn, useTempAuthKeys: context.useTempAuthKeys, publicKeyCount: serverPublicKeys.count)
         self.requiredAuthToken = self.requiresForeignAuthToken ? (datacenterId as NSNumber) : nil
 
         self.queue = Queue(name: "org.telegram.MTProtoRust.session")
@@ -169,7 +177,7 @@ final class RustNetworkSession: NetworkEngineSession {
         self.holdForUnsupportedProxy = self.apiEnvironment.socksProxySettings?.webProxy ?? false
         self.logPrefix = "[MTProtoRust#0 dc\(datacenterId) \(roleName)]"
 
-        let authInfo = context.authInfoForDatacenter(withId: datacenterId, selector: self.selector)
+        let authInfo = context.authInfoForDatacenter(withId: datacenterId, selector: self.keySelector)
 
         let arena = RustEngineArena()
         var setup = MTSessionSetup()
@@ -181,7 +189,7 @@ final class RustNetworkSession: NetworkEngineSession {
         setup.addresses = arena.array(addresses)
         setup.address_count = addresses.count
         setup.proxy = RustNetworkSession.makeProxy(self.apiEnvironment.socksProxySettings, arena: arena)
-        if let authInfo = authInfo, let material = RustNetworkSession.makeKeyMaterial(authInfo, arena: arena) {
+        if let authInfo = authInfo, let material = RustNetworkSession.makeKeyMaterial(authInfo, includeInitHash: !self.runsPfs, arena: arena) {
             setup.auth_key = material.key
             setup.salts = material.salts
             setup.salt_count = material.saltCount
@@ -197,6 +205,16 @@ final class RustNetworkSession: NetworkEngineSession {
         setup.keep_connected = self.isMain ? 1 : 0
         setup.idle_disconnect_after = self.isMain ? 0.0 : 60.0
         setup.request_timeout = 5.0
+        if self.runsPfs {
+            let publicKeys = serverPublicKeys.map { arena.string($0) }
+            setup.public_keys_pem = arena.array(publicKeys)
+            setup.public_key_count = publicKeys.count
+            setup.pfs_lifetime = context.tempKeyExpiration
+            setup.pfs_make_permanent_key = 0
+            if let stored = self.storedTemporaryKey(), let temporaryKey = RustNetworkSession.makeTemporaryKey(stored, timeDifference: context.globalTimeDifference(), arena: arena) {
+                setup.pfs_temporary_key = arena.value(temporaryKey)
+            }
+        }
 
         let mailbox = self.mailbox
         let handle: MTSessionHandle = withExtendedLifetime(arena) {
@@ -216,7 +234,10 @@ final class RustNetworkSession: NetworkEngineSession {
         if handle == 0 {
             rustEngineImportantLog("\(self.logPrefix) mt_session_create failed, requests on this session will never complete")
         } else {
-            rustEngineLog("\(self.logPrefix) created, key \(authInfo != nil ? "present" : "missing") selector \(self.selector.rawValue), \(addresses.count) addresses, token \(self.requiresForeignAuthToken ? (self.authTokenReady ? "ready" : "missing") : "not required")")
+            rustEngineLog("\(self.logPrefix) created, key \(authInfo != nil ? "present" : "missing") selector \(self.selector.rawValue)\(self.runsPfs ? ", PFS in the engine" : ""), \(addresses.count) addresses, token \(self.requiresForeignAuthToken ? (self.authTokenReady ? "ready" : "missing") : "not required")")
+            if let engine = self.engine, !self.isCdn {
+                mt_session_set_transport(engine, handle, UInt8(MTTransportAuto), self.httpPort)
+            }
         }
 
         if self.requiresForeignAuthToken && !self.authTokenReady, let engine = self.engine, handle != 0 {
@@ -402,7 +423,8 @@ final class RustNetworkSession: NetworkEngineSession {
         }
         var invokeAfter: UInt64 = 0
         if let dependsOn = pending.request.dependsOn {
-            let candidates = self.activeRequests.filter { $0 !== pending && $0.isInEngine }
+            let earlier = self.activeRequests.firstIndex(where: { $0 === pending }).map { self.activeRequests[..<$0] } ?? self.activeRequests[...]
+            let candidates = earlier.filter { $0.isInEngine }
             if let index = rustEngineDependencyIndex(candidates: candidates, accepts: { dependsOn($0.request.metadata) }) {
                 invokeAfter = candidates[index].engineId
             }
@@ -525,9 +547,15 @@ final class RustNetworkSession: NetworkEngineSession {
             self.workerAuthorizationRequired()
         case .temporaryKeyRejected:
             rustEngineImportantLog("\(self.logPrefix) received AUTH_KEY_PERM_EMPTY")
+            if self.runsPfs {
+                return
+            }
             self.handleMissingKey(rejectedKeyId: self.installedKeyId, engineStillHoldsKey: true)
         case .authKeyInvalid:
             rustEngineImportantLog("\(self.logPrefix) auth key invalid (\(event.code))")
+            if self.runsPfs {
+                return
+            }
             let rejectedKeyId = self.installedKeyId
             self.installedKeyId = nil
             self.handleMissingKey(rejectedKeyId: rejectedKeyId, engineStillHoldsKey: false)
@@ -580,7 +608,21 @@ final class RustNetworkSession: NetworkEngineSession {
                 }
             }
         case .authKeyCreated:
-            rustEngineImportantLog("\(self.logPrefix) unexpected engine-generated auth key ignored")
+            if self.runsPfs {
+                self.handleEngineMadeKey(event)
+            } else {
+                rustEngineImportantLog("\(self.logPrefix) unexpected engine-generated auth key ignored")
+            }
+        case .temporaryKeyBound:
+            rustEngineLog("\(self.logPrefix) temporary key bound")
+        case .temporaryKeyBindFailed:
+            rustEngineImportantLog("\(self.logPrefix) binding the temporary key failed: \(event.code) \(event.text)")
+        case .permanentKeyInvalid:
+            rustEngineImportantLog("\(self.logPrefix) the server does not know the permanent key \(self.installedKeyId.map(String.init) ?? "none")")
+        case .temporaryKeyInUse:
+            self.handleTemporaryKeyInUse(event)
+        case .temporaryKeyDropped:
+            self.handleTemporaryKeyDropped(event)
         case .authKeyCreationFailed:
             rustEngineLog("\(self.logPrefix) auth key creation failed: \(event.text)")
         case .transportFlood:
@@ -661,6 +703,18 @@ final class RustNetworkSession: NetworkEngineSession {
             return
         }
         rustEngineLog("\(self.logPrefix) failed #\(event.requestId) \(event.code) \(event.text)")
+        if rustEngineResubmitsAfterKeyRotation(code: event.code, text: event.text) {
+            let errorContext = pending.errorState.applyServerError()
+            if pending.request.shouldContinueAfterError(NetworkEngineErrorContext(floodWaitSeconds: errorContext.floodWaitSeconds, floodWaitErrorText: errorContext.floodWaitErrorText, internalServerErrorCount: errorContext.internalServerErrorCount)) && !pending.isCancelled && !pending.isFinished {
+                if self.verifyingRequests.removeValue(forKey: event.requestId) != nil {
+                    pending.releaseResources()
+                }
+                pending.errorState.didResubmit()
+                rustEngineLog("\(self.logPrefix) #\(event.requestId) goes again under the new temporary key")
+                self.sendToEngine(pending)
+                return
+            }
+        }
         if !self.isMain && previousKind != .authTokenRequired && rustEngineWorkerShouldTransferAuthToken(code: event.code, text: event.text) {
             rustEngineImportantLog("\(self.logPrefix) worker received 401 \(event.text)")
             self.workerAuthorizationRequired()
@@ -824,7 +878,7 @@ final class RustNetworkSession: NetworkEngineSession {
     private func handleAuthKeyRequired() {
         self.installedKeyId = nil
         self.updateConnectionWatchdog()
-        if let authInfo = self.context.authInfoForDatacenter(withId: self.datacenterId, selector: self.selector), authInfo.authKeyId != self.rejectedKeyId {
+        if let authInfo = self.context.authInfoForDatacenter(withId: self.datacenterId, selector: self.keySelector), authInfo.authKeyId != self.rejectedKeyId {
             self.install(authInfo)
             return
         }
@@ -839,6 +893,9 @@ final class RustNetworkSession: NetworkEngineSession {
     }
 
     private func handleMissingKey(rejectedKeyId: Int64?, engineStillHoldsKey: Bool) {
+        if self.runsPfs {
+            return
+        }
         let selector = self.selector
         let selectorIsEphemeral = selector == .ephemeralMain || selector == .ephemeralMedia
         let action = rustEngineMissingKeyAction(isCdn: self.isCdn, requiresForeignAuthToken: self.requiresForeignAuthToken, selectorIsEphemeral: selectorIsEphemeral)
@@ -890,7 +947,7 @@ final class RustNetworkSession: NetworkEngineSession {
         if !self.awaitingKey {
             return
         }
-        self.context.authInfoForDatacenter(withIdRequired: self.datacenterId, isCdn: self.isCdn, selector: self.selector, allowUnboundEphemeralKeys: false)
+        self.context.authInfoForDatacenter(withIdRequired: self.datacenterId, isCdn: self.isCdn, selector: self.keySelector, allowUnboundEphemeralKeys: false)
     }
 
     private func install(_ authInfo: MTDatacenterAuthInfo) {
@@ -898,17 +955,20 @@ final class RustNetworkSession: NetworkEngineSession {
             return
         }
         let arena = RustEngineArena()
-        guard let material = RustNetworkSession.makeKeyMaterial(authInfo, arena: arena) else {
-            rustEngineImportantLog("\(self.logPrefix) auth key for selector \(self.selector.rawValue) has an unexpected size")
+        guard let material = RustNetworkSession.makeKeyMaterial(authInfo, includeInitHash: !self.runsPfs, arena: arena) else {
+            rustEngineImportantLog("\(self.logPrefix) auth key for selector \(self.keySelector.rawValue) has an unexpected size")
             return
         }
         withExtendedLifetime(arena) {
             mt_session_set_auth_key(engine, self.handle, material.key, material.salts, material.saltCount, material.hasInitHash, material.initHash)
         }
-        rustEngineLog("\(self.logPrefix) installed auth key \(authInfo.authKeyId) selector \(self.selector.rawValue)")
+        rustEngineLog("\(self.logPrefix) installed auth key \(authInfo.authKeyId) selector \(self.keySelector.rawValue)")
         self.installedKeyId = authInfo.authKeyId
         self.awaitingKey = false
         self.rejectedKeyId = nil
+        if self.runsPfs {
+            self.offerStoredTemporaryKey()
+        }
         if self.requiresForeignAuthToken {
             mt_session_set_auth_token_ready(engine, self.handle, self.authTokenReady ? 1 : 0)
         }
@@ -922,6 +982,120 @@ final class RustNetworkSession: NetworkEngineSession {
             self.ensureAuthToken()
         }
         self.updateConnectionWatchdog()
+    }
+
+    private var keySelector: MTDatacenterAuthInfoSelector {
+        return self.runsPfs ? .persistent : self.selector
+    }
+
+    private func handleEngineMadeKey(_ event: RustEngineEvent) {
+        guard let key = event.payload, key.count == 256 else {
+            return
+        }
+        let keyId = RustNetworkSession.authKeyId(key)
+        if event.integer2 == 0 {
+            rustEngineImportantLog("\(self.logPrefix) unexpected engine-made permanent key \(keyId) ignored")
+        } else {
+            self.madeTemporaryKey = (keyId, key, event.integer1)
+        }
+    }
+
+    private func handleTemporaryKeyInUse(_ event: RustEngineEvent) {
+        let keyId = event.integer1
+        let adopted = (event.flags & 1) != 0
+        self.temporaryKeyId = keyId
+        rustEngineLog("\(self.logPrefix) talking under temporary key \(keyId)\(adopted ? " from the context" : "")")
+        guard !adopted, let made = self.madeTemporaryKey, made.keyId == keyId else {
+            return
+        }
+        self.madeTemporaryKey = nil
+        guard event.code == Int32(self.obfuscationDatacenterId) else {
+            rustEngineLog("\(self.logPrefix) temporary key \(keyId) was made for dc \(event.code), not kept for \(self.obfuscationDatacenterId)")
+            return
+        }
+        let permanentKeyId = Int64(bitPattern: event.requestId)
+        guard permanentKeyId != 0, permanentKeyId == self.installedKeyId else {
+            return
+        }
+        let validUntil = rustEngineLocalValidUntil(serverExpiry: event.integer2, timeDifference: self.context.globalTimeDifference())
+        let info = RustEngineTemporaryKeyInfo(keyId: keyId, validUntil: validUntil, boundTo: permanentKeyId)
+        guard let authInfo = MTDatacenterAuthInfo(authKey: made.key, authKeyId: keyId, validUntilTimestamp: validUntil, saltSet: [RustNetworkSession.freshSalt(made.salt, serverTime: self.context.globalTime())], authKeyAttributes: [rustEngineBoundToAttribute: NSNumber(value: permanentKeyId)]) else {
+            return
+        }
+        let context = self.context
+        let datacenterId = self.datacenterId
+        let selector = self.selector
+        context.performBatchUpdates {
+            let stored = context.authInfoForDatacenter(withId: datacenterId, selector: selector).map(RustNetworkSession.temporaryKeyInfo)
+            if rustEngineStoresTemporaryKey(stored: stored, made: info) {
+                context.updateAuthInfoForDatacenter(withId: datacenterId, authInfo: authInfo, selector: selector)
+            }
+        }
+    }
+
+    private func handleTemporaryKeyDropped(_ event: RustEngineEvent) {
+        let keyId = event.integer1
+        rustEngineImportantLog("\(self.logPrefix) the server no longer takes temporary key \(keyId)")
+        if self.temporaryKeyId == keyId {
+            self.temporaryKeyId = nil
+        }
+        let context = self.context
+        let datacenterId = self.datacenterId
+        let selector = self.selector
+        context.performBatchUpdates {
+            if let stored = context.authInfoForDatacenter(withId: datacenterId, selector: selector), stored.authKeyId == keyId {
+                context.updateAuthInfoForDatacenter(withId: datacenterId, authInfo: nil, selector: selector)
+            }
+        }
+    }
+
+    private func contextPermanentKeyUpdated(_ authInfo: MTDatacenterAuthInfo?) {
+        guard let authInfo = authInfo else {
+            guard self.installedKeyId != nil, let engine = self.engine, self.handle != 0 else {
+                return
+            }
+            rustEngineImportantLog("\(self.logPrefix) the permanent key was removed from the context")
+            self.installedKeyId = nil
+            self.temporaryKeyId = nil
+            mt_session_set_auth_key(engine, self.handle, MTBytes(data: nil, length: 0), nil, 0, 0, MTString(data: nil, length: 0))
+            self.updateConnectionWatchdog()
+            return
+        }
+        if authInfo.authKeyId != self.installedKeyId {
+            self.install(authInfo)
+        }
+    }
+
+    private func storedTemporaryKey() -> MTDatacenterAuthInfo? {
+        guard let stored = self.context.authInfoForDatacenter(withId: self.datacenterId, selector: self.selector) else {
+            return nil
+        }
+        let offered = rustEngineOffersTemporaryKey(stored: RustNetworkSession.temporaryKeyInfo(stored), permanentKeyId: self.installedKeyId, now: Int32(clamping: Int64(Date().timeIntervalSince1970)), minimumLifetime: RustNetworkSession.temporaryKeyMinimumLifetime)
+        return offered ? stored : nil
+    }
+
+    private func offerStoredTemporaryKey() {
+        if let stored = self.storedTemporaryKey(), stored.authKeyId != self.temporaryKeyId {
+            self.offerTemporaryKey(stored)
+        }
+    }
+
+    private func offerTemporaryKey(_ authInfo: MTDatacenterAuthInfo) {
+        guard let engine = self.engine, self.handle != 0 else {
+            return
+        }
+        let info = RustNetworkSession.temporaryKeyInfo(authInfo)
+        guard rustEngineOffersTemporaryKey(stored: info, permanentKeyId: self.installedKeyId, now: Int32(clamping: Int64(Date().timeIntervalSince1970)), minimumLifetime: RustNetworkSession.temporaryKeyMinimumLifetime) else {
+            return
+        }
+        let arena = RustEngineArena()
+        guard var temporaryKey = RustNetworkSession.makeTemporaryKey(authInfo, timeDifference: self.context.globalTimeDifference(), arena: arena) else {
+            return
+        }
+        withExtendedLifetime(arena) {
+            mt_session_offer_temporary_key(engine, self.handle, &temporaryKey)
+        }
+        rustEngineLog("\(self.logPrefix) offered temporary key \(authInfo.authKeyId)")
     }
 
     private func ensureAuthToken() {
@@ -951,7 +1125,18 @@ final class RustNetworkSession: NetworkEngineSession {
     }
 
     func contextAuthInfoUpdated(datacenterId: Int, authInfo: MTDatacenterAuthInfo?, selector: MTDatacenterAuthInfoSelector) {
-        if self.isStopped.with({ $0 }) || datacenterId != self.datacenterId || selector != self.selector {
+        if self.isStopped.with({ $0 }) || datacenterId != self.datacenterId {
+            return
+        }
+        if self.runsPfs {
+            if selector == .persistent {
+                self.contextPermanentKeyUpdated(authInfo)
+            } else if selector == self.selector, let authInfo = authInfo, authInfo.authKeyId != self.temporaryKeyId {
+                self.offerTemporaryKey(authInfo)
+            }
+            return
+        }
+        if selector != self.selector {
             return
         }
         if self.awaitingKey {
@@ -984,7 +1169,7 @@ final class RustNetworkSession: NetworkEngineSession {
     }
 
     func contextAuthInfoRequestFailed(datacenterId: Int, selector: MTDatacenterAuthInfoSelector) {
-        if self.isStopped.with({ $0 }) || datacenterId != self.datacenterId || selector != self.selector {
+        if self.isStopped.with({ $0 }) || datacenterId != self.datacenterId || selector != self.keySelector {
             return
         }
         if self.awaitingKey && !self.externallyPaused {
@@ -1107,6 +1292,12 @@ final class RustNetworkSession: NetworkEngineSession {
     private func switchSelector(to selector: MTDatacenterAuthInfoSelector) {
         rustEngineImportantLog("\(self.logPrefix) addresses moved from selector \(self.selector.rawValue) to \(selector.rawValue)")
         self.selector = selector
+        if self.runsPfs {
+            self.temporaryKeyId = nil
+            self.madeTemporaryKey = nil
+            self.offerStoredTemporaryKey()
+            return
+        }
         self.rejectedKeyId = nil
         if let authInfo = self.context.authInfoForDatacenter(withId: self.datacenterId, selector: selector) {
             self.install(authInfo)
@@ -1143,7 +1334,7 @@ final class RustNetworkSession: NetworkEngineSession {
     }
 
     private func updateContextAuthKeyAttributes(_ update: @escaping (inout [AnyHashable: Any]) -> Void) {
-        guard let keyId = self.installedKeyId else {
+        guard let keyId = self.runsPfs ? self.temporaryKeyId : self.installedKeyId else {
             return
         }
         let context = self.context
@@ -1167,7 +1358,7 @@ final class RustNetworkSession: NetworkEngineSession {
     }
 
     private func mergeSalts(_ salts: [RustEngineSalt]) {
-        guard let keyId = self.installedKeyId else {
+        guard let keyId = self.runsPfs ? self.temporaryKeyId : self.installedKeyId else {
             return
         }
         var saltInfos: [MTDatacenterSaltInfo] = []
@@ -1290,7 +1481,41 @@ extension RustNetworkSession {
         return Int32(clamping: context.serialization.currentLayer())
     }
 
-    fileprivate static func makeKeyMaterial(_ authInfo: MTDatacenterAuthInfo, arena: RustEngineArena) -> RustKeyMaterial? {
+    fileprivate static func authKeyId(_ key: Data) -> Int64 {
+        let hash = MTSha1(key)
+        var keyId: Int64 = 0
+        _ = withUnsafeMutableBytes(of: &keyId) { buffer in
+            hash.copyBytes(to: buffer, from: hash.count - 8 ..< hash.count)
+        }
+        return keyId
+    }
+
+    fileprivate static func freshSalt(_ salt: Int64, serverTime: Double) -> MTDatacenterSaltInfo {
+        let now = Int64(serverTime)
+        return MTDatacenterSaltInfo(salt: salt, firstValidMessageId: now << 32, lastValidMessageId: (now + 29 * 60) << 32)
+    }
+
+    fileprivate static func temporaryKeyInfo(_ authInfo: MTDatacenterAuthInfo) -> RustEngineTemporaryKeyInfo {
+        let boundTo = (authInfo.authKeyAttributes?[rustEngineBoundToAttribute] as? NSNumber)?.int64Value
+        return RustEngineTemporaryKeyInfo(keyId: authInfo.authKeyId, validUntil: authInfo.validUntilTimestamp, boundTo: boundTo)
+    }
+
+    fileprivate static func makeTemporaryKey(_ authInfo: MTDatacenterAuthInfo, timeDifference: Double, arena: RustEngineArena) -> MTTemporaryKey? {
+        guard let material = RustNetworkSession.makeKeyMaterial(authInfo, includeInitHash: true, arena: arena) else {
+            return nil
+        }
+        return MTTemporaryKey(
+            key: material.key,
+            expires_at: rustEngineServerExpiry(validUntil: authInfo.validUntilTimestamp, timeDifference: timeDifference),
+            bound_to: RustNetworkSession.temporaryKeyInfo(authInfo).boundTo ?? 0,
+            salts: material.salts,
+            salt_count: material.saltCount,
+            has_init_hash: material.hasInitHash,
+            init_hash: material.initHash
+        )
+    }
+
+    fileprivate static func makeKeyMaterial(_ authInfo: MTDatacenterAuthInfo, includeInitHash: Bool, arena: RustEngineArena) -> RustKeyMaterial? {
         guard let authKey = authInfo.authKey, authKey.count == 256 else {
             return nil
         }
@@ -1301,7 +1526,7 @@ extension RustNetworkSession {
                 salts.append(MTSaltEntry(salt: salt.salt, valid_since: salt.validSince, valid_until: salt.validUntil))
             }
         }
-        let initHash = authInfo.authKeyAttributes?["apiInitializationHash"] as? String
+        let initHash = includeInitHash ? authInfo.authKeyAttributes?["apiInitializationHash"] as? String : nil
         return RustKeyMaterial(
             key: arena.bytes(authKey),
             salts: arena.array(salts),

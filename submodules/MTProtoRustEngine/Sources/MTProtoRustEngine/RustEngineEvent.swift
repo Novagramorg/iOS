@@ -31,6 +31,11 @@ enum RustEngineEventKind: UInt32 {
     case closed = 26
     case retryDecisionRequired = 27
     case connectionDropped = 29
+    case temporaryKeyBound = 30
+    case temporaryKeyBindFailed = 31
+    case permanentKeyInvalid = 32
+    case temporaryKeyInUse = 33
+    case temporaryKeyDropped = 34
 }
 
 struct RustEngineEvent {

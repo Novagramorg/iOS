@@ -83,6 +83,14 @@ static NSArray<MTDatacenterAuthPublicKey *> *defaultPublicKeys(bool isProduction
     }
 }
 
+NSArray<NSString *> *MTDatacenterAuthDefaultPublicKeys(bool isProduction) {
+    NSMutableArray<NSString *> *result = [[NSMutableArray alloc] init];
+    for (MTDatacenterAuthPublicKey *key in defaultPublicKeys(isProduction)) {
+        [result addObject:key.publicKey];
+    }
+    return result;
+}
+
 static MTDatacenterAuthPublicKey *selectPublicKey(id<EncryptionProvider> encryptionProvider, NSArray<NSNumber *> *fingerprints, NSArray<MTDatacenterAuthPublicKey *> *publicKeys) {
     NSMutableArray<NSNumber *> *keyFingerprints = [[NSMutableArray alloc] init];
     for (MTDatacenterAuthPublicKey *key in publicKeys) {

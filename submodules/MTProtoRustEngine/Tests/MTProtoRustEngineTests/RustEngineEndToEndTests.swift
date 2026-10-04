@@ -5,6 +5,7 @@ import EncryptionProvider
 import MTProtoEngineFFI
 @testable import TelegramCore
 @testable import MTProtoRustEngine
+import MTProtoRustEngineMapping
 
 private let callConstructor: UInt32 = 0x7e57_0001
 private let callResultConstructor: UInt32 = 0x7e57_0002
@@ -18,6 +19,7 @@ private final class TestServerProcess {
     let port: Int32
     let key: Data
     let salt: Int64
+    let publicKeyPem: String
 
     private let process: Process
     private let input: Pipe
@@ -58,9 +60,10 @@ private final class TestServerProcess {
             self.buffer.append(chunk)
             line = TestServerProcess.takeLine(&self.buffer)
         }
-        guard let ready = line, let object = try JSONSerialization.jsonObject(with: Data(ready.utf8)) as? [String: Any], let address = object["address"] as? String, let keyHex = object["key_hex"] as? String, let salt = object["salt"] as? NSNumber, let separator = address.lastIndex(of: ":"), let port = Int32(address[address.index(after: separator)...]) else {
+        guard let ready = line, let object = try JSONSerialization.jsonObject(with: Data(ready.utf8)) as? [String: Any], let address = object["address"] as? String, let keyHex = object["key_hex"] as? String, let salt = object["salt"] as? NSNumber, let publicKeyPem = object["public_key_pem"] as? String, let separator = address.lastIndex(of: ":"), let port = Int32(address[address.index(after: separator)...]) else {
             throw NSError(domain: "TestServerProcess", code: 1)
         }
+        self.publicKeyPem = publicKeyPem
         self.address = String(address[..<separator])
         self.port = port
         self.key = TestServerProcess.data(hex: keyHex)
@@ -89,6 +92,36 @@ private final class TestServerProcess {
 
     func executions(tag: UInt32) -> Int {
         return ((self.stats()["tags"] as? [String: Any])?["\(tag)"] as? NSNumber)?.intValue ?? 0
+    }
+
+    func handshakes() -> [(datacenterId: Int, temporary: Bool)] {
+        let entries = (self.stats()["handshake_dcs"] as? [[String: Any]]) ?? []
+        return entries.map { entry in
+            ((entry["dc"] as? NSNumber)?.intValue ?? 0, (entry["temporary"] as? Bool) ?? false)
+        }
+    }
+
+    func invokeAfterWrappers() -> Int {
+        return (self.stats()["invoke_after"] as? NSNumber)?.intValue ?? 0
+    }
+
+    func binds() -> Int {
+        return (self.stats()["binds"] as? NSNumber)?.intValue ?? 0
+    }
+
+    func dropTemporaryKeys() {
+        self.input.fileHandleForWriting.write(Data("drop-temporary-keys\n".utf8))
+        _ = self.stats()
+    }
+
+    func addKey(_ key: Data) {
+        let hex = key.map { String(format: "%02x", $0) }.joined()
+        self.input.fileHandleForWriting.write(Data("add-key \(hex)\n".utf8))
+        _ = self.stats()
+    }
+
+    func setTcpBlackhole(_ enabled: Bool) {
+        self.input.fileHandleForWriting.write(Data("tcp-blackhole \(enabled ? "on" : "off")\n".utf8))
     }
 
     func obfuscationDatacenterIds() -> [Int] {
@@ -261,7 +294,7 @@ final class RustEngineEndToEndTests: XCTestCase {
         MTContext.contextQueue().dispatch(onQueue: {}, synchronous: true)
     }
 
-    private func authInfo(key: Data) -> MTDatacenterAuthInfo {
+    private func authInfo(key: Data, validUntil: Int32 = Int32.max) -> MTDatacenterAuthInfo {
         let keyHash = MTSha1(key)
         var authKeyId: Int64 = 0
         _ = withUnsafeMutableBytes(of: &authKeyId) { buffer in
@@ -269,7 +302,7 @@ final class RustEngineEndToEndTests: XCTestCase {
         }
         let now = Int64(Date().timeIntervalSince1970)
         let saltInfo = MTDatacenterSaltInfo(salt: self.server.salt, firstValidMessageId: (now - 86_400) << 32, lastValidMessageId: (now + 86_400) << 32)!
-        return MTDatacenterAuthInfo(authKey: key, authKeyId: authKeyId, validUntilTimestamp: Int32.max, saltSet: [saltInfo], authKeyAttributes: [:])!
+        return MTDatacenterAuthInfo(authKey: key, authKeyId: authKeyId, validUntilTimestamp: validUntil, saltSet: [saltInfo], authKeyAttributes: [:])!
     }
 
     private static func append(_ value: UInt32, to data: inout Data) {
@@ -328,9 +361,11 @@ final class RustEngineEndToEndTests: XCTestCase {
         options: NetworkEngineRequestOptions = NetworkEngineRequestOptions(),
         shouldContinueAfterError: @escaping (NetworkEngineErrorContext) -> Bool = { _ in false },
         acknowledged: (() -> Void)? = nil,
+        dependsOn: ((WrappedRequestMetadata) -> Bool)? = nil,
+        label: String? = nil,
         completed: @escaping (Result<NetworkEngineResponse, NetworkEngineRequestFailure>) -> Void
     ) -> NetworkEngineRequest {
-        let description = "call \(tag)"
+        let description = label ?? "call \(tag)"
         return NetworkEngineRequest(
             payload: self.call(tag: tag, payload: payload),
             metadata: WrappedRequestMetadata(metadata: description, tag: nil),
@@ -338,7 +373,7 @@ final class RustEngineEndToEndTests: XCTestCase {
             parse: RustEngineEndToEndTests.parse,
             options: options,
             shouldContinueAfterError: shouldContinueAfterError,
-            dependsOn: nil,
+            dependsOn: dependsOn,
             acknowledged: acknowledged,
             progress: nil,
             completed: completed
@@ -375,33 +410,45 @@ final class RustEngineEndToEndTests: XCTestCase {
 
     func testMediaWorkerFollowsItsAddressesBetweenMediaAndMainKeys() {
         let datacenterId = RustEngineEndToEndTests.datacenterId
-        let context = self.makeContext(useTempAuthKeys: true)
-        let serverKey = self.authInfo(key: self.server.key)
-        let unknownKey = self.authInfo(key: Data((0 ..< 256).map { _ in UInt8.random(in: 0 ... 255) }))
-        context.updateAuthInfoForDatacenter(withId: datacenterId, authInfo: serverKey, selector: .persistent)
-        context.updateAuthInfoForDatacenter(withId: datacenterId, authInfo: serverKey, selector: .ephemeralMain)
-        context.updateAuthInfoForDatacenter(withId: datacenterId, authInfo: unknownKey, selector: .ephemeralMedia)
-        self.setAddress(of: context, preferForMedia: true)
-        guard let engine = RustNetworkEngineFactory().makeEngine(context: context, isAppExtension: false) else {
-            XCTFail("factory declined a temporary key configuration")
+        guard let mainKey = self.keptTemporaryKey(media: false, tag: 71), let mediaKey = self.keptTemporaryKey(media: true, tag: 72) else {
+            XCTFail("could not make the keys")
             return
         }
-        let session = engine.makeSession(datacenterId: datacenterId, role: .worker(masterDatacenterId: datacenterId, isMedia: true, isCdn: false), usageCalculationInfo: nil, delegate: nil)
+        XCTAssertNotEqual(mainKey.authKeyId, mediaKey.authKeyId)
+        let context = self.pfsContext(permanentKey: true, preferForMedia: true)
+        context.updateAuthInfoForDatacenter(withId: datacenterId, authInfo: mainKey, selector: .ephemeralMain)
+        context.updateAuthInfoForDatacenter(withId: datacenterId, authInfo: mediaKey, selector: .ephemeralMedia)
+        MTContext.contextQueue().dispatch(onQueue: {}, synchronous: true)
+        let session = self.pfsEngine(context).makeSession(datacenterId: datacenterId, role: .worker(masterDatacenterId: datacenterId, isMedia: true, isCdn: false), usageCalculationInfo: nil, delegate: nil)
         session.setPaused(false)
         defer { session.stop() }
+        let handshakes = self.server.handshakes().count
 
         self.setAddress(of: context, preferForMedia: false)
-        guard self.completes(tag: 21, on: session) else {
+        guard self.completes(tag: 73, on: session) else {
             return
         }
         XCTAssertEqual(self.server.obfuscationDatacenterIds().last, datacenterId)
 
-        context.updateAuthInfoForDatacenter(withId: datacenterId, authInfo: serverKey, selector: .ephemeralMedia)
         self.setAddress(of: context, preferForMedia: true)
-        guard self.completes(tag: 22, on: session) else {
+        guard self.completes(tag: 74, on: session) else {
             return
         }
         XCTAssertEqual(self.server.obfuscationDatacenterIds().last, -datacenterId)
+        XCTAssertEqual(self.server.handshakes().count, handshakes, "both address classes ran under the keys the context keeps")
+    }
+
+    private func keptTemporaryKey(media: Bool, tag: UInt32) -> MTDatacenterAuthInfo? {
+        let datacenterId = RustEngineEndToEndTests.datacenterId
+        let selector: MTDatacenterAuthInfoSelector = media ? .ephemeralMedia : .ephemeralMain
+        let context = self.pfsContext(permanentKey: true, preferForMedia: media)
+        let session = self.pfsEngine(context).makeSession(datacenterId: datacenterId, role: .worker(masterDatacenterId: datacenterId, isMedia: true, isCdn: false), usageCalculationInfo: nil, delegate: nil)
+        session.setPaused(false)
+        defer { session.stop() }
+        guard self.completes(tag: tag, on: session), self.eventually({ context.authInfoForDatacenter(withId: datacenterId, selector: selector) != nil }) else {
+            return nil
+        }
+        return context.authInfoForDatacenter(withId: datacenterId, selector: selector)
     }
 
     private func completes(tag: UInt32, on session: NetworkEngineSession) -> Bool {
@@ -622,5 +669,289 @@ final class RustEngineEndToEndTests: XCTestCase {
         self.wait(for: [done], timeout: RustEngineEndToEndTests.timeout)
         first.dispose()
         second.dispose()
+    }
+
+    private func pfsContext(permanentKey: Bool, preferForMedia: Bool = false) -> MTContext {
+        let context = self.makeContext(useTempAuthKeys: true)
+        self.setAddress(of: context, preferForMedia: preferForMedia)
+        if permanentKey {
+            context.updateAuthInfoForDatacenter(withId: RustEngineEndToEndTests.datacenterId, authInfo: self.authInfo(key: self.server.key), selector: .persistent)
+        }
+        MTContext.contextQueue().dispatch(onQueue: {}, synchronous: true)
+        return context
+    }
+
+    private func pfsEngine(_ context: MTContext) -> NetworkEngine {
+        return RustNetworkEngine(runtime: RustEngineRuntime.shared!, context: context, serverPublicKeys: [self.server.publicKeyPem], httpPort: 0)
+    }
+
+    private func eventually(_ condition: () -> Bool) -> Bool {
+        let deadline = Date().addingTimeInterval(RustEngineEndToEndTests.timeout)
+        while Date() < deadline {
+            MTContext.contextQueue().dispatch(onQueue: {}, synchronous: true)
+            if condition() {
+                return true
+            }
+            Thread.sleep(forTimeInterval: 0.02)
+        }
+        return false
+    }
+
+    private var permanentKeyId: Int64 {
+        return self.authInfo(key: self.server.key).authKeyId
+    }
+
+    func testTheEngineMakesBindsAndKeepsTheTemporaryKey() {
+        let datacenterId = RustEngineEndToEndTests.datacenterId
+        let context = self.pfsContext(permanentKey: true)
+        let session = self.pfsEngine(context).makeSession(datacenterId: datacenterId, role: .main, usageCalculationInfo: nil, delegate: nil)
+        session.setPaused(false)
+        defer { session.stop() }
+        guard self.completes(tag: 31, on: session) else {
+            return
+        }
+        XCTAssertTrue(self.server.handshakes().map { $0.temporary } == [true], "one temporary key and no permanent one: \(self.server.handshakes())")
+        XCTAssertEqual(self.server.binds(), 1)
+        XCTAssertTrue(self.eventually { context.authInfoForDatacenter(withId: datacenterId, selector: .ephemeralMain) != nil }, "the bound key is kept in the context")
+        guard let kept = context.authInfoForDatacenter(withId: datacenterId, selector: .ephemeralMain) else {
+            return
+        }
+        XCTAssertNotEqual(kept.authKeyId, self.permanentKeyId)
+        XCTAssertEqual((kept.authKeyAttributes?[rustEngineBoundToAttribute] as? NSNumber)?.int64Value, self.permanentKeyId)
+        let lifetime = Int64(kept.validUntilTimestamp) - Int64(Date().timeIntervalSince1970)
+        XCTAssertTrue(abs(lifetime - Int64(context.tempKeyExpiration)) < 60, "valid until \(kept.validUntilTimestamp), \(lifetime) s from now")
+        XCTAssertNil(context.authInfoForDatacenter(withId: datacenterId, selector: .ephemeralMedia))
+    }
+
+    func testANewSessionStartsUnderTheKeptTemporaryKey() {
+        let datacenterId = RustEngineEndToEndTests.datacenterId
+        let context = self.pfsContext(permanentKey: true)
+        let first = self.pfsEngine(context).makeSession(datacenterId: datacenterId, role: .main, usageCalculationInfo: nil, delegate: nil)
+        first.setPaused(false)
+        guard self.completes(tag: 32, on: first), self.eventually({ context.authInfoForDatacenter(withId: datacenterId, selector: .ephemeralMain) != nil }) else {
+            first.stop()
+            return
+        }
+        first.stop()
+        let second = self.pfsEngine(context).makeSession(datacenterId: datacenterId, role: .main, usageCalculationInfo: nil, delegate: nil)
+        second.setPaused(false)
+        defer { second.stop() }
+        guard self.completes(tag: 33, on: second) else {
+            return
+        }
+        XCTAssertEqual(self.server.handshakes().count, 1, "the second session made no key")
+        XCTAssertEqual(self.server.binds(), 1, "and bound nothing")
+    }
+
+    func testMediaKeysAreMadeForTheMediaDatacenterIdAndKeptApart() {
+        let datacenterId = RustEngineEndToEndTests.datacenterId
+        let context = self.pfsContext(permanentKey: true, preferForMedia: true)
+        let session = self.pfsEngine(context).makeSession(datacenterId: datacenterId, role: .worker(masterDatacenterId: datacenterId, isMedia: true, isCdn: false), usageCalculationInfo: nil, delegate: nil)
+        session.setPaused(false)
+        defer { session.stop() }
+        guard self.completes(tag: 36, on: session) else {
+            return
+        }
+        XCTAssertEqual(self.server.handshakes().map { $0.datacenterId }, [-datacenterId], "a media key, as MtProtoKit makes it")
+        XCTAssertTrue(self.eventually { context.authInfoForDatacenter(withId: datacenterId, selector: .ephemeralMedia) != nil })
+        XCTAssertNil(context.authInfoForDatacenter(withId: datacenterId, selector: .ephemeralMain))
+    }
+
+    func testWithTcpBlockedKeysAreMadeAndBoundOverHttp() {
+        let datacenterId = RustEngineEndToEndTests.datacenterId
+        self.server.setTcpBlackhole(true)
+        let context = self.pfsContext(permanentKey: true)
+        let session = self.pfsEngine(context).makeSession(datacenterId: datacenterId, role: .main, usageCalculationInfo: nil, delegate: nil)
+        session.setPaused(false)
+        defer { session.stop() }
+        guard self.completes(tag: 37, on: session) else {
+            return
+        }
+        XCTAssertEqual(self.server.handshakes().count, 1)
+        XCTAssertEqual(self.server.binds(), 1)
+        XCTAssertTrue(self.eventually { context.authInfoForDatacenter(withId: datacenterId, selector: .ephemeralMain) != nil })
+    }
+
+    func testAKeyKeptForTheOldPermanentKeyIsNotTakenAfterThePermanentKeyChanges() {
+        let datacenterId = RustEngineEndToEndTests.datacenterId
+        guard let boundToA = self.keptTemporaryKey(media: false, tag: 50) else {
+            XCTFail("could not make the key")
+            return
+        }
+        let otherPermanent = Data((0 ..< 256).map { _ in UInt8.random(in: 0 ... 255) })
+        self.server.addKey(otherPermanent)
+        let context = self.pfsContext(permanentKey: true)
+        let session = self.pfsEngine(context).makeSession(datacenterId: datacenterId, role: .main, usageCalculationInfo: nil, delegate: nil)
+        session.setPaused(false)
+        defer { session.stop() }
+        guard self.completes(tag: 52, on: session), self.eventually({ context.authInfoForDatacenter(withId: datacenterId, selector: .ephemeralMain) != nil }) else {
+            return
+        }
+        context.updateAuthInfoForDatacenter(withId: datacenterId, authInfo: boundToA, selector: .ephemeralMain)
+        MTContext.contextQueue().dispatch(onQueue: {}, synchronous: true)
+        Thread.sleep(forTimeInterval: 0.3)
+        let handshakes = self.server.handshakes().count
+        let binds = self.server.binds()
+        let permanentB = self.authInfo(key: otherPermanent)
+        context.updateAuthInfoForDatacenter(withId: datacenterId, authInfo: permanentB, selector: .persistent)
+        MTContext.contextQueue().dispatch(onQueue: {}, synchronous: true)
+        Thread.sleep(forTimeInterval: 0.3)
+        guard self.completes(tag: 53, on: session) else {
+            return
+        }
+        XCTAssertEqual(self.server.handshakes().count, handshakes + 1, "a new temporary key is made for the new permanent key")
+        XCTAssertEqual(self.server.binds(), binds + 1, "and bound to it, instead of taking the key kept for the old one")
+        XCTAssertTrue(self.eventually {
+            (context.authInfoForDatacenter(withId: datacenterId, selector: .ephemeralMain)?.authKeyAttributes?[rustEngineBoundToAttribute] as? NSNumber)?.int64Value == permanentB.authKeyId
+        }, "the context keeps the key bound to the new permanent key")
+    }
+
+    func testAKeyTheServerDroppedLeavesTheContextAndIsReplaced() {
+        let datacenterId = RustEngineEndToEndTests.datacenterId
+        let context = self.pfsContext(permanentKey: true)
+        let session = self.pfsEngine(context).makeSession(datacenterId: datacenterId, role: .main, usageCalculationInfo: nil, delegate: nil)
+        session.setPaused(false)
+        defer { session.stop() }
+        guard self.completes(tag: 54, on: session), self.eventually({ context.authInfoForDatacenter(withId: datacenterId, selector: .ephemeralMain) != nil }), let dropped = context.authInfoForDatacenter(withId: datacenterId, selector: .ephemeralMain) else {
+            return
+        }
+        self.server.dropTemporaryKeys()
+        guard self.completes(tag: 55, on: session) else {
+            return
+        }
+        XCTAssertTrue(self.eventually {
+            guard let kept = context.authInfoForDatacenter(withId: datacenterId, selector: .ephemeralMain) else {
+                return false
+            }
+            return kept.authKeyId != dropped.authKeyId
+        }, "the dropped key left the context and the new one took its place")
+        XCTAssertEqual(self.server.handshakes().count, 2)
+    }
+
+    func testACallInFlightAcrossAnAddressClassChangeGoesAgainUnderTheNewKey() {
+        let datacenterId = RustEngineEndToEndTests.datacenterId
+        let context = self.pfsContext(permanentKey: true, preferForMedia: true)
+        let session = self.pfsEngine(context).makeSession(datacenterId: datacenterId, role: .worker(masterDatacenterId: datacenterId, isMedia: true, isCdn: false), usageCalculationInfo: nil, delegate: nil)
+        session.setPaused(false)
+        defer { session.stop() }
+        guard self.completes(tag: 63, on: session) else {
+            return
+        }
+        let finished = XCTestExpectation(description: "the call in flight finished")
+        finished.isInverted = true
+        let outcome = Atomic<String>(value: "still pending")
+        let disposable = session.requestService.add(self.request(tag: tagNever, shouldContinueAfterError: { _ in true }) { result in
+            if case let .failure(failure) = result {
+                let _ = outcome.swap("failed \(failure.error.errorCode) \(failure.error.errorDescription ?? "")")
+            } else {
+                let _ = outcome.swap("completed")
+            }
+            finished.fulfill()
+        })
+        Thread.sleep(forTimeInterval: 0.5)
+        self.setAddress(of: context, preferForMedia: false)
+        _ = XCTWaiter().wait(for: [finished], timeout: 5.0)
+        disposable.dispose()
+        XCTAssertEqual(outcome.with { $0 }, "still pending", "the call goes again under the new key, as with MtProtoKit")
+        XCTAssertEqual(self.server.executions(tag: tagNever), 2, "it ran again under the new key")
+    }
+
+    func testACallThatMayNotRetryFailsWhenItsTemporaryKeyGoes() {
+        let datacenterId = RustEngineEndToEndTests.datacenterId
+        let context = self.pfsContext(permanentKey: true, preferForMedia: true)
+        let session = self.pfsEngine(context).makeSession(datacenterId: datacenterId, role: .worker(masterDatacenterId: datacenterId, isMedia: true, isCdn: false), usageCalculationInfo: nil, delegate: nil)
+        session.setPaused(false)
+        defer { session.stop() }
+        guard self.completes(tag: 66, on: session) else {
+            return
+        }
+        let finished = XCTestExpectation(description: "the call in flight failed")
+        let outcome = Atomic<String>(value: "still pending")
+        let disposable = session.requestService.add(self.request(tag: tagNever, shouldContinueAfterError: { _ in false }) { result in
+            if case let .failure(failure) = result {
+                let _ = outcome.swap("failed \(failure.error.errorCode) \(failure.error.errorDescription ?? "")")
+            }
+            finished.fulfill()
+        })
+        Thread.sleep(forTimeInterval: 0.5)
+        self.setAddress(of: context, preferForMedia: false)
+        _ = XCTWaiter().wait(for: [finished], timeout: 5.0)
+        disposable.dispose()
+        XCTAssertEqual(outcome.with { $0 }, "failed 500 TEMP_KEY_ROTATED", "a request that fails on server errors is not run again")
+    }
+
+    func testChainedCallsGoAgainInTheirOrderAfterARotation() {
+        let datacenterId = RustEngineEndToEndTests.datacenterId
+        let context = self.pfsContext(permanentKey: true, preferForMedia: true)
+        let session = self.pfsEngine(context).makeSession(datacenterId: datacenterId, role: .worker(masterDatacenterId: datacenterId, isMedia: true, isCdn: false), usageCalculationInfo: nil, delegate: nil)
+        session.setPaused(false)
+        defer { session.stop() }
+        guard self.completes(tag: 67, on: session) else {
+            return
+        }
+        let order = Atomic<[Int]>(value: [])
+        var disposables: [Disposable] = []
+        for index in 0 ..< 4 {
+            let earlier: (WrappedRequestMetadata) -> Bool = { other in
+                let parts = other.description.split(separator: " ")
+                return parts.first == "chain" && (Int(parts.last ?? "") ?? Int.max) < index
+            }
+            disposables.append(session.requestService.add(self.request(tag: tagNever, shouldContinueAfterError: { _ in
+                let _ = order.modify { $0 + [index] }
+                return true
+            }, dependsOn: index == 0 ? nil : earlier, label: "chain \(index)") { _ in }))
+        }
+        defer {
+            for disposable in disposables {
+                disposable.dispose()
+            }
+        }
+        Thread.sleep(forTimeInterval: 0.5)
+        var media = true
+        for round in 1 ... 4 {
+            media.toggle()
+            self.setAddress(of: context, preferForMedia: media)
+            XCTAssertTrue(self.eventually { order.with { $0.count } == 4 * round }, "round \(round): \(order.with { $0 })")
+            let rotated = order.with { Array($0.suffix(4)) }
+            XCTAssertEqual(rotated, [0, 1, 2, 3], "round \(round): each call goes again after the one it is chained to")
+            Thread.sleep(forTimeInterval: 0.5)
+        }
+    }
+
+    func testChainedCallsStayChainedToTheCallsSentAgainBeforeThem() {
+        let datacenterId = RustEngineEndToEndTests.datacenterId
+        let context = self.pfsContext(permanentKey: true, preferForMedia: true)
+        let session = self.pfsEngine(context).makeSession(datacenterId: datacenterId, role: .worker(masterDatacenterId: datacenterId, isMedia: true, isCdn: false), usageCalculationInfo: nil, delegate: nil)
+        session.setPaused(false)
+        defer { session.stop() }
+        guard self.completes(tag: 68, on: session) else {
+            return
+        }
+        let rotations = Atomic<Int>(value: 0)
+        let sameChain: (WrappedRequestMetadata) -> Bool = { other in
+            return other.description.hasPrefix("chain ")
+        }
+        var disposables: [Disposable] = []
+        for index in 0 ..< 4 {
+            disposables.append(session.requestService.add(self.request(tag: tagNever, shouldContinueAfterError: { _ in
+                let _ = rotations.modify { $0 + 1 }
+                return true
+            }, dependsOn: index == 0 ? nil : sameChain, label: "chain \(index)") { _ in }))
+        }
+        defer {
+            for disposable in disposables {
+                disposable.dispose()
+            }
+        }
+        Thread.sleep(forTimeInterval: 0.5)
+        var media = true
+        for round in 1 ... 3 {
+            let wrappers = self.server.invokeAfterWrappers()
+            media.toggle()
+            self.setAddress(of: context, preferForMedia: media)
+            XCTAssertTrue(self.eventually { rotations.with { $0 } == 4 * round }, "round \(round)")
+            Thread.sleep(forTimeInterval: 0.5)
+            XCTAssertGreaterThanOrEqual(self.server.invokeAfterWrappers() - wrappers, 3, "round \(round): calls 1-3 went again chained to the call sent again before them")
+        }
     }
 }

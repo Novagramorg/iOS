@@ -151,7 +151,7 @@ final class RustEngineRuntime: NSObject, MTNetworkAvailabilityDelegate {
         rustEngineVerifyAssumptions()
 
         let abiVersion = mt_engine_abi_version()
-        if abiVersion != 1 {
+        if abiVersion != 2 {
             rustEngineImportantLog("[MTProtoRust] unsupported engine ABI version \(abiVersion)")
             return
         }

@@ -97,6 +97,9 @@ final class RustEngineBridgeTests: XCTestCase {
             (.addressResult, MTEventKindAddressResult), (.closed, MTEventKindClosed),
             (.retryDecisionRequired, MTEventKindRetryDecisionRequired),
             (.connectionDropped, MTEventKindConnectionDropped),
+            (.temporaryKeyBound, MTEventKindTemporaryKeyBound), (.temporaryKeyBindFailed, MTEventKindTemporaryKeyBindFailed),
+            (.permanentKeyInvalid, MTEventKindPermanentKeyInvalid), (.temporaryKeyInUse, MTEventKindTemporaryKeyInUse),
+            (.temporaryKeyDropped, MTEventKindTemporaryKeyDropped),
         ]
         for (kind, raw) in pairs {
             XCTAssertEqual(kind.rawValue, raw.rawValue)
@@ -143,7 +146,7 @@ final class RustEngineBridgeTests: XCTestCase {
             return
         }
         XCTAssertNotNil(runtime.engine)
-        XCTAssertEqual(mt_engine_abi_version(), 1)
+        XCTAssertEqual(mt_engine_abi_version(), 2)
         let first = runtime.nextRequestId()
         let second = runtime.nextRequestId()
         XCTAssertNotEqual(first, 0)

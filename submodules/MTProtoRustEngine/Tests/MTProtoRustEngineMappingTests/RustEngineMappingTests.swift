@@ -219,4 +219,49 @@ final class RustEngineMappingTests: XCTestCase {
         XCTAssertEqual(rustEngineAuthorizationRequiredAction(isMain: true), .logOut)
         XCTAssertEqual(rustEngineAuthorizationRequiredAction(isMain: false), .ignore)
     }
+
+    func testOnlyNonCdnSessionsWithTemporaryKeysRunPfsInTheEngine() {
+        XCTAssertTrue(rustEngineRunsPfs(isCdn: false, useTempAuthKeys: true, publicKeyCount: 1))
+        XCTAssertFalse(rustEngineRunsPfs(isCdn: true, useTempAuthKeys: true, publicKeyCount: 1))
+        XCTAssertFalse(rustEngineRunsPfs(isCdn: false, useTempAuthKeys: false, publicKeyCount: 1))
+        XCTAssertFalse(rustEngineRunsPfs(isCdn: false, useTempAuthKeys: true, publicKeyCount: 0))
+    }
+
+    func testTemporaryKeyExpiryMovesBetweenLocalAndServerTime() {
+        XCTAssertEqual(rustEngineServerExpiry(validUntil: 1_000_000, timeDifference: 12.7), 1_000_012)
+        XCTAssertEqual(rustEngineLocalValidUntil(serverExpiry: 1_000_012, timeDifference: 12.7), 999_999)
+        XCTAssertEqual(rustEngineServerExpiry(validUntil: Int32.max, timeDifference: 100.0), Int32.max)
+    }
+
+    func testAMadeTemporaryKeyReplacesOnlyAnOlderOrForeignOne() {
+        let made = RustEngineTemporaryKeyInfo(keyId: 2, validUntil: 2000, boundTo: 7)
+        XCTAssertTrue(rustEngineStoresTemporaryKey(stored: nil, made: made))
+        XCTAssertFalse(rustEngineStoresTemporaryKey(stored: made, made: made), "the same key is kept as it is")
+        XCTAssertTrue(rustEngineStoresTemporaryKey(stored: RustEngineTemporaryKeyInfo(keyId: 1, validUntil: 1000, boundTo: 7), made: made))
+        XCTAssertFalse(rustEngineStoresTemporaryKey(stored: RustEngineTemporaryKeyInfo(keyId: 1, validUntil: 3000, boundTo: 7), made: made), "a longer-lived key of another session stays")
+        XCTAssertTrue(rustEngineStoresTemporaryKey(stored: RustEngineTemporaryKeyInfo(keyId: 1, validUntil: 3000, boundTo: 8), made: made), "a key bound to another permanent key goes")
+        XCTAssertFalse(rustEngineStoresTemporaryKey(stored: RustEngineTemporaryKeyInfo(keyId: 1, validUntil: 3000, boundTo: nil), made: made))
+    }
+
+    func testAKeptTemporaryKeyIsOfferedOnlyForItsPermanentKeyAndWithTimeLeft() {
+        let kept = RustEngineTemporaryKeyInfo(keyId: 1, validUntil: 10_000, boundTo: 7)
+        XCTAssertTrue(rustEngineOffersTemporaryKey(stored: kept, permanentKeyId: 7, now: 9_000, minimumLifetime: 300))
+        XCTAssertFalse(rustEngineOffersTemporaryKey(stored: kept, permanentKeyId: 8, now: 9_000, minimumLifetime: 300))
+        XCTAssertFalse(rustEngineOffersTemporaryKey(stored: kept, permanentKeyId: nil, now: 9_000, minimumLifetime: 300))
+        XCTAssertFalse(rustEngineOffersTemporaryKey(stored: kept, permanentKeyId: 7, now: 9_800, minimumLifetime: 300))
+        let legacy = RustEngineTemporaryKeyInfo(keyId: 1, validUntil: 10_000, boundTo: nil)
+        XCTAssertTrue(rustEngineOffersTemporaryKey(stored: legacy, permanentKeyId: 7, now: 9_000, minimumLifetime: 300), "MtProtoKit's keys carry no binding")
+        let permanent = RustEngineTemporaryKeyInfo(keyId: 1, validUntil: Int32.max, boundTo: nil)
+        XCTAssertFalse(rustEngineOffersTemporaryKey(stored: permanent, permanentKeyId: 7, now: 9_000, minimumLifetime: 300))
+    }
+
+    func testOnlyARotatedTemporaryKeyFailureIsResubmitted() {
+        XCTAssertTrue(rustEngineResubmitsAfterKeyRotation(code: 500, text: "TEMP_KEY_ROTATED"))
+        XCTAssertFalse(rustEngineResubmitsAfterKeyRotation(code: 500, text: "INTERNAL"))
+        XCTAssertFalse(rustEngineResubmitsAfterKeyRotation(code: 400, text: "TEMP_KEY_ROTATED"))
+        var state = RustEngineErrorState()
+        XCTAssertEqual(state.applyServerError().internalServerErrorCount, 1)
+        state.didResubmit()
+        XCTAssertEqual(state.applyServerError().internalServerErrorCount, 2, "each rotation counts as a server error for the request's policy")
+    }
 }

@@ -1803,6 +1803,9 @@ static void copyKeychainDictionaryKey(NSString * _Nonnull group, NSString * _Non
     if (authInfo == nil || authInfo.validUntilTimestamp == INT32_MAX || (int64_t)authInfo.validUntilTimestamp <= (int64_t)[NSDate date].timeIntervalSince1970) {
         return false;
     }
+    if (authInfo.authKeyAttributes[@"rustEngineBoundTo"] != nil) {
+        return false;
+    }
     if (_datacenterAuthInfoById[authInfoMapIntegerKey(parsedKey.datacenterId, MTDatacenterAuthInfoSelectorPersistent)] == nil) {
         return false;
     }

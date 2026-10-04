@@ -168,6 +168,11 @@ public struct RustEngineErrorState: Equatable {
         return self.context
     }
 
+    public mutating func applyServerError() -> Context {
+        self.serverErrorsOfCurrentSubmission += 1
+        return self.context
+    }
+
     public mutating func applyParseFailure() -> Context {
         self.parseFailures += 1
         return self.context
@@ -177,6 +182,15 @@ public struct RustEngineErrorState: Equatable {
         self.serverErrorsOfEarlierSubmissions += self.serverErrorsOfCurrentSubmission
         self.serverErrorsOfCurrentSubmission = 0
     }
+}
+
+/// With PFS in the engine, a call the server may already have fails as `500 TEMP_KEY_ROTATED` when its
+/// temporary key had to go (an address class change, or no quiet moment before the key's end): the
+/// engine never re-sends it under the new session by itself. MtProtoKit re-sends such calls after a key
+/// change, so the bridge does too, under the request's own server-error policy
+/// (`shouldContinueAfterError`), as for any other 500.
+public func rustEngineResubmitsAfterKeyRotation(code: Int32, text: String) -> Bool {
+    return code == 500 && text == "TEMP_KEY_ROTATED"
 }
 
 /// An unparsable `rpc_result` is a `500 TL_PARSING_ERROR`. MtProtoKit retries it every 2 seconds
@@ -337,4 +351,66 @@ public func rustEngineRetryDecisionIsRetryable(code: Int32, floodWaitText: Strin
 /// `NetworkEngineErrorContext.floodWaitErrorText` from the event's `text2`, which is empty when unset.
 public func rustEngineOptionalText(_ text: String) -> String? {
     return text.isEmpty ? nil : text
+}
+
+/// Whether a session runs PFS in the engine: it makes and binds its temporary keys itself, over
+/// whichever transport works, instead of taking them from `MTContext`. CDN sessions talk under their
+/// permanent key, as with MtProtoKit.
+public func rustEngineRunsPfs(isCdn: Bool, useTempAuthKeys: Bool, publicKeyCount: Int) -> Bool {
+    return !isCdn && useTempAuthKeys && publicKeyCount > 0
+}
+
+/// `MTDatacenterAuthInfo.validUntilTimestamp` of a temporary key is local time; the engine and
+/// `auth.bindTempAuthKey` use server time.
+public func rustEngineServerExpiry(validUntil: Int32, timeDifference: Double) -> Int32 {
+    return Int32(clamping: Int64((Double(validUntil) + timeDifference).rounded(.down)))
+}
+
+public func rustEngineLocalValidUntil(serverExpiry: Int64, timeDifference: Double) -> Int32 {
+    return Int32(clamping: Int64((Double(serverExpiry) - timeDifference).rounded(.down)))
+}
+
+/// A temporary key as `MTContext` keeps it: `boundTo` is the permanent key it was bound to when the
+/// Rust engine stored it, nil for a key MtProtoKit made.
+public struct RustEngineTemporaryKeyInfo: Equatable {
+    public var keyId: Int64
+    public var validUntil: Int32
+    public var boundTo: Int64?
+
+    public init(keyId: Int64, validUntil: Int32, boundTo: Int64?) {
+        self.keyId = keyId
+        self.validUntil = validUntil
+        self.boundTo = boundTo
+    }
+}
+
+/// `MTDatacenterAuthInfo.authKeyAttributes` key holding `RustEngineTemporaryKeyInfo.boundTo`.
+public let rustEngineBoundToAttribute = "rustEngineBoundTo"
+
+/// Whether a temporary key a session made and bound replaces the one the context keeps for its
+/// address class: when there is none, when the kept one belongs to another permanent key, or when
+/// the new one lives longer.
+public func rustEngineStoresTemporaryKey(stored: RustEngineTemporaryKeyInfo?, made: RustEngineTemporaryKeyInfo) -> Bool {
+    guard let stored = stored else {
+        return true
+    }
+    if stored.keyId == made.keyId {
+        return false
+    }
+    if let boundTo = stored.boundTo, boundTo != made.boundTo {
+        return true
+    }
+    return stored.validUntil < made.validUntil
+}
+
+/// Whether a temporary key the context keeps can be given to a session: bound to the session's
+/// permanent key as far as is known, and with more than `minimumLifetime` seconds left.
+public func rustEngineOffersTemporaryKey(stored: RustEngineTemporaryKeyInfo, permanentKeyId: Int64?, now: Int32, minimumLifetime: Int32) -> Bool {
+    guard let permanentKeyId = permanentKeyId else {
+        return false
+    }
+    if let boundTo = stored.boundTo, boundTo != permanentKeyId {
+        return false
+    }
+    return stored.validUntil != Int32.max && Int64(stored.validUntil) - Int64(now) > Int64(minimumLifetime)
 }
