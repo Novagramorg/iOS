@@ -21,6 +21,7 @@ public final class InteractiveDiamondComponent: Component {
 
     public enum AnimationMode: Equatable {
         case continuous
+        case idle
         case lottie(loop: Bool)
     }
 
@@ -127,6 +128,16 @@ public final class InteractiveDiamondComponent: Component {
         public var scrollTiltProvider: ((CFTimeInterval) -> Float)? {
             get { return self.diamondLayer.scrollTiltProvider }
             set { self.diamondLayer.scrollTiltProvider = newValue }
+        }
+        /// Runs on the stone's display link. A nil time suspends the external motion.
+        /// The rotation is additive and does not restart the authored animation.
+        public var externalMotion: ((CFTimeInterval?) -> (rotation: Float, isAnimating: Bool))? {
+            get { return self.diamondLayer.externalMotion }
+            set { self.diamondLayer.externalMotion = newValue }
+        }
+
+        public func requestExternalMotionUpdate() {
+            self.diamondLayer.requestExternalMotionUpdate()
         }
         private var restingSize = CGSize.zero
         private var diamondWidth: CGFloat = 0.0
@@ -512,6 +523,7 @@ public final class InteractiveDiamondComponent: Component {
             self.onMotionUpdated = nil
             self.onRefractionUpdated = nil
             self.scrollTiltProvider = nil
+            self.externalMotion = nil
             self.updateRefractionSource(nil)
             self.bounds = CGRect(x: 0.0, y: 0.0, width: 150.0, height: 150.0)
             self.applyExpansion()
@@ -612,8 +624,9 @@ public final class InteractiveDiamondComponent: Component {
                 style.burstFadeInDuration = defaults.burstFadeInDuration
             }
             style.animateOnAppear = component.animateOnAppear
+            style.isRotating = component.animationMode != .idle
             switch component.animationMode {
-            case .continuous:
+            case .continuous, .idle:
                 style.animationMode = .continuous
                 style.referenceAnimationLoops = true
             case let .lottie(loop):

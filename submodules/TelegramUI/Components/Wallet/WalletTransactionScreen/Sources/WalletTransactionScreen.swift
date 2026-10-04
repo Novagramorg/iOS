@@ -828,6 +828,7 @@ private final class WalletTransactionContentComponent: Component {
     let maxCommentHeight: CGFloat
     let openExplorer: (String) -> Void
     let animateOut: ActionSlot<Action<Void>>
+    let pagerPosition: WalletPagerView.ItemPosition?
 
     init(
         context: AccountContext,
@@ -836,7 +837,8 @@ private final class WalletTransactionContentComponent: Component {
         fromChat: Bool,
         maxCommentHeight: CGFloat,
         openExplorer: @escaping (String) -> Void,
-        animateOut: ActionSlot<Action<Void>>
+        animateOut: ActionSlot<Action<Void>>,
+        pagerPosition: WalletPagerView.ItemPosition? = nil
     ) {
         self.context = context
         self.mode = mode
@@ -845,13 +847,15 @@ private final class WalletTransactionContentComponent: Component {
         self.maxCommentHeight = maxCommentHeight
         self.openExplorer = openExplorer
         self.animateOut = animateOut
+        self.pagerPosition = pagerPosition
     }
 
     static func ==(lhs: WalletTransactionContentComponent, rhs: WalletTransactionContentComponent) -> Bool {
         if lhs.context !== rhs.context
             || lhs.walletContext !== rhs.walletContext
             || lhs.fromChat != rhs.fromChat
-            || lhs.maxCommentHeight != rhs.maxCommentHeight {
+            || lhs.maxCommentHeight != rhs.maxCommentHeight
+            || lhs.pagerPosition !== rhs.pagerPosition {
             return false
         }
         switch (lhs.mode, rhs.mode) {
@@ -865,6 +869,67 @@ private final class WalletTransactionContentComponent: Component {
     }
 
     final class View: UIView {
+        private struct Roll {
+            private var x: CGFloat = 0.0
+            private var v: CGFloat = 0.0
+            private var last: CFTimeInterval?
+            private var sheetX: CGFloat = 0.0
+            private var sheetV: CGFloat = 0.0
+            private(set) var isAnimating = false
+
+            private static func target(_ sheet: CGFloat) -> CGFloat {
+                return min(110.0, max(-110.0, sheet * 0.5))
+            }
+
+            mutating func rebase(sheet: CGFloat, at now: CFTimeInterval) {
+                guard self.last != nil else { return }
+                self.sheetX = sheet
+                self.sheetV = 0.0
+                self.last = now
+                self.isAnimating = abs(self.x - Self.target(sheet)) >= 0.01 || abs(self.v) >= 0.01
+            }
+
+            mutating func step(sheet: CGFloat, at now: CFTimeInterval) -> CGFloat {
+                let target = Self.target(sheet)
+                guard let last = self.last else {
+                    self.x = target
+                    self.sheetX = sheet
+                    self.last = now
+                    return self.x
+                }
+                self.isAnimating = self.isAnimating || self.sheetX != sheet
+                let dt = CGFloat(min(max(now - last, 0.0), 0.05))
+                self.last = now
+                guard dt > 0.0005 else { return self.x }
+
+                let raw = (sheet - self.sheetX) / dt
+                self.sheetX = sheet
+                let previousVelocity = self.sheetV
+                self.sheetV += (raw - self.sheetV) * min(1.0, dt * 12.0)
+                self.v -= (self.sheetV - previousVelocity) * 0.5
+                let w: CGFloat = 2.0 * .pi * 1.7
+                var remaining = dt
+                while remaining > 0.0 {
+                    let h = min(remaining, 1.0 / 240.0)
+                    self.v += (w * w * (target - self.x) - 2.0 * 0.45 * w * self.v) * h
+                    self.x += self.v * h
+                    remaining -= h
+                }
+                if abs(self.x) > 132.0 {
+                    self.x = self.x > 0.0 ? 132.0 : -132.0
+                    self.v = 0.0
+                }
+                // Let the filtered sheet velocity decay too, so a pending braking impulse is not lost.
+                self.isAnimating = abs(self.x - target) >= 0.01 || abs(self.v) >= 0.01 || abs(self.sheetV) >= 0.01
+                if !self.isAnimating {
+                    self.x = target
+                    self.v = 0.0
+                    self.sheetV = 0.0
+                }
+                return self.x
+            }
+        }
+
         private enum PreviewOperation: Equatable {
             case ready
             case preparing
@@ -887,6 +952,8 @@ private final class WalletTransactionContentComponent: Component {
         private let keyUpdateHeader = ComponentView<Empty>()
         private let collectibleHeader = ComponentView<Empty>()
         private var gramAnimation = ComponentView<Empty>()
+        private var pagerPosition: WalletPagerView.ItemPosition?
+        private var roll = Roll()
         private var isReturningToWallet = false
         private var hasTransferredDiamond = false
         private let amount = ComponentView<Empty>()
@@ -987,6 +1054,7 @@ private final class WalletTransactionContentComponent: Component {
         }
 
         deinit {
+            self.pagerPosition?.updated = nil
             self.restorationSession?.invalidate()
             self.commentSession?.invalidate()
             self.commentSessionDisposable.dispose()
@@ -999,6 +1067,52 @@ private final class WalletTransactionContentComponent: Component {
             self.discardTransferDisposables.dispose()
             self.commentDecryptionDisposable.dispose()
             self.commentAuthorizationDisposable.dispose()
+        }
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            self.pagerPositionChanged(reset: true)
+        }
+
+        private func setPagerPosition(_ position: WalletPagerView.ItemPosition?) {
+            if self.pagerPosition !== position {
+                self.pagerPosition?.updated = nil
+                (self.gramAnimation.view as? InteractiveDiamondComponent.View)?.externalMotion = nil
+                self.pagerPosition = position
+                self.roll = Roll()
+                position?.updated = { [weak self] reset in
+                    self?.pagerPositionChanged(reset: reset)
+                }
+            }
+            if position != nil, let diamond = self.gramAnimation.view as? InteractiveDiamondComponent.View, diamond.externalMotion == nil {
+                diamond.externalMotion = { [weak self, weak diamond] time in
+                    guard let self, let diamond else { return (0.0, false) }
+                    var offset: CGFloat = 0.0
+                    if let time, let position = self.pagerPosition, position.isVisible,
+                       self.window != nil, self.environment?.isVisible == true,
+                       !self.isReturningToWallet, !self.hasTransferredDiamond, !UIAccessibility.isReduceMotionEnabled {
+                        offset = self.roll.step(sheet: position.offset, at: time)
+                    } else {
+                        self.roll = Roll()
+                    }
+                    UIView.performWithoutAnimation {
+                        diamond.transform = CGAffineTransform(translationX: offset, y: 0.0)
+                    }
+                    return (Float(offset / (78.0 / 2.0 * 0.949)), self.roll.isAnimating)
+                }
+            }
+            self.pagerPositionChanged(reset: false)
+        }
+
+        private func pagerPositionChanged(reset: Bool) {
+            guard let position = self.pagerPosition,
+                  let diamond = self.gramAnimation.view as? InteractiveDiamondComponent.View else { return }
+            if reset {
+                self.roll.rebase(sheet: position.offset, at: CACurrentMediaTime())
+            }
+            diamond.isRenderingEnabled = position.isVisible && self.window != nil && self.environment?.isVisible == true
+                && !self.isReturningToWallet && !self.hasTransferredDiamond
+            diamond.requestExternalMotionUpdate()
         }
 
         @objc private func gramAnimationTapped() {
@@ -2341,6 +2455,7 @@ private final class WalletTransactionContentComponent: Component {
 
             let incomingModeId = walletTransactionModeId(component.mode)
             if self.modeId != incomingModeId || previousWalletContext !== component.walletContext {
+                self.setPagerPosition(nil)
                 self.configureMode(component.mode, walletContext: component.walletContext)
             } else if case let .transaction(transaction) = component.mode {
                 if self.transaction?.comment != transaction.comment
@@ -2435,6 +2550,9 @@ private final class WalletTransactionContentComponent: Component {
             let fiatRate = self.latestWalletState?.fiat.selectedRate
             let isKeyChange = transaction.kind == .keyChange
             let displaysGramHeader = transaction.currency == .ton && transaction.collectible == nil && !isKeyChange
+            if !displaysGramHeader {
+                self.setPagerPosition(nil)
+            }
             if !displaysGramHeader, let animationView = self.gramAnimation.view as? InteractiveDiamondComponent.View {
                 transition.setAlpha(view: animationView, alpha: 0.0)
                 animationView.isRenderingEnabled = false
@@ -2513,6 +2631,7 @@ private final class WalletTransactionContentComponent: Component {
             } else {
                 if displaysGramHeader {
                     let animationSize = CGSize(width: 118.0, height: 118.0)
+                    let rollsWithPager = !self.isPreview && component.pagerPosition != nil
                     if !self.isReturningToWallet {
                         let _ = self.gramAnimation.update(
                             transition: transition,
@@ -2521,8 +2640,8 @@ private final class WalletTransactionContentComponent: Component {
                                 diamondWidth: 78.0,
                                 isVisible: environment.isVisible,
                                 theme: theme,
-                                animationMode: .lottie(loop: false),
-                                animateOnAppear: true
+                                animationMode: rollsWithPager ? .idle : .lottie(loop: false),
+                                animateOnAppear: !rollsWithPager
                             )),
                             environment: {},
                             containerSize: animationSize
@@ -2531,22 +2650,22 @@ private final class WalletTransactionContentComponent: Component {
                     contentHeight = 10.0
                     if !self.hasTransferredDiamond, let animationView = self.gramAnimation.view as? InteractiveDiamondComponent.View {
                         animationView.isRenderingEnabled = environment.isVisible
+                        animationView.isUserInteractionEnabled = !rollsWithPager
                         if animationView.superview == nil {
-                            animationView.isUserInteractionEnabled = true
                             animationView.addGestureRecognizer(UITapGestureRecognizer(
                                 target: self,
                                 action: #selector(self.gramAnimationTapped)
                             ))
                             self.addSubview(animationView)
                         }
-                        transition.setFrame(view: animationView, frame: CGRect(
-                            x: floorToScreenPixels((availableSize.width - animationSize.width) / 2.0),
-                            y: contentHeight,
-                            width: animationSize.width,
-                            height: animationSize.height
+                        transition.setBounds(view: animationView, bounds: CGRect(origin: .zero, size: animationSize))
+                        transition.setPosition(view: animationView, position: CGPoint(
+                            x: floorToScreenPixels((availableSize.width - animationSize.width) / 2.0) + animationSize.width / 2.0,
+                            y: contentHeight + animationSize.height / 2.0
                         ))
                         transition.setAlpha(view: animationView, alpha: 1.0)
                     }
+                    self.setPagerPosition(self.isPreview ? nil : component.pagerPosition)
                     contentHeight += animationSize.height - 16.0
                 }
                 let amountSize = self.amount.update(
@@ -3481,7 +3600,7 @@ private final class WalletTransactionPagerComponent: Component {
             availableSize: availableSize,
             environment: environment,
             transition: transition,
-            makeContent: { index, isCurrent in
+            makeContent: { [weak view] index, isCurrent in
                 return AnyComponent(WalletTransactionSheetComponent(
                     context: self.context,
                     transaction: self.transactions[index],
@@ -3489,7 +3608,8 @@ private final class WalletTransactionPagerComponent: Component {
                     fromChat: self.fromChat,
                     hasDimView: false,
                     updatesPresentationContextLayout: isCurrent,
-                    openExplorer: self.openExplorer
+                    openExplorer: self.openExplorer,
+                    pagerPosition: view?.itemPosition(for: self.transactions[index].presentationId)
                 ))
             },
             indexUpdated: self.indexUpdated,
@@ -3508,6 +3628,7 @@ private final class WalletTransactionSheetComponent: CombinedComponent {
     let hasDimView: Bool
     let updatesPresentationContextLayout: Bool
     let openExplorer: (String) -> Void
+    let pagerPosition: WalletPagerView.ItemPosition?
 
     init(
         context: AccountContext,
@@ -3516,7 +3637,8 @@ private final class WalletTransactionSheetComponent: CombinedComponent {
         fromChat: Bool,
         hasDimView: Bool,
         updatesPresentationContextLayout: Bool,
-        openExplorer: @escaping (String) -> Void
+        openExplorer: @escaping (String) -> Void,
+        pagerPosition: WalletPagerView.ItemPosition? = nil
     ) {
         self.context = context
         self.transaction = transaction
@@ -3525,6 +3647,7 @@ private final class WalletTransactionSheetComponent: CombinedComponent {
         self.hasDimView = hasDimView
         self.updatesPresentationContextLayout = updatesPresentationContextLayout
         self.openExplorer = openExplorer
+        self.pagerPosition = pagerPosition
     }
 
     static func ==(lhs: WalletTransactionSheetComponent, rhs: WalletTransactionSheetComponent) -> Bool {
@@ -3532,7 +3655,8 @@ private final class WalletTransactionSheetComponent: CombinedComponent {
             || lhs.walletContext !== rhs.walletContext
             || lhs.fromChat != rhs.fromChat
             || lhs.hasDimView != rhs.hasDimView
-            || lhs.updatesPresentationContextLayout != rhs.updatesPresentationContextLayout {
+            || lhs.updatesPresentationContextLayout != rhs.updatesPresentationContextLayout
+            || lhs.pagerPosition !== rhs.pagerPosition {
             return false
         }
         return lhs.transaction == rhs.transaction
@@ -3556,7 +3680,8 @@ private final class WalletTransactionSheetComponent: CombinedComponent {
                         fromChat: context.component.fromChat,
                         maxCommentHeight: floorToScreenPixels(min(150.0, max(80.0, availableCommentHeight * 0.25))),
                         openExplorer: context.component.openExplorer,
-                        animateOut: animateOut
+                        animateOut: animateOut,
+                        pagerPosition: context.component.pagerPosition
                     )),
                     style: .glass,
                     backgroundColor: .color(environment.theme.actionSheet.opaqueItemBackgroundColor),

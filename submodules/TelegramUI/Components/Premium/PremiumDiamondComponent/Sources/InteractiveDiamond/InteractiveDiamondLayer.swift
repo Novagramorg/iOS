@@ -146,6 +146,16 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
     var onHold: ((Bool) -> Void)?
     var onPoseUpdated: ((DiamondPose) -> Void)?
     var scrollTiltProvider: ((CFTimeInterval) -> Float)?
+    var externalMotion: ((CFTimeInterval?) -> (rotation: Float, isAnimating: Bool))? {
+        didSet {
+            guard self.externalMotion != nil || oldValue != nil else { return }
+            let _ = oldValue?(nil)
+            self.displayLink?.invalidate()
+            self.displayLink = nil
+            self.requestExternalMotionUpdate()
+        }
+    }
+    private var externalMotionIsAnimating = false
     var lightBackground = false
     var interactionScale: Float = 1
     var starOffset: CGPoint = .zero
@@ -245,7 +255,7 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
     }
 
     var pose: DiamondPose {
-        return DiamondPose(yaw: self.motion.yaw + self.motion.lean, pitch: self.motion.pitch,
+        return DiamondPose(yaw: self.motion.renderedYaw, pitch: self.motion.pitch,
             grow: self.grow * self.interactionScale, shift: self.diamondStyle.growShift * (self.grow * self.interactionScale - 1))
     }
 
@@ -385,8 +395,10 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
 
     func resetAnimation() {
         let wasDragging = self.motion.isDragging
+        let externalYaw = self.motion.externalYaw
         self.cancelTapSpin()
         self.motion = DiamondMotion()
+        self.motion.externalYaw = externalYaw
         self.updateMotionStyle()
         self.grow = 1
         self.growVelocity = 0
@@ -498,20 +510,38 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
         self.updateAnimationState()
     }
 
+    private func updateExternalMotion(at time: CFTimeInterval?) {
+        let result = self.externalMotion?(time)
+        self.motion.externalYaw = time == nil ? 0.0 : result?.rotation ?? 0.0
+        self.externalMotionIsAnimating = time != nil && result?.isAnimating == true
+    }
+
+    func requestExternalMotionUpdate() {
+        // A running link samples the latest input once on its next frame.
+        guard self.displayLink == nil else { return }
+        self.updateAnimationState()
+        self.onPoseUpdated?(self.pose)
+    }
+
     private func updateAnimationState() {
         let isVisible = self.isInHierarchy && self.isApplicationInForeground && self.isRenderingEnabled
+        if !isVisible || self.reduceMotion {
+            self.updateExternalMotion(at: nil)
+        } else if self.displayLink == nil {
+            self.updateExternalMotion(at: CACurrentMediaTime())
+        }
         if isVisible && self.diamondStyle.animateOnAppear && !self.didAnimateAppearance {
             self.didAnimateAppearance = true
             if !self.reduceMotion && !UIAccessibility.isReduceMotionEnabled {
                 self.motion.pushFromBelow()
             }
         }
-        if isVisible && !self.reduceMotion && (!self.hasCompletedReferenceAnimation || self.motion.isAppearanceImpulseActive) {
+        if isVisible && !self.reduceMotion && (!self.hasCompletedReferenceAnimation || self.motion.isAppearanceImpulseActive || self.externalMotionIsAnimating) {
             if self.displayLink == nil {
-                self.displayLink = SharedDisplayLinkDriver.shared.add(framesPerSecond: self.usesHighFrameRate ? .max : .fps(60), { [weak self] _ in
+                self.displayLink = SharedDisplayLinkDriver.shared.add(framesPerSecond: self.usesHighFrameRate || self.externalMotion != nil ? .max : .fps(60), { [weak self] _ in
                     guard let self else { return }
                     self.updateMotion(at: CACurrentMediaTime())
-                    if self.hasCompletedReferenceAnimation && !self.motion.isAppearanceImpulseActive {
+                    if self.hasCompletedReferenceAnimation && !self.motion.isAppearanceImpulseActive && !self.externalMotionIsAnimating {
                         self.updateAnimationState()
                     }
                     self.setNeedsUpdate()
@@ -543,6 +573,7 @@ final class InteractiveDiamondLayer: MetalEngineSubjectLayer, MetalEngineSubject
     }
 
     private func updateMotion(at time: CFTimeInterval) {
+        self.updateExternalMotion(at: self.isInHierarchy && self.isApplicationInForeground && self.isRenderingEnabled && !self.reduceMotion ? time : nil)
         let dt = Float(self.lastTime.map { min(max(0, time - $0), 0.05) } ?? 0)
         self.lastTime = time
         var animationDt = dt

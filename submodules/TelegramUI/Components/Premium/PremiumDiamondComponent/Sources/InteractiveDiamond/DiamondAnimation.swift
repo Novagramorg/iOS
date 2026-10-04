@@ -67,6 +67,8 @@ struct DiamondMotion {
     private static let tapUnlockSpeedMultiplier: Float = 1.4
 
     private(set) var yaw: Float = 0
+    var externalYaw: Float = 0
+    var renderedYaw: Float { self.yaw + self.lean + self.externalYaw }
     private(set) var pitch: Float = Self.referencePitch
     private(set) var isDragging = false
     var zoom: Float = 1

@@ -12,6 +12,22 @@ public final class WalletPagerView: UIView, UIScrollViewDelegate, ComponentTagge
         }
     }
 
+    public final class ItemPosition {
+        public private(set) var offset: CGFloat = 0.0
+        public private(set) var isVisible = false
+        /// A reset rebases motion after data/layout changes, rather than imparting velocity.
+        public var updated: ((_ reset: Bool) -> Void)?
+
+        fileprivate func update(offset: CGFloat, isVisible: Bool, reset: Bool) {
+            let changed = self.isVisible != isVisible || (isVisible && self.offset != offset)
+            self.offset = offset
+            self.isVisible = isVisible
+            if changed || reset {
+                self.updated?(reset)
+            }
+        }
+    }
+
     public func matches(tag: Any) -> Bool {
         return tag is Tag
     }
@@ -20,6 +36,7 @@ public final class WalletPagerView: UIView, UIScrollViewDelegate, ComponentTagge
     private var isDimHidden = false
     private let scrollView: UIScrollView
     private var itemViews: [String: ComponentHostView<EnvironmentType>] = [:]
+    private var itemPositions: [String: ItemPosition] = [:]
     private var pagerState = WalletPagerState()
     private var environment: Environment<EnvironmentType>?
     private var makeContent: ((Int, Bool) -> AnyComponent<EnvironmentType>)?
@@ -56,6 +73,40 @@ public final class WalletPagerView: UIView, UIScrollViewDelegate, ComponentTagge
 
     public required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    public override func didMoveToWindow() {
+        super.didMoveToWindow()
+        self.updateItemPositions(reset: true)
+    }
+
+    public func itemPosition(for id: String) -> ItemPosition? {
+        if let position = self.itemPositions[id] {
+            return position
+        }
+        guard self.pagerState.index(forId: id) != nil else { return nil }
+        let position = ItemPosition()
+        self.itemPositions[id] = position
+        self.updateItemPosition(position, id: id, reset: true)
+        return position
+    }
+
+    private func updateItemPosition(_ position: ItemPosition, id: String, reset: Bool) {
+        let layout = self.pagerState.layout
+        guard layout.isValid, let index = self.pagerState.index(forId: id) else {
+            position.update(offset: 0.0, isVisible: false, reset: true)
+            return
+        }
+        let isVisible = self.window != nil && self.environment?[EnvironmentType.self].value.isVisible == true
+            && layout.itemFrame(at: index).intersects(self.scrollView.bounds)
+        position.update(offset: CGFloat(index) * layout.itemStride - self.scrollView.contentOffset.x,
+                        isVisible: isVisible, reset: reset)
+    }
+
+    private func updateItemPositions(reset: Bool) {
+        for (id, position) in self.itemPositions {
+            self.updateItemPosition(position, id: id, reset: reset)
+        }
     }
 
     public func setDimHidden(_ hidden: Bool, animated: Bool) {
@@ -119,6 +170,7 @@ public final class WalletPagerView: UIView, UIScrollViewDelegate, ComponentTagge
                 self.updatePage(at: index, transition: .immediate)
             }
         }
+        self.updateItemPositions(reset: false)
         self.isUpdating = false
     }
 
@@ -178,6 +230,10 @@ public final class WalletPagerView: UIView, UIScrollViewDelegate, ComponentTagge
         }
         for id in removeIds {
             self.itemViews.removeValue(forKey: id)
+            if let position = self.itemPositions.removeValue(forKey: id) {
+                position.update(offset: position.offset, isVisible: false, reset: true)
+                position.updated = nil
+            }
         }
     }
 
@@ -203,6 +259,9 @@ public final class WalletPagerView: UIView, UIScrollViewDelegate, ComponentTagge
         }
 
         let wasInitialized = self.pagerState.isInitialized
+        let rebasePositions = self.pagerState.itemIds != itemIds
+            || self.pagerState.layout.size != availableSize || self.pagerState.layout.itemSpacing != itemSpacing
+        let previousOffset = self.scrollView.contentOffset.x
         let targetOffset = self.pagerState.update(
             itemIds: itemIds,
             initialIndex: initialIndex,
@@ -229,6 +288,7 @@ public final class WalletPagerView: UIView, UIScrollViewDelegate, ComponentTagge
             self.scrollView.contentOffset = CGPoint(x: targetOffset, y: 0.0)
             self.ignoreContentOffsetChange = false
         }
+        self.updateItemPositions(reset: rebasePositions || previousOffset != targetOffset)
         self.updatePages(transition: transition)
 
         if !self.isDimHidden {

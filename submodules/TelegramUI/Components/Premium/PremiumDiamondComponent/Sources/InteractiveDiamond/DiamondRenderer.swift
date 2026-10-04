@@ -293,9 +293,9 @@ final class DiamondRenderer: ComputeState {
 
     private func uniforms(size: CGSize, time: Float, motion: DiamondMotion, style: DiamondStyle,
                           grow: Float, pixelsPerPoint: Float, reduceMotion: Bool, heldProgress: Float, highlightBoost: Float) -> Uniforms {
-        let model = DiamondMath.rotation(x: motion.pitch, y: motion.yaw + motion.lean)
+        let model = DiamondMath.rotation(x: motion.pitch, y: motion.renderedYaw)
         let horizontalScale: Float = style.widthCompensation
-            ? silhouette.horizontalScale(yaw: motion.yaw + motion.lean, pitch: motion.pitch) : 1
+            ? silhouette.horizontalScale(yaw: motion.renderedYaw, pitch: motion.pitch) : 1
         let zoom: Float
         if style.widthPoints > 0 && size.width > 0 && size.height > 0 {
             let aspect = Float(size.width / size.height)
@@ -364,14 +364,14 @@ final class DiamondRenderer: ComputeState {
         let referenceHighlightPipeline = pipelines.referenceHighlight
         var u = uniforms(size: size, time: time, motion: motion, style: style, grow: grow, pixelsPerPoint: pixelsPerPoint,
             reduceMotion: reduceMotion, heldProgress: refractionStrength, highlightBoost: highlightBoost)
-        let lens = self.lens(source: refractionSource, strength: refractionStrength, yaw: motion.yaw + motion.lean,
+        let lens = self.lens(source: refractionSource, strength: refractionStrength, yaw: motion.renderedYaw,
             pipeline: refractionSource == nil ? nil : pipelines.lens, uniforms: u, pixelsPerPoint: pixelsPerPoint, lightBackground: lightBackground)
         if let refractionUpdated {
             refractionUpdated(lens.map { lens in
                 InteractiveDiamondComponent.RefractionGeometry(
                     center: CGPoint(x: CGFloat(lens.uniforms.center.x), y: CGFloat(lens.uniforms.center.y)),
                     hull: lens.hull.map { CGPoint(x: CGFloat($0.x), y: CGFloat($0.y)) },
-                    strength: CGFloat(refractionStrength), rotation: motion.yaw + motion.lean
+                    strength: CGFloat(refractionStrength), rotation: motion.renderedYaw
                 )
             })
         }
