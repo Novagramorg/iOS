@@ -399,6 +399,7 @@ private final class FetchImpl {
         private var cdnReuploadCounts: [Int64: Int] = [:]
         private var cdnReuploadGenerations: [Int64: Int] = [:]
         private var state: State?
+        private var reportedFailure = false
         
         private let loggingIdentifier: String
         
@@ -799,6 +800,7 @@ private final class FetchImpl {
                             return
                         }
                         self.state = .failed
+                        self.update()
                     })
                 }
             case let .refreshingFileReference(state):
@@ -851,10 +853,18 @@ private final class FetchImpl {
                             self.state = .failed
                             self.update()
                         })
+                    } else {
+                        Logger.shared.log("FetchV2", "\(self.loggingIdentifier): no way to refresh the file reference")
+                        self.state = .failed
+                        self.update()
                     }
                 }
             case .failed:
-                break
+                if !self.reportedFailure {
+                    self.reportedFailure = true
+                    Logger.shared.log("FetchV2", "\(self.loggingIdentifier): failed")
+                    self.onError(.generic)
+                }
             }
         }
         
