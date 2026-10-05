@@ -65,6 +65,13 @@ func walletSendGroupedAmountText(_ text: String, dateTimeFormat: PresentationDat
 }
 
 struct WalletSendAmountTextLayout {
+    static let paragraphStyle: NSParagraphStyle = {
+        let style = NSMutableParagraphStyle()
+        style.alignment = .left
+        style.baseWritingDirection = .leftToRight
+        return style
+    }()
+
     let attributedText: NSAttributedString
     let groupingSeparator: NSAttributedString
     let groupingSeparatorSize: CGSize
@@ -199,6 +206,8 @@ final class WalletSendAmountTextField: UITextField {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
+        self.semanticContentAttribute = .forceLeftToRight
+        self.defaultTextAttributes[.paragraphStyle] = WalletSendAmountTextLayout.paragraphStyle
         self.groupingView.isUserInteractionEnabled = false
         self.groupingView.accessibilityElementsHidden = true
         self.addSubview(self.groupingView)
@@ -206,6 +215,14 @@ final class WalletSendAmountTextField: UITextField {
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    override func baseWritingDirection(for position: UITextPosition, in direction: UITextStorageDirection) -> NSWritingDirection {
+        return .leftToRight
+    }
+
+    override func setBaseWritingDirection(_ writingDirection: NSWritingDirection, for range: UITextRange) {
+        super.setBaseWritingDirection(.leftToRight, for: range)
     }
 
     override func deleteBackward() {
@@ -431,6 +448,7 @@ class WalletSendAmountField: UIView, UITextFieldDelegate {
             color: textColor,
             decimalSeparator: decimalSeparator
         ))
+        attributedText.addAttribute(.paragraphStyle, value: WalletSendAmountTextLayout.paragraphStyle, range: NSRange(location: 0, length: attributedText.length))
         let separatorText = NSAttributedString(string: groupingSeparator, font: self.integralFont, textColor: textColor)
         let separatorLine = CTLineCreateWithAttributedString(separatorText)
         let separatorSize = CGSize(
@@ -546,11 +564,7 @@ class WalletSendAmountField: UIView, UITextFieldDelegate {
         let currencyColor = UIColor(rgb: mode == .gram ? (theme.overallDarkAppearance ? 0x30A1F5 : 0x0088FF) : 0x219949)
         self.textField.caretColor = currencyColor
         
-        self.textField.attributedPlaceholder = NSAttributedString(
-            string: "0",
-            font: self.integralFont,
-            textColor: theme.list.itemPrimaryTextColor
-        )
+        self.textField.attributedPlaceholder = self.amountTextLayout("0").attributedText
 
         let suffixText: String
         switch mode {

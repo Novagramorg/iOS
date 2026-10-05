@@ -1181,10 +1181,12 @@ public class SearchBarNode: ASDisplayNode, UITextFieldDelegate {
         let cancelButtonSize = self.cancelButton.measure(CGSize(width: 100.0, height: CGFloat.infinity))
         transition.updateFrame(node: self.cancelButton, frame: CGRect(origin: CGPoint(x: contentFrame.maxX - 10.0 - cancelButtonSize.width, y: verticalOffset + textBackgroundHeight + floorToScreenPixels((textBackgroundHeight - cancelButtonSize.height) / 2.0)), size: cancelButtonSize))
         
+        let searchPlaceholderFrame = CGRect(origin: CGPoint(x: leftInset + 16.0, y: 0.0), size: CGSize(width: max(0.0, boundingSize.width - 16.0 * 2.0 - leftInset - rightInset), height: 44.0))
+        
         let padding = self.fieldStyle.padding
         var textBackgroundFrame = CGRect(origin: CGPoint(x: contentFrame.minX + padding, y: verticalOffset + textBackgroundHeight), size: CGSize(width: contentFrame.width - padding - (self.hasCancelButton ? cancelButtonSize.width + 11.0 : 0.0), height: textBackgroundHeight))
         if case .glass = self.fieldStyle {
-            textBackgroundFrame.size.width -= 8.0
+            textBackgroundFrame.size.width = max(0.0, searchPlaceholderFrame.maxX - 44.0 - 8.0 - textBackgroundFrame.minX)
         } else {
             textBackgroundFrame.size.width -= padding
         }
@@ -1214,8 +1216,6 @@ public class SearchBarNode: ASDisplayNode, UITextFieldDelegate {
         self.textField.frame = textFrame
         
         let additionalPlaceholderInset = self.textField.tokensInsetWidth
-        
-        let searchPlaceholderFrame = CGRect(origin: CGPoint(x: leftInset + 16.0, y: 0.0), size: CGSize(width: max(0.0, boundingSize.width - 16.0 * 2.0 - leftInset - rightInset), height: 44.0))
         
         if case .glass = self.fieldStyle, self.takenSearchPlaceholderContentView == nil {
             transition.updateFrame(node: self.inlineSearchPlaceholder, frame: searchPlaceholderFrame)
@@ -1310,7 +1310,6 @@ public class SearchBarNode: ASDisplayNode, UITextFieldDelegate {
         let targetBackgroundFrame = backgroundView.convert(backgroundView.bounds, to: self.view)
         let verticalOffset = sourceBackgroundFrame.midY - targetBackgroundFrame.midY
 
-        // Keep the input contents aligned with the background while preserving their layout frames.
         transition.animatePositionAdditive(layer: self.textField.layer, offset: CGPoint(
             x: sourceBackgroundFrame.minX - targetBackgroundFrame.minX,
             y: verticalOffset

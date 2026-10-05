@@ -834,7 +834,6 @@ private final class WalletSendScreenComponent: Component {
             (self.recipient.view as? WalletSendRecipientComponent.View)?.updateOpening(time: recipientTime)
             CATransaction.commit()
             if self.openingStart != nil {
-                // Additive animations leave model frames intact during keyboard/layout updates.
                 for view in [self.balanceText.view, self.sendButton.view].compactMap({ $0 }) where view.layer.animation(forKey: Self.openingAnimationKey) == nil {
                     let duration = self.openingFinish.map { max(0.0, 0.15 - (now - $0.start)) }
                         ?? max(0.0, WalletSendAmountIntro.duration - elapsed)
