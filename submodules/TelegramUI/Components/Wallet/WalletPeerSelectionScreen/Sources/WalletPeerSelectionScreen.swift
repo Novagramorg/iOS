@@ -97,7 +97,6 @@ private func walletPeerSelectionIsAddressQuery(_ query: String) -> Bool {
     guard !query.hasPrefix("@"), !query.unicodeScalars.contains(where: CharacterSet.whitespacesAndNewlines.contains) else {
         return false
     }
-    // Recognize friendly addresses even with an invalid checksum or a missing character.
     return query.count == 48 || (query.count > 32 && ["EQ", "UQ", "kQ", "0Q", "Ef", "Uf", "kf", "0f"].contains(where: query.hasPrefix))
 }
 
@@ -476,6 +475,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
     final class View: UIView {
         private var contentListNode: ContentListNode?
         private var suggestionsListNode: ContentListNode?
+        private let suggestionsContainerView = UIView()
         private let navigationGlassContainer = GlassBackgroundContainerView()
         private let navigationBarView = ComponentView<Empty>()
         private var navigationHeight: CGFloat?
@@ -648,7 +648,6 @@ private final class WalletPeerSelectionScreenComponent: Component {
                 return
             }
 
-            // Keep the displayed peers until the replacement results arrive, as in chat search.
             self.resetQuery(keepPeerResults: !self.query.isEmpty && !query.isEmpty)
             let generation = self.resolveGeneration
             self.query = query
@@ -1406,7 +1405,6 @@ private final class WalletPeerSelectionScreenComponent: Component {
             let isModal = environment.controller()?.navigationPresentation == .modal
             var statusBarHeight = environment.statusBarHeight
             if isModal {
-                // ChatListNavigationBar adds 10 pt above the header buttons.
                 statusBarHeight = max(statusBarHeight, self.activeSearch == nil ? 6.0 : 1.0)
             }
 
@@ -1562,7 +1560,6 @@ private final class WalletPeerSelectionScreenComponent: Component {
                 searchBarTransition.setFrame(view: searchBarNode.view, frame: searchBarFrame)
                 if searchBarNode.view.superview == nil {
                     self.navigationGlassContainer.contentView.addSubview(searchBarNode.view)
-                    // Prepare the editor before the transition, as in chat search.
                     searchBarNode.layout()
                     searchBarNode.activate()
                     searchBarNode.text = self.query
@@ -1654,8 +1651,6 @@ private final class WalletPeerSelectionScreenComponent: Component {
                 }
                 self.insertSubview(contentListNode.view, at: 0)
             }
-            let listPresentationDataUpdated = contentListNode.presentationData != presentationData
-            contentListNode.presentationData = presentationData
             transition.setFrame(
                 view: contentListNode.view,
                 frame: CGRect(origin: .zero, size: availableSize)
@@ -1733,9 +1728,12 @@ private final class WalletPeerSelectionScreenComponent: Component {
                 ),
                 transition: transition
             )
-            contentListNode.setEntries(entries, allUpdated: listPresentationDataUpdated)
-
             let displaysSuggestions = self.activeSearch != nil && self.query.isEmpty
+            if !displaysSuggestions {
+                let listPresentationDataUpdated = contentListNode.presentationData != presentationData
+                contentListNode.presentationData = presentationData
+                contentListNode.setEntries(entries, allUpdated: listPresentationDataUpdated)
+            }
             let suggestionsVisibilityTransition: ComponentTransition = transition.animation.isImmediate ? .immediate : .easeInOut(duration: 0.2)
             let displaysContent = !displaysSuggestions && (self.query.isEmpty || !entries.isEmpty)
             contentListNode.view.isUserInteractionEnabled = displaysContent
@@ -1744,19 +1742,22 @@ private final class WalletPeerSelectionScreenComponent: Component {
             contentVisibilityTransition.setAlpha(view: contentListNode.view, alpha: displaysContent ? 1.0 : 0.0)
             let suggestionsListNode: ContentListNode
             let needsInitialSuggestionsLayout = self.suggestionsListNode == nil
-            let suggestionsLayoutTransition: ComponentTransition = displaysSuggestions && self.suggestionsListNode?.view.alpha == 1.0 ? transition : .immediate
+            let suggestionsLayoutTransition: ComponentTransition = displaysSuggestions && !needsInitialSuggestionsLayout && self.suggestionsContainerView.alpha == 1.0 ? transition : .immediate
             if let current = self.suggestionsListNode {
                 suggestionsListNode = current
             } else {
                 suggestionsListNode = ContentListNode(parentView: self, context: component.context, presentationData: presentationData)
                 self.suggestionsListNode = suggestionsListNode
-                suggestionsListNode.view.alpha = 0.0
-                self.insertSubview(suggestionsListNode.view, aboveSubview: contentListNode.view)
+                self.suggestionsContainerView.alpha = 0.0
+                self.suggestionsContainerView.isHidden = true
+                self.insertSubview(self.suggestionsContainerView, aboveSubview: contentListNode.view)
+                self.suggestionsContainerView.addSubview(suggestionsListNode.view)
             }
             let suggestionsPresentationDataUpdated = suggestionsListNode.presentationData != presentationData
             suggestionsListNode.presentationData = presentationData
             suggestionsListNode.backgroundColor = environment.theme.list.modalPlainBackgroundColor
             if displaysSuggestions || needsInitialSuggestionsLayout {
+                suggestionsLayoutTransition.setFrame(view: self.suggestionsContainerView, frame: CGRect(origin: .zero, size: availableSize))
                 suggestionsLayoutTransition.setFrame(view: suggestionsListNode.view, frame: CGRect(origin: .zero, size: availableSize))
                 suggestionsListNode.update(
                     size: availableSize,
@@ -1774,7 +1775,20 @@ private final class WalletPeerSelectionScreenComponent: Component {
             suggestionsListNode.setEntries(suggestions, allUpdated: suggestionsPresentationDataUpdated)
             suggestionsListNode.view.isUserInteractionEnabled = displaysSuggestions
             suggestionsListNode.view.accessibilityElementsHidden = !displaysSuggestions
-            suggestionsVisibilityTransition.setAlpha(view: suggestionsListNode.view, alpha: displaysSuggestions ? 1.0 : 0.0)
+            self.suggestionsContainerView.isUserInteractionEnabled = displaysSuggestions
+            self.suggestionsContainerView.accessibilityElementsHidden = !displaysSuggestions
+            if displaysSuggestions {
+                self.suggestionsContainerView.isHidden = false
+            }
+            let suggestionsAlpha: CGFloat = displaysSuggestions ? 1.0 : 0.0
+            if self.suggestionsContainerView.alpha != suggestionsAlpha {
+                suggestionsVisibilityTransition.setAlpha(view: self.suggestionsContainerView, alpha: suggestionsAlpha, completion: { [weak self] completed in
+                    guard let self, completed, !self.suggestionsContainerView.isUserInteractionEnabled else {
+                        return
+                    }
+                    self.suggestionsContainerView.isHidden = true
+                })
+            }
 
             let displayNoResultsQuery: String?
             if !self.query.isEmpty, !self.isSearching, entries.isEmpty, self.recipient == nil {
