@@ -234,6 +234,13 @@ public struct PresentationResourcesChatList {
             return generateScaledImage(image: generateTintedImage(image: UIImage(bundleImageName: "Chat List/PollVotesBadgeIcon"), color: theme.chatList.unreadBadgeActiveBackgroundColor), size: CGSize(width: diameter, height: diameter), opaque: false)
         })
     }
+
+    public static func badgeBackgroundGram(_ theme: PresentationTheme, diameter: CGFloat, inactive: Bool) -> UIImage? {
+        return theme.image(PresentationResourceParameterKey.badgeBackgroundGram(diameter, inactive), { theme in
+            let color = inactive ? theme.chatList.unreadBadgeInactiveBackgroundColor : theme.chatList.unreadBadgeActiveBackgroundColor
+            return generateScaledImage(image: generateTintedImage(image: UIImage(bundleImageName: "Chat List/GramBadgeIcon"), color: color), size: CGSize(width: diameter, height: diameter), opaque: false)
+        })
+    }
     
     public static func badgeBackgroundInactivePollVotes(_ theme: PresentationTheme, diameter: CGFloat) -> UIImage? {
         return theme.image(PresentationResourceParameterKey.badgeBackgroundInactivePollVotes(diameter), { theme in

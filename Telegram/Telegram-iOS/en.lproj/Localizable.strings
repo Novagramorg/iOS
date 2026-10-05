@@ -16733,6 +16733,7 @@ Error: %8$@";
 "PasscodeSettings.TurnOffWalletProtectionWarning" = "This will also turn off passcode and biometric protection for every wallet on this device.";
 
 "Notification.GramTransfer" = "%1$@ sent you %2$@";
+"Notification.GramTransfer.Compact" = "sent you %@";
 "Notification.GramTransferYou" = "You sent %1$@ %2$@";
 "Notification.GramTransfer.WithFiat" = "%1$@ sent you %2$@ (%3$@)";
 "Notification.GramTransfer.WithFiatYou" = "You sent %1$@ %2$@ (%3$@)";

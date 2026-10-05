@@ -2073,3 +2073,28 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
     
     return attributedString
 }
+
+public func incomingGramTransferPreview(message: EngineMessage, accountPeerId: EnginePeer.Id, strings: PresentationStrings, dateTimeFormat: PresentationDateTimeFormat, includeDiamond: Bool = false) -> (text: String, amountRanges: [NSRange])? {
+    guard message.effectivelyIncoming(accountPeerId) else {
+        return nil
+    }
+    for media in message.media {
+        guard let media = media as? TelegramMediaAction, case let .gramTransfer(amount, _, _, _, _) = media.action else {
+            continue
+        }
+        let amountText = formatTonAmountText(amount, dateTimeFormat: dateTimeFormat, maxDecimalPositions: 3, formatString: strings.Currency_Grams)
+        let prefix = includeDiamond ? "💎" : ""
+        let formatted: PresentationStrings.FormattedString
+        if message.id.peerId.isTelegramNotifications {
+            formatted = strings.Notification_GramTransferUnknown(prefix + amountText)
+        } else {
+            formatted = strings.Notification_GramTransfer_Compact(prefix + amountText)
+        }
+        let prefixLength = (prefix as NSString).length
+        let amountRanges = formatted.ranges.filter { $0.index == 0 }.map { item in
+            return NSRange(location: item.range.location + prefixLength, length: item.range.length - prefixLength)
+        }
+        return (formatted.string, amountRanges)
+    }
+    return nil
+}

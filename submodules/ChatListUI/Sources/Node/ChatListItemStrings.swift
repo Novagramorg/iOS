@@ -354,6 +354,15 @@ public func chatListItemStrings(strings: PresentationStrings, nameDisplayOrder: 
                         messageText = invoice.title
                     case let action as TelegramMediaAction:
                         switch action.action {
+                            case .gramTransfer where message.effectivelyIncoming(accountPeerId):
+                                if let preview = incomingGramTransferPreview(message: message, accountPeerId: accountPeerId, strings: strings, dateTimeFormat: dateTimeFormat) {
+                                    hideAuthor = true
+                                    richTextPreview = nil
+                                    messageText = preview.text
+                                    messageEntities = []
+                                    spoilers = nil
+                                    customEmojiRanges = nil
+                                }
                             case let .conferenceCall(conferenceCall):
                                 let incoming = message.flags.contains(.Incoming)
                                 

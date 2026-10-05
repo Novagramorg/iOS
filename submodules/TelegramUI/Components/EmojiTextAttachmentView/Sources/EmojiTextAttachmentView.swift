@@ -729,13 +729,13 @@ public final class InlineStickerItemLayer: MultiAnimationRenderTarget {
             if !arguments.renderer.loadFirstFrameSynchronously(target: self, cache: arguments.cache, itemId: name, size: arguments.pixelSize) {
             }
             
-            self.loadAnimation()
+            self.loadLocalAnimation()
         } else {
             self.loadDisposable = arguments.renderer.loadFirstFrame(target: self, cache: arguments.cache, itemId: name, size: arguments.pixelSize, fetch: animationCacheLoadLocalFile(name: name, type: .lottie, keyframeOnly: true, customColor: nil, lottieSettings: arguments.context.lottieRenderingSettings), completion: { [weak self] result, isFinal in
                 guard let strongSelf = self else {
                     return
                 }
-                strongSelf.loadAnimation()
+                strongSelf.loadLocalAnimation()
             })
         }
     }
@@ -786,7 +786,8 @@ public final class InlineStickerItemLayer: MultiAnimationRenderTarget {
         guard let name = self.localAnimationName else {
             return
         }
-                
+
+        self.disposable?.dispose()
         let keyframeOnly = arguments.pixelSize.width >= 120.0
         self.disposable = arguments.renderer.add(target: self, cache: arguments.cache, itemId: name, unique: self.isUnique, size: arguments.pixelSize, fetch: animationCacheLoadLocalFile(name: name, type: .lottie, keyframeOnly: keyframeOnly, customColor: nil, lottieSettings: arguments.context.lottieRenderingSettings))
     }

@@ -3456,7 +3456,18 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
             }
 
             if !isPeerGroup {
-                if hasUnseenMentions {
+                let hasIncomingGramTransfer = messages.last.map { message in
+                    return message.effectivelyIncoming(account.peerId) && message.media.contains(where: { media in
+                        if let media = media as? TelegramMediaAction, case .gramTransfer = media.action {
+                            return true
+                        }
+                        return false
+                    })
+                } ?? false
+                if hasIncomingGramTransfer {
+                    currentMentionBadgeImage = PresentationResourcesChatList.badgeBackgroundGram(item.presentationData.theme, diameter: badgeDiameter, inactive: isRemovedFromTotalUnreadCount)
+                    mentionBadgeContent = .mention
+                } else if hasUnseenMentions {
                     if case .chatList(.archive) = item.chatListLocation {
                         currentMentionBadgeImage = PresentationResourcesChatList.badgeBackgroundInactiveMention(item.presentationData.theme, diameter: badgeDiameter)
                     } else {
