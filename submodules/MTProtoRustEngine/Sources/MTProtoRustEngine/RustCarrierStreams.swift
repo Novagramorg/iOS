@@ -13,7 +13,7 @@ final class RustCarrierStreams {
     }
 
     func open(stream: UInt64) {
-        self.queue.async {
+        self.queue.async { [self] in
             let engine = self.engine
             let raw = WebProxyTransport.shared.openRawStream(timeout: 12.0, queue: self.queue, opened: { [weak self] in
                 guard self?.streams[stream] != nil else {

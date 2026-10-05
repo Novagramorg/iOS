@@ -626,8 +626,6 @@ public extension WalletContext {
         public let collectionUrl: String?
         public let attributes: [String: String]
         public let giftSlug: String?
-        // Optional for caches written before the server NFT API. Legacy URL
-        // keys are deliberately not decoded or used to create media resources.
         public let nft: WalletNftItem?
 
         public var image: WalletNftFile? { self.nft?.image ?? self.nft?.imageSmall }
@@ -942,6 +940,7 @@ public extension WalletContext {
 
     struct State: Equatable, Sendable {
         public let phase: Phase
+        public let walletAddress: String?
         public let balance: Resource<Int64>
         public let transactions: TransactionsState
         public let collectibles: CollectiblesState
@@ -952,6 +951,7 @@ public extension WalletContext {
 
         public init(
             phase: Phase,
+            walletAddress: String? = nil,
             balance: Resource<Int64>,
             transactions: TransactionsState,
             collectibles: CollectiblesState = .empty,
@@ -961,6 +961,14 @@ public extension WalletContext {
             gaslessInfo: Resource<WalletGaslessInfo> = .idle
         ) {
             self.phase = phase
+            switch phase {
+            case let .wallet(info):
+                self.walletAddress = info.address
+            case .restoring:
+                self.walletAddress = walletAddress
+            case .creating, .empty, .failed:
+                self.walletAddress = nil
+            }
             self.balance = balance
             self.transactions = transactions
             self.collectibles = collectibles

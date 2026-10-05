@@ -14,7 +14,7 @@ final class RustStreamHost {
     }
 
     func open(stream: UInt64, host: String, port: UInt16, serverName: String?, alpn: [String]) {
-        self.queue.async {
+        self.queue.async { [self] in
             guard let endpointPort = NWEndpoint.Port(rawValue: port) else {
                 self.report(stream: stream, error: "bad port \(port)")
                 return
@@ -46,7 +46,7 @@ final class RustStreamHost {
     }
 
     func write(stream: UInt64, data: Data) {
-        self.queue.async {
+        self.queue.async { [self] in
             guard let connection = self.connections[stream] else {
                 return
             }

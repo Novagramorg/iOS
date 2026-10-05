@@ -1513,6 +1513,10 @@ private final class WalletScreenComponent: Component {
             return balance.magnitude < 1_000_000 ? 0 : balance
         }
 
+        private var walletAddress: String? {
+            return self.walletState?.walletAddress
+        }
+
         private var walletInfo: WalletContext.WalletInfo? {
             guard let walletState = self.walletState else {
                 return nil
@@ -1524,7 +1528,7 @@ private final class WalletScreenComponent: Component {
         }
 
         private func maybePresentGramTooltip(cardView: WalletCardComponent.View) {
-            let walletAddress = self.walletInfo?.address
+            let walletAddress = self.walletAddress
             if self.gramTooltipWalletAddress != walletAddress {
                 self.dismissGramTooltip(animated: false)
                 self.gramTooltipWalletAddress = walletAddress
@@ -1557,7 +1561,7 @@ private final class WalletScreenComponent: Component {
                 self.isGramTooltipPresentationPending = false
 
                 guard self.gramTooltipWalletAddress == walletAddress,
-                      self.walletInfo?.address == walletAddress,
+                      self.walletAddress == walletAddress,
                       !self.didPresentGramTooltip else {
                     return
                 }
@@ -2370,16 +2374,16 @@ private final class WalletScreenComponent: Component {
             guard let component = self.component, let controller = self.environment?.controller() else {
                 return
             }
-            guard let walletInfo = self.walletInfo else {
+            guard let walletAddress = self.walletAddress else {
                 return
             }
             let walletContext = component.walletContext
             controller.push(component.context.sharedContext.makeWalletReceiveScreen(
                 context: component.context,
-                address: walletInfo.address,
+                address: walletAddress,
                 appeared: { [weak self, weak walletContext] in
                     guard let self, let walletContext, self.walletContext === walletContext,
-                          self.walletInfo?.address == walletInfo.address else {
+                          self.walletAddress == walletAddress else {
                         return
                     }
                     self.showTransactions()
@@ -2390,8 +2394,12 @@ private final class WalletScreenComponent: Component {
         private func openSend(address: String? = nil) {
             guard let component = self.component,
                   let controller = self.environment?.controller(),
-                  let walletInfo = self.walletInfo,
+                  self.walletAddress != nil,
                   !self.isResolvingSigningAccess else {
+                return
+            }
+            guard let walletInfo = self.walletInfo else {
+                self.routeToSend(address: address)
                 return
             }
             if !walletInfo.canSign {
@@ -3099,6 +3107,7 @@ private final class WalletScreenComponent: Component {
                     }
                     let isFirstState = self.walletState == nil
                     let previousPhase = self.walletState?.phase
+                    let previousWalletAddress = self.walletAddress
                     if case let .wallet(previousInfo) = self.walletState?.phase {
                         switch walletState.phase {
                         case let .wallet(info) where previousInfo.address == info.address && previousInfo.publicKey == info.publicKey:
@@ -3112,7 +3121,10 @@ private final class WalletScreenComponent: Component {
                     self.updateSuppressedCollectibles(walletState)
                     self.observePendingTransfers(walletState)
                     self.walletState = walletState
-                    if previousPhase != walletState.phase {
+                    if previousPhase != walletState.phase || previousWalletAddress != walletState.walletAddress {
+                        if previousWalletAddress != walletState.walletAddress {
+                            self.previousWalletsBalance = 0
+                        }
                         self.reloadPreviousWallets()
                     }
                     if !self.isUpdating {
@@ -3237,7 +3249,7 @@ private final class WalletScreenComponent: Component {
             let compensateAdditionalBalancesOffset = additionalBalancesHeightChanged && previousContentOffset.y > 0.0
             let contentLayoutTransition = compensateAdditionalBalancesOffset ? transition.withAnimation(.none) : transition
             let cardOriginY = additionalBalancesOriginY + self.cardTransitionStart
-            let walletInfo = self.walletInfo
+            let walletAddress = self.walletAddress
             let fiatCurrency = self.walletState?.fiat.selectedCurrency ?? .usd
             let fiatRate = self.walletState?.fiat.selectedRate
             self.card.parentState = state
@@ -3250,7 +3262,7 @@ private final class WalletScreenComponent: Component {
                     fiatRate: fiatRate,
                     dateTimeFormat: environment.dateTimeFormat,
                     name: self.accountName,
-                    address: walletInfo?.address ?? "",
+                    address: walletAddress ?? "",
                     isVisible: environment.isVisible,
                     cardPressed: { [weak self] in
                         self?.openReceive()
@@ -3327,7 +3339,7 @@ private final class WalletScreenComponent: Component {
                             color: environment.theme.list.itemCheckColors.foregroundColor
                         ))
                     ),
-                    isEnabled: walletInfo != nil,
+                    isEnabled: walletAddress != nil,
                     action: { [weak self] in
                         self?.openReceive()
                     }
@@ -3365,7 +3377,7 @@ private final class WalletScreenComponent: Component {
                             color: environment.theme.list.itemCheckColors.foregroundColor
                         ))
                     ),
-                    isEnabled: self.walletInfo != nil && !self.isResolvingSigningAccess,
+                    isEnabled: walletAddress != nil && !self.isResolvingSigningAccess,
                     displaysProgress: self.isResolvingSigningAccess,
                     action: { [weak self] in
                         self?.openSend()
@@ -3500,7 +3512,7 @@ private final class WalletScreenComponent: Component {
                                     strings: itemStrings,
                                     dateTimeFormat: itemDateTimeFormat,
                                     transaction: transaction,
-                                    walletAddress: walletInfo?.address,
+                                    walletAddress: walletAddress,
                                     animatesPendingTransfer: self?.pendingTransferAnimations[transaction.presentationId] != nil
                                 )),
                                 contentInsets: UIEdgeInsets(top: 9.0, left: 0.0, bottom: 8.0, right: 0.0),

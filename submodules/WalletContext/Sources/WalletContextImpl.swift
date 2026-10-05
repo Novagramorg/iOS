@@ -377,17 +377,17 @@ actor WalletContextImpl {
         guard !Task.isCancelled, !self.isShutdown else {
             return
         }
-        self.storedState = storedState
-        self.balanceLastSuccessfulAt = storedState.balanceUpdatedAt
-        self.fiatLastSuccessfulAt = storedState.fiatRatesUpdatedAt
-        guard case .restoring = self.currentState.phase else {
+        guard case .restoring = self.currentState.phase, self.serverWalletState == nil else {
             self.completeStoredStateRestore()
             return
         }
+        self.storedState = storedState
+        self.balanceLastSuccessfulAt = storedState.balanceUpdatedAt
+        self.fiatLastSuccessfulAt = storedState.fiatRatesUpdatedAt
         cachedTransactions = mergeTransactions(
             existing: cachedTransactions, new: [], source: "cache_restore", log: self.logger.log
         )
-        self.replaceState(
+        let restoredState = State(
             phase: .restoring,
             balance: storedState.balance.map { .value($0, updatedAt: storedState.balanceUpdatedAt ?? 0) } ?? .idle,
             transactions: TransactionsState(
@@ -410,6 +410,19 @@ actor WalletContextImpl {
                 rates: storedState.fiatRates.map { .value($0, updatedAt: storedState.fiatRatesUpdatedAt ?? 0) } ?? .idle
             )
         )
+        if self.pendingInitialServerWalletState != nil {
+            self.currentState = restoredState
+        } else {
+            self.replaceState(
+                phase: restoredState.phase,
+                balance: restoredState.balance,
+                transactions: restoredState.transactions,
+                collectibles: restoredState.collectibles,
+                pendingTransfers: restoredState.pendingTransfers,
+                activeOperation: restoredState.activeOperation,
+                fiat: restoredState.fiat
+            )
+        }
         self.completeStoredStateRestore()
     }
 
@@ -1155,8 +1168,17 @@ actor WalletContextImpl {
             offset: transactions.offset, canLoadMore: transactions.canLoadMore,
             isLoadingMore: transactions.isLoadingMore, error: transactions.error
         )
+        let walletAddress: String?
+        if case let .ready(_, _, _, address, _, _)? = self.serverWalletState {
+            walletAddress = address
+        } else if self.serverWalletState == nil {
+            walletAddress = self.storedState.walletAddress
+        } else {
+            walletAddress = nil
+        }
         let value = State(
             phase: phase,
+            walletAddress: walletAddress,
             balance: balance,
             transactions: transactions,
             collectibles: collectibles ?? self.currentState.collectibles,
@@ -1404,8 +1426,8 @@ actor WalletContextImpl {
         var storedState = WalletStoredState()
         storedState.tonConnectRequests = self.storedState.tonConnectRequests
         storedState.walletAddress = {
-            if case let .wallet(info) = state.phase { return info.address }
-            return self.storedState.walletAddress
+            if case .failed = state.phase { return self.storedState.walletAddress }
+            return state.walletAddress
         }()
         storedState.pendingTransfers = state.pendingTransfers
         storedState.balance = state.balance.currentValue

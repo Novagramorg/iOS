@@ -324,8 +324,19 @@ public extension WalletContext {
     }
 
     func previousWallets(refreshBalances: Bool = false) -> Signal<[PreviousWallet], WalletError> {
-        let cached = self.signal(name: "previous_wallets") { impl, _ in
-            try await impl.previousWallets()
+        let cached = self.state
+        |> filter { state in
+            if case .restoring = state.phase {
+                return state.walletAddress != nil
+            }
+            return true
+        }
+        |> take(1)
+        |> castError(WalletError.self)
+        |> mapToSignal { _ -> Signal<[PreviousWallet], WalletError> in
+            return self.signal(name: "previous_wallets") { impl, _ in
+                try await impl.previousWallets()
+            }
         }
         guard refreshBalances else { return cached }
         return cached |> then(self.signal(name: "refreshing_previous_wallet_balances", cancelOnDispose: false) { impl, _ in
@@ -745,8 +756,8 @@ extension WalletContextImpl {
     }
 
     private func previousWalletsExcludingCurrent(_ wallets: [WalletContext.PreviousWallet]) -> [WalletContext.PreviousWallet] {
-        guard case let .wallet(info) = self.currentState.phase else { return wallets }
-        return wallets.filter { !walletEngineAddressesEqual($0.address, info.address) }
+        guard let walletAddress = self.currentState.walletAddress else { return wallets }
+        return wallets.filter { !walletEngineAddressesEqual($0.address, walletAddress) }
     }
 
     func refreshPreviousWalletBalances() async throws -> [WalletContext.PreviousWallet] {

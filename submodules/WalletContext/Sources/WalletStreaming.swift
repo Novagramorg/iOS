@@ -1149,6 +1149,7 @@ struct WalletStreamingPresentationOverlay {
         }
         return WalletContext.State(
             phase: state.phase,
+            walletAddress: state.walletAddress,
             balance: balance,
             transactions: transactions,
             collectibles: state.collectibles,

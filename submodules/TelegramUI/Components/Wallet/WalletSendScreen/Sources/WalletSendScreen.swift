@@ -969,7 +969,7 @@ private final class WalletSendScreenComponent: Component {
         }
 
         private var isSelfTransfer: Bool {
-            return WalletContext.isSelfTransfer(recipient: self.recipientAddress, walletAddress: self.walletInfo?.address)
+            return WalletContext.isSelfTransfer(recipient: self.recipientAddress, walletAddress: self.walletAddress)
         }
 
         private func feesAreCovered(amount: Int64) -> Bool {
@@ -2067,14 +2067,14 @@ private final class WalletSendScreenComponent: Component {
                     }
                     if case let .wallet(info) = walletState.phase {
                         self.walletInfo = info
-                        self.walletAddress = info.address
                     } else {
                         self.walletInfo = nil
-                        self.walletAddress = nil
                     }
+                    self.walletAddress = walletState.walletAddress
                     let isOwnPreparation = (self.isEstimatingFee || self.isPreparingActualTransfer)
                         && walletState.activeOperation == .preparingTransfer
-                    self.walletIsLoading = walletState.balance.currentValue == nil
+                    self.walletIsLoading = self.walletInfo == nil
+                        || walletState.balance.currentValue == nil
                         || (walletState.activeOperation != nil && !isOwnPreparation)
                     self.currentFiatCurrency = walletState.fiat.selectedCurrency
                     if let rate = walletState.fiat.selectedRate,

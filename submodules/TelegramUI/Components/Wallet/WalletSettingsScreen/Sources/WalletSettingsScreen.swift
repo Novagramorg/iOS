@@ -1643,8 +1643,9 @@ private final class WalletSettingsScreenComponent: Component {
                         return
                     }
                     let previousPhase = self.walletState?.phase
+                    let previousWalletAddress = self.walletState?.walletAddress
                     self.walletState = walletState
-                    if previousPhase != walletState.phase, self.isVisible {
+                    if previousPhase != walletState.phase || previousWalletAddress != walletState.walletAddress, self.isVisible {
                         self.reloadPreviousWallets()
                     }
                     self.reconcileBackupDisableWalletState()
