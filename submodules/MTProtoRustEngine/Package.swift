@@ -15,6 +15,7 @@ let package = Package(
         .package(name: "MtProtoKit", path: "../MtProtoKit"),
         .package(name: "SSignalKit", path: "../SSignalKit"),
         .package(name: "EncryptionProvider", path: "../EncryptionProvider"),
+        .package(name: "WebProxyTransport", path: "../WebProxyTransport"),
     ],
     targets: [
         .binaryTarget(
@@ -32,6 +33,7 @@ let package = Package(
                 .product(name: "TelegramCore", package: "TelegramCore", condition: nil),
                 .product(name: "MtProtoKit", package: "MtProtoKit", condition: nil),
                 .product(name: "SwiftSignalKit", package: "SSignalKit", condition: nil),
+                .product(name: "WebProxyTransport", package: "WebProxyTransport", condition: nil),
             ],
             path: "Sources/MTProtoRustEngine"),
         .testTarget(

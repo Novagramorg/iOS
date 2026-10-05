@@ -174,7 +174,7 @@ final class RustNetworkSession: NetworkEngineSession {
         let preferForMedia = schemes.first?.address.preferForMedia ?? false
         self.selector = RustNetworkSession.authInfoSelector(context: context, isCdn: self.isCdn, preferForMedia: preferForMedia)
         self.obfuscationDatacenterId = rustEngineObfuscationDatacenterId(datacenterId: datacenterId, isTestingEnvironment: context.isTestingEnvironment, preferForMedia: preferForMedia)
-        self.holdForUnsupportedProxy = self.apiEnvironment.socksProxySettings?.webProxy ?? false
+        self.holdForUnsupportedProxy = (self.apiEnvironment.socksProxySettings?.webProxy ?? false) && !runtime.carriesWebProxy
         self.logPrefix = "[MTProtoRust#0 dc\(datacenterId) \(roleName)]"
 
         let authInfo = context.authInfoForDatacenter(withId: datacenterId, selector: self.keySelector)
@@ -237,6 +237,9 @@ final class RustNetworkSession: NetworkEngineSession {
             rustEngineLog("\(self.logPrefix) created, key \(authInfo != nil ? "present" : "missing") selector \(self.selector.rawValue)\(self.runsPfs ? ", PFS in the engine" : ""), \(addresses.count) addresses, token \(self.requiresForeignAuthToken ? (self.authTokenReady ? "ready" : "missing") : "not required")")
             if let engine = self.engine, !self.isCdn {
                 mt_session_set_transport(engine, handle, UInt8(MTTransportAuto), self.httpPort)
+                if #available(macOS 10.14, iOS 12.0, *) {
+                    RustNetworkSession.setWebEndpoint(engine: engine, handle: handle, isTestingEnvironment: context.isTestingEnvironment)
+                }
             }
         }
 
@@ -623,6 +626,8 @@ final class RustNetworkSession: NetworkEngineSession {
             self.handleTemporaryKeyInUse(event)
         case .temporaryKeyDropped:
             self.handleTemporaryKeyDropped(event)
+        case .routeMemoryChanged:
+            break
         case .authKeyCreationFailed:
             rustEngineLog("\(self.logPrefix) auth key creation failed: \(event.text)")
         case .transportFlood:
@@ -1220,9 +1225,9 @@ final class RustNetworkSession: NetworkEngineSession {
 
         let proxyChanged = !RustNetworkSession.isSameProxy(previous.socksProxySettings, apiEnvironment.socksProxySettings)
         if proxyChanged {
-            let isWebProxy = apiEnvironment.socksProxySettings?.webProxy ?? false
-            rustEngineImportantLog("\(self.logPrefix) proxy changed\(isWebProxy ? " to a WEB proxy, which this engine cannot carry: staying disconnected" : "")")
-            if isWebProxy {
+            let unsupported = (apiEnvironment.socksProxySettings?.webProxy ?? false) && !self.runtime.carriesWebProxy
+            rustEngineImportantLog("\(self.logPrefix) proxy changed\(unsupported ? " to a WEB proxy, which this engine cannot carry: staying disconnected" : "")")
+            if unsupported {
                 self.holdForUnsupportedProxy = true
                 self.applyPaused()
             }
@@ -1232,7 +1237,7 @@ final class RustNetworkSession: NetworkEngineSession {
                 mt_session_set_proxy(engine, self.handle, &proxy)
             }
             self.refreshSchemes()
-            if !isWebProxy {
+            if !unsupported {
                 self.holdForUnsupportedProxy = false
                 self.applyPaused()
             }
@@ -1575,15 +1580,32 @@ extension RustNetworkSession {
         }
     }
 
+    static var webEndpointOverride: (host: String, port: UInt16, path: String, wsPath: String, address: String)?
+
+    fileprivate static func setWebEndpoint(engine: OpaquePointer, handle: MTSessionHandle, isTestingEnvironment: Bool) {
+        guard let override = RustNetworkSession.webEndpointOverride else {
+            mt_session_use_telegram_web(engine, handle, isTestingEnvironment ? 1 : 0)
+            return
+        }
+        let arena = RustEngineArena()
+        var endpoint = MTWebEndpoint(host: arena.string(override.host), port: override.port, path: arena.string(override.path), address: arena.string(override.address), ws_path: arena.string(override.wsPath))
+        withExtendedLifetime(arena) {
+            mt_session_set_web_endpoint(engine, handle, &endpoint)
+        }
+    }
+
     fileprivate static func makeProxy(_ settings: MTSocksProxySettings?, arena: RustEngineArena) -> MTProxy {
         var proxy = MTProxy()
         proxy.kind = UInt8(MTProxyKindNone)
-        guard let settings = settings, !settings.webProxy else {
+        guard let settings = settings else {
             return proxy
         }
         proxy.host = arena.string(settings.ip)
         proxy.port = settings.port
-        if let secret = settings.secret {
+        if settings.webProxy {
+            proxy.kind = UInt8(MTProxyKindWeb)
+            proxy.secret = arena.bytes(settings.secret)
+        } else if let secret = settings.secret {
             proxy.kind = UInt8(MTProxyKindMTProxy)
             proxy.secret = arena.bytes(secret)
         } else {

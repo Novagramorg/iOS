@@ -20,6 +20,8 @@ private final class TestServerProcess {
     let key: Data
     let salt: Int64
     let publicKeyPem: String
+    let webFront: (host: String, port: UInt16)?
+    let blackhole: (host: String, port: UInt16)?
 
     private let process: Process
     private let input: Pipe
@@ -45,6 +47,7 @@ private final class TestServerProcess {
         self.input = Pipe()
         self.output = Pipe()
         self.process.executableURL = URL(fileURLWithPath: binary)
+        self.process.arguments = ["--web-front"]
         self.process.standardInput = self.input
         self.process.standardOutput = self.output
         self.process.standardError = FileHandle.nullDevice
@@ -64,6 +67,8 @@ private final class TestServerProcess {
             throw NSError(domain: "TestServerProcess", code: 1)
         }
         self.publicKeyPem = publicKeyPem
+        self.webFront = (object["web_front"] as? String).flatMap(TestServerProcess.hostAndPort)
+        self.blackhole = (object["blackhole"] as? String).flatMap(TestServerProcess.hostAndPort)
         self.address = String(address[..<separator])
         self.port = port
         self.key = TestServerProcess.data(hex: keyHex)
@@ -75,8 +80,19 @@ private final class TestServerProcess {
         self.process.waitUntilExit()
     }
 
-    func stats() -> [String: Any] {
-        self.input.fileHandleForWriting.write(Data("stats\n".utf8))
+    private static func hostAndPort(_ text: String) -> (host: String, port: UInt16)? {
+        guard let separator = text.lastIndex(of: ":"), let port = UInt16(text[text.index(after: separator)...]) else {
+            return nil
+        }
+        return (String(text[..<separator]), port)
+    }
+
+    func webFrontStats() -> [String: Any] {
+        return self.stats(command: "web-front-stats")
+    }
+
+    func stats(command: String = "stats") -> [String: Any] {
+        self.input.fileHandleForWriting.write(Data("\(command)\n".utf8))
         let handle = self.output.fileHandleForReading
         while true {
             if let line = TestServerProcess.takeLine(&self.buffer) {
@@ -117,6 +133,11 @@ private final class TestServerProcess {
     func addKey(_ key: Data) {
         let hex = key.map { String(format: "%02x", $0) }.joined()
         self.input.fileHandleForWriting.write(Data("add-key \(hex)\n".utf8))
+        _ = self.stats()
+    }
+
+    func setWebSocketRefused(_ refused: Bool) {
+        self.input.fileHandleForWriting.write(Data("websocket-refused \(refused ? "on" : "off")\n".utf8))
         _ = self.stats()
     }
 
@@ -449,6 +470,47 @@ final class RustEngineEndToEndTests: XCTestCase {
             return nil
         }
         return context.authInfoForDatacenter(withId: datacenterId, selector: selector)
+    }
+
+    private func runOverTelegramWeb(refuseWebSocket: Bool, firstTag: UInt32) throws -> [String: Any] {
+        guard #available(macOS 10.14, *), let front = self.server.webFront, let blackhole = self.server.blackhole else {
+            throw XCTSkip("needs macOS 10.14 and the test server's web front")
+        }
+        self.server.setWebSocketRefused(refuseWebSocket)
+        RustNetworkSession.webEndpointOverride = (host: "venus.web.test", port: front.port, path: "/apiw1", wsPath: "/apiws", address: front.host)
+        defer {
+            RustNetworkSession.webEndpointOverride = nil
+        }
+        let address = MTDatacenterAddress(ip: blackhole.host, port: blackhole.port, preferForMedia: false, restrictToTcp: false, cdn: false, preferForProxy: false, secret: nil)
+        self.context.updateAddressSetForDatacenter(withId: RustEngineEndToEndTests.datacenterId, addressSet: MTDatacenterAddressSet(addressList: [address]), forceUpdateSchemes: true)
+        MTContext.contextQueue().dispatch(onQueue: {}, synchronous: true)
+        let session = self.makeSession()
+        defer { session.stop() }
+        let started = Date()
+        guard self.completes(tag: firstTag, on: session) else {
+            return [:]
+        }
+        XCTAssertTrue(self.completes(tag: firstTag + 1, on: session))
+        XCTAssertLessThan(Date().timeIntervalSince(started), 8.0, "the web front is probed with the first round")
+        let stats = self.server.webFrontStats()
+        XCTAssertGreaterThan((stats["handshakes"] as? NSNumber)?.intValue ?? 0, 0, "\(stats)")
+        XCTAssertEqual(Set((stats["server_names"] as? [String]) ?? []), ["venus.web.test"], "SNI is the web host")
+        XCTAssertEqual(Set((stats["alpn"] as? [String]) ?? []), ["http/1.1"])
+        XCTAssertEqual((stats["violations"] as? NSNumber)?.intValue ?? -1, 0, "no frame Telegram's server drops a connection for")
+        return stats
+    }
+
+    func testTheStreamMovesToTelegramWebsWebSocketThroughTheNetworkFrameworkHost() throws {
+        let stats = try self.runOverTelegramWeb(refuseWebSocket: false, firstTag: 41)
+        XCTAssertGreaterThan((stats["websockets"] as? NSNumber)?.intValue ?? 0, 0, "\(stats)")
+        let requests = (stats["requests"] as? [String]) ?? []
+        XCTAssertTrue(requests.allSatisfy { $0 == "GET /apiws HTTP/1.1 @ venus.web.test:\(self.server.webFront?.port ?? 0)" }, "\(requests)")
+    }
+
+    func testTelegramWebsHttpsTakesOverWhenTheWebSocketIsRefused() throws {
+        let stats = try self.runOverTelegramWeb(refuseWebSocket: true, firstTag: 43)
+        let requests = (stats["requests"] as? [String]) ?? []
+        XCTAssertTrue(requests.contains("POST /apiw1 HTTP/1.1 @ venus.web.test:\(self.server.webFront?.port ?? 0)"), "\(requests)")
     }
 
     private func completes(tag: UInt32, on session: NetworkEngineSession) -> Bool {
@@ -952,6 +1014,32 @@ final class RustEngineEndToEndTests: XCTestCase {
             XCTAssertTrue(self.eventually { rotations.with { $0 } == 4 * round }, "round \(round)")
             Thread.sleep(forTimeInterval: 0.5)
             XCTAssertGreaterThanOrEqual(self.server.invokeAfterWrappers() - wrappers, 3, "round \(round): calls 1-3 went again chained to the call sent again before them")
+        }
+    }
+
+    func testANetworkThatBlocksTcpIsStoredForTheNextRunAndForgottenWhenTcpWorks() throws {
+        let network = RustNetworkIdentity.currentKey()
+        if network.isEmpty {
+            throw XCTSkip("no network to name")
+        }
+        let datacenterId = RustEngineEndToEndTests.datacenterId
+        let remembered: () -> Bool = { UserDefaults.standard.data(forKey: RustNetworkIdentity.memoryKey)?.range(of: network) != nil }
+        let context = self.pfsContext(permanentKey: true)
+        let runs: [(blackhole: Bool, tag: UInt32, stored: Bool, message: String)] = [
+            (false, 37, false, "TCP answering forgets whatever an earlier run left"),
+            (true, 38, true, "the network was stored as one that blocks TCP"),
+            (false, 39, false, "TCP answering there removed it")
+        ]
+        for run in runs {
+            self.server.setTcpBlackhole(run.blackhole)
+            let session = self.pfsEngine(context).makeSession(datacenterId: datacenterId, role: .main, usageCalculationInfo: nil, delegate: nil)
+            session.setPaused(false)
+            let completed = self.completes(tag: run.tag, on: session)
+            session.stop()
+            guard completed else {
+                return
+            }
+            XCTAssertTrue(self.eventually { remembered() == run.stored }, run.message)
         }
     }
 }

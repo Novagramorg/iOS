@@ -661,7 +661,7 @@ func initializedNetwork(accountId: AccountRecordId, arguments: NetworkInitializa
             // network runs the resolved engine directly, exactly as without a factory.
             #if os(macOS)
             let prefersRustEngine = (networkEngineSettings?.engine ?? NetworkEngineSettings.defaultSettings.engine) == .rust
-            let rustEngineWaitsForWebProxy = arguments.networkEngineFactory != nil && !rustEngineDisabled && resolvedEngine.kind == .mtProtoKit && prefersRustEngine && initialActiveServer?.isWebProxy == true
+            let rustEngineWaitsForWebProxy = arguments.networkEngineFactory != nil && !rustEngineDisabled && resolvedEngine.kind == .mtProtoKit && prefersRustEngine && initialActiveServer?.isWebProxy == true && arguments.networkEngineFactory?.supportsWebProxy != true
             // Live switching only ever moves a network off Rust, or back to Rust after a WEB proxy, so it
             // is needed only while Rust is in play; otherwise MtProtoKit runs directly.
             let switchingEngine = arguments.networkEngineFactory != nil && (resolvedEngine.kind == .rust || rustEngineWaitsForWebProxy) ? SwitchingNetworkEngine(engine: resolvedEngine) : nil
@@ -1093,7 +1093,7 @@ public final class Network: NSObject {
             }
         }
         if activeServer?.isWebProxy == true {
-            if self.engineKind == .rust && self.switchEngine(to: .mtProtoKit, reason: "WEB proxy") {
+            if self.engineKind == .rust && self.engineFactory?.supportsWebProxy != true && self.switchEngine(to: .mtProtoKit, reason: "WEB proxy") {
                 let _ = self.rustEngineWaitsForWebProxy.swap(true)
             }
         } else if self.rustEngineWaitsForWebProxy.swap(false) {

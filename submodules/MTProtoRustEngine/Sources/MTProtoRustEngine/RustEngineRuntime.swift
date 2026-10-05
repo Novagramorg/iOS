@@ -144,6 +144,14 @@ final class RustEngineRuntime: NSObject, MTNetworkAvailabilityDelegate {
     private var mailboxes: [MTSessionHandle: RustEngineMailbox] = [:]
     private var networkAvailability: MTNetworkAvailability?
     private var isNetworkAvailableValue: Bool = true
+    private let networkQueue = DispatchQueue(label: "org.telegram.MTProtoRust.network")
+    private var networkWatcher: RustNetworkWatcher?
+    private var streamHost: AnyObject?
+    private var carrierStreams: RustCarrierStreams?
+    private var carrierStreamIds = Set<UInt64>()
+    private var networkKey: Data?
+    private var unresolvedRoutersSince: [String: Double] = [:]
+    private static let routerResolveWait: Double = 2.0
 
     private override init() {
         super.init()
@@ -151,7 +159,7 @@ final class RustEngineRuntime: NSObject, MTNetworkAvailabilityDelegate {
         rustEngineVerifyAssumptions()
 
         let abiVersion = mt_engine_abi_version()
-        if abiVersion != 2 {
+        if abiVersion != 3 {
             rustEngineImportantLog("[MTProtoRust] unsupported engine ABI version \(abiVersion)")
             return
         }
@@ -159,13 +167,37 @@ final class RustEngineRuntime: NSObject, MTNetworkAvailabilityDelegate {
     }
 
     private func start() {
+        if let engine = self.engine, let memory = RustNetworkIdentity.storedMemory() {
+            memory.withUnsafeBytes { bytes in
+                mt_engine_set_route_memory(engine, MTBytes(data: bytes.baseAddress?.assumingMemoryBound(to: UInt8.self), length: bytes.count))
+            }
+        }
+        self.networkQueue.sync {
+            self.applyNetworkKey()
+        }
+        let networkWatcher = RustNetworkWatcher(queue: self.networkQueue, changed: { [weak self] in
+            self?.applyNetworkKey()
+        })
+        self.networkQueue.sync {
+            self.networkWatcher = networkWatcher
+        }
+        networkWatcher.start()
+        if let engine = self.engine {
+            if #available(macOS 10.14, iOS 12.0, *) {
+                self.streamHost = RustStreamHost(engine: engine)
+            }
+            self.carrierStreams = RustCarrierStreams(engine: engine)
+            var callbacks = rustStreamHostCallbacks()
+            mt_engine_set_stream_host(engine, &callbacks)
+        }
         self.networkAvailability = MTNetworkAvailability(delegate: self)
         #if canImport(AppKit)
         let engine = self.engine
-        self.wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: nil, using: { _ in
+        self.wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: nil, using: { [weak self] _ in
             guard let engine = engine else {
                 return
             }
+            self?.updateNetworkKey()
             rustEngineImportantLog("[MTProtoRust] system woke up, resetting connections")
             mt_engine_reset_connections(engine)
         })
@@ -209,11 +241,117 @@ final class RustEngineRuntime: NSObject, MTNetworkAvailabilityDelegate {
         mt_session_destroy(engine, handle)
     }
 
+    /// WEB proxies go over the WEB proxy carrier, which this engine drives itself.
+    var carriesWebProxy: Bool {
+        return self.carrierStreams != nil
+    }
+
+    private func isCarrierStream(_ stream: UInt64) -> Bool {
+        self.lock.lock()
+        defer {
+            self.lock.unlock()
+        }
+        return self.carrierStreamIds.contains(stream)
+    }
+
+    func openStream(_ stream: UInt64, host: String, port: UInt16, serverName: String?, alpn: [String], carrier: Bool) {
+        if carrier, let carrierStreams = self.carrierStreams {
+            self.lock.lock()
+            self.carrierStreamIds.insert(stream)
+            self.lock.unlock()
+            carrierStreams.open(stream: stream)
+        } else if !carrier, #available(macOS 10.14, iOS 12.0, *), let streamHost = self.streamHost as? RustStreamHost {
+            streamHost.open(stream: stream, host: host, port: port, serverName: serverName, alpn: alpn)
+        } else if let engine = self.engine {
+            "unavailable".withCString { pointer in
+                mt_stream_closed(engine, stream, MTString(data: pointer, length: strlen(pointer)))
+            }
+        }
+    }
+
+    func writeStream(_ stream: UInt64, data: Data) {
+        if self.isCarrierStream(stream) {
+            self.carrierStreams?.write(stream: stream, data: data)
+        } else if #available(macOS 10.14, iOS 12.0, *), let streamHost = self.streamHost as? RustStreamHost {
+            streamHost.write(stream: stream, data: data)
+        }
+    }
+
+    func closeStream(_ stream: UInt64) {
+        self.lock.lock()
+        let carrier = self.carrierStreamIds.remove(stream) != nil
+        self.lock.unlock()
+        if carrier {
+            self.carrierStreams?.close(stream: stream)
+        } else if #available(macOS 10.14, iOS 12.0, *), let streamHost = self.streamHost as? RustStreamHost {
+            streamHost.close(stream: stream)
+        }
+    }
+
+    func resumeStream(_ stream: UInt64) {
+        if self.isCarrierStream(stream) {
+            self.carrierStreams?.resume(stream: stream)
+        } else if #available(macOS 10.14, iOS 12.0, *), let streamHost = self.streamHost as? RustStreamHost {
+            streamHost.resume(stream: stream)
+        }
+    }
+
     fileprivate func dispatch(handle: MTSessionHandle, event: RustEngineEvent) {
+        if handle == 0 {
+            if event.kind == .routeMemoryChanged, let memory = event.payload {
+                RustNetworkIdentity.storeMemory(Data(memory))
+            }
+            return
+        }
         self.lock.lock()
         let mailbox = self.mailboxes[handle]
         self.lock.unlock()
         mailbox?.post(event)
+    }
+
+    private func updateNetworkKey() {
+        self.networkQueue.async { [weak self] in
+            self?.applyNetworkKey()
+        }
+    }
+
+    private func applyNetworkKey() {
+        guard let engine = self.engine else {
+            return
+        }
+        let key = self.networkIdentityComplete() ? RustNetworkIdentity.currentKey(gateways: self.networkWatcher?.gateways ?? []) : Data()
+        if self.networkKey == key {
+            return
+        }
+        self.networkKey = key
+        rustEngineLog("[MTProtoRust] network \(key.isEmpty ? "unknown" : key.prefix(4).map { String(format: "%02x", $0) }.joined())")
+        key.withUnsafeBytes { bytes in
+            mt_engine_set_network(engine, MTBytes(data: bytes.baseAddress?.assumingMemoryBound(to: UInt8.self), length: bytes.count))
+        }
+    }
+
+    private func networkIdentityComplete() -> Bool {
+        #if os(macOS)
+        let unresolved = RustNetworkIdentity.unresolvedRouters()
+        let now = ProcessInfo.processInfo.systemUptime
+        self.unresolvedRoutersSince = self.unresolvedRoutersSince.filter { unresolved.contains($0.key) }
+        for router in unresolved where self.unresolvedRoutersSince[router] == nil {
+            self.unresolvedRoutersSince[router] = now
+        }
+        guard let since = self.unresolvedRoutersSince.values.max() else {
+            return true
+        }
+        let deadline = since + RustEngineRuntime.routerResolveWait
+        if now >= deadline {
+            return true
+        }
+        self.networkQueue.asyncAfter(deadline: .now() + (deadline - now)) { [weak self] in
+            self?.applyNetworkKey()
+        }
+        return false
+        #else
+        return self.networkWatcher?.hasPath ?? false
+        #endif
     }
 
     func networkAvailabilityChanged(_ networkAvailability: MTNetworkAvailability!, networkIsAvailable: Bool) {
@@ -225,6 +363,9 @@ final class RustEngineRuntime: NSObject, MTNetworkAvailabilityDelegate {
         self.lock.unlock()
 
         rustEngineImportantLog("[MTProtoRust] network availability changed: \(networkIsAvailable ? "available" : "unavailable")")
+        if networkIsAvailable {
+            self.updateNetworkKey()
+        }
         mt_engine_set_network_available(engine, networkIsAvailable ? 1 : 0)
         if networkIsAvailable {
             mt_engine_reset_connections(engine)

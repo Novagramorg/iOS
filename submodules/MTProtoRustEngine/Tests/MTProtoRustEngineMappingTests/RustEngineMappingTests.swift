@@ -264,4 +264,40 @@ final class RustEngineMappingTests: XCTestCase {
         state.didResubmit()
         XCTAssertEqual(state.applyServerError().internalServerErrorCount, 2, "each rotation counts as a server error for the request's policy")
     }
+
+    func testTheNetworkFingerprintIgnoresTunnelsAndHostBits() {
+        let wifi = RustEngineNetworkInterface(name: "en0", address: [192, 168, 1, 23], netmask: [255, 255, 255, 0])
+        let otherHost = RustEngineNetworkInterface(name: "en0", address: [192, 168, 1, 77], netmask: [255, 255, 255, 0])
+        let vpn = RustEngineNetworkInterface(name: "utun3", address: [10, 8, 0, 2], netmask: [255, 255, 255, 0])
+        let virtualMachine = RustEngineNetworkInterface(name: "vmnet8", address: [172, 16, 5, 1], netmask: [255, 255, 255, 0])
+        let linkLocal6 = RustEngineNetworkInterface(name: "en0", address: [0xfe, 0x80] + Array(repeating: 1, count: 14), netmask: [])
+        let global6 = RustEngineNetworkInterface(name: "en0", address: [0x2a, 0x01, 0x04, 0xf8, 0x0c, 0x17, 0x1b, 0x2c] + Array(repeating: 7, count: 8), netmask: [])
+        let router = RustEngineNetworkRouter(interface: "en0", address: "192.168.1.1")
+        let vpnRouter = RustEngineNetworkRouter(interface: "utun3", address: "10.8.0.1")
+        let base = rustEngineNetworkFingerprint(interfaces: [wifi], routers: [router])
+        XCTAssertEqual(base, "en0 192.168.1.0/24\nrouter en0 192.168.1.1")
+        XCTAssertEqual(rustEngineNetworkFingerprint(interfaces: [otherHost], routers: [router]), base, "another address on the same network")
+        XCTAssertEqual(rustEngineNetworkFingerprint(interfaces: [wifi, vpn, virtualMachine, linkLocal6], routers: [router, vpnRouter]), base, "a VPN, a virtual machine link or a link-local address changes nothing")
+        XCTAssertNotEqual(rustEngineNetworkFingerprint(interfaces: [wifi, global6], routers: [router]), base, "the IPv6 prefix tells same-looking home networks apart")
+        XCTAssertNotEqual(rustEngineNetworkFingerprint(interfaces: [wifi], routers: [RustEngineNetworkRouter(interface: "en0", address: "192.168.1.254")]), base)
+        XCTAssertNil(rustEngineNetworkFingerprint(interfaces: [vpn, linkLocal6], routers: [vpnRouter]), "nothing identifies the network")
+    }
+
+    func testCellularIsOneNetworkAndDoesNotDisturbWifi() {
+        let wifi = RustEngineNetworkInterface(name: "en0", address: [192, 168, 1, 23], netmask: [255, 255, 255, 0])
+        let attach = RustEngineNetworkInterface(name: "pdp_ip0", address: [10, 42, 7, 9], netmask: [255, 255, 255, 255])
+        let reattach = RustEngineNetworkInterface(name: "pdp_ip0", address: [10, 51, 3, 200], netmask: [255, 255, 255, 255])
+        let router = RustEngineNetworkRouter(interface: "en0", address: "192.168.1.1")
+        XCTAssertEqual(rustEngineNetworkFingerprint(interfaces: [wifi, attach], routers: [router]), rustEngineNetworkFingerprint(interfaces: [wifi], routers: [router]), "cellular staying up next to Wi-Fi changes nothing")
+        XCTAssertEqual(rustEngineNetworkFingerprint(interfaces: [attach], routers: []), "cellular")
+        XCTAssertEqual(rustEngineNetworkFingerprint(interfaces: [reattach], routers: []), "cellular", "a new attach is the same network")
+    }
+
+    func testOnlyRoutersOfTheNetworkItselfCount() {
+        XCTAssertTrue(rustEngineNetworkRouterCounts(RustEngineNetworkRouter(interface: "en0", address: "192.168.1.1")))
+        XCTAssertFalse(rustEngineNetworkRouterCounts(RustEngineNetworkRouter(interface: "utun4", address: "10.8.0.1")), "a VPN's router never resolves and never names the network")
+        XCTAssertFalse(rustEngineNetworkRouterCounts(RustEngineNetworkRouter(interface: "ppp0", address: "10.0.0.1")))
+        XCTAssertFalse(rustEngineNetworkRouterCounts(RustEngineNetworkRouter(interface: "pdp_ip0", address: "10.64.0.1")))
+        XCTAssertFalse(rustEngineNetworkRouterCounts(RustEngineNetworkRouter(interface: "en0", address: "")))
+    }
 }

@@ -268,4 +268,12 @@ public protocol NetworkEngineFactory {
     /// configuration); the network then uses MtProtoKit. The TCP connection factory to use is
     /// `context.makeTcpConnectionInterface`, which changes when the proxy changes.
     func makeEngine(context: MTContext, isAppExtension: Bool) -> NetworkEngine?
+    /// The engine carries WEB proxies itself; otherwise the network moves to MtProtoKit while one is on.
+    var supportsWebProxy: Bool { get }
+}
+
+public extension NetworkEngineFactory {
+    var supportsWebProxy: Bool {
+        return false
+    }
 }

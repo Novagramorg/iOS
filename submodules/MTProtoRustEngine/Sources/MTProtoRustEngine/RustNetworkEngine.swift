@@ -32,16 +32,16 @@ public struct RustNetworkEngineFactory: NetworkEngineFactory {
     public init() {
     }
 
+    public var supportsWebProxy: Bool {
+        return true
+    }
+
     public func makeEngine(context: MTContext, isAppExtension: Bool) -> NetworkEngine? {
         if isAppExtension {
             rustEngineImportantLog("[MTProtoRust] declined: app extension")
             return nil
         }
         let apiEnvironment = context.apiEnvironment
-        if let proxy = apiEnvironment.socksProxySettings, proxy.webProxy {
-            rustEngineImportantLog("[MTProtoRust] declined: WEB proxy is not supported")
-            return nil
-        }
         if let overrides = apiEnvironment.datacenterAddressOverrides, !overrides.isEmpty {
             rustEngineImportantLog("[MTProtoRust] declined: datacenter address overrides are not supported")
             return nil

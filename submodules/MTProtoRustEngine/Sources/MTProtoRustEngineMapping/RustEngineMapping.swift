@@ -414,3 +414,82 @@ public func rustEngineOffersTemporaryKey(stored: RustEngineTemporaryKeyInfo, per
     }
     return stored.validUntil != Int32.max && Int64(stored.validUntil) - Int64(now) > Int64(minimumLifetime)
 }
+
+/// An address of an active interface, as `getifaddrs` reports it.
+public struct RustEngineNetworkInterface: Equatable {
+    public var name: String
+    public var address: [UInt8]
+    public var netmask: [UInt8]
+
+    public init(name: String, address: [UInt8], netmask: [UInt8]) {
+        self.name = name
+        self.address = address
+        self.netmask = netmask
+    }
+}
+
+/// The router of an active network service, as the system configuration reports it.
+public struct RustEngineNetworkRouter: Equatable {
+    public var interface: String
+    public var address: String
+
+    public init(interface: String, address: String) {
+        self.interface = interface
+        self.address = address
+    }
+}
+
+/// Interfaces that say nothing about the network the device is on: VPN tunnels, peer-to-peer, bridge
+/// and virtual machine links. A VPN coming and going must not make the same network look new.
+private let rustEngineIgnoredInterfacePrefixes = ["utun", "ipsec", "ppp", "awdl", "llw", "gif", "stf", "anpi", "ap", "bridge", "vmnet", "vnic", "vboxnet", "feth", "lo"]
+/// Cellular data interfaces: their addresses change with every attach, and they stay up next to Wi-Fi.
+private let rustEngineCellularInterfacePrefix = "pdp_ip"
+
+private func rustEngineIgnoresInterface(_ name: String) -> Bool {
+    return rustEngineIgnoredInterfacePrefixes.contains(where: { name.hasPrefix($0) })
+}
+
+/// Whether a service's router goes into the fingerprint: not on a VPN, virtual or cellular interface.
+public func rustEngineNetworkRouterCounts(_ router: RustEngineNetworkRouter) -> Bool {
+    return !router.address.isEmpty && !rustEngineIgnoresInterface(router.interface) && !router.interface.hasPrefix(rustEngineCellularInterfacePrefix)
+}
+
+/// What identifies the network the device is on, as text to be hashed with a per-install salt: every
+/// active interface with its IPv4 network and prefix and its global or unique-local IPv6 /64, and the
+/// routers of the services on them. Cellular alone is one network, whatever its addresses. Nil when
+/// nothing identifies it.
+public func rustEngineNetworkFingerprint(interfaces: [RustEngineNetworkInterface], routers: [RustEngineNetworkRouter]) -> String? {
+    var parts: [String] = []
+    var cellular = false
+    for interface in interfaces {
+        if rustEngineIgnoresInterface(interface.name) {
+            continue
+        }
+        if interface.name.hasPrefix(rustEngineCellularInterfacePrefix) {
+            cellular = true
+            continue
+        }
+        if interface.address.count == 4 && interface.netmask.count == 4 {
+            if interface.address[0] == 169 && interface.address[1] == 254 {
+                continue
+            }
+            let network = zip(interface.address, interface.netmask).map { $0 & $1 }
+            let prefix = interface.netmask.reduce(0) { $0 + $1.nonzeroBitCount }
+            parts.append("\(interface.name) \(network.map(String.init).joined(separator: "."))/\(prefix)")
+        } else if interface.address.count == 16 {
+            let global = interface.address[0] & 0xe0 == 0x20
+            let uniqueLocal = interface.address[0] & 0xfe == 0xfc
+            if !global && !uniqueLocal {
+                continue
+            }
+            parts.append("\(interface.name) \(interface.address.prefix(8).map { String(format: "%02x", $0) }.joined())/64")
+        }
+    }
+    if parts.isEmpty {
+        return cellular ? "cellular" : nil
+    }
+    for router in routers where rustEngineNetworkRouterCounts(router) {
+        parts.append("router \(router.interface) \(router.address)")
+    }
+    return Array(Set(parts)).sorted().joined(separator: "\n")
+}

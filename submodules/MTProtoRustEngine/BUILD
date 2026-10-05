@@ -24,6 +24,7 @@ swift_library(
         "//submodules/MtProtoKit:MtProtoKit",
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
         "//submodules/TelegramCore:TelegramCore",
+        "//submodules/WebProxyTransport:WebProxyTransport",
         "//third-party/mtproto-engine:MTProtoEngineFFI",
     ],
     visibility = ["//visibility:public"],

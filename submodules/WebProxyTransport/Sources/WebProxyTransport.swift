@@ -27,7 +27,7 @@ public final class WebProxyTransport: WebProxyCarrier {
     }
 
     private final class StreamState {
-        weak var connection: WebProxyConnectionInterface?
+        weak var connection: WebProxyStreamEndpoint?
         var opened = false
         var closing = false
         var sendCredit = WebProxyProtocol.initialWindow
@@ -35,7 +35,7 @@ public final class WebProxyTransport: WebProxyCarrier {
         var pendingWrites: [Data] = []
         var pendingWriteBytes = 0
 
-        init(connection: WebProxyConnectionInterface) {
+        init(connection: WebProxyStreamEndpoint) {
             self.connection = connection
         }
     }
@@ -63,8 +63,31 @@ public final class WebProxyTransport: WebProxyCarrier {
     private var stableResetWorkItem: DispatchWorkItem?
     private var decoder = WebProxyFrameDecoder()
     private var lastPageStatus: WebProxyPageStatus?
+    private var testPage: ((WebProxyFrame) -> Void)?
 
-    private init() {
+    init() {
+    }
+
+    /// Stands a page in for the web view, for tests: frames sent go to `page`, and the carrier is ready.
+    func attachTestPage(configuration: WebProxyConfiguration, page: @escaping (WebProxyFrame) -> Void) {
+        self.queue.sync {
+            self.configuration = configuration
+            self.testPage = page
+            self.carrierState = .ready
+        }
+    }
+
+    func receiveFromTestPage(_ frame: WebProxyFrame) {
+        self.queue.async {
+            self.receive(frame: frame)
+        }
+    }
+
+    func restartTestPage() {
+        self.queue.sync {
+            self.stopCarrier(reportInactive: false)
+            self.carrierState = .ready
+        }
     }
 
     public var statusSignal: Signal<WebProxyCarrierStatus, NoError> {
@@ -117,7 +140,28 @@ public final class WebProxyTransport: WebProxyCarrier {
         return WebProxyConnectionInterface(transport: self, delegate: delegate, delegateQueue: delegateQueue)
     }
 
-    fileprivate func open(_ connection: WebProxyConnectionInterface, timeout: TimeInterval) {
+    /// A stream for a host that frames and paces the bytes itself (the Rust MTProto engine): it gets
+    /// them as they arrive, on `queue`, and gives receive credit back with `WebProxyRawStream.consumed`
+    /// once it took them; `sent` reports bytes handed to the carrier. It opens with the carrier, or
+    /// closes with `.timeout` after `timeout`.
+    public func openRawStream(timeout: TimeInterval, queue: DispatchQueue, opened: @escaping () -> Void, received: @escaping (Data) -> Void, sent: @escaping (Int) -> Void, closed: @escaping (Error?) -> Void) -> WebProxyRawStream {
+        let stream = WebProxyRawStream(transport: self, queue: queue, opened: opened, received: received, sent: sent, closed: closed)
+        self.open(stream, timeout: timeout)
+        return stream
+    }
+
+    fileprivate func consumed(_ endpoint: WebProxyRawStream, count: Int) {
+        guard count > 0 else { return }
+        self.queue.async {
+            guard let streamId = endpoint.streamId,
+                  let stream = self.streams[streamId],
+                  stream.connection === endpoint else { return }
+            endpoint.noteConsumed(count)
+            self.grantWindow(streamId: streamId, consumed: count)
+        }
+    }
+
+    fileprivate func open(_ connection: WebProxyStreamEndpoint, timeout: TimeInterval) {
         self.queue.async {
             guard self.configuration != nil, self.nextStreamId <= WebProxyProtocol.maximumStreamId else {
                 connection.transportDidClose(error: WebProxyTransportError.unavailable)
@@ -144,11 +188,12 @@ public final class WebProxyTransport: WebProxyCarrier {
         }
     }
 
-    fileprivate func write(_ connection: WebProxyConnectionInterface, data: Data) {
+    fileprivate func write(_ connection: WebProxyStreamEndpoint, data: Data) {
         guard !data.isEmpty else { return }
         self.queue.async {
             guard let streamId = connection.streamId,
                   let stream = self.streams[streamId],
+                  stream.connection === connection,
                   !stream.closing else { return }
             let newStreamBytes = stream.pendingWriteBytes + data.count
             let newGlobalBytes = self.queuedBytes + data.count
@@ -170,8 +215,10 @@ public final class WebProxyTransport: WebProxyCarrier {
     fileprivate func read(_ connection: WebProxyConnectionInterface, length: Int, timeout: TimeInterval, tag: Int) {
         self.queue.async {
             guard let streamId = connection.streamId,
-                  self.streams[streamId] != nil else { return }
+                  let stream = self.streams[streamId],
+                  stream.connection === connection else { return }
             let consumed = connection.enqueueRead(length: length, tag: tag)
+            self.incomingBytes = max(0, self.incomingBytes - consumed)
             self.grantWindow(streamId: streamId, consumed: consumed)
             if timeout >= 0.0, connection.hasPendingRead(tag: tag) {
                 self.queue.asyncAfter(deadline: .now() + timeout) {
@@ -183,9 +230,11 @@ public final class WebProxyTransport: WebProxyCarrier {
         }
     }
 
-    fileprivate func close(_ connection: WebProxyConnectionInterface) {
+    fileprivate func close(_ connection: WebProxyStreamEndpoint) {
         self.queue.async {
-            guard let streamId = connection.streamId else {
+            guard let streamId = connection.streamId,
+                  let stream = self.streams[streamId],
+                  stream.connection === connection else {
                 connection.transportDidClose(error: nil)
                 return
             }
@@ -380,12 +429,15 @@ public final class WebProxyTransport: WebProxyCarrier {
                 return
             }
             let consumed = connection.enqueueIncoming(frame.payload)
-            self.incomingBytes += frame.payload.count
-            guard connection.bufferedIncomingBytes <= 8 * 1024 * 1024,
-                  self.incomingBytes - consumed <= WebProxyProtocol.maximumQueuedBytes else {
+            if !connection.paced {
+                self.incomingBytes += frame.payload.count
+                guard connection.bufferedIncomingBytes <= 8 * 1024 * 1024,
+                      self.incomingBytes - consumed <= WebProxyProtocol.maximumQueuedBytes else {
+                    self.incomingBytes = max(0, self.incomingBytes - consumed)
+                    self.closeStream(frame.streamId, sendClose: true, error: WebProxyTransportError.queueLimitExceeded)
+                    return
+                }
                 self.incomingBytes = max(0, self.incomingBytes - consumed)
-                self.closeStream(frame.streamId, sendClose: true, error: WebProxyTransportError.queueLimitExceeded)
-                return
             }
             self.grantWindow(streamId: frame.streamId, consumed: consumed)
         case .window:
@@ -445,12 +497,12 @@ public final class WebProxyTransport: WebProxyCarrier {
             self.queuedBytes -= count
             stream.sendCredit -= count
             self.send(frame: WebProxyFrame(type: .data, streamId: streamId, payload: Data(chunk)))
+            stream.connection?.transportDidSend(count)
         }
     }
 
     private func grantWindow(streamId: UInt32, consumed: Int) {
         guard consumed > 0, let stream = self.streams[streamId] else { return }
-        self.incomingBytes = max(0, self.incomingBytes - consumed)
         stream.receiveCredit += consumed
         var remaining = consumed
         while remaining > 0 {
@@ -465,7 +517,9 @@ public final class WebProxyTransport: WebProxyCarrier {
         stream.closing = true
         self.queuedBytes -= stream.pendingWriteBytes
         self.queuedItems -= stream.pendingWrites.count
-        self.incomingBytes = max(0, self.incomingBytes - (stream.connection?.bufferedIncomingBytes ?? 0))
+        if let connection = stream.connection, !connection.paced {
+            self.incomingBytes = max(0, self.incomingBytes - connection.bufferedIncomingBytes)
+        }
         if sendClose, stream.opened, self.carrierState == .ready {
             self.send(frame: WebProxyFrame(type: .close, streamId: streamId))
         }
@@ -482,11 +536,110 @@ public final class WebProxyTransport: WebProxyCarrier {
     }
 
     private func send(frame: WebProxyFrame) {
+        if let testPage = self.testPage {
+            testPage(frame)
+            return
+        }
         guard let data = try? WebProxyFrameEncoder.encode(frame), let carrier = self.carrier else {
             self.failCarrier(.protocolViolation)
             return
         }
         DispatchQueue.main.async { carrier.send(data: data) }
+    }
+}
+
+/// One end of a carrier stream: the MtProtoKit connection interface, or a raw stream.
+fileprivate protocol WebProxyStreamEndpoint: AnyObject {
+    var streamId: UInt32? { get }
+    var bufferedIncomingBytes: Int { get }
+    /// The owner paces receiving itself: its bytes are bounded by its own window, not the overall cap.
+    var paced: Bool { get }
+    func assign(streamId: UInt32)
+    func transportDidOpen()
+    /// Takes received bytes; returns how many were consumed at once, the credit to give back now.
+    func enqueueIncoming(_ data: Data) -> Int
+    /// `count` more of its bytes went to the carrier.
+    func transportDidSend(_ count: Int)
+    func transportDidClose(error: Error?)
+}
+
+/// A carrier stream handed to its owner byte for byte (see `WebProxyTransport.openRawStream`).
+/// Transport state is touched on the transport's queue only; the handlers run on the owner's queue.
+public final class WebProxyRawStream: WebProxyStreamEndpoint {
+    private unowned let transport: WebProxyTransport
+    private let handlerQueue: DispatchQueue
+    private let opened: () -> Void
+    private let received: (Data) -> Void
+    private let sent: (Int) -> Void
+    private let closed: (Error?) -> Void
+    fileprivate var streamId: UInt32?
+    fileprivate let paced = true
+    fileprivate private(set) var bufferedIncomingBytes = 0
+    private var isClosed = false
+
+    fileprivate init(transport: WebProxyTransport, queue: DispatchQueue, opened: @escaping () -> Void, received: @escaping (Data) -> Void, sent: @escaping (Int) -> Void, closed: @escaping (Error?) -> Void) {
+        self.transport = transport
+        self.handlerQueue = queue
+        self.opened = opened
+        self.received = received
+        self.sent = sent
+        self.closed = closed
+    }
+
+    public func write(_ data: Data) {
+        self.transport.write(self, data: data)
+    }
+
+    /// The owner took `count` more of the received bytes: the relay may send that much more.
+    public func consumed(_ count: Int) {
+        self.transport.consumed(self, count: count)
+    }
+
+    public func close() {
+        self.transport.close(self)
+    }
+
+    fileprivate func assign(streamId: UInt32) {
+        self.streamId = streamId
+    }
+
+    fileprivate func noteConsumed(_ count: Int) {
+        self.bufferedIncomingBytes = max(0, self.bufferedIncomingBytes - count)
+    }
+
+    fileprivate func transportDidOpen() {
+        guard !self.isClosed else { return }
+        let opened = self.opened
+        self.handlerQueue.async {
+            opened()
+        }
+    }
+
+    fileprivate func enqueueIncoming(_ data: Data) -> Int {
+        guard !self.isClosed else { return 0 }
+        self.bufferedIncomingBytes += data.count
+        let received = self.received
+        self.handlerQueue.async {
+            received(data)
+        }
+        return 0
+    }
+
+    fileprivate func transportDidSend(_ count: Int) {
+        guard !self.isClosed else { return }
+        let sent = self.sent
+        self.handlerQueue.async {
+            sent(count)
+        }
+    }
+
+    fileprivate func transportDidClose(error: Error?) {
+        guard !self.isClosed else { return }
+        self.isClosed = true
+        let closed = self.closed
+        self.handlerQueue.async {
+            closed(error)
+        }
     }
 }
 
@@ -498,7 +651,7 @@ public enum WebProxyTransportError: Error {
     case timeout
 }
 
-public final class WebProxyConnectionInterface: NSObject, MTTcpConnectionInterface {
+public final class WebProxyConnectionInterface: NSObject, MTTcpConnectionInterface, WebProxyStreamEndpoint {
     private struct ReadRequest {
         let length: Int
         let tag: Int
@@ -509,6 +662,7 @@ public final class WebProxyConnectionInterface: NSObject, MTTcpConnectionInterfa
     private unowned let transport: WebProxyTransport
     fileprivate var streamId: UInt32?
     fileprivate var bufferedIncomingBytes: Int { self.incoming.count }
+    fileprivate var paced: Bool { false }
     private var incoming = Data()
     private var reads: [ReadRequest] = []
     private var closed = false
@@ -556,6 +710,9 @@ public final class WebProxyConnectionInterface: NSObject, MTTcpConnectionInterfa
 
     fileprivate func assign(streamId: UInt32) {
         self.streamId = streamId
+    }
+
+    fileprivate func transportDidSend(_ count: Int) {
     }
 
     fileprivate func transportDidOpen() {
