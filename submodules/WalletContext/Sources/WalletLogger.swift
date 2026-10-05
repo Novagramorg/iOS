@@ -204,6 +204,19 @@ func walletError(_ error: Error) -> WalletContext.WalletError {
         }
     }
     if let value = error as? WalletContext.WalletError { return value }
+    if let value = error as? WalletClientError {
+        switch value {
+        case let .InsufficientBalance(_, requestedNanograms):
+            return .insufficientBalance(required: Int64(requestedNanograms) ?? Int64.max)
+        case let .InsufficientBalanceForFees(_, requestedNanograms, estimatedFeeNanograms):
+            let amount = Int64(requestedNanograms) ?? Int64.max
+            let fee = Int64(estimatedFeeNanograms) ?? Int64.max
+            let (required, overflow) = amount.addingReportingOverflow(fee)
+            return .insufficientBalance(required: overflow ? Int64.max : required)
+        default:
+            break
+        }
+    }
     if (error as? WalletSendTransferError) == .keyMismatch { return .walletKeyMismatch }
     if let value = error as? TonConnectFailure { return .engine(value.message) }
     if let value = error as? WalletContext.SynchronizationError {

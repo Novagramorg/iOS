@@ -2117,7 +2117,25 @@ private final class WalletTransactionContentComponent: Component {
             let strings = self.currentPresentationData(for: component).initial.strings
             let title: String
             let text: String
+            var actions = [TextAlertAction(type: .defaultAction, title: strings.Common_OK, action: {})]
             switch error {
+            case .insufficientBalance where self.previewSource?.collectible != nil:
+                title = strings.Wallet_Backup_InsufficientFundsTitle
+                text = strings.Wallet_Transfer_CollectibleTopUpText
+                actions = [
+                    TextAlertAction(type: .genericAction, title: strings.Common_Cancel, action: {}),
+                    TextAlertAction(type: .defaultAction, title: strings.Wallet_Backup_TopUp, action: { [weak self, weak controller] in
+                        guard let self, let controller,
+                              let walletContext = self.walletContext,
+                              case let .wallet(info) = walletContext.stateValue.phase else {
+                            return
+                        }
+                        controller.push(component.context.sharedContext.makeWalletReceiveScreen(
+                            context: component.context,
+                            address: info.address
+                        ))
+                    })
+                ]
             case .commentTooLong:
                 title = strings.Wallet_Transfer_CommentTooLongTitle
                 text = strings.Wallet_Transfer_CommentTooLongText
@@ -2136,8 +2154,7 @@ private final class WalletTransactionContentComponent: Component {
                 updatedPresentationData: self.currentPresentationData(for: component),
                 title: title,
                 text: text,
-                actions: [TextAlertAction(type: .defaultAction, title: strings.Common_OK, action: {
-                })]
+                actions: actions
             ), in: .window(.root))
         }
 
