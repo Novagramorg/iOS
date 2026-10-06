@@ -79,6 +79,7 @@ public struct ExperimentalUISettings: Codable, Equatable {
     public var coreListChatBackend: Bool
     public var forceRLottieBackend: Bool
     public var respectSystemMicrophone: Bool
+    public var useModernVideoMessagePipeline: Bool?
 
     public static var defaultSettings: ExperimentalUISettings {
         return ExperimentalUISettings(
@@ -132,7 +133,8 @@ public struct ExperimentalUISettings: Codable, Equatable {
             forceNewTextInput: false,
             coreListChatBackend: false,
             forceRLottieBackend: false,
-            respectSystemMicrophone: false
+            respectSystemMicrophone: false,
+            useModernVideoMessagePipeline: nil
         )
     }
     
@@ -187,7 +189,8 @@ public struct ExperimentalUISettings: Codable, Equatable {
         forceNewTextInput: Bool,
         coreListChatBackend: Bool,
         forceRLottieBackend: Bool,
-        respectSystemMicrophone: Bool
+        respectSystemMicrophone: Bool,
+        useModernVideoMessagePipeline: Bool? = nil
     ) {
         self.keepChatNavigationStack = keepChatNavigationStack
         self.skipReadHistory = skipReadHistory
@@ -240,6 +243,7 @@ public struct ExperimentalUISettings: Codable, Equatable {
         self.coreListChatBackend = coreListChatBackend
         self.forceRLottieBackend = forceRLottieBackend
         self.respectSystemMicrophone = respectSystemMicrophone
+        self.useModernVideoMessagePipeline = useModernVideoMessagePipeline
     }
     
     public init(from decoder: Decoder) throws {
@@ -296,6 +300,7 @@ public struct ExperimentalUISettings: Codable, Equatable {
         self.coreListChatBackend = try container.decodeIfPresent(Bool.self, forKey: "coreListChatBackend") ?? false
         self.forceRLottieBackend = try container.decodeIfPresent(Bool.self, forKey: "forceRLottieBackend") ?? false
         self.respectSystemMicrophone = try container.decodeIfPresent(Bool.self, forKey: "respectSystemMicrophone") ?? false
+        self.useModernVideoMessagePipeline = try container.decodeIfPresent(Bool.self, forKey: "useModernVideoMessagePipeline")
     }
     
     public func encode(to encoder: Encoder) throws {
@@ -352,6 +357,7 @@ public struct ExperimentalUISettings: Codable, Equatable {
         try container.encodeIfPresent(self.coreListChatBackend, forKey: "coreListChatBackend")
         try container.encodeIfPresent(self.forceRLottieBackend, forKey: "forceRLottieBackend")
         try container.encodeIfPresent(self.respectSystemMicrophone, forKey: "respectSystemMicrophone")
+        try container.encodeIfPresent(self.useModernVideoMessagePipeline, forKey: "useModernVideoMessagePipeline")
     }
 }
 

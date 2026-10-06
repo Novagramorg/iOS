@@ -169,6 +169,7 @@ private enum DebugControllerEntry: ItemListNodeEntry {
     case coreListChatBackend(Bool)
     case forceRLottieBackend(Bool)
     case respectSystemMicrophone(Bool)
+    case useModernVideoMessagePipeline(Bool)
     case browserExperiment(Bool)
     case allForumsHaveTabs(Bool)
     case enableReactionOverrides(Bool)
@@ -212,7 +213,7 @@ private enum DebugControllerEntry: ItemListNodeEntry {
             return DebugControllerSection.web.rawValue
         case .keepChatNavigationStack, .skipReadHistory, .alwaysDisplayTyping, .debugRatingLayout, .crashOnSlowQueries, .crashOnMemoryPressure:
             return DebugControllerSection.experiments.rawValue
-        case .clearTips, .resetNotifications, .crash, .fillLocalSavedMessageCache, .resetDatabase, .resetDatabaseAndCache, .resetHoles, .resetTagHoles, .reindexUnread, .resetCacheIndex, .reindexCache, .resetBiometricsData, .optimizeDatabase, .photoPreview, .knockoutWallpaper, .compressedEmojiCache, .storiesJpegExperiment, .checkSerializedData, .enableQuickReactionSwitch, .experimentalCompatibility, .enableDebugDataDisplay, .fakeGlass, .forceClearGlass, .debugRipple, .debugRichText, .coreListChatBackend, .forceRLottieBackend, .respectSystemMicrophone, .browserExperiment, .allForumsHaveTabs, .enableReactionOverrides, .restorePurchases, .disableReloginTokens, .liveStreamV2, .experimentalCallMute, .groupCallReferenceEngine, .playerV2, .devRequests, .enableUpdates, .pwa, .enableLocalTranslation, .testPasscodeMigration:
+        case .clearTips, .resetNotifications, .crash, .fillLocalSavedMessageCache, .resetDatabase, .resetDatabaseAndCache, .resetHoles, .resetTagHoles, .reindexUnread, .resetCacheIndex, .reindexCache, .resetBiometricsData, .optimizeDatabase, .photoPreview, .knockoutWallpaper, .compressedEmojiCache, .storiesJpegExperiment, .checkSerializedData, .enableQuickReactionSwitch, .experimentalCompatibility, .enableDebugDataDisplay, .fakeGlass, .forceClearGlass, .debugRipple, .debugRichText, .coreListChatBackend, .forceRLottieBackend, .respectSystemMicrophone, .useModernVideoMessagePipeline, .browserExperiment, .allForumsHaveTabs, .enableReactionOverrides, .restorePurchases, .disableReloginTokens, .liveStreamV2, .experimentalCallMute, .groupCallReferenceEngine, .playerV2, .devRequests, .enableUpdates, .pwa, .enableLocalTranslation, .testPasscodeMigration:
             return DebugControllerSection.experiments.rawValue
         case .logTranslationRecognition, .resetTranslationStates:
             return DebugControllerSection.translation.rawValue
@@ -271,92 +272,94 @@ private enum DebugControllerEntry: ItemListNodeEntry {
             return 20
         case .respectSystemMicrophone:
             return 21
-        case .crashOnSlowQueries:
+        case .useModernVideoMessagePipeline:
             return 22
-        case .crashOnMemoryPressure:
+        case .crashOnSlowQueries:
             return 23
-        case .clearTips:
+        case .crashOnMemoryPressure:
             return 24
-        case .resetNotifications:
+        case .clearTips:
             return 25
-        case .crash:
+        case .resetNotifications:
             return 26
-        case .testPasscodeMigration:
+        case .crash:
             return 27
-        case .fillLocalSavedMessageCache:
+        case .testPasscodeMigration:
             return 28
-        case .resetDatabase:
+        case .fillLocalSavedMessageCache:
             return 29
-        case .resetDatabaseAndCache:
+        case .resetDatabase:
             return 30
-        case .resetHoles:
+        case .resetDatabaseAndCache:
             return 31
-        case .resetTagHoles:
+        case .resetHoles:
             return 32
-        case .reindexUnread:
+        case .resetTagHoles:
             return 33
-        case .resetCacheIndex:
+        case .reindexUnread:
             return 34
-        case .reindexCache:
+        case .resetCacheIndex:
             return 35
-        case .resetBiometricsData:
+        case .reindexCache:
             return 36
-        case .optimizeDatabase:
+        case .resetBiometricsData:
             return 37
-        case .photoPreview:
+        case .optimizeDatabase:
             return 38
-        case .knockoutWallpaper:
+        case .photoPreview:
             return 39
-        case .experimentalCompatibility:
+        case .knockoutWallpaper:
             return 40
-        case .enableDebugDataDisplay:
+        case .experimentalCompatibility:
             return 41
-        case .fakeGlass:
+        case .enableDebugDataDisplay:
             return 42
-        case .forceClearGlass:
+        case .fakeGlass:
             return 43
-        case .debugRipple:
+        case .forceClearGlass:
             return 44
-        case .debugRichText:
+        case .debugRipple:
             return 45
-        case .browserExperiment:
+        case .debugRichText:
             return 46
-        case .allForumsHaveTabs:
+        case .browserExperiment:
             return 47
-        case .enableReactionOverrides:
+        case .allForumsHaveTabs:
             return 48
-        case .restorePurchases:
+        case .enableReactionOverrides:
             return 49
-        case .logTranslationRecognition:
-            return 63
-        case .resetTranslationStates:
-            return 64
-        case .compressedEmojiCache:
+        case .restorePurchases:
             return 50
-        case .storiesJpegExperiment:
+        case .logTranslationRecognition:
+            return 64
+        case .resetTranslationStates:
+            return 65
+        case .compressedEmojiCache:
             return 51
-        case .disableReloginTokens:
+        case .storiesJpegExperiment:
             return 52
-        case .checkSerializedData:
+        case .disableReloginTokens:
             return 53
-        case .enableQuickReactionSwitch:
+        case .checkSerializedData:
             return 54
-        case .liveStreamV2:
+        case .enableQuickReactionSwitch:
             return 55
-        case .experimentalCallMute:
+        case .liveStreamV2:
             return 56
-        case .groupCallReferenceEngine:
+        case .experimentalCallMute:
             return 57
-        case .playerV2:
+        case .groupCallReferenceEngine:
             return 58
-        case .devRequests:
+        case .playerV2:
             return 59
-        case .pwa:
+        case .devRequests:
             return 60
-        case .enableLocalTranslation:
+        case .pwa:
             return 61
-        case .enableUpdates:
+        case .enableLocalTranslation:
             return 62
+        case .enableUpdates:
+            return 63
         case .disableVideoAspectScaling:
             return 101
         case .enableNetworkFramework:
@@ -1442,6 +1445,16 @@ private enum DebugControllerEntry: ItemListNodeEntry {
                     })
                 }).start()
             })
+        case let .useModernVideoMessagePipeline(value):
+            return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: "Use Modern Video Message Pipeline", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                let _ = arguments.sharedContext.accountManager.transaction ({ transaction in
+                    transaction.updateSharedData(ApplicationSpecificSharedDataKeys.experimentalUISettings, { settings in
+                        var settings = settings?.get(ExperimentalUISettings.self) ?? ExperimentalUISettings.defaultSettings
+                        settings.useModernVideoMessagePipeline = value
+                        return EnginePreferencesEntry(settings)
+                    })
+                }).start()
+            })
         case let .browserExperiment(value):
             return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: "Inline UI", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 let _ = arguments.sharedContext.accountManager.transaction ({ transaction in
@@ -1825,6 +1838,7 @@ private func debugControllerEntries(context: AccountContext?, sharedContext: Sha
     entries.append(.coreListChatBackend(experimentalSettings.coreListChatBackend))
     entries.append(.forceRLottieBackend(experimentalSettings.forceRLottieBackend))
     entries.append(.respectSystemMicrophone(experimentalSettings.respectSystemMicrophone))
+    entries.append(.useModernVideoMessagePipeline(experimentalSettings.useModernVideoMessagePipeline ?? (context?.getAppConfigValue("ios_killswitch_disable_neo_round_camera_v2") == nil)))
     entries.append(.crashOnSlowQueries(presentationData.theme, experimentalSettings.crashOnLongQueries))
     entries.append(.crashOnMemoryPressure(presentationData.theme, experimentalSettings.crashOnMemoryPressure))
     if isMainApp {
