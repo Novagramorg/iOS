@@ -1342,11 +1342,11 @@ private final class WalletReceiveSheetContent: Component {
                 ),
                 AnyComponentWithIdentity(
                     id: "title",
-                    component: AnyComponent(Text(
-                        text: environment.strings.Wallet_Receive_Buy,
+                    component: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(
+                        string: environment.strings.Wallet_Receive_Buy,
                         font: Font.semibold(17.0),
-                        color: UIColor(rgb: 0x087cff)
-                    ))
+                        textColor: UIColor(rgb: 0x087cff)
+                    ))))
                 )
             ], spacing: 10.0)
             let buyButtonSize = self.buyButton.update(
