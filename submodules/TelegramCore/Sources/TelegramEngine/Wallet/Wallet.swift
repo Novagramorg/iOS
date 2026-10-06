@@ -557,7 +557,7 @@ func _internal_getWalletGaslessInfo(account: Account) -> Signal<WalletGaslessInf
     }
 }
 
-func _internal_sendWalletTransfer(account: Account, dataNormal: Data, dataGasless: Data?, randomId: Int64, pendingMessage: WalletPendingTransferMessageReference? = nil) -> Signal<WalletSendTransferResult, WalletSendTransferError> {
+func _internal_sendWalletTransfer(account: Account, dataNormal: Data, dataGasless: Data?, recipientPeerId: EnginePeer.Id?, randomId: Int64, pendingMessage: WalletPendingTransferMessageReference? = nil) -> Signal<WalletSendTransferResult, WalletSendTransferError> {
     guard !dataNormal.isEmpty, dataNormal.count <= 16 * 1024,
           (dataGasless?.count ?? 0) <= 16 * 1024 else {
         if let pendingMessage {
@@ -567,22 +567,35 @@ func _internal_sendWalletTransfer(account: Account, dataNormal: Data, dataGasles
         }
         return .fail(.invalidData)
     }
-    return account.network.request(Api.functions.wallet.sendTransfer(
-        flags: dataGasless == nil ? 0 : (1 << 0),
-        dataNormal: Buffer(data: dataNormal),
-        dataGasless: dataGasless.map { Buffer(data: $0) },
-        randomId: randomId
-    ), automaticFloodWait: false)
-    |> mapError { error -> WalletSendTransferError in
-        switch error.errorDescription {
-        case "WALLET_TRANSFER_DATA_INVALID":
-            return .invalidData
-        case "WALLET_KEY_MISMATCH":
-            return .keyMismatch
-        case "WALLET_TRANSFER_SEND_FAILED":
-            return .sendFailed
-        default:
-            return error.errorCode < 0 ? .network : .generic
+    return account.postbox.transaction { transaction -> Api.InputUser in
+        guard let recipientPeerId,
+              recipientPeerId.namespace == Namespaces.Peer.CloudUser,
+              let peer = transaction.getPeer(recipientPeerId),
+              let inputUser = apiInputUser(peer) else {
+            return .inputUserEmpty
+        }
+        return inputUser
+    }
+    |> castError(WalletSendTransferError.self)
+    |> mapToSignal { inputUser -> Signal<Api.Updates, WalletSendTransferError> in
+        return account.network.request(Api.functions.wallet.sendTransfer(
+            flags: dataGasless == nil ? 0 : (1 << 0),
+            dataNormal: Buffer(data: dataNormal),
+            dataGasless: dataGasless.map { Buffer(data: $0) },
+            userId: inputUser,
+            randomId: randomId
+        ), automaticFloodWait: false)
+        |> mapError { error -> WalletSendTransferError in
+            switch error.errorDescription {
+            case "WALLET_TRANSFER_DATA_INVALID":
+                return .invalidData
+            case "WALLET_KEY_MISMATCH":
+                return .keyMismatch
+            case "WALLET_TRANSFER_SEND_FAILED":
+                return .sendFailed
+            default:
+                return error.errorCode < 0 ? .network : .generic
+            }
         }
     }
     |> mapToSignal { updates -> Signal<WalletSendTransferResult, WalletSendTransferError> in

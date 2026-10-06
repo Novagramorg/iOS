@@ -15099,16 +15099,17 @@ public extension Api.functions.wallet {
     }
 }
 public extension Api.functions.wallet {
-    static func sendTransfer(flags: Int32, dataNormal: Buffer, dataGasless: Buffer?, randomId: Int64) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Updates>) {
+    static func sendTransfer(flags: Int32, dataNormal: Buffer, dataGasless: Buffer?, userId: Api.InputUser, randomId: Int64) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Updates>) {
         let buffer = Buffer()
-        buffer.appendInt32(-746745893)
+        buffer.appendInt32(-639247902)
         serializeInt32(flags, buffer: buffer, boxed: false)
         serializeBytes(dataNormal, buffer: buffer, boxed: false)
         if Int(flags) & Int(1 << 0) != 0 {
             serializeBytes(dataGasless!, buffer: buffer, boxed: false)
         }
+        userId.serialize(buffer, true)
         serializeInt64(randomId, buffer: buffer, boxed: false)
-        return (FunctionDescription(name: "wallet.sendTransfer", parameters: [("flags", ConstructorParameterDescription(flags)), ("dataNormal", ConstructorParameterDescription(dataNormal)), ("dataGasless", ConstructorParameterDescription(dataGasless)), ("randomId", ConstructorParameterDescription(randomId))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Updates? in
+        return (FunctionDescription(name: "wallet.sendTransfer", parameters: [("flags", ConstructorParameterDescription(flags)), ("dataNormal", ConstructorParameterDescription(dataNormal)), ("dataGasless", ConstructorParameterDescription(dataGasless)), ("userId", ConstructorParameterDescription(userId)), ("randomId", ConstructorParameterDescription(randomId))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Updates? in
             let reader = BufferReader(buffer)
             var result: Api.Updates?
             if let signature = reader.readInt32() {

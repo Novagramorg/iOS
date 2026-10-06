@@ -171,7 +171,6 @@ public func parseInternalUrl(sharedContext: SharedAccountContext, context: Accou
         query = String(query[query.index(query.startIndex, offsetBy: 2)...])
     }
     if let components = URLComponents(string: "/" + query) {
-        // Parse before trimming the query so a trailing slash in ref remains invalid.
         if components.path.components(separatedBy: "/").dropFirst().first?.lowercased() == "getpremium" {
             var reference = "tme_getpremium"
             if let ref = components.queryItems?.first(where: { $0.name == "ref" })?.value,
