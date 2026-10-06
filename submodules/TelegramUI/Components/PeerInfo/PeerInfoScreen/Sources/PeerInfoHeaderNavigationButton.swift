@@ -120,7 +120,7 @@ private final class MoreIconNode: ManagedAnimationNode {
     }
 }
 
-final class PeerInfoHeaderNavigationButton: HighlightableButtonNode {
+final class PeerInfoHeaderNavigationButton: HighlightTrackingButtonNode {
     let containerNode: ContextControllerSourceNode
     let contextSourceNode: ContextReferenceContentNode
     private let textNode: ImmediateTextNode

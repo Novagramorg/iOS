@@ -16,22 +16,18 @@ func walletSendAmountComponentGlyphs(_ view: UIView, origin: CGPoint) -> [Wallet
 
 // Shared with the screen's entrance clock; independent of amount-entry motion.
 struct WalletSendAmountIntro {
-    static let duration = 1.2
+    static let duration = InteractiveDiamondIntro.duration
     var progress: CGFloat = 1.0
     var caret: CGFloat = 1.0
-    var lift: CGFloat { -48.0 * 4.0 * self.progress * (1.0 - self.progress) }
-    var scale: CGFloat { 1.0 + 5.0 * pow(max(0.0, 1.0 - self.progress), 1.25) }
+    var lift: CGFloat { InteractiveDiamondIntro(progress: self.progress).lift }
+    var scale: CGFloat { InteractiveDiamondIntro(progress: self.progress).scale }
     var rise: CGFloat { 56.0 * (1.0 - self.progress) }
 
     init(time: Double?) {
         guard let time, time < Self.duration else { return }
-        let t = max(time - 0.18, 0.0)
         let k = min(max((time - 0.78) / 0.2, 0.0), 1.0)
         self.caret = CGFloat(k * k * (3.0 - 2.0 * k))
-        let omega = 2.0 * Double.pi / 0.9
-        let a = 0.8 * omega
-        let wd = omega * sqrt(1.0 - 0.8 * 0.8)
-        self.progress = CGFloat(1.0 - exp(-a * t) * (cos(wd * t) + (a - 1.2) / wd * sin(wd * t)))
+        self.progress = InteractiveDiamondIntro(time: time).progress
     }
 
     func finishing(_ progress: CGFloat) -> WalletSendAmountIntro {

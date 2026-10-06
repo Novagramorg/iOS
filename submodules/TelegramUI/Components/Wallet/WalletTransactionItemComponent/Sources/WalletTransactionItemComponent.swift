@@ -1113,7 +1113,7 @@ public final class WalletTransactionItemComponent: Component {
                     component: AnyComponent(WalletTransactionAddressTitleComponent(
                         address: titleAddress,
                         textColor: component.theme.list.itemPrimaryTextColor,
-                        backgroundColor: component.theme.list.blocksBackgroundColor
+                        backgroundColor: component.theme.list.itemSecondaryTextColor.withAlphaComponent(0.08)
                     )),
                     environment: {},
                     containerSize: CGSize(width: titleAvailableWidth, height: 100.0)

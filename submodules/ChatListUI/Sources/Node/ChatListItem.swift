@@ -3470,6 +3470,11 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                 if hasUnreadIncomingGramTransfer {
                     currentMentionBadgeImage = PresentationResourcesChatList.badgeBackgroundGram(item.presentationData.theme, diameter: badgeDiameter, inactive: isRemovedFromTotalUnreadCount)
                     mentionBadgeContent = .mention
+                    if unreadCount.count == 1 {
+                        badgeContent = .none
+                        currentBadgeBackgroundImage = nil
+                        currentAvatarBadgeBackgroundImage = nil
+                    }
                 } else if hasUnseenMentions {
                     if case .chatList(.archive) = item.chatListLocation {
                         currentMentionBadgeImage = PresentationResourcesChatList.badgeBackgroundInactiveMention(item.presentationData.theme, diameter: badgeDiameter)

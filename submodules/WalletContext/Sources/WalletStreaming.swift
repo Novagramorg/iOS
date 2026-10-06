@@ -572,7 +572,9 @@ enum WalletStreamingEventParser {
                 guard let transaction = self.transaction(value, walletRawAddress: expected, finality: finality, log: log) else {
                     continue
                 }
-                transactions.append(transaction)
+                if transaction.direction == .incoming {
+                    transactions.append(transaction)
+                }
                 guard transaction.direction == .outgoing, transaction.status != .failed,
                       let bodyHash = value.inMessage?.message_content?.hash,
                       value.inMessage?.destination?.lowercased() == expected,

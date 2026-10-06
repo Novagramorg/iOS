@@ -13,6 +13,7 @@ swift_library(
         "//submodules/AppBundle",
         "//submodules/AsyncDisplayKit",
         "//submodules/Display",
+        "//submodules/MetalEngine",
         "//submodules/AccountContext",
         "//submodules/SSignalKit/SwiftSignalKit",
         "//submodules/TelegramCore",

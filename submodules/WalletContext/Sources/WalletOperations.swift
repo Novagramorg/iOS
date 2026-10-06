@@ -1935,6 +1935,7 @@ extension WalletContextImpl {
                     prepared: prepared,
                     intent: intent,
                     pending: pending,
+                    recipientPeerId: recipientPeerId,
                     randomId: randomId,
                     walletAddress: record.walletAddress,
                     generation: activationGenerationBeforeSend,
