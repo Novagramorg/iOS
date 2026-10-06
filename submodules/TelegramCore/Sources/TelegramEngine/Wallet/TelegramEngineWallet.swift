@@ -28,8 +28,8 @@ public extension TelegramEngine {
             return _internal_getWalletGaslessInfo(account: self.account)
         }
 
-        public func sendTransfer(dataNormal: Data, dataGasless: Data? = nil, randomId: Int64, pendingMessage: WalletPendingTransferMessageReference? = nil) -> Signal<WalletSendTransferResult, WalletSendTransferError> {
-            return _internal_sendWalletTransfer(account: self.account, dataNormal: dataNormal, dataGasless: dataGasless, randomId: randomId, pendingMessage: pendingMessage)
+        public func sendTransfer(dataNormal: Data, dataGasless: Data? = nil, recipientPeerId: EnginePeer.Id? = nil, randomId: Int64, pendingMessage: WalletPendingTransferMessageReference? = nil) -> Signal<WalletSendTransferResult, WalletSendTransferError> {
+            return _internal_sendWalletTransfer(account: self.account, dataNormal: dataNormal, dataGasless: dataGasless, recipientPeerId: recipientPeerId, randomId: randomId, pendingMessage: pendingMessage)
         }
 
         public func createPendingTransferMessage(peerId: EnginePeer.Id, operationId: String, randomId: Int64, amount: Int64, address: String, comment: String?, commentEncrypted: Bool, timestamp: Int32) -> Signal<WalletPendingTransferMessageReference?, NoError> {

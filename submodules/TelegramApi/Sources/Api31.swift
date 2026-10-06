@@ -235,23 +235,6 @@ public extension Api {
                 return nil
             }
         }
-        public static func parse_walletUserAddressWithUserId(_ reader: BufferReader) -> WalletUserAddress? {
-            var _1: Int64?
-            _1 = reader.readInt64()
-            var _2: String?
-            _2 = parseString(reader)
-            var _3: Buffer?
-            _3 = parseBytes(reader)
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            let _c3 = _3 != nil
-            if _c1 && _c2 && _c3 {
-                return Api.WalletUserAddress.walletUserAddress(Cons_walletUserAddress(flags: 1 << 0, userId: _1, address: _2!, publicKey: _3!))
-            }
-            else {
-                return nil
-            }
-        }
     }
 }
 public extension Api {

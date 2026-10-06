@@ -184,6 +184,12 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     /// rather than the whole editor surface.
     public var configureSelectionHandleView: ((UIView) -> Void)? { didSet { canvas.configureSelectionHandleView = configureSelectionHandleView } }
 
+    /// Localized titles for the editor's custom edit-menu items on all supported iOS versions.
+    public var editMenuStrings: RichTextEditorMenuStrings {
+        get { canvas.editMenuStrings }
+        set { canvas.editMenuStrings = newValue }
+    }
+
     /// Transform the editor's default edit-menu elements into the final set. `defaultElements` is the system
     /// suggested actions (Cut/Copy/Paste/Select + Writing Tools) followed by the editor's own custom items
     /// (the built-in "Format" submenu + Look Up / Translate / Share). Return the elements to present.

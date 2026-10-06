@@ -148,6 +148,7 @@ public enum ParsedInternalUrl {
     case startAttach(String, String?, String?)
     case contactToken(String)
     case chatFolder(slug: String)
+    case premiumOffer(reference: String)
     case premiumGiftCode(slug: String)
     case messageLink(slug: String)
     case collectible(slug: String)
@@ -169,9 +170,19 @@ public func parseInternalUrl(sharedContext: SharedAccountContext, context: Accou
     if query.hasPrefix("s/") {
         query = String(query[query.index(query.startIndex, offsetBy: 2)...])
     }
-    if let components = URLComponents(string: "/" + query),
-       components.path.lowercased() == "/sendgrams" || components.path.lowercased() == "/sendgrams/" {
-        return .sendGrams(queryItems: components.queryItems ?? [])
+    if let components = URLComponents(string: "/" + query) {
+        if components.path.components(separatedBy: "/").dropFirst().first?.lowercased() == "getpremium" {
+            var reference = "tme_getpremium"
+            if let ref = components.queryItems?.first(where: { $0.name == "ref" })?.value,
+               !ref.isEmpty, ref.count <= 32,
+               ref.rangeOfCharacter(from: CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_").inverted) == nil {
+                reference += "_" + ref.lowercased()
+            }
+            return .premiumOffer(reference: reference)
+        }
+        if components.path.lowercased() == "/sendgrams" || components.path.lowercased() == "/sendgrams/" {
+            return .sendGrams(queryItems: components.queryItems ?? [])
+        }
     }
     if query.hasSuffix("/") {
         query.removeLast()
@@ -885,6 +896,8 @@ private func resolvedForumTopicUrl(channel: TelegramChannel, threadId: Int64, me
 
 private func resolveInternalUrl(context: AccountContext, url: ParsedInternalUrl) -> Signal<ResolveInternalUrlResult, NoError> {
     switch url {
+        case let .premiumOffer(reference):
+            return .single(.result(.premiumOffer(reference: reference)))
         case let .sendGrams(queryItems):
             var walletUrl = URLComponents(string: "https://t.me/sendgrams")!
             walletUrl.queryItems = queryItems

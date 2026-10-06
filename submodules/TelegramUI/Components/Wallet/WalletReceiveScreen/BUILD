@@ -13,6 +13,7 @@ swift_library(
         "//submodules/AppBundle",
         "//submodules/AsyncDisplayKit",
         "//submodules/Display",
+        "//submodules/MetalEngine",
         "//submodules/AccountContext",
         "//submodules/SSignalKit/SwiftSignalKit",
         "//submodules/TelegramCore",
@@ -25,6 +26,7 @@ swift_library(
         "//submodules/Components/BundleIconComponent",
         "//submodules/TelegramUI/Components/GlassBarButtonComponent",
         "//submodules/TelegramUI/Components/ButtonComponent",
+        "//submodules/TelegramUI/Components/Premium/PremiumDiamondComponent",
         "//submodules/QrCode",
     ],
     visibility = [

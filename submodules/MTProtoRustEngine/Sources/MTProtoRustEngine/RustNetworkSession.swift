@@ -99,6 +99,7 @@ final class RustNetworkSession: NetworkEngineSession {
     private var holdForUnsupportedProxy = false
 
     private var installedKeyId: Int64?
+    private var installedKeyAt: CFAbsoluteTime = 0.0
     private var awaitingKey = false
     private var rejectedKeyId: Int64?
     private var authTokenReady: Bool
@@ -124,6 +125,7 @@ final class RustNetworkSession: NetworkEngineSession {
 
     private static let connectionWatchdogInitialDelay: Double = 20.0
     private static let connectionWatchdogMaxDelay: Double = 320.0
+    private static let permanentKeyImmunity: Double = 60.0
     private static let temporaryKeyMinimumLifetime: Int32 = 300
 
     init(runtime: RustEngineRuntime, context: MTContext, datacenterId: Int, role: NetworkEngineSessionRole, usageCalculationInfo: MTNetworkUsageCalculationInfo?, delegate: NetworkEngineSessionDelegate?, serverPublicKeys: [String], httpPort: UInt16) {
@@ -622,6 +624,7 @@ final class RustNetworkSession: NetworkEngineSession {
             rustEngineImportantLog("\(self.logPrefix) binding the temporary key failed: \(event.code) \(event.text)")
         case .permanentKeyInvalid:
             rustEngineImportantLog("\(self.logPrefix) the server does not know the permanent key \(self.installedKeyId.map(String.init) ?? "none")")
+            self.handlePermanentKeyInvalid()
         case .temporaryKeyInUse:
             self.handleTemporaryKeyInUse(event)
         case .temporaryKeyDropped:
@@ -708,6 +711,11 @@ final class RustNetworkSession: NetworkEngineSession {
             return
         }
         rustEngineLog("\(self.logPrefix) failed #\(event.requestId) \(event.code) \(event.text)")
+        if rustEngineKeepsWaitingAfterLostAnswer(code: event.code, text: event.text) {
+            rustEngineImportantLog("\(self.logPrefix) #\(event.requestId) ran on the server but its answer is gone; it stays waiting")
+            self.finish(pending)
+            return
+        }
         if rustEngineResubmitsAfterKeyRotation(code: event.code, text: event.text) {
             let errorContext = pending.errorState.applyServerError()
             if pending.request.shouldContinueAfterError(NetworkEngineErrorContext(floodWaitSeconds: errorContext.floodWaitSeconds, floodWaitErrorText: errorContext.floodWaitErrorText, internalServerErrorCount: errorContext.internalServerErrorCount)) && !pending.isCancelled && !pending.isFinished {
@@ -922,10 +930,39 @@ final class RustNetworkSession: NetworkEngineSession {
         }
     }
 
-    private func dropAndRequireKey(isCdn: Bool, rejectedKeyId: Int64?, engineStillHoldsKey: Bool) {
+    /// The engine's binds say the server no longer knows the permanent key (a session terminated from
+    /// another device, a key the server dropped). On another datacenter the key and its authorization
+    /// token are made anew. On the home datacenter it is MtProtoKit's call, as with MtProtoKit:
+    /// `checkIfLoggedOut` probes the key and logs an authorized account out once the probe confirms it is
+    /// gone; until then the session waits, reported as updating. A key that replaced another less than a
+    /// minute ago is left alone: the engine reports a key it just got only after it kept failing past
+    /// that, so the report is about the key it replaced.
+    private func handlePermanentKeyInvalid() {
+        guard self.runsPfs, let keyId = self.installedKeyId else {
+            return
+        }
+        if CFAbsoluteTimeGetCurrent() - self.installedKeyAt < RustNetworkSession.permanentKeyImmunity {
+            rustEngineLog("\(self.logPrefix) permanent key reported unknown right after it was installed; keeping it")
+            return
+        }
+        if self.requiresForeignAuthToken {
+            self.context.removeTokenForDatacenter(withId: self.datacenterId)
+            if self.authTokenReady {
+                self.authTokenReady = false
+                if let engine = self.engine, self.handle != 0 {
+                    mt_session_set_auth_token_ready(engine, self.handle, 0)
+                }
+            }
+            self.dropAndRequireKey(isCdn: false, rejectedKeyId: keyId, engineStillHoldsKey: true, selector: .persistent)
+        } else {
+            self.context.checkIfLoggedOut(self.datacenterId)
+        }
+    }
+
+    private func dropAndRequireKey(isCdn: Bool, rejectedKeyId: Int64?, engineStillHoldsKey: Bool, selector explicitSelector: MTDatacenterAuthInfoSelector? = nil) {
         let context = self.context
         let datacenterId = self.datacenterId
-        let selector = self.selector
+        let selector = explicitSelector ?? self.selector
         if let rejectedKeyId = rejectedKeyId {
             self.rejectedKeyId = rejectedKeyId
         }
@@ -968,6 +1005,9 @@ final class RustNetworkSession: NetworkEngineSession {
             mt_session_set_auth_key(engine, self.handle, material.key, material.salts, material.saltCount, material.hasInitHash, material.initHash)
         }
         rustEngineLog("\(self.logPrefix) installed auth key \(authInfo.authKeyId) selector \(self.keySelector.rawValue)")
+        if self.installedKeyId != authInfo.authKeyId {
+            self.installedKeyAt = CFAbsoluteTimeGetCurrent()
+        }
         self.installedKeyId = authInfo.authKeyId
         self.awaitingKey = false
         self.rejectedKeyId = nil
@@ -1010,7 +1050,11 @@ final class RustNetworkSession: NetworkEngineSession {
         let adopted = (event.flags & 1) != 0
         self.temporaryKeyId = keyId
         rustEngineLog("\(self.logPrefix) talking under temporary key \(keyId)\(adopted ? " from the context" : "")")
-        guard !adopted, let made = self.madeTemporaryKey, made.keyId == keyId else {
+        guard !adopted else {
+            return
+        }
+        guard let made = self.madeTemporaryKey, made.keyId == keyId else {
+            self.markContextKeyBound(keyId: keyId, permanentKeyId: Int64(bitPattern: event.requestId), datacenterOfKey: event.code)
             return
         }
         self.madeTemporaryKey = nil
@@ -1034,6 +1078,28 @@ final class RustNetworkSession: NetworkEngineSession {
             let stored = context.authInfoForDatacenter(withId: datacenterId, selector: selector).map(RustNetworkSession.temporaryKeyInfo)
             if rustEngineStoresTemporaryKey(stored: stored, made: info) {
                 context.updateAuthInfoForDatacenter(withId: datacenterId, authInfo: authInfo, selector: selector)
+            }
+        }
+    }
+
+    /// A key from the context (MtProtoKit's, its binding unknown) that the engine bound to the installed
+    /// permanent key: the context's copy says so from now on, so that later sessions take it without
+    /// binding it again and MtProtoKit's refresher leaves it to the engine.
+    private func markContextKeyBound(keyId: Int64, permanentKeyId: Int64, datacenterOfKey: Int32) {
+        guard permanentKeyId != 0, permanentKeyId == self.installedKeyId, datacenterOfKey == Int32(self.obfuscationDatacenterId) else {
+            return
+        }
+        let context = self.context
+        let datacenterId = self.datacenterId
+        let selector = self.selector
+        context.performBatchUpdates {
+            guard let stored = context.authInfoForDatacenter(withId: datacenterId, selector: selector), stored.authKeyId == keyId, stored.authKeyAttributes?[rustEngineBoundToAttribute] == nil, let authKey = stored.authKey else {
+                return
+            }
+            var attributes = stored.authKeyAttributes ?? [:]
+            attributes[rustEngineBoundToAttribute] = NSNumber(value: permanentKeyId)
+            if let updated = MTDatacenterAuthInfo(authKey: authKey, authKeyId: keyId, validUntilTimestamp: stored.validUntilTimestamp, saltSet: stored.saltSet ?? [], authKeyAttributes: attributes) {
+                context.updateAuthInfoForDatacenter(withId: datacenterId, authInfo: updated, selector: selector)
             }
         }
     }
@@ -1392,7 +1458,7 @@ final class RustNetworkSession: NetworkEngineSession {
     }
 
     private func updateConnectionWatchdog() {
-        let isHealthy = self.lastConnectionFlags.map { $0.isConnected && !$0.isUpdatingConnectionContext } ?? false
+        let isHealthy = self.lastConnectionFlags.map { $0.isConnected && (!$0.isUpdatingConnectionContext || $0.isAwaitingKeyBinding) } ?? false
         if isHealthy {
             if self.connectionProblemsReported, let scheme = self.schemes.first {
                 self.context.revalidateTransportScheme(forDatacenterId: self.datacenterId, transportScheme: scheme, media: self.isMedia)

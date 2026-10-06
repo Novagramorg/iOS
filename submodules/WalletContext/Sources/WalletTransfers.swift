@@ -449,6 +449,7 @@ extension WalletContextImpl {
         prepared: PreparedTransfer,
         intent: SendIntent,
         pending: PendingTransfer,
+        recipientPeerId: EnginePeer.Id?,
         randomId: Int64,
         walletAddress: String,
         generation: UInt64,
@@ -528,7 +529,7 @@ extension WalletContextImpl {
             self.transferSubmissions.startedRPC(pending.id)
             let task = WalletAuthorizationScope.$session.withValue(nil) {
                 request.start(self.engine.wallet.sendTransfer(dataNormal: data.normal, dataGasless: data.gasless,
-                    randomId: randomId, pendingMessage: submittedPending.pendingMessage))
+                    recipientPeerId: recipientPeerId, randomId: randomId, pendingMessage: submittedPending.pendingMessage))
                 return Task {
                     try await self.submitTransferData(request, pending: submittedPending,
                         generation: generation, startedAt: startedAt, requestStartedAt: requestStartedAt)

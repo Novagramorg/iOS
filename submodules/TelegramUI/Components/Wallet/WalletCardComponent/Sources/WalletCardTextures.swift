@@ -6,6 +6,7 @@ private let walletCardTextureSourceSize = CGSize(width: 370.0, height: 220.0)
 enum WalletCardTextures {
     private static let cachedStars = makeStarsImage()
     private static let cachedNoise = makeNoiseImage()
+    private static let cachedQR = makeQRImage()
 
     static func starsImage() -> UIImage {
         return self.cachedStars
@@ -13,6 +14,37 @@ enum WalletCardTextures {
 
     static func noiseImage() -> UIImage {
         return self.cachedNoise
+    }
+
+    static func qrImage() -> UIImage {
+        return self.cachedQR
+    }
+
+    private static func makeQRImage() -> UIImage {
+        let format = UIGraphicsImageRendererFormat()
+        format.preferredRange = .standard
+        format.scale = 8.0
+        format.opaque = false
+        return UIGraphicsImageRenderer(size: CGSize(width: 22.0, height: 22.0), format: format).image { context in
+            let cg = context.cgContext
+            cg.translateBy(x: -282.5, y: -90.0)
+            cg.setFillColor(UIColor.white.cgColor)
+            for origin in [CGPoint(x: 284.25, y: 91.75), CGPoint(x: 294.5, y: 91.75), CGPoint(x: 284.25, y: 102.0)] {
+                let outer = CGRect(origin: origin, size: CGSize(width: 8.25, height: 8.25))
+                let inner = outer.insetBy(dx: 1.375, dy: 1.375)
+                let path = CGMutablePath()
+                path.addRoundedRect(in: outer, cornerWidth: 2.4, cornerHeight: 2.4)
+                path.addRoundedRect(in: inner, cornerWidth: 1.1, cornerHeight: 1.1)
+                cg.addPath(path)
+                cg.fillPath(using: .evenOdd)
+            }
+            for origin in [CGPoint(x: 295.0, y: 103.0), CGPoint(x: 300.12, y: 103.0), CGPoint(x: 297.6, y: 105.3),
+                           CGPoint(x: 295.0, y: 108.15), CGPoint(x: 300.12, y: 108.15)] {
+                let dot = CGRect(origin: origin, size: CGSize(width: 2.12, height: 2.1))
+                cg.addPath(CGPath(roundedRect: dot, cornerWidth: 0.45, cornerHeight: 0.45, transform: nil))
+                cg.fillPath()
+            }
+        }
     }
 
     private static func makeStarsImage() -> UIImage {

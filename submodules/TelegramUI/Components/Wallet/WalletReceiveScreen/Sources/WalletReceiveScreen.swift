@@ -1,6 +1,8 @@
 import Foundation
 import UIKit
 import CoreText
+import Metal
+import MetalEngine
 import Display
 import AccountContext
 import SwiftSignalKit
@@ -15,21 +17,43 @@ import BundleIconComponent
 import GlassBarButtonComponent
 import ButtonComponent
 import QrCode
+import PremiumDiamondComponent
 
 private final class WalletReceiveQrComponent: Component {
     let address: String
+    let theme: PresentationTheme
+    let isVisible: Bool
 
-    init(address: String) {
+    init(address: String, theme: PresentationTheme, isVisible: Bool) {
         self.address = address
+        self.theme = theme
+        self.isVisible = isVisible
     }
 
     static func ==(lhs: WalletReceiveQrComponent, rhs: WalletReceiveQrComponent) -> Bool {
-        return lhs.address == rhs.address
+        return lhs.address == rhs.address && lhs.theme === rhs.theme && lhs.isVisible == rhs.isVisible
     }
 
     final class View: UIView {
+        private static let introDelay = 0.03
+        private static let qrRevealDuration = 0.5
+        private static let diamondIntroSpeed = 1.5
+        private static var diamondIntroDuration: Double {
+            return Self.introDelay + (InteractiveDiamondIntro.duration - InteractiveDiamondIntro.delay) / Self.diamondIntroSpeed
+        }
+
         private var component: WalletReceiveQrComponent?
         private let imageNode: TransformImageNode
+        private let diamond = ComponentView<Empty>()
+        private var qrCodeSize: Int?
+        private var refractionImage: UIImage?
+        private var refractionTexture: MTLTexture?
+        private var revealView: WalletReceiveQrRevealView?
+        private var revealStartTime: CFTimeInterval?
+        private var revealDisplayLink: SharedDisplayLinkDriver.Link?
+        private var diamondFrame: CGRect = .zero
+        private var didAnimateIn = false
+        private var isUpdating = false
 
         override init(frame: CGRect) {
             self.imageNode = TransformImageNode()
@@ -37,30 +61,202 @@ private final class WalletReceiveQrComponent: Component {
             super.init(frame: frame)
 
             self.backgroundColor = .white
-            self.isUserInteractionEnabled = false
             self.addSubview(self.imageNode.view)
+            self.imageNode.imageUpdated = { [weak self] _ in
+                guard let self, !self.isUpdating else {
+                    return
+                }
+                self.updateRevealAnimation()
+                self.updateDiamondRefraction()
+            }
+            NotificationCenter.default.addObserver(self, selector: #selector(self.stopRevealAnimation), name: UIApplication.didEnterBackgroundNotification, object: nil)
+            NotificationCenter.default.addObserver(self, selector: #selector(self.stopRevealAnimation), name: UIAccessibility.reduceMotionStatusDidChangeNotification, object: nil)
         }
 
         required init?(coder: NSCoder) {
             fatalError("init(coder:) has not been implemented")
         }
 
+        deinit {
+            self.revealDisplayLink?.invalidate()
+            NotificationCenter.default.removeObserver(self)
+        }
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+
+            self.updateRevealAnimation()
+        }
+
+        override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+            guard self.isUserInteractionEnabled, !self.isHidden, self.alpha > 0.01,
+                  self.component?.isVisible == true,
+                  let diamondView = self.diamond.view as? InteractiveDiamondComponent.View else {
+                return nil
+            }
+            return diamondView.hitTest(diamondView.convert(point, from: self), with: event)
+        }
+
+        private func finishRevealAnimation() {
+            self.revealDisplayLink?.invalidate()
+            self.revealDisplayLink = nil
+            self.revealStartTime = nil
+            let revealView = self.revealView
+            self.revealView = nil
+            revealView?.removeFromSuperview()
+            self.imageNode.isHidden = false
+            if let diamondView = self.diamond.view as? InteractiveDiamondComponent.View {
+                diamondView.updateOpeningScale(nil)
+                diamondView.frame = self.diamondFrame
+            }
+        }
+
+        @objc private func stopRevealAnimation() {
+            self.finishRevealAnimation()
+        }
+
+        private func updateDiamondIntro() {
+            guard let startTime = self.revealStartTime,
+                  let diamondView = self.diamond.view as? InteractiveDiamondComponent.View else {
+                return
+            }
+            let elapsed = CACurrentMediaTime() - startTime
+            guard elapsed < max(Self.diamondIntroDuration, Self.introDelay + Self.qrRevealDuration),
+                  self.window != nil, self.component?.isVisible == true,
+                  UIApplication.shared.applicationState != .background,
+                  !UIAccessibility.isReduceMotionEnabled else {
+                self.finishRevealAnimation()
+                return
+            }
+            let introTime = elapsed + InteractiveDiamondIntro.delay - Self.introDelay
+            let intro = InteractiveDiamondIntro(time: introTime, speed: Self.diamondIntroSpeed, damping: 0.64)
+            let bounceAmplitude: CGFloat = intro.progress > 1.0 ? 0.49 : 1.0
+            let scale = 1.0 + (intro.scale(from: 5.0, allowsOvershoot: true) - 1.0) * bounceAmplitude
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            diamondView.clipsToBounds = false
+            diamondView.center = CGPoint(x: self.diamondFrame.midX, y: self.diamondFrame.midY + intro.lift * bounceAmplitude)
+            diamondView.updateOpeningScale(elapsed < Self.diamondIntroDuration ? scale : nil)
+            CATransaction.commit()
+        }
+
+        private func updateRevealAnimation() {
+            guard let component = self.component else {
+                return
+            }
+            guard self.window != nil, component.isVisible, UIApplication.shared.applicationState != .background else {
+                self.finishRevealAnimation()
+                return
+            }
+            if UIAccessibility.isReduceMotionEnabled {
+                self.didAnimateIn = true
+                self.finishRevealAnimation()
+                return
+            }
+            guard !self.didAnimateIn, let image = self.imageNode.image, let qrCodeSize = self.qrCodeSize,
+                  self.diamond.view is InteractiveDiamondComponent.View,
+                  self.imageNode.bounds.width > 0.0 else {
+                return
+            }
+            self.didAnimateIn = true
+
+            let revealView = WalletReceiveQrRevealView(image: image, moduleCount: qrCodeSize)
+            revealView.frame = self.imageNode.frame
+            self.revealView = revealView
+            self.insertSubview(revealView, aboveSubview: self.imageNode.view)
+            self.imageNode.isHidden = true
+            self.revealStartTime = CACurrentMediaTime()
+            revealView.animateIn(delay: Self.introDelay, duration: Self.qrRevealDuration)
+            self.updateDiamondIntro()
+            self.revealDisplayLink = SharedDisplayLinkDriver.shared.add(framesPerSecond: .max, { [weak self] _ in
+                self?.updateDiamondIntro()
+            })
+        }
+
+        private func updateDiamondRefraction() {
+            guard let diamondView = self.diamond.view as? InteractiveDiamondComponent.View else { return }
+            guard diamondView.isExpanded, let image = self.imageNode.image, let cgImage = image.cgImage else {
+                diamondView.updateRefractionSource(nil)
+                return
+            }
+            if self.refractionImage !== image {
+                self.refractionTexture = nil
+                self.refractionImage = nil
+                let width = cgImage.width
+                let height = cgImage.height
+                guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+                    space: CGColorSpaceCreateDeviceRGB(),
+                    bitmapInfo: CGBitmapInfo.byteOrder32Little.rawValue | CGImageAlphaInfo.premultipliedFirst.rawValue),
+                    let bytes = context.data else {
+                    diamondView.updateRefractionSource(nil)
+                    return
+                }
+                context.translateBy(x: 0.0, y: CGFloat(height))
+                context.scaleBy(x: 1.0, y: -1.0)
+                UIGraphicsPushContext(context)
+                image.draw(in: CGRect(x: 0.0, y: 0.0, width: CGFloat(width), height: CGFloat(height)))
+                UIGraphicsPopContext()
+
+                // Black modules with transparent gaps, including their antialiased edges.
+                // The QR's white backing should not cover the diamond's facets.
+                let pixels = bytes.assumingMemoryBound(to: UInt8.self)
+                for y in 0 ..< height {
+                    for x in 0 ..< width {
+                        let offset = y * context.bytesPerRow + x * 4
+                        let alpha = 255 - pixels[offset + 2]
+                        pixels[offset] = 0
+                        pixels[offset + 1] = 0
+                        pixels[offset + 2] = 0
+                        pixels[offset + 3] = alpha
+                    }
+                }
+                let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm, width: width, height: height, mipmapped: false)
+                descriptor.storageMode = .shared
+                descriptor.usage = .shaderRead
+                guard let texture = MetalEngine.shared.device.makeTexture(descriptor: descriptor) else {
+                    diamondView.updateRefractionSource(nil)
+                    return
+                }
+                texture.label = "Wallet receive QR refraction"
+                texture.replace(region: MTLRegionMake2D(0, 0, width, height), mipmapLevel: 0, withBytes: bytes, bytesPerRow: context.bytesPerRow)
+                self.refractionImage = image
+                self.refractionTexture = texture
+            }
+            guard let texture = self.refractionTexture else { return }
+            let rect = self.imageNode.view.convert(self.imageNode.bounds, to: diamondView)
+                .offsetBy(dx: -diamondView.bounds.midX, dy: -diamondView.bounds.midY)
+            diamondView.updateRefractionSource(InteractiveDiamondComponent.RefractionSource(
+                texture: texture, uv: SIMD4(0.0, 0.0, 1.0, 1.0), rect: rect, preservesColors: true
+            ))
+        }
+
         func update(
             component: WalletReceiveQrComponent,
             availableSize: CGSize
         ) -> CGSize {
+            self.isUpdating = true
             let previousComponent = self.component
             self.component = component
 
             if previousComponent?.address != component.address {
+                self.finishRevealAnimation()
+                self.didAnimateIn = false
+                self.qrCodeSize = nil
+                self.refractionImage = nil
+                self.refractionTexture = nil
+                (self.diamond.view as? InteractiveDiamondComponent.View)?.updateRefractionSource(nil)
+                self.imageNode.reset()
                 self.imageNode.setSignal(
                     qrCode(
                         string: "ton://transfer/\(component.address)",
                         color: .black,
                         backgroundColor: .white,
-                        icon: .custom(UIImage(bundleImageName: "Wallet/QrGram")),
+                        icon: .cutout,
                         ecl: "Q"
                     )
+                    |> beforeNext { [weak self] size, _ in
+                        self?.qrCodeSize = size
+                    }
                     |> map { $0.1 },
                     attemptSynchronously: true
                 )
@@ -71,6 +267,9 @@ private final class WalletReceiveQrComponent: Component {
             let imageInset = min(6.0, max(0.0, (side - 1.0) / 2.0))
             let imageSide = max(1.0, side - imageInset * 2.0)
             let imageSize = CGSize(width: imageSide, height: imageSide)
+            if self.imageNode.bounds.size != imageSize {
+                self.finishRevealAnimation()
+            }
 
             let makeImageLayout = self.imageNode.asyncLayout()
             let imageApply = makeImageLayout(TransformImageArguments(
@@ -85,6 +284,42 @@ private final class WalletReceiveQrComponent: Component {
                 origin: CGPoint(x: imageInset, y: imageInset),
                 size: imageSize
             )
+
+            if let qrCodeSize = self.qrCodeSize {
+                let (_, cutoutFrame, _) = qrCodeCutout(size: qrCodeSize, dimensions: imageSize, scale: nil)
+                let _ = self.diamond.update(
+                    transition: .immediate,
+                    component: AnyComponent(InteractiveDiamondComponent(
+                        size: cutoutFrame.size,
+                        diamondWidth: cutoutFrame.width * 0.72,
+                        isVisible: component.isVisible,
+                        theme: component.theme,
+                        animationMode: .continuous
+                    )),
+                    environment: {},
+                    containerSize: cutoutFrame.size
+                )
+                if let diamondView = self.diamond.view as? InteractiveDiamondComponent.View {
+                    if diamondView.superview == nil {
+                        diamondView.clipsToBounds = false
+                        diamondView.onExpansionChanged = { [weak self] expanded in
+                            guard let self else { return }
+                            if expanded, self.revealStartTime != nil {
+                                self.finishRevealAnimation()
+                            }
+                            self.updateDiamondRefraction()
+                        }
+                        self.addSubview(diamondView)
+                    }
+                    self.diamondFrame = cutoutFrame.offsetBy(dx: imageInset, dy: imageInset)
+                    diamondView.frame = self.diamondFrame
+                    self.updateDiamondIntro()
+                }
+            }
+
+            self.isUpdating = false
+            self.updateRevealAnimation()
+            self.updateDiamondRefraction()
 
             return size
         }
@@ -1107,11 +1342,11 @@ private final class WalletReceiveSheetContent: Component {
                 ),
                 AnyComponentWithIdentity(
                     id: "title",
-                    component: AnyComponent(Text(
-                        text: environment.strings.Wallet_Receive_Buy,
+                    component: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(
+                        string: availableWidth < 390.0 ? environment.strings.Wallet_Receive_BuyShort : environment.strings.Wallet_Receive_Buy,
                         font: Font.semibold(17.0),
-                        color: UIColor(rgb: 0x087cff)
-                    ))
+                        textColor: UIColor(rgb: 0x087cff)
+                    ))))
                 )
             ], spacing: 10.0)
             let buyButtonSize = self.buyButton.update(
@@ -1261,7 +1496,11 @@ private final class WalletReceiveSheetContent: Component {
                 } else {
                     let qrCodeSize = self.qrCode.update(
                         transition: cardContentTransition,
-                        component: AnyComponent(WalletReceiveQrComponent(address: component.address)),
+                        component: AnyComponent(WalletReceiveQrComponent(
+                            address: component.address,
+                            theme: environment.theme,
+                            isVisible: environment.isVisible
+                        )),
                         environment: {},
                         containerSize: CGSize(width: qrSize, height: qrSize)
                     )

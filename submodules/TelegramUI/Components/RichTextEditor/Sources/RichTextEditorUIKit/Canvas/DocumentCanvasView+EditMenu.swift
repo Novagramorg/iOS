@@ -180,11 +180,11 @@ extension DocumentCanvasView {
     private func legacyCustomMenuItems() -> [UIMenuItem] {
         guard selFrom < selTo else { return [] }
         return [
-            UIMenuItem(title: "Bold", action: #selector(legacyBold)),
-            UIMenuItem(title: "Italic", action: #selector(legacyItalic)),
-            UIMenuItem(title: "Underline", action: #selector(legacyUnderline)),
-            UIMenuItem(title: "Look Up", action: #selector(legacyLookUp)),
-            UIMenuItem(title: "Share", action: #selector(legacyShare)),
+            UIMenuItem(title: editMenuStrings.bold, action: #selector(legacyBold)),
+            UIMenuItem(title: editMenuStrings.italic, action: #selector(legacyItalic)),
+            UIMenuItem(title: editMenuStrings.underline, action: #selector(legacyUnderline)),
+            UIMenuItem(title: editMenuStrings.lookUp, action: #selector(legacyLookUp)),
+            UIMenuItem(title: editMenuStrings.share, action: #selector(legacyShare)),
         ]
     }
 

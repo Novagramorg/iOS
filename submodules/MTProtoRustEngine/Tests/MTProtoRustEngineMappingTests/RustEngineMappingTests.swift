@@ -160,9 +160,11 @@ final class RustEngineMappingTests: XCTestCase {
 
     func testConnectionFlags() {
         let none = RustEngineConnectionFlags(rawValue: 0)
-        XCTAssertFalse(none.isNetworkAvailable || none.isConnected || none.isUpdatingConnectionContext || none.isPerformingServiceTasks || none.proxyHasConnectionIssues)
-        let all = RustEngineConnectionFlags(rawValue: 31)
-        XCTAssertTrue(all.isNetworkAvailable && all.isConnected && all.isUpdatingConnectionContext && all.isPerformingServiceTasks && all.proxyHasConnectionIssues)
+        XCTAssertFalse(none.isNetworkAvailable || none.isConnected || none.isUpdatingConnectionContext || none.isPerformingServiceTasks || none.proxyHasConnectionIssues || none.isAwaitingKeyBinding)
+        let all = RustEngineConnectionFlags(rawValue: 63)
+        XCTAssertTrue(all.isNetworkAvailable && all.isConnected && all.isUpdatingConnectionContext && all.isPerformingServiceTasks && all.proxyHasConnectionIssues && all.isAwaitingKeyBinding)
+        let binding = RustEngineConnectionFlags(rawValue: 1 | 2 | 4 | 32)
+        XCTAssertTrue(binding.isUpdatingConnectionContext && binding.isAwaitingKeyBinding)
         let connected = RustEngineConnectionFlags(rawValue: 1 | 2)
         XCTAssertTrue(connected.isNetworkAvailable)
         XCTAssertTrue(connected.isConnected)
@@ -253,6 +255,13 @@ final class RustEngineMappingTests: XCTestCase {
         XCTAssertTrue(rustEngineOffersTemporaryKey(stored: legacy, permanentKeyId: 7, now: 9_000, minimumLifetime: 300), "MtProtoKit's keys carry no binding")
         let permanent = RustEngineTemporaryKeyInfo(keyId: 1, validUntil: Int32.max, boundTo: nil)
         XCTAssertFalse(rustEngineOffersTemporaryKey(stored: permanent, permanentKeyId: 7, now: 9_000, minimumLifetime: 300))
+    }
+
+    func testALostAnswerKeepsTheCallWaiting() {
+        XCTAssertTrue(rustEngineKeepsWaitingAfterLostAnswer(code: 500, text: "PROTOCOL_ERROR_ANSWER_LOST"))
+        XCTAssertFalse(rustEngineKeepsWaitingAfterLostAnswer(code: 500, text: "PROTOCOL_ERROR_REJECTED"))
+        XCTAssertFalse(rustEngineKeepsWaitingAfterLostAnswer(code: 400, text: "PROTOCOL_ERROR_ANSWER_LOST"))
+        XCTAssertFalse(rustEngineResubmitsAfterKeyRotation(code: 500, text: "PROTOCOL_ERROR_ANSWER_LOST"))
     }
 
     func testOnlyARotatedTemporaryKeyFailureIsResubmitted() {

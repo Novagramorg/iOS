@@ -234,7 +234,6 @@ public extension WalletContext {
         }
     }
 
-    /// The default canonical form is for account comparisons. Preserve the flag for display and sending.
     static func transferAddress(from value: String, preserveBounce: Bool = false) -> String? {
         normalizedMainnetAddress(value, preserveBounce: preserveBounce)
     }
@@ -1936,6 +1935,7 @@ extension WalletContextImpl {
                     prepared: prepared,
                     intent: intent,
                     pending: pending,
+                    recipientPeerId: recipientPeerId,
                     randomId: randomId,
                     walletAddress: record.walletAddress,
                     generation: activationGenerationBeforeSend,

@@ -2,6 +2,9 @@ build --action_env=ZERO_AR_DATE=1
 
 build --enable_platform_specific_config
 
+# Download dependencies directly if the remote downloader configured by --cacheHost fails.
+build --experimental_remote_downloader_local_fallback
+
 # Keeps $(TARGET_CPU) as "ios_sim_arm64" rather than "aarch64". Removing this does not
 # fail the build: the third-party genrules silently pick the wrong build directory.
 build --noincompatible_target_cpu_from_platform

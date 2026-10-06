@@ -178,18 +178,15 @@ final class WebProxyWebViewCarrier: NSObject, WKNavigationDelegate, WKUIDelegate
             // The payload travels as an argument, not interpolated into source: the
             // function body is constant so WebKit compiles it once instead of parsing
             // a fresh multi-kilobyte script per batch, and nothing needs escaping.
-            self.webView.callAsyncJavaScript(
+            // The Objective-C method, not the Swift overlay's: an x86_64 build for macOS 10.13 binds the
+            // overlay's symbol to WebKit.framework, which has it only from macOS 15.4.
+            self.webView.__callAsyncJavaScript(
                 Self.deliverFunctionBody,
                 arguments: ["payload": base64],
-                in: nil,
+                inFrame: nil,
                 in: .page
-            ) { result in
-                switch result {
-                case let .success(value):
-                    completion(value as? Bool, nil)
-                case let .failure(error):
-                    completion(nil, error)
-                }
+            ) { value, error in
+                completion(error == nil ? value as? Bool : nil, error)
             }
         } else {
             let script = """

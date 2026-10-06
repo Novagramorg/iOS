@@ -501,7 +501,7 @@ public final class InteractiveDiamondComponent: Component {
             self.applyExpansion()
         }
 
-        /// The send screen changes the rendered width, keeping one surface for the whole entrance.
+        /// Wallet screens change the rendered width, keeping one surface for the whole entrance.
         /// This is independent of holding the stone: it does not enable the lens or emit stars.
         public func updateOpeningScale(_ scale: CGFloat?) {
             guard self.openingScale != scale else { return }

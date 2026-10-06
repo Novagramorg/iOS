@@ -54,6 +54,8 @@ extension DocumentCanvasView {
                     pq.placeholders = self.placeholders
                 } else if let cb = b as? CodeBlockBox {
                     cb.placeholders = self.placeholders
+                } else if let media = b as? MediaBlockBox {
+                    media.placeholders = self.placeholders
                 } else if let bq = b as? BlockQuoteBox {
                     bq.placeholders = self.placeholders
                     if !bq.collapsed { stamp(bq.children.boxes, topLevel: false) }

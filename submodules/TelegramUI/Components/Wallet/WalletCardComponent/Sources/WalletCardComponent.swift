@@ -104,10 +104,11 @@ public final class WalletCardComponent: Component {
     }
 
     public final class View: UIView {
-        private static let maxPitch = 0.14
+        private static let maxPitch = 0.20
         private static let maxOverscrollPitch = 12.0 * Double.pi / 180.0
         private static let maxOverscrollScale = 1.05
-        private static let maxYaw = 0.21
+        private static let maxYaw = 0.30
+        private static let thickness: CGFloat = 9.0
         private static let gyroGain = 0.9
         private static let foregroundZPosition: CGFloat = 128.0
         private static let maximumLiftShadowOpacity: Float = 0.16
@@ -164,6 +165,9 @@ public final class WalletCardComponent: Component {
         private let addressOutline = ComponentView<Empty>()
         private let address = ComponentView<Empty>()
         private let qrButton = ComponentView<Empty>()
+        private var qrFrame = CGRect.zero
+        private var qrAlpha: CGFloat = 1.0
+        private var qrBlurRadius: CGFloat = 0.0
 
         private var deviceMotionDisposable: Disposable?
         private var displayLink: SharedDisplayLinkDriver.Link?
@@ -440,7 +444,8 @@ public final class WalletCardComponent: Component {
                     action: { [weak self] in
                         self?.component?.qrPressed()
                     },
-                    animateAlpha: false
+                    animateAlpha: false,
+                    animateScale: false
                 )),
                 environment: {},
                 containerSize: CGSize(width: 80.0 * scale, height: 80.0)
@@ -449,6 +454,7 @@ public final class WalletCardComponent: Component {
                 origin: CGPoint(x: width - qrSize.width - 47.0 * scale, y: 82.0 * scale),
                 size: qrSize
             )
+            self.qrFrame = qrFrame
             let balanceRightEdge = qrFrame.minX - 10.0 * scale
             let integralFont = Font.with(
                 size: 22.0 * scale,
@@ -943,7 +949,7 @@ public final class WalletCardComponent: Component {
             }
 
             if self.displayLink == nil {
-                self.displayLink = SharedDisplayLinkDriver.shared.add { [weak self] frameDuration in
+                self.displayLink = SharedDisplayLinkDriver.shared.add(framesPerSecond: .fps(60)) { [weak self] frameDuration in
                     self?.displayLinkDidFire(frameDuration)
                 }
             }
@@ -1229,6 +1235,8 @@ public final class WalletCardComponent: Component {
             let detailsFraction = max(0.0, min(1.0, (self.balanceTransitionFraction - 0.3) / 0.3))
             let easedDetailsFraction = detailsFraction * detailsFraction * (3.0 - 2.0 * detailsFraction)
             let detailsAlpha = 1.0 - easedDetailsFraction
+            self.qrAlpha = detailsAlpha
+            self.qrBlurRadius = easedDetailsFraction * 8.0
             for view in [self.name.view, self.qrButton.view, self.address.view, self.addressOutline.view] {
                 if let view {
                     ComponentTransition.immediate.setAlpha(view: view, alpha: detailsAlpha)
@@ -1380,8 +1388,8 @@ public final class WalletCardComponent: Component {
             perspectiveTransform.m34 = -1.0 / 650.0
             perspectiveTransform = CATransform3DTranslate(
                 perspectiveTransform,
-                CGFloat(-self.currentCardY * 10.0),
-                CGFloat(self.currentCardX * 8.0),
+                CGFloat(-self.currentCardY * 3.0),
+                CGFloat(self.currentCardX * 2.5),
                 0.0
             )
             perspectiveTransform = CATransform3DScale(
@@ -1441,14 +1449,33 @@ public final class WalletCardComponent: Component {
                 )
             }
 
-            self.balanceSourceTransform = perspectiveTransform
-            if !CATransform3DIsIdentity(self.scrollTransform) {
-                perspectiveTransform.m13 = 0.0
-                perspectiveTransform.m23 = 0.0
-                perspectiveTransform.m33 = 1.0
-                perspectiveTransform.m43 = 0.0
-                perspectiveTransform = CATransform3DConcat(perspectiveTransform, self.scrollTransform)
+            let edgeShift = self.edgeShift(pitch: cardPitch, yaw: self.currentCardY)
+            let bounds = CGRect(origin: .zero, size: self.currentSize)
+            let anchorX = self.currentSize.width * 0.5
+            var reachX: CGFloat = 0.0
+            for corner in [CGPoint(x: bounds.minX, y: bounds.minY), CGPoint(x: bounds.maxX, y: bounds.minY),
+                           CGPoint(x: bounds.minX, y: bounds.maxY), CGPoint(x: bounds.maxX, y: bounds.maxY)] {
+                let x = self.projectedPoint(corner, transform: perspectiveTransform).point.x - anchorX
+                reachX = max(reachX, max(abs(x), abs(x + edgeShift.x)))
             }
+            let fitScale = reachX > anchorX ? anchorX / reachX : 1.0
+            perspectiveTransform = CATransform3DConcat(perspectiveTransform, CATransform3DMakeScale(fitScale, fitScale, 1.0))
+            var backTransform = CATransform3DConcat(perspectiveTransform,
+                CATransform3DMakeTranslation(edgeShift.x * fitScale, edgeShift.y * fitScale, 0.0))
+
+            self.balanceSourceTransform = perspectiveTransform
+            // Project the slab before collapsing the card; both faces then follow the same scroll transform.
+            func scrolled(_ transform: CATransform3D) -> CATransform3D {
+                guard !CATransform3DIsIdentity(self.scrollTransform) else { return transform }
+                var result = transform
+                result.m13 = 0.0
+                result.m23 = 0.0
+                result.m33 = 1.0
+                result.m43 = 0.0
+                return CATransform3DConcat(result, self.scrollTransform)
+            }
+            perspectiveTransform = scrolled(perspectiveTransform)
+            backTransform = scrolled(backTransform)
 
             CATransaction.begin()
             CATransaction.setDisableActions(true)
@@ -1494,12 +1521,22 @@ public final class WalletCardComponent: Component {
                 highlightTiltY: self.currentCardY,
                 surfaceTiltX: Self.clamp(self.currentDepthX + self.overscrollPitch, maxPitch + 0.03),
                 surfaceTiltY: self.currentDepthY,
-                quad: projectedQuad
+                quad: projectedQuad,
+                backQuad: self.projectedQuad(for: backTransform),
+                qrChip: WalletCardQRChip(frame: self.qrFrame, alpha: self.qrAlpha, blurRadius: self.qrBlurRadius)
             )
+            (self.qrButton.view as? PlainButtonComponent.View)?.contentView?.isHidden = self.backgroundView.displaysQRChip
 
             if notifyBalanceGeometry {
                 self.balanceGeometryUpdated?()
             }
+        }
+
+        private func edgeShift(pitch: Double, yaw: Double) -> CGPoint {
+            let depth = -Self.thickness * self.currentSize.width / 370.0 * self.currentScale
+            var rotation = CATransform3DRotate(CATransform3DIdentity, CGFloat(pitch), 1.0, 0.0, 0.0)
+            rotation = CATransform3DRotate(rotation, CGFloat(yaw), 0.0, 1.0, 0.0)
+            return CGPoint(x: depth * rotation.m31, y: depth * rotation.m32)
         }
 
         private func projectedFrame(_ frame: CGRect, transform: CATransform3D) -> CGRect {
@@ -1561,7 +1598,7 @@ public final class WalletCardComponent: Component {
             switch gestureRecognizer.state {
             case .began:
                 self.isPanning = true
-                self.targetScale = 1.02
+                self.targetScale = 1.01
             case .changed:
                 let translation = gestureRecognizer.translation(in: self)
                 let designScale = max(self.currentSize.width / 361.0, 0.01)

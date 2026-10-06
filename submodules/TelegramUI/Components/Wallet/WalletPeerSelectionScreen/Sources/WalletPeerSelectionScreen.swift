@@ -1189,6 +1189,7 @@ private final class WalletPeerSelectionScreenComponent: Component {
                     context: component.context,
                     walletContext: component.walletContext,
                     address: recipient.address,
+                    recipientPeer: peer?.peer ?? selectedPeer,
                     collectible: collectible,
                     comment: nil,
                     dismissSendScreen: dismissSourceScreens

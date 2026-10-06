@@ -423,7 +423,7 @@ final class BlockQuoteBox: CanvasBlock {
             authorLayout.drawText(in: ctx, at: authorOrigin)
             if authorLength == 0 {
                 let font = mapper.styleSheet.font(for: .caption, attributes: CharacterAttributes(bold: true))
-                NSAttributedString(string: quoteAuthorPlaceholderText,
+                NSAttributedString(string: placeholders.quoteAuthor,
                                    attributes: [.font: font, .foregroundColor: mapper.theme.quoteAuthorPlaceholder]).draw(at: authorOrigin)
             }
         }

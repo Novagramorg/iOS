@@ -4,6 +4,8 @@ using namespace metal;
 struct WalletCardVertexOutput {
     float4 position [[position]];
     float2 uv;
+    // Back-to-front edge depth is 0...1; the face uses 2.
+    float layer [[flat]];
 };
 
 struct WalletCardShaderUniforms {
@@ -14,6 +16,8 @@ struct WalletCardShaderUniforms {
     float cornerRadius;
     float2 surfaceTilt;
     float2 cardSize;
+    float4 qrRect;
+    float4 qrEffects;
 };
 
 struct WalletCardLens {
@@ -58,12 +62,30 @@ static inline float2 walletCardLensPoint(float2 position, constant WalletCardLen
     return lens.center + d * mix(1.0, zoom, edge) + bend * edge;
 }
 
-struct WalletCardVertexUniforms {
+struct WalletCardQuad {
     float4 bottomLeft;
     float4 bottomRight;
     float4 topLeft;
     float4 topRight;
 };
+
+struct WalletCardVertexUniforms {
+    WalletCardQuad front;
+    WalletCardQuad back;
+    int slices;
+};
+
+static inline float walletRoundRect(float2 p, float2 halfSize, float r) {
+    float2 q = abs(p) - (halfSize - r);
+    return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
+}
+
+static inline float2 walletRoundRectNormal(float2 p, float2 halfSize, float r) {
+    float2 q = abs(p) - (halfSize - r);
+    float2 n = (q.x > 0.0 && q.y > 0.0) ? normalize(q)
+        : (q.x > q.y ? float2(1.0, 0.0) : float2(0.0, 1.0));
+    return n * float2(p.x < 0.0 ? -1.0 : 1.0, p.y < 0.0 ? -1.0 : 1.0);
+}
 
 static inline float walletCardHash(float value) {
     return fract(sin(value * 127.1) * 43758.5453);
@@ -81,17 +103,74 @@ static inline float3 walletCardApplySaturation(float3 value) {
     return clamp(mix(float3(luminance), value, 1.6), float3(0.0), float3(1.0));
 }
 
+// Premultiplied chip and socket, in the reference's 50 x 38 point coordinates.
+static inline float4 walletCardQRChip(float2 cp, float2 surface, float time,
+                                     texture2d<float> noiseMap, texture2d<float> qrMap) {
+    constexpr sampler cardSampler(filter::linear, address::clamp_to_edge);
+    constexpr sampler noiseSampler(filter::linear, address::repeat);
+    const float2 center = float2(293.5, 101.0);
+    const float2 halfSize = float2(25.0, 19.0);
+    const float radius = 9.0;
+    float2 local = cp - center;
+    float d = walletRoundRect(local, halfSize, radius);
+    float aa = max(0.6 * fwidth(d), 0.001);
+    float socket = (1.0 - smoothstep(0.0, 1.2, d)) * step(0.0, d) * 0.10;
+    if (d >= 2.0) return float4(0.0, 0.0, 0.0, socket);
+
+    float2 q = local / halfSize;
+    float horizon = 0.10 + 0.55 * surface.y - 0.18 * surface.x;
+    float sky = 1.0 - smoothstep(horizon - 0.55, horizon + 0.85, q.y + 0.18 * q.x);
+    float3 metal = mix(float3(0.66, 0.78, 0.93), float3(0.955, 0.975, 1.0), sky);
+    float brush = noiseMap.sample(noiseSampler, cp * float2(0.012, 1.4)).r;
+    float brushFine = noiseMap.sample(noiseSampler, cp * float2(0.03, 3.1)).r;
+    float grain = (brush - 0.5) * 0.020 + (brushFine - 0.5) * 0.014;
+    metal *= 1.0 + grain;
+
+    float slide = 0.10 + 0.95 * surface.x - 0.55 * surface.y + 0.12 * sin(time * 0.45);
+    float across = dot(q, normalize(float2(1.0, -0.45)));
+    float soft = exp(-pow((across - slide) / 0.55, 2.0));
+    float sharp = exp(-pow((across - slide) / 0.10, 2.0));
+    metal = mix(metal, float3(1.0), soft * 0.22 + sharp * (0.30 + grain * 6.0));
+
+    float inner = walletRoundRect(local, halfSize - 1.0, radius - 1.0);
+    float2 n = walletRoundRectNormal(local, halfSize - 1.0, radius - 1.0);
+    float2 light = normalize(float2(-0.55 - 0.7 * surface.x, -0.85 + 0.6 * surface.y));
+    float fresnel = smoothstep(-5.0, 0.0, inner);
+    metal = mix(metal, float3(0.98, 0.99, 1.0), fresnel * 0.18);
+    float chamfer = smoothstep(-1.3, -0.1, inner);
+    metal -= chamfer * dot(n, light) * 0.12;
+
+    float2 qrUV = (cp - float2(282.5, 90.0)) / 22.0;
+    float ink = qrMap.sample(cardSampler, qrUV).a;
+    float lip = qrMap.sample(cardSampler, qrUV - float2(0.0, 1.0 / 22.0)).a;
+    float upper = qrMap.sample(cardSampler, qrUV + float2(0.0, 0.55 / 22.0)).a;
+    metal = mix(metal, float3(0.90, 0.93, 0.96), lip * (1.0 - ink));
+    float3 inkColor = float3(0.459, 0.486, 0.514);
+    inkColor = mix(inkColor * 0.80, inkColor, upper);
+    metal = mix(metal, inkColor, ink);
+
+    float ringMask = smoothstep(-1.0 - aa, -1.0 + aa, d);
+    float3 ring = float3(0.047, 0.451, 0.835) * (0.92 + 0.16 * dot(n, light));
+    float3 chip = mix(clamp(metal, 0.0, 1.0), ring, ringMask);
+    float cover = 1.0 - smoothstep(-aa, aa, d);
+    return float4(chip * cover, cover + socket * (1.0 - cover));
+}
+
 vertex WalletCardVertexOutput walletCardBackgroundVertex(
     constant float4 &rect [[buffer(0)]],
     constant WalletCardVertexUniforms &uniforms [[buffer(1)]],
     constant float4 &antialiasingParameters [[buffer(2)]],
-    uint vertexID [[vertex_id]]
+    uint vertexID [[vertex_id]],
+    uint instanceID [[instance_id]]
 ) {
+    const int slices = max(uniforms.slices, 0);
+    const bool face = int(instanceID) >= slices;
+    const float depth = face ? 1.0 : float(instanceID) / float(max(slices - 1, 1));
     const float4 positions[] = {
-        uniforms.bottomLeft,
-        uniforms.bottomRight,
-        uniforms.topLeft,
-        uniforms.topRight,
+        mix(uniforms.back.bottomLeft, uniforms.front.bottomLeft, depth),
+        mix(uniforms.back.bottomRight, uniforms.front.bottomRight, depth),
+        mix(uniforms.back.topLeft, uniforms.front.topLeft, depth),
+        mix(uniforms.back.topRight, uniforms.front.topRight, depth),
     };
     const float2 textureCoordinates[] = {
         float2(0.0, 1.0),
@@ -120,6 +199,7 @@ vertex WalletCardVertexOutput walletCardBackgroundVertex(
     output.uv = textureCoordinates[vertexID]
         + float2(cornerDirection.x, -cornerDirection.y)
             * edgeInsetPixels / cardPixelSize;
+    output.layer = face ? 2.0 : depth;
     return output;
 }
 
@@ -129,13 +209,40 @@ fragment float4 walletCardBackgroundFragment(
     constant WalletCardLens &lens [[buffer(1)]],
     constant float2 *hull [[buffer(2)]],
     texture2d<float> starsMap [[texture(0)]],
-    texture2d<float> noiseMap [[texture(1)]]
+    texture2d<float> noiseMap [[texture(1)]],
+    texture2d<float> qrMap [[texture(2)]]
 ) {
     constexpr sampler cardSampler(filter::linear, address::clamp_to_edge);
     constexpr sampler noiseSampler(filter::linear, address::repeat);
 
     float safeWidth = max(uniforms.cardSize.x, 1.0);
     float safeHeight = max(uniforms.cardSize.y, 1.0);
+    float2 cardHalf = float2(safeWidth, safeHeight) * 0.5;
+    float cardRadius = min(uniforms.cornerRadius, min(cardHalf.x, cardHalf.y));
+    float2 surface = clamp(float2(uniforms.surfaceTilt.y / 0.30, uniforms.surfaceTilt.x / 0.20),
+                           float2(-1.0), float2(1.0));
+
+    // Edge instances never evaluate the face's material, lens or chip.
+    if (input.layer < 1.5) {
+        float t = input.layer;
+        float2 p = input.uv * float2(safeWidth, safeHeight) - cardHalf;
+        float d = walletRoundRect(p, cardHalf, cardRadius);
+        if (d < -9.0) discard_fragment();
+        float aa = max(0.5 * fwidth(d), 0.001);
+        float cover = 1.0 - smoothstep(-aa, aa, d);
+        float2 n = walletRoundRectNormal(p, cardHalf, cardRadius);
+        float diffuse = 0.5 + 0.5 * dot(n, normalize(float2(-0.35, -1.0)));
+        float lines = 1.0 + (walletCardHash(floor(t * 9.0) + 3.1) - 0.5) * 0.05;
+        float3 edge = float3(0.014, 0.085, 0.40) * (0.62 + 0.62 * diffuse) * lines;
+        float2 along = float2(-n.y, n.x);
+        float run = dot(p, along) / max(cardHalf.x, 1.0);
+        float streak = exp(-pow((run - (surface.x * 0.9 - surface.y * 0.7)) / 0.38, 2.0));
+        edge += float3(0.30, 0.62, 1.0) * streak * 0.18 * (0.35 + 0.65 * diffuse);
+        edge += float3(0.30, 0.62, 1.0) * step(0.88, t) * (0.18 + 0.40 * diffuse);
+        float3 edgeColor = clamp(walletCardApplySaturation(walletCardLinearToSrgb(edge))
+            * float3(1.05933, 0.912212, 0.968627), 0.0, 1.0);
+        return float4(edgeColor * cover, cover);
+    }
     float2 uv = walletCardLensPoint(input.uv * float2(safeWidth, safeHeight), lens, hull)
         / float2(safeWidth, safeHeight);
 
@@ -291,6 +398,15 @@ fragment float4 walletCardBackgroundFragment(
     gradient += (fineGrain - 0.5) * 0.014;
     gradient *= 1.0 - 0.14 * smoothstep(0.965, 1.0, uv.y);
 
+    if (uniforms.qrEffects.z > 0.0) {
+        float2 p = input.uv * float2(safeWidth, safeHeight) - cardHalf;
+        float d = walletRoundRect(p, cardHalf, cardRadius);
+        float2 n = walletRoundRectNormal(p, cardHalf, cardRadius);
+        float band = smoothstep(-1.1, -0.35, d);
+        float2 light = normalize(float2(-0.45 - 0.9 * surface.x, -0.9 + 0.7 * surface.y));
+        gradient += float3(0.10, 0.36, 0.85) * band * (0.03 + 0.26 * max(dot(n, light), 0.0));
+    }
+
     float2 halfSize = float2(safeWidth, safeHeight) * 0.5;
     float radiusPoints = min(uniforms.cornerRadius, min(halfSize.x, halfSize.y));
     float2 roundedPoint = abs(input.uv * float2(safeWidth, safeHeight) - halfSize)
@@ -303,8 +419,35 @@ fragment float4 walletCardBackgroundFragment(
 
     // MetalEngine renders into a bgra8Unorm IOSurface. The reference renderer
     // used an sRGB drawable, so encode the linear material color explicitly.
-    const float3 outputColor = walletCardApplySaturation(
+    float3 outputColor = walletCardApplySaturation(
         walletCardLinearToSrgb(gradient + spark)
     );
+    if (uniforms.qrEffects.x > 0.0 && all(uniforms.qrRect.zw > 0.0)) {
+        float2 position = uv * float2(safeWidth, safeHeight);
+        float2 chipScale = uniforms.qrRect.zw / float2(50.0, 38.0);
+        float blur = uniforms.qrEffects.y;
+        float2 margin = chipScale * 2.0 + blur * 1.5;
+        if (all(position >= uniforms.qrRect.xy - margin)
+            && all(position <= uniforms.qrRect.xy + uniforms.qrRect.zw + margin)) {
+            float2 cp = (position - uniforms.qrRect.xy) / chipScale + float2(268.5, 82.0);
+            float4 chip;
+            if (blur > 0.01) {
+                // Blur only this small overlay, in premultiplied color, during card collapse.
+                constexpr float weights[] = { 0.25, 0.5, 0.25 };
+                chip = float4(0.0);
+                for (int y = -1; y <= 1; y++) {
+                    for (int x = -1; x <= 1; x++) {
+                        float2 offset = float2(x, y) * (blur * 1.41421356) / chipScale;
+                        chip += walletCardQRChip(cp + offset, surface, uniforms.time, noiseMap, qrMap)
+                            * weights[x + 1] * weights[y + 1];
+                    }
+                }
+            } else {
+                chip = walletCardQRChip(cp, surface, uniforms.time, noiseMap, qrMap);
+            }
+            chip *= uniforms.qrEffects.x;
+            outputColor = outputColor * (1.0 - chip.a) + chip.rgb;
+        }
+    }
     return float4(outputColor * coverage, coverage);
 }

@@ -3456,7 +3456,10 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
             }
 
             if !isPeerGroup {
-                let hasIncomingGramTransfer = messages.last.map { message in
+                let hasUnreadIncomingGramTransfer = messages.last.map { message in
+                    guard let combinedReadState, combinedReadState.count > 0, !combinedReadState.isIncomingMessageIndexRead(message.index) else {
+                        return false
+                    }
                     return message.effectivelyIncoming(account.peerId) && message.media.contains(where: { media in
                         if let media = media as? TelegramMediaAction, case .gramTransfer = media.action {
                             return true
@@ -3464,9 +3467,14 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         return false
                     })
                 } ?? false
-                if hasIncomingGramTransfer {
+                if hasUnreadIncomingGramTransfer {
                     currentMentionBadgeImage = PresentationResourcesChatList.badgeBackgroundGram(item.presentationData.theme, diameter: badgeDiameter, inactive: isRemovedFromTotalUnreadCount)
                     mentionBadgeContent = .mention
+                    if unreadCount.count == 1 {
+                        badgeContent = .none
+                        currentBadgeBackgroundImage = nil
+                        currentAvatarBadgeBackgroundImage = nil
+                    }
                 } else if hasUnseenMentions {
                     if case .chatList(.archive) = item.chatListLocation {
                         currentMentionBadgeImage = PresentationResourcesChatList.badgeBackgroundInactiveMention(item.presentationData.theme, diameter: badgeDiameter)

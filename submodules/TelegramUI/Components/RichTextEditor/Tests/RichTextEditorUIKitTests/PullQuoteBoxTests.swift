@@ -180,7 +180,7 @@ final class PullQuoteBoxTests: XCTestCase {
                                mapper: AttributedStringMapper(), pullQuoteStyle: .default, width: 320)
         box.frame = CGRect(x: 0, y: 0, width: 320, height: box.height)
         let font = AttributedStringMapper().styleSheet.font(for: .caption, attributes: CharacterAttributes(bold: true))
-        let placeholderWidth = (quoteAuthorPlaceholderText as NSString).size(withAttributes: [.font: font]).width
+        let placeholderWidth = (box.placeholders.quoteAuthor as NSString).size(withAttributes: [.font: font]).width
         XCTAssertGreaterThanOrEqual(box.pillContentWidth, placeholderWidth - 0.5)
     }
 

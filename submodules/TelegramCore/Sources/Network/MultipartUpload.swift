@@ -376,6 +376,7 @@ private final class MultipartUploadManager {
                         }))
                     } else {
                         self.completed(nil)
+                        return
                     }
                 } else {
                     break
