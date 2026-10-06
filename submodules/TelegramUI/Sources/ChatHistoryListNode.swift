@@ -4272,6 +4272,76 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
             previousCloneView = self.view.snapshotView(afterScreenUpdates: false)
         }
 
+        // Publish unread ranges before laying out items so one-time effects can prepare their first frame.
+        var unreadMessageRangeUpdated = false
+
+        if case let .peer(peerId) = self.chatLocation, let previousReadStatesValue = self.historyView?.originalView.transientReadStates, case let .peer(previousReadStates) = previousReadStatesValue, case let .peer(updatedReadStates) = transition.historyView.originalView.transientReadStates {
+            if let previousPeerReadState = previousReadStates[peerId], let updatedPeerReadState = updatedReadStates[peerId] {
+                if previousPeerReadState != updatedPeerReadState {
+                    for (namespace, state) in previousPeerReadState.states {
+                        inner: for (updatedNamespace, updatedState) in updatedPeerReadState.states {
+                            if namespace == updatedNamespace {
+                                switch state {
+                                case let .idBased(previousIncomingId, _, _, _, _):
+                                    if case let .idBased(updatedIncomingId, _, _, _, _) = updatedState, previousIncomingId <= updatedIncomingId {
+                                        let rangeKey = UnreadMessageRangeKey(peerId: peerId, namespace: namespace)
+
+                                        if let currentRange = self.controllerInteraction.unreadMessageRange[rangeKey] {
+                                            if currentRange.upperBound < (updatedIncomingId + 1) {
+                                                let updatedRange = currentRange.lowerBound ..< (updatedIncomingId + 1)
+                                                if self.controllerInteraction.unreadMessageRange[rangeKey] != updatedRange {
+                                                    self.controllerInteraction.unreadMessageRange[rangeKey] = updatedRange
+                                                    unreadMessageRangeUpdated = true
+                                                }
+                                            }
+                                        } else {
+                                            let updatedRange = (previousIncomingId + 1) ..< (updatedIncomingId + 1)
+                                            if self.controllerInteraction.unreadMessageRange[rangeKey] != updatedRange {
+                                                self.controllerInteraction.unreadMessageRange[rangeKey] = updatedRange
+                                                unreadMessageRangeUpdated = true
+                                            }
+                                        }
+                                    }
+                                case .indexBased:
+                                    break
+                                }
+
+                                break inner
+                            }
+                        }
+                    }
+                    //print("Read from \(previousPeerReadState) up to \(updatedPeerReadState)")
+                }
+            }
+        } else if case let .peer(peerId) = self.chatLocation, case let .peer(updatedReadStates) = transition.historyView.originalView.transientReadStates {
+            if let updatedPeerReadState = updatedReadStates[peerId] {
+                for (namespace, updatedState) in updatedPeerReadState.states {
+                    switch updatedState {
+                    case let .idBased(updatedIncomingId, _, _, _, _):
+                        let rangeKey = UnreadMessageRangeKey(peerId: peerId, namespace: namespace)
+
+                        if let currentRange = self.controllerInteraction.unreadMessageRange[rangeKey] {
+                            if currentRange.upperBound < (updatedIncomingId + 1) {
+                                let updatedRange = currentRange.lowerBound ..< (updatedIncomingId + 1)
+                                if self.controllerInteraction.unreadMessageRange[rangeKey] != updatedRange {
+                                    self.controllerInteraction.unreadMessageRange[rangeKey] = updatedRange
+                                    unreadMessageRangeUpdated = true
+                                }
+                            }
+                        } else {
+                            let updatedRange = (updatedIncomingId + 1) ..< (Int32.max - 1)
+                            if self.controllerInteraction.unreadMessageRange[rangeKey] != updatedRange {
+                                self.controllerInteraction.unreadMessageRange[rangeKey] = updatedRange
+                                unreadMessageRangeUpdated = true
+                            }
+                        }
+                    case .indexBased:
+                        break
+                    }
+                }
+            }
+        }
+
         let completion: (Bool, ListViewDisplayedItemRange) -> Void = { [weak self] wasTransformed, visibleRange in
             if let strongSelf = self {
                 strongSelf.currentAppliedDeleteAnimationCorrelationIds.removeAll()
@@ -4344,75 +4414,6 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
                             }
                         default:
                             break
-                        }
-                    }
-                }
-                
-                var unreadMessageRangeUpdated = false
-                
-                if case let .peer(peerId) = strongSelf.chatLocation, let previousReadStatesValue = strongSelf.historyView?.originalView.transientReadStates, case let .peer(previousReadStates) = previousReadStatesValue, case let .peer(updatedReadStates) = transition.historyView.originalView.transientReadStates {
-                    if let previousPeerReadState = previousReadStates[peerId], let updatedPeerReadState = updatedReadStates[peerId] {
-                        if previousPeerReadState != updatedPeerReadState {
-                            for (namespace, state) in previousPeerReadState.states {
-                                inner: for (updatedNamespace, updatedState) in updatedPeerReadState.states {
-                                    if namespace == updatedNamespace {
-                                        switch state {
-                                        case let .idBased(previousIncomingId, _, _, _, _):
-                                            if case let .idBased(updatedIncomingId, _, _, _, _) = updatedState, previousIncomingId <= updatedIncomingId {
-                                                let rangeKey = UnreadMessageRangeKey(peerId: peerId, namespace: namespace)
-                                                
-                                                if let currentRange = strongSelf.controllerInteraction.unreadMessageRange[rangeKey] {
-                                                    if currentRange.upperBound < (updatedIncomingId + 1) {
-                                                        let updatedRange = currentRange.lowerBound ..< (updatedIncomingId + 1)
-                                                        if strongSelf.controllerInteraction.unreadMessageRange[rangeKey] != updatedRange {
-                                                            strongSelf.controllerInteraction.unreadMessageRange[rangeKey] = updatedRange
-                                                            unreadMessageRangeUpdated = true
-                                                        }
-                                                    }
-                                                } else {
-                                                    let updatedRange = (previousIncomingId + 1) ..< (updatedIncomingId + 1)
-                                                    if strongSelf.controllerInteraction.unreadMessageRange[rangeKey] != updatedRange {
-                                                        strongSelf.controllerInteraction.unreadMessageRange[rangeKey] = updatedRange
-                                                        unreadMessageRangeUpdated = true
-                                                    }
-                                                }
-                                            }
-                                        case .indexBased:
-                                            break
-                                        }
-                                        
-                                        break inner
-                                    }
-                                }
-                            }
-                            //print("Read from \(previousPeerReadState) up to \(updatedPeerReadState)")
-                        }
-                    }
-                } else if case let .peer(peerId) = strongSelf.chatLocation, case let .peer(updatedReadStates) = transition.historyView.originalView.transientReadStates {
-                    if let updatedPeerReadState = updatedReadStates[peerId] {
-                        for (namespace, updatedState) in updatedPeerReadState.states {
-                            switch updatedState {
-                            case let .idBased(updatedIncomingId, _, _, _, _):
-                                let rangeKey = UnreadMessageRangeKey(peerId: peerId, namespace: namespace)
-                                
-                                if let currentRange = strongSelf.controllerInteraction.unreadMessageRange[rangeKey] {
-                                    if currentRange.upperBound < (updatedIncomingId + 1) {
-                                        let updatedRange = currentRange.lowerBound ..< (updatedIncomingId + 1)
-                                        if strongSelf.controllerInteraction.unreadMessageRange[rangeKey] != updatedRange {
-                                            strongSelf.controllerInteraction.unreadMessageRange[rangeKey] = updatedRange
-                                            unreadMessageRangeUpdated = true
-                                        }
-                                    }
-                                } else {
-                                    let updatedRange = (updatedIncomingId + 1) ..< (Int32.max - 1)
-                                    if strongSelf.controllerInteraction.unreadMessageRange[rangeKey] != updatedRange {
-                                        strongSelf.controllerInteraction.unreadMessageRange[rangeKey] = updatedRange
-                                        unreadMessageRangeUpdated = true
-                                    }
-                                }
-                            case .indexBased:
-                                break
-                            }
                         }
                     }
                 }

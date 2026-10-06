@@ -523,7 +523,7 @@ public final class ChatMessageWebpageBubbleContentNode: ChatMessageBubbleContent
                         case "telegram_newbot":
                             actionTitle = item.presentationData.strings.Chat_CreateBotLink
                         case "telegram_aicomposetone":
-                            actionTitle = item.presentationData.Chat_ViewStyle
+                            actionTitle = item.presentationData.strings.Chat_ViewStyle
                         
                             for attribute in webpage.attributes {
                                 if case let .aiTextStyle(aiTextStyle) = attribute {

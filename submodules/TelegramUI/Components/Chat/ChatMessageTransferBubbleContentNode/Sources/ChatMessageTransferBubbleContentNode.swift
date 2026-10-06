@@ -928,22 +928,32 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
     }
 
     private func updateIncomingTransferVisibility() {
-        guard let item = self.item, self.canPlayIncomingTransferAnimation else { return }
+        guard let item = self.item, self.isIncomingTransfer, self.cardNode.bounds.width > 0 else { return }
+        let isUnread = item.controllerInteraction.unreadMessageRange[UnreadMessageRangeKey(peerId: item.message.id.peerId, namespace: item.message.id.namespace)]?.contains(item.message.id.id) == true
         var state = item.controllerInteraction.walletTransferArrivalState?(item.message.id)
-        if state == nil,
-           item.controllerInteraction.unreadMessageRange[UnreadMessageRangeKey(peerId: item.message.id.peerId, namespace: item.message.id.namespace)]?.contains(item.message.id.id) == true {
+        if state == nil, isUnread, self.canPlayIncomingTransferAnimation {
             item.controllerInteraction.requestWalletTransferArrival?(item.message)
             state = item.controllerInteraction.walletTransferArrivalState?(item.message.id)
+        }
+        if UIAccessibility.isReduceMotionEnabled {
+            self.finishIncomingTransferAnimation()
+            return
         }
         switch state {
         case let .queued(rise):
             self.prepareIncomingTransferAnimation(rise: rise)
         case let .playing(startTime, rise):
+            self.prepareIncomingTransferAnimation(rise: rise)
             self.updateIncomingTransferAnimation(startTime: startTime, rise: rise, at: CACurrentMediaTime())
         case .finished:
             self.finishIncomingTransferAnimation()
         case nil:
-            break
+            // Prepare before visibility and history-reading readiness allow the scene to start.
+            if isUnread, item.controllerInteraction.requestWalletTransferArrival != nil, self.cardIcon?.isExpanded != true {
+                self.prepareIncomingTransferAnimation(rise: item.controllerInteraction.freshWalletTransferMessageIds.contains(item.message.id))
+            } else {
+                self.finishIncomingTransferAnimation()
+            }
         }
     }
 
@@ -1943,12 +1953,23 @@ public final class ChatMessageTransferBubbleContentNode: ChatMessageBubbleConten
                     backgroundColor: nil,
                     maximumNumberOfLines: 1,
                     truncationType: .end,
-                    constrainedSize: CGSize(width: 80.0, height: CGFloat.greatestFiniteMagnitude),
+                    constrainedSize: CGSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude),
                     alignment: .center,
                     cutout: nil,
                     insets: UIEdgeInsets()
                 )
-                let (ribbonTextLayout, ribbonTextApply) = makeRibbonTextLayout(ribbonTextLayoutArguments)
+                var (ribbonTextLayout, ribbonTextApply) = makeRibbonTextLayout(ribbonTextLayoutArguments)
+                let ribbonTextMaxWidth: CGFloat = 52.0
+                if ribbonTextLayout.size.width > ribbonTextMaxWidth {
+                    (ribbonTextLayout, ribbonTextApply) = makeRibbonTextLayout(ribbonTextLayoutArguments.withAttributedString(
+                        NSAttributedString(
+                            string: ribbonTitle,
+                            font: Font.semibold(11.0 * ribbonTextMaxWidth / ribbonTextLayout.size.width),
+                            textColor: .white,
+                            paragraphAlignment: .center
+                        )
+                    ))
+                }
 
                 var labelRects = labelLayout.linesRects()
                 if labelRects.count > 1 {
