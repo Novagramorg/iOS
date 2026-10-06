@@ -17093,3 +17093,4 @@ Error: %8$@";
 "Notification.GramTransferUnknown.WithFiat" = "Someone sent you %1$@ (%2$@)";
 "Notification.GramTransfer.UnknownUser" = "UNKNOWN USER";
 
+"Chat.ViewStyle" = "VIEW STYLE";
