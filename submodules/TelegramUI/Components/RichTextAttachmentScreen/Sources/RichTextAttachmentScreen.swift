@@ -1362,7 +1362,16 @@ final class RichTextAttachmentScreenComponent: Component {
             defer { self.isUpdating = false }
 
             if self.component == nil {
-                editor.placeholders = RichTextEditorPlaceholders(body: environment.strings.RichText_PlaceholderBody, listEnd: "", listOutdent: "", pullQuote: environment.strings.RichText_PlaceholderQuote, blockQuote: environment.strings.RichText_PlaceholderQuote, codeBlock: environment.strings.RichText_PlaceholderCode, codeLanguage: environment.strings.RichText_PlaceholderCodeLanguage, detailsTitle: environment.strings.RichText_PlaceholderDetailTitle)
+                editor.placeholders = RichTextEditorPlaceholders(body: environment.strings.RichText_PlaceholderBody, listEnd: "", listOutdent: "", pullQuote: environment.strings.RichText_PlaceholderQuote, blockQuote: environment.strings.RichText_PlaceholderQuote, codeBlock: environment.strings.RichText_PlaceholderCode, codeLanguage: environment.strings.RichText_PlaceholderCodeLanguage, detailsTitle: environment.strings.RichText_PlaceholderDetailTitle, quoteAuthor: environment.strings.RichText_PlaceholderQuoteAuthor)
+                editor.editMenuStrings = RichTextEditorMenuStrings(
+                    format: environment.strings.TextFormat_Format,
+                    bold: environment.strings.TextFormat_Bold,
+                    italic: environment.strings.TextFormat_Italic,
+                    underline: environment.strings.TextFormat_Underline,
+                    lookUp: environment.strings.Conversation_ContextMenuLookUp,
+                    translate: environment.strings.Conversation_ContextMenuTranslate,
+                    share: environment.strings.Conversation_ContextMenuShare
+                )
                 
                 // The screen paints `list.plainBackgroundColor` (below); clear the editor's opaque default
                 // `.systemBackground` so that themed surface shows through.

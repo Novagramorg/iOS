@@ -5212,9 +5212,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
 
         let formatMenu = UIMenu(title: self.strings?.TextFormat_Format ?? "Format", image: nil, children: children)
 
-        // Drop the editor's built-in "Format" submenu (identified by its "Format" title), then
+        // Drop the editor's built-in "Format" submenu by its language-independent identifier, then
         // splice in the composer's after the system Cut/Copy/Paste actions.
-        var elements = defaultElements.filter { ($0 as? UIMenu)?.title != "Format" }
+        var elements = defaultElements.filter { ($0 as? UIMenu)?.identifier != UIMenu.Identifier("org.telegram.RichTextEditor.format") }
         let insertIndex = min(1, elements.count)
         elements.insert(formatMenu, at: insertIndex)
         return elements

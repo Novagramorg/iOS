@@ -77,7 +77,7 @@ final class PullQuoteBox {
     private var authorPlaceholderTextWidth: CGFloat {
         // Placeholder measured in the BOLD+ITALIC caption font (matches the rendered author weight/style).
         let font = mapper.styleSheet.font(for: .caption, attributes: CharacterAttributes(bold: true, italic: true))
-        return (quoteAuthorPlaceholderText as NSString).size(withAttributes: [.font: font]).width
+        return (placeholders.quoteAuthor as NSString).size(withAttributes: [.font: font]).width
     }
     private var authorEmptyLineIndent: CGFloat {
         guard authorLength == 0 else { return 0 }
@@ -234,7 +234,7 @@ extension PullQuoteBox: CanvasBlock {
                 let ps = NSMutableParagraphStyle(); ps.alignment = .center
                 let rect = CGRect(x: frame.minX + leftInset, y: authorOrigin.y,
                                   width: max(frame.width - leftInset - rightInset, 1), height: authorEmptyLineHeight)
-                NSAttributedString(string: quoteAuthorPlaceholderText,
+                NSAttributedString(string: placeholders.quoteAuthor,
                                    attributes: [.font: font, .foregroundColor: mapper.theme.quoteAuthorPlaceholder, .paragraphStyle: ps]).draw(in: rect)
             }
         }

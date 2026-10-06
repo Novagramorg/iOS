@@ -773,6 +773,7 @@ final class DocumentCanvasView: UIView {
     /// and only for a non-collapsed selection. nil ⇒ the editor's default menu. (iOS 13–15 keeps its built-in
     /// items — see DocumentCanvasView+EditMenu; UIMenuItem cannot carry a closure.)
     var hostContextMenuItemsProvider: ((_ defaultElements: [UIMenuElement]) -> [UIMenuElement])?
+    var editMenuStrings: RichTextEditorMenuStrings = .default
     /// Host hook for the table row/column structural menu. Fired from the `.menu` handle-tap case with a
     /// framework-agnostic description; the host presents its own ContextController. nil ⇒ no menu shown.
     var onRequestTableStructuralMenu: ((TableStructuralMenuRequest) -> Void)?
