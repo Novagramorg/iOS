@@ -44,6 +44,7 @@ import WalletAuthorizationUI
 private struct WalletTransactionPreviewSource: Equatable {
     let id: String
     let address: String
+    let recipientPeer: EnginePeer?
     let amount: Int64
     let requestedAmount: Int64
     let isSendAll: Bool
@@ -56,6 +57,7 @@ private struct WalletTransactionPreviewSource: Equatable {
     init(preparedTransfer: WalletContext.PreparedTransfer) {
         self.id = preparedTransfer.id
         self.address = preparedTransfer.recipient
+        self.recipientPeer = nil
         self.amount = preparedTransfer.amount
         self.requestedAmount = preparedTransfer.requestedAmount
         self.isSendAll = preparedTransfer.isSendAll
@@ -66,9 +68,10 @@ private struct WalletTransactionPreviewSource: Equatable {
         self.preparedTransfer = preparedTransfer
     }
 
-    init(address: String, amount: Int64, sendAll: Bool, comment: String?, collectible: WalletContext.Collectible?, initialFee: Int64?) {
+    init(address: String, recipientPeer: EnginePeer?, amount: Int64, sendAll: Bool, comment: String?, collectible: WalletContext.Collectible?, initialFee: Int64?) {
         self.id = UUID().uuidString
         self.address = address
+        self.recipientPeer = recipientPeer
         self.amount = amount
         self.requestedAmount = amount
         self.isSendAll = sendAll
@@ -1319,6 +1322,12 @@ private final class WalletTransactionContentComponent: Component {
             }
             let preparedTransfer = self.preparedTransfer
             let recipient = preparedTransfer?.recipient ?? previewSource.address
+            let transactionPeer: WalletContext.Transaction.Peer
+            if let recipientPeer = previewSource.recipientPeer {
+                transactionPeer = .user(recipientPeer, address: recipient, domain: nil)
+            } else {
+                transactionPeer = .address(recipient, domain: nil)
+            }
             let amount = preparedTransfer?.amount ?? (previewSource.isSendAll
                 ? max(0, previewSource.amount - (self.displayedFee ?? 0))
                 : previewSource.amount)
@@ -1351,7 +1360,7 @@ private final class WalletTransactionContentComponent: Component {
                 amount: amount,
                 fee: self.displayedFee ?? 0,
                 gasless: gasless,
-                peer: .address(recipient, domain: nil),
+                peer: transactionPeer,
                 comment: self.previewComment,
                 collectible: collectible.map(WalletContext.Transaction.CollectibleTransfer.init(collectible:))
             )
@@ -2101,10 +2110,11 @@ private final class WalletTransactionContentComponent: Component {
             }
             self.didShowSuccess = true
             let presentationData = self.currentPresentationData(for: component).initial
+            let recipientName = self.previewSource?.recipientPeer?.displayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder) ?? walletTransactionShortAddress(address)
             controller.present(
                 UndoOverlayController(
                     presentationData: presentationData,
-                    content: .emoji(name: "Celebrate", text: presentationData.strings.Wallet_Transfer_CollectibleSuccess(walletTransactionShortAddress(address)).string),
+                    content: .emoji(name: "Celebrate", text: presentationData.strings.Wallet_Transfer_CollectibleSuccess(recipientName).string),
                     position: .bottom,
                     action: { _ in
                         return false
@@ -2985,7 +2995,7 @@ private final class WalletTransactionContentComponent: Component {
             let valueColor = theme.list.itemPrimaryTextColor
             let secondaryValueColor = theme.list.itemSecondaryTextColor
             let counterpartyTitle: String
-            if self.isPreview && !self.isFinishedPreview {
+            if self.isPreview && !self.isFinishedPreview, case .address = transaction.peer {
                 counterpartyTitle = environment.strings.Wallet_Transaction_Address
             } else {
                 switch displayedDirection {
@@ -4439,6 +4449,7 @@ public final class WalletTransactionPreviewScreen: ViewControllerComponentContai
         updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? = nil,
         walletContext: WalletContext,
         address: String,
+        recipientPeer: EnginePeer? = nil,
         amount: Int64,
         sendAll: Bool,
         comment: String?,
@@ -4446,7 +4457,7 @@ public final class WalletTransactionPreviewScreen: ViewControllerComponentContai
         initialFee: Int64? = nil,
         dismissSendScreen: @escaping () -> Void
     ) {
-        let source = WalletTransactionPreviewSource(address: address, amount: amount, sendAll: sendAll, comment: comment, collectible: collectible, initialFee: initialFee)
+        let source = WalletTransactionPreviewSource(address: address, recipientPeer: recipientPeer, amount: amount, sendAll: sendAll, comment: comment, collectible: collectible, initialFee: initialFee)
         self.walletPresentationData = updatedPresentationData
         self.currentCloseId = walletTransactionModeId(.preview(
             walletContext: walletContext,

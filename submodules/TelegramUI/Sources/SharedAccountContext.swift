@@ -4279,11 +4279,12 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         )
     }
 
-    public func makeWalletTransactionPreviewScreen(context: AccountContext, walletContext: WalletContext, address: String, collectible: WalletContext.Collectible, comment: String?, dismissSendScreen: @escaping () -> Void) -> ViewController {
+    public func makeWalletTransactionPreviewScreen(context: AccountContext, walletContext: WalletContext, address: String, recipientPeer: EnginePeer?, collectible: WalletContext.Collectible, comment: String?, dismissSendScreen: @escaping () -> Void) -> ViewController {
         return WalletTransactionPreviewScreen(
             context: context,
             walletContext: walletContext,
             address: address,
+            recipientPeer: recipientPeer,
             amount: 0,
             sendAll: false,
             comment: comment,
