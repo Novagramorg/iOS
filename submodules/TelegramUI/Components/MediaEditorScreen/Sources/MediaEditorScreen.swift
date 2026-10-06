@@ -1092,7 +1092,7 @@ final class MediaEditorScreenComponent: Component {
                             return
                         }
                         mediaEditor.setCrop(
-                            offset: mediaEditor.values.cropOffset,
+                            offset: CGPoint(x: mediaEditor.values.cropOffset.y, y: -mediaEditor.values.cropOffset.x),
                             scale: mediaEditor.values.cropScale,
                             rotation: mediaEditor.values.cropRotation - .pi / 2.0,
                             mirroring: mediaEditor.values.cropMirroring
@@ -1123,11 +1123,14 @@ final class MediaEditorScreenComponent: Component {
                         guard !controller.node.recording.isActive else {
                             return
                         }
+                        let values = mediaEditor.values
+                        let imageOffset = values.cropOffset.applying(CGAffineTransform(rotationAngle: -values.cropRotation))
+                        let mirroredOffset = CGPoint(x: -imageOffset.x, y: imageOffset.y).applying(CGAffineTransform(rotationAngle: values.cropRotation))
                         mediaEditor.setCrop(
-                            offset: mediaEditor.values.cropOffset,
-                            scale: mediaEditor.values.cropScale,
-                            rotation: mediaEditor.values.cropRotation,
-                            mirroring: !mediaEditor.values.cropMirroring
+                            offset: mirroredOffset,
+                            scale: values.cropScale,
+                            rotation: values.cropRotation,
+                            mirroring: !values.cropMirroring
                         )
                     }
                 )),
@@ -3133,6 +3136,7 @@ public final class MediaEditorScreenImpl: ViewController, MediaEditorScreen, UID
         private var gradientColorsDisposable: Disposable?
         
         fileprivate var cropScrollView: CropScrollView?
+        private var cropScrollViewFrame: CGRect = .zero
         fileprivate var stickerBackgroundView: UIImageView?
         private var stickerOverlayLayer: SimpleShapeLayer?
         private var stickerFrameLayer: SimpleShapeLayer?
@@ -3150,6 +3154,7 @@ public final class MediaEditorScreenImpl: ViewController, MediaEditorScreen, UID
         var mediaEditor: MediaEditor?
         fileprivate var mediaEditorPromise = Promise<MediaEditor?>()
         private var mediaEntityInitialValues: (position: CGPoint, scale: CGFloat, rotation: CGFloat)?
+        private var isUpdatingCrop = false
         
         let ciContext = CIContext(options: [.workingColorSpace : NSNull()])
         
@@ -3325,12 +3330,16 @@ public final class MediaEditorScreenImpl: ViewController, MediaEditorScreen, UID
                 
                 let cropScrollView = CropScrollView(frame: .zero)
                 cropScrollView.updated = { [weak self] position, scale in
-                    guard let self, let mediaEntityView = self.entitiesView.getView(where: { $0 is DrawingMediaEntityView }) as? DrawingMediaEntityView, let mediaEntity = mediaEntityView.entity as? DrawingMediaEntity, let (initialPosition, initialScale, _) = self.mediaEntityInitialValues else {
+                    guard let self, let mediaEditor = self.mediaEditor, self.previewView.bounds.width > 0.0 else {
                         return
                     }
-                    mediaEntity.position = initialPosition.offsetBy(dx: position.x * initialScale, dy: position.y * initialScale)
-                    mediaEntity.scale = initialScale * scale
-                    mediaEntityView.update(animated: false)
+                    let previewScale = self.previewView.bounds.width / storyDimensions.width
+                    mediaEditor.setCrop(
+                        offset: CGPoint(x: position.x / previewScale, y: position.y / previewScale),
+                        scale: scale,
+                        rotation: mediaEditor.values.cropRotation,
+                        mirroring: mediaEditor.values.cropMirroring
+                    )
                 }
                 self.cropScrollView = cropScrollView
             default:
@@ -3662,7 +3671,7 @@ public final class MediaEditorScreenImpl: ViewController, MediaEditorScreen, UID
             if let mediaEntityView = self.entitiesView.add(mediaEntity, announce: false) as? DrawingMediaEntityView {
                 self.entitiesView.sendSubviewToBack(mediaEntityView)
                 mediaEntityView.updated = { [weak self, weak mediaEntity] in
-                    if let self, let mediaEditor = self.mediaEditor, let mediaEntity {
+                    if let self, !self.isUpdatingCrop, let mediaEditor = self.mediaEditor, let mediaEntity {
                         let rotation = mediaEntity.rotation - initialRotation
                         let position = CGPoint(x: mediaEntity.position.x - initialPosition.x, y: mediaEntity.position.y - initialPosition.y)
                         let scale = mediaEntity.scale / initialScale
@@ -3715,7 +3724,10 @@ public final class MediaEditorScreenImpl: ViewController, MediaEditorScreen, UID
                     break
                 }
             }
-            mediaEditor.valuesUpdated = { [weak self] values in
+            mediaEditor.valuesUpdated = { [weak self, weak mediaEditor] values in
+                if let self, let mediaEditor, self.mediaEditor === mediaEditor {
+                    self.updateCrop()
+                }
                 if let self, let controller = self.controller, values.gradientColors != nil, controller.previousSavedValues != values {
                     if !isSavingAvailable && controller.previousSavedValues == nil {
                         controller.previousSavedValues = values
@@ -3988,6 +4000,7 @@ public final class MediaEditorScreenImpl: ViewController, MediaEditorScreen, UID
                 }
             })
             self.mediaEditor = mediaEditor
+            self.updateCrop()
             self.mediaEditorPromise.set(.single(mediaEditor))
             
             mediaEditor.onPlaybackAction = { [weak self] action in
@@ -4016,6 +4029,47 @@ public final class MediaEditorScreenImpl: ViewController, MediaEditorScreen, UID
             }
         }
         
+        private func updateCrop(frame: CGRect? = nil) {
+            if let frame {
+                self.cropScrollViewFrame = frame
+            }
+            guard let cropScrollView = self.cropScrollView, let mediaEditor = self.mediaEditor, let mediaEntityView = self.entitiesView.getView(where: { $0 is DrawingMediaEntityView }) as? DrawingMediaEntityView, let mediaEntity = mediaEntityView.entity as? DrawingMediaEntity, let (initialPosition, initialScale, initialRotation) = self.mediaEntityInitialValues else {
+                return
+            }
+
+            let values = mediaEditor.values
+            let position = initialPosition.offsetBy(dx: values.cropOffset.x, dy: values.cropOffset.y)
+            let scale = initialScale * values.cropScale
+            let rotation = initialRotation + values.cropRotation
+            if mediaEntity.position != position || mediaEntity.scale != scale || mediaEntity.rotation != rotation || mediaEntity.mirrored != values.cropMirroring {
+                self.isUpdatingCrop = true
+                mediaEntity.position = position
+                mediaEntity.scale = scale
+                mediaEntity.rotation = rotation
+                mediaEntity.mirrored = values.cropMirroring
+                mediaEntityView.update(animated: false)
+                self.isUpdatingCrop = false
+            }
+
+            let previewScale = self.previewView.bounds.width / storyDimensions.width
+            guard previewScale > 0.0 else {
+                return
+            }
+            let baseSize = CGSize(width: mediaEntity.size.width * initialScale * previewScale, height: mediaEntity.size.height * initialScale * previewScale)
+            let contentSize = CGRect(origin: .zero, size: baseSize).applying(CGAffineTransform(rotationAngle: rotation)).size
+            if let updatedCrop = cropScrollView.update(
+                frame: self.cropScrollViewFrame,
+                contentSize: contentSize,
+                offset: CGPoint(x: values.cropOffset.x * previewScale, y: values.cropOffset.y * previewScale),
+                scale: values.cropScale
+            ) {
+                let offset = CGPoint(x: updatedCrop.offset.x / previewScale, y: updatedCrop.offset.y / previewScale)
+                if abs(offset.x - values.cropOffset.x) > 0.001 || abs(offset.y - values.cropOffset.y) > 0.001 || abs(updatedCrop.scale - values.cropScale) > 0.00001 {
+                    mediaEditor.setCrop(offset: offset, scale: updatedCrop.scale, rotation: values.cropRotation, mirroring: values.cropMirroring)
+                }
+            }
+        }
+
         private var initialMaskScale: CGFloat = .zero
         private var initialMaskPosition: CGPoint = .zero
         private func setupMaskDrawingView(size: CGSize) {
@@ -6579,15 +6633,10 @@ public final class MediaEditorScreenImpl: ViewController, MediaEditorScreen, UID
                 stickerBackgroundView.layer.cornerRadius = stickerFrameWidth / 8.0
                 
                 if let cropScrollView = self.cropScrollView {
-                    cropScrollView.frame = cropScrollRect
                     if cropScrollView.superview == nil {
                         self.previewContainerView.addSubview(cropScrollView)
-                        
-                        if let dimensions = self.subject?.dimensions {
-                            let filledCropSize = dimensions.cgSize.aspectFilled(cropScrollRect.size)
-                            cropScrollView.setContentSize(filledCropSize)
-                        }
                     }
+                    self.updateCrop(frame: cropScrollRect)
                 }
             }
             

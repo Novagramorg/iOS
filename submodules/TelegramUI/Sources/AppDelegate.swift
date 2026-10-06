@@ -65,6 +65,7 @@ private let handleVoipNotifications = false
 
 private func isTonTransferUrl(_ url: URL) -> Bool {
     return url.scheme?.lowercased() == "ton" && url.host?.lowercased() == "transfer"
+        && WalletContext.transferAddress(from: url.absoluteString) != nil
 }
 
 private var testIsLaunched = false
