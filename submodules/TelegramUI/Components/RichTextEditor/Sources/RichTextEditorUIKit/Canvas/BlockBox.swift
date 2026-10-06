@@ -25,11 +25,13 @@ public struct RichTextEditorPlaceholders: Equatable {
     public var detailsTitle: String
     /// Shown on an empty author line in a block quote or pull quote.
     public var quoteAuthor: String
+    /// Shown centered below media when its caption is empty.
+    public var caption: String
 
     public init(body: String, listEnd: String, listOutdent: String, pullQuote: String = "Type a quote here",
                 blockQuote: String = "Type a quote here", codeBlock: String = "Type code here",
                 codeLanguage: String = "Language",
-                detailsTitle: String = "Title", quoteAuthor: String = "Add author") {
+                detailsTitle: String = "Title", quoteAuthor: String = "Add author", caption: String = "Add caption") {
         self.body = body
         self.listEnd = listEnd
         self.listOutdent = listOutdent
@@ -39,6 +41,7 @@ public struct RichTextEditorPlaceholders: Equatable {
         self.codeLanguage = codeLanguage
         self.detailsTitle = detailsTitle
         self.quoteAuthor = quoteAuthor
+        self.caption = caption
     }
 
     public static let `default` = RichTextEditorPlaceholders(
@@ -50,7 +53,8 @@ public struct RichTextEditorPlaceholders: Equatable {
         codeBlock: "Type code here",
         codeLanguage: "Language",
         detailsTitle: "Title",
-        quoteAuthor: "Add author"
+        quoteAuthor: "Add author",
+        caption: "Add caption"
     )
 }
 

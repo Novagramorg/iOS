@@ -43,8 +43,8 @@ final class MediaBlockBox: CanvasBlock {
     /// caption runs, so alignment never enters the model (and markdown carries none).
     private static let captionParagraph = ParagraphAttributes(alignment: .center)
 
-    /// The placeholder text shown while the caption is empty.
-    private static let captionPlaceholderText = "Add caption"
+    /// Host placeholder strings, stamped by the canvas during layout.
+    var placeholders: RichTextEditorPlaceholders = .default
 
     /// A caption-less block renders as a fixed-height row (NOT aspect-scaled). Both heights match the V2
     /// renderer's frame height in `InstantPageV2Layout.swift` (`audioFrame` / `documentFrame`), so the
@@ -193,7 +193,7 @@ final class MediaBlockBox: CanvasBlock {
     /// caret to the START (left edge) of the centered placeholder rather than the line's center.
     private var captionPlaceholderTextWidth: CGFloat {
         let font = mapper.styleSheet.font(for: .caption, attributes: .plain)
-        return (MediaBlockBox.captionPlaceholderText as NSString).size(withAttributes: [.font: font]).width
+        return (placeholders.caption as NSString).size(withAttributes: [.font: font]).width
     }
 
     var height: CGFloat {
@@ -290,10 +290,10 @@ final class MediaBlockBox: CanvasBlock {
     /// because an image is view-backed (`rendersAsBlockView`) — its caption and placeholder must share
     /// the same render layer. Mirrors the paragraph placeholder's color/font.
     func captionPlaceholder() -> CaptionPlaceholder? {
-        guard !isCaptionless, caption.length == 0 else { return nil }
+        guard !isCaptionless, caption.length == 0, !placeholders.caption.isEmpty else { return nil }
         let font = mapper.styleSheet.font(for: .caption, attributes: .plain)
         let rect = CGRect(x: textOrigin.x, y: textOrigin.y, width: layoutWidth, height: captionEmptyLineHeight)
-        return CaptionPlaceholder(text: MediaBlockBox.captionPlaceholderText, rect: rect, font: font)
+        return CaptionPlaceholder(text: placeholders.caption, rect: rect, font: font)
     }
 
     func draw(in ctx: CGContext, imageProvider: (String) -> UIImage?) {

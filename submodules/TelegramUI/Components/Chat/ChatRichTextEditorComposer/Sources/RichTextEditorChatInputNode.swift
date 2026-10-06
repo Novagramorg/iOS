@@ -172,7 +172,7 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         // Suppress the editor's built-in placeholders ("Type something…" / list hints): the chat input panel
         // draws its own placeholder ("Message", etc.), so the editor's would double up.
         
-        self.editorView.placeholders = RichTextEditorPlaceholders(body: "", listEnd: "", listOutdent: "", pullQuote: self.strings.RichText_PlaceholderQuote, blockQuote: self.strings.RichText_PlaceholderQuote, codeBlock: self.strings.RichText_PlaceholderCode, codeLanguage: self.strings.RichText_PlaceholderCodeLanguage, detailsTitle: self.strings.RichText_PlaceholderDetailTitle, quoteAuthor: self.strings.RichText_PlaceholderQuoteAuthor)
+        self.editorView.placeholders = RichTextEditorPlaceholders(body: "", listEnd: "", listOutdent: "", pullQuote: self.strings.RichText_PlaceholderQuote, blockQuote: self.strings.RichText_PlaceholderQuote, codeBlock: self.strings.RichText_PlaceholderCode, codeLanguage: self.strings.RichText_PlaceholderCodeLanguage, detailsTitle: self.strings.RichText_PlaceholderDetailTitle, quoteAuthor: self.strings.RichText_PlaceholderQuoteAuthor, caption: self.strings.RichText_PlaceholderCaption)
         self.editorView.editMenuStrings = RichTextEditorMenuStrings(
             format: self.strings.TextFormat_Format,
             bold: self.strings.TextFormat_Bold,
