@@ -155,6 +155,12 @@ struct WalletCardProjectedQuad {
     var topRight = SIMD4<Float>(1.0, 1.0, 0.0, 1.0)
 }
 
+struct WalletCardQRChip {
+    let frame: CGRect
+    let alpha: CGFloat
+    let blurRadius: CGFloat
+}
+
 private final class WalletCardBundleMarker: NSObject {
 }
 
@@ -190,10 +196,9 @@ struct WalletCardLens {
 
 private final class WalletCardMetalLayer: MetalEngineSubjectLayer, MetalEngineSubject {
     private struct VertexUniforms {
-        var bottomLeft = SIMD4<Float>(-1.0, -1.0, 0.0, 1.0)
-        var bottomRight = SIMD4<Float>(1.0, -1.0, 0.0, 1.0)
-        var topLeft = SIMD4<Float>(-1.0, 1.0, 0.0, 1.0)
-        var topRight = SIMD4<Float>(1.0, 1.0, 0.0, 1.0)
+        var front = WalletCardProjectedQuad()
+        var back = WalletCardProjectedQuad()
+        var slices: Int32 = 0
     }
 
     private struct LensUniforms {
@@ -212,6 +217,9 @@ private final class WalletCardMetalLayer: MetalEngineSubjectLayer, MetalEngineSu
         var cornerRadius: Float = 0.0
         var surfaceTilt = SIMD2<Float>(repeating: 0.0)
         var cardSize = SIMD2<Float>(repeating: 1.0)
+        var qrRect = SIMD4<Float>(repeating: 0.0)
+        // Chip opacity, blur radius in points, and whether the face has a bevel.
+        var qrEffects = SIMD4<Float>(repeating: 0.0)
     }
 
     private final class RenderState: RenderToLayerState {
@@ -250,9 +258,22 @@ private final class WalletCardMetalLayer: MetalEngineSubjectLayer, MetalEngineSu
 
     private var starsTexture: MTLTexture?
     private var noiseTexture: MTLTexture?
+    private var qrTexture: MTLTexture?
     private var vertexUniforms = VertexUniforms()
     private var fragmentUniforms = FragmentUniforms()
     private var lens: WalletCardLens?
+
+    private static let sharedQRTexture: MTLTexture? = {
+        guard let image = WalletCardTextures.qrImage().cgImage else { return nil }
+        return try? MTKTextureLoader(device: MetalEngine.shared.device).newTexture(cgImage: image, options: [
+            .SRGB: false,
+            .origin: MTKTextureLoader.Origin.topLeft
+        ])
+    }()
+
+    var hasQRChip: Bool {
+        return self.qrTexture != nil && self.fragmentUniforms.qrRect.z > 0.0
+    }
 
     override init() {
         let textureLoader = MTKTextureLoader(device: MetalEngine.shared.device)
@@ -282,6 +303,7 @@ private final class WalletCardMetalLayer: MetalEngineSubjectLayer, MetalEngineSu
         if let layer = layer as? WalletCardMetalLayer {
             self.starsTexture = layer.starsTexture
             self.noiseTexture = layer.noiseTexture
+            self.qrTexture = layer.qrTexture
             self.vertexUniforms = layer.vertexUniforms
             self.fragmentUniforms = layer.fragmentUniforms
             self.lens = layer.lens
@@ -301,14 +323,14 @@ private final class WalletCardMetalLayer: MetalEngineSubjectLayer, MetalEngineSu
         surfaceTiltY: Double,
         cardSize: CGSize,
         cornerRadius: CGFloat,
-        quad: WalletCardProjectedQuad
+        quad: WalletCardProjectedQuad,
+        backQuad: WalletCardProjectedQuad?,
+        qrChip: WalletCardQRChip?
     ) {
-        self.vertexUniforms = VertexUniforms(
-            bottomLeft: quad.bottomLeft,
-            bottomRight: quad.bottomRight,
-            topLeft: quad.topLeft,
-            topRight: quad.topRight
-        )
+        self.vertexUniforms = VertexUniforms(front: quad, back: backQuad ?? quad)
+        if qrChip != nil {
+            self.qrTexture = Self.sharedQRTexture
+        }
         self.fragmentUniforms = FragmentUniforms(
             time: Float(time),
             reflectionRotation: Float(reflectionRotation.truncatingRemainder(dividingBy: 2.0 * .pi)),
@@ -318,7 +340,27 @@ private final class WalletCardMetalLayer: MetalEngineSubjectLayer, MetalEngineSu
             surfaceTilt: SIMD2<Float>(Float(surfaceTiltX), Float(surfaceTiltY)),
             cardSize: SIMD2<Float>(Float(max(cardSize.width, 1.0)), Float(max(cardSize.height, 1.0)))
         )
+        self.fragmentUniforms.qrEffects.z = backQuad == nil ? 0.0 : 1.0
+        if let qrChip, self.qrTexture != nil, !qrChip.frame.isEmpty {
+            self.fragmentUniforms.qrRect = SIMD4<Float>(Float(qrChip.frame.minX), Float(qrChip.frame.minY), Float(qrChip.frame.width), Float(qrChip.frame.height))
+            self.fragmentUniforms.qrEffects.x = Float(max(0.0, min(1.0, qrChip.alpha)))
+            self.fragmentUniforms.qrEffects.y = Float(max(0.0, qrChip.blurRadius))
+        }
         self.setNeedsUpdate()
+    }
+
+    private func sliceCount(drawableSize: CGSize) -> Int32 {
+        func pixels(_ front: SIMD4<Float>, _ back: SIMD4<Float>) -> Float {
+            let a = SIMD2<Float>(front.x, front.y) / max(front.w, 0.0001)
+            let b = SIMD2<Float>(back.x, back.y) / max(back.w, 0.0001)
+            return simd_length((a - b) * 0.5 * SIMD2<Float>(Float(drawableSize.width), Float(drawableSize.height)))
+        }
+        let front = self.vertexUniforms.front
+        let back = self.vertexUniforms.back
+        let shift = max(max(pixels(front.topLeft, back.topLeft), pixels(front.topRight, back.topRight)),
+            max(pixels(front.bottomLeft, back.bottomLeft), pixels(front.bottomRight, back.bottomRight)))
+        guard shift > 0.35 else { return 0 }
+        return Int32(min(24.0, ceil(shift) + 1.0))
     }
 
     func updateLens(_ lens: WalletCardLens?) {
@@ -341,8 +383,10 @@ private final class WalletCardMetalLayer: MetalEngineSubjectLayer, MetalEngineSu
             width: self.bounds.width * displayScale,
             height: self.bounds.height * displayScale
         )
-        let currentVertexUniforms = self.vertexUniforms
+        var currentVertexUniforms = self.vertexUniforms
+        currentVertexUniforms.slices = self.sliceCount(drawableSize: drawableSize)
         let currentFragmentUniforms = self.fragmentUniforms
+        let qrTexture = self.qrTexture ?? noiseTexture
 
         context.renderToLayer(
             spec: RenderLayerSpec(
@@ -373,7 +417,7 @@ private final class WalletCardMetalLayer: MetalEngineSubjectLayer, MetalEngineSu
                 encoder.setVertexBytes(&rect, length: MemoryLayout<SIMD4<Float>>.size, index: 0)
                 encoder.setVertexBytes(
                     &vertexUniforms,
-                    length: MemoryLayout<VertexUniforms>.size,
+                    length: MemoryLayout<VertexUniforms>.stride,
                     index: 1
                 )
                 encoder.setVertexBytes(
@@ -383,7 +427,7 @@ private final class WalletCardMetalLayer: MetalEngineSubjectLayer, MetalEngineSu
                 )
                 encoder.setFragmentBytes(
                     &fragmentUniforms,
-                    length: MemoryLayout<FragmentUniforms>.size,
+                    length: MemoryLayout<FragmentUniforms>.stride,
                     index: 0
                 )
                 // Diamond compute operations precede compositing, so read its current silhouette here.
@@ -413,7 +457,9 @@ private final class WalletCardMetalLayer: MetalEngineSubjectLayer, MetalEngineSu
                 }
                 encoder.setFragmentTexture(starsTexture, index: 0)
                 encoder.setFragmentTexture(noiseTexture, index: 1)
-                encoder.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4)
+                encoder.setFragmentTexture(qrTexture, index: 2)
+                encoder.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4,
+                    instanceCount: Int(vertexUniforms.slices) + 1)
             }
         )
     }
@@ -452,6 +498,10 @@ final class WalletCardBackgroundView: UIView {
     private var cornerRadius: CGFloat = 0.0
     private var currentTime = 0.0
     private var currentReflectionRotation = WalletCardBackgroundMotion.shared.currentRotation
+
+    var displaysQRChip: Bool {
+        return self.metalView.metalLayer.contents != nil && self.metalView.metalLayer.hasQRChip
+    }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -497,7 +547,9 @@ final class WalletCardBackgroundView: UIView {
         highlightTiltY: Double,
         surfaceTiltX: Double,
         surfaceTiltY: Double,
-        quad: WalletCardProjectedQuad
+        quad: WalletCardProjectedQuad,
+        backQuad: WalletCardProjectedQuad? = nil,
+        qrChip: WalletCardQRChip? = nil
     ) {
         self.currentTime = time
         self.currentReflectionRotation = reflectionRotation
@@ -515,7 +567,9 @@ final class WalletCardBackgroundView: UIView {
             surfaceTiltY: surfaceTiltY,
             cardSize: self.cardSize,
             cornerRadius: self.cornerRadius,
-            quad: quad
+            quad: quad,
+            backQuad: backQuad,
+            qrChip: qrChip
         )
     }
 

@@ -870,6 +870,7 @@ private final class WalletTransactionContentComponent: Component {
 
     final class View: UIView {
         private struct Roll {
+            private static let reach: CGFloat = 18.0
             private var x: CGFloat = 0.0
             private var v: CGFloat = 0.0
             private var last: CFTimeInterval?
@@ -878,7 +879,7 @@ private final class WalletTransactionContentComponent: Component {
             private(set) var isAnimating = false
 
             private static func target(_ sheet: CGFloat) -> CGFloat {
-                return min(110.0, max(-110.0, sheet * 0.5))
+                return min(Self.reach, max(-Self.reach, sheet * 0.06))
             }
 
             mutating func rebase(sheet: CGFloat, at now: CFTimeInterval) {
@@ -906,7 +907,7 @@ private final class WalletTransactionContentComponent: Component {
                 self.sheetX = sheet
                 let previousVelocity = self.sheetV
                 self.sheetV += (raw - self.sheetV) * min(1.0, dt * 12.0)
-                self.v -= (self.sheetV - previousVelocity) * 0.5
+                self.v -= (self.sheetV - previousVelocity) * 0.06
                 let w: CGFloat = 2.0 * .pi * 1.7
                 var remaining = dt
                 while remaining > 0.0 {
@@ -915,8 +916,9 @@ private final class WalletTransactionContentComponent: Component {
                     self.x += self.v * h
                     remaining -= h
                 }
-                if abs(self.x) > 132.0 {
-                    self.x = self.x > 0.0 ? 132.0 : -132.0
+                let edge = Self.reach * 1.2
+                if abs(self.x) > edge {
+                    self.x = self.x > 0.0 ? edge : -edge
                     self.v = 0.0
                 }
                 // Let the filtered sheet velocity decay too, so a pending braking impulse is not lost.
@@ -1098,7 +1100,7 @@ private final class WalletTransactionContentComponent: Component {
                     UIView.performWithoutAnimation {
                         diamond.transform = CGAffineTransform(translationX: offset, y: 0.0)
                     }
-                    return (Float(offset / (78.0 / 2.0 * 0.949)), self.roll.isAnimating)
+                    return (Float(offset / (78.0 / 2.0 * 0.949) * 0.8), self.roll.isAnimating)
                 }
             }
             self.pagerPositionChanged(reset: false)
