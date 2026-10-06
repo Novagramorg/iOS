@@ -6935,7 +6935,14 @@ public final class MediaEditorScreenImpl: ViewController, MediaEditorScreen, UID
     fileprivate let transitionIn: TransitionIn?
     fileprivate let transitionOut: (Bool, Bool?) -> TransitionOut?
         
-    var didComplete = false
+    var didComplete = false {
+        didSet {
+            if !self.didComplete {
+                self.storyPrivacyScreen?.isCompleting = false
+            }
+        }
+    }
+    weak var storyPrivacyScreen: ShareWithPeersScreen?
     var collage: MediaEditorCollage?
     var collageResolutionId = UUID()
     var collageDraftSaveOperation: MediaEditorCollageDraftSaveOperation?
@@ -7311,6 +7318,10 @@ public final class MediaEditorScreenImpl: ViewController, MediaEditorScreen, UID
             }
             controller.dismissed = {
                 self.node.mediaEditor?.play()
+            }
+            if self.collage != nil {
+                controller.automaticallyDismissOnCompletion = false
+                self.storyPrivacyScreen = controller
             }
             self.push(controller)
             
@@ -7732,6 +7743,9 @@ public final class MediaEditorScreenImpl: ViewController, MediaEditorScreen, UID
     }
     
     func requestDismiss(saveDraft: Bool, animated: Bool, draftSaved: Bool = false, discardDraft: Bool = true) {
+        guard self.storyPrivacyScreen?.isCompleting != true else {
+            return
+        }
         if saveDraft, self.collage != nil, !draftSaved {
             self.maybePresentDiscardAlert()
             return

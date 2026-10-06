@@ -13,6 +13,104 @@ import StarsAvatarComponent
 import WalletContext
 import WalletCollectibleImageComponent
 
+private final class WalletTransactionAddressTitleComponent: Component {
+    let address: String
+    let textColor: UIColor
+    let backgroundColor: UIColor
+
+    init(address: String, textColor: UIColor, backgroundColor: UIColor) {
+        self.address = address
+        self.textColor = textColor
+        self.backgroundColor = backgroundColor
+    }
+
+    static func ==(lhs: WalletTransactionAddressTitleComponent, rhs: WalletTransactionAddressTitleComponent) -> Bool {
+        return lhs.address == rhs.address
+            && lhs.textColor == rhs.textColor
+            && lhs.backgroundColor == rhs.backgroundColor
+    }
+
+    final class View: UIView {
+        private let contentView = UIView()
+        private var backgrounds: [UIView] = []
+        private var labels: [UILabel] = []
+
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+
+            self.isUserInteractionEnabled = false
+            self.isAccessibilityElement = true
+            self.accessibilityTraits = .staticText
+            self.addSubview(self.contentView)
+
+            for index in 0 ..< 3 {
+                let background = UIView(frame: CGRect(x: CGFloat(index) * 52.0, y: 0.0, width: 48.0, height: 22.0))
+                background.layer.cornerRadius = 6.0
+                self.contentView.addSubview(background)
+                self.backgrounds.append(background)
+
+                let label = UILabel(frame: background.bounds)
+                label.font = Font.with(size: 16.0, design: .monospace, weight: .semibold)
+                label.textAlignment = .center
+                label.isAccessibilityElement = false
+                background.addSubview(label)
+                self.labels.append(label)
+
+                if index == 1 {
+                    let mask = CAGradientLayer()
+                    mask.frame = label.bounds
+                    mask.startPoint = CGPoint(x: 0.0, y: 0.5)
+                    mask.endPoint = CGPoint(x: 1.0, y: 0.5)
+                    mask.colors = [UIColor.black.cgColor, UIColor.black.cgColor, UIColor.clear.cgColor, UIColor.black.cgColor, UIColor.black.cgColor]
+                    mask.locations = [0.0, 0.15, 0.5, 0.85, 1.0]
+                    label.layer.mask = mask
+                }
+            }
+        }
+
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+
+        func update(component: WalletTransactionAddressTitleComponent, availableSize: CGSize) -> CGSize {
+            let groups = [
+                String(component.address.prefix(4)),
+                String(component.address.dropFirst(4).prefix(2)) + String(component.address.suffix(6).prefix(2)),
+                String(component.address.suffix(4))
+            ]
+            for index in 0 ..< self.labels.count {
+                self.labels[index].text = groups[index]
+                self.labels[index].textColor = component.textColor
+                self.backgrounds[index].backgroundColor = component.backgroundColor
+            }
+            self.accessibilityLabel = component.address
+
+            let contentSize = CGSize(width: 152.0, height: 22.0)
+            let scale = min(1.0, max(0.0, availableSize.width) / contentSize.width)
+            let size = CGSize(width: contentSize.width * scale, height: contentSize.height * scale)
+            self.contentView.isHidden = scale == 0.0
+            self.contentView.bounds = CGRect(origin: .zero, size: contentSize)
+            self.contentView.center = CGPoint(x: size.width * 0.5, y: size.height * 0.5)
+            self.contentView.transform = scale == 0.0 ? .identity : CGAffineTransform(scaleX: scale, y: scale)
+            return size
+        }
+    }
+
+    func makeView() -> View {
+        return View(frame: .zero)
+    }
+
+    func update(
+        view: View,
+        availableSize: CGSize,
+        state: EmptyComponentState,
+        environment: Environment<Empty>,
+        transition: ComponentTransition
+    ) -> CGSize {
+        return view.update(component: self, availableSize: availableSize)
+    }
+}
+
 private final class WalletTransactionGramIconComponent: Component {
     let isPending: Bool
     let pendingColor: UIColor
@@ -274,6 +372,7 @@ public final class WalletTransactionItemComponent: Component {
         private var activityIndicatorBackground: UIView?
         private var activityIndicator: ActivityIndicator?
         private let title = ComponentView<Empty>()
+        private let addressTitle = ComponentView<Empty>()
         private let subtitle = ComponentView<Empty>()
         private let date = ComponentView<Empty>()
         private let amount = ComponentView<Empty>()
@@ -381,6 +480,7 @@ public final class WalletTransactionItemComponent: Component {
             self.activityIndicatorBackground?.isHidden = hidden
             self.activityIndicator?.view.isHidden = hidden
             self.title.view?.isHidden = hidden
+            self.addressTitle.view?.isHidden = hidden
             self.subtitle.view?.isHidden = hidden
             self.date.view?.isHidden = hidden
             self.amount.view?.isHidden = hidden
@@ -969,6 +1069,7 @@ public final class WalletTransactionItemComponent: Component {
             )
 
             let peerTitle: String
+            var titleAddress: String?
             switch transaction.peer {
             case let .user(peer, _, _):
                 peerTitle = peer.debugDisplayTitle
@@ -976,7 +1077,11 @@ public final class WalletTransactionItemComponent: Component {
                 if let domain = domain?.trimmingCharacters(in: .whitespacesAndNewlines), !domain.isEmpty {
                     peerTitle = domain
                 } else {
+                    let address = WalletContext.transferAddress(from: address, preserveBounce: true) ?? address
                     peerTitle = walletTransactionCounterparty(address, strings: component.strings)
+                    if address.count > 12 {
+                        titleAddress = address
+                    }
                 }
             case let .onramp(_, _, provider):
                 switch provider {
@@ -1001,6 +1106,35 @@ public final class WalletTransactionItemComponent: Component {
                 environment: {},
                 containerSize: CGSize(width: titleAvailableWidth, height: 100.0)
             )
+            self.title.view?.isHidden = titleAddress != nil
+            if let titleAddress {
+                let addressTitleSize = self.addressTitle.update(
+                    transition: transition,
+                    component: AnyComponent(WalletTransactionAddressTitleComponent(
+                        address: titleAddress,
+                        textColor: component.theme.list.itemPrimaryTextColor,
+                        backgroundColor: component.theme.list.blocksBackgroundColor
+                    )),
+                    environment: {},
+                    containerSize: CGSize(width: titleAvailableWidth, height: 100.0)
+                )
+                if let addressTitleView = self.addressTitle.view {
+                    if addressTitleView.superview == nil {
+                        self.addSubview(addressTitleView)
+                    }
+                    addressTitleView.isHidden = false
+                    // Keep the original title's height so the amount, subtitle and date stay aligned.
+                    transition.setFrame(
+                        view: addressTitleView,
+                        frame: CGRect(
+                            origin: CGPoint(x: textOriginX, y: 2.0 + floorToScreenPixels((titleSize.height - addressTitleSize.height) * 0.5)),
+                            size: addressTitleSize
+                        )
+                    )
+                }
+            } else {
+                self.addressTitle.view?.isHidden = true
+            }
             let subtitleSize = self.subtitle.update(
                 transition: transition,
                 component: AnyComponent(MultilineTextComponent(
@@ -1283,10 +1417,9 @@ public final class WalletTransactionItemComponent: Component {
 }
 
 private func walletTransactionCounterparty(_ address: String?, strings: PresentationStrings) -> String {
-    guard var address, !address.isEmpty else {
+    guard let address, !address.isEmpty else {
         return strings.Wallet_Transaction_UnknownAddress
     }
-    address = WalletContext.transferAddress(from: address, preserveBounce: true) ?? address
     
     let edgeLength = 4
     guard address.count > edgeLength * 2 else {

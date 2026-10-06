@@ -25,44 +25,6 @@ final class MediaEditorDraftSaveAlert: AlertScreen {
 }
 
 extension MediaEditorScreenImpl {
-    func saveCollageForPublication(id: Int64, completion: @escaping (Swift.Result<MediaEditorDraft, MediaEditorCollageDraftSaveError>) -> Void) {
-        let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }.withUpdated(theme: defaultDarkPresentationTheme)
-        weak var weakAlert: MediaEditorDraftSaveAlert?
-        var finished = false
-        let cancel = { [weak self] in
-            guard let self, !finished, self.cancelCollageDraftSave() else {
-                return
-            }
-            finished = true
-            self.collageSaveAlert = nil
-            weakAlert?.close(completion: { completion(.failure(.cancelled)) })
-        }
-        let alert = MediaEditorDraftSaveAlert(
-            configuration: AlertScreen.Configuration(actionAlignment: .vertical, dismissOnOutsideTap: false),
-            contentSignal: .single([]),
-            actionsSignal: .single([
-                AlertScreen.Action(title: presentationData.strings.Channel_NotificationLoading, action: {}, autoDismiss: false, isEnabled: .single(false), progress: .single(true)),
-                AlertScreen.Action(title: presentationData.strings.Common_Cancel, action: cancel, autoDismiss: false)
-            ]),
-            updatedPresentationData: (initial: presentationData, signal: self.context.sharedContext.presentationData |> map { $0.withUpdated(theme: defaultDarkPresentationTheme) })
-        )
-        weakAlert = alert
-        alert.requestClose = {
-            cancel()
-            return false
-        }
-        self.collageSaveAlert = alert
-        self.present(alert, in: .window(.root))
-        self.saveCollageDraft(id: id) { [weak self] result in
-            guard let self, !finished else {
-                return
-            }
-            finished = true
-            self.collageSaveAlert = nil
-            weakAlert?.close(completion: { completion(result) })
-        }
-    }
-
     func prepareCollageMedia(_ collage: MediaEditorCollage, completion: @escaping (Bool) -> Void) {
         guard collage.isVideo else {
             completion(true)

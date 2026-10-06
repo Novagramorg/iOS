@@ -15,21 +15,28 @@ import BundleIconComponent
 import GlassBarButtonComponent
 import ButtonComponent
 import QrCode
+import PremiumDiamondComponent
 
 private final class WalletReceiveQrComponent: Component {
     let address: String
+    let theme: PresentationTheme
+    let isVisible: Bool
 
-    init(address: String) {
+    init(address: String, theme: PresentationTheme, isVisible: Bool) {
         self.address = address
+        self.theme = theme
+        self.isVisible = isVisible
     }
 
     static func ==(lhs: WalletReceiveQrComponent, rhs: WalletReceiveQrComponent) -> Bool {
-        return lhs.address == rhs.address
+        return lhs.address == rhs.address && lhs.theme === rhs.theme && lhs.isVisible == rhs.isVisible
     }
 
     final class View: UIView {
         private var component: WalletReceiveQrComponent?
         private let imageNode: TransformImageNode
+        private let diamond = ComponentView<Empty>()
+        private var qrCodeSize: Int?
 
         override init(frame: CGRect) {
             self.imageNode = TransformImageNode()
@@ -58,9 +65,12 @@ private final class WalletReceiveQrComponent: Component {
                         string: "ton://transfer/\(component.address)",
                         color: .black,
                         backgroundColor: .white,
-                        icon: .custom(UIImage(bundleImageName: "Wallet/QrGram")),
+                        icon: .cutout,
                         ecl: "Q"
                     )
+                    |> beforeNext { [weak self] size, _ in
+                        self?.qrCodeSize = size
+                    }
                     |> map { $0.1 },
                     attemptSynchronously: true
                 )
@@ -85,6 +95,30 @@ private final class WalletReceiveQrComponent: Component {
                 origin: CGPoint(x: imageInset, y: imageInset),
                 size: imageSize
             )
+
+            if let qrCodeSize = self.qrCodeSize {
+                let (_, cutoutFrame, _) = qrCodeCutout(size: qrCodeSize, dimensions: imageSize, scale: nil)
+                let _ = self.diamond.update(
+                    transition: .immediate,
+                    component: AnyComponent(InteractiveDiamondComponent(
+                        size: cutoutFrame.size,
+                        diamondWidth: cutoutFrame.width * 0.72,
+                        isVisible: component.isVisible,
+                        theme: component.theme,
+                        animationMode: .continuous
+                    )),
+                    environment: {},
+                    containerSize: cutoutFrame.size
+                )
+                if let diamondView = self.diamond.view {
+                    if diamondView.superview == nil {
+                        diamondView.isUserInteractionEnabled = false
+                        diamondView.clipsToBounds = true
+                        self.addSubview(diamondView)
+                    }
+                    diamondView.frame = cutoutFrame.offsetBy(dx: imageInset, dy: imageInset)
+                }
+            }
 
             return size
         }
@@ -1261,7 +1295,11 @@ private final class WalletReceiveSheetContent: Component {
                 } else {
                     let qrCodeSize = self.qrCode.update(
                         transition: cardContentTransition,
-                        component: AnyComponent(WalletReceiveQrComponent(address: component.address)),
+                        component: AnyComponent(WalletReceiveQrComponent(
+                            address: component.address,
+                            theme: environment.theme,
+                            isVisible: environment.isVisible
+                        )),
                         environment: {},
                         containerSize: CGSize(width: qrSize, height: qrSize)
                     )
