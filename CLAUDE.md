@@ -61,6 +61,20 @@ the compiler's reply thread and the caller crashes retaining it (device crash on
 macOS 27). `MetalBinaryArchiveSerialization` hooks that one `NSFileManager` call to keep the error alive;
 the target sets `NSZombieEnabled` so a regression fails deterministically.
 
+`//submodules/UrlWhitelist:UrlWhitelistTests` (added 2026-10-06) is a host `swift_test` like
+`MTProtoRustEngineMappingTests`, run the same way. It pins `externalUrlWithLoginPart`, the check that
+makes opening a link with a login part in front of its host ask first: in
+`https://telegram.org∕test∕@evil.org` the `∕` (U+2215) is not a slash, so `telegram.org∕test∕` is a user
+name and the link opens evil.org. The check runs in the external-URL opener (`openExternalUrlImpl`),
+which every external link leaves through, including the openers that never ask about anything (admin
+log, Instant View), and its parse is the opener's own (`canonicalExternalUrl`, now in `UrlWhitelist`).
+The prompts in `openUserGeneratedUrl` and `TextLinkHandling` also flag such links. Every prompt, and
+the title of every long-press link menu (`displayUrlRevealingLoginPart`; Copy still copies the link as
+written), shows the address without the login part, and accepting a prompt records the address
+(`noteLoginPartConfirmed`) so the opener does not ask a second time. The check stays out of `parseUrl`,
+whose `concealed` flag also makes the shared-links list title a link with its whole address instead of
+its host.
+
 ### Updating the running simulator after a rebuild (whole-`.app` copy)
 
 `simctl install` will NOT replace an already-installed app when the build number is unchanged (installd keeps a hard-link cache), so a rebuilt binary silently doesn't take effect. **Preferred fix: copy the whole freshly-built `.app` over the installed bundle in place.** This is more robust than swapping only the `Frameworks/TelegramUIFramework` binary (no risk of app↔framework version skew), and it preserves the account/login because the **data container is a separate path** (`.../data/Containers/Data/Application/<uuid>/`, keyed by bundle id) — only the **bundle** container is replaced, and the install-DB entry stays valid since the path + bundle id are unchanged.
