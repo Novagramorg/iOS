@@ -16829,6 +16829,7 @@ Error: %8$@";
 "Wallet.Receive.CopyAddress" = "Copy my address";
 "Wallet.Receive.Text" = "Share your address or this\nQR code to receive GRAM.";
 "Wallet.Receive.Buy" = "Buy with cash or crypto";
+"Wallet.Receive.BuyShort" = "Buy with cash or crypto";
 "Wallet.Receive.PurchaseUnavailableTitle" = "Purchase Unavailable";
 "Wallet.Receive.PurchaseUnavailableText" = "Purchasing is currently unavailable. Please try again later.";
 "Wallet.Receive.PurchaseFailedTitle" = "Purchase Failed";

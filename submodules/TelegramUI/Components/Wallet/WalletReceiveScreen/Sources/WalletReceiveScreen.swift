@@ -1343,7 +1343,7 @@ private final class WalletReceiveSheetContent: Component {
                 AnyComponentWithIdentity(
                     id: "title",
                     component: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(
-                        string: environment.strings.Wallet_Receive_Buy,
+                        string: availableWidth < 390.0 ? environment.strings.Wallet_Receive_BuyShort : environment.strings.Wallet_Receive_Buy,
                         font: Font.semibold(17.0),
                         textColor: UIColor(rgb: 0x087cff)
                     ))))

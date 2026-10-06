@@ -373,8 +373,9 @@ private final class WalletTransferSheetContent: Component {
                 self.card.view?.isHidden = true
                 transition.setBackgroundColor(view: self, color: theme.list.modalBlocksBackgroundColor)
 
-                let cardWidth = min(382.0, max(1.0, safeContentWidth - 42.0))
-                let cardX = floor(contentCenterX - cardWidth * 0.5)
+                let sideInset: CGFloat = 16.0
+                let cardWidth = max(1.0, safeContentWidth - sideInset * 2.0)
+                let cardX = environment.safeInsets.left + sideInset
                 var contentHeight: CGFloat = 90.0
                 func addText(_ text: String, view: ComponentView<Empty>, font: UIFont, topInset: CGFloat) {
                     guard !text.isEmpty else {

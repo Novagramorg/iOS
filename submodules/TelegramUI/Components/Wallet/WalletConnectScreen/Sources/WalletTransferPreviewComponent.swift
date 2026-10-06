@@ -539,8 +539,9 @@ final class WalletTransferPreviewComponent: Component {
                 0.0,
                 availableSize.width - environment.safeInsets.left - environment.safeInsets.right
             )
-            let contentWidth = min(382.0, max(1.0, safeWidth - 48.0))
-            let contentX = environment.safeInsets.left + floor((safeWidth - contentWidth) * 0.5)
+            let sideInset: CGFloat = 16.0
+            let contentWidth = max(1.0, safeWidth - sideInset * 2.0)
+            let contentX = environment.safeInsets.left + sideInset
             let sectionTitleColor = theme.list.itemSecondaryTextColor
 
             let presentation = WalletTransferPresentation(request: component.request, walletState: component.walletState)
