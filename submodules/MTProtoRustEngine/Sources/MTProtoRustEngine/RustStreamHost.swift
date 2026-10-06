@@ -32,6 +32,7 @@ final class RustStreamHost {
                 parameters = nw_parameters_create_secure_tcp({ options in
                     let security = nw_tls_copy_sec_protocol_options(options)
                     sec_protocol_options_set_tls_server_name(security, serverName)
+                    sec_protocol_options_set_tls_false_start_enabled(security, true)
                     for name in alpn {
                         sec_protocol_options_add_tls_application_protocol(security, name)
                     }

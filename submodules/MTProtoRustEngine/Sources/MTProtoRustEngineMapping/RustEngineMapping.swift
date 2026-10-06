@@ -27,6 +27,7 @@ public struct RustEngineConnectionFlags: Equatable {
     public var isUpdatingConnectionContext: Bool
     public var isPerformingServiceTasks: Bool
     public var proxyHasConnectionIssues: Bool
+    public var isAwaitingKeyBinding: Bool
 
     public init(rawValue: UInt32) {
         self.isNetworkAvailable = (rawValue & (1 << 0)) != 0
@@ -34,6 +35,7 @@ public struct RustEngineConnectionFlags: Equatable {
         self.isUpdatingConnectionContext = (rawValue & (1 << 2)) != 0
         self.isPerformingServiceTasks = (rawValue & (1 << 3)) != 0
         self.proxyHasConnectionIssues = (rawValue & (1 << 4)) != 0
+        self.isAwaitingKeyBinding = (rawValue & (1 << 5)) != 0
     }
 }
 
@@ -191,6 +193,14 @@ public struct RustEngineErrorState: Equatable {
 /// (`shouldContinueAfterError`), as for any other 500.
 public func rustEngineResubmitsAfterKeyRotation(code: Int32, text: String) -> Bool {
     return code == 500 && text == "TEMP_KEY_ROTATED"
+}
+
+/// `500 PROTOCOL_ERROR_ANSWER_LOST`: the server ran the call and announced its answer, then said it no
+/// longer has it. The caller is never told: a failure would mark a message that went out as failed (and
+/// a resend would post it twice), and the many callers that retry on any error would run the call
+/// again. The call stays waiting, as with MtProtoKit and tdlib, until its caller gives it up.
+public func rustEngineKeepsWaitingAfterLostAnswer(code: Int32, text: String) -> Bool {
+    return code == 500 && text == "PROTOCOL_ERROR_ANSWER_LOST"
 }
 
 /// An unparsable `rpc_result` is a `500 TL_PARSING_ERROR`. MtProtoKit retries it every 2 seconds
