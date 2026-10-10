@@ -5,6 +5,7 @@ import TelegramCore
 import FenixuzAnalytics
 import FenixuzAutoProxy
 import FenixuzProMessager
+import FenixuzSceneLifecycle
 import UserNotifications
 import Intents
 import Postbox
@@ -89,10 +90,16 @@ private func isKeyboardViewContainer(view: NSObject) -> Bool {
 }
 
 private class ApplicationStatusBarHost: StatusBarHost {
-    private weak var scene: UIWindowScene?
+    // Fenixuz: with the UIScene life cycle the window gets its scene only after the scene
+    // connects, so read it when asked instead of keeping the (still nil) value from launch.
+    private weak var window: UIWindow?
 
-    init(scene: UIWindowScene?) {
-        self.scene = scene
+    private var scene: UIWindowScene? {
+        return self.window?.windowScene
+    }
+
+    init(window: UIWindow) {
+        self.window = window
     }
 
     var isApplicationInForeground: Bool {
@@ -397,7 +404,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         }
 
         let (window, hostView) = nativeWindowHostView()
-        let statusBarHost = ApplicationStatusBarHost(scene: window.windowScene)
+        let statusBarHost = ApplicationStatusBarHost(window: window)
         self.mainWindow = Window1(hostView: hostView, statusBarHost: statusBarHost)
         if let traitCollection = window.rootViewController?.traitCollection {
             if #available(iOS 13.0, *) {
@@ -2111,6 +2118,13 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
 
     func applicationWillTerminate(_ application: UIApplication) {
         Logger.shared.log("App \(self.episodeId)", "terminating")
+    }
+
+    // Fenixuz: UIScene life cycle (required by the iOS 27 SDK), see NovagramSceneDelegate.
+    func application(_ application: UIApplication, configurationForConnecting connectingSceneSession: UISceneSession, options: UIScene.ConnectionOptions) -> UISceneConfiguration {
+        let configuration = UISceneConfiguration(name: "Default Configuration", sessionRole: connectingSceneSession.role)
+        configuration.delegateClass = NovagramSceneDelegate.self
+        return configuration
     }
 
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
