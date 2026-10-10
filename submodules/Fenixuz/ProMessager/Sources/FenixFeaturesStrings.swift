@@ -174,6 +174,25 @@ enum FenixFeaturesStrings {
         }
     }
 
+    // Novagram Settings switch for the "Add folders?" prompt
+    static func foldersPromptTitle(langCode: String) -> String {
+        switch langCode {
+        case "uz": return "Kirgandan keyin papka taklifi"
+        case "ru": return "Предлагать папки после входа"
+        case "zh": return "登录后建议添加分组"
+        default:   return "Suggest folders after login"
+        }
+    }
+
+    static func foldersPromptTip(langCode: String) -> String {
+        switch langCode {
+        case "uz": return "Akkauntga kirgandan keyin «Papkalar qo'shilsinmi?» oynasini ko'rsatadi"
+        case "ru": return "Показывает окно «Добавить папки?» после входа в аккаунт"
+        case "zh": return "登录账号后显示“添加分组？”提示"
+        default:   return "Shows the \"Add folders?\" prompt after you sign in"
+        }
+    }
+
     static func addFoldersAlertConfirm(langCode: String) -> String {
         switch langCode {
         case "uz": return "Qo'shish"
