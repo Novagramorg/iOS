@@ -473,6 +473,8 @@ On every `git pull upstream master`, an AI assistant uses this file to re-apply 
 216. `Telegram/BUILD`: upstream watch app qaytarilganda fork sozlamalari saqlab qolingan (`composer_icon_folders = []`, `:PrivacyManifest`).
 217. `project.yml`, `project.pbxproj` (WatchApp): Team ID `ZDBP5RSRZF`.
 218. `ChatInputTextNode.swift` (TelegramUI): input diagnostika log'i (faqat DEBUG).
+219. `run.sh`: Xcode versiyasi o'rnatilgan Xcode'dan olinadi, Swift 6.4 warning'lari error bo'lmaydi.
+220. `ChatControllerNode.swift` (TelegramUI): Swift 6.4 uchun `EmptyInputView` importi aniqlashtirilgan.
 
 ---
 
@@ -6270,6 +6272,36 @@ if let fenixEditItem = FenixuzForwardEdit.menuItem(context: selfController.conte
 On an upstream pull: re-apply both pieces; the anchor is the forward-options item list in
 `chatForwardOptions`. If upstream renames `sendMessages` / `presentPaidMessageAlertIfNeeded` /
 `withUpdatedForwardMessageIds`, map to the new names — the module itself does not change.
+
+---
+
+## 📌 Xcode 27.1 / Swift 6.4 build compatibility (2026-10-08)
+
+Not a feature hook — a toolchain fix so the fork builds with Xcode 27.1 (Swift 6.4); the old
+Xcode 26.5 no longer launches on the current macOS.
+
+### `submodules/TelegramUI/Sources/ChatControllerNode.swift` (import block, right after `import ChatEntityKeyboardInputNode`)
+
+```swift
+import ChatEntityKeyboardInputNode
+// TextFieldComponent also has a public EmptyInputView and Swift 6.4 calls it ambiguous, so pin this one
+// swiftlint:disable:next duplicate_imports
+import class ChatEntityKeyboardInputNode.EmptyInputView
+```
+
+Reason: this file imports both `ChatEntityKeyboardInputNode` and `TextFieldComponent`, and both
+declare an identical `public final class EmptyInputView`. Swift 6.4 reports `ambiguous use of
+'EmptyInputView'` at `private let emptyInputView = EmptyInputView()`; the scoped import picks the
+keyboard one. The `swiftlint:disable:next` line is required — `swiftlint --fix` (auto-lint hook)
+treats the scoped import as a duplicate of `import ChatEntityKeyboardInputNode` and deletes it.
+
+On an upstream pull: keep the three lines unless upstream renamed/removed one of the two
+`EmptyInputView` classes (then the line can go).
+
+Related (not a Telegram-owned file): `run.sh` now derives `--xcode_version` from the installed
+Xcode and passes `--@build_bazel_rules_swift//swift:copt=-no-warnings-as-errors` (+ `exec_copt`),
+because Swift 6.4's new `ImplicitStrongCapture` warning hits hundreds of upstream files that build
+with `-warnings-as-errors`. `publish.sh` / `release.sh` call Bazel directly and don't pass this flag yet.
 
 ---
 
