@@ -28,13 +28,11 @@ Active Fenixuz modules (as of 2026-05-08):
 
 ```
 submodules/Fenixuz/
-├── AIChatbot/         (FenixuzAIChatbot)        — UI hidden; module kept for future
 ├── ChatLock/          (FenixuzChatLock)         — Pincode + manager
 ├── EditedHistory/     (FenixuzEditedHistory)    — Edited message history viewer
 ├── ForeignUserBlock/  (FenixuzForeignUserBlock) — Country code helpers
 ├── ProMessager/       (FenixuzProMessager)      — "NovagramPro" Settings UI (5 controllers)
-├── SpeechToText/      (FenixuzSpeechToText)     — STT manager
-└── Tasks/             (FenixuzTasks)            — Vazifalar tab + Todo + Scheduled
+└── SpeechToText/      (FenixuzSpeechToText)     — STT manager
 ```
 
 ## Build — ALWAYS use `./run.sh`

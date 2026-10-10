@@ -8,9 +8,9 @@
 
 ## Summary
 
-- **Total hooks:** 64
+- **Total hooks:** 62
 - **Apple-critical hooks:** 18
-- **Non-critical hooks:** 46
+- **Non-critical hooks:** 44
 
 ---
 
@@ -69,8 +69,6 @@
 | `submodules/AuthorizationUI/Sources/AuthorizationSequencePaymentScreen.swift` | `paymentscreen-storekit-drop` | 🔴 | IAP-gate | `drop import StoreKit` | Drop now-unused import StoreKit (AppStoreTransactionPurpose is TelegramCore type) |
 | `submodules/ChatListUI/Sources/ChatListController.swift` | `ghost-button-nav` | ⚪ | Ghost | `ghostModeButton, isGhostModeActive, FenixGhostIcon` | Ghost mode read-without-receipts nav-bar button with Fenixuz ghost icon (2026-06-04) |
 | `submodules/TelegramUI/Components/ChatListHeaderComponent/Sources/NavigationButtonComponent.swift` | `navbutton-icon-variants` | ⚪ | Ghost, brand | `iconTinted, iconOriginal, systemIcon cases` | Add .systemIcon / .iconTinted / .iconOriginal Content cases + icon-frame size clamp (2026-06-08) |
-| `submodules/TelegramUI/Sources/TelegramRootController.swift` | `tasks-tab-hide` | ⚪ | multi-account | `tasksTabController commented out, FenixuzTasks` | Hide Vazifalar (Tasks) tab per owner request (2026-06-04) |
-| `submodules/TelegramUI/BUILD` | `telegramui-tasks-hide` | ⚪ | multi-account | `FenixuzTasks commented out` | Comment out FenixuzTasks dep (Tasks tab hidden, 2026-06-04) |
 | `submodules/TelegramUI/Components/Chat/ChatTextInputPanelNode/Sources/ChatTextInputPanelNode.swift` | `stt-button-placement-fix` | ⚪ | STT | `sttButton, textFieldInsets.left, glass background` | Move STT button from right to left (next to attachment), fix visibility on dark wallpapers (2026-06-04/05) |
 | `submodules/AccountUtils/Sources/AccountUtils.swift` | `multi-account-limit-raise` | ⚪ | multi-account | `maximumNumberOfAccounts 3→20, maximumPremiumNumberOfAccounts` | Raise account caps in three files: AccountUtils (3→20), PeerInfoScreenSettingsActions, LogoutOptionsController, DeleteAccountOptionsController (999) |
 | `submodules/TelegramUI/Sources/SharedAccountContext.swift` | `multi-account-working-set` | ⚪ | multi-account | `fenixuzMaxLiveAccounts, fenixuzWorkingSet, fenixuzNameCache` | Implement working-set cap (max 5 live / up to 5 pinned accounts) with LRU eviction (Stage 2, 2026-06-05) |

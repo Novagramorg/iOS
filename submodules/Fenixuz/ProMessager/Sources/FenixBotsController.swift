@@ -241,8 +241,7 @@ private func resolveBotAvatarPeers(
 
 /// Pushes a categorised list of Novagram official bots.
 /// Reachable from FenixSettingsController via the "Novagram Bots" disclosure row.
-/// Tapping any bot row resolves its @username and opens the chat — reusing the same
-/// resolvePeerByName + makeChatController pattern as AIChatbotTabController.swift:190.
+/// Tapping any bot row resolves its @username and opens the chat (resolvePeerByName + makeChatController).
 public func fenixBotsController(context: AccountContext) -> ViewController {
     let categories = loadNovagramBots()?.categories ?? []
 
@@ -252,8 +251,6 @@ public func fenixBotsController(context: AccountContext) -> ViewController {
 
     let arguments = FenixBotsArguments(context: context, openBot: { username in
         // Resolve the bot peer by @username, then push its chat controller.
-        // Pattern: context.engine.peers.resolvePeerByName — reused from
-        // submodules/Fenixuz/AIChatbot/Sources/AIChatbotTabController.swift:190
         openBotDisposable.set((context.engine.peers.resolvePeerByName(name: username, referrer: nil)
         |> mapToSignal { result -> Signal<EnginePeer?, NoError> in
             switch result {

@@ -16,7 +16,6 @@ import WebUI
 import LegacyChatHeaderPanelComponent
 import ComponentFlow
 import ComponentDisplayAdapters
-import ChatTitleView
 
 extension ChatControllerImpl {
     func updateRightNavigationButtons(presentationInterfaceState: ChatPresentationInterfaceState, transition: ContainedViewLayoutTransition) {
@@ -47,14 +46,11 @@ extension ChatControllerImpl {
         }
 
         var rightBarButtons: [UIBarButtonItem] = []
-        // In embedded bot mode, hide the avatar/profile navigation buttons
-        if !self.isEmbeddedBotMode {
-            if let rightNavigationButton = self.rightNavigationButton {
-                rightBarButtons.append(rightNavigationButton.buttonItem)
-            }
-            if let secondaryRightNavigationButton = self.secondaryRightNavigationButton {
-                rightBarButtons.append(secondaryRightNavigationButton.buttonItem)
-            }
+        if let rightNavigationButton = self.rightNavigationButton {
+            rightBarButtons.append(rightNavigationButton.buttonItem)
+        }
+        if let secondaryRightNavigationButton = self.secondaryRightNavigationButton {
+            rightBarButtons.append(secondaryRightNavigationButton.buttonItem)
         }
         var rightBarButtonsUpdated = false
         let currentRightBarButtons = self.navigationItem.rightBarButtonItems ?? []
@@ -515,18 +511,6 @@ func updateChatPresentationInterfaceStateImpl(
     var forceLayout = false
     
     if let chatTitleContent = selfController.contentData?.state.chatTitleContent, let chatTitleView = selfController.chatTitleView {
-        // In embedded bot mode, override the title to hide bot identity
-        let effectiveTitleContent: ChatTitleContent
-        if selfController.isEmbeddedBotMode {
-            effectiveTitleContent = .custom(
-                title: [ChatTitleContent.TitleTextItem(id: AnyHashable(0), content: .text("AI"))],
-                subtitle: "online",
-                isEnabled: false
-            )
-        } else {
-            effectiveTitleContent = chatTitleContent
-        }
-        
         var titleTransition = ComponentTransition(transition)
         if case .messageOptions = selfController.subject {
             titleTransition = titleTransition.withAnimation(.none)
@@ -539,7 +523,7 @@ func updateChatPresentationInterfaceStateImpl(
             strings: selfController.presentationData.strings,
             dateTimeFormat: selfController.presentationData.dateTimeFormat,
             nameDisplayOrder: selfController.presentationData.nameDisplayOrder,
-            content: effectiveTitleContent,
+            content: chatTitleContent,
             transition: titleTransition,
             ignoreParentTransitionRequests: true
         )
