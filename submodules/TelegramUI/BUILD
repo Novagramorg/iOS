@@ -55,10 +55,6 @@ swift_library(
     deps = [
         "//submodules/Fenixuz/PremiumUnlock:FenixuzPremiumUnlock",
         "//submodules/Fenixuz/StoryUnlock:FenixuzStoryUnlock",
-        # AI tab hidden from UI — uncomment to re-enable
-        # "//submodules/Fenixuz/AIChatbot:FenixuzAIChatbot",
-        # Vazifalar (Tasks) tab hidden from UI (owner request) — uncomment to re-enable
-        # "//submodules/Fenixuz/Tasks:FenixuzTasks",
         "//submodules/Fenixuz/ChatLock:FenixuzChatLock",
         "//submodules/Fenixuz/SecretVault:FenixuzSecretVault",
         "//submodules/Fenixuz/ForeignUserBlock:FenixuzForeignUserBlock",

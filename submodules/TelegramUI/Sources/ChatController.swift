@@ -261,8 +261,6 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     var botAppStart: ChatControllerInitialBotAppStart?
     var mode: ChatControllerPresentationMode
 
-    public var isEmbeddedBotMode: Bool = false
-
     var pendingContentData: (contentData: ChatControllerImpl.ContentData, historyNode: ChatHistoryListNodeImpl)?
     var contentData: ChatControllerImpl.ContentData?
     let contentDataReady = ValuePromise<Bool>(false, ignoreRepeated: true)
@@ -6034,8 +6032,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
 
         self.navigationItem.titleView = self.chatTitleView
         self.chatTitleView?.longTapAction = { [weak self] in
-            guard let strongSelf = self, !strongSelf.isEmbeddedBotMode else { return }
-            if let peerView = strongSelf.contentData?.state.peerView, let peer = peerView.peers[peerView.peerId], peer.restrictionText(platform: "ios", contentSettings: strongSelf.context.currentContentSettings.with { $0 }) == nil && !strongSelf.presentationInterfaceState.isNotAccessible {
+            if let strongSelf = self, let peerView = strongSelf.contentData?.state.peerView, let peer = peerView.peers[peerView.peerId], peer.restrictionText(platform: "ios", contentSettings: strongSelf.context.currentContentSettings.with { $0 }) == nil && !strongSelf.presentationInterfaceState.isNotAccessible {
                 if case .standard(.previewing) = strongSelf.mode {
                 } else {
                     strongSelf.interfaceInteraction?.beginMessageSearch(.everything, "")
@@ -6048,7 +6045,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         case .peer, .replyThread:
             let avatarNode = ChatAvatarNavigationNode()
             avatarNode.contextAction = { [weak self] node, gesture in
-                guard let strongSelf = self, !strongSelf.isEmbeddedBotMode, let peer = strongSelf.presentationInterfaceState.renderedPeer?.chatMainPeer else {
+                guard let strongSelf = self, let peer = strongSelf.presentationInterfaceState.renderedPeer?.chatMainPeer else {
                     gesture?.cancel()
                     return
                 }
@@ -6431,8 +6428,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
 
         self.navigationItem.titleView = self.chatTitleView
         self.chatTitleView?.tapAction = { [weak self] in
-            guard let strongSelf = self, !strongSelf.isEmbeddedBotMode else { return }
-            strongSelf.navigationButtonAction(.openChatInfo(expandAvatar: false, section: nil))
+            self?.navigationButtonAction(.openChatInfo(expandAvatar: false, section: nil))
         }
 
         self.updateChatPresentationInterfaceState(animated: false, interactive: false, { state in

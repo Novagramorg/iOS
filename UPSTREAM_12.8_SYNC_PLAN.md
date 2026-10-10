@@ -209,7 +209,7 @@ See dedicated **§5 — WatchApp restoration** below for the full plan.
 6. For each of 18 hooked files: AI-assisted one-file-at-a-time re-apply against HOOKS.md (highest: ChatController 2749, SharedAccountContext 1257).
 7. Update HOOKS.md with new line numbers in same commits.
 8. EXCLUDE StreamingTextReveal + ShimmeringMask (Cluster 1).
-9. `./run.sh` + verify demo-login + 5 Fenixuz features (Tasks tab, ProMessager Settings, Ghost read-on-send, account-switch context item, chat-lock) intact before dropping backup tag.
+9. `./run.sh` + verify demo-login + 4 Fenixuz features (ProMessager Settings, Ghost read-on-send, account-switch context item, chat-lock) intact before dropping backup tag.
 
 ---
 
@@ -256,7 +256,7 @@ See dedicated **§5 — WatchApp restoration** below for the full plan.
 1. Checkpoint-commit before touching any mega-diff file.
 2. Open HOOKS.md, locate the hook block, find its **anchor** (surrounding upstream code), re-apply at the new position.
 3. Build after each file (or each small batch).
-4. After all hooks re-applied: run the Fenixuz feature smoke (demo-login, EditedHistory viewer, Ghost read-on-send, Tasks tab, ProMessager Settings, account-switch context item, chat-lock).
+4. After all hooks re-applied: run the Fenixuz feature smoke (demo-login, EditedHistory viewer, Ghost read-on-send, ProMessager Settings, account-switch context item, chat-lock).
 
 ---
 
@@ -322,7 +322,7 @@ tail -25 /tmp/run-sh-output.log
 2. **Apple 3.1.1 IAP gate** — if the 3 BotCheckout gates are restored (§7 decision 1a): tap a Premium/subscription invoice → must end at the localized block alert, NOT `BotCheckoutController`. If not restored: it opens BotCheckout (current unguarded state) — note the risk.
 3. EditedHistory viewer opens (confirms the two `declareEncodable` lines survived).
 4. Ghost read-on-send still marks chats read.
-5. Tasks tab, ProMessager Settings, account-switch context item, chat-lock all present.
+5. ProMessager Settings, account-switch context item, chat-lock all present.
 6. Emerald intro screen + visible QR-login button + overlay.
 
 **Only after demo-login + IAP gate + all Fenixuz features verified → drop the checkpoint tag + backup branch.** If anything regresses, roll back to `pre-pull-checkpoint-*` / `backup-before-merge-*`.

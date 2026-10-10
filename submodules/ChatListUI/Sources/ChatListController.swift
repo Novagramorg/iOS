@@ -2509,8 +2509,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 return
             }
             let count = ChatControllerCount.with({ $0 })
-            // Threshold is 2 because the AI tab keeps one ChatController permanently alive
-            if count > 2 {
+            if count > 1 {
                 strongSelf.present(textAlertController(context: strongSelf.context, title: "", text: "ChatControllerCount \(count)", actions: [TextAlertAction(type: .defaultAction, title: "OK", action: {})]), in: .window(.root))
             }
         })

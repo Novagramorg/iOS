@@ -14,7 +14,7 @@ On every `git pull upstream master`, an AI assistant uses this file to re-apply 
 
 ## 📋 Novagram features va hooklar (2026-10-10)
 
-> 1–44: Settings → Novagram Settings (ilovadagi tartibda). 45–87: Settings'dan tashqaridagi features.
+> 1–44: Settings → Novagram Settings (ilovadagi tartibda). 45–85: Settings'dan tashqaridagi features.
 > Hooks: Telegram-owned fayllardagi barcha Fenixuz o'zgarishlari, feature bo'yicha. Har bir hookning kodi va anchor'i quyidagi 📌 bo'limlarda.
 
 ### 1. Novagram Settings
@@ -174,11 +174,6 @@ On every `git pull upstream master`, an AI assistant uses this file to re-apply 
 83. **To'lov bo'limi faqat ko'rish uchun**: Premium, Stars, TON, Business va Gift ekranlari ko'rinadi, lekin xarid tugmalari bloklangan.
 84. **Kontaktlar roziligi (5.1.2)**: iOS Contacts ruxsatidan oldin kontaktlar serverga yuklanishiga rozilik so'raladi.
 85. **Demo login**: Apple Review demo raqami kiritilsa SMS kod avtomatik to'ldiriladi.
-
-#### Yashirin (UI'dan olib tashlangan)
-
-86. **AI Assistant**: AI chatbot tabi yashirilgan, modul kelajak uchun saqlangan.
-87. **Vazifalar (Tasks)**: vazifalar, papkalar va rejalashtirilgan xabarlar tabi yashirilgan.
 
 ---
 
@@ -355,134 +350,129 @@ On every `git pull upstream master`, an AI assistant uses this file to re-apply 
 123. `TelegramRootController.swift` (TelegramUI): bot sessiyada faqat Chats va Settings tablari.
 124. `PeerInfoScreenSettingsActions.swift` (PeerInfoScreen): telefonsiz bot accountdan chiqish.
 125. `AppDelegate.swift` (TelegramUI): telefonsiz bot account uchun nom.
-126. `ChatController.swift` (AccountContext, TelegramUI), `UpdateChatPresentationInterfaceState.swift` (TelegramUI): `isEmbeddedBotMode`. Bu rejimda nav-bar tugmalari va avatar bosish o'chiriladi.
 
 #### Chat va xabarlar (Settings'dan tashqari)
 
-127. `ChatMessageActionOptions.swift` (TelegramUI): **Tahrirlab yuborish** (#39): forward menyusidagi band.
-128. `ChatContextMenus.swift` (ChatListUI): **Maxfiy ko'rish** va **Chat ID'ni nusxalash** (#24).
-129. `PeerInfoProfileItems.swift` (PeerInfoScreen): **Profildagi ID qatori**, bosilsa nusxalanadi.
-130. `PeerInfoScreenPerformButtonAction.swift` (PeerInfoScreen): **Novagram Info** profil "…" menyusida.
-131. `ResolvePeerByName.swift`, `TelegramEnginePeers.swift` (TelegramCore): **Telefon raqam**: tarmoq xatosi alohida natija bo'lib qaytadi.
-132. `ChatControllerOpenPhoneContextMenu.swift` (TelegramUI): **Telefon raqam**: xatoda "Qayta urinish" va to'g'ri xabar chiqadi.
+126. `ChatMessageActionOptions.swift` (TelegramUI): **Tahrirlab yuborish** (#39): forward menyusidagi band.
+127. `ChatContextMenus.swift` (ChatListUI): **Maxfiy ko'rish** va **Chat ID'ni nusxalash** (#24).
+128. `PeerInfoProfileItems.swift` (PeerInfoScreen): **Profildagi ID qatori**, bosilsa nusxalanadi.
+129. `PeerInfoScreenPerformButtonAction.swift` (PeerInfoScreen): **Novagram Info** profil "…" menyusida.
+130. `ResolvePeerByName.swift`, `TelegramEnginePeers.swift` (TelegramCore): **Telefon raqam**: tarmoq xatosi alohida natija bo'lib qaytadi.
+131. `ChatControllerOpenPhoneContextMenu.swift` (TelegramUI): **Telefon raqam**: xatoda "Qayta urinish" va to'g'ri xabar chiqadi.
 
 #### Papkalar
 
-133. `ChatListFilterPresetController.swift` (ChatListUI): papka muharririda "Ikonka" qatori (#18).
-134. `FenixuzFolderIconPicker.swift` (ChatListUI, yangi fayl): emoji ikonka tanlash ekrani (#18).
-135. `UserLimitsConfiguration.swift` (TelegramCore): papka limiti 1000.
-136. `ChatListFilterPresetListController.swift` (ChatListUI): "Show Folder Tags" Premium'siz.
-137. `ChatListController.swift` (ChatListUI): header tugmalari chevron ortiga yig'iladi.
+132. `ChatListFilterPresetController.swift` (ChatListUI): papka muharririda "Ikonka" qatori (#18).
+133. `FenixuzFolderIconPicker.swift` (ChatListUI, yangi fayl): emoji ikonka tanlash ekrani (#18).
+134. `UserLimitsConfiguration.swift` (TelegramCore): papka limiti 1000.
+135. `ChatListFilterPresetListController.swift` (ChatListUI): "Show Folder Tags" Premium'siz.
+136. `ChatListController.swift` (ChatListUI): header tugmalari chevron ortiga yig'iladi.
 
 #### Qo'ng'iroqlar
 
-138. `NotificationService.swift` (NotificationService): CallKit ishlamasa qo'ng'iroq ringtone bilan jiringlaydi.
-139. `SharedAccountContext.swift`, `AppDelegate.swift` (TelegramUI): uxlayotgan accountga qo'ng'iroq kelsa account uyg'otiladi.
-140. `Telegram/BUILD`: `INStartCallIntent` activity type.
-141. `PresentationCall.swift` (TelegramCallsUI): qo'ng'iroq diagnostikasi uchun log qatori.
+137. `NotificationService.swift` (NotificationService): CallKit ishlamasa qo'ng'iroq ringtone bilan jiringlaydi.
+138. `SharedAccountContext.swift`, `AppDelegate.swift` (TelegramUI): uxlayotgan accountga qo'ng'iroq kelsa account uyg'otiladi.
+139. `Telegram/BUILD`: `INStartCallIntent` activity type.
+140. `PresentationCall.swift` (TelegramCallsUI): qo'ng'iroq diagnostikasi uchun log qatori.
 
 #### Bildirishnomalar
 
-142. `Telegram/BUILD`: Communication Notifications entitlement (push'da yuboruvchi rasmi).
-143. `NotificationService.swift` (NotificationService): bo'sh yoki umumiy "new message" bannerlari chiqmaydi (yashirin boshlash, bo'sh content fallback, 20 s watchdog, xom bannerlarni tozalash).
-144. `NotificationService.swift` (NotificationService): bo'sh xizmat bannerlari `fenixuz_blank` belgisi bilan tozalanadi.
-145. `AppDelegate.swift` (TelegramUI): NSE boyitmagan bannerlar tozalanadi, `peerId` uchun fallback.
-146. `SharedNotificationManager.swift` (TelegramUI): o'qilgan xabar bildirishnomasi har bir live accountda o'chadi.
-147. `ApplicationContext.swift` (TelegramUI): faqat primary account uchun ishlaydigan eski tozalash olib tashlangan.
-148. `NotificationsAndSoundsController.swift` (SettingsUI): "Barcha accountlardan bildirishnomalar" bo'limi doim ko'rinadi.
+141. `Telegram/BUILD`: Communication Notifications entitlement (push'da yuboruvchi rasmi).
+142. `NotificationService.swift` (NotificationService): bo'sh yoki umumiy "new message" bannerlari chiqmaydi (yashirin boshlash, bo'sh content fallback, 20 s watchdog, xom bannerlarni tozalash).
+143. `NotificationService.swift` (NotificationService): bo'sh xizmat bannerlari `fenixuz_blank` belgisi bilan tozalanadi.
+144. `AppDelegate.swift` (TelegramUI): NSE boyitmagan bannerlar tozalanadi, `peerId` uchun fallback.
+145. `SharedNotificationManager.swift` (TelegramUI): o'qilgan xabar bildirishnomasi har bir live accountda o'chadi.
+146. `ApplicationContext.swift` (TelegramUI): faqat primary account uchun ishlaydigan eski tozalash olib tashlangan.
+147. `NotificationsAndSoundsController.swift` (SettingsUI): "Barcha accountlardan bildirishnomalar" bo'limi doim ko'rinadi.
 
 #### Ilova va Settings
 
-149. `PeerInfoSettingsItems.swift` (PeerInfoScreen): oltin "Novagram Settings", "Novagram Bots" va "Analytics" qatorlari (lokalizatsiya qilingan).
-150. `PeerInfoScreenDisclosureItem.swift` (PeerInfoScreen): qator nomi uchun ixtiyoriy rang.
-151. `PeerInfoScreen.swift`, `PeerInfoScreenSettingsActions.swift` (PeerInfoScreen): Bots va Analytics ekranlarini ochish.
-152. `ItemListDisclosureItem.swift` (ItemListUI): Bots ro'yxatida avatar o'lchamini sozlash mumkin.
-153. `AppDelegate.swift` (TelegramUI): Analytics ishga tushadi.
-154. `PrivacyInfo.xcprivacy` (Telegram app): anonim Device ID (Analytics, tracking yo'q).
-155. `FenixAnalyticsDuck.imageset` (TelegramUI, yangi asset): Analytics sahifasi rasmi.
-156. `ApplicationContext.swift` (TelegramUI): birinchi launch'da Tips, keyingilarida App Store yangilanish tekshiruvi.
-157. `AppDelegate.swift` (TelegramUI), `ThemeSettingsAppIconItem.swift` (SettingsUI): 7 ta Nova ikonka va ularning lokalizatsiya qilingan nomlari.
-158. `Info.plist`, `Telegram/BUILD`, `Nova*Icon.alticon` (Telegram app): alternate ikonka fayllari.
-159. `NavigationButtonComponent.swift` (TelegramUI), `ChatListController.swift` (ChatListUI): header va story kamera tugmalarida haptic.
-160. `ItemListSwitchItem.swift` (ItemListUI): switch'dagi "NEW" badge joyi tuzatilgan.
+148. `PeerInfoSettingsItems.swift` (PeerInfoScreen): oltin "Novagram Settings", "Novagram Bots" va "Analytics" qatorlari (lokalizatsiya qilingan).
+149. `PeerInfoScreenDisclosureItem.swift` (PeerInfoScreen): qator nomi uchun ixtiyoriy rang.
+150. `PeerInfoScreen.swift`, `PeerInfoScreenSettingsActions.swift` (PeerInfoScreen): Bots va Analytics ekranlarini ochish.
+151. `ItemListDisclosureItem.swift` (ItemListUI): Bots ro'yxatida avatar o'lchamini sozlash mumkin.
+152. `AppDelegate.swift` (TelegramUI): Analytics ishga tushadi.
+153. `PrivacyInfo.xcprivacy` (Telegram app): anonim Device ID (Analytics, tracking yo'q).
+154. `FenixAnalyticsDuck.imageset` (TelegramUI, yangi asset): Analytics sahifasi rasmi.
+155. `ApplicationContext.swift` (TelegramUI): birinchi launch'da Tips, keyingilarida App Store yangilanish tekshiruvi.
+156. `AppDelegate.swift` (TelegramUI), `ThemeSettingsAppIconItem.swift` (SettingsUI): 7 ta Nova ikonka va ularning lokalizatsiya qilingan nomlari.
+157. `Info.plist`, `Telegram/BUILD`, `Nova*Icon.alticon` (Telegram app): alternate ikonka fayllari.
+158. `NavigationButtonComponent.swift` (TelegramUI), `ChatListController.swift` (ChatListUI): header va story kamera tugmalarida haptic.
+159. `ItemListSwitchItem.swift` (ItemListUI): switch'dagi "NEW" badge joyi tuzatilgan.
 
 #### Brand va til
 
-161. `PresentationData.swift` (TelegramPresentationData): server tarjimalaridagi "Telegram" so'zi "Novagram"ga almashtiriladi.
-162. `en.lproj/Localizable.strings` (Telegram app): ichki matnlarda "Novagram" ("NOVAGRAM TONES" ham).
-163. `InfoPlist.strings` (18 til), `InfoBazel.plist` (Telegram app): ruxsat so'rovlari matnida "Novagram".
-164. `AppIntentVocabulary.plist` (19 til): Siri lug'atida "Novagram".
-165. `Telegram/BUILD`: `bundle_name = "Novagram"`.
-166. `CallKitIntegration.swift` (TelegramCallsUI): qo'ng'iroq ekranida "Novagram".
-167. `Share/…/Localizable.strings`, `WidgetKitWidget/…/Localizable.strings`, `IntentHandler.swift`, `WidgetItems.swift`: Share, Widget va Siri matnlarida "Novagram".
-168. `StoreDownloadedMedia.swift` (TelegramUI): Photos albomi "Novagram".
-169. `DeviceContactData.swift` (AccountContext), `DeviceContactDataManager.swift` (TelegramUI), `IntentContacts.swift` (SiriIntents): kontakt label'i "Novagram", eski "Telegram" ham taniladi.
-170. `AuthorizationSequenceSplashController.swift` (AuthorizationUI): Welcome ekranida brand rangi.
-171. `RMIntroViewController.m` (RMIntro): simulator'da intro logosi.
-172. `tgwatch Watch App/Info.plist` (WatchApp): watch ilovada "Novagram".
-173. `SearchBarNode.swift` (SearchBarNode): xitoy tilida qidiruvdagi "x" tugmasi joyida turadi.
-174. `TextProcessingTranslateContentComponent.swift` (TelegramUI): `zh-hans` → `zh`, shunda tarjima ishlaydi.
-175. `LocalizationListControllerNode.swift` (SettingsUI): Settings → Language'da xitoy tili.
-176. Telegram fayllaridagi Fenixuz matnlari (`ChatContextMenus`, `ChatController`, `ChatControllerNode`, `ChatInterfaceStateContextMenus` va boshqalar): `zh` tarjimasi qo'shilgan.
+160. `PresentationData.swift` (TelegramPresentationData): server tarjimalaridagi "Telegram" so'zi "Novagram"ga almashtiriladi.
+161. `en.lproj/Localizable.strings` (Telegram app): ichki matnlarda "Novagram" ("NOVAGRAM TONES" ham).
+162. `InfoPlist.strings` (18 til), `InfoBazel.plist` (Telegram app): ruxsat so'rovlari matnida "Novagram".
+163. `AppIntentVocabulary.plist` (19 til): Siri lug'atida "Novagram".
+164. `Telegram/BUILD`: `bundle_name = "Novagram"`.
+165. `CallKitIntegration.swift` (TelegramCallsUI): qo'ng'iroq ekranida "Novagram".
+166. `Share/…/Localizable.strings`, `WidgetKitWidget/…/Localizable.strings`, `IntentHandler.swift`, `WidgetItems.swift`: Share, Widget va Siri matnlarida "Novagram".
+167. `StoreDownloadedMedia.swift` (TelegramUI): Photos albomi "Novagram".
+168. `DeviceContactData.swift` (AccountContext), `DeviceContactDataManager.swift` (TelegramUI), `IntentContacts.swift` (SiriIntents): kontakt label'i "Novagram", eski "Telegram" ham taniladi.
+169. `AuthorizationSequenceSplashController.swift` (AuthorizationUI): Welcome ekranida brand rangi.
+170. `RMIntroViewController.m` (RMIntro): simulator'da intro logosi.
+171. `tgwatch Watch App/Info.plist` (WatchApp): watch ilovada "Novagram".
+172. `SearchBarNode.swift` (SearchBarNode): xitoy tilida qidiruvdagi "x" tugmasi joyida turadi.
+173. `TextProcessingTranslateContentComponent.swift` (TelegramUI): `zh-hans` → `zh`, shunda tarjima ishlaydi.
+174. `LocalizationListControllerNode.swift` (SettingsUI): Settings → Language'da xitoy tili.
+175. Telegram fayllaridagi Fenixuz matnlari (`ChatContextMenus`, `ChatController`, `ChatControllerNode`, `ChatInterfaceStateContextMenus` va boshqalar): `zh` tarjimasi qo'shilgan.
 
 #### Apple talablari
 
-177. `InAppPurchaseManager.swift` (InAppPurchaseManager): StoreKit olib tashlangan, har bir xaridda alert chiqadi.
-178. `AppDelegate.swift` (TelegramUI), `AuthorizationSequencePaymentScreen.swift` (AuthorizationUI): `import StoreKit` olib tashlangan, obunalar web'da boshqariladi.
-179. `PeerInfoSettingsItems.swift` (PeerInfoScreen): to'lov bo'limi faqat ko'rish uchun.
-180. `DeviceAccess.swift` (DeviceAccess): iOS Contacts ruxsatidan oldin rozilik dialogi (5.1.2).
-181. `DeviceContactDataManager.swift` (TelegramUI): kontakt ruxsati bo'lmasa ham chat ochiladi.
-182. `TelegramRootController.swift` (TelegramUI): Contacts tabi qayta yoqilgan.
-183. `AuthorizationSequencePhoneEntryController.swift` (AuthorizationUI): demo raqamda SMS polling oldindan boshlanadi.
-184. `AuthorizationSequenceCodeEntryController.swift`, `AuthorizationSequenceCodeEntryControllerNode.swift` (AuthorizationUI): demo kod avtomatik to'ldiriladi, "Kod kelmadimi?" yashiriladi.
-
-#### Yashirin modullar
-
-185. `TelegramRootController.swift` (TelegramUI): Vazifalar va AI tablari kodda izohga olingan.
+176. `InAppPurchaseManager.swift` (InAppPurchaseManager): StoreKit olib tashlangan, har bir xaridda alert chiqadi.
+177. `AppDelegate.swift` (TelegramUI), `AuthorizationSequencePaymentScreen.swift` (AuthorizationUI): `import StoreKit` olib tashlangan, obunalar web'da boshqariladi.
+178. `PeerInfoSettingsItems.swift` (PeerInfoScreen): to'lov bo'limi faqat ko'rish uchun.
+179. `DeviceAccess.swift` (DeviceAccess): iOS Contacts ruxsatidan oldin rozilik dialogi (5.1.2).
+180. `DeviceContactDataManager.swift` (TelegramUI): kontakt ruxsati bo'lmasa ham chat ochiladi.
+181. `TelegramRootController.swift` (TelegramUI): Contacts tabi qayta yoqilgan.
+182. `AuthorizationSequencePhoneEntryController.swift` (AuthorizationUI): demo raqamda SMS polling oldindan boshlanadi.
+183. `AuthorizationSequenceCodeEntryController.swift`, `AuthorizationSequenceCodeEntryControllerNode.swift` (AuthorizationUI): demo kod avtomatik to'ldiriladi, "Kod kelmadimi?" yashiriladi.
 
 #### Crash fixlar (upstream xatolari)
 
-186. `AnimatedStickerFrameSource.swift` (AnimatedStickerNode) va unga test: buzilgan sticker kesh fayli crash qilmaydi.
-187. `EmojiHeaderComponent.swift`, `ReactionContextNode.swift`, `QuickShareToastScreen.swift`, `EmojiStatusSelectionComponent.swift`, `StoryItemSetContainerComponent.swift`: parabolik animatsiyada nolga bo'lish tuzatilgan.
-188. `HLSVideoJSNativeContentNode.swift` (TelegramUniversalVideoContent): HLS range tekshiriladi.
-189. `VolumeButtons.swift` (Utils): deinit main thread'da bajariladi.
-190. `TGMediaPickerPhotoStripView.m` (LegacyComponents): media picker'da count mos kelmasa reload qilinadi.
-191. `ChatInterfaceInputContexts.swift` (TelegramUI): eskirgan matn uzunligi tufayli bo'ladigan crash.
-192. `SSubscriber.m` (SSignalKit): disposal race.
-193. `PasskeysScreen.swift` (TelegramUI): `preconditionFailure` o'rniga anchor qaytariladi.
-194. `NewContactScreen.swift` (TelegramUI): update re-entrancy.
-195. `FFMpegMediaFrameSourceContext.swift`, `MediaPlayerNode.swift` (MediaPlayer): story video oxiridan o'tib ketganda Timer crash.
-196. `LocationUtils.swift`, `LocationViewControllerNode.swift` (LocationUI): ETA shimmer qotib qolmaydi (ruxsat va timeout).
-197. `OpenInOptionsScreen.swift` (OpenInExternalAppUI): "Open In" ikonkalari bosiladi (upstream cherry-pick).
+184. `AnimatedStickerFrameSource.swift` (AnimatedStickerNode) va unga test: buzilgan sticker kesh fayli crash qilmaydi.
+185. `EmojiHeaderComponent.swift`, `ReactionContextNode.swift`, `QuickShareToastScreen.swift`, `EmojiStatusSelectionComponent.swift`, `StoryItemSetContainerComponent.swift`: parabolik animatsiyada nolga bo'lish tuzatilgan.
+186. `HLSVideoJSNativeContentNode.swift` (TelegramUniversalVideoContent): HLS range tekshiriladi.
+187. `VolumeButtons.swift` (Utils): deinit main thread'da bajariladi.
+188. `TGMediaPickerPhotoStripView.m` (LegacyComponents): media picker'da count mos kelmasa reload qilinadi.
+189. `ChatInterfaceInputContexts.swift` (TelegramUI): eskirgan matn uzunligi tufayli bo'ladigan crash.
+190. `SSubscriber.m` (SSignalKit): disposal race.
+191. `PasskeysScreen.swift` (TelegramUI): `preconditionFailure` o'rniga anchor qaytariladi.
+192. `NewContactScreen.swift` (TelegramUI): update re-entrancy.
+193. `FFMpegMediaFrameSourceContext.swift`, `MediaPlayerNode.swift` (MediaPlayer): story video oxiridan o'tib ketganda Timer crash.
+194. `LocationUtils.swift`, `LocationViewControllerNode.swift` (LocationUI): ETA shimmer qotib qolmaydi (ruxsat va timeout).
+195. `OpenInOptionsScreen.swift` (OpenInExternalAppUI): "Open In" ikonkalari bosiladi (upstream cherry-pick).
 
 #### BUILD dependency'lar
 
-198. `AuthorizationUI/BUILD`: AppleReview, Brand, Localization, AutoProxy, BotTokenLogin.
-199. `CallListUI/BUILD`: SecretVault.
-200. `ChatListUI/BUILD`: StoryUnlock, ChatLock, SecretVault, ForeignUserBlock, NovagramAds, Localization.
-201. `ContactListUI/BUILD`: SecretVault, ChatLock.
-202. `DeviceAccess/BUILD`: ContactsConsent.
-203. `InAppPurchaseManager/BUILD`: AppStoreIAP (StoreKit davridagi deplar olib tashlangan).
-204. `SettingsUI/BUILD`: PremiumUnlock, Localization.
-205. `TelegramPresentationData/BUILD`: Brand.
-206. `TelegramUI/BUILD`: PremiumUnlock, StoryUnlock, ChatLock, SecretVault, ForeignUserBlock, EditedHistory, Localization, Tips, UpdateCheck, UnreadReminder, ProMessager, Analytics, AutoProxy, NovagramAds, ForwardEdit. AIChatbot va Tasks izohga olingan.
-207. `ChatMessageDateAndStatusNode/BUILD`: Localization.
-208. `ChatTextInputPanelNode/BUILD`: SpeechToText, Localization, RoundVideoFromGallery.
-209. `GlobalControlPanelsContext/BUILD`: NovagramAds.
-210. `PeerInfoScreen/BUILD`: ProMessager, Localization, Analytics.
-211. `StoryContainerScreen/BUILD`: StoryUnlock.
-212. `TranslateHeaderPanelComponent/BUILD`: PremiumUnlock.
-213. `AnimatedStickerNode/BUILD`: unit test target'lari.
+196. `AuthorizationUI/BUILD`: AppleReview, Brand, Localization, AutoProxy, BotTokenLogin.
+197. `CallListUI/BUILD`: SecretVault.
+198. `ChatListUI/BUILD`: StoryUnlock, ChatLock, SecretVault, ForeignUserBlock, NovagramAds, Localization.
+199. `ContactListUI/BUILD`: SecretVault, ChatLock.
+200. `DeviceAccess/BUILD`: ContactsConsent.
+201. `InAppPurchaseManager/BUILD`: AppStoreIAP (StoreKit davridagi deplar olib tashlangan).
+202. `SettingsUI/BUILD`: PremiumUnlock, Localization.
+203. `TelegramPresentationData/BUILD`: Brand.
+204. `TelegramUI/BUILD`: PremiumUnlock, StoryUnlock, ChatLock, SecretVault, ForeignUserBlock, EditedHistory, Localization, Tips, UpdateCheck, UnreadReminder, ProMessager, Analytics, AutoProxy, NovagramAds, ForwardEdit.
+205. `ChatMessageDateAndStatusNode/BUILD`: Localization.
+206. `ChatTextInputPanelNode/BUILD`: SpeechToText, Localization, RoundVideoFromGallery.
+207. `GlobalControlPanelsContext/BUILD`: NovagramAds.
+208. `PeerInfoScreen/BUILD`: ProMessager, Localization, Analytics.
+209. `StoryContainerScreen/BUILD`: StoryUnlock.
+210. `TranslateHeaderPanelComponent/BUILD`: PremiumUnlock.
+211. `AnimatedStickerNode/BUILD`: unit test target'lari.
 
 #### Build
 
-214. `Telegram/BUILD`: minimum iOS 15.0, widget uchun ham.
-215. 39 ta `BUILD` fayl: iOS 15 deprecation'lari error emas, warning bo'ladi.
-216. `sqlcipher/BUILD`: Xcode 26.5 SDK uchun `sqlite3ext.h` private qilingan.
-217. `run.sh`: device build'da push entitlement (`aps_environment`).
-218. `Telegram/BUILD`: upstream watch app qaytarilganda fork sozlamalari saqlab qolingan (`composer_icon_folders = []`, `:PrivacyManifest`).
-219. `project.yml`, `project.pbxproj` (WatchApp): Team ID `ZDBP5RSRZF`.
-220. `ChatInputTextNode.swift` (TelegramUI): input diagnostika log'i (faqat DEBUG).
+212. `Telegram/BUILD`: minimum iOS 15.0, widget uchun ham.
+213. 39 ta `BUILD` fayl: iOS 15 deprecation'lari error emas, warning bo'ladi.
+214. `sqlcipher/BUILD`: Xcode 26.5 SDK uchun `sqlite3ext.h` private qilingan.
+215. `run.sh`: device build'da push entitlement (`aps_environment`).
+216. `Telegram/BUILD`: upstream watch app qaytarilganda fork sozlamalari saqlab qolingan (`composer_icon_folders = []`, `:PrivacyManifest`).
+217. `project.yml`, `project.pbxproj` (WatchApp): Team ID `ZDBP5RSRZF`.
+218. `ChatInputTextNode.swift` (TelegramUI): input diagnostika log'i (faqat DEBUG).
 
 ---
 
@@ -1750,7 +1740,7 @@ All logic lives in `submodules/Fenixuz/AutoProxy/`:
 To swap the proxy list later, replace `submodules/Fenixuz/AutoProxy/Resources/russia_proxies.txt`
 (same `host:port:user:pass` format) and rebuild — no code change needed.
 
-## 📌 Ghost mode button + Vazifalar tab (2026-06-04)
+## 📌 Ghost mode button (2026-06-04)
 
 ### `submodules/ChatListUI/Sources/ChatListController.swift` — Ghost mode nav-bar button
 
@@ -1808,15 +1798,6 @@ clamp their `image.size` fills most of the screen. Clamp only shrinks oversized 
 are already ≤28 pt are unaffected). Also sets `iconView.contentMode = .scaleAspectFit` so the PDF
 scales correctly inside the clamped frame. No other icon cases or `.text` / `.more` / `.proxy` branches
 are touched.
-
-### `submodules/TelegramUI/Sources/TelegramRootController.swift` + `submodules/TelegramUI/BUILD` — Vazifalar (Tasks) tab hidden
-
-The Vazifalar (Tasks) tab was removed from the tab bar per owner request (2026-06-04). Same pattern
-as the already-paused AI tab: `import FenixuzTasks`, the `tasksTabController(...)` creation/append in
-`addRootControllers`, the `self.scheduledTasksController` assignment, and the append in
-`updateRootControllers` are all commented out; the `//submodules/Fenixuz/Tasks:FenixuzTasks` dep is
-commented out in `TelegramUI/BUILD`. The `FenixuzTasks` module + SQLite store are kept on disk for a
-future re-enable (uncomment the 4 spots). The `scheduledTasksController` property stays (nil).
 
 ### `submodules/TelegramUI/Components/Chat/ChatTextInputPanelNode/Sources/ChatTextInputPanelNode.swift` — STT (ovoz→matn) button
 
@@ -4161,8 +4142,7 @@ Merged upstream `release-12.9.2` (254 commits, 994 files, MTProto layer 227→22
 ### Undocumented hooks discovered by the audit (documented here now)
 
 - `AccountContext.swift` (AccountContext module): `isRealPremium` member on the `AccountContext` protocol.
-- `AccountContext/Sources/ChatController.swift`: `navigateToFirstMessage()` + `isEmbeddedBotMode` on the `ChatController` protocol (bot-token-login embedded mode).
-- `TelegramUI/Sources/Chat/UpdateChatPresentationInterfaceState.swift`: `isEmbeddedBotMode` rightBarButtons suppression — after this merge it lives in the shared `updateRightNavigationButtons(...)` extension, so it now applies at both upstream call sites (intended).
+- `AccountContext/Sources/ChatController.swift`: `navigateToFirstMessage()` on the `ChatController` protocol (View First Message).
 
 > ⚠️ Line numbers in sections written before 2026-07-22 may have shifted ±20-60 lines after this merge. The `// Fenixuz:` comment anchors remain authoritative — locate hooks by grep, not by line number.
 
@@ -6204,7 +6184,7 @@ depends only on TelegramPresentationData + TelegramCore).
 Fenixuz-owned string tables got `zh` everywhere (no merge risk): `FenixuzL10n.swift` (`pick(en:uz:ru:zh:)`, `zh`
 required so a missing one fails to compile), `FenixAboutController.swift` (`L3.zh` required), every ProMessager
 strings switch + the embedded bots JSON (`NovagramBotLocalizedText.zh` optional), ChatLock, SecretVault,
-SpeechToText, AIChatbot, ContactsConsent, EditedHistory, UnreadReminder, Analytics. Device-language helpers
+SpeechToText, ContactsConsent, EditedHistory, UnreadReminder, Analytics. Device-language helpers
 (`Locale.current.languageCode`) get `"zh"` on a Chinese iPhone without any `zh.lproj`.
 
 ### `submodules/ChatListUI/Sources/ChatListController.swift` (UPSTREAM hook) — header buttons fold

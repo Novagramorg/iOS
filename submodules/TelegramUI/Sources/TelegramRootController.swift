@@ -17,10 +17,6 @@ import TabBarUI
 import WallpaperBackgroundNode
 import ChatPresentationInterfaceState
 import CameraScreen
-// Vazifalar (Tasks) tab disabled in UI per owner request — module kept at submodules/Fenixuz/Tasks for future
-// import FenixuzTasks
-// AI tab disabled in UI — module kept at submodules/Fenixuz/AIChatbot for future
-// import FenixuzAIChatbot
 import MediaEditorScreen
 import LegacyComponents
 import LegacyMediaPickerUI
@@ -80,11 +76,9 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
     public var rootTabController: TabBarController?
 
     public var contactsController: ContactsController?
-    public var aiChatbotController: ViewController?
     public var callListController: CallListController?
     public var chatListController: ChatListController?
     public var accountSettingsController: PeerInfoScreen?
-    public var scheduledTasksController: ViewController?
 
     private var permissionsDisposable: Disposable?
     private var presentationDataDisposable: Disposable?
@@ -234,20 +228,6 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
             controllers.append(callListController)
         }
 
-        // Vazifalar (Tasks) tab hidden from UI (owner request). Re-enable by:
-        //   1. uncomment "import FenixuzTasks" above
-        //   2. uncomment the 2 lines below
-        //   3. add "//submodules/Fenixuz/Tasks:FenixuzTasks" back to TelegramUI/BUILD deps
-        // let scheduledTasksCtrl = tasksTabController(context: self.context)
-        // controllers.append(scheduledTasksCtrl)
-
-        // AI tab hidden from UI (feature paused). Re-enable by:
-        //   1. uncomment "import FenixuzAIChatbot" above
-        //   2. uncomment the 2 lines below
-        //   3. add "//submodules/Fenixuz/AIChatbot:FenixuzAIChatbot" back to TelegramUI/BUILD deps
-        // let aiChatbotCtrl = AIChatbotTabController(context: self.context)
-        // controllers.append(aiChatbotCtrl)
-
         controllers.append(chatListController)
 
         var restoreSettignsController: (ViewController & SettingsController)?
@@ -272,11 +252,9 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         tabBarController.setControllers(controllers, selectedIndex: restoreSettignsController != nil ? (controllers.count - 1) : (controllers.count - 2))
 
         self.contactsController = contactsController
-        // AI tab disabled — self.aiChatbotController stays nil
         self.callListController = callListController
         self.chatListController = chatListController
         self.accountSettingsController = accountSettingsController
-        // Vazifalar (Tasks) tab disabled — self.scheduledTasksController stays nil
         self.rootTabController = tabBarController
         self.pushViewController(tabBarController, animated: false)
 
@@ -302,15 +280,6 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         }
         if showCallsTab && !self.isBotAccount {
             controllers.append(self.callListController!)
-        }
-
-        // Vazifalar (Tasks) tab disabled — scheduledTasksController stays nil
-        // if let tasksCtrl = self.scheduledTasksController {
-        //     controllers.append(tasksCtrl)
-        // }
-
-        if let aiCtrl = self.aiChatbotController {
-            controllers.append(aiCtrl)
         }
 
         controllers.append(self.chatListController!)
