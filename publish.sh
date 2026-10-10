@@ -241,6 +241,10 @@ warn "Birinchi opt-build 30-45 daqiqa olishi mumkin (dbg-cache yordam bermaydi).
     --repository_cache="$CACHE_DIR/repo-cache" \
     --experimental_repository_cache_hardlinks \
     -c opt \
+    `# Swift 6.4 (Xcode 27) added an ImplicitStrongCapture warning and -warnings-as-errors turns it into` \
+    `# an error in hundreds of upstream files; same flags as run.sh.` \
+    --@build_bazel_rules_swift//swift:copt=-no-warnings-as-errors \
+    --@build_bazel_rules_swift//swift:exec_copt=-no-warnings-as-errors \
     --apple_generate_dsym \
     --output_groups=+dsyms \
     --ios_multi_cpus=arm64 \

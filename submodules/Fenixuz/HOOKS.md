@@ -475,6 +475,9 @@ On every `git pull upstream master`, an AI assistant uses this file to re-apply 
 218. `ChatInputTextNode.swift` (TelegramUI): input diagnostika log'i (faqat DEBUG).
 219. `run.sh`: Xcode versiyasi o'rnatilgan Xcode'dan olinadi, Swift 6.4 warning'lari error bo'lmaydi.
 220. `ChatControllerNode.swift` (TelegramUI): Swift 6.4 uchun `EmptyInputView` importi aniqlashtirilgan.
+221. `AppDelegate.swift` (TelegramUI), `Telegram/BUILD`, `TelegramUI/BUILD`: UIScene life cycle (`NovagramSceneDelegate`), iOS 27 SDK bilan ilova ochilishi uchun.
+222. `UIViewController+Navigation.m` (UIKitRuntimeUtils): iOS 27'da yashirin klaviatura API chaqirilmaydi, ilova ishga tushganda to'xtamaydi.
+223. `publish.sh`, `release.sh`: App Store build uchun Swift 6.4 flag'lari.
 
 ---
 
@@ -6497,3 +6500,68 @@ Anchor: `Novagram`. On an upstream merge, keep our strings.
 ### `submodules/TelegramUI/Components/Chat/ChatInputTextNode/Sources/ChatInputTextNode.swift` (UPSTREAM hook)
 
 `NSLog("FENIX_INPUT_DBG ...")` (~1336) is inside `#if DEBUG`. It logs the content height, offset and insets when the input overflows. Release builds are not affected.
+
+---
+
+## 📌 2026-10-10 — UIScene life cycle + private keyboard API (iOS 27 SDK launch blockers)
+
+Apps built with the iOS 27 SDK (Xcode 27.1) are stopped at launch on iOS 27 unless they use the
+scene-based life cycle ("UIScene life cycle is required for apps built with this SDK"). The App
+Store build 12.9.8 (Xcode 26.5) is not affected; every build from this Mac (Xcode 27.1) is.
+
+### `submodules/Fenixuz/SceneLifecycle/` (FENIXUZ module, new) — `NovagramSceneDelegate`
+
+`@objc(NovagramSceneDelegate)` `UIWindowSceneDelegate`. It attaches the app delegate's existing
+window to the scene in `scene(_:willConnectTo:options:)` and forwards every scene callback to the
+matching `UIApplicationDelegate` method, which UIKit no longer calls by itself in a scene app:
+foreground/active/resign/background, `openURLContexts` → `application(_:open:options:)`,
+`continue userActivity`, `performActionFor shortcutItem`, plus the launch payloads from the
+connection options. It also returns `.minimal` from `preferredWindowingControlStyle(for:)`, which
+`WindowRootViewController` used to provide by making itself the scene delegate.
+
+### `Telegram/BUILD` (UPSTREAM hook) — `TelegramInfoPlist`
+
+```xml
+<key>UIApplicationSceneManifest</key>
+<dict>
+    <key>UIApplicationSupportsMultipleScenes</key>
+    <false/>
+</dict>
+```
+
+No `UISceneConfigurations`: UIKit asks the app delegate for the configuration instead.
+
+### `submodules/TelegramUI/Sources/AppDelegate.swift` (UPSTREAM hooks)
+
+- `import FenixuzSceneLifecycle`.
+- `application(_:configurationForConnecting:options:)` returns a `UISceneConfiguration` with
+  `delegateClass = NovagramSceneDelegate.self` (also keeps the class linked into the binary).
+- `ApplicationStatusBarHost` keeps a weak `window` and reads `window.windowScene` when asked,
+  instead of storing `window.windowScene` at launch: with scenes that value is still nil inside
+  `didFinishLaunching`, because the scene connects afterwards.
+
+### `submodules/TelegramUI/BUILD` (UPSTREAM hook)
+
+`//submodules/Fenixuz/SceneLifecycle:FenixuzSceneLifecycle` dep.
+
+### `submodules/UIKitRuntimeUtils/Source/UIKitRuntimeUtils/UIViewController+Navigation.m` (UPSTREAM hook)
+
+`-[UIApplication internalGetKeyboard]`: on iOS 27+ it no longer calls the private
+`+[UIRemoteKeyboardWindow remoteKeyboardWindowForScreen:create:]`. With the iOS 27 SDK that call
+traps (SIGTRAP, "is a private method") the first time `Window1` asks the status bar host for the
+keyboard window during launch. It now looks for a scene window whose class name ends in
+`RemoteKeyboardWindow` and returns nil if there is none (callers already handle nil). iOS 26 and
+older keep the old path.
+
+### `publish.sh`, `release.sh`
+
+The release Bazel command gained the same Swift 6.4 flags as `run.sh`
+(`--@build_bazel_rules_swift//swift:copt=-no-warnings-as-errors` and `exec_copt`).
+
+Verified: iOS 27.0 simulator (launch, login screens) and iOS 26.5 simulator (launch, chat list,
+`tg://` deep link, background → foreground, typing in a chat). iOS 15–18 simulators can't run on
+this macOS, so those versions need a real device.
+
+On an upstream pull: if upstream adopts the scene life cycle itself, drop this module and the
+AppDelegate hooks in favour of theirs, but keep the `internalGetKeyboard` guard unless upstream
+has its own.
