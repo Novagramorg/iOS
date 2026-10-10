@@ -23,6 +23,9 @@ import PremiumUI
 import ChatTitleView
 import ChatInputNode
 import ChatEntityKeyboardInputNode
+// TextFieldComponent also has a public EmptyInputView and Swift 6.4 calls it ambiguous, so pin this one
+// swiftlint:disable:next duplicate_imports
+import class ChatEntityKeyboardInputNode.EmptyInputView
 import ChatControllerInteraction
 import ChatAvatarNavigationNode
 import AccessoryPanelNode

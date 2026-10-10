@@ -420,6 +420,18 @@ fi
 
 XCODE_DEV_DIR=/Applications/Xcode.app/Contents/Developer
 
+# take the version from the installed Xcode so an Xcode update doesn't break the build
+# (bazel wants "27.1.0.27A9275" = short version padded to 3 parts + build version)
+XCODE_SHORT_VERSION=$("$XCODE_DEV_DIR/usr/bin/xcodebuild" -version | awk 'NR==1 {print $2}')
+XCODE_BUILD_VERSION=$("$XCODE_DEV_DIR/usr/bin/xcodebuild" -version | awk 'NR==2 {print $3}')
+case "$XCODE_SHORT_VERSION" in
+    *.*.*) ;;
+    *.*)   XCODE_SHORT_VERSION="$XCODE_SHORT_VERSION.0" ;;
+    *)     XCODE_SHORT_VERSION="$XCODE_SHORT_VERSION.0.0" ;;
+esac
+XCODE_BAZEL_VERSION="$XCODE_SHORT_VERSION.$XCODE_BUILD_VERSION"
+ok "Xcode: $XCODE_BAZEL_VERSION"
+
 "$BAZEL_PATH" \
     --output_user_root="$CACHE_DIR/bazel-user-root" \
     build \
@@ -429,7 +441,12 @@ XCODE_DEV_DIR=/Applications/Xcode.app/Contents/Developer
     --action_env=DEVELOPER_DIR="$XCODE_DEV_DIR" \
     --host_action_env=DEVELOPER_DIR="$XCODE_DEV_DIR" \
     --repo_env=DEVELOPER_DIR="$XCODE_DEV_DIR" \
-    --xcode_version=26.5.0.17F42 \
+    --xcode_version="$XCODE_BAZEL_VERSION" \
+    `# Swift 6.4 (Xcode 27) added an ImplicitStrongCapture warning and -warnings-as-errors turns it into` \
+    `# an error in hundreds of upstream files. these flags come after the target copts, so they win.` \
+    `# (-Wwarning ImplicitStrongCapture would be narrower but it clashes with -suppress-warnings targets)` \
+    --@build_bazel_rules_swift//swift:copt=-no-warnings-as-errors \
+    --@build_bazel_rules_swift//swift:exec_copt=-no-warnings-as-errors \
     --features=swift.use_global_module_cache \
     --features=swift.use_global_index_store \
     --features=swift.skip_function_bodies_for_derived_files \
