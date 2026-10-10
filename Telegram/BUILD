@@ -1711,6 +1711,11 @@ plist_fragment(
     </array>
     <key>UIFileSharingEnabled</key>
     <false/>
+    <key>UIApplicationSceneManifest</key>
+    <dict>
+        <key>UIApplicationSupportsMultipleScenes</key>
+        <false/>
+    </dict>
     <key>UILaunchStoryboardName</key>
     <string>LaunchScreen</string>
     <key>UIRequiresPersistentWiFi</key>
