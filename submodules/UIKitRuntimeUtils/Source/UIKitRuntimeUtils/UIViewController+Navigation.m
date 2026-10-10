@@ -729,6 +729,24 @@ static NSMutableDictionary<NSString *, TrustedWebRecord *> *trustedWebRecords() 
 }*/
 
 - (UIWindow * _Nullable)internalGetKeyboard {
+    // Fenixuz: since iOS 27 UIKit stops an app built with the iOS 27 SDK as soon as it calls
+    // +[UIRemoteKeyboardWindow remoteKeyboardWindowForScreen:create:] ("is a private method",
+    // SIGTRAP at launch). Look the keyboard window up among the scene windows by class name
+    // instead; callers already handle nil.
+    if (@available(iOS 27.0, *)) {
+        for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
+            if (![scene isKindOfClass:[UIWindowScene class]]) {
+                continue;
+            }
+            for (UIWindow *window in ((UIWindowScene *)scene).windows) {
+                if ([NSStringFromClass([window class]) hasSuffix:@"RemoteKeyboardWindow"]) {
+                    return window;
+                }
+            }
+        }
+        return nil;
+    }
+
     Class windowClass = NSClassFromString(@"UIRemoteKeyboardWindow");
     if (!windowClass) {
         return nil;
