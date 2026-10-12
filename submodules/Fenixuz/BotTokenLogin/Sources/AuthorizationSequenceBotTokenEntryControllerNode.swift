@@ -6,6 +6,7 @@ import SwiftSignalKit
 import TelegramPresentationData
 import AuthorizationUtils
 import AnimatedStickerNode
+import LottieSettings
 import TelegramAnimatedStickerNode
 import SolidRoundedButtonNode
 
@@ -81,7 +82,7 @@ final class AuthorizationSequenceBotTokenEntryControllerNode: ASDisplayNode, UIT
         self.strings = strings
         self.theme = theme
 
-        self.animationNode = DefaultAnimatedStickerNodeImpl()
+        self.animationNode = DefaultAnimatedStickerNodeImpl(lottieSettings: .noAccountFallback)
         self.animationNode.setup(source: AnimatedStickerNodeLocalFileSource(name: "BusinessChatbot"), width: 256, height: 256, playbackMode: .loop, mode: .direct(cachePathPrefix: nil))
 
         self.titleNode = ASTextNode()

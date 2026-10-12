@@ -5,6 +5,7 @@ import AsyncDisplayKit
 import SwiftSignalKit
 import TelegramPresentationData
 import AnimatedStickerNode
+import LottieSettings
 import TelegramAnimatedStickerNode
 import AccountContext
 import PresentationDataUtils
@@ -315,7 +316,7 @@ private final class FenixuzAnalyticsControllerNode: ASDisplayNode {
     init(presentationData: PresentationData) {
         self.presentationData = presentationData
 
-        self.duckNode = DefaultAnimatedStickerNodeImpl()
+        self.duckNode = DefaultAnimatedStickerNodeImpl(lottieSettings: .noAccountFallback)
         self.duckNode.setup(source: AnimatedStickerNodeLocalFileSource(name: "BroadcastGroup"), width: 448, height: 448, playbackMode: .loop, mode: .direct(cachePathPrefix: nil))
         self.duckNode.visibility = true
 

@@ -700,7 +700,7 @@ private struct NotificationContent: CustomStringConvertible {
         }
 
         // Fenixuz: see fenixuzRingingCallContent
-        if #available(iOS 15.2, *), let isVideo = self.fenixuzIncomingCallIsVideo, let ringingContent = fenixuzRingingCallContent(content, caller: self.senderPerson, isVideo: isVideo) {
+        if #available(iOS 15.2, *), let isVideo = self.fenixuzIncomingCallIsVideo, let ringingContent = fenixuzRingingCallContent(content, caller: self.fenixuzCallerPerson, isVideo: isVideo) {
             return ringingContent
         }
 
@@ -809,6 +809,29 @@ private func fenixuzIncomingCallFallbackContent(callerTitle: String?, callerPeer
 // INStartCallIntent in NSUserActivityTypes (Telegram/BUILD). Returns nil when iOS rejects the intent,
 // and generate() then falls back to the plain banner.
 @available(iOS 15.2, *)
+// Fenixuz: upstream 13.0 dropped the stored `senderPerson` (it keeps `sender` and builds the
+// INPerson per intent), so build the caller for the ringing call notification the same way.
+@available(iOS 15.0, *)
+private extension NotificationContent {
+    var fenixuzCallerPerson: INPerson? {
+        guard let sender = self.sender else {
+            return nil
+        }
+        var personNameComponents = PersonNameComponents()
+        personNameComponents.nickname = sender.name
+        return INPerson(
+            personHandle: INPersonHandle(value: "\(sender.peerId.toInt64())", type: .unknown),
+            nameComponents: personNameComponents,
+            displayName: sender.name,
+            image: self.senderImage,
+            contactIdentifier: sender.contactIdentifier,
+            customIdentifier: "\(sender.peerId.toInt64())",
+            isMe: false,
+            suggestionType: .none
+        )
+    }
+}
+
 private func fenixuzRingingCallContent(_ content: UNMutableNotificationContent, caller: INPerson?, isVideo: Bool) -> UNNotificationContent? {
     let callerPerson = caller ?? INPerson(
         personHandle: INPersonHandle(value: content.title, type: .unknown),

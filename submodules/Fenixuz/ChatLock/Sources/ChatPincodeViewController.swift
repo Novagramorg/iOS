@@ -4,6 +4,7 @@ import Display
 import TelegramPresentationData
 import LocalAuthentication
 import AnimatedStickerNode
+import LottieSettings
 import TelegramAnimatedStickerNode
 
 // MARK: - Public mode enum
@@ -157,7 +158,7 @@ public final class ChatPincodeViewController: ViewController {
         // 140pt reads as a proper hero on a normal phone. On a short screen (SE-class, 667pt)
         // the title + subtitle + dots + number pad already fill the height, so drop back to 100.
         let animationSize: CGFloat = UIScreen.main.bounds.height < 700.0 ? 100.0 : 140.0
-        let animationNode = DefaultAnimatedStickerNodeImpl()
+        let animationNode = DefaultAnimatedStickerNodeImpl(lottieSettings: .noAccountFallback)
         // Render at 3x the largest display size so it never upscales on a Retina screen.
         animationNode.setup(source: AnimatedStickerNodeLocalFileSource(name: "Passcode"), width: 448, height: 448, playbackMode: .loop, mode: .direct(cachePathPrefix: nil))
         animationNode.visibility = true

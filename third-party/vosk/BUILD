@@ -2,6 +2,7 @@ load(
     "@build_bazel_rules_apple//apple:apple.bzl",
     "apple_static_xcframework_import",
 )
+load("@rules_cc//cc:objc_library.bzl", "objc_library")
 
 # Prebuilt static Vosk C library (Kaldi-based offline speech recognition).
 # Mirrors third-party/recaptcha/BUILD — the fork's existing prebuilt xcframework import.
