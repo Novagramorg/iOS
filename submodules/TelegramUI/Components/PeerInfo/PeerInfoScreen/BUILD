@@ -103,6 +103,7 @@ swift_library(
         "//submodules/Fenixuz/ProMessager:FenixuzProMessager",
         "//submodules/Fenixuz/Localization:FenixuzLocalization",
         "//submodules/Fenixuz/Analytics:FenixuzAnalytics",
+        "//submodules/Fenixuz/UpdateCheck:FenixuzUpdateCheck",
         "//submodules/ShareController",
         "//submodules/TelegramUI/Components/ShareWithPeersScreen",
         "//submodules/StatisticsUI",
