@@ -13,6 +13,7 @@ swift_library(
         "//submodules/Fenixuz/SecretVault:FenixuzSecretVault",
         "//submodules/Fenixuz/ChatLock:FenixuzChatLock",
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
+        "//submodules/LottieSettings:LottieSettings",
         "//submodules/AsyncDisplayKit:AsyncDisplayKit",
         "//submodules/Display:Display",
         "//submodules/TelegramCore:TelegramCore",

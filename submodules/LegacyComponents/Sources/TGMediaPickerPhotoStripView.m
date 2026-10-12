@@ -120,22 +120,37 @@
 
 - (void)insertItemAtIndex:(NSInteger)index
 {
-    // UICollectionView checks that the data source's new count equals its own cached count plus
-    // the inserted rows, and raises NSInternalInconsistencyException when it does not. The model
-    // and the collection view do fall out of step here — selectedItemsModel is assigned after the
-    // view exists, and two selection changes can land before the view has processed the first.
-    // Reload instead of dying; the thumbnail still appears, just without the insert animation.
-    NSInteger newCount = [self collectionView:_collectionView numberOfItemsInSection:0];
-    NSInteger cachedCount = [_collectionView numberOfItemsInSection:0];
-    if (index < 0 || index >= newCount || newCount != cachedCount + 1)
+    void (^updateLayout)(void) = ^
     {
-        [_collectionView reloadData];
-        [self _layoutCollectionViewForOrientation:self.interfaceOrientation];
+        [UIView animateWithDuration:0.3f
+                         animations:^
+        {
+            [self _layoutCollectionViewForOrientation:self.interfaceOrientation];
+        }];
+
+        if (_collectionViewLayout.scrollDirection == UICollectionViewScrollDirectionHorizontal)
+        {
+            [_collectionView setContentOffset:CGPointMake(_collectionView.contentSize.width - _collectionView.frame.size.width + _collectionView.contentInset.left, _collectionView.contentOffset.y) animated:true];
+        }
+        else
+        {
+            [_collectionView setContentOffset:CGPointMake(_collectionView.contentOffset.x, _collectionView.contentSize.height - _collectionView.frame.size.height + _collectionView.contentInset.top) animated:true];
+        }
+    };
+
+    NSInteger collectionItemsCount = [_collectionView numberOfItemsInSection:0];
+    NSInteger modelItemsCount = self.selectedItemsModel.totalCount;
+    bool validBatchUpdate = modelItemsCount == collectionItemsCount + 1 && index >= 0 && index < modelItemsCount;
+    if (!validBatchUpdate)
+    {
+        [self reloadData];
+        [_collectionView layoutIfNeeded];
+        updateLayout();
         return;
     }
 
     NSIndexPath *indexPath = [NSIndexPath indexPathForRow:index inSection:0];
-    
+
     [UIView performWithoutAnimation:^
     {
         [_collectionView performBatchUpdates:^
@@ -143,40 +158,28 @@
             [_collectionView insertItemsAtIndexPaths:@[ indexPath ]];
         } completion:^(__unused BOOL finished)
         {
-            [UIView animateWithDuration:0.3f
-                             animations:^
-            {
-                [self _layoutCollectionViewForOrientation:self.interfaceOrientation];
-            }];
-            
-            if (_collectionViewLayout.scrollDirection == UICollectionViewScrollDirectionHorizontal)
-            {
-                [_collectionView setContentOffset:CGPointMake(_collectionView.contentSize.width - _collectionView.frame.size.width + _collectionView.contentInset.left, _collectionView.contentOffset.y) animated:true];
-            }
-            else
-            {
-                [_collectionView setContentOffset:CGPointMake(_collectionView.contentOffset.x, _collectionView.contentSize.height - _collectionView.frame.size.height + _collectionView.contentInset.top) animated:true];
-            }
+            updateLayout();
         }];
     }];
 }
 
 - (void)deleteItemAtIndex:(NSInteger)index
 {
-    // Same invariant as insertItemAtIndex:, in the other direction.
-    NSInteger newCount = [self collectionView:_collectionView numberOfItemsInSection:0];
-    NSInteger cachedCount = [_collectionView numberOfItemsInSection:0];
-    if (index < 0 || index >= cachedCount || newCount != cachedCount - 1)
+    NSInteger collectionItemsCount = [_collectionView numberOfItemsInSection:0];
+    NSInteger modelItemsCount = self.selectedItemsModel.totalCount;
+    bool validBatchUpdate = modelItemsCount == collectionItemsCount - 1 && index >= 0 && index < collectionItemsCount;
+    if (validBatchUpdate)
     {
-        [_collectionView reloadData];
-        [self _layoutCollectionViewForOrientation:self.interfaceOrientation];
-        return;
+        [_collectionView performBatchUpdates:^
+        {
+            [_collectionView deleteItemsAtIndexPaths:@[ [NSIndexPath indexPathForRow:index inSection:0] ]];
+        } completion:nil];
     }
-
-    [_collectionView performBatchUpdates:^
+    else
     {
-        [_collectionView deleteItemsAtIndexPaths:@[ [NSIndexPath indexPathForRow:index inSection:0] ]];
-    } completion:nil];
+        [self reloadData];
+        [_collectionView layoutIfNeeded];
+    }
     
     [UIView animateWithDuration:0.3f
                      animations:^

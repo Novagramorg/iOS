@@ -66,8 +66,10 @@ swift_library(
     ],
     deps = [
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
+        "//submodules/LottieSettings:LottieSettings",
         "//submodules/AsyncDisplayKit:AsyncDisplayKit",
         "//submodules/Display:Display",
+        "//submodules/UIKitRuntimeUtils:UIKitRuntimeUtils",
         "//submodules/TelegramCore:TelegramCore",
         "//submodules/TelegramPresentationData:TelegramPresentationData",
         "//submodules/LegacyComponents:LegacyComponents",
@@ -107,6 +109,7 @@ swift_library(
         "//submodules/ReactionSelectionNode",
         "//submodules/TelegramUI/Components/EntityKeyboard",
         "//submodules/Camera",
+        "//submodules/Camera/CameraLegacy",
         "//submodules/TelegramUI/Components/DustEffect",
         "//submodules/TelegramUI/Components/DynamicCornerRadiusView",
         "//submodules/TelegramUI/Components/StickerPickerScreen",

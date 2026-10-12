@@ -408,7 +408,7 @@ final class LocalizationListControllerNode: ViewControllerTracingNode {
             }
         }
         
-        let removeItem: (String) -> Void = { id in
+        let removeItem: (String) -> Void = { [weak self] id in
             let _ = context.engine.localization.removeSavedLocalization(languageCode: id).start()
             
             let _ = (context.engine.data.get(TelegramEngine.EngineData.Item.Configuration.LocalizationList())

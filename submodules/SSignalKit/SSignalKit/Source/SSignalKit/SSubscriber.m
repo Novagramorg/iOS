@@ -104,8 +104,8 @@
 
 - (void)putError:(id)error
 {
-    SSubscriberBlocks *blocks = nil;
     id<SDisposable> disposable = nil;
+    SSubscriberBlocks *blocks = nil;
     
     os_unfair_lock_lock(&_lock);
     if (!_terminated)
@@ -113,12 +113,8 @@
         blocks = _blocks;
         _blocks = nil;
         
-        // Take _disposable under the lock, like _markTerminatedWithoutDisposal does. Reading and
-        // nilling it after unlocking lets a concurrent dispose release the same object twice, and
-        // the second -dispose lands on freed memory.
         disposable = _disposable;
         _disposable = nil;
-        
         _terminated = true;
     }
     os_unfair_lock_unlock(&_lock);
@@ -132,8 +128,8 @@
 
 - (void)putCompletion
 {
-    SSubscriberBlocks *blocks = nil;
     id<SDisposable> disposable = nil;
+    SSubscriberBlocks *blocks = nil;
     
     os_unfair_lock_lock(&_lock);
     if (!_terminated)
@@ -141,10 +137,8 @@
         blocks = _blocks;
         _blocks = nil;
         
-        // See putError: — _disposable has to be taken under the lock.
         disposable = _disposable;
         _disposable = nil;
-        
         _terminated = true;
     }
     os_unfair_lock_unlock(&_lock);
@@ -162,7 +156,7 @@
     disposable = _disposable;
     _disposable = nil;
     os_unfair_lock_unlock(&_lock);
-    
+
     [disposable dispose];
 }
 
