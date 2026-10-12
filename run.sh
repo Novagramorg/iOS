@@ -322,6 +322,15 @@ if [ "$MODE" = "real" ]; then
         cp -f "$DEV_SRC/Fenixuz.mobileprovision"                       "$PROV_DIR/WatchApp.mobileprovision"
         cp -f "$DEV_SRC/Fenixuz.mobileprovision"                       "$PROV_DIR/WatchExtension.mobileprovision"
         ok "Development profillar joylashtirildi (manba: $DEV_SRC)"
+        # The provisioning BUILD was written in step 2, before these copies. On a fresh
+        # checkout (e.g. a new worktree) it lists nothing, so write it again now.
+        {
+            echo 'exports_files(['
+            for f in "$PROV_DIR"/*.mobileprovision; do
+                echo "    \"$(basename "$f")\","
+            done
+            echo '])'
+        } > "$PROV_DIR/BUILD"
     else
         warn "$DEV_SRC topilmadi — mavjud profillar bilan davom etamiz"
     fi
