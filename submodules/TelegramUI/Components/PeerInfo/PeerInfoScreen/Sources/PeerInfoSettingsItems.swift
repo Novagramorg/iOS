@@ -15,6 +15,7 @@ import PeerNameColorItem
 import FenixuzLocalization
 import FenixuzProMessager
 import FenixuzAnalytics
+import FenixuzUpdateCheck
 import WalletContext
 
 enum SettingsSection: Int, CaseIterable {
@@ -384,6 +385,8 @@ func settingsItems(data: PeerInfoScreenData?, context: AccountContext, presentat
     items[.support]!.append(PeerInfoScreenDisclosureItem(id: 2, text: presentationData.strings.Settings_Tips, icon: PresentationResourcesSettings.tips, action: {
         interaction.openSettings(.tips)
     }))
+    // Fenixuz: app version under the last section. See HOOKS.md.
+    items[.support]!.append(PeerInfoScreenCommentItem(id: 100, text: FenixuzAppVersion.displayText))
 
     var result: [(AnyHashable, [PeerInfoScreenItem])] = []
     for section in SettingsSection.allCases {
