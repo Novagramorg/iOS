@@ -46,6 +46,7 @@ On every `git pull upstream master`, an AI assistant uses this file to re-apply 
 - `run.sh`, `publish.sh`, `release.sh`: `--disk_cache="$CACHE_DIR"` → `--disk_cache="$CACHE_DIR/disk"`. Bazel 9 output base'ni (`bazel-user-root`) disk cache papkasi ichida qabul qilmaydi. `run.sh`'dagi favqulodda tozalash ham `disk/cas`'ni o'chiradi. Eski `~/telegram-bazel-cache/{cas,ac}` keraksiz.
 - `submodules/Fenixuz/AutoProxy/BUILD`: `Resources/**/*` glob'iga `allow_empty = True` (modulda resurs yo'q; Bazel 9 bo'sh glob'ni xato deydi).
 - `NotificationService.swift`: `fenixuzCallerPerson` extension'i `@available(iOS 15.2, *) fenixuzRingingCallContent` doc-comment'idan yuqorida turadi (atribut funksiyadan ajralib qolmasin).
+- `run.sh -r`: development profillar nusxalangandan keyin `provisioning/BUILD` (`exports_files`) qayta yoziladi. Avval ro'yxat profillar nusxalanishidan oldin yozilardi va yangi checkout'da (worktree) bo'sh qolib, device build "no such target ...mobileprovision" bilan yiqilardi.
 - Natija: `./run.sh` Bazel 9.2.0 + Xcode 27.1 bilan to'liq build bo'ldi; 12.9.9 → 13.0 upgrade (DB, sozlamalar, passcode migration) simulator'da tekshirildi.
 
 **Wallet gate (merge'dan keyingi commit):**
@@ -442,6 +443,7 @@ On every `git pull upstream master`, an AI assistant uses this file to re-apply 
 157. `Info.plist`, `Telegram/BUILD`, `Nova*Icon.alticon` (Telegram app): alternate ikonka fayllari.
 158. `NavigationButtonComponent.swift` (TelegramUI), `ChatListController.swift` (ChatListUI): header va story kamera tugmalarida haptic.
 159. `ItemListSwitchItem.swift` (ItemListUI): switch'dagi "NEW" badge joyi tuzatilgan.
+224. `PeerInfoSettingsItems.swift` (PeerInfoScreen): Settings tab'ining eng pastida (`support` section ostida) ilova versiyasi — "Novagram 13.0 (85)". Matn `FenixuzAppVersion.displayText` (UpdateCheck moduli), hook — 1 qator `PeerInfoScreenCommentItem(id: 100, ...)` + `import FenixuzUpdateCheck` (2026-10-12).
 
 #### Brand va til
 
@@ -502,7 +504,7 @@ On every `git pull upstream master`, an AI assistant uses this file to re-apply 
 205. `ChatMessageDateAndStatusNode/BUILD`: Localization.
 206. `ChatTextInputPanelNode/BUILD`: SpeechToText, Localization, RoundVideoFromGallery.
 207. `GlobalControlPanelsContext/BUILD`: NovagramAds.
-208. `PeerInfoScreen/BUILD`: ProMessager, Localization, Analytics.
+208. `PeerInfoScreen/BUILD`: ProMessager, Localization, Analytics, UpdateCheck (versiya footer'i, #224).
 209. `StoryContainerScreen/BUILD`: StoryUnlock.
 210. `TranslateHeaderPanelComponent/BUILD`: PremiumUnlock.
 211. `AnimatedStickerNode/BUILD`: unit test target'lari.
