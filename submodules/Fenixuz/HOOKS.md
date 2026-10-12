@@ -12,6 +12,32 @@ On every `git pull upstream master`, an AI assistant uses this file to re-apply 
 
 ---
 
+## 🔀 Upstream 13.0 merge (2026-10-12)
+
+> Upstream `release-13.0.0` (`f1dd7a2dbd`) `feature/upstream-13.0` branch'ga merge qilindi: `git merge --no-ff -X ignore-space-change release-13.0.0` (alohida worktree `../Telegram-iOS-13`). To'liq reja va o'zgarishlar ro'yxati: repo root'dagi `UPSTREAM_13.0_MERGE_PLAN.md` va `UPSTREAM_13.0_CHANGES.md`. Hook nazorati: main'dagi 1707 ta Fenixuz/Novagram qatoridan faqat quyida yozilgan, ataylab olib tashlanganlari kamaydi.
+
+**Olib tashlangan hook'lar** (upstream o'zi tuzatgan yoki almashtirgan): #172 SearchBarNode (bb5b4f5a3c), #188 TGMediaPickerPhotoStripView (37abd7a04a), #189 ChatInterfaceInputContexts (f09120e85f), #190 SSubscriber (7f6f87843c), #195 OpenInOptionsScreen (allaqachon upstream'da), #212 widget MinOS genrule (upstream ham min iOS 15.0), #220 `EmptyInputView` import pin (upstream o'zining `EmptyKeyboardInputView`'ini qo'shgan), #221 UIScene (`Fenixuz/SceneLifecycle` moduli o'chirildi, upstream `SceneDelegate` ishlatiladi, 13a2694420), #222 `UIViewController+Navigation.m` (upstream `internalGetKeyboardForScene`, 93af3a138e).
+
+**Yangi joyga ko'chirilgan / qayta ulangan hook'lar:**
+- `ChatListController.swift` (#78): qidiruvdagi long-press endi upstream'ning `dismissPreviewing` oqimida; `ChatPincodeManager.shared.isLocked(peer.id)` tarmog'i qulflangan chatda preview'ni yopadi. Upstream secret chat `.extracted` tarmog'ini olib tashlagan (secret chat'lar ham preview oladi).
+- `ChatController.swift`: `ignorePreviewTap` guard'i upstream'ning wallet TonConnect route blokidan keyin turadi.
+- `GlobalControlPanelsContext.swift` (#111): closure parametri `configuration` → `needsPasswordSetup` (upstream), oxirida bizning `bannerNotice` va erta return.
+- `VideoMessageCameraScreen.swift` (#61): `pendingCameraPosition` endi `cameraImpl.isDualCameraSupported(forRoundVideo:)` bilan birga.
+- `AuthorizationSequencePhoneEntryControllerNode.swift` (#114): `DefaultAnimatedStickerNodeImpl(lottieSettings: .noAccountFallback)` + bizning `playbackMode: .loop`.
+- `SyncCore_StandaloneAccountTransaction.swift` (#21, #33): bizning 2 ta carry-forward (edit history, 🗑) upstream'ning `EphemeralReplacementMessageAttribute` carry-forward'idan oldin.
+- `NotificationService.swift` (#137): `fenixuzIncomingCallIsVideo` upstream'ning `recipientAccountName` property'si yonida.
+- `IntentContacts.swift` (#168): `"Novagram"` label tekshiruvi upstream'ning yangi `matchingDeviceContact(_:)` ichida (:83), auto-merge bo'lgan.
+- `CallKitIntegration.swift` (#165): `CXProviderConfiguration(localizedName: "Novagram")` saqlandi (upstream `CXProviderConfiguration()` ga o'tgan; `-Wwarning DeprecatedDeclaration` bor).
+- `InAppPurchaseManager.swift` (#176): butun fayl bizniki, StoreKit yo'q. `AppDelegate.swift` (#177): Manage Subscriptions faqat web URL, upstream'ning `AppStore.showManageSubscriptions` olinmadi.
+- `Telegram/BUILD`: bizning ikkinchi `UIApplicationSceneManifest` o'chirildi (upstream manifest `SceneDelegate` bilan). `ton` / `tc` URL scheme'lar olib tashlandi (Wallet gate), `tonsite` qoldi.
+- `en.lproj/Localizable.strings` (#161): upstream'ning yangi kalitlari Novagram bilan (`Settings.LogoutConfirmationTextWithWallets`, `Conversation.UnsupportedMedia.*`).
+- `.bazelrc`: upstream (SourceKit BSP `index_build` bloki yo'q) + bizning disk-cache GC comment'i. `sqlcipher/BUILD` (#214): upstream `load(...)` + bizning `sqlite3ext.h` exclusion.
+- BUILD union: `SettingsUI/BUILD` (#202 + PasscodeCore, WalletContext), `ChatTextInputPanelNode/BUILD` (#206 + RichTextEditorCore), `StoryContainerScreen/BUILD` (#209 + UrlWhitelist).
+
+**Keyingi commit'larda:** 7 ta compile fix (vosk `load`, ChatLock / BotTokenLogin / Analytics'da `lottieSettings`, ProMessager `neighbors`, IAP stub, NSE `fenixuzCallerPerson`), kamera pozitsiya fix'ini `CameraLegacy`'ga ko'chirish, Wallet gate, onramp hide, brand iboralar.
+
+---
+
 ## 📋 Novagram features va hooklar (2026-10-10)
 
 > 1–44: Settings → Novagram Settings (ilovadagi tartibda). 45–85: Settings'dan tashqaridagi features.
@@ -414,7 +440,7 @@ On every `git pull upstream master`, an AI assistant uses this file to re-apply 
 169. `AuthorizationSequenceSplashController.swift` (AuthorizationUI): Welcome ekranida brand rangi.
 170. `RMIntroViewController.m` (RMIntro): simulator'da intro logosi.
 171. `tgwatch Watch App/Info.plist` (WatchApp): watch ilovada "Novagram".
-172. `SearchBarNode.swift` (SearchBarNode): xitoy tilida qidiruvdagi "x" tugmasi joyida turadi.
+172. `SearchBarNode.swift` (SearchBarNode): xitoy tilida qidiruvdagi "x" tugmasi joyida turadi. **13.0: olib tashlandi, upstream bb5b4f5a3c o'zi tuzatgan.**
 173. `TextProcessingTranslateContentComponent.swift` (TelegramUI): `zh-hans` → `zh`, shunda tarjima ishlaydi.
 174. `LocalizationListControllerNode.swift` (SettingsUI): Settings → Language'da xitoy tili.
 175. Telegram fayllaridagi Fenixuz matnlari (`ChatContextMenus`, `ChatController`, `ChatControllerNode`, `ChatInterfaceStateContextMenus` va boshqalar): `zh` tarjimasi qo'shilgan.
@@ -436,14 +462,14 @@ On every `git pull upstream master`, an AI assistant uses this file to re-apply 
 185. `EmojiHeaderComponent.swift`, `ReactionContextNode.swift`, `QuickShareToastScreen.swift`, `EmojiStatusSelectionComponent.swift`, `StoryItemSetContainerComponent.swift`: parabolik animatsiyada nolga bo'lish tuzatilgan.
 186. `HLSVideoJSNativeContentNode.swift` (TelegramUniversalVideoContent): HLS range tekshiriladi.
 187. `VolumeButtons.swift` (Utils): deinit main thread'da bajariladi.
-188. `TGMediaPickerPhotoStripView.m` (LegacyComponents): media picker'da count mos kelmasa reload qilinadi.
-189. `ChatInterfaceInputContexts.swift` (TelegramUI): eskirgan matn uzunligi tufayli bo'ladigan crash.
-190. `SSubscriber.m` (SSignalKit): disposal race.
+188. `TGMediaPickerPhotoStripView.m` (LegacyComponents): media picker'da count mos kelmasa reload qilinadi. **13.0: olib tashlandi, upstream 37abd7a04a.**
+189. `ChatInterfaceInputContexts.swift` (TelegramUI): eskirgan matn uzunligi tufayli bo'ladigan crash. **13.0: olib tashlandi, upstream f09120e85f.**
+190. `SSubscriber.m` (SSignalKit): disposal race. **13.0: olib tashlandi, upstream 7f6f87843c.**
 191. `PasskeysScreen.swift` (TelegramUI): `preconditionFailure` o'rniga anchor qaytariladi.
 192. `NewContactScreen.swift` (TelegramUI): update re-entrancy.
 193. `FFMpegMediaFrameSourceContext.swift`, `MediaPlayerNode.swift` (MediaPlayer): story video oxiridan o'tib ketganda Timer crash.
 194. `LocationUtils.swift`, `LocationViewControllerNode.swift` (LocationUI): ETA shimmer qotib qolmaydi (ruxsat va timeout).
-195. `OpenInOptionsScreen.swift` (OpenInExternalAppUI): "Open In" ikonkalari bosiladi (upstream cherry-pick).
+195. `OpenInOptionsScreen.swift` (OpenInExternalAppUI): "Open In" ikonkalari bosiladi (upstream cherry-pick). **13.0: upstream'da bor, hook yo'q.**
 
 #### BUILD dependency'lar
 
@@ -466,7 +492,7 @@ On every `git pull upstream master`, an AI assistant uses this file to re-apply 
 
 #### Build
 
-212. `Telegram/BUILD`: minimum iOS 15.0, widget uchun ham.
+212. `Telegram/BUILD`: minimum iOS 15.0, widget uchun ham. **13.0: upstream ham 15.0; widget genrule olib tashlangan.**
 213. 39 ta `BUILD` fayl: iOS 15 deprecation'lari error emas, warning bo'ladi.
 214. `sqlcipher/BUILD`: Xcode 26.5 SDK uchun `sqlite3ext.h` private qilingan.
 215. `run.sh`: device build'da push entitlement (`aps_environment`).
@@ -474,9 +500,9 @@ On every `git pull upstream master`, an AI assistant uses this file to re-apply 
 217. `project.yml`, `project.pbxproj` (WatchApp): Team ID `ZDBP5RSRZF`.
 218. `ChatInputTextNode.swift` (TelegramUI): input diagnostika log'i (faqat DEBUG).
 219. `run.sh`: Xcode versiyasi o'rnatilgan Xcode'dan olinadi, Swift 6.4 warning'lari error bo'lmaydi.
-220. `ChatControllerNode.swift` (TelegramUI): Swift 6.4 uchun `EmptyInputView` importi aniqlashtirilgan.
-221. `AppDelegate.swift` (TelegramUI), `Telegram/BUILD`, `TelegramUI/BUILD`: UIScene life cycle (`NovagramSceneDelegate`), iOS 27 SDK bilan ilova ochilishi uchun.
-222. `UIViewController+Navigation.m` (UIKitRuntimeUtils): iOS 27'da yashirin klaviatura API chaqirilmaydi, ilova ishga tushganda to'xtamaydi.
+220. `ChatControllerNode.swift` (TelegramUI): Swift 6.4 uchun `EmptyInputView` importi aniqlashtirilgan. **13.0: olib tashlandi, upstream `EmptyKeyboardInputView` (fdcd002ef5).**
+221. `AppDelegate.swift` (TelegramUI), `Telegram/BUILD`, `TelegramUI/BUILD`: UIScene life cycle (`NovagramSceneDelegate`), iOS 27 SDK bilan ilova ochilishi uchun. **13.0: olib tashlandi, upstream `SceneDelegate` (13a2694420); `Fenixuz/SceneLifecycle` o'chirildi.**
+222. `UIViewController+Navigation.m` (UIKitRuntimeUtils): iOS 27'da yashirin klaviatura API chaqirilmaydi, ilova ishga tushganda to'xtamaydi. **13.0: olib tashlandi, upstream 93af3a138e.**
 223. `publish.sh`, `release.sh`: App Store build uchun Swift 6.4 flag'lari.
 
 ---

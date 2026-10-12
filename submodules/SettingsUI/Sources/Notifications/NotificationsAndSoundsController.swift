@@ -536,7 +536,6 @@ private func notificationsAndSoundsEntries(authorizationStatus: AccessType, warn
         entries.append(.accountsInfo(presentationData.theme, inAppSettings.displayNotificationsFromAllAccounts ? presentationData.strings.NotificationSettings_ShowNotificationsAllAccountsInfoOn : presentationData.strings.NotificationSettings_ShowNotificationsAllAccountsInfoOff))
     }
     
-    if #available(iOSApplicationExtension 10.0, iOS 10.0, *) {
         let title: String
         let text: String
         if case .unreachable = authorizationStatus {
@@ -560,7 +559,6 @@ private func notificationsAndSoundsEntries(authorizationStatus: AccessType, warn
             default:
                 break
         }
-    }
     
     entries.append(.categoriesHeader(presentationData.theme, presentationData.strings.Notifications_MessageNotifications.uppercased()))
     entries.append(.privateChats(presentationData.theme, presentationData.strings.Notifications_PrivateChats, !exceptions.users.isEmpty ? presentationData.strings.Notifications_CategoryExceptions(Int32(exceptions.users.peerIds.count)) : "", globalSettings.privateChats.enabled ? presentationData.strings.Notifications_On : presentationData.strings.Notifications_Off))

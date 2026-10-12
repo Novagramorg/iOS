@@ -1,4 +1,5 @@
 import Foundation
+import LottieSettings
 import UIKit
 import AsyncDisplayKit
 import Display
@@ -275,7 +276,7 @@ final class CallListControllerNode: ASDisplayNode {
         self.emptyTextNode.textAlignment = .center
         self.emptyTextNode.maximumNumberOfLines = 3
 
-        self.emptyAnimationNode = DefaultAnimatedStickerNodeImpl()
+        self.emptyAnimationNode = DefaultAnimatedStickerNodeImpl(lottieSettings: self.context.lottieRenderingSettings)
         self.emptyAnimationNode.alpha = 0.0
         self.emptyAnimationNode.isUserInteractionEnabled = false
 

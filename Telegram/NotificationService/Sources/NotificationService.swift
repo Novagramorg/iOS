@@ -1,4 +1,5 @@
 import Foundation
+import PasscodeCore
 import UserNotifications
 import SwiftSignalKit
 import Postbox
@@ -7,7 +8,8 @@ import BuildConfig
 import OpenSSLEncryptionProvider
 import TelegramUIPreferences
 import WebPBinding
-import RLottieBinding
+import LottieBinding
+import LottieSettings
 import GZip
 import UIKit
 import Intents
@@ -278,9 +280,9 @@ private extension CGSize {
     }
 }
 
-private func convertLottieImage(data: Data, size: CGSize, forceSquare: Bool) -> UIImage? {
+private func convertLottieImage(data: Data, size: CGSize, forceSquare: Bool, lottieSettings: LottieRenderingSettings) -> UIImage? {
     let decompressedData = TGGUnzipData(data, 512 * 1024) ?? data
-    guard let animation = LottieInstance(data: decompressedData, fitzModifier: .none, colorReplacements: nil, cacheKey: "") else {
+    guard let animation = makeLottieInstance(data: decompressedData, fitzModifier: .none, colorReplacements: nil, cacheKey: "", settings: lottieSettings) else {
         return nil
     }
     let actualSize: CGSize
@@ -494,6 +496,7 @@ private func peerAvatar(mediaBox: MediaBox, accountPeerId: PeerId, peer: Peer, i
 
 @available(iOSApplicationExtension 10.0, iOS 10.0, *)
 private struct NotificationContent: CustomStringConvertible {
+    var lottieSettings: LottieRenderingSettings = .noAccountFallback
     struct CustomEmoji {
         var range: Range<Int>
         var fileId: Int64
@@ -518,8 +521,18 @@ private struct NotificationContent: CustomStringConvertible {
     var silent = false
     // Fenixuz: set by fenixuzIncomingCallFallbackContent; generate() turns it into a ringing call notification
     var fenixuzIncomingCallIsVideo: Bool?
+    /// The account this notification was delivered to, set only while more than one is signed
+    /// in (see `notificationRecipientAccountName`).
+    var recipientAccountName: String?
 
-    var senderPerson: INPerson?
+    struct Sender {
+        var peerId: PeerId
+        /// Without the recipient account or the muted marker, which `NotificationNames` adds.
+        var name: String
+        var contactIdentifier: String?
+    }
+
+    var sender: Sender?
     var senderImage: INImage?
     
     var isLockedMessage: String?
@@ -552,28 +565,54 @@ private struct NotificationContent: CustomStringConvertible {
 
             self.senderImage = image
 
-            var displayName: String = peer.debugDisplayTitle
+            var name: String = peer.debugDisplayTitle
             if let topicTitle {
-                displayName = "\(topicTitle) (\(displayName))"
+                name = "\(topicTitle) (\(name))"
             }
-            if self.silent {
-                displayName = "\(displayName) 🔕"
+            self.sender = Sender(peerId: peer.id, name: name, contactIdentifier: contactIdentifier)
+            }
             }
             
+    @available(iOS 15.0, *)
+    private func incomingMessageIntent(sender: Sender, senderName: String, groupName: String, body: String) -> INSendMessageIntent {
             var personNameComponents = PersonNameComponents()
-            personNameComponents.nickname = displayName
+        personNameComponents.nickname = senderName
             
-            self.senderPerson = INPerson(
-                personHandle: INPersonHandle(value: "\(peer.id.toInt64())", type: .unknown),
+        let senderPerson = INPerson(
+            personHandle: INPersonHandle(value: "\(sender.peerId.toInt64())", type: .unknown),
                 nameComponents: personNameComponents,
-                displayName: displayName,
-                image: image,
-                contactIdentifier: contactIdentifier,
-                customIdentifier: "\(peer.id.toInt64())",
+            displayName: senderName,
+            image: self.senderImage,
+            contactIdentifier: sender.contactIdentifier,
+            customIdentifier: "\(sender.peerId.toInt64())",
                 isMe: false,
                 suggestionType: .none
             )
+        let mePerson = INPerson(
+            personHandle: INPersonHandle(value: "0", type: .unknown),
+            nameComponents: nil,
+            displayName: nil,
+            image: nil,
+            contactIdentifier: nil,
+            customIdentifier: nil,
+            isMe: true,
+            suggestionType: .none
+        )
+
+        let intent = INSendMessageIntent(
+            recipients: [mePerson],
+            outgoingMessageType: .outgoingMessageText,
+            content: body,
+            speakableGroupName: INSpeakableString(spokenPhrase: groupName),
+            conversationIdentifier: "\(sender.peerId.toInt64())",
+            serviceName: nil,
+            sender: senderPerson,
+            attachments: nil
+        )
+        if let senderImage = self.senderImage {
+            intent.setImage(senderImage, forParameterNamed: \.sender)
         }
+        return intent
     }
 
     func generate() -> UNNotificationContent {
@@ -581,13 +620,11 @@ private struct NotificationContent: CustomStringConvertible {
         
         //Logger.shared.log("NotificationService", "Generating final content: \(self.description)")
 
-        if let title = self.title {
-            if self.silent {
-                content.title = "\(title) 🔕"
-            } else {
+        let names = NotificationNames(title: self.title, senderName: self.sender?.name, silent: self.silent, recipientAccountName: self.recipientAccountName)
+
+        if let title = names.title {
                 content.title = title
             }
-        }
         
         if let subtitle = self.subtitle {
             content.subtitle = subtitle
@@ -610,7 +647,7 @@ private struct NotificationContent: CustomStringConvertible {
                             continue
                         }
                         let image: UIImage
-                        if let lottieImage = convertLottieImage(data: fileData, size: CGSize(width: 40.0, height: 40.0), forceSquare: false) {
+                        if let lottieImage = convertLottieImage(data: fileData, size: CGSize(width: 40.0, height: 40.0), forceSquare: false, lottieSettings: self.lottieSettings) {
                             image = lottieImage
                         } else if let webpImage = WebP.convert(fromWebP: fileData) {
                             image = webpImage
@@ -668,39 +705,27 @@ private struct NotificationContent: CustomStringConvertible {
         }
 
         if #available(iOS 15.0, *) {
-            if self.isLockedMessage == nil, let senderPerson = self.senderPerson, let customIdentifier = senderPerson.customIdentifier {
-                let mePerson = INPerson(
-                    personHandle: INPersonHandle(value: "0", type: .unknown),
-                    nameComponents: nil,
-                    displayName: nil,
-                    image: nil,
-                    contactIdentifier: nil,
-                    customIdentifier: nil,
-                    isMe: true,
-                    suggestionType: .none
-                )
+            if self.isLockedMessage == nil, let sender = self.sender, let donatedSenderName = names.donatedSenderName, let displayedSenderName = names.displayedSenderName {
+                let donatedIntent = self.incomingMessageIntent(sender: sender, senderName: donatedSenderName, groupName: donatedSenderName, body: content.body)
 
-                let incomingCommunicationIntent = INSendMessageIntent(
-                    recipients: [mePerson],
-                    outgoingMessageType: .outgoingMessageText,
-                    content: content.body,
-                    speakableGroupName: INSpeakableString(spokenPhrase: senderPerson.displayName),
-                    conversationIdentifier: "\(customIdentifier)",
-                    serviceName: nil,
-                    sender: senderPerson,
-                    attachments: nil
-                )
-
-                if let senderImage = self.senderImage {
-                    incomingCommunicationIntent.setImage(senderImage, forParameterNamed: \.sender)
-                }
-
-                let interaction = INInteraction(intent: incomingCommunicationIntent, response: nil)
+                let interaction = INInteraction(intent: donatedIntent, response: nil)
                 interaction.direction = .incoming
                 interaction.donate(completion: nil)
 
+                // The system draws the notification from the intent it is updated from, not the
+                // donated one, so only the drawn copy names the recipient account. The title is
+                // drawn from the sender's name (measured on iOS 18.6 and 27); the group name carries
+                // the account too, as the single intent's names always matched, for any presentation
+                // that reads the group name instead.
+                let displayedIntent: INSendMessageIntent
+                if displayedSenderName == donatedSenderName {
+                    displayedIntent = donatedIntent
+                } else {
+                    displayedIntent = self.incomingMessageIntent(sender: sender, senderName: displayedSenderName, groupName: displayedSenderName, body: content.body)
+                }
+
                 do {
-                    content = try content.updating(from: incomingCommunicationIntent) as! UNMutableNotificationContent
+                    content = try content.updating(from: displayedIntent) as! UNMutableNotificationContent
                 } catch let e {
                     print("Exception: \(e)")
                 }
@@ -859,10 +884,19 @@ private final class NotificationServiceHandler {
 
     private let notificationKeyDisposable = MetaDisposable()
     private let pollDisposable = MetaDisposable()
+    // Handler creation is, for practical purposes, when the system's ~30 s extension
+    // budget started ticking; the connection deadline on the poll path counts from here.
+    private let startTimestamp = CFAbsoluteTimeGetCurrent()
 
-    init?(queue: Queue, episode: String, updateCurrentContent: @escaping (NotificationContent) -> Void, completed: @escaping () -> Void, payload: [AnyHashable: Any]) {
+    init?(queue: Queue, episode: String, updateCurrentContent: @escaping (NotificationContent) -> Void, completed: @escaping () -> Void, requestIdentifier: String, payload: [AnyHashable: Any]) {
         //debug_linker_fail_test()
         self.queue = queue
+
+        // In the extension, database BEGIN/COMMIT/step failures must crash (the system then
+        // falls back to displaying the unmodified push) instead of failing silently: silent
+        // failures under cross-process lock contention produce non-atomic writes and pin the
+        // account state, turning the difference polling loop into an infinite livelock.
+        setValueBoxStrictErrorHandling(true)
 
         guard let appBundleIdentifier = Bundle.main.bundleIdentifier, let lastDotRange = appBundleIdentifier.range(of: ".", options: [.backwards]) else {
             return nil
@@ -876,6 +910,7 @@ private final class NotificationServiceHandler {
         let languagesCategory = "ios"
 
         let appGroupName = "group.\(baseAppBundleId)"
+        try! PasscodeEnvironment.shared.configure(PasscodeConfiguration(appGroupIdentifier: appGroupName, processRole: .appExtension))
         let maybeAppGroupUrl = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupName)
 
         guard let appGroupUrl = maybeAppGroupUrl else {
@@ -897,7 +932,7 @@ private final class NotificationServiceHandler {
 
         let appVersion = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "unknown"
 
-        self.accountManager = AccountManager<TelegramAccountManagerTypes>(basePath: rootPath + "/accounts-metadata", isTemporary: true, isReadOnly: false, useCaches: false, removeDatabaseOnError: false)
+        self.accountManager = setupAccountManager(basePath: rootPath + "/accounts-metadata", isTemporary: true, isReadOnly: false, useCaches: false, removeDatabaseOnError: false)
 
         let deviceSpecificEncryptionParameters = BuildConfig.deviceSpecificEncryptionParameters(rootPath, baseAppBundleId: baseAppBundleId)
         self.encryptionParameters = ValueBoxEncryptionParameters(forceEncryptionIfNoSet: false, key: ValueBoxEncryptionParameters.Key(data: deviceSpecificEncryptionParameters.key)!, salt: ValueBoxEncryptionParameters.Salt(data: deviceSpecificEncryptionParameters.salt)!)
@@ -930,14 +965,18 @@ private final class NotificationServiceHandler {
         let networkArguments = NetworkInitializationArguments(apiId: apiId, apiHash: apiHash, languagesCategory: languagesCategory, appVersion: appVersion, voipMaxLayer: 0, voipVersions: [], appData: .single(buildConfig.bundleData(withAppToken: nil, tokenType: nil, tokenEnvironment: nil, signatureDict: nil)), externalRequestVerificationStream: .never(), externalRecaptchaRequestVerification: { _, _ in return .never() }, autolockDeadine: .single(nil), encryptionProvider: OpenSSLEncryptionProvider(), deviceModelName: nil, useBetaFeatures: !buildConfig.isAppStoreBuild, isICloudEnabled: false)
         
         let isLockedMessage: String?
+        let isLockedStoryMessage: String?
         if let data = try? Data(contentsOf: URL(fileURLWithPath: appLockStatePath(rootPath: rootPath))), let state = try? JSONDecoder().decode(LockState.self, from: data), isAppLocked(state: state) {
             if let notificationsPresentationData = try? Data(contentsOf: URL(fileURLWithPath: notificationsPresentationDataPath(rootPath: rootPath))), let notificationsPresentationDataValue = try? JSONDecoder().decode(NotificationsPresentationData.self, from: notificationsPresentationData) {
                 isLockedMessage = notificationsPresentationDataValue.applicationLockedMessageString
+                isLockedStoryMessage = notificationsPresentationDataValue.applicationLockedStoryString ?? notificationsPresentationDataValue.applicationLockedMessageString
             } else {
                 isLockedMessage = "You have a new message"
+                isLockedStoryMessage = "You have a new story"
             }
         } else {
             isLockedMessage = nil
+            isLockedStoryMessage = nil
         }
         
         let incomingCallMessage: String
@@ -1048,10 +1087,36 @@ private final class NotificationServiceHandler {
                     return _internal_cachedNotificationSoundList(transaction: transaction)
                 }
 
+                // The extension has a postbox but no AccountContext, so the backend
+                // is read straight from app configuration. Carried through the
+                // combineLatest that already feeds this closure rather than read
+                // synchronously at the render site.
+                let lottieSettings = stateManager.postbox.transaction { transaction -> LottieRenderingSettings in
+                    let appConfiguration = currentAppConfiguration(transaction: transaction)
+                    if let data = appConfiguration.data, let _ = data["ios_killswitch_disable_tlottie"] {
+                        return LottieRenderingSettings(backend: .rlottie)
+                    }
+                    return LottieRenderingSettings(backend: .tlottie)
+                }
+
+                // Read up front so that the first content handed over, the one shown if the
+                // extension runs out of time, already names the account. Only with several
+                // accounts: every transaction here takes the database write lock the app may hold.
+                let recipientAccountName: Signal<String?, NoError>
+                if notificationsNameRecipientAccount(records: records.records) {
+                    recipientAccountName = stateManager.postbox.transaction { transaction -> String? in
+                        return notificationRecipientAccountName(accountPeer: transaction.getPeer(accountPeerId))
+                    }
+                } else {
+                    recipientAccountName = .single(nil)
+                }
+
                 strongSelf.notificationKeyDisposable.set((combineLatest(queue: strongSelf.queue,
                     existingMasterNotificationsKey(postbox: stateManager.postbox),
-                    settings
-                ) |> deliverOn(strongSelf.queue)).start(next: { notificationsKey, notificationSoundList in
+                    settings,
+                    lottieSettings,
+                    recipientAccountName
+                ) |> deliverOn(strongSelf.queue)).start(next: { notificationsKey, notificationSoundList, lottieSettings, recipientAccountName in
                     guard let strongSelf = self else {
                         let content = NotificationContent(isLockedMessage: nil)
                         updateCurrentContent(content)
@@ -1093,6 +1158,10 @@ private final class NotificationServiceHandler {
                     var messageId: MessageId.Id?
                     var storyId: Int32?
                     var mediaAttachment: Media?
+                    // Commits the notification → message link Siri's announce flow looks up;
+                    // the poll path runs it ahead of the fetch so the content is handed to the
+                    // system only after the link is stored.
+                    var recordNotificationLink: Signal<Never, NoError> = .complete()
                     var downloadNotificationSound: (file: TelegramMediaFile, path: String, fileName: String)?
 
                     var interactionAuthorId: PeerId?
@@ -1294,6 +1363,7 @@ private final class NotificationServiceHandler {
                     } else {
                         if let aps = payloadJson["aps"] as? [String: Any], var peerId = peerId {
                             var content: NotificationContent = NotificationContent(isLockedMessage: isLockedMessage)
+                            content.recipientAccountName = recipientAccountName
                             if let alert = aps["alert"] as? [String: Any] {
                                 if let topicTitleValue = payloadJson["topic_title"] as? String {
                                     topicTitle = topicTitleValue
@@ -1428,6 +1498,7 @@ private final class NotificationServiceHandler {
                                     content.category = "str"
                                 } else {
                                     content.category = "st"
+                                    content.isLockedMessage = isLockedStoryMessage
                                 }
                                 
                                 action = .pollStories(peerId: peerId, content: content, storyId: storyId, isReaction: isReaction)
@@ -1444,11 +1515,24 @@ private final class NotificationServiceHandler {
                                     enableInlineEmoji = false
                                 }
                                 action = .poll(peerId: peerId, content: content, messageId: messageIdValue, reportDelivery: reportDelivery, enableInlineEmoji: enableInlineEmoji)
+
+                                // Siri's announce flow asks the intents extension for the message
+                                // behind a delivered notification by the request identifier the
+                                // system assigned to it. That identifier exists only here. Reactions
+                                // are left out: their category never routes through the search
+                                // intent, and the link would read the reacted-to message as new.
+                                if let messageIdValue, !isReaction {
+                                    recordNotificationLink = stateManager.postbox.transaction { transaction -> Void in
+                                        _internal_setNotificationRequestMessageId(transaction: transaction, requestIdentifier: requestIdentifier, messageId: messageIdValue)
+                                    }
+                                    |> ignoreValues
+                                }
                             }
                             
                             updateCurrentContent(content)
                         } else if let aps = payloadJson["aps"] as? [String: Any], let url = payloadJson["url"] as? String {
                             var content: NotificationContent = NotificationContent(isLockedMessage: nil)
+                            content.recipientAccountName = recipientAccountName
                             content.userInfo["url"] = url
                             content.userInfo["peerId"] = "777000"
                             content.userInfo["accountId"] = "\(recordId.int64)"
@@ -1520,6 +1604,7 @@ private final class NotificationServiceHandler {
                                         })
                                     } else {
                                         var content = NotificationContent(isLockedMessage: nil)
+                                        content.recipientAccountName = recipientAccountName
                                         if let peer = callData.peer {
                                             content.title = peer.debugDisplayTitle
                                             content.body = incomingCallMessage
@@ -1569,6 +1654,7 @@ private final class NotificationServiceHandler {
                                         })
                                     } else {
                                         var content = NotificationContent(isLockedMessage: nil)
+                                        content.recipientAccountName = recipientAccountName
                                         if let peer = fromPeer {
                                             content.title = peer.debugDisplayTitle
                                             content.body = incomingCallMessage
@@ -1634,6 +1720,25 @@ private final class NotificationServiceHandler {
                                 
                                 let shouldKeepConnection = stateManager.network.shouldKeepConnection
                                 
+                                // iOS expires the extension about 30 s after didReceive. Everything on
+                                // this path that needs the connection is cut off at one deadline counted
+                                // from handler creation, leaving slack for the postbox-only work after the
+                                // fetches (unread count, content generation), so a slow poll cannot push
+                                // the fetch step past expiry. The poll additionally has its own 15 s cap:
+                                // without one, a push arriving while no connection can be established (a
+                                // dead proxy, a blocked network) kept polling until the system expired the
+                                // extension, and every retry along the way was a fresh connection attempt
+                                // (bugs.telegram.org/c/64534, /c/61583). Giving up shows the payload's own
+                                // text instead of the fetched message, which is the same content the
+                                // expiry path would have shown, only sooner and without the retries.
+                                let connectionDeadline = strongSelf.startTimestamp + 25.0
+                                let remainingBudget: () -> Double = {
+                                    return max(0.5, connectionDeadline - CFAbsoluteTimeGetCurrent())
+                                }
+                                let pollBudget: Double = 15.0
+                                let pollCompleted = Atomic<Bool>(value: false)
+                                let connectionGaveUp = Atomic<Bool>(value: false)
+
                                 let pollCompletion: (NotificationContent, Media?) -> Void = { content, customMedia in
                                     var content = content
 
@@ -1834,7 +1939,7 @@ private final class NotificationServiceHandler {
                                             }
                                         }
                                         
-                                        let resolvedEmojiFiles: Signal<[Int64: String], NoError> = _internal_resolveInlineStickers(postbox: stateManager.postbox, network: stateManager.network, fileIds: uniqueEmojiIds)
+                                        var resolvedEmojiFiles: Signal<[Int64: String], NoError> = _internal_resolveInlineStickers(postbox: stateManager.postbox, network: stateManager.network, fileIds: uniqueEmojiIds)
                                         |> mapToSignal { files -> Signal<[Int64: String], NoError> in
                                             var fetchSignals: [Signal<(Int64, String?), NoError>] = []
                                             
@@ -1958,15 +2063,29 @@ private final class NotificationServiceHandler {
                                             }
                                         }
 
+                                        if connectionGaveUp.with({ $0 }) {
+                                            // The poll never got a connection. Each fetch below would only sit
+                                            // out its own 10 s timeout on the same dead connection, past the
+                                            // point where iOS expires the extension.
+                                            Logger.shared.log("NotificationService \(episode)", "Skipping media fetches: no connection during the poll")
+                                            fetchMediaSignal = .single(nil)
+                                            fetchNotificationSoundSignal = .single(nil)
+                                            resolvedEmojiFiles = .single([:])
+                                        }
+
+                                        // Each fetch gets at most 10 s, and never more than is left before
+                                        // the deadline.
+                                        let fetchBudget = min(10.0, remainingBudget())
+
                                         Logger.shared.log("NotificationService \(episode)", "Will fetch media")
                                         let _ = (combineLatest(queue: queue,
                                             fetchMediaSignal
-                                            |> timeout(10.0, queue: queue, alternate: .single(nil)),
+                                            |> timeout(fetchBudget, queue: queue, alternate: .single(nil)),
                                             fetchNotificationSoundSignal
-                                            |> timeout(10.0, queue: queue, alternate: .single(nil)),
+                                            |> timeout(fetchBudget, queue: queue, alternate: .single(nil)),
                                             wasDisplayed,
                                             resolvedEmojiFiles
-                                            |> timeout(10.0, queue: queue, alternate: .single([:])),
+                                            |> timeout(fetchBudget, queue: queue, alternate: .single([:])),
                                         )
                                         |> deliverOn(queue)).start(next: { mediaData, notificationSoundData, wasDisplayed, resolvedEmojiFiles in
                                             guard let strongSelf = self, let stateManager = strongSelf.stateManager else {
@@ -2040,7 +2159,7 @@ private final class NotificationServiceHandler {
                                                             stateManager.postbox.mediaBox.storeResourceData(resource.id, data: mediaData, synchronous: true)
                                                         }
                                                         if let storedPath = stateManager.postbox.mediaBox.completedResourcePath(resource) {
-                                                            if let data = try? Data(contentsOf: URL(fileURLWithPath: storedPath)), let image = convertLottieImage(data: data, size: CGSize(width: 200.0, height: 200.0), forceSquare: false) {
+                                                            if let data = try? Data(contentsOf: URL(fileURLWithPath: storedPath)), let image = convertLottieImage(data: data, size: CGSize(width: 200.0, height: 200.0), forceSquare: false, lottieSettings: lottieSettings) {
                                                                 let tempFile = TempBox.shared.tempFile(fileName: "image.png")
                                                                 let _ = try? image.pngData()?.write(to: URL(fileURLWithPath: tempFile.path))
                                                                 if let attachment = try? UNNotificationAttachment(identifier: "image", url: URL(fileURLWithPath: tempFile.path), options: nil) {
@@ -2107,10 +2226,11 @@ private final class NotificationServiceHandler {
                                     pollSignal = .complete()
                                 } else {
                                     shouldKeepConnection.set(.single(true))
+                                    let unboundedPollSignal: Signal<Never, NoError>
                                     if peerId.namespace == Namespaces.Peer.CloudChannel {
                                         Logger.shared.log("NotificationService \(episode)", "Will poll channel \(peerId)")
                                         
-                                        pollSignal = standalonePollChannelOnce(
+                                        unboundedPollSignal = standalonePollChannelOnce(
                                             accountPeerId: stateManager.accountPeerId,
                                             postbox: stateManager.postbox,
                                             network: stateManager.network,
@@ -2122,7 +2242,9 @@ private final class NotificationServiceHandler {
                                         enum ControlError {
                                             case restart
                                         }
-                                        let signal = stateManager.standalonePollDifference()
+                                        // Unbounded on its own: getDifference is paginated and restarted
+                                        // until the state catches up, which never happens offline.
+                                        unboundedPollSignal = stateManager.standalonePollDifference()
                                         |> castError(ControlError.self)
                                         |> mapToSignal { result -> Signal<Never, ControlError> in
                                             if result {
@@ -2132,9 +2254,27 @@ private final class NotificationServiceHandler {
                                             }
                                         }
                                         |> restartIfError
-                                        
-                                        pollSignal = signal
                                     }
+
+                                    // `timeout` disposes the poll when it fires, which stops the
+                                    // getDifference loop and its reconnects; the flag makes the fetch step
+                                    // skip work that would only wait on the same dead connection. The
+                                    // timer's handler can still run once after a completion it was too
+                                    // late to cancel, hence the `pollCompleted` guard: a poll that just
+                                    // made it keeps its fetches.
+                                    let pollTimeout = min(pollBudget, remainingBudget())
+                                    pollSignal = (unboundedPollSignal
+                                    |> afterCompleted {
+                                        let _ = pollCompleted.swap(true)
+                                    })
+                                    |> timeout(pollTimeout, queue: queue, alternate: Signal { subscriber in
+                                        if !pollCompleted.with({ $0 }) {
+                                            Logger.shared.log("NotificationService \(episode)", "Poll did not complete within \(pollTimeout) s, giving up on the connection")
+                                            let _ = connectionGaveUp.swap(true)
+                                        }
+                                        subscriber.putCompletion()
+                                        return EmptyDisposable
+                                    })
                                 }
 
                                 let pollWithUpdatedContent: Signal<(NotificationContent, Media?), NoError>
@@ -2237,15 +2377,26 @@ private final class NotificationServiceHandler {
                                 
                                 let reportDeliverySignal: Signal<Bool, NoError>
                                 if reportDelivery, let messageId {
+                                    // Combined with the poll below, so it needs the same deadline: a
+                                    // request that never gets a connection would otherwise hold the
+                                    // completion back even after the poll has given up. Delivery reports
+                                    // are best-effort, so dropping the in-flight request is fine.
                                     reportDeliverySignal = _internal_reportMessageDelivery(postbox: stateManager.postbox, network: stateManager.network, messageIds: [messageId], fromPushNotification: true)
-                                    |> then(.single(true))
+                                    |> timeout(remainingBudget(), queue: queue, alternate: .single(true))
                                 } else {
                                     reportDeliverySignal = .single(true)
                                 }
 
                                 var updatedContent = initialContent
                                 var updatedMedia: Media?
-                                strongSelf.pollDisposable.set(combineLatest(pollWithUpdatedContent, reportDeliverySignal).start(next: { contentAndMedia, _ in
+                                // The link is stored before any network work so the deadline and
+                                // payload-only fallbacks, which still deliver this notification, find
+                                // it committed; `then` keeps the fetch behind it.
+                                let linkedPollWithUpdatedContent = (recordNotificationLink
+                                |> map { _ -> (NotificationContent, Media?) in })
+                                |> then(pollWithUpdatedContent)
+
+                                strongSelf.pollDisposable.set(combineLatest(linkedPollWithUpdatedContent, reportDeliverySignal).start(next: { contentAndMedia, _ in
                                     updatedContent = contentAndMedia.0
                                     updatedMedia = contentAndMedia.1
                                 }, completed: {
@@ -2262,7 +2413,7 @@ private final class NotificationServiceHandler {
 
                                     queue.async {
                                         guard let strongSelf = self, let stateManager = strongSelf.stateManager else {
-                                            let content = NotificationContent(isLockedMessage: isLockedMessage)
+                                            let content = NotificationContent(isLockedMessage: isReaction ? isLockedMessage : isLockedStoryMessage)
                                             updateCurrentContent(content)
                                             completed()
                                             return
@@ -2862,6 +3013,7 @@ final class NotificationService: UNNotificationServiceExtension {
                         Logger.shared.log("NotificationService \(episode)", "Attempted to repeatedly complete handling notification")
                     }
                 },
+                requestIdentifier: request.identifier,
                 payload: request.content.userInfo
             ))
         })
@@ -2893,6 +3045,12 @@ final class NotificationService: UNNotificationServiceExtension {
     }
     
     override func serviceExtensionTimeWillExpire() {
+        // Releasing impl deallocates the handler on its queue, which disposes the in-flight
+        // poll (getDifference/state replay) and drops the keep-alive network connection.
+        // Without this, that work keeps running after the system takes back control and
+        // continues to consume CPU for as long as the extension process stays alive.
+        self.impl = nil
+
         if let contentHandler = self.contentHandler {
             self.contentHandler = nil
             
