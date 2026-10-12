@@ -10,9 +10,10 @@ load("//build-system/bazel-utils:plist_fragment.bzl",
 
 filegroup(
     name = "FenixuzAutoProxyResourceFiles",
+    # Bazel 9 rejects an empty glob; AutoProxy has no resources yet.
     srcs = glob([
         "Resources/**/*",
-    ]),
+    ], allow_empty = True),
     visibility = ["//visibility:public"],
 )
 

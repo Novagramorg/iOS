@@ -28,8 +28,8 @@ build:macos --strategy=SwiftCompile=worker
 common:macos --features=swift.use_global_module_cache
 common:macos --features=oso_prefix_is_pwd
 
-# Fenixuz: do NOT enable --experimental_disk_cache_gc_* here. run.sh passes
-# --disk_cache="$CACHE_DIR" (the ROOT ~/telegram-bazel-cache) while --repository_cache and
+# Fenixuz: do NOT enable --experimental_disk_cache_gc_* here. Until 13.0 run.sh passed
+# --disk_cache="$CACHE_DIR" (the ROOT ~/telegram-bazel-cache; since 13.0 / Bazel 9 it is $CACHE_DIR/disk) while --repository_cache and
 # bazel-user-root/external live INSIDE that same root, so the disk-cache GC prunes the repo cache
 # and the extracted external repos too. That corrupted bazel_skylib three times on 2026-08-27
 # ("Every .bzl file must have a corresponding package"). Cap the cache by hand instead, or first

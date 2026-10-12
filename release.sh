@@ -318,7 +318,7 @@ ok "Resurs: $BAZEL_JOBS jobs, ${BAZEL_RAM_MB}MB RAM"
     --local_resources=cpu=$BAZEL_JOBS \
     --define=buildNumber=3 \
     --define=telegramVersion=12.4 \
-    --disk_cache="$CACHE_DIR" \
+    --disk_cache="$CACHE_DIR/disk" \
     --repository_cache="$CACHE_DIR/repo-cache" \
     --experimental_repository_cache_hardlinks \
     -c opt \

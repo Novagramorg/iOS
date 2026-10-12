@@ -801,14 +801,6 @@ private func fenixuzIncomingCallFallbackContent(callerTitle: String?, callerPeer
     return content
 }
 
-// Fenixuz: a plain banner with a 3-second sound reads as a text message, so people missed the calls
-// anyway. UNNotificationSound.defaultRingtone plays the user's own ringtone and haptics for 30
-// seconds — the documented replacement for CallKit when an extension cannot use it — but only on
-// content updated from an INStartCallIntent with destinationType .normal (see UNNotificationSound.h).
-// The intent also makes it a communication notification with the caller's avatar. Requires
-// INStartCallIntent in NSUserActivityTypes (Telegram/BUILD). Returns nil when iOS rejects the intent,
-// and generate() then falls back to the plain banner.
-@available(iOS 15.2, *)
 // Fenixuz: upstream 13.0 dropped the stored `senderPerson` (it keeps `sender` and builds the
 // INPerson per intent), so build the caller for the ringing call notification the same way.
 @available(iOS 15.0, *)
@@ -832,6 +824,14 @@ private extension NotificationContent {
     }
 }
 
+// Fenixuz: a plain banner with a 3-second sound reads as a text message, so people missed the calls
+// anyway. UNNotificationSound.defaultRingtone plays the user's own ringtone and haptics for 30
+// seconds — the documented replacement for CallKit when an extension cannot use it — but only on
+// content updated from an INStartCallIntent with destinationType .normal (see UNNotificationSound.h).
+// The intent also makes it a communication notification with the caller's avatar. Requires
+// INStartCallIntent in NSUserActivityTypes (Telegram/BUILD). Returns nil when iOS rejects the intent,
+// and generate() then falls back to the plain banner.
+@available(iOS 15.2, *)
 private func fenixuzRingingCallContent(_ content: UNMutableNotificationContent, caller: INPerson?, isVideo: Bool) -> UNNotificationContent? {
     let callerPerson = caller ?? INPerson(
         personHandle: INPersonHandle(value: content.title, type: .unknown),
