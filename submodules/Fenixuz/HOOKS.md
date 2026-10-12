@@ -42,7 +42,10 @@ On every `git pull upstream master`, an AI assistant uses this file to re-apply 
 - `NotificationService.swift` (#137): upstream `senderPerson`'ni olib tashlagan; qo'ng'iroq caller'i endi `sender`'dan yasaladi (`fenixuzCallerPerson` extension, `fenixuzRingingCallContent` yonida).
 - **Yangi hook** `submodules/Camera/CameraLegacy/Sources/LegacyCamera.swift`: round video uchun old/orqa kamera fix'i (`setPosition`'da guard + `stopRunning`/`startRunning` + `invalidate(switchAudio: !isRoundVideo)` + `markPositionChange`, va round video `startRecording` oldidan `markPositionChange`). Avval eski `Camera.swift`'da edi (b56b9b0cb3); upstream kamera kodini `CameraLegacy` / `CameraNeo`'ga bo'lgan, round video uchun default — Neo. Neo yo'lini qurilmada tekshirish kerak.
 
-**Keyingi commit'da:** Wallet gate, onramp hide, brand iboralar.
+**Wallet gate (merge'dan keyingi commit):**
+- **Yangi hook** `submodules/WalletContext/Sources/WalletContext.swift`: fayl darajasida `private let fenixuzWalletEnabled = false` va `WalletConfiguration.with(appConfiguration:)` ichida `isAvailable = fenixuzWalletEnabled && (...wallet_available...)`. Shu bitta joyni 26 ta kirish nuqtasi (Settings "Money" qatori, profil "Send Money", attach menu, `t.me/sendgrams`, TON Connect) va fon wallet engine'i (streaming, backup) tekshiradi, shuning uchun server wallet'ni yoqsa ham Novagram'da u o'chiq turadi.
+- **Wallet'ni yoqishdan oldin majburiy:** (1) `WalletReceiveScreen`'dagi onramp "Buy" tugmasini yashirish (exchange litsenziyasi yo'q, Apple 3.1.5(iii)); (2) `FenixuzBrandStrings.protectedPhrases`'ga wallet iboralarini qo'shish ("paid by Telegram", "Telegram covers", "not even Telegram", "Telegram's datacenters", "Telegram couldn't", "Digital currency for Telegram", "Telegram Support"), aks holda "paid by Novagram" kabi noto'g'ri da'vo chiqadi; (3) App Privacy'ni yangilash (financial info, toncenter). Wallet o'chiq paytda bular ko'rinmaydi, shuning uchun hozir qilinmadi.
+- `en.lproj/Localizable.strings`: `PasscodeSettings.LockTelegram` = "Lock Novagram" (13.0'da qo'shilgan, hamma userga ko'rinadi).
 
 ---
 
