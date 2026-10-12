@@ -105,13 +105,15 @@ cd "$SCRIPT_DIR"
 AVAIL_GB=$(df -g . | awk 'NR==2 {print $4}')
 if [ "${AVAIL_GB:-999}" -lt 8 ] 2>/dev/null; then
     warn "Disk juda kam (${AVAIL_GB}GB) — build cache (cas) favqulodda tozalanmoqda..."
-    rm -rf "$HOME/telegram-bazel-cache/cas" 2>/dev/null
+    rm -rf "$HOME/telegram-bazel-cache/disk/cas" 2>/dev/null
     rm -rf /private/tmp/telegram-sim-app 2>/dev/null
     rm -rf /private/tmp/telegram-device-app 2>/dev/null
     ok "Tozalandi. $(df -h . | awk 'NR==2 {print $4}') bo'sh joy mavjud"
 fi
 
 CACHE_DIR="$HOME/telegram-bazel-cache"
+# Bazel 9 refuses an output base inside the --disk_cache directory, and bazel-user-root
+# lives in CACHE_DIR, so the disk cache gets its own subdirectory (CACHE_DIR/disk).
 
 # Mode-specific paths
 if [ "$MODE" = "simulator" ]; then
@@ -458,7 +460,7 @@ ok "Xcode: $XCODE_BAZEL_VERSION"
     --local_resources=cpu=$BAZEL_JOBS \
     --define=buildNumber=10000 \
     --define=telegramVersion=12.4 \
-    --disk_cache="$CACHE_DIR" \
+    --disk_cache="$CACHE_DIR/disk" \
     --repository_cache="$CACHE_DIR/repo-cache" \
     --experimental_repository_cache_hardlinks \
     -c $COMPILATION_MODE \
