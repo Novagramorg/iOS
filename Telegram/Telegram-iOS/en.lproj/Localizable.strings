@@ -16734,7 +16734,7 @@ Error: %8$@";
 
 "PasscodeSettings.UpdateError" = "Couldn't update the passcode. Unlock again and try once more.";
 "PasscodeSettings.VerificationError" = "Couldn't verify the passcode. Please try again.";
-"PasscodeSettings.LockTelegram" = "Lock Telegram";
+"PasscodeSettings.LockTelegram" = "Lock Novagram";
 "PasscodeSettings.LockWallet" = "Lock Money";
 "PasscodeSettings.WalletConfirmWithPasscode" = "Confirm with Passcode";
 "PasscodeSettings.WalletConfirmWithFaceId" = "Confirm with Face ID";
