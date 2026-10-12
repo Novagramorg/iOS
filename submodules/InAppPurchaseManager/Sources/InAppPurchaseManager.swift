@@ -80,6 +80,10 @@ public final class InAppPurchaseManager: NSObject {
     }
 
     public enum PurchaseState {
+        // Fenixuz: upstream 13.0 API (PremiumIntroScreen switches on these). Never emitted here,
+        // buyProduct always shows the blocked alert and fails with .cancelled.
+        case waiting
+        case pending
         case purchased(transactionId: String)
     }
 
@@ -129,7 +133,7 @@ public final class InAppPurchaseManager: NSObject {
     /// Fail-fast — every Subscribe/Buy tap shows the Fenixuz IAP alert and
     /// returns `.cancelled` so existing call sites silently dismiss the flow
     /// without a double error toast.
-    public func buyProduct(_ product: Product, quantity: Int32 = 1, purpose: AppStoreTransactionPurpose) -> Signal<PurchaseState, PurchaseError> {
+    public func buyProduct(_ product: Product, quantity: Int32 = 1, purpose: AppStoreTransactionPurpose, reportPending: Bool = false) -> Signal<PurchaseState, PurchaseError> {
         FenixuzAppStoreIAP.presentBlockedAlertOnTop()
         return .fail(.cancelled)
     }

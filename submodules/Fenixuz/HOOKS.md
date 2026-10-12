@@ -34,7 +34,15 @@ On every `git pull upstream master`, an AI assistant uses this file to re-apply 
 - `.bazelrc`: upstream (SourceKit BSP `index_build` bloki yo'q) + bizning disk-cache GC comment'i. `sqlcipher/BUILD` (#214): upstream `load(...)` + bizning `sqlite3ext.h` exclusion.
 - BUILD union: `SettingsUI/BUILD` (#202 + PasscodeCore, WalletContext), `ChatTextInputPanelNode/BUILD` (#206 + RichTextEditorCore), `StoryContainerScreen/BUILD` (#209 + UrlWhitelist).
 
-**Keyingi commit'larda:** 7 ta compile fix (vosk `load`, ChatLock / BotTokenLogin / Analytics'da `lottieSettings`, ProMessager `neighbors`, IAP stub, NSE `fenixuzCallerPerson`), kamera pozitsiya fix'ini `CameraLegacy`'ga ko'chirish, Wallet gate, onramp hide, brand iboralar.
+**13.0 API uchun compile fix'lar (merge'dan keyingi commit):**
+- `third-party/vosk/BUILD`: `load("@rules_cc//cc:objc_library.bzl", "objc_library")` — Bazel 9'da native `objc_library` yo'q.
+- ChatLock `ChatPincodeViewController.swift`, BotTokenLogin `AuthorizationSequenceBotTokenEntryControllerNode.swift`, Analytics `FenixuzAnalyticsController.swift`: `DefaultAnimatedStickerNodeImpl(lottieSettings: .noAccountFallback)` + `import LottieSettings` + BUILD'ga `//submodules/LottieSettings:LottieSettings`. `.noAccountFallback` = rlottie, ya'ni 13.0'gacha ishlatilgan renderer.
+- ProMessager `FenixAccountItem.swift`: `previousItem` / `nextItem` o'rniga `neighbors: ListViewItemNeighbors` va `itemListNeighbors(item:topFacet:bottomFacet:)` (upstream 22271266f8).
+- `InAppPurchaseManager.swift` (#176): `PurchaseState.waiting` / `.pending` va `buyProduct(..., reportPending: Bool = false)` — faqat API stub, hech qachon emit qilinmaydi, StoreKit yo'q.
+- `NotificationService.swift` (#137): upstream `senderPerson`'ni olib tashlagan; qo'ng'iroq caller'i endi `sender`'dan yasaladi (`fenixuzCallerPerson` extension, `fenixuzRingingCallContent` yonida).
+- **Yangi hook** `submodules/Camera/CameraLegacy/Sources/LegacyCamera.swift`: round video uchun old/orqa kamera fix'i (`setPosition`'da guard + `stopRunning`/`startRunning` + `invalidate(switchAudio: !isRoundVideo)` + `markPositionChange`, va round video `startRecording` oldidan `markPositionChange`). Avval eski `Camera.swift`'da edi (b56b9b0cb3); upstream kamera kodini `CameraLegacy` / `CameraNeo`'ga bo'lgan, round video uchun default — Neo. Neo yo'lini qurilmada tekshirish kerak.
+
+**Keyingi commit'da:** Wallet gate, onramp hide, brand iboralar.
 
 ---
 
