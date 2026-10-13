@@ -420,7 +420,12 @@ ok "Resurs: ${BAZEL_JOBS} jobs, ${BAZEL_RAM_MB}MB RAM ($TOTAL_CORES cores, ${TOT
 if [ "$MODE" = "simulator" ]; then
     BAZEL_CPU_FLAG="--ios_multi_cpus=sim_arm64"
     BAZEL_PROV_FLAG="--//Telegram:disableProvisioningProfiles"
+    # Write the .app as a folder (Bazel tree artifact) instead of zipping a 600MB .ipa.
+    # Saves the zip + unzip on every build, and Bazel keeps this folder up to date
+    # even when the signing step comes from the cache (see Step 4).
+    BAZEL_OUTPUT_FLAG="--define=apple.experimental.tree_artifact_outputs=1"
 else
+    BAZEL_OUTPUT_FLAG=""
     BAZEL_CPU_FLAG="--ios_multi_cpus=arm64"
     # Real device: do NOT disable provisioning profiles. Bazel will look for
     # local profiles in ~/Library/MobileDevice/Provisioning Profiles/ via
@@ -442,6 +447,21 @@ case "$XCODE_SHORT_VERSION" in
 esac
 XCODE_BAZEL_VERSION="$XCODE_SHORT_VERSION.$XCODE_BUILD_VERSION"
 ok "Xcode: $XCODE_BAZEL_VERSION"
+
+# Output base guard. Bazel never prunes its output base: every config ever built
+# (simulator, device, release, old flags or Xcode) stays there, which is how it
+# reached 35GB. Once a day, if this checkout's output base is over 30GB, clean it;
+# the next build refills from the disk cache (~4 min instead of a full build).
+OUTPUT_BASE="$CACHE_DIR/bazel-user-root/$(md5 -q -s "$(pwd -P)")"
+SIZE_MARKER="$CACHE_DIR/.output-base-checked-$(basename "$OUTPUT_BASE")"
+if [ -d "$OUTPUT_BASE" ] && [ -z "$(find "$SIZE_MARKER" -mtime -1 2>/dev/null)" ]; then
+    OUTPUT_BASE_GB=$(du -sg "$OUTPUT_BASE" 2>/dev/null | awk '{print $1}')
+    if [ "${OUTPUT_BASE_GB:-0}" -gt 30 ]; then
+        warn "Bazel output base ${OUTPUT_BASE_GB}GB (30GB dan katta) — eski build natijalari tozalanmoqda..."
+        "$BAZEL_PATH" --output_user_root="$CACHE_DIR/bazel-user-root" clean
+    fi
+    touch "$SIZE_MARKER"
+fi
 
 "$BAZEL_PATH" \
     --output_user_root="$CACHE_DIR/bazel-user-root" \
@@ -470,10 +490,16 @@ ok "Xcode: $XCODE_BAZEL_VERSION"
     --define=buildNumber=10000 \
     --define=telegramVersion=12.4 \
     --disk_cache="$CACHE_DIR/disk" \
+    `# keep the disk cache bounded: ~5 min after a build (Bazel server idle) it deletes` \
+    `# the least recently used entries over 20GB and anything unused for 14 days.` \
+    `# Safe only because --disk_cache is its own folder; never point these at CACHE_DIR.` \
+    --experimental_disk_cache_gc_max_size=20G \
+    --experimental_disk_cache_gc_max_age=14d \
     --repository_cache="$CACHE_DIR/repo-cache" \
     --experimental_repository_cache_hardlinks \
     -c $COMPILATION_MODE \
     $BAZEL_CPU_FLAG \
+    $BAZEL_OUTPUT_FLAG \
     --watchos_cpus=arm64_32 \
     $BAZEL_PROV_FLAG
 
@@ -482,39 +508,37 @@ ok "Build muvaffaqiyatli tugadi"
 # ─── Step 4: .app faylini topish ─────────────────────────────────────────────
 step ".app fayl tayyorlanmoqda..."
 
-# Bazel target nomi `Telegram` bo'lgani uchun IPA hali Telegram.ipa nomi bilan
-# yoziladi, lekin ichidagi .app esa Novagram.app (bundle_name = "Novagram" tufayli).
-# Keyingi qadamlar uchun IPA ni ham Novagram.ipa ga ko'chiramiz, real qurilmaga
-# yoki TestFlight ga yuklaganda fayl nomi to'g'ri ko'rinsin.
+# Only install what Bazel itself keeps up to date. Without tree artifacts,
+# Telegram_archive-root/ is a scratch folder of the signing step and is NOT refreshed
+# when that step comes from the cache (a revert, a branch switch), so installing from
+# it put the previous build on the simulator (proven by md5 on 2026-10-13).
 APP_PATH=""
-APP_PATH=$(find "$SCRIPT_DIR/bazel-bin/Telegram" -name "Novagram.app" -maxdepth 5 2>/dev/null | head -1 || true)
-if [ -z "$APP_PATH" ]; then
-    APP_PATH=$(find "$SCRIPT_DIR/bazel-bin/Telegram" -name "Telegram.app" -maxdepth 5 2>/dev/null | head -1 || true)
-fi
-
-if [ -z "$APP_PATH" ]; then
-    IPA_PATH=$(find "$SCRIPT_DIR/bazel-bin/Telegram" -name "Novagram.ipa" -maxdepth 5 2>/dev/null | head -1 || true)
-    if [ -z "$IPA_PATH" ]; then
-        IPA_PATH=$(find "$SCRIPT_DIR/bazel-bin/Telegram" -name "Telegram.ipa" -maxdepth 5 2>/dev/null | head -1 || true)
-    fi
-    if [ -n "$IPA_PATH" ]; then
-        ok "IPA topildi: $(basename "$IPA_PATH")"
+IPA_PATH=""
+if [ "$MODE" = "simulator" ]; then
+    # With tree_artifact_outputs (see BAZEL_OUTPUT_FLAG) this folder IS the build output.
+    APP_PATH="$SCRIPT_DIR/bazel-bin/Telegram/Telegram_archive-root/Payload/Novagram.app"
+    [ -d "$APP_PATH" ] || APP_PATH=""
+else
+    # The device build still makes an .ipa; unzip the fresh one.
+    IPA_PATH="$SCRIPT_DIR/bazel-bin/Telegram/Telegram.ipa"
+    if [ -f "$IPA_PATH" ]; then
         rm -rf "$EXTRACT_DIR"
         mkdir -p "$EXTRACT_DIR"
         unzip -q "$IPA_PATH" -d "$EXTRACT_DIR"
-        APP_PATH=$(find "$EXTRACT_DIR" -name "*.app" -maxdepth 4 2>/dev/null | head -1 || true)
+        APP_PATH=$(find "$EXTRACT_DIR/Payload" -maxdepth 1 -name "*.app" 2>/dev/null | head -1 || true)
     fi
 fi
 
 [ -z "$APP_PATH" ] && err ".app fayl topilmadi. bazel-bin/Telegram/ papkasini tekshiring."
 ok "App: $(basename "$APP_PATH")"
 
-# Telegram.ipa ni Novagram.ipa ga ko'chiramiz (bundle_name attributi .app ni
-# qayta nomlaydi, lekin .ipa fayl nomi Bazel target nomidan kelib chiqadi).
-TELEGRAM_IPA=$(find "$SCRIPT_DIR/bazel-bin/Telegram" -maxdepth 2 -name "Telegram.ipa" 2>/dev/null | head -1 || true)
-if [ -n "$TELEGRAM_IPA" ]; then
-    NOVAGRAM_IPA="$(dirname "$TELEGRAM_IPA")/Novagram.ipa"
-    cp -f "$TELEGRAM_IPA" "$NOVAGRAM_IPA"
+# Bazel target nomi `Telegram` bo'lgani uchun IPA Telegram.ipa nomi bilan yoziladi,
+# ichidagi .app esa Novagram.app (bundle_name). Device build'da IPA ni Novagram.ipa
+# nomi bilan ham qo'yamiz. `cp -c` APFS clone qiladi, ya'ni disk'da qo'shimcha joy olmaydi.
+if [ -n "$IPA_PATH" ] && [ -f "$IPA_PATH" ]; then
+    NOVAGRAM_IPA="$SCRIPT_DIR/bazel-bin/Telegram/Novagram.ipa"
+    rm -f "$NOVAGRAM_IPA"
+    cp -c "$IPA_PATH" "$NOVAGRAM_IPA" 2>/dev/null || cp "$IPA_PATH" "$NOVAGRAM_IPA"
     ok "IPA qayta nomlandi: Novagram.ipa"
 fi
 
@@ -554,6 +578,12 @@ for runtime, devices in data.get('devices', {}).items():
     step "O'rnatilmoqda va ishga tushirilmoqda..."
     # NOTE: we use `install` (overwrite mode), NOT `uninstall + install`.
     # The latter wipes the user's session and chat history.
+    # The tree artifact is read-only and the mirror below copies its modes, so make
+    # the previous install writable first, or it could not be replaced.
+    OLD_BUNDLE=$(xcrun simctl get_app_container "$SIM_UDID" "$BUNDLE_ID" app 2>/dev/null || true)
+    if [ -n "$OLD_BUNDLE" ] && [ -d "$OLD_BUNDLE" ]; then
+        chmod -R u+w "$OLD_BUNDLE" 2>/dev/null || true
+    fi
     xcrun simctl install "$SIM_UDID" "$APP_PATH"
 
     # WORKAROUND: simctl install on recent macOS (Sequoia/Tahoe) sometimes
@@ -566,16 +596,17 @@ for runtime, devices in data.get('devices', {}).items():
     if [ -n "$INSTALLED_BUNDLE" ] && [ -d "$INSTALLED_BUNDLE" ]; then
         # Terminate first so we never rewrite a running binary mid-flight.
         xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" 2>/dev/null || true
-        # -aHE = perms/owner/links/macOS-exec; --extended-attributes for xattrs
-        # (the short -X flag isn't supported by macOS's legacy Apple rsync 2.6.9
-        # — it errors with "invalid option -- X" and skips the entire copy,
-        # which is why every build kept the previous Assets.car/binary).
+        # -aH = perms/owner/links. No xattrs: macOS now ships openrsync, which
+        # fails on the ._* AppleDouble files of the read-only tree artifact
+        # (an app bundle in the simulator needs no xattrs anyway).
         # --delete prunes removed files; --ignore-times forces re-copy
         # regardless of stat (we can't trust mtime under Bazel epoch);
         # --whole-file disables delta-xfer (pointless for a local copy).
-        rsync -aHE --extended-attributes --delete --ignore-times --whole-file \
+        rsync -aH --delete --ignore-times --whole-file \
             "$APP_PATH/" "$INSTALLED_BUNDLE/" >/dev/null 2>&1 \
             || warn "Bundle mirror (rsync) failed — installed app may be stale"
+        # openrsync ignores --chmod, so give the copied read-only modes write back here.
+        chmod -R u+w "$INSTALLED_BUNDLE" 2>/dev/null || true
     fi
 
     ok "O'rnatildi"

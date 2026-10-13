@@ -31,7 +31,7 @@ On every `git pull upstream master`, an AI assistant uses this file to re-apply 
 - `InAppPurchaseManager.swift` (#176): butun fayl bizniki, StoreKit yo'q. `AppDelegate.swift` (#177): Manage Subscriptions faqat web URL, upstream'ning `AppStore.showManageSubscriptions` olinmadi.
 - `Telegram/BUILD`: bizning ikkinchi `UIApplicationSceneManifest` o'chirildi (upstream manifest `SceneDelegate` bilan). `ton` / `tc` URL scheme'lar olib tashlandi (Wallet gate), `tonsite` qoldi.
 - `en.lproj/Localizable.strings` (#161): upstream'ning yangi kalitlari Novagram bilan (`Settings.LogoutConfirmationTextWithWallets`, `Conversation.UnsupportedMedia.*`).
-- `.bazelrc`: upstream (SourceKit BSP `index_build` bloki yo'q) + bizning disk-cache GC comment'i. `sqlcipher/BUILD` (#214): upstream `load(...)` + bizning `sqlite3ext.h` exclusion.
+- `.bazelrc`: upstream (SourceKit BSP `index_build` bloki yo'q) + bizning disk-cache GC comment'i. 2026-10-13: GC endi yoqilgan (20GB, 14 kun), lekin faqat `run.sh` / `publish.sh` / `release.sh` da, `--disk_cache="$CACHE_DIR/disk"` yonida. Comment shuni aytadi; `.bazelrc` ga GC flag qo'yilmaydi. `sqlcipher/BUILD` (#214): upstream `load(...)` + bizning `sqlite3ext.h` exclusion.
 - BUILD union: `SettingsUI/BUILD` (#202 + PasscodeCore, WalletContext), `ChatTextInputPanelNode/BUILD` (#206 + RichTextEditorCore), `StoryContainerScreen/BUILD` (#209 + UrlWhitelist).
 
 **13.0 API uchun compile fix'lar (merge'dan keyingi commit):**
