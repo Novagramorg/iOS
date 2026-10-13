@@ -6260,7 +6260,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             guard let self = self else { return }
             // Fenixuz: surface the error in the input field via the upstream rich-text setter.
             self.loadTextInputNodeIfNeeded()
-            self.text = "XATO: \(errorMessage)"
+            let errorPrefix = self.presentationInterfaceState.map { FenixuzL10n($0.strings).stt_sheet_errorPrefix } ?? "ERROR"
+            self.text = "\(errorPrefix): \(errorMessage)"
             self.stopSttRecording()
         }
 
@@ -6279,6 +6280,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
               let presentationInterfaceState = self.presentationInterfaceState else { return }
 
         let defaults = UserDefaults(suiteName: "pro_messager")
+        let l10n = FenixuzL10n(presentationInterfaceState.strings)
 
         // ── helpers ──────────────────────────────────────────────────────────────────
         let currentSttLang = defaults?.string(forKey: "stt_language") ?? "en-US"
@@ -6315,9 +6317,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         let askOnSend = defaults?.bool(forKey: "translate_confirm_enabled") ?? false
         let translateToggleTitle: String
         if askOnSend {
-            translateToggleTitle = "Ovozli tarjima: o'chiq — \"Yuborishda so'rov\" yoniq"
+            translateToggleTitle = l10n.stt_sheet_translateBlocked
         } else {
-            translateToggleTitle = isTranslateOn ? "Ovozli tarjima: BOR ✅" : "Ovozli tarjima: YO'Q"
+            translateToggleTitle = isTranslateOn ? l10n.stt_sheet_translateOn : l10n.stt_sheet_translateOff
         }
         let translateToggleItem = ActionSheetButtonItem(title: translateToggleTitle, color: .accent, action: {
             if askOnSend {
@@ -6339,7 +6341,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             }
             return currentTranslateLang
         }()
-        let translateLangTitle = "Tarjima tili: \(resolvedTranslateLangName)"
+        let translateLangTitle = l10n.stt_sheet_translateLanguage(resolvedTranslateLangName)
         let translateLangItem = ActionSheetButtonItem(title: translateLangTitle, color: .accent, action: {
             // Present a second ActionSheet for the translate-target language.
             let innerSheet = ActionSheetController(theme: theme)
@@ -6373,9 +6375,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
 
         // ── Assemble ─────────────────────────────────────────────────────────────────
         actionSheet.setItemGroups([
-            ActionSheetItemGroup(items: [ActionSheetTextItem(title: "🌐 Til")] + langItems),
+            ActionSheetItemGroup(items: [ActionSheetTextItem(title: l10n.stt_sheet_languageHeader)] + langItems),
             ActionSheetItemGroup(items: [
-                ActionSheetTextItem(title: "🔄 Ovozli tarjima"),
+                ActionSheetTextItem(title: l10n.stt_sheet_translateHeader),
                 translateToggleItem,
                 translateLangItem
             ]),

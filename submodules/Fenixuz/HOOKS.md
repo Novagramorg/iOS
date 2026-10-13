@@ -6610,3 +6610,29 @@ this macOS, so those versions need a real device.
 On an upstream pull: if upstream adopts the scene life cycle itself, drop this module and the
 AppDelegate hooks in favour of theirs, but keep the `internalGetKeyboard` guard unless upstream
 has its own.
+
+## 📌 2026-10-13 — Hardcoded user-visible strings moved into FenixuzL10n
+
+Two hooks in Telegram-owned files and two Fenixuz screens had text that was fixed in one language
+(Uzbek, or English for the QR hint and the Analytics screen), so the English and Russian app showed it in the wrong language.
+All of it now comes from `FenixuzL10n` (`en`, `uz`, `ru`, `zh`; `uz` of the QR hint keeps the English
+sentence it always showed; the Analytics texts gained an Uzbek wording, they were English in every language).
+
+| Where | What changed |
+| --- | --- |
+| `submodules/TelegramUI/Components/Chat/ChatTextInputPanelNode/Sources/ChatTextInputPanelNode.swift` (hook #: mic button long-press sheet, `sttButtonLongPressed`) | `let l10n = FenixuzL10n(presentationInterfaceState.strings)`; the sheet's six literals («Til», «Ovozli tarjima», «…: BOR/YO'Q», the «Yuborishda so'rov» note, «Tarjima tili: …») and the `XATO:` error prefix use `stt_sheet_*` keys. |
+| `submodules/AuthorizationUI/Sources/AuthorizationSequencePhoneEntryControllerNode.swift` (QR overlay, #114) | The hint under the QR code uses `FenixuzL10n(self.strings).auth_qrLoginHint`. |
+| `submodules/Fenixuz/BotTokenLogin` (Fenixuz-owned) | Title, notice, «Kirish» button and the paste chip use `auth_botLogin*` keys; `BUILD` gained the `FenixuzLocalization` dep. |
+| `submodules/Fenixuz/Analytics` (Fenixuz-owned) | Subtitle, the two stat captions and the two info alerts use `analytics_*` keys; `BUILD` gained the `FenixuzLocalization` dep. |
+
+Keys added to `Localization/Sources/FenixuzL10n.swift`: `auth_qrLoginHint`, `auth_botLoginTitle`,
+`auth_botLoginNotice`, `auth_botLoginProceed`, `auth_botLoginPaste`, `stt_sheet_languageHeader`,
+`stt_sheet_translateHeader`, `stt_sheet_translateOn`, `stt_sheet_translateOff`,
+`stt_sheet_translateBlocked`, `stt_sheet_translateLanguage(_:)`, `stt_sheet_errorPrefix`, `analytics_subtitle`,
+`analytics_usersCaption`, `analytics_accountsCaption`, `analytics_usersInfo`, `analytics_accountsInfo`.
+
+Left in English on purpose (the app's own Russian «About» text names them in English): the profile menu
+entries «View First message» and «Novagram Info», and the splash button «Start Messaging» (it activates
+English; on a Russian device the splash offers «Продолжить на русском»).
+
+On an upstream pull: these edits are single-line replacements inside the hooks above; re-apply them from this table.

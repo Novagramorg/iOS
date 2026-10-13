@@ -812,7 +812,7 @@ final class AuthorizationSequencePhoneEntryControllerNode: ASDisplayNode {
         instructionNode.maximumNumberOfLines = 0
         instructionNode.textAlignment = .center
         instructionNode.attributedText = NSAttributedString(
-            string: "Open Telegram on another device \u{2192} Settings \u{2192} Devices \u{2192} Link Desktop Device, then scan this code.",
+            string: FenixuzL10n(self.strings).auth_qrLoginHint,
             font: Font.regular(15.0),
             textColor: self.theme.list.itemSecondaryTextColor,
             paragraphAlignment: .center
