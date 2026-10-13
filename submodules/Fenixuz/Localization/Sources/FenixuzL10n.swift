@@ -899,6 +899,113 @@ public struct FenixuzL10n {
         pick(en: "Log in by QR code", uz: "QR kod orqali kirish", ru: "Войти по QR-коду", zh: "使用二维码登录")
     }
 
+    // The hint under the QR code. uz keeps the English sentence it always showed: Telegram's own Uzbek
+    // wording for "Link Desktop Device" is served by the language pack, not by this module.
+    public var auth_qrLoginHint: String {
+        pick(
+            en: "Open Telegram on another device \u{2192} Settings \u{2192} Devices \u{2192} Link Desktop Device, then scan this code.",
+            uz: "Open Telegram on another device \u{2192} Settings \u{2192} Devices \u{2192} Link Desktop Device, then scan this code.",
+            ru: "Откройте Telegram на другом устройстве \u{2192} Настройки \u{2192} Устройства \u{2192} Подключить устройство, затем отсканируйте этот код.",
+            zh: "在另一台设备上打开 Telegram \u{2192} 设置 \u{2192} 设备 \u{2192} 链接桌面设备，然后扫描此二维码。"
+        )
+    }
+
+    // MARK: - Bot-token login screen
+
+    public var auth_botLoginTitle: String {
+        pick(en: "Log in with bot token", uz: "Bot token bilan kirish", ru: "Вход по токену бота", zh: "使用机器人令牌登录")
+    }
+
+    public var auth_botLoginNotice: String {
+        pick(
+            en: "Bot mode is limited: the chat list and history are not shown",
+            uz: "Bot rejimi cheklangan: chat ro'yxati va tarix ko'rinmaydi",
+            ru: "Режим бота ограничен: список чатов и история не отображаются",
+            zh: "机器人模式有限制：不显示聊天列表和历史记录"
+        )
+    }
+
+    public var auth_botLoginProceed: String {
+        pick(en: "Log In", uz: "Kirish", ru: "Войти", zh: "登录")
+    }
+
+    public var auth_botLoginPaste: String {
+        pick(en: "Paste", uz: "Joylash", ru: "Вставить", zh: "粘贴")
+    }
+
+    // MARK: - Voice-to-text sheet (long-press on the mic button next to the text field)
+
+    public var stt_sheet_languageHeader: String {
+        pick(en: "🌐 Language", uz: "🌐 Til", ru: "🌐 Язык", zh: "🌐 语言")
+    }
+
+    public var stt_sheet_translateHeader: String {
+        pick(en: "🔄 Voice translation", uz: "🔄 Ovozli tarjima", ru: "🔄 Голосовой перевод", zh: "🔄 语音翻译")
+    }
+
+    public var stt_sheet_translateOn: String {
+        pick(en: "Voice translation: ON ✅", uz: "Ovozli tarjima: BOR ✅", ru: "Голосовой перевод: ВКЛ ✅", zh: "语音翻译：开 ✅")
+    }
+
+    public var stt_sheet_translateOff: String {
+        pick(en: "Voice translation: OFF", uz: "Ovozli tarjima: YO'Q", ru: "Голосовой перевод: ВЫКЛ", zh: "语音翻译：关")
+    }
+
+    // Shown instead of the on/off state while "Ask to translate on send" is on (it wins over voice translation).
+    public var stt_sheet_translateBlocked: String {
+        pick(
+            en: "Voice translation: off, “Ask to translate on send” is on",
+            uz: "Ovozli tarjima: o'chiq — \"Yuborishda so'rov\" yoniq",
+            ru: "Голосовой перевод: выкл., включён «Запрос перевода при отправке»",
+            zh: "语音翻译：关，“发送时询问翻译”已开启"
+        )
+    }
+
+    public func stt_sheet_translateLanguage(_ name: String) -> String {
+        switch langCode {
+        case "uz": return "Tarjima tili: \(name)"
+        case "ru": return "Язык перевода: \(name)"
+        case "zh": return "翻译语言：\(name)"
+        default:   return "Translation language: \(name)"
+        }
+    }
+
+    public var stt_sheet_errorPrefix: String {
+        pick(en: "ERROR", uz: "XATO", ru: "ОШИБКА", zh: "错误")
+    }
+
+    // MARK: - Analytics screen (Settings → Analytics)
+
+    public var analytics_subtitle: String {
+        pick(en: "App usage numbers", uz: "Ilovadan foydalanish ko'rsatkichlari", ru: "Статистика использования приложения", zh: "应用使用数据")
+    }
+
+    public var analytics_usersCaption: String {
+        pick(en: "Novagram users", uz: "Novagram foydalanuvchilari", ru: "Пользователи Novagram", zh: "Novagram 用户")
+    }
+
+    public var analytics_accountsCaption: String {
+        pick(en: "Active accounts", uz: "Faol accountlar", ru: "Активные аккаунты", zh: "活跃账号")
+    }
+
+    public var analytics_usersInfo: String {
+        pick(
+            en: "The number of unique devices that have installed Novagram. Each device is counted once.",
+            uz: "Novagram o'rnatilgan noyob qurilmalar soni. Har bir qurilma bir marta hisoblanadi.",
+            ru: "Количество уникальных устройств, на которых установлен Novagram. Каждое устройство учитывается один раз.",
+            zh: "已安装 Novagram 的唯一设备数量。每台设备只计算一次。"
+        )
+    }
+
+    public var analytics_accountsInfo: String {
+        pick(
+            en: "The total number of accounts that have ever signed in to Novagram.",
+            uz: "Novagram'ga hozirgacha kirgan accountlarning umumiy soni.",
+            ru: "Общее число аккаунтов, когда-либо входивших в Novagram.",
+            zh: "曾登录过 Novagram 的账号总数。"
+        )
+    }
+
     // MARK: - About FenixPro (Settings → FenixPro → About)
 
     public var about_rowTitle: String {

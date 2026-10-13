@@ -9,6 +9,7 @@ import LottieSettings
 import TelegramAnimatedStickerNode
 import AccountContext
 import PresentationDataUtils
+import FenixuzLocalization
 
 // Public entry point — pushed from the Settings screen.
 public func fenixAnalyticsController(context: AccountContext) -> ViewController {
@@ -147,10 +148,18 @@ final class FenixuzAnalyticsController: ViewController {
     override func loadDisplayNode() {
         self.displayNode = FenixuzAnalyticsControllerNode(presentationData: self.presentationData)
         self.controllerNode.presentUsersInfo = { [weak self] in
-            self?.presentInfo(title: "Novagram users", text: "The number of unique devices that have installed Novagram. Each device is counted once.")
+            guard let self = self else {
+                return
+            }
+            let l10n = FenixuzL10n(self.presentationData.strings)
+            self.presentInfo(title: l10n.analytics_usersCaption, text: l10n.analytics_usersInfo)
         }
         self.controllerNode.presentAccountsInfo = { [weak self] in
-            self?.presentInfo(title: "Active accounts", text: "The total number of accounts that have ever signed in to Novagram.")
+            guard let self = self else {
+                return
+            }
+            let l10n = FenixuzL10n(self.presentationData.strings)
+            self.presentInfo(title: l10n.analytics_accountsCaption, text: l10n.analytics_accountsInfo)
         }
         self.displayNodeDidLoad()
 
@@ -324,8 +333,9 @@ private final class FenixuzAnalyticsControllerNode: ASDisplayNode {
         self.subtitleNode.maximumNumberOfLines = 1
         self.subtitleNode.textAlignment = .center
 
-        self.usersChip = StatChipNode(theme: presentationData.theme, caption: "Novagram users")
-        self.accountsChip = StatChipNode(theme: presentationData.theme, caption: "Active accounts")
+        let l10n = FenixuzL10n(presentationData.strings)
+        self.usersChip = StatChipNode(theme: presentationData.theme, caption: l10n.analytics_usersCaption)
+        self.accountsChip = StatChipNode(theme: presentationData.theme, caption: l10n.analytics_accountsCaption)
 
         super.init()
 
@@ -368,7 +378,7 @@ private final class FenixuzAnalyticsControllerNode: ASDisplayNode {
     }
 
     private func applyStaticContent() {
-        self.subtitleNode.attributedText = NSAttributedString(string: "App usage numbers", font: Font.regular(15.0), textColor: self.presentationData.theme.list.itemSecondaryTextColor)
+        self.subtitleNode.attributedText = NSAttributedString(string: FenixuzL10n(self.presentationData.strings).analytics_subtitle, font: Font.regular(15.0), textColor: self.presentationData.theme.list.itemSecondaryTextColor)
     }
 
     private func applyDuckShadow() {

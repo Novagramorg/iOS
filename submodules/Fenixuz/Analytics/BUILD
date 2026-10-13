@@ -20,6 +20,7 @@ swift_library(
         "//submodules/AnimatedStickerNode:AnimatedStickerNode",
         "//submodules/LottieSettings:LottieSettings",
         "//submodules/TelegramAnimatedStickerNode:TelegramAnimatedStickerNode",
+        "//submodules/Fenixuz/Localization:FenixuzLocalization",
     ],
     visibility = [
         "//visibility:public",

@@ -9,12 +9,9 @@ import AnimatedStickerNode
 import LottieSettings
 import TelegramAnimatedStickerNode
 import SolidRoundedButtonNode
+import FenixuzLocalization
 
-private let titleText = "Bot token bilan kirish"
-private let noticeText = "Bot rejimi cheklangan: chat ro'yxati va tarix ko'rinmaydi"
 private let placeholderText = "123456789:ABCdef..."
-private let proceedText = "Kirish"
-private let pasteText = "Joylash"
 
 // A bot token looks like "<digits>:<35 chars>", e.g. 123456789:AAE... . Lenient check so we
 // auto-fill / recognise a pasted token without being strict about Telegram's exact length.
@@ -81,6 +78,7 @@ final class AuthorizationSequenceBotTokenEntryControllerNode: ASDisplayNode, UIT
     init(strings: PresentationStrings, theme: PresentationTheme) {
         self.strings = strings
         self.theme = theme
+        let l10n = FenixuzL10n(strings)
 
         self.animationNode = DefaultAnimatedStickerNodeImpl(lottieSettings: .noAccountFallback)
         self.animationNode.setup(source: AnimatedStickerNodeLocalFileSource(name: "BusinessChatbot"), width: 256, height: 256, playbackMode: .loop, mode: .direct(cachePathPrefix: nil))
@@ -88,7 +86,7 @@ final class AuthorizationSequenceBotTokenEntryControllerNode: ASDisplayNode, UIT
         self.titleNode = ASTextNode()
         self.titleNode.isUserInteractionEnabled = false
         self.titleNode.displaysAsynchronously = false
-        self.titleNode.attributedText = NSAttributedString(string: titleText, font: Font.semibold(28.0), textColor: self.theme.list.itemPrimaryTextColor)
+        self.titleNode.attributedText = NSAttributedString(string: l10n.auth_botLoginTitle, font: Font.semibold(28.0), textColor: self.theme.list.itemPrimaryTextColor)
 
         self.titleActivateAreaNode = AccessibilityAreaNode()
         self.titleActivateAreaNode.accessibilityTraits = .staticText
@@ -97,7 +95,7 @@ final class AuthorizationSequenceBotTokenEntryControllerNode: ASDisplayNode, UIT
         self.noticeNode.isUserInteractionEnabled = false
         self.noticeNode.displaysAsynchronously = false
         self.noticeNode.lineSpacing = 0.1
-        self.noticeNode.attributedText = NSAttributedString(string: noticeText, font: Font.regular(15.0), textColor: self.theme.list.itemSecondaryTextColor, paragraphAlignment: .center)
+        self.noticeNode.attributedText = NSAttributedString(string: l10n.auth_botLoginNotice, font: Font.regular(15.0), textColor: self.theme.list.itemSecondaryTextColor, paragraphAlignment: .center)
 
         self.noticeActivateAreaNode = AccessibilityAreaNode()
         self.noticeActivateAreaNode.accessibilityTraits = .staticText
@@ -129,12 +127,12 @@ final class AuthorizationSequenceBotTokenEntryControllerNode: ASDisplayNode, UIT
 
         // One-tap paste chip, trailing inside the field. Accent-tinted pill; hidden once the field has text.
         self.pasteButton = HighlightableButtonNode()
-        self.pasteButton.setTitle(pasteText, with: Font.semibold(15.0), with: self.theme.list.itemAccentColor, for: .normal)
+        self.pasteButton.setTitle(l10n.auth_botLoginPaste, with: Font.semibold(15.0), with: self.theme.list.itemAccentColor, for: .normal)
         self.pasteButton.backgroundColor = self.theme.list.itemAccentColor.withAlphaComponent(0.12)
         self.pasteButton.cornerRadius = 9.0
-        self.pasteButton.accessibilityLabel = pasteText
+        self.pasteButton.accessibilityLabel = l10n.auth_botLoginPaste
 
-        self.proceedNode = SolidRoundedButtonNode(title: proceedText, theme: SolidRoundedButtonTheme(backgroundColor: self.theme.list.itemCheckColors.fillColor, foregroundColor: self.theme.list.itemCheckColors.foregroundColor), glass: false, height: 50.0, cornerRadius: 50.0 * 0.5)
+        self.proceedNode = SolidRoundedButtonNode(title: l10n.auth_botLoginProceed, theme: SolidRoundedButtonTheme(backgroundColor: self.theme.list.itemCheckColors.fillColor, foregroundColor: self.theme.list.itemCheckColors.foregroundColor), glass: false, height: 50.0, cornerRadius: 50.0 * 0.5)
         self.proceedNode.progressType = .embedded
         self.proceedNode.isEnabled = false
 
