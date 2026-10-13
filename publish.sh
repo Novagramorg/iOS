@@ -238,6 +238,9 @@ warn "Birinchi opt-build 30-45 daqiqa olishi mumkin (dbg-cache yordam bermaydi).
     --define=buildNumber=$BUILD_NUMBER \
     --define=telegramVersion=$VERSION \
     --disk_cache="$CACHE_DIR/disk" \
+    `# same disk cache limits as run.sh (20GB, 14 days); never point these at CACHE_DIR` \
+    --experimental_disk_cache_gc_max_size=20G \
+    --experimental_disk_cache_gc_max_age=14d \
     --repository_cache="$CACHE_DIR/repo-cache" \
     --experimental_repository_cache_hardlinks \
     -c opt \

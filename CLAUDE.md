@@ -63,6 +63,18 @@ tail -25 /tmp/run-sh-output.log
 
 First clean build ≈ 10–12 min, cache-warm incremental ≈ 1–3 min, single-file edit ≈ 30–90 s.
 
+### Cache limits and the simulator `.app` (Novagram, 2026-10-13)
+
+Measured 2026-10-13: a fresh output base with a warm disk cache builds in ~4 min, a no-op `run.sh` takes ~5 s, and a one-line change in a Fenixuz module takes ~38 s, most of it recompiling PeerInfoScreen and TelegramUI, which import it.
+
+- **Disk cache limit.** `run.sh`, `publish.sh` and `release.sh` cap `~/telegram-bazel-cache/disk` with `--experimental_disk_cache_gc_max_size=20G` and `--experimental_disk_cache_gc_max_age=14d`.
+  - Bazel trims the cache in the background about 5 min after a build, while its server is idle.
+  - Using an entry refreshes its age (measured), so only entries unused for 14 days expire.
+  - Never put these flags in `.bazelrc`; the comment there explains why.
+- **Output base limit.** Once a day `run.sh` runs `bazel clean` when the checkout's output base is over 30GB. Bazel never prunes old configurations on its own; the output base had reached 35GB.
+- **Simulator builds produce no `.ipa`.** They pass `--define=apple.experimental.tree_artifact_outputs=1`, so the output is the folder `bazel-bin/Telegram/Telegram_archive-root/Payload/Novagram.app`, which Bazel keeps current. Use that folder as `SRC` in the recipe below instead of unzipping an `.ipa`.
+- **Device builds still produce `Telegram.ipa`, and `run.sh` unzips it.** Without tree artifacts, `Telegram_archive-root/` is a stale scratch folder (see below). `run.sh` used to install from it and put a previous build on the simulator after a revert.
+
 ## Known simulator quirks
 
 - **iOS 26.x simulator emoji font is broken** — `AppleColorEmoji.ttc` is missing. Color emojis render as `[?]` boxes (e.g. country flag picker, Telegram default monogram avatars, the Ghost button before we replaced its emoji with a bundled icon). Verify any emoji-bearing UI on a real device or an iOS 18 simulator before reporting "this is broken." For new Fenixuz UI, prefer SF Symbols or bundled `Item List/Icons/*` assets over color emoji in titles/buttons.
