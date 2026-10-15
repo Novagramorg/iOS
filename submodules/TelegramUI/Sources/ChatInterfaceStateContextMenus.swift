@@ -632,9 +632,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             })))
 
             let premiumConfiguration = PremiumConfiguration.with(appConfiguration: context.currentAppConfiguration.with { $0 })
-            // Fenixuz: OUR Novagram ad must not offer Telegram Premium "hide ads" (we have no IAP).
-            let isNovagramAd = (String(data: adAttribute.opaqueId, encoding: .utf8) ?? "").hasPrefix("novagram:")
-            if !chatPresentationInterfaceState.isPremium && !premiumConfiguration.isPremiumDisabled && !isNovagramAd {
+            if !chatPresentationInterfaceState.isPremium && !premiumConfiguration.isPremiumDisabled {
                 actions.append(.action(ContextMenuActionItem(text: presentationData.strings.SponsoredMessageMenu_Hide, textColor: .primary, textLayout: .twoLinesMax, textFont: .custom(font: Font.regular(presentationData.listsFontSize.baseDisplaySize - 1.0), height: nil, verticalOffset: nil), badge: nil, icon: { theme in
                     return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Clear"), color: theme.actionSheet.primaryTextColor)
                 }, iconSource: nil, action: { c, _ in

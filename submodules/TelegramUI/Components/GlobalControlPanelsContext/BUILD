@@ -18,7 +18,6 @@ swift_library(
         "//submodules/TelegramCallsUI",
         "//submodules/Display",
         "//submodules/UndoUI",
-        "//submodules/Fenixuz/NovagramAds:FenixNovagramAds",
     ],
     visibility = [
         "//visibility:public",

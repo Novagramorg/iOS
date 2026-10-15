@@ -31,7 +31,6 @@ import ChatListSearchRecentPeersNode
 import UndoUI
 import Postbox
 import FetchManagerImpl
-import FenixNovagramAds
 import AdsInfoScreen
 import AnimationCache
 import MultiAnimationRenderer
@@ -403,7 +402,6 @@ public enum ChatListSearchEntryStableId: Hashable {
     case threadId(Int64)
     case localPeerId(EnginePeer.Id)
     case globalPeerId(EnginePeer.Id)
-    case novagramAdPeerId(EnginePeer.Id)
     case messageId(EngineMessage.Id, ChatListSearchEntry.MessageSection)
     case messagePlaceholder(Int32)
     case emptyMessagesFooter
@@ -466,7 +464,6 @@ public enum ChatListSearchEntry: Comparable, Identifiable {
     case topic(EnginePeer, ChatListItemContent.ThreadInfo, Int, PresentationTheme, PresentationStrings, ChatListSearchSectionExpandType)
     case recentlySearchedPeer(EnginePeer, EnginePeer?, (Int32, Bool)?, Int, PresentationTheme, PresentationStrings, PresentationPersonNameOrder, PresentationPersonNameOrder, PeerStoryStats?, Bool)
     case adPeer(AdPeer, Int, PresentationTheme, PresentationStrings, PresentationPersonNameOrder, PresentationPersonNameOrder, ChatListSearchSectionExpandType, String?)
-    case novagramAdPeer(EnginePeer, String, Int, PresentationTheme, PresentationStrings, String?)
     case localPeer(EnginePeer, EnginePeer?, (Int32, Bool)?, Int, PresentationTheme, PresentationStrings, PresentationPersonNameOrder, PresentationPersonNameOrder, ChatListSearchSectionExpandType, PeerStoryStats?, Bool, Bool)
     case globalPeer(FoundPeer, (Int32, Bool)?, Int, PresentationTheme, PresentationStrings, PresentationPersonNameOrder, PresentationPersonNameOrder, ChatListSearchSectionExpandType, PeerStoryStats?, Bool, String?)
     case message(EngineMessage, EngineRenderedPeer, EnginePeerReadCounters?, EngineMessageHistoryThread.Info?, ChatListPresentationData, Int32, Bool?, Bool, MessageOrderingKey, (id: String, size: Int64, isFirstInList: Bool)?, MessageSection, Bool, PeerStoryStats?, Bool, TelegramSearchPeersScope)
@@ -484,8 +481,6 @@ public enum ChatListSearchEntry: Comparable, Identifiable {
             return .localPeerId(peer.id)
         case let .adPeer(peer, _, _, _, _, _, _, _):
             return .globalPeerId(peer.peer.id)
-        case let .novagramAdPeer(peer, _, _, _, _, _):
-            return .novagramAdPeerId(peer.id)
         case let .globalPeer(peer, _, _, _, _, _, _, _, _, _, _):
             return .globalPeerId(peer.peer.id)
         case let .message(message, _, _, _, _, _, _, _, _, _, section, _, _, _, _):
@@ -521,12 +516,6 @@ public enum ChatListSearchEntry: Comparable, Identifiable {
             }
         case let .adPeer(lhsPeer, lhsIndex, lhsTheme, lhsStrings, lhsSortOrder, lhsDisplayOrder, lhsExpandType, lhsQuery):
             if case let .adPeer(rhsPeer, rhsIndex, rhsTheme, rhsStrings, rhsSortOrder, rhsDisplayOrder, rhsExpandType, rhsQuery) = rhs, lhsPeer == rhsPeer && lhsIndex == rhsIndex && lhsTheme === rhsTheme && lhsStrings === rhsStrings && lhsSortOrder == rhsSortOrder && lhsDisplayOrder == rhsDisplayOrder && lhsExpandType == rhsExpandType && lhsQuery == rhsQuery {
-                return true
-            } else {
-                return false
-            }
-        case let .novagramAdPeer(lhsPeer, lhsOrderId, lhsIndex, lhsTheme, lhsStrings, lhsQuery):
-            if case let .novagramAdPeer(rhsPeer, rhsOrderId, rhsIndex, rhsTheme, rhsStrings, rhsQuery) = rhs, lhsPeer == rhsPeer && lhsOrderId == rhsOrderId && lhsIndex == rhsIndex && lhsTheme === rhsTheme && lhsStrings === rhsStrings && lhsQuery == rhsQuery {
                 return true
             } else {
                 return false
@@ -644,24 +633,14 @@ public enum ChatListSearchEntry: Comparable, Identifiable {
 
     public static func <(lhs: ChatListSearchEntry, rhs: ChatListSearchEntry) -> Bool {
         switch lhs {
-        case let .novagramAdPeer(_, _, lhsIndex, _, _, _):
-            if case let .novagramAdPeer(_, _, rhsIndex, _, _, _) = rhs {
-                return lhsIndex <= rhsIndex
-            } else {
-                return true
-            }
         case let .topic(_, _, lhsIndex, _, _, _):
             if case let .topic(_, _, rhsIndex, _, _, _) = rhs {
                 return lhsIndex <= rhsIndex
-            } else if case .novagramAdPeer = rhs {
-                return false
             } else {
                 return true
             }
         case let .recentlySearchedPeer(_, _, _, lhsIndex, _, _, _, _, _, _):
             if case .topic = rhs {
-                return false
-            } else if case .novagramAdPeer = rhs {
                 return false
             } else if case let .recentlySearchedPeer(_, _, _, rhsIndex, _, _, _, _, _, _) = rhs {
                 return lhsIndex <= rhsIndex
@@ -670,7 +649,7 @@ public enum ChatListSearchEntry: Comparable, Identifiable {
             }
         case let .localPeer(_, _, _, lhsIndex, _, _, _, _, _, _, _, _):
             switch rhs {
-            case .topic, .recentlySearchedPeer, .novagramAdPeer:
+            case .topic, .recentlySearchedPeer:
                 return false
             case let .localPeer(_, _, _, rhsIndex, _, _, _, _, _, _, _, _):
                 return lhsIndex <= rhsIndex
@@ -679,7 +658,7 @@ public enum ChatListSearchEntry: Comparable, Identifiable {
             }
         case let .adPeer(_, lhsIndex, _, _, _, _, _, _):
             switch rhs {
-            case .topic, .recentlySearchedPeer, .localPeer, .novagramAdPeer:
+            case .topic, .recentlySearchedPeer, .localPeer:
                 return false
             case let .adPeer(_, rhsIndex, _, _, _, _, _, _):
                 return lhsIndex <= rhsIndex
@@ -688,7 +667,7 @@ public enum ChatListSearchEntry: Comparable, Identifiable {
             }
         case let .globalPeer(_, _, lhsIndex, _, _, _, _, _, _, _, _):
             switch rhs {
-            case .topic, .recentlySearchedPeer, .localPeer, .adPeer, .novagramAdPeer:
+            case .topic, .recentlySearchedPeer, .localPeer, .adPeer:
                 return false
             case let .globalPeer(_, _, rhsIndex, _, _, _, _, _, _, _, _):
                 return lhsIndex <= rhsIndex
@@ -1129,17 +1108,6 @@ public enum ChatListSearchEntry: Comparable, Identifiable {
                         openStories(peer.id, sourceNode.avatarNode)
                     }
                 }, adButtonAction: { _ in
-                })
-            case let .novagramAdPeer(peer, orderId, _, _, _, query):
-                // The @username is rendered automatically by the .generalSearch peerMode,
-                // so the status line stays empty — otherwise the username shows twice.
-                // isAd draws Telegram's own localized "Ad" pill with the three-dot button, so
-                // our promoted rows are indistinguishable from server-side sponsored results.
-                return ContactsPeerItem(presentationData: ItemListPresentationData(presentationData), sortOrder: .firstLast, displayOrder: .firstLast, context: context, peerMode: .generalSearch(isSavedMessages: false), peer: .peer(peer: peer, chatPeer: peer), status: .none, badge: nil, enabled: true, selection: .none, editing: ContactsPeerItemEditing(editable: false, editing: false, revealed: false), index: nil, header: nil, searchQuery: query, isAd: true, action: { _ in
-                    interaction.peerSelected(peer, nil, nil, nil, false)
-                    FenixNovagramSearchAds.reportClick(orderId: orderId, context: context)
-                }, animationCache: interaction.animationCache, animationRenderer: interaction.animationRenderer, adButtonAction: { _ in
-                    interaction.present(AdsInfoScreen(context: context, mode: .search))
                 })
             case let .message(message, peer, readState, threadInfo, presentationData, _, selected, displayCustomHeader, orderingKey, _, section, allPaused, storyStats, requiresPremiumForMessaging, searchScope):
                 let header: ChatListSearchItemHeader
@@ -2725,27 +2693,24 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                 let _ = previousRecentlySearchedPeersState.swap(nil)
             }
 
-            let foundRemotePeers: Signal<([FoundPeer], [FoundPeer], [AdPeer], Bool, FenixNovagramPromotedChannel?), NoError>
+            let foundRemotePeers: Signal<([FoundPeer], [FoundPeer], [AdPeer], Bool), NoError>
             let currentRemotePeersValue: ([FoundPeer], [FoundPeer], [AdPeer]) = currentRemotePeers.with { $0 } ?? ([], [], [])
             if communityId != nil {
-                foundRemotePeers = .single(([], [], [], false, nil))
+                foundRemotePeers = .single(([], [], [], false))
             } else if case .savedMessagesChats = location {
-                foundRemotePeers = .single(([], [], [], false, nil))
+                foundRemotePeers = .single(([], [], [], false))
             } else if let query = query, case .chats = key {
                 if query.hasPrefix("#") || options?.folder != nil {
-                    foundRemotePeers = .single(([], [], [], false, nil))
+                    foundRemotePeers = .single(([], [], [], false))
                 } else {
                     foundRemotePeers = (
-                        .single((currentRemotePeersValue.0, currentRemotePeersValue.1, currentRemotePeersValue.2, true, nil))
+                        .single((currentRemotePeersValue.0, currentRemotePeersValue.1, currentRemotePeersValue.2, true))
                         |> then(
                             globalPeerSearchContext.searchRemotePeers(engine: context.engine, query: query)
                             |> mapToSignal { result in
-                                return combineLatest(
-                                    context.engine.peers.searchAdPeers(query: query),
-                                    FenixNovagramSearchAds.promotedChannel(context: context, query: query)
-                                )
-                                |> map { adPeers, novagramPromoted in
-                                    return (result.0, result.1, adPeers, false, novagramPromoted)
+                                return context.engine.peers.searchAdPeers(query: query)
+                                |> map { adPeers in
+                                    return (result.0, result.1, adPeers, false)
                                 }
                             }
                         )
@@ -2753,17 +2718,17 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                 }
             } else if let query = query, case .channels = key {
                 foundRemotePeers = (
-                    .single((currentRemotePeersValue.0, currentRemotePeersValue.1, currentRemotePeersValue.2, true, nil))
+                    .single((currentRemotePeersValue.0, currentRemotePeersValue.1, currentRemotePeersValue.2, true))
                     |> then(
                         globalPeerSearchContext.searchRemotePeers(engine: context.engine, query: query, scope: .channels)
-                        |> map { ($0.0, $0.1, [], false, nil) }
+                        |> map { ($0.0, $0.1, [], false) }
                     )
                 )
             } else if let query, case .apps = key {
                 _ = query
-                foundRemotePeers = .single(([], [], [], false, nil))
+                foundRemotePeers = .single(([], [], [], false))
             } else {
-                foundRemotePeers = .single(([], [], [], false, nil))
+                foundRemotePeers = .single(([], [], [], false))
             }
             let searchLocations: [SearchMessagesLocation]
             if key == .globalPosts {
@@ -3242,14 +3207,6 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                 }
 
                 var existingPeerIds = Set<EnginePeer.Id>()
-
-                // Fenixuz: Novagram promoted channel — always the very top row of global
-                // search, above Telegram's own sponsored row. `foundRemotePeers.4` is nil
-                // (no row) when our backend returns no ad (HTTP 404) for this query/viewer.
-                if !adsHidden, let novagramPromoted = foundRemotePeers.4, !existingPeerIds.contains(novagramPromoted.peer.id) {
-                    existingPeerIds.insert(novagramPromoted.peer.id)
-                    entries.insert(.novagramAdPeer(novagramPromoted.peer, novagramPromoted.orderId, 0, presentationData.theme, presentationData.strings, finalQuery), at: 0)
-                }
 
                 var totalNumberOfLocalPeers = 0
                 for renderedPeer in foundLocalPeers.peers {
