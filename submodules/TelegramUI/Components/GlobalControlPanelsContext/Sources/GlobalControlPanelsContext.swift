@@ -8,7 +8,6 @@ import TelegramUIPreferences
 import TelegramCallsUI
 import Display
 import UndoUI
-import FenixNovagramAds
 
 public final class GlobalControlPanelsContext {
     public final class MediaPlayback: Equatable {
@@ -350,15 +349,9 @@ public final class GlobalControlPanelsContext {
                     ),
                     context.account.stateManager.contactBirthdays,
                     starsSubscriptionsContextPromise.get(),
-                    accountFreezeConfiguration,
-                    FenixNovagramBannerAds.bannerNotice(context: context)
+                    accountFreezeConfiguration
                 )
-                |> mapToSignal { suggestions, dismissedSuggestions, needsPasswordSetup, newSessionReviews, newBotConnectionReviews, data, birthdays, starsSubscriptionsContext, accountFreezeConfiguration, bannerNotice -> Signal<ChatListNotice?, NoError> in
-                    if let bannerNotice = bannerNotice {
-                        // OURS — highest priority. Map the neutral FenixBannerNotice to a .link notice here
-                        // (mapping lives on this side so FenixNovagramAds needs no GlobalControlPanelsContext dep).
-                        return .single(.link(id: "novagram-banner:\(bannerNotice.id)", url: bannerNotice.url, title: ServerSuggestionInfo.Item.Text(string: bannerNotice.title, entities: []), subtitle: ServerSuggestionInfo.Item.Text(string: bannerNotice.text, entities: [])))
-                    }
+                |> mapToSignal { suggestions, dismissedSuggestions, needsPasswordSetup, newSessionReviews, newBotConnectionReviews, data, birthdays, starsSubscriptionsContext, accountFreezeConfiguration -> Signal<ChatListNotice?, NoError> in
                     let (accountPeer, birthday) = data
 
                     if let newSessionReview = newSessionReviews.first {
@@ -664,11 +657,7 @@ public final class GlobalControlPanelsContext {
             case .starsSubscriptionLowBalance:
                 _ = self.context.engine.notices.dismissServerProvidedSuggestion(suggestion: ServerProvidedSuggestion.starsSubscriptionLowBalance.id).startStandalone()
             case let .link(id, _, _, _):
-                if id.hasPrefix("novagram-banner:"), let uuid = UUID(uuidString: String(id.dropFirst("novagram-banner:".count))) {
-                    FenixNovagramBannerAds.markDismissed(bannerId: uuid, viewerId: FenixNovagramBannerAds.viewerId(context: self.context), context: self.context)
-                } else {
-                    _ = self.context.engine.notices.dismissServerProvidedSuggestion(suggestion: id).startStandalone()
-                }
+                _ = self.context.engine.notices.dismissServerProvidedSuggestion(suggestion: id).startStandalone()
             default:
                 break
             }

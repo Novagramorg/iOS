@@ -494,16 +494,16 @@ On every `git pull upstream master`, an AI assistant uses this file to re-apply 
 
 196. `AuthorizationUI/BUILD`: AppleReview, Brand, Localization, AutoProxy, BotTokenLogin.
 197. `CallListUI/BUILD`: SecretVault.
-198. `ChatListUI/BUILD`: StoryUnlock, ChatLock, SecretVault, ForeignUserBlock, NovagramAds, Localization.
+198. `ChatListUI/BUILD`: StoryUnlock, ChatLock, SecretVault, ForeignUserBlock, Localization.
 199. `ContactListUI/BUILD`: SecretVault, ChatLock.
 200. `DeviceAccess/BUILD`: ContactsConsent.
 201. `InAppPurchaseManager/BUILD`: AppStoreIAP (StoreKit davridagi deplar olib tashlangan).
 202. `SettingsUI/BUILD`: PremiumUnlock, Localization.
 203. `TelegramPresentationData/BUILD`: Brand.
-204. `TelegramUI/BUILD`: PremiumUnlock, StoryUnlock, ChatLock, SecretVault, ForeignUserBlock, EditedHistory, Localization, Tips, UpdateCheck, UnreadReminder, ProMessager, Analytics, AutoProxy, NovagramAds, ForwardEdit.
+204. `TelegramUI/BUILD`: PremiumUnlock, StoryUnlock, ChatLock, SecretVault, ForeignUserBlock, EditedHistory, Localization, Tips, UpdateCheck, UnreadReminder, ProMessager, Analytics, AutoProxy, ForwardEdit.
 205. `ChatMessageDateAndStatusNode/BUILD`: Localization.
 206. `ChatTextInputPanelNode/BUILD`: SpeechToText, Localization, RoundVideoFromGallery.
-207. `GlobalControlPanelsContext/BUILD`: NovagramAds.
+207. `GlobalControlPanelsContext/BUILD`: clean.
 208. `PeerInfoScreen/BUILD`: ProMessager, Localization, Analytics, UpdateCheck (versiya footer'i, #224).
 209. `StoryContainerScreen/BUILD`: StoryUnlock.
 210. `TranslateHeaderPanelComponent/BUILD`: PremiumUnlock.
@@ -1068,131 +1068,7 @@ if case .bubbles = mode, let adMessagesContext {
 
 Reason: `ChatHistoryListNode.init` builds the ad source (`adMessagesContext.state`, or empty for CloudUser / non-bubbles). `FenixShowAdsGate.gate` (in `FenixuzProMessager`, file `FenixShowAdsGate.swift`) wraps that source so it emits an empty tuple while `fenix_show_ads` is off and mirrors the real source while on. The gate is driven by `FenixShowAdsGate.enabledSignal`, which re-reads the UserDefaults key on every `.fenixShowAdsChanged` notification — posted by `FenixSettingsController.updateShowAds`. Result: flipping the toggle takes effect **live** in already-open chats (no reopen needed), replacing the previous one-shot init-time read. Feature #6: NovagramPro Ads Easter-egg section. The `fakeAds` experimental path is untouched. Real Telegram sponsored messages remain server-gated to the official api_id and cannot flow to this fork — this toggle only controls the visibility wiring.
 
-**Hook D — Novagram chat-ad source swap (VipAds → NovagramAds, 2026-07-11).** The old `submodules/Fenixuz/VipAds` module (`FenixVipAds` + `VipAdsSDK`) was removed and re-done with the newer `NovagramAds` SDK. Add `import FenixNovagramAds` to Hook A's import block. In the `else` branch that builds the real ad source (the `else` of the `fakeAds` check, currently `adMessages = adMessagesContext.state`, ~line 916), change it to:
-
-```swift
-} else {
-    // Fenixuz: serve OUR chat ads (ads-api.vipads.uz) in the channel sponsored slot.
-    adMessages = FenixNovagramChatAds.chatAdMessages(context: context, peerId: peerId)
-}
-```
-
-Reason: Telegram gates sponsored messages to the official api_id, so `adMessagesContext.state` is always empty on this fork. `FenixNovagramChatAds.chatAdMessages` (module `submodules/Fenixuz/NovagramAds`, target `FenixNovagramAds`) fetches a chat ad from OUR backend via `chatAds.search(channelName:viewerId:)` (channelName = the channel's username; broadcast channels only) and renders it as a sponsored `Message` in the same slot, mirroring the `fakeAds` path / `AdMessagesHistoryContextImpl.CachedMessage.toMessage`. Still wrapped by `FenixShowAdsGate` (Hook C). `chat_ads/order/search/` currently REQUIRES auth, so the SDK client is seeded with a **temporary test token** (a `FenixNovagramStaticTokenStore` in `FenixNovagramChatAds.swift`) — remove it once the backend is made public or keyed by Telegram user id. viewer_id policy is the same as search ads (real id in App Store builds, random id otherwise). BUILD: `//submodules/Fenixuz/NovagramAds:FenixNovagramAds` added to `//submodules/TelegramUI` deps.
-
-**Hook E — chat-ad click reporting in `submodules/TelegramUI/Sources/ChatController.swift` (2026-07-11).** Add `import FenixNovagramAds`. In the `activateAdAction` closure (~line 4926), immediately after `self.chatDisplayNode.adMessagesContext?.markAction(opaqueId: adAttribute.opaqueId, media: media, fullscreen: fullscreen)`, add:
-
-```swift
-// Fenixuz: report the tap to OUR ads backend when this is one of our ads (no-op otherwise).
-FenixNovagramChatAds.reportClick(opaqueId: adAttribute.opaqueId, context: self.context)
-```
-
-Reason: our sponsored `Message` carries an `AdMessageAttribute` whose `opaqueId` is `novagram:<orderId>`. Telegram's own `markAction` reports to Telegram's server (a no-op for our ad), so we also report the tap to OUR backend via `chatAds.click`. `reportClick` no-ops on any opaqueId not prefixed `novagram:`, so real Telegram ads are unaffected; the tap still opens `adAttribute.url` exactly as before.
-
 ---
-
-### `submodules/ChatListUI/Sources/ChatListSearchListPaneNode.swift` — Novagram search ads (2026-07-11)
-
-Shows a promoted channel from our own ads backend at the **very top** of global search (the "Chats" tab), above Telegram's own sponsored `.adPeer` row, with an "ads by Novagram" trailing label. No ad (backend answers HTTP 404) → the row is nil and Telegram's own results show unchanged.
-
-Module: `submodules/Fenixuz/NovagramAds` — target `FenixNovagramAds` (bridge) over vendored SDK target `NovagramAds`. Entry point `FenixNovagramSearchAds.promotedChannel(context:query:)` → `Signal<FenixNovagramPromotedChannel?, NoError>`; click reporting `FenixNovagramSearchAds.reportClick(orderId:context:)`.
-
-Hooks in this file (all additive, `.novagramAdPeer` sorts before every other case so it renders first):
-
-1. **Import** — add `import FenixNovagramAds` next to `import FetchManagerImpl`, plus `import AdsInfoScreen` (already a `//submodules/ChatListUI` BUILD dep, used by `ChatListController.swift`) for the ad-badge menu.
-2. **`ChatListSearchEntryStableId`** — add `case novagramAdPeerId(EnginePeer.Id)`.
-3. **`ChatListSearchEntry`** — add `case novagramAdPeer(EnginePeer, String, Int, PresentationTheme, PresentationStrings, String?)` (peer, orderId, index, theme, strings, query). Handle it in `stableId`, `==`, `<` (sorts first — less than `.topic`; add it to the `return false` group of every other case's rhs switch), and `item(...)` (renders a `ContactsPeerItem` with `isAd: true`, tap → `interaction.peerSelected` + `FenixNovagramSearchAds.reportClick`, and `adButtonAction:` → `interaction.present(AdsInfoScreen(context:mode: .search), nil)`). **2026-08-07:** this used to pass a custom `rightLabelText: .init(text: "ads by Novagram", …)` pill and `isAd: false`, which made our promoted row visibly different from Telegram's own sponsored results. It now uses upstream's `isAd: true`, which draws `PresentationResourcesChatList.searchAdIcon` — the localized `ChatList_Search_Ad` label ("Ad" / "Reklama") plus the three-dot button — so ours is pixel-identical to a server-side ad. The theme payload is no longer bound in the `case let` (it stays in the enum for equality-driven relayout).
-4. **`foundRemotePeers`** — widen its tuple from `([FoundPeer],[FoundPeer],[AdPeer],Bool)` to `(…,Bool, FenixNovagramPromotedChannel?)`. In the `.chats` branch, `combineLatest` the existing `searchAdPeers(query:)` with `FenixNovagramSearchAds.promotedChannel(context:query:)`; every other branch passes `nil` as the 5th element.
-5. **Entry insert** — right after `var existingPeerIds = Set<EnginePeer.Id>()`, if `foundRemotePeers.4` is non-nil and not hidden, insert `.novagramAdPeer(...)` at index 0 of `entries` and add its peer id to `existingPeerIds` (so it isn't duplicated as a local/global result).
-
-BUILD: `//submodules/Fenixuz/NovagramAds:FenixNovagramAds` added to `//submodules/ChatListUI` deps.
-
-viewer_id policy (in `FenixNovagramSearchAds`): real Telegram user id when `GlobalExperimentalSettings.isAppStoreBuild` is true (App Store publish), a throwaway random id otherwise — the backend caps each order to one view per viewer, so a real id would show the ad once and never again while testing (`./run.sh`, `-r --prod`).
-
-BUILD: `//submodules/Fenixuz/ProMessager:FenixuzProMessager` is already a dep of `//submodules/TelegramUI` (added 2026-06-27, see below).
-
----
-
-### `submodules/TelegramUI/Components/GlobalControlPanelsContext/Sources/GlobalControlPanelsContext.swift` + `submodules/ChatListUI/Sources/ChatListControllerNode.swift` — Novagram banner ads (2026-07-17)
-
-Shows a backend-driven banner at the **very top of the chat list**, reusing Telegram's own `.link` `ChatListNotice` case (the same slot upstream uses for "click here" server-side suggestions) instead of adding a new UI element. OURS-FIRST priority: if our backend has an active, non-dismissed banner and the ads gate is ON, it wins the whole notice slot; if empty / 404 / gate OFF, the signal emits `nil` and Telegram's existing notice chain (`reviewLogin`, `setupPassword`, birthdays, Premium upsells, `.link` suggestions, …) runs completely unchanged below it.
-
-Module: `submodules/Fenixuz/NovagramAds` — target `FenixNovagramAds`, file `Sources/FenixNovagramAds/FenixNovagramBannerAds.swift`. Entry points: `FenixNovagramBannerAds.bannerNotice(context:)` → `Signal<GlobalControlPanelsContext.ChatListNotice?, NoError>`, `FenixNovagramBannerAds.reportClick(bannerId:context:)`, `FenixNovagramBannerAds.markDismissed(bannerId:viewerId:context:)`. Gated by `FenixShowAdsGate.enabledSignal` (same NovagramPro ads toggle as chat ads / search ads), and locally deduped against a per-viewer dismissed-id set in `UserDefaults` (suite `pro_messager`, key `fenix_banner_dismissed_ids`) so a dismissed banner disappears instantly even before the backend round-trip completes.
-
-**Hook 1 — producer, OURS-FIRST branch (`GlobalControlPanelsContext.swift`).**
-
-Import, top of file (line 10):
-
-```swift
-import FenixNovagramAds
-```
-
-Inside `chatListNotices`'s `suggestedChatListNoticeSignal`, `FenixNovagramBannerAds.bannerNotice(context: context)` is appended as the last input of the `combineLatest(...)` call (line 346) and the trailing closure parameter list gains a matching `bannerNotice` (line 348). As the very first statement inside the `mapToSignal { … in` body (lines 349–351), before any of Telegram's own suggestion checks:
-
-```swift
-if let bannerNotice = bannerNotice {
-    return .single(bannerNotice)   // OURS — highest priority
-}
-```
-
-Reason: `suggestedChatListNoticeSignal` is a single `combineLatest` → `mapToSignal` chain that falls through a long `if/else if` ladder of upstream suggestion types, ending in the real `.link` branch (suggestions-driven, line 479–480) and a final `return .single(nil)` (line 482). Adding our signal as one more `combineLatest` input and checking it first means: banner present → short-circuit with `.single(bannerNotice)` before touching any upstream case; banner absent (`nil`) → falls straight through to the untouched upstream ladder. No upstream branch, ordering, or precedence among upstream cases was reordered or removed.
-
-**Hook 2 — dismiss (`GlobalControlPanelsContext.swift`, `Impl.dismissChatListNotice`).**
-
-Inside the `switch notice` in `dismissChatListNotice(parentController:notice:)`, the pre-existing `case let .link(id, _, _, _):` arm (which previously always called `dismissServerProvidedSuggestion`) is branched on the id prefix (lines 666–671):
-
-```swift
-case let .link(id, _, _, _):
-    if id.hasPrefix("novagram-banner:"), let uuid = UUID(uuidString: String(id.dropFirst("novagram-banner:".count))) {
-        FenixNovagramBannerAds.markDismissed(bannerId: uuid, viewerId: FenixNovagramBannerAds.viewerId(context: self.context), context: self.context)
-    } else {
-        _ = self.context.engine.notices.dismissServerProvidedSuggestion(suggestion: id).startStandalone()
-    }
-```
-
-Reason: our banner's `.link` id is namespaced `"novagram-banner:<uuid>"` (built in `FenixNovagramBannerAds.bannerNotice`), so it is never a real server suggestion id and calling `dismissServerProvidedSuggestion` on it would just be a harmless no-op server call — but routing it to `markDismissed` instead also (a) tells our backend so the dismissal survives a reinstall, (b) records the id locally for instant re-filtering, and (c) posts `.fenixShowAdsChanged` so the chat-list notice reactively drops the banner right away. Any real upstream `.link` suggestion (id without our prefix) still goes through the original `dismissServerProvidedSuggestion` call, unchanged.
-
-**Hook 3 — click reporting (`ChatListUI/Sources/ChatListControllerNode.swift`).**
-
-Import (line 32):
-
-```swift
-import FenixNovagramAds
-```
-
-The pre-existing `case let .link(id, url, _, _):` arm of the notice tap-action switch gains a prefix check before its existing `openUrl(url)` call (lines 1443–1447):
-
-```swift
-case let .link(id, url, _, _):
-    if id.hasPrefix("novagram-banner:"), let uuid = UUID(uuidString: String(id.dropFirst("novagram-banner:".count))) {
-        FenixNovagramBannerAds.reportClick(bannerId: uuid, context: self.context)
-    }
-    self.effectiveContainerNode.currentItemNode.interaction?.openUrl(url)
-```
-
-Reason: same id-namespacing as Hook 2 — a tap on our banner also needs a fire-and-forget click report to our own backend before Telegram opens `url` (which stays `ad.link`, i.e. `openUrl` behavior for real upstream `.link` suggestions is byte-for-byte unchanged).
-
-**BUILD dependency additions:**
-
-- `//submodules/TelegramUI/Components/GlobalControlPanelsContext/BUILD` — `deps` gains `"//submodules/Fenixuz/NovagramAds:FenixNovagramAds"` (needed for the `import FenixNovagramAds` in Hook 1; this module previously had no Fenixuz dep at all).
-- `//submodules/ChatListUI/BUILD` — `deps` already had `"//submodules/Fenixuz/NovagramAds:FenixNovagramAds"` from the search-ads hook above; reused as-is for Hook 3's `import FenixNovagramAds`, no duplicate line added.
-- `//submodules/Fenixuz/NovagramAds/BUILD`, target `FenixNovagramAds` — **no change needed**. It already depended on `//submodules/SSignalKit/SwiftSignalKit`, `//submodules/Postbox`, `//submodules/TelegramCore`, `//submodules/AccountContext`, `//submodules/TelegramUI/Components/GlobalControlPanelsContext`, and `//submodules/Fenixuz/ProMessager:FenixuzProMessager` — exactly the six non-`NovagramAds` imports `FenixNovagramBannerAds.swift` uses (`SwiftSignalKit`, `Postbox`, `TelegramCore`, `AccountContext`, `GlobalControlPanelsContext`, `FenixuzProMessager` for `FenixShowAdsGate`/`.fenixShowAdsChanged`), plus its own `:NovagramAds` (vendored SDK) dep for `SDKClient`/`SDKConfiguration`/`SDKBannerAd`.
-
----
-
-### `submodules/TelegramUI/Sources/ChatInterfaceStateContextMenus.swift` — hide the Premium "hide ads" option on OUR ads (2026-07-11)
-
-Our injected chat ad (`FenixNovagramChatAds`, opaqueId `novagram:<orderId>`) renders through Telegram's own sponsored-message UI, whose context menu offers **"Hide" → Telegram Premium** (`makePremiumDemoController(subject: .noAds)` → `makePremiumIntroController(source: .ads)`). This fork does not sell Premium (no IAP, see AppStoreIAP §), so that option must not appear on our ads — and it must NOT be replaced with any "buy from official Telegram" steering (Apple 3.1.1 / 4.1 anti-steering). The option is simply absent.
-
-In the sponsored-menu `else` branch (the `!adAttribute.canReport` path our ad takes — our `AdMessageAttribute` sets `canReport: false`), just before the premium gate, add:
-
-```swift
-// Fenixuz: OUR Novagram ad must not offer Telegram Premium "hide ads" (we have no IAP).
-let isNovagramAd = (String(data: adAttribute.opaqueId, encoding: .utf8) ?? "").hasPrefix("novagram:")
-```
-
-and change the gate around the `SponsoredMessageMenu_Hide` item from `if !chatPresentationInterfaceState.isPremium && !premiumConfiguration.isPremiumDisabled {` to append `&& !isNovagramAd`. Native Telegram ads are unaffected (their opaqueId lacks the prefix); the `SponsoredMessageMenu_Info` and Copy items remain. No BUILD change (edit is in an already-built Telegram-owned file).
-
-Mac mirror: `TelegramSwift/Telegram-Mac/ChatMessageMenuItems.swift` — same `isNovagramAd` gate on the `chatContextHideAd` item; the Mac search ad uses `contextMenu = nil` (no Premium at all). See `TelegramSwift/FORK_NOTES.md` §10.
 
 ### `PeerInfoScreen/Sources/PeerInfoSettingsItems.swift` — payment section shown view-only + redirect to Premium bot (2026-07-20)
 

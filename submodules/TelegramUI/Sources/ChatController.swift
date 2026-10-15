@@ -147,7 +147,6 @@ import ChatAgeRestrictionAlertController
 import TextProcessingScreen
 import FenixuzProMessager
 import FenixuzLocalization
-import FenixNovagramAds
 
 public final class ChatControllerOverlayPresentationData {
     public let expandData: (ASDisplayNode?, () -> Void)
@@ -5128,8 +5127,6 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             }
 
             self.chatDisplayNode.adMessagesContext?.markAction(opaqueId: adAttribute.opaqueId, media: media, fullscreen: fullscreen)
-            // Fenixuz: report the tap to OUR ads backend when this is one of our ads (no-op otherwise).
-            FenixNovagramChatAds.reportClick(opaqueId: adAttribute.opaqueId, context: self.context)
             self.controllerInteraction?.openUrl(ChatControllerInteraction.OpenUrl(url: adAttribute.url, concealed: false, external: true, progress: progress))
         }, adContextAction: { [weak self] message, _, _ in
             guard let self else {

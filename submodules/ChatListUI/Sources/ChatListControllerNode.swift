@@ -29,7 +29,6 @@ import LiveLocationHeaderPanelComponent
 import ChatListHeaderNoticeComponent
 import ChatListFilterTabContainerNode
 import GlassControls
-import FenixNovagramAds
 
 public enum ChatListContainerNodeFilter: Equatable {
     case all
@@ -1482,10 +1481,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
                             self.effectiveContainerNode.currentItemNode.interaction?.openPhotoSetup()
                         case .accountFreeze:
                             self.effectiveContainerNode.currentItemNode.interaction?.openAccountFreezeInfo()
-                        case let .link(id, url, _, _):
-                            if id.hasPrefix("novagram-banner:"), let uuid = UUID(uuidString: String(id.dropFirst("novagram-banner:".count))) {
-                                FenixNovagramBannerAds.reportClick(bannerId: uuid, context: self.context)
-                            }
+                        case let .link(_, url, _, _):
                             self.effectiveContainerNode.currentItemNode.interaction?.openUrl(url)
                         }
                     },

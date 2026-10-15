@@ -37,7 +37,6 @@ import ChatNewThreadInfoItem
 import PhoneNumberFormat
 import Postbox
 import FenixuzProMessager
-import FenixNovagramAds
 import FenixuzStoryUnlock
 import FenixuzPremiumUnlock
 
@@ -997,9 +996,7 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
                         return (10, fakeAdMessages, nil, nil)
                     }
                 } else {
-                    // Fenixuz: serve OUR chat ads (ads-api.vipads.uz) in the channel
-                    // sponsored slot; adMessagesContext.state is always empty on this fork.
-                    adMessages = FenixNovagramChatAds.chatAdMessages(context: context, peerId: peerId)
+                    adMessages = adMessagesContext.state
                 }
             }
         } else {
