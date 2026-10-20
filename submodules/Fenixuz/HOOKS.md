@@ -58,7 +58,7 @@ On every `git pull upstream master`, an AI assistant uses this file to re-apply 
 
 ## 📋 Novagram features va hooklar (2026-10-10)
 
-> 1–44 va 86: Settings → Novagram Settings (ilovadagi tartibda). 45–85 va 87: Settings'dan tashqaridagi features.
+> 1–44 va 86: Settings → Novagram Settings (ilovadagi tartibda). 45–85, 87 va 88: Settings'dan tashqaridagi features.
 > Hooks: Telegram-owned fayllardagi barcha Fenixuz o'zgarishlari, feature bo'yicha. Har bir hookning kodi va anchor'i quyidagi 📌 bo'limlarda.
 
 ### 1. Novagram Settings
@@ -193,6 +193,7 @@ On every `git pull upstream master`, an AI assistant uses this file to re-apply 
 62. **Kiruvchi qo'ng'iroq fallback**: ilova yopiq bo'lsa ham qo'ng'iroq ringtone va vibratsiya bilan jiringlaydi.
 63. **Uxlayotgan accountga qo'ng'iroq**: uxlayotgan accountga qo'ng'iroq kelsa account uyg'otiladi.
 64. **Bildirishnomada yuboruvchi rasmi**: push'da yuboruvchining avatari ko'rinadi (Communication Notifications).
+88. **Video qo'ng'iroqda speaker**: kamera yoqilganda ham speaker tugmasi flip tugmasi yonida qoladi (5 ta tugma). Headset bo'lmasa video ovozi gromkada; quloq dinamikda qolib ketsa ~1 s ichida gromkaga qaytadi. Foydalanuvchi o'zi tanlagan quloq dinamik saqlanadi.
 
 #### Ilova va Settings
 
@@ -426,6 +427,12 @@ On every `git pull upstream master`, an AI assistant uses this file to re-apply 
 138. `SharedAccountContext.swift`, `AppDelegate.swift` (TelegramUI): uxlayotgan accountga qo'ng'iroq kelsa account uyg'otiladi.
 139. `Telegram/BUILD`: `INStartCallIntent` activity type.
 140. `PresentationCall.swift` (TelegramCallsUI): qo'ng'iroq diagnostikasi uchun log qatori.
+232. `SharedCallAudioContext.swift` (TelegramCallsUI): sessiya oxirgi bergan route (`sessionReportedAudioOutput`); `setCurrentAudioOutput` guard'i sessiya boshqa route'ni ko'rsatib turganda so'rovni tashlamaydi, shuning uchun video qo'ng'iroq quloq dinamikda qotib qolmaydi.
+233. `CallControllerNodeV2.swift` (TelegramCallsUI): `userChosenAudioOutput` + `noteAudioOutputChosenByUser`; video paytidagi 1 s speaker timer foydalanuvchi tanlagan quloq dinamikni qaytarib yubormaydi.
+234. `CallController.swift` (TelegramCallsUI): foydalanuvchi chiqish tanlaganda (2 ta chiqishli toggle va sheet) node'ga `noteAudioOutputChosenByUser` aytiladi.
+235. `PrivateCallScreen.swift` (CallScreen): kamera yoqilganda speaker tugmasi flip camera'dan keyin qoladi (5 ta tugma).
+236. `ButtonGroupView.swift` (CallScreen): 5 ta tugmada oraliq ekran eniga moslashadi (36pt dan 8pt gacha).
+237. `TelegramCallsUI/Tests/FenixuzSpeakerReapplyTests.swift` (yangi fayl, upstream modul ichida): 232-hook uchun regression testlar.
 
 #### Bildirishnomalar
 
@@ -6662,3 +6669,127 @@ the `castError` at the end of the `mapToSignal`:
 ```
 
 Without identifiers (Siri on the phone, announce) nothing changes.
+
+---
+
+## 📌 Video call speaker button and earpiece fix — 2026-10-20
+
+**Report:** in video calls the speaker button disappears, and the sound sometimes plays from the
+earpiece with no way to switch it. All files below were identical to upstream 13.0 before this
+change.
+
+**1. The button.** Upstream design: `PrivateCallScreen` puts flip camera in the speaker's slot
+whenever the local camera is on (`activeLocalVideoSource != nil`). And even with a speaker
+button, `CallControllerNodeV2.setupAudioOutputForVideoIfNeeded` forces `.speaker` every second
+during video, so an earpiece the user picked was reverted at once.
+
+**2. The earpiece (root cause in `SharedCallAudioContext`).** A video call records `.speaker` as
+its output at construction, before the route follows. The session's route report that arrives
+while the speaker default is pending is skipped (`acceptReportedAudioOutput` drops `.builtin`).
+When the speaker override then does not take effect, the session sends no new report: it keeps
+reporting the earpiece while the context believes in the speaker. The call screen asks for the
+speaker every second, and `setCurrentAudioOutput` dropped every request:
+`guard self.currentAudioOutputValue != output`. Reproduced by
+`FenixuzSpeakerReapplyTests.testSpeakerRequestIsReappliedWhileTheSessionStillReportsTheEarpiece`
+(on the old code: 3 applied modes instead of 4, "the speaker request was dropped").
+
+Note: on the CallKit path the override is not lost while CallKit's session is inactive.
+`CallKitProviderDelegate.applyVoiceChatOutputMode` keeps a `pendingVoiceChatOutputMode` and
+applies it in `provider(_:didActivate:)`.
+
+**Hooks:**
+
+`submodules/TelegramCallsUI/Sources/SharedCallAudioContext.swift`. After
+`private var didSetCurrentAudioOutputValue: Bool = false`:
+
+```swift
+    // Fenixuz: the route the session itself last reported (see setCurrentAudioOutput, HOOKS.md).
+    private var sessionReportedAudioOutput: AudioSessionOutput?
+```
+
+In the `availableOutputsChanged:` closure, after `self.audioOutputStateValue = (availableOutputs, currentOutput)`:
+
+```swift
+                self.sessionReportedAudioOutput = currentOutput
+```
+
+In `setCurrentAudioOutput(_:)`, the guard (was `guard self.currentAudioOutputValue != output else {`):
+
+```swift
+        // Fenixuz: still apply while the session reports another route, or video calls stay on the earpiece (HOOKS.md).
+        guard self.currentAudioOutputValue != output || (self.sessionReportedAudioOutput.map({ $0 != output }) ?? false) else {
+```
+
+Only real session reports set the property. The optimistic value that `setCurrentAudioOutput`
+publishes (and the stale state it re-publishes after 1 s) never does. So the second-by-second
+request keeps reaching the session until it actually reports the speaker, and stops once it does
+(`testSpeakerRequestIsNotReappliedOnceTheSessionReportsTheSpeaker`).
+
+`submodules/TelegramCallsUI/Sources/CallControllerNodeV2.swift`. After `private var audioOutputCheckTimer: Foundation.Timer?`:
+
+```swift
+    // Fenixuz: the output the user picked during this call (HOOKS.md).
+    private var userChosenAudioOutput: AudioSessionOutput?
+```
+
+Before `private func setupAudioOutputForVideoIfNeeded() {`:
+
+```swift
+    func noteAudioOutputChosenByUser(_ output: AudioSessionOutput) {
+        self.userChosenAudioOutput = output
+    }
+```
+
+In `setupAudioOutputForVideoIfNeeded`, the `default:` case of the output switch:
+
+```swift
+            default:
+                // Fenixuz: an earpiece the user picked during the video call stays (HOOKS.md).
+                if self.userChosenAudioOutput == nil || self.userChosenAudioOutput == .speaker {
+                    self.setCurrentAudioOutput?(.speaker)
+                }
+```
+
+`submodules/TelegramCallsUI/Sources/CallController.swift`. In `beginAudioOuputSelection`, before
+both `call.setCurrentAudioOutput(output)` calls (the two-output toggle and the action sheet item):
+
+```swift
+                        (strongSelf.controllerNode as? CallControllerNodeV2)?.noteAudioOutputChosenByUser(output) // Fenixuz (HOOKS.md)
+```
+
+(the sheet uses `self?.controllerNode`). The cast keeps `CallControllerNodeProtocol` and the
+legacy node untouched.
+
+`submodules/TelegramUI/Components/Calls/CallScreen/Sources/PrivateCallScreen.swift`. The
+`if self.activeLocalVideoSource != nil { flipCamera } else { speaker }` pair became:
+
+```swift
+        if self.activeLocalVideoSource != nil {
+            buttons.insert(... .flipCamera ..., at: 0)
+        }
+        // Fenixuz: video calls keep the speaker button, right after flip camera (HOOKS.md).
+        do {
+            buttons.insert(ButtonGroupView.Button(content: .speaker(audioOutput: params.state.audioOutput), ...), at: self.activeLocalVideoSource != nil ? 1 : 0)
+        }
+```
+
+Video row: flip, speaker, video, mute, end. Audio calls are unchanged.
+
+`submodules/TelegramUI/Components/Calls/CallScreen/Sources/Components/ButtonGroupView.swift`.
+`let buttonSpacing: CGFloat = 36.0` became:
+
+```swift
+        // Fenixuz: a fifth button (speaker in video calls) narrows the spacing to fit the width (HOOKS.md).
+        let buttonSpacing: CGFloat = buttons.count > 4 ? max(8.0, min(36.0, floor((size.width - 32.0 - buttonSize * CGFloat(buttons.count)) / CGFloat(buttons.count - 1)))) : 36.0
+```
+
+Four buttons keep upstream's 36pt. Five give 22pt at 402pt, 15pt at 375pt and 8pt at 320pt.
+
+**Tests:** `submodules/TelegramCallsUI/Tests/FenixuzSpeakerReapplyTests.swift` (new file; the BUILD's
+`Tests/**/*.swift` glob picks it up). It carries its own copies of the fake session and control,
+which are private to upstream's `SharedCallAudioContextTests.swift`. Run with
+`bazel test //submodules/TelegramCallsUI:TelegramCallsUITests` and run.sh's simulator flags.
+
+**Upstream pull:** if upstream changes `setCurrentAudioOutput`'s guard or the button pair, re-apply
+the intent: never drop a speaker request while the session reports another route, and keep the
+speaker button in video calls.
