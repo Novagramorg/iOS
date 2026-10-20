@@ -74,9 +74,20 @@ public enum FenixRecommendedFolders {
         })
     }
 
+    // The "Add folders?" prompt is off by default. Novagram Settings has a switch to turn it on.
+    private static let promptEnabledKey = "fenix_features_folders_prompt_enabled"
+
+    public static var isFirstLaunchPromptEnabled: Bool {
+        get { return UserDefaults(suiteName: "pro_messager")?.bool(forKey: promptEnabledKey) ?? false }
+        set { UserDefaults(suiteName: "pro_messager")?.set(newValue, forKey: promptEnabledKey) }
+    }
+
     // One-time first-launch prompt — fires exactly once, gated on "fenix_features_firstrun_done".
     // Called from ApplicationContext.swift after addRootControllers.
     public static func presentFirstLaunchPromptIfNeeded(context: AccountContext, rootController: NavigationController) {
+        // Stays silent until the user turns the prompt on in Novagram Settings.
+        // The firstrun flag is not used up here, so turning it on later still shows the prompt once.
+        guard isFirstLaunchPromptEnabled else { return }
         let key = "fenix_features_firstrun_done"
         let ud = UserDefaults(suiteName: "pro_messager")
         guard !(ud?.bool(forKey: key) ?? false) else { return }
