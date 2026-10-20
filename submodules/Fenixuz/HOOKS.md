@@ -58,7 +58,7 @@ On every `git pull upstream master`, an AI assistant uses this file to re-apply 
 
 ## 📋 Novagram features va hooklar (2026-10-10)
 
-> 1–44 va 86: Settings → Novagram Settings (ilovadagi tartibda). 45–85, 87 va 88: Settings'dan tashqaridagi features.
+> 1–44, 86 va 89: Settings → Novagram Settings (ilovadagi tartibda). 45–85, 87 va 88: Settings'dan tashqaridagi features.
 > Hooks: Telegram-owned fayllardagi barcha Fenixuz o'zgarishlari, feature bo'yicha. Har bir hookning kodi va anchor'i quyidagi 📌 bo'limlarda.
 
 ### 1. Novagram Settings
@@ -137,6 +137,7 @@ On every `git pull upstream master`, an AI assistant uses this file to re-apply 
 #### Imkoniyatlar
 
 36. **Tavsiya etilgan papkalar**: bir bosishda Shaxsiy, O'qilmagan, Kanallar va Botlar papkalari yaratiladi.
+89. **Kirgandan keyin papka taklifi**: akkauntga kirgandan keyingi «Papkalar qo'shilsinmi?» oynasi endi standart holda o'chiq, shu switch bilan yoqiladi (faqat Fenixuz fayllari, hook yo'q).
 37. **Admin papkalar**: siz ega (👑) yoki admin (🔑) bo'lgan guruh va kanallar 4 ta avto-papkaga ajratiladi.
 38. **Papka ko'rinishi**: papka tablari uchun Ikonkalar, Matn yoki Avtomatik ko'rinish.
 39. **Kanal tarixi tugmasi**: siz admin bo'lgan kanal menyusiga "So'nggi amallar" qo'shiladi.
