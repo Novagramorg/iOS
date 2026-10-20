@@ -36,6 +36,7 @@ private enum FenixSection: Int32 {
     // Ads section — hidden Easter-egg, revealed by 15-second long-press on the NovagramPro page
     case ads = 10
     case secretVault = 11
+    case carPlay = 12
 }
 
 private func textStyleDisplayName(_ rawValue: String, l10n: FenixuzL10n) -> String {
@@ -89,6 +90,11 @@ private enum FenixEntry: ItemListNodeEntry {
     case sttLanguage(PresentationTheme, String, String)
     // isNew: true while this feature's introducedBuild is newer than the seen-build pointer
     case voiceTranslate(PresentationTheme, String, String, Bool, Bool, Bool)
+
+    // — CarPlay Section — the row opens the CarPlay page; its label is the Siri permission status
+    case carPlayHeader(String, Bool)
+    case carPlay(PresentationTheme, String, FenixCarPlayStatus)
+    case carPlayFooter(PresentationTheme, String)
 
     // — Protection Section —
     case protectionHeader(String)
@@ -176,6 +182,8 @@ private enum FenixEntry: ItemListNodeEntry {
             return FenixSection.messaging.rawValue
         case .sttHeader, .sttEnabled, .sttLanguage, .voiceTranslate:
             return FenixSection.stt.rawValue
+        case .carPlayHeader, .carPlay, .carPlayFooter:
+            return FenixSection.carPlay.rawValue
         case .protectionHeader, .blockForeignUsers, .enableNovagramProxy, .chatLockMasterEnabled, .autoDownloadDisabled, .sendConfirmEnabled, .protectionFooter:
             return FenixSection.protection.rawValue
         case .appearanceHeader, .whiteThemeAccent, .appearanceFooter:
@@ -231,6 +239,10 @@ private enum FenixEntry: ItemListNodeEntry {
         case .sttEnabled:                return 31
         case .sttLanguage:               return 32
         case .voiceTranslate:            return 33
+        // CarPlay
+        case .carPlayHeader:             return 35
+        case .carPlay:                   return 36
+        case .carPlayFooter:             return 37
         // Protection
         case .protectionHeader:          return 40
         case .blockForeignUsers:         return 41
@@ -353,6 +365,13 @@ private enum FenixEntry: ItemListNodeEntry {
         case let .voiceTranslate(lhsTheme, lhsTitle, lhsText, lhsValue, lhsIsNew, lhsEnabled):
             if case let .voiceTranslate(rhsTheme, rhsTitle, rhsText, rhsValue, rhsIsNew, rhsEnabled) = rhs,
                lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue, lhsIsNew == rhsIsNew, lhsEnabled == rhsEnabled { return true } else { return false }
+
+        case let .carPlayHeader(lhsText, lhsIsNew):
+            if case let .carPlayHeader(rhsText, rhsIsNew) = rhs, lhsText == rhsText, lhsIsNew == rhsIsNew { return true } else { return false }
+        case let .carPlay(lhsTheme, lhsTitle, lhsStatus):
+            if case let .carPlay(rhsTheme, rhsTitle, rhsStatus) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsStatus == rhsStatus { return true } else { return false }
+        case let .carPlayFooter(lhsTheme, lhsText):
+            if case let .carPlayFooter(rhsTheme, rhsText) = rhs, lhsTheme === rhsTheme, lhsText == rhsText { return true } else { return false }
 
         case let .protectionHeader(lhsText):
             if case let .protectionHeader(rhsText) = rhs, lhsText == rhsText { return true } else { return false }
@@ -483,6 +502,8 @@ private enum FenixEntry: ItemListNodeEntry {
         case let .sttEnabled(_, title, _, _):               return (.voiceToText, title)
         case let .sttLanguage(_, title, _):                 return (.voiceLanguage, title)
         case let .voiceTranslate(_, title, _, _, _, _):     return (.voiceTranslate, title)
+
+        case let .carPlay(_, title, _):                     return (.carPlay, title)
 
         case let .blockForeignUsers(_, title, _, _):        return (.blockForeign, title)
         case let .chatLockMasterEnabled(_, title, _, _, _): return (.chatLock, title)
@@ -702,6 +723,31 @@ private enum FenixEntry: ItemListNodeEntry {
                 },
                 tag: self.fenixTag
             )
+
+        // ─── CARPLAY ───
+        case let .carPlayHeader(text, isNew):
+            let langCode = FenixuzL10n.languageKey(for: presentationData.strings)
+            let badgeText: String? = isNew ? FenixNewBadgeLabel.headerText(langCode: langCode) : nil
+            let badgeStyle: ItemListSectionHeaderItem.BadgeStyle? = isNew
+                ? ItemListSectionHeaderItem.BadgeStyle(
+                    background: UIColor(red: 0.18, green: 0.74, blue: 0.44, alpha: 1.0),
+                    foreground: .white
+                )
+                : nil
+            return ItemListSectionHeaderItem(
+                presentationData: presentationData,
+                text: text,
+                badge: badgeText,
+                badgeStyle: badgeStyle,
+                sectionId: self.section
+            )
+        case let .carPlay(theme, title, status):
+            let (label, labelStyle) = fenixCarPlayStatusLabel(status, theme: theme, strings: presentationData.strings)
+            return ItemListDisclosureItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "car.fill", color: .green), title: title, label: label, labelStyle: labelStyle, sectionId: self.section, style: .blocks, action: {
+                arguments.openCarPlay()
+            }, tag: self.fenixTag)
+        case let .carPlayFooter(_, text):
+            return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
 
         // ─── HIMOYA ───
         case let .protectionHeader(text):
@@ -1332,7 +1378,7 @@ private func sttSupportedLanguages() -> [(String, String)] {
     ]
 }
 
-private func fenixSettingsEntries(presentationData: PresentationData, state: FenixSettingsState) -> [FenixEntry] {
+private func fenixSettingsEntries(presentationData: PresentationData, state: FenixSettingsState, carPlayStatus: FenixCarPlayStatus) -> [FenixEntry] {
     var entries: [FenixEntry] = []
     let l10n = FenixuzL10n(presentationData.strings)
     // Resolved once at entry-build time; used by local string namespaces throughout.
@@ -1404,6 +1450,15 @@ private func fenixSettingsEntries(presentationData: PresentationData, state: Fen
     let voiceTranslateTitle    = FenixVoiceTranslateStrings.toggleTitle(langCode: langCode)
     let voiceTranslateSubtitle = FenixVoiceTranslateStrings.toggleSubtitle(langCode: langCode)
     entries.append(.voiceTranslate(presentationData.theme, voiceTranslateTitle, voiceTranslateSubtitle, state.voiceTranslateEnabled, false, !state.translateConfirmEnabled))
+
+    // ─── CARPLAY ───
+    // isNew: hardcoded true — set to false here when this feature is no longer new.
+    // CarPlay only ever connects to an iPhone, so iPad does not get the row.
+    if UIDevice.current.userInterfaceIdiom == .phone {
+        entries.append(.carPlayHeader(FenixCarPlayStrings.title(langCode: langCode), true))
+        entries.append(.carPlay(presentationData.theme, FenixCarPlayStrings.title(langCode: langCode), carPlayStatus))
+        entries.append(.carPlayFooter(presentationData.theme, FenixCarPlayStrings.mainFooter(langCode: langCode)))
+    }
 
     // ─── PROTECTION ───
     entries.append(.protectionHeader(l10n.settings_section_protection))
@@ -1532,8 +1587,9 @@ private final class FenixSettingsArguments {
     let updateShowAds: (Bool) -> Void
     let updateStoryUnlock: (Bool) -> Void
     let updateTranslateChatsUnlock: (Bool) -> Void
+    let openCarPlay: () -> Void
 
-    init(openAccounts: @escaping () -> Void, openAbout: @escaping () -> Void, openNovagramBots: @escaping () -> Void, openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateEditedHistoryEnabled: @escaping (Bool) -> Void, updateRoundVideoFromGallery: @escaping (Bool) -> Void, updateForwardHideNames: @escaping (Bool) -> Void, updateUnlimitedPins: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateSttEnabled: @escaping (Bool) -> Void, openSttLanguageSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateEnableNovagramProxy: @escaping (Bool) -> Void, updateChatLockMaster: @escaping (Bool) -> Void, updateSecretVault: @escaping (Bool) -> Void, updateSecretVaultBiometric: @escaping (Bool) -> Void, updateWhiteThemeAccent: @escaping (Bool) -> Void, updateVoiceTranslate: @escaping (Bool) -> Void, updateAutoDownloadDisabled: @escaping (Bool) -> Void, updateSendTranslateConfirm: @escaping (Bool) -> Void, updateSendConfirmEnabled: @escaping (Bool) -> Void, updateAutoStickerEnabled: @escaping (Bool) -> Void, updateHeartEffectEnabled: @escaping (Bool) -> Void, updateReminderEnabled: @escaping (Bool) -> Void, openReminderTimeSettings: @escaping () -> Void, openReminderSoundSettings: @escaping () -> Void, addRecommendedFolders: @escaping () -> Void, openFolderStyle: @escaping () -> Void, updateChannelHistory: @escaping (Bool) -> Void, updateSettingsLinks: @escaping (Bool) -> Void, shareNovagramProLink: @escaping () -> Void, updateAutoAccept: @escaping (Bool) -> Void, updateAdminFolders: @escaping (Bool) -> Void, updateShowAds: @escaping (Bool) -> Void, updateStoryUnlock: @escaping (Bool) -> Void, updateTranslateChatsUnlock: @escaping (Bool) -> Void) {
+    init(openAccounts: @escaping () -> Void, openAbout: @escaping () -> Void, openNovagramBots: @escaping () -> Void, openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateEditedHistoryEnabled: @escaping (Bool) -> Void, updateRoundVideoFromGallery: @escaping (Bool) -> Void, updateForwardHideNames: @escaping (Bool) -> Void, updateUnlimitedPins: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateSttEnabled: @escaping (Bool) -> Void, openSttLanguageSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateEnableNovagramProxy: @escaping (Bool) -> Void, updateChatLockMaster: @escaping (Bool) -> Void, updateSecretVault: @escaping (Bool) -> Void, updateSecretVaultBiometric: @escaping (Bool) -> Void, updateWhiteThemeAccent: @escaping (Bool) -> Void, updateVoiceTranslate: @escaping (Bool) -> Void, updateAutoDownloadDisabled: @escaping (Bool) -> Void, updateSendTranslateConfirm: @escaping (Bool) -> Void, updateSendConfirmEnabled: @escaping (Bool) -> Void, updateAutoStickerEnabled: @escaping (Bool) -> Void, updateHeartEffectEnabled: @escaping (Bool) -> Void, updateReminderEnabled: @escaping (Bool) -> Void, openReminderTimeSettings: @escaping () -> Void, openReminderSoundSettings: @escaping () -> Void, addRecommendedFolders: @escaping () -> Void, openFolderStyle: @escaping () -> Void, updateChannelHistory: @escaping (Bool) -> Void, updateSettingsLinks: @escaping (Bool) -> Void, shareNovagramProLink: @escaping () -> Void, updateAutoAccept: @escaping (Bool) -> Void, updateAdminFolders: @escaping (Bool) -> Void, updateShowAds: @escaping (Bool) -> Void, updateStoryUnlock: @escaping (Bool) -> Void, updateTranslateChatsUnlock: @escaping (Bool) -> Void, openCarPlay: @escaping () -> Void) {
         self.openAccounts = openAccounts
         self.openAbout = openAbout
         self.openNovagramBots = openNovagramBots
@@ -1581,6 +1637,7 @@ private final class FenixSettingsArguments {
         self.updateShowAds = updateShowAds
         self.updateStoryUnlock = updateStoryUnlock
         self.updateTranslateChatsUnlock = updateTranslateChatsUnlock
+        self.openCarPlay = openCarPlay
     }
 }
 
@@ -2250,6 +2307,8 @@ public func fenixSettingsController(context: AccountContext, highlightFeature: F
             state.translateChatsUnlock = value
             return state
         }
+    }, openCarPlay: {
+        pushControllerImpl?(fenixCarPlayController(context: context))
     })
 
     // Feature #40 (part c): the long-press share menu names the row the user pressed, so it needs
@@ -2259,11 +2318,12 @@ public func fenixSettingsController(context: AccountContext, highlightFeature: F
 
     let signal = combineLatest(
         context.sharedContext.presentationData,
-        statePromise.get()
+        statePromise.get(),
+        FenixCarPlayStatus.signal(context: context)
     ) |> deliverOnMainQueue
-        |> map { presentationData, state -> (ItemListControllerState, (ItemListNodeState, Any)) in
+        |> map { presentationData, state, carPlayStatus -> (ItemListControllerState, (ItemListNodeState, Any)) in
             let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Novagram"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
-            let entries = fenixSettingsEntries(presentationData: presentationData, state: state)
+            let entries = fenixSettingsEntries(presentationData: presentationData, state: state, carPlayStatus: carPlayStatus)
             _ = latestEntries.swap(entries)
             // ensureVisibleItemTag only reaches rows whose nodes already exist, so a row far down
             // the list also needs an index-based scroll. ItemListNodeState applies this on the

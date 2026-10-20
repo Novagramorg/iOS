@@ -58,7 +58,7 @@ On every `git pull upstream master`, an AI assistant uses this file to re-apply 
 
 ## 📋 Novagram features va hooklar (2026-10-10)
 
-> 1–44: Settings → Novagram Settings (ilovadagi tartibda). 45–85: Settings'dan tashqaridagi features.
+> 1–44 va 86: Settings → Novagram Settings (ilovadagi tartibda). 45–85 va 87: Settings'dan tashqaridagi features.
 > Hooks: Telegram-owned fayllardagi barcha Fenixuz o'zgarishlari, feature bo'yicha. Har bir hookning kodi va anchor'i quyidagi 📌 bo'limlarda.
 
 ### 1. Novagram Settings
@@ -107,6 +107,10 @@ On every `git pull upstream master`, an AI assistant uses this file to re-apply 
 23. **Tanish tili**: STT tilini tanlash. O'zbek tili offline Vosk modeli orqali taniladi.
 24. **Ovozli xabarlarni tarjima qilish**: ovozdan olingan matn avtomatik tarjima qilinadi.
 
+#### CarPlay
+
+86. **CarPlay**: mashinada Siri Novagram xabarlarini o'qib beradi va javobingizni ovoz bilan yuboradi. Qator Siri ruxsatining holatini ko'rsatadi: ruxsat bo'lsa yashil, rad etilgan bo'lsa ogohlantirish va iOS Settings'ga o'tish tugmasi; ilovaga qaytganda holat o'zi yangilanadi.
+
 #### Himoya
 
 25. **Xorijiy raqamlarni bloklash**: boshqa davlat raqamlaridan kelgan chat, xabar va bildirishnomalarni yashiradi.
@@ -150,6 +154,10 @@ On every `git pull upstream master`, an AI assistant uses this file to re-apply 
 ---
 
 ### 2. Settings'dan tashqaridagi features
+
+#### CarPlay
+
+87. **CarPlay ekrani**: CarPlay'da Novagram so'nggi chatlar ro'yxatini ko'rsatadi. Chat bosilganda Siri o'qilmagan xabarlarni o'qiydi yoki javobni ovoz bilan yuboradi; yuqoridagi tugma Siri orqali yangi xabar boshlaydi. Kanallar (javob yozib bo'lmaydi), yashirin, qulflangan, maxfiy chatlar va Saved Messages chiqmaydi; passcode qulfida ro'yxat bo'sh. Tanlangan chat mute bo'lsa ham Siri uni o'qiydi. Mute qilinmagan chatlar tepada, mute qilinganlar pastdagi "Ovozsiz" bo'limida.
 
 #### Login
 
@@ -523,6 +531,16 @@ On every `git pull upstream master`, an AI assistant uses this file to re-apply 
 221. `AppDelegate.swift` (TelegramUI), `Telegram/BUILD`, `TelegramUI/BUILD`: UIScene life cycle (`NovagramSceneDelegate`), iOS 27 SDK bilan ilova ochilishi uchun. **13.0: olib tashlandi, upstream `SceneDelegate` (13a2694420); `Fenixuz/SceneLifecycle` o'chirildi.**
 222. `UIViewController+Navigation.m` (UIKitRuntimeUtils): iOS 27'da yashirin klaviatura API chaqirilmaydi, ilova ishga tushganda to'xtamaydi. **13.0: olib tashlandi, upstream 93af3a138e.**
 223. `publish.sh`, `release.sh`: App Store build uchun Swift 6.4 flag'lari.
+
+#### CarPlay
+
+225. `Telegram/BUILD`: CarPlay entitlement `com.apple.developer.carplay-communication` (`uz.fenixuz.app` va simulator bundle). Telegram'ning eski `carplay-messaging` kaliti bizning profillarda yo'q. `IntentsSupported` esa yana upstream bilan bir xil (pull'da upstream'niki olinadi).
+226. `run.sh`: yangi `my-config.json` va `my-device-config.json` `enable_siri: true` bilan yaratiladi.
+227. `publish.sh`: imzolangan IPA'da CarPlay yoki Siri entitlement'i bo'lmasa ogohlantiradi.
+228. `AppIntentVocabulary.plist` (en, ru, uz): `INSearchForMessagesIntent` misollari; `uz` da o'zbekcha `INSendMessageIntent` misollari.
+229. `AppDelegate.swift` (TelegramUI): `import FenixuzCarPlay`; `configurationForConnecting` ichida `FenixCarPlay.configure(...)` (CarPlay template scene delegate'i); ishga tushishda `FenixCarPlay.start(sharedContext:)`.
+230. `TelegramUI/BUILD`: `//submodules/Fenixuz/CarPlay:FenixuzCarPlay` dep.
+231. `IntentHandler.swift`, `IntentMessages.swift` (SiriIntents): CarPlay'da tanlangan chat (`conversationIdentifiers`) to'g'ridan-to'g'ri o'qiladi (`unreadMessages(account:peerIds:)`), mute bo'lsa ham va 20 ta chatdan tashqarida bo'lsa ham.
 
 ---
 
@@ -6512,3 +6530,135 @@ entries «View First message» and «Novagram Info», and the splash button «St
 English; on a Russian device the splash offers «Продолжить на русском»).
 
 On an upstream pull: these edits are single-line replacements inside the hooks above; re-apply them from this table.
+
+---
+
+## 📌 CarPlay Communication entitlement + Siri intents — 2026-10-20
+
+Apple granted Novagram (`uz.fenixuz.app`) **CarPlay Communication** in October 2026 (portal App ID page
+`UNVDR8NLC7`); **Siri** was switched on for the same App ID on 2026-10-20. The regenerated "Fenixuz AppStore"
+and "Fenixuz" profiles carry `com.apple.developer.carplay-communication` and `com.apple.developer.siri`.
+CarPlay shows Novagram on the dashboard, Siri reads messages (`INSearchForMessagesIntent`) and sends replies
+(`INSendMessageIntent`), and notifications reach CarPlay through upstream's `.carPlay` /
+`.allowInCarPlay` options in `AppDelegate.swift`.
+
+**1. `Telegram/BUILD` ~line 502 — the CarPlay key.** Upstream emits Telegram's legacy
+`com.apple.developer.carplay-messaging` (deprecated in iOS 14) for `official_bundle_ids` only:
+
+```python
+official_carplay_fragment = """
+<key>com.apple.developer.carplay-messaging</key>
+<true/>
+"""
+carplay_fragment = official_carplay_fragment if telegram_bundle_id in official_bundle_ids else ""
+```
+
+**Fenixuz hook — swap the key and add our App Store bundle:**
+
+```python
+# Fenixuz: Novagram holds the iOS 14+ CarPlay Communication entitlement, not Telegram's older
+# carplay-messaging. The simulator bundle gets the same key so CarPlay tests match the App Store build.
+official_carplay_fragment = """
+<key>com.apple.developer.carplay-communication</key>
+<true/>
+"""
+carplay_fragment = official_carplay_fragment if (telegram_bundle_id in official_bundle_ids or telegram_bundle_id == "uz.fenixuz.app") else ""
+```
+
+- Never put `carplay-messaging` back: our profiles do not have it, and rules_apple fails a device build that claims it.
+- rules_apple does **not** check `carplay-communication` against the profile, so losing this hook breaks no build;
+  CarPlay just disappears from the next release. `publish.sh` warns when the signed IPA lacks the key or Siri.
+- `official_bundle_ids` itself stays untouched (it also gates associated domains and unrestricted VoIP).
+
+**2. `Telegram/BUILD` `IntentsInfoPlist` — `IntentsSupported` is upstream's list again (not a hook).** The 12.8
+merge (`cee1a8940d`, 2026-07-06) dropped `INStartAudioCallIntent`, `INSearchForMessagesIntent`,
+`INSetMessageAttributeIntent` and `INSearchCallHistoryIntent`, while their handlers stayed in
+`Telegram/SiriIntents/IntentHandler.swift` and the "r"/"gr" notification categories kept pointing Siri at
+`INSearchForMessagesIntent`. Without it Siri cannot read messages in CarPlay. On a pull, keep upstream's list.
+
+**3. `build-system/appstore-configuration.json` (local, gitignored) — `"enable_siri": true`.** It adds
+`com.apple.developer.siri` and `APP_CONFIG_IS_SIRI_ENABLED`; the upstream permission flow then asks every
+user once for Siri access. A profile without Siri fails the device build. `run.sh` writes `"enable_siri": true`
+into newly created `my-config.json` and `my-device-config.json`, so simulator and device builds match.
+
+**4. `AppIntentVocabulary.plist` (en, ru, uz):** example phrases for `INSearchForMessagesIntent`, and Uzbek
+`INSendMessageIntent` examples in `uz` (it used to be an English copy).
+
+**5. CarPlay template scene (`submodules/Fenixuz/CarPlay`, module `FenixuzCarPlay`) — 2026-10-20.**
+With `carplay-communication` CarPlay opens Novagram as a *template* app: a tap creates a
+`CPTemplateApplicationScene` hosted by `com.apple.CarPlayTemplateUIHost`. Upstream's
+`configurationForConnecting` gives no delegate to roles other than `.windowApplication`, so UIKit
+threw and the app died on every tap (iPhone log, 2026-10-20):
+
+```
+Novagram[917]: *** Terminating app due to uncaught exception 'NSGenericException', reason:
+'Application does not implement CarPlay template application lifecycle methods in its scene delegate.'
+CarPlayTemplateUIHost: [app<uz.fenixuz.app>:917] Process exited: SIGABRT
+```
+
+Telegram's own build does not hit this: its legacy `carplay-messaging` grant gets the system Siri
+UI instead of a template scene. The module draws a `CPListTemplate` of recent chats as
+`CPMessageListItem`s (`conversationIdentifier` = `"\(peerId.toInt64())"`, the format the Siri
+extension already uses), plus a `CPMessageComposeBarButton`. Rows have no tap handler: CarPlay
+hands the chat to Siri (read flow when unread, reply flow otherwise). The list scans the newest
+50 chats in phone order, puts unmuted chats first and muted ones in a "Muted" section after them
+(groups posting every minute had pushed private chats and bots off the short list), and keeps
+only private chats and groups: broadcast channels
+cannot be answered and crowded personal chats out (a test account's list was all muted job
+channels). Never Saved Messages, vault-hidden or chat-locked chats, and nothing at all while the
+app passcode is locked.
+
+`submodules/TelegramUI/Sources/AppDelegate.swift` — three additions:
+
+```swift
+import FenixuzCarPlay
+```
+
+```swift
+        if connectingSceneSession.role == .windowApplication {
+            configuration.delegateClass = SceneDelegate.self
+        }
+        // Fenixuz: the CarPlay template scene gets its delegate (submodules/Fenixuz/CarPlay).
+        FenixCarPlay.configure(configuration, for: connectingSceneSession)
+        return configuration
+```
+
+```swift
+        // Fenixuz CarPlay — the CarPlay scene lists the active account's chats.
+        _ = (self.sharedContextPromise.get()
+        |> take(1)
+        |> deliverOnMainQueue).start(next: { sharedApplicationContext in
+            FenixCarPlay.start(sharedContext: sharedApplicationContext.sharedContext)
+        })
+```
+
+(`configure` touches only `.carTemplateApplication`; external displays still get no delegate, as
+upstream intends.) `submodules/TelegramUI/BUILD` gains `"//submodules/Fenixuz/CarPlay:FenixuzCarPlay"`.
+
+**6. `Telegram/SiriIntents/IntentHandler.swift` + `IntentMessages.swift` — a picked chat is read directly.**
+A row picked in CarPlay arrives as `INSearchForMessagesIntent.conversationIdentifiers`. Upstream
+ignored it, and its "read my messages" scan also skips muted chats and looks at the newest 20 only,
+so picking a muted group in CarPlay read nothing. `IntentMessages.swift` gains (before the raw-store
+`unreadMessages(postbox:)`):
+
+```swift
+/// Fenixuz: the unread messages of the chats CarPlay's conversation list hands to Siri. ...
+func unreadMessages(account: Account, peerIds: [PeerId]) -> Signal<[INMessage], NoError>
+```
+
+It takes each chat's `CombinedPeerReadState`, reads its newest 10 messages through the same settled
+history view as the scan, and keeps the unread ones (newest first). In `handle(intent:)`, just before
+the `castError` at the end of the `mapToSignal`:
+
+```swift
+                // Fenixuz: a chat picked in CarPlay's conversation list is read directly, even when
+                // muted or outside the chats the scan above looks at.
+                let conversationPeerIds = (intent.conversationIdentifiers ?? []).compactMap { Int64($0) }.map { PeerId($0) }
+                if !conversationPeerIds.isEmpty {
+                    Logger.shared.log("SiriIntents", "INSearchForMessagesIntent conversationIdentifiers: \(conversationPeerIds)")
+                }
+                return (conversationPeerIds.isEmpty ? messages : unreadMessages(account: account, peerIds: conversationPeerIds))
+                |> castError(IntentHandlingError.self)
+```
+
+Without identifiers (Siri on the phone, announce) nothing changes.

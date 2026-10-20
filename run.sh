@@ -176,7 +176,7 @@ if [ ! -f "$CONFIG_PATH" ]; then
     "appstore_id": "0",
     "app_specific_url_scheme": "tg",
     "premium_iap_product_id": "",
-    "enable_siri": false,
+    "enable_siri": true,
     "enable_icloud": false
 }
 EOF
@@ -197,7 +197,7 @@ EOF
     "appstore_id": "0",
     "app_specific_url_scheme": "tg",
     "premium_iap_product_id": "",
-    "enable_siri": false,
+    "enable_siri": true,
     "enable_icloud": false
 }
 EOF

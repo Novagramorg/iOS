@@ -698,7 +698,13 @@ class DefaultIntentHandler: INExtension, INSendMessageIntentHandling, INSearchFo
                         }
                     }
                 }
-                return messages
+                // Fenixuz: a chat picked in CarPlay's conversation list is read directly, even when
+                // muted or outside the chats the scan above looks at.
+                let conversationPeerIds = (intent.conversationIdentifiers ?? []).compactMap { Int64($0) }.map { PeerId($0) }
+                if !conversationPeerIds.isEmpty {
+                    Logger.shared.log("SiriIntents", "INSearchForMessagesIntent conversationIdentifiers: \(conversationPeerIds)")
+                }
+                return (conversationPeerIds.isEmpty ? messages : unreadMessages(account: account, peerIds: conversationPeerIds))
                 |> castError(IntentHandlingError.self)
                 |> afterDisposed {
                     account.shouldBeServiceTaskMaster.set(.single(.never))

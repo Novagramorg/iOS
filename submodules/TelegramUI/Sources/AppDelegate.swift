@@ -5,6 +5,7 @@ import TelegramCore
 import FenixuzAnalytics
 import FenixuzAutoProxy
 import FenixuzProMessager
+import FenixuzCarPlay
 import UserNotifications
 import Intents
 import Postbox
@@ -1331,6 +1332,13 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             })
         })
 
+        // Fenixuz CarPlay — the CarPlay scene lists the active account's chats.
+        _ = (self.sharedContextPromise.get()
+        |> take(1)
+        |> deliverOnMainQueue).start(next: { sharedApplicationContext in
+            FenixCarPlay.start(sharedContext: sharedApplicationContext.sharedContext)
+        })
+
         self.context.set(self.sharedContextPromise.get()
         |> deliverOnMainQueue
         |> mapToSignal { sharedApplicationContext -> Signal<AuthorizedApplicationContext?, NoError> in
@@ -1832,6 +1840,8 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         if connectingSceneSession.role == .windowApplication {
             configuration.delegateClass = SceneDelegate.self
         }
+        // Fenixuz: the CarPlay template scene gets its delegate (submodules/Fenixuz/CarPlay).
+        FenixCarPlay.configure(configuration, for: connectingSceneSession)
         return configuration
     }
 

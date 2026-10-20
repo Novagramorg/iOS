@@ -54,6 +54,9 @@ public enum FenixSettingsFeature: String, CaseIterable {
     case voiceLanguage = "voice-language"
     case voiceTranslate = "voice-translate"
 
+    // CarPlay
+    case carPlay = "carplay"
+
     // Protection
     case blockForeign = "block-foreign"
     case chatLock = "chat-lock"

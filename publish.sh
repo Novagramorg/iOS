@@ -303,6 +303,14 @@ if [ -f "$EMBEDDED_PROV" ]; then
     else
         warn "Communication Notifications entitlement YO'Q — lock-screen avatar ishlamaydi (BUILD:560 + App ID capability tekshiring)"
     fi
+    # CarPlay Communication + Siri (CarPlay o'qish/javob Siri orqali ishlaydi). rules_apple
+    # carplay-communication'ni profilga solishtirmaydi, shuning uchun yo'qolgan hook faqat shu yerda bilinadi.
+    if codesign -d --entitlements :- "$EMBEDDED_APP" 2>/dev/null | grep -q "carplay-communication" \
+        && codesign -d --entitlements :- "$EMBEDDED_APP" 2>/dev/null | grep -q "com.apple.developer.siri"; then
+        ok "CarPlay Communication + Siri entitlement: signed ✓"
+    else
+        warn "CarPlay yoki Siri entitlement YO'Q — CarPlay'da Novagram chiqmaydi (BUILD carplay_fragment + appstore enable_siri tekshiring)"
+    fi
 else
     warn "Embedded .app topilmadi — profil verify o'tkazib yuborildi"
 fi

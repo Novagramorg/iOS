@@ -499,11 +499,13 @@ official_unrestricted_voip_fragment = """
 """
 unrestricted_voip_fragment = official_unrestricted_voip_fragment if telegram_bundle_id in official_bundle_ids else ""
 
+# Fenixuz: Novagram holds the iOS 14+ CarPlay Communication entitlement, not Telegram's older
+# carplay-messaging. The simulator bundle gets the same key so CarPlay tests match the App Store build.
 official_carplay_fragment = """
-<key>com.apple.developer.carplay-messaging</key>
+<key>com.apple.developer.carplay-communication</key>
 <true/>
 """
-carplay_fragment = official_carplay_fragment if telegram_bundle_id in official_bundle_ids else ""
+carplay_fragment = official_carplay_fragment if (telegram_bundle_id in official_bundle_ids or telegram_bundle_id == "uz.fenixuz.app") else ""
 
 icloud_fragment = "" if not telegram_enable_icloud else """
 <key>com.apple.developer.icloud-services</key>
@@ -1327,6 +1329,10 @@ plist_fragment(
             <key>IntentsSupported</key>
             <array>
                 <string>INSendMessageIntent</string>
+                <string>INStartAudioCallIntent</string>
+                <string>INSearchForMessagesIntent</string>
+                <string>INSetMessageAttributeIntent</string>
+                <string>INSearchCallHistoryIntent</string>
                 <string>SelectFriendsIntent</string>
                 <string>SelectAvatarFriendsIntent</string>
             </array>
