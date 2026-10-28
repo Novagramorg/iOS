@@ -945,14 +945,14 @@ public final class PrivateCallScreen: OverlayMaskContainerView, AVPictureInPictu
             let backButtonSize = self.backButtonView.updateCircle(text: params.state.strings.Common_Back, diameter: sideColumnBackButtonFrame.width)
             backButtonFrame = CGRect(origin: sideColumnBackButtonFrame.origin, size: backButtonSize)
         } else {
-        let backButtonSize = self.backButtonView.update(text: params.state.strings.Common_Back)
-        
-        let backButtonY: CGFloat
-        if currentAreControlsHidden {
-            backButtonY = -backButtonSize.height - 12.0
-        } else {
-            backButtonY = params.insets.top + 12.0
-        }
+            let backButtonSize = self.backButtonView.update(text: params.state.strings.Common_Back)
+            
+            let backButtonY: CGFloat
+            if currentAreControlsHidden {
+                backButtonY = -backButtonSize.height - 12.0
+            } else {
+                backButtonY = params.insets.top + 12.0
+            }
             backButtonFrame = CGRect(origin: CGPoint(x: params.insets.left + 10.0, y: backButtonY), size: backButtonSize)
         }
         transition.setFrame(view: self.backButtonView, frame: backButtonFrame)

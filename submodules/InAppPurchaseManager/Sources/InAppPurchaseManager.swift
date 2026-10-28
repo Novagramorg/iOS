@@ -39,46 +39,46 @@ public final class InAppPurchaseManager: NSObject {
         // No StoreKit-backed state — this class is kept as a public type for
         // consumer compilation only. `availableProducts` returns `[]`, so no
         // instance is ever constructed at runtime.
-
+        
         fileprivate init() {}
-
+        
         public var id: String {
             return ""
         }
-
+        
         public var isSubscription: Bool {
             return false
         }
-
+        
         public var price: String {
             return ""
         }
-
+        
         public func pricePerMonth(_ monthsCount: Int) -> String {
             return ""
         }
-
+        
         public func defaultPrice(_ value: NSDecimalNumber, monthsCount: Int) -> String {
             return ""
         }
-
+        
         public func multipliedPrice(count: Int) -> String {
             return ""
         }
-
+        
         public var priceValue: NSDecimalNumber {
             return NSDecimalNumber.zero
         }
-
+        
         public var priceCurrencyAndAmount: (currency: String, amount: Int64) {
             return ("", 0)
         }
-
+        
         public static func ==(lhs: Product, rhs: Product) -> Bool {
             return lhs === rhs
         }
     }
-
+    
     public enum PurchaseState {
         // Novagram: upstream 13.0 API (PremiumIntroScreen switches on these). Never emitted here,
         // buyProduct always shows the blocked alert and fails with .cancelled.
@@ -86,7 +86,7 @@ public final class InAppPurchaseManager: NSObject {
         case pending
         case purchased(transactionId: String)
     }
-
+    
     public enum PurchaseError {
         case generic
         case cancelled
@@ -96,7 +96,7 @@ public final class InAppPurchaseManager: NSObject {
         case assignFailed
         case tryLater
     }
-
+    
     public enum RestoreState {
         case succeed(Bool)
         case failed
@@ -113,7 +113,7 @@ public final class InAppPurchaseManager: NSObject {
             self.expirationDate = expirationDate
         }
     }
-
+    
     private let engine: SomeTelegramEngine
 
     public init(engine: SomeTelegramEngine) {
@@ -152,6 +152,6 @@ public final class InAppPurchaseManager: NSObject {
 
     /// No StoreKit receipt is requested — the fork never produces one.
     public func getReceiptPurchases() -> [ReceiptPurchase] {
-        return []
+            return []
     }
 }

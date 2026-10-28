@@ -641,7 +641,7 @@ final class CallControllerNodeV2: ViewControllerTracingNode, CallControllerNodeP
             default:
                 // Novagram: an earpiece the user picked during the video call stays (HOOKS.md).
                 if self.userChosenAudioOutput == nil || self.userChosenAudioOutput == .speaker {
-                    self.setCurrentAudioOutput?(.speaker)
+                self.setCurrentAudioOutput?(.speaker)
                 }
             }
             

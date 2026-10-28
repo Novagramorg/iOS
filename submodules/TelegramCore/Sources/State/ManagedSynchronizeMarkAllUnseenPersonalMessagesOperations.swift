@@ -296,7 +296,7 @@ private func synchronizeMarkAllUnseenReactions(transaction: Transaction, postbox
     guard let inputPeer = apiInputPeer(peer) else {
         return .complete()
     }
-
+    
     var flags: Int32 = 0
     var topMsgId: Int32?
     var savedPeerId: Api.InputPeer?

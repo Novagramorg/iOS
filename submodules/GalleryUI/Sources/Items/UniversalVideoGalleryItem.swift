@@ -362,7 +362,7 @@ private final class UniversalVideoGalleryItemOverlayNode: GalleryOverlayContentN
                     self.reportedMessages.insert(adAttribute.opaqueId)
                     // Novagram: OUR banner's view goes to the Novagram backend only.
                     if self.novagramVideoAd?.recordViewIfOurs(adMessage) != true {
-                        context.engine.messages.markAdAsSeen(opaqueId: adAttribute.opaqueId)
+                    context.engine.messages.markAdAsSeen(opaqueId: adAttribute.opaqueId)
                     }
                 }
             }

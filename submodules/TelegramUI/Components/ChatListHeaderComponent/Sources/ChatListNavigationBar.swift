@@ -236,7 +236,7 @@ public final class ChatListNavigationBar: Component {
 
     public final class View: UIView {
         private let edgeEffectView: EdgeEffectView
-        
+
         // Layout remains in navigation bar coordinates when this view is hosted externally.
         public var edgeEffectBackgroundView: UIView {
             return self.edgeEffectView
@@ -435,7 +435,7 @@ public final class ChatListNavigationBar: Component {
             self.rawScrollOffset = offset
             let allowAvatarsExpansionUpdated = self.currentAllowAvatarsExpansion != allowAvatarsExpansion
             self.currentAllowAvatarsExpansion = allowAvatarsExpansion
-            
+
             if !self.liftedScrollGate.offer(offset) {
                 // Lifted by a navigation transition: the header rides its screen as it was; the latest scroll applies
                 // at put-back.
@@ -451,7 +451,7 @@ public final class ChatListNavigationBar: Component {
             guard let component = self.component, let currentLayout = self.currentLayout else {
                 return
             }
-            
+
             let searchPresentationUpdated = component.theme !== self.scrollTheme
                 || component.strings !== self.scrollStrings
                 || component.search != self.scrollSearch
@@ -690,8 +690,8 @@ public final class ChatListNavigationBar: Component {
             } else {
                 // Also without a status bar (iPhone landscape), matching the regular navigation bar's
                 // 10pt button inset there.
-                    headerContentY = component.statusBarHeight + 10.0
-                }
+                headerContentY = component.statusBarHeight + 10.0
+            }
             let headerContentFrame = CGRect(origin: CGPoint(x: 0.0, y: headerContentY), size: headerContentSize)
             if let headerContentView = self.headerContent.view {
                 if component.hasOwnGlassContainer != (self.headerBackgroundContainer is GlassBackgroundContainerView) {
@@ -931,10 +931,10 @@ public final class ChatListNavigationBar: Component {
                 color = edgeEffectColor
             } else {
                 var defaultColor = component.theme.list.plainBackgroundColor
-            if component.activeSearch == nil {
+                if component.activeSearch == nil {
                     defaultColor = component.theme.list.plainBackgroundColor.mixedWith(component.theme.chatList.pinnedItemBackgroundColor, alpha: self.pinnedFraction)
-            }
-            if !component.hasEdgeEffect {
+                }
+                if !component.hasEdgeEffect {
                     defaultColor = component.theme.list.itemModalBlocksBackgroundColor
                 }
                 color = defaultColor
@@ -959,7 +959,7 @@ public final class ChatListNavigationBar: Component {
             self.state = state
             
             var contentHeight = component.statusBarHeight
-                contentHeight += 3.0
+            contentHeight += 3.0
             if let activeSearch = component.activeSearch {
                 if !activeSearch.isExternal {
                     contentHeight += navigationBarSearchContentHeight
@@ -1051,7 +1051,7 @@ public final class ChatListNavigationBar: Component {
             self.updateEdgeEffectColor(transition: transition)
             
             self.edgeEffectView.isHidden = !component.hasEdgeEffect
-            
+
             if self.isContentLifted {
                 self.transitionContentFrameUpdated?(CGRect(origin: CGPoint(), size: size))
             } else {

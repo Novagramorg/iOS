@@ -231,7 +231,7 @@ public class ContactsPeerItem: ItemListItem, ListViewItemWithHeader {
     public let headerAccessoryItem: ListViewAccessoryItem?
     
     public let header: ListViewItemHeader?
-    
+
     public var neighborDescriptor: AnyEquatable {
         return AnyEquatable(ItemListHeaderNeighborDescriptor(
             sectionId: self.sectionId,
@@ -770,18 +770,18 @@ public class ContactsPeerItemNode: ItemListRevealOptionsItemNode {
         self.updateRevealOptionsHighlightedBackgroundNode(self.highlightedBackgroundNode, isHighlighted: baseAlpha > 0, transition: transition, aboveNodes: [self.separatorNode, self.backgroundNode], highlightAlpha: baseAlpha)
         if let item = self.item, let avatarBadgeBackground = self.avatarBadgeBackground {
             transition.updateTintColor(layer: avatarBadgeBackground.layer, color: item.presentationData.theme.list.itemHighlightedBackgroundColor.mixedWith(item.presentationData.theme.list.plainBackgroundColor, alpha: 1.0 - self.highlightedBackgroundNode.alpha))
-                        }
-                    }
+        }
+    }
 
     override public func revealOptionsActiveStateUpdated(isActive: Bool, transition: ContainedViewLayoutTransition) {
         super.revealOptionsActiveStateUpdated(isActive: isActive, transition: transition)
         self.updateIsHighlighted(transition: transition)
-        }
+    }
 
     override public func revealOptionsSurfaceUpdated(progress: CGFloat) {
         self.updateIsHighlighted(transition: .immediate)
     }
-    
+
     public func asyncLayout() -> (_ item: ContactsPeerItem, _ params: ListViewItemLayoutParams, _ first: Bool, _ last: Bool, _ firstWithHeader: Bool, _ neighbors: ItemListNeighbors) -> (ListViewItemNodeLayout, () -> (Signal<Void, NoError>?, (Bool, Bool) -> Void)) {
         let makeTitleLayout = TextNode.asyncLayout(self.titleNode)
         let titleBadgeLayout = TextNode.asyncLayout(self.titleBadge?.textNode)
@@ -985,13 +985,13 @@ public class ContactsPeerItemNode: ItemListRevealOptionsItemNode {
                             if user.flags.contains(.mutualContact) && showMutualContactSymbol {
                                 titleAttributedString = NSAttributedString(string: "\(firstName) 🤝", font: titleBoldFont, textColor: textColor)
                             } else {
-                                titleAttributedString = NSAttributedString(string: firstName, font: titleBoldFont, textColor: textColor)
+                            titleAttributedString = NSAttributedString(string: firstName, font: titleBoldFont, textColor: textColor)
                             }
                         } else if let lastName = user.lastName, !lastName.isEmpty {
                             if user.flags.contains(.mutualContact) && showMutualContactSymbol {
                                 titleAttributedString = NSAttributedString(string: "\(lastName) 🤝", font: titleBoldFont, textColor: textColor)
                             } else {
-                                titleAttributedString = NSAttributedString(string: lastName, font: titleBoldFont, textColor: textColor)
+                            titleAttributedString = NSAttributedString(string: lastName, font: titleBoldFont, textColor: textColor)
                             }
                         } else {
                             titleAttributedString = NSAttributedString(string: item.presentationData.strings.User_DeletedAccount, font: titleBoldFont, textColor: textColor)
@@ -2029,9 +2029,9 @@ public class ContactsPeerItemNode: ItemListRevealOptionsItemNode {
                             let stripExcessLeft = max(0.0, params.leftInset - params.rightInset)
                             let stripExcessRight = max(0.0, params.rightInset - params.leftInset)
                             let separatorRightInset: CGFloat = (item.systemStyle == .glass ? 16.0 : 0.0) + stripExcessRight
-                            
+
                             strongSelf.maskNode.image = hasCorners ? PresentationResourcesItemList.cornersImage(item.presentationData.theme, top: hasTopCorners, bottom: hasBottomCorners, glass: item.systemStyle == .glass) : nil
-                            
+
                             var topHighlightInset: CGFloat = (first || !nodeLayout.insets.top.isZero) ? 0.0 : separatorHeight
                             topHighlightInset -= nodeLayout.insets.top
                             strongSelf.backgroundNode.frame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: nodeLayout.contentSize.width, height: nodeLayout.contentSize.height))

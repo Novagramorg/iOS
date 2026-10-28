@@ -2038,8 +2038,8 @@ extension ChatControllerImpl {
                         pinnedStateBelongsToTheCachedDataRule = false
                     }
                     if !pinnedStateBelongsToTheCachedDataRule {
-                    strongSelf.state.pinnedMessageId = pinnedMessageId
-                    strongSelf.state.pinnedMessage = pinnedMessage
+                        strongSelf.state.pinnedMessageId = pinnedMessageId
+                        strongSelf.state.pinnedMessage = pinnedMessage
                     }
                     strongSelf.state.keyboardButtonsMessage = buttonKeyboardMessage
                     strongSelf.state.peerIsBlocked = peerIsBlocked

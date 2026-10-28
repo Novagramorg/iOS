@@ -58,7 +58,7 @@ final class PeerInfoScreenDisclosureItem: PeerInfoScreenItem {
     let longPressDuration: TimeInterval
     let longPressAction: (() -> Void)?
     let action: (() -> Void)?
-
+    
     init(id: AnyHashable, label: Label = .none, additionalBadgeLabel: String? = nil, additionalBadgeIcon: UIImage? = nil, text: String, titleColor: UIColor? = nil, icon: UIImage? = nil, iconSignal: Signal<UIImage?, NoError>? = nil, hasArrow: Bool = true, longPressDuration: TimeInterval = 0.0, longPressAction: (() -> Void)? = nil, action: (() -> Void)?) {
         self.id = id
         self.label = label

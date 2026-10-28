@@ -2021,7 +2021,7 @@ public final class PendingMessageManager {
                         if suggestedPost != nil {
                             flags |= 1 << 23
                         }
-                    
+
                         if Namespaces.Message.allEphemeral.contains(sourceInfo.messageId.namespace) {
                             flags |= 1 << 25
                         }
@@ -2114,8 +2114,8 @@ public final class PendingMessageManager {
                         if isNovagramGhostModeActive {
                             sendMessageRequest = .complete()
                         } else {
-                            sendMessageRequest = network.request(Api.functions.messages.sendScreenshotNotification(peer: inputPeer, replyTo: replyTo, randomId: uniqueId))
-                            |> map(NetworkRequestResult.result)
+                        sendMessageRequest = network.request(Api.functions.messages.sendScreenshotNotification(peer: inputPeer, replyTo: replyTo, randomId: uniqueId))
+                        |> map(NetworkRequestResult.result)
                         }
                     case .secretMedia:
                         assertionFailure()

@@ -10,7 +10,7 @@ extension TelegramMediaMap {
     convenience init(coordinate: CLLocationCoordinate2D, liveBroadcastingTimeout: Int32? = nil, proximityNotificationRadius: Int32? = nil) {
         self.init(latitude: coordinate.latitude, longitude: coordinate.longitude, heading: nil, accuracyRadius: nil, venue: nil, liveBroadcastingTimeout: liveBroadcastingTimeout, liveProximityNotificationRadius: proximityNotificationRadius)
     }
-
+    
     var coordinate: CLLocationCoordinate2D {
         return CLLocationCoordinate2D(latitude: self.latitude, longitude: self.longitude)
     }
@@ -90,7 +90,7 @@ func stringForEstimatedDuration(strings: PresentationStrings, time: Double, form
         let minutes = Int32(time / 60.0) % 60
         let hours = Int32(time / 3600.0)
         let days = Int32(time / (3600.0 * 24.0))
-
+        
         let string: String
         if hours >= 24 {
             string = strings.Map_ETADays(days)
@@ -156,16 +156,16 @@ public func getExpectedTravelTime(coordinate: CLLocationCoordinate2D, transportT
         }
 
         subscriber.putNext(.calculating)
-
+        
         let destinationPlacemark = MKPlacemark(coordinate: coordinate, addressDictionary: nil)
         let destination = MKMapItem(placemark: destinationPlacemark)
-
+        
         let request = MKDirections.Request()
         request.source = MKMapItem.forCurrentLocation()
         request.destination = destination
         request.transportType = transportType
         request.requestsAlternateRoutes = false
-
+        
         let directions = MKDirections(request: request)
 
         #if DEBUG

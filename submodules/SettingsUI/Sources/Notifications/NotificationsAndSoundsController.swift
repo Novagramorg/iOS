@@ -535,29 +535,29 @@ private func notificationsAndSoundsEntries(authorizationStatus: AccessType, warn
         entries.append(.accountsInfo(presentationData.theme, inAppSettings.displayNotificationsFromAllAccounts ? presentationData.strings.NotificationSettings_ShowNotificationsAllAccountsInfoOn : presentationData.strings.NotificationSettings_ShowNotificationsAllAccountsInfoOff))
     }
     
-        let title: String
-        let text: String
-        if case .unreachable = authorizationStatus {
-            title = presentationData.strings.Notifications_PermissionsUnreachableTitle
-            text = presentationData.strings.Notifications_PermissionsUnreachableText
-        } else {
-            title = presentationData.strings.Notifications_PermissionsTitle
-            text = presentationData.strings.Notifications_PermissionsText
-        }
-    
-        switch (authorizationStatus, warningSuppressed) {
-            case (.denied, _):
-                entries.append(.permissionInfo(presentationData.theme, title, text, true))
-                entries.append(.permissionEnable(presentationData.theme, presentationData.strings.Notifications_PermissionsAllowInSettings))
-            case (.unreachable, false):
-                entries.append(.permissionInfo(presentationData.theme, title, text, false))
-                entries.append(.permissionEnable(presentationData.theme, presentationData.strings.Notifications_PermissionsOpenSettings))
-            case (.notDetermined, _):
-                entries.append(.permissionInfo(presentationData.theme, title, text, true))
-                entries.append(.permissionEnable(presentationData.theme, presentationData.strings.Notifications_PermissionsAllow))
-            default:
-                break
-        }
+    let title: String
+    let text: String
+    if case .unreachable = authorizationStatus {
+        title = presentationData.strings.Notifications_PermissionsUnreachableTitle
+        text = presentationData.strings.Notifications_PermissionsUnreachableText
+    } else {
+        title = presentationData.strings.Notifications_PermissionsTitle
+        text = presentationData.strings.Notifications_PermissionsText
+    }
+
+    switch (authorizationStatus, warningSuppressed) {
+        case (.denied, _):
+            entries.append(.permissionInfo(presentationData.theme, title, text, true))
+            entries.append(.permissionEnable(presentationData.theme, presentationData.strings.Notifications_PermissionsAllowInSettings))
+        case (.unreachable, false):
+            entries.append(.permissionInfo(presentationData.theme, title, text, false))
+            entries.append(.permissionEnable(presentationData.theme, presentationData.strings.Notifications_PermissionsOpenSettings))
+        case (.notDetermined, _):
+            entries.append(.permissionInfo(presentationData.theme, title, text, true))
+            entries.append(.permissionEnable(presentationData.theme, presentationData.strings.Notifications_PermissionsAllow))
+        default:
+            break
+    }
     
     entries.append(.categoriesHeader(presentationData.theme, presentationData.strings.Notifications_MessageNotifications.uppercased()))
     entries.append(.privateChats(presentationData.theme, presentationData.strings.Notifications_PrivateChats, !exceptions.users.isEmpty ? presentationData.strings.Notifications_CategoryExceptions(Int32(exceptions.users.peerIds.count)) : "", globalSettings.privateChats.enabled ? presentationData.strings.Notifications_On : presentationData.strings.Notifications_Off))

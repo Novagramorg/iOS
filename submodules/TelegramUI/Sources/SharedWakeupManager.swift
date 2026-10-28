@@ -1141,7 +1141,7 @@ public final class SharedWakeupManager {
 
     private func updateAccounts(hasTasks: Bool, endTaskAfterTransactionsComplete: UIBackgroundTaskIdentifier?) {
         let hasBackgroundLocationTask = self.accountsAndTasks.contains(where: { $0.2.backgroundLocation })
-
+        
         // Novagram: accounts in the working-set (pinned "Active / No Sleep") must keep their network
         // connection alive regardless of which account is currently in the foreground. Read once here
         // so the Set is shared across the loop below.
@@ -1149,10 +1149,10 @@ public final class SharedWakeupManager {
 
         if self.inForeground || self.hasActiveAudioSession || self.isInBackgroundExtension || self.backgroundProcessingTaskId != nil || self.backgroundStoryProcessingTaskId != nil || hasBackgroundLocationTask || (hasTasks && self.currentExternalCompletion != nil) || self.activeExplicitExtensionTimer != nil || self.silenceAudioRenderer != nil {
             Logger.shared.log("Wakeup", "enableBeginTransactions: true (active)")
-
+            
             for (account, primary, tasks) in self.accountsAndTasks {
                 account.postbox.setCanBeginTransactions(true)
-
+                
                 // Novagram: grant .always to any account in the pinned working-set, not just the
                 // foreground primary. This keeps the MTProto connection alive so pinned accounts
                 // receive messages and generate in-app notifications in the background.

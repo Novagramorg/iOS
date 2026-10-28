@@ -30,8 +30,8 @@ enum CallListNodeEntry: Comparable, Identifiable {
         case groupCall(EnginePeer.Id, String)
         case message(EngineMessage.Index)
         case hole(EngineMessage.Index)
-
-        static func < (lhs: SortIndex, rhs: SortIndex) -> Bool {
+        
+        static func <(lhs: SortIndex, rhs: SortIndex) -> Bool {
             switch lhs {
             case .displayTab:
                 return false
@@ -80,18 +80,18 @@ enum CallListNodeEntry: Comparable, Identifiable {
                 case let .message(rhsIndex):
                     return lhsIndex < rhsIndex
                 }
-
+                
             }
         }
     }
-
+    
     case displayTab(PresentationTheme, String, Bool)
     case displayTabInfo(PresentationTheme, String)
     case openNewCall
     case groupCall(peer: EnginePeer, editing: Bool, isActive: Bool)
     case messageEntry(topMessage: EngineMessage, messages: [EngineMessage], theme: PresentationTheme, strings: PresentationStrings, dateTimeFormat: PresentationDateTimeFormat, editing: Bool, hasActiveRevealControls: Bool, displayHeader: Bool, missed: Bool)
     case holeEntry(index: EngineMessage.Index, theme: PresentationTheme)
-
+    
     var sortIndex: SortIndex {
         switch self {
         case .displayTab:
@@ -108,7 +108,7 @@ enum CallListNodeEntry: Comparable, Identifiable {
             return .hole(index)
         }
     }
-
+    
     var stableId: CallListNodeEntryId {
         switch self {
         case .displayTab:
@@ -125,12 +125,12 @@ enum CallListNodeEntry: Comparable, Identifiable {
             return .hole(index)
         }
     }
-
-    static func < (lhs: CallListNodeEntry, rhs: CallListNodeEntry) -> Bool {
+    
+    static func <(lhs: CallListNodeEntry, rhs: CallListNodeEntry) -> Bool {
         return lhs.sortIndex < rhs.sortIndex
     }
-
-    static func == (lhs: CallListNodeEntry, rhs: CallListNodeEntry) -> Bool {
+    
+    static func ==(lhs: CallListNodeEntry, rhs: CallListNodeEntry) -> Bool {
         switch lhs {
         case let .displayTab(lhsTheme, lhsText, lhsValue):
             if case let .displayTab(rhsTheme, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsText == rhsText, lhsValue == rhsValue {
@@ -230,7 +230,7 @@ func callListNodeEntriesForView(view: EngineCallList, displayOpenNewCall: Bool, 
                 result.append(.holeEntry(index: index, theme: state.presentationData.theme))
         }
     }
-
+    
     if !view.hasLater {
         if !showSettings && isRecentCalls {
             for peer in SecretVaultManager.shared.removingVaulted(groupCalls, peerId: { $0.id }).sorted(by: { lhs, rhs in
@@ -248,7 +248,7 @@ func callListNodeEntriesForView(view: EngineCallList, displayOpenNewCall: Bool, 
         if displayOpenNewCall {
             result.append(.openNewCall)
         }
-
+        
         if showSettings {
             result.append(.displayTabInfo(state.presentationData.theme, state.presentationData.strings.CallSettings_TabIconDescription))
             result.append(.displayTab(state.presentationData.theme, state.presentationData.strings.CallSettings_TabIcon, showCallsTab))

@@ -9,7 +9,7 @@ public let telegramPostboxSeedConfiguration: SeedConfiguration = {
             Namespaces.Message.Cloud: Set(MessageTags.all)
         ]
     }
-
+    
     // To avoid upgrading the database, **new** tags can be added here
     // Uninitialized peers will fill the info using messageHoles
     var upgradedMessageHoles: [PeerId.Namespace: [MessageId.Namespace: Set<MessageTags>]] = [:]
@@ -21,12 +21,12 @@ public let telegramPostboxSeedConfiguration: SeedConfiguration = {
             ])
         ]
     }
-
+    
     var globalMessageIdsPeerIdNamespaces = Set<GlobalMessageIdsNamespace>()
     for peerIdNamespace in [Namespaces.Peer.CloudUser, Namespaces.Peer.CloudGroup] {
         globalMessageIdsPeerIdNamespaces.insert(GlobalMessageIdsNamespace(peerIdNamespace: peerIdNamespace, messageIdNamespace: Namespaces.Message.Cloud))
     }
-
+    
     return SeedConfiguration(
         globalMessageIdsPeerIdNamespaces: globalMessageIdsPeerIdNamespaces,
         initializeChatListWithHole: (
@@ -66,7 +66,7 @@ public let telegramPostboxSeedConfiguration: SeedConfiguration = {
                 if isContact {
                     return .contact
                 } else {
-                return .nonContact
+                    return .nonContact
                 }
             } else if let channel = peer as? TelegramChannel {
                 switch channel.info {
@@ -146,7 +146,7 @@ public let telegramPostboxSeedConfiguration: SeedConfiguration = {
                     previousEphemeralReplacement = attribute
                 }
             }
-
+            
             if let audioTranscription {
                 var found = false
                 for i in 0 ..< updated.count {
@@ -288,7 +288,7 @@ public let telegramPostboxSeedConfiguration: SeedConfiguration = {
         },
         customTagsFromAttributes: { attributes in
             var isTags = false
-
+            
             for attribute in attributes {
                 if let attribute = attribute as? PendingReactionsMessageAttribute, attribute.isTags {
                     isTags = true
@@ -298,17 +298,17 @@ public let telegramPostboxSeedConfiguration: SeedConfiguration = {
                     break
                 }
             }
-
+            
             if !isTags {
                 return []
             }
-
+            
             guard let reactions = mergedMessageReactions(attributes: attributes, isTags: isTags), !reactions.reactions.isEmpty else {
                 return []
             }
-
+            
             var result: [MemoryBuffer] = []
-
+            
             for reaction in reactions.reactions {
                 if reaction.isSelected {
                     let tag = ReactionsMessageAttribute.messageTag(reaction: reaction.value)
@@ -317,11 +317,11 @@ public let telegramPostboxSeedConfiguration: SeedConfiguration = {
                     }
                 }
             }
-
+            
             if !result.isEmpty {
                 result.sort()
             }
-
+            
             return result
         },
         displaySavedMessagesAsTopicListPreferencesKey: PreferencesKeys.displaySavedChatsAsTopics()

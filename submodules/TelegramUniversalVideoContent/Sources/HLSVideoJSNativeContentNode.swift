@@ -306,7 +306,7 @@ final class HLSJSServerSource: SharedHLSServer.Source {
                                 let upperBound = Int(result.offset + result.size)
                                 if lowerBound >= 0 && lowerBound <= upperBound && upperBound <= data.count {
                                     let subData = data.subdata(in: lowerBound ..< upperBound)
-                                    postbox.mediaBox.storeResourceData(file.media.resource.id, range: Int64(range.lowerBound) ..< Int64(range.upperBound), data: subData)
+                                postbox.mediaBox.storeResourceData(file.media.resource.id, range: Int64(range.lowerBound) ..< Int64(range.upperBound), data: subData)
                                 }
                             }
                             subscriber.putNext((partialFile, Int(result.offset) ..< Int(result.offset + result.size), Int(size)))
@@ -953,14 +953,14 @@ final class HLSVideoJSNativeContentNode: ASDisplayNode, UniversalVideoContentNod
         var current: Int
         var preferred: UniversalVideoContentVideoQuality
         var available: [Int]
-        
+
         init(current: Int, preferred: UniversalVideoContentVideoQuality, available: [Int]) {
             self.current = current
             self.preferred = preferred
             self.available = available
         }
     }
-    
+
     private struct BridgeStatus: Equatable {
         var isPlaying: Bool
         var isWaiting: Bool
@@ -1030,7 +1030,7 @@ final class HLSVideoJSNativeContentNode: ASDisplayNode, UniversalVideoContentNod
     private let dimensionsPromise = ValuePromise<CGSize>(CGSize())
     
     private var validLayout: (size: CGSize, actualSize: CGSize)?
-    
+
     private var preferredVideoQuality: UniversalVideoContentVideoQuality = .auto
     
     fileprivate var playerIsReady: Bool = false
@@ -1051,7 +1051,7 @@ final class HLSVideoJSNativeContentNode: ASDisplayNode, UniversalVideoContentNod
     private var requestedLevelIndex: Int?
     
     private var lastBridgeStatus: BridgeStatus?
-    
+
     private let chunkPlayerPartsState = Promise<ChunkMediaPlayerPartsState>(ChunkMediaPlayerPartsState(duration: nil, content: .parts([])))
     private var sourceBufferStateDisposable: Disposable?
     
@@ -1166,7 +1166,7 @@ final class HLSVideoJSNativeContentNode: ASDisplayNode, UniversalVideoContentNod
             }
             self.updatePlayerStatus(status: status)
         })
-        
+
         onSeeked = { [weak self] in
             Queue.mainQueue().async {
                 guard let self else {
@@ -1184,7 +1184,7 @@ final class HLSVideoJSNativeContentNode: ASDisplayNode, UniversalVideoContentNod
     deinit {
         self.serverDisposable?.dispose()
         self.audioSessionDisposable.dispose()
-        
+
         self.sourceBufferStateDisposable?.dispose()
         self.playerStatusDisposable?.dispose()
         
@@ -1305,7 +1305,7 @@ final class HLSVideoJSNativeContentNode: ASDisplayNode, UniversalVideoContentNod
             SharedHLSVideoJSContext.shared.jsContext?.evaluateJavaScript("window.hlsPlayer_instances[\(self.instanceId)].playerSetBaseRate(\(self.requestedBaseRate));")
         }
     }
-    
+
     fileprivate func onPlayerUpdatedCurrentTime(currentTime: Double) {
         self.playerTime = currentTime
     }
@@ -1398,7 +1398,7 @@ final class HLSVideoJSNativeContentNode: ASDisplayNode, UniversalVideoContentNod
                 "isWaiting": isBuffering,
                 "currentTime": currentTime
             ]
-            
+
             guard let jsonResult = try? JSONSerialization.data(withJSONObject: result), let jsonResultString = String(data: jsonResult, encoding: .utf8) else {
                 return
             }

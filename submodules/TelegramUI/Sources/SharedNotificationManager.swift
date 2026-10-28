@@ -42,7 +42,7 @@ public final class SharedNotificationManager {
     private var accountManager: AccountManager<TelegramAccountManagerTypes>?
     private var accountsAndKeys: [(Account, Bool, MasterNotificationKey)]?
     private var accountsAndKeysDisposable: Disposable?
-
+    
     // Novagram: per-account clear-on-read subscriptions.
     // Each live account subscribes to appliedIncomingReadMessages so delivered
     // notifications are removed when the user reads any chat — not just the primary.
@@ -51,17 +51,17 @@ public final class SharedNotificationManager {
     private var readClearAccountsDisposable: Disposable?
 
     private var notifications: [NotificationInfo] = []
-
+    
     private var pollStateContexts: [AccountRecordId: PollStateContext] = [:]
-
+    
     init(episodeId: UInt32, application: UIApplication, clearNotificationsManager: ClearNotificationsManager?, inForeground: Signal<Bool, NoError>, accounts: Signal<[(Account, Bool)], NoError>, pollLiveLocationOnce: @escaping (AccountRecordId) -> Void) {
         assert(Queue.mainQueue().isCurrent())
-
+        
         self.episodeId = episodeId
         self.application = application
         self.clearNotificationsManager = clearNotificationsManager
         self.pollLiveLocationOnce = pollLiveLocationOnce
-
+        
         self.inForegroundDisposable = (inForeground
         |> deliverOnMainQueue).startStrict(next: { [weak self] value in
             guard let strongSelf = self else {
@@ -69,7 +69,7 @@ public final class SharedNotificationManager {
             }
             strongSelf.inForeground = value
         })
-
+        
         self.accountsAndKeysDisposable = (accounts
         |> mapToSignal { accounts -> Signal<[(Account, Bool, MasterNotificationKey)], NoError> in
             let signals = accounts.map { account, isCurrent -> Signal<(Account, Bool, MasterNotificationKey), NoError> in
@@ -130,7 +130,7 @@ public final class SharedNotificationManager {
             }
         })
     }
-
+    
     deinit {
         self.inForegroundDisposable?.dispose()
         self.accountsAndKeysDisposable?.dispose()

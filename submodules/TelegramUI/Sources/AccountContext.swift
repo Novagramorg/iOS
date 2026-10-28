@@ -208,7 +208,7 @@ public final class AccountContextImpl: AccountContext {
     public var animatedEmojiStickers: Signal<[String: [StickerPackItem]], NoError> {
         return self.animatedEmojiStickersPromise.get()
     }
-    
+
     private var premiumGiftStickersDisposable: Disposable?
     public private(set) var premiumGiftStickersValue: [Int32: StickerPackItem] = [:]
     private let premiumGiftStickersPromise = Promise<[Int32: StickerPackItem]>()
@@ -522,7 +522,7 @@ public final class AccountContextImpl: AccountContext {
             strongSelf.animatedEmojiStickersValue = stickers
             strongSelf.animatedEmojiStickersPromise.set(.single(stickers))
         })
-        
+
         self.premiumGiftStickersDisposable = (self.engine.stickers.loadedStickerPack(reference: .premiumGifts, forceActualized: false)
         |> map { premiumGifts -> [Int32: StickerPackItem] in
             let durations: [Int32] = [1, 3, 6, 12, 24]
@@ -703,7 +703,7 @@ public final class AccountContextImpl: AccountContext {
             }
         }
     }
-    
+
     deinit {
         if self.walletContext != nil {
             self.account.walletTransferTasksRunning.set(.single(false))

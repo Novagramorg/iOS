@@ -245,14 +245,14 @@ public func navigateToChatControllerImpl(_ params: NavigateToChatControllerParam
                                     return
                                 }
                                 controller.navigateToMessage(messageLocation: .id(messageId, navigateToMessageParams), animated: isFirst || params.forceAnimatedScroll, completion: { [weak navigationController, weak controller] in
-                                if let navigationController = navigationController, let controller = controller {
-                                    let _ = navigationController.popToViewController(controller, animated: animated)
-                                    params.completion(controller)
-                                }
-                            }, customPresentProgress: { [weak navigationController] c, a in
-                                (navigationController?.viewControllers.last as? ViewController)?.present(c, in: .window(.root), with: a)
-                            })
-                        }
+                                    if let navigationController = navigationController, let controller = controller {
+                                        let _ = navigationController.popToViewController(controller, animated: animated)
+                                        params.completion(controller)
+                                    }
+                                }, customPresentProgress: { [weak navigationController] c, a in
+                                    (navigationController?.viewControllers.last as? ViewController)?.present(c, in: .window(.root), with: a)
+                                })
+                            }
 
                             if switchToThread {
                                 // The message lives in a different thread of the same peer (a link to topic A tapped

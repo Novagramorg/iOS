@@ -638,11 +638,11 @@ public final class ChatTextInputMediaRecordingButton: TGModernConversationInputM
         
         if toSmallSize {
             if !self.isDecorationFlying {
-            micDecoration.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.03, delay: 0.15, removeOnCompletion: false)
+                micDecoration.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.03, delay: 0.15, removeOnCompletion: false)
             }
         } else {
             if !self.isDecorationFlying {
-            micDecoration.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.18, removeOnCompletion: false)
+                micDecoration.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.18, removeOnCompletion: false)
             }
             let transition = ContainedViewLayoutTransition.animated(duration: 0.15, curve: .easeInOut)
             if let layer = self.animationView.view?.layer {

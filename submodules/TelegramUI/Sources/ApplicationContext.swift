@@ -41,33 +41,33 @@ import NewsFeedSupport
 final class UnauthorizedApplicationContext {
     let sharedContext: SharedAccountContextImpl
     let account: UnauthorizedAccount
-
+    
     let rootController: AuthorizationSequenceController
-
+    
     let isReady = Promise<Bool>()
-
+    
     var authorizationCompleted: Bool = false
 
     private var serviceNotificationEventsDisposable: Disposable?
-
+    
     init(apiId: Int32, apiHash: String, sharedContext: SharedAccountContextImpl, account: UnauthorizedAccount, otherAccountPhoneNumbers: ((String, AccountRecordId, Bool)?, [(String, AccountRecordId, Bool)])) {
         self.sharedContext = sharedContext
         self.account = account
         let presentationData = sharedContext.currentPresentationData.with { $0 }
-
+        
         var authorizationCompleted: (() -> Void)?
-
+        
         self.rootController = AuthorizationSequenceController(sharedContext: sharedContext, account: account, otherAccountPhoneNumbers: otherAccountPhoneNumbers, presentationData: presentationData, openUrl: sharedContext.applicationBindings.openUrl, apiId: apiId, apiHash: apiHash, authorizationCompleted: {
             authorizationCompleted?()
         })
         (self.rootController as NavigationController).statusBarHost = sharedContext.mainWindow?.statusBarHost
-
+        
         authorizationCompleted = { [weak self] in
             self?.authorizationCompleted = true
         }
-
+        
         self.isReady.set(self.rootController.ready.get())
-
+        
         account.shouldBeServiceTaskMaster.set(sharedContext.applicationBindings.applicationInForeground |> map { value -> AccountServiceTaskMasterMode in
             if value {
                 return .always
@@ -75,14 +75,14 @@ final class UnauthorizedApplicationContext {
                 return .never
             }
         })
-
-        DeviceAccess.authorizeAccess(to: .cellularData, presentationData: sharedContext.currentPresentationData.with { $0 }, present: { [weak self] c, _ in
+        
+        DeviceAccess.authorizeAccess(to: .cellularData, presentationData: sharedContext.currentPresentationData.with { $0 }, present: { [weak self] c, a in
             if let strongSelf = self {
                 (strongSelf.rootController.viewControllers.last as? ViewController)?.present(c, in: .window(.root))
             }
         }, openSettings: {
             sharedContext.applicationBindings.openSettings()
-        }, { _ in
+        }, { result in
             ApplicationSpecificNotice.setPermissionWarning(accountManager: sharedContext.accountManager, permission: .cellularData, value: 0)
         })
 
@@ -106,15 +106,15 @@ final class AuthorizedApplicationContext {
     let sharedApplicationContext: SharedApplicationContext
     let mainWindow: Window1
     let lockedCoveringView: LockedWindowCoveringView
-
+    
     let context: AccountContextImpl
-
+    
     let rootController: TelegramRootController
     let notificationController: NotificationContainerController
-
+    
     private let scheduledCallPeerDisposable = MetaDisposable()
     private var scheduledOpenExternalUrl: URL?
-
+        
     private let passcodeStatusDisposable = MetaDisposable()
     private let passcodeLockDisposable = MetaDisposable()
     private let loggedOutDisposable = MetaDisposable()
@@ -125,58 +125,58 @@ final class AuthorizedApplicationContext {
     private let watchNavigateToMessageDisposable = MetaDisposable()
     private let permissionsDisposable = MetaDisposable()
     private let appUpdateInfoDisposable = MetaDisposable()
-
+    
     private var inAppNotificationSettings: InAppNotificationSettings?
-
+    
     var passcodeController: PasscodeEntryController?
-
+    
     private var currentAppUpdateInfo: AppUpdateInfo?
     private var currentTermsOfServiceUpdate: TermsOfServiceUpdate?
     private var currentPermissionsController: PermissionController?
     private var currentPermissionsState: PermissionState?
-
+    
     private let unlockedStatePromise = Promise<Bool>()
     var unlockedState: Signal<Bool, NoError> {
         return self.unlockedStatePromise.get()
     }
-
+    
     var applicationBadge: Signal<Int32, NoError> {
         return renderedTotalUnreadCount(accountManager: self.context.sharedContext.accountManager, engine: self.context.engine)
         |> map {
             $0.0
         }
     }
-
+    
     let isReady = Promise<Bool>()
-
+    
     private var presentationDataDisposable: Disposable?
     private var displayAlertsDisposable: Disposable?
     private var removeNotificationsDisposable: Disposable?
-
+    
     private var applicationInForegroundDisposable: Disposable?
-
+    
     private var showCallsTab: Bool
     private var showCallsTabDisposable: Disposable?
     private var showNewsTab: Bool
     private var showNewsTabDisposable: Disposable?
     private var enablePostboxTransactionsDiposable: Disposable?
-
+    
     init(sharedApplicationContext: SharedApplicationContext, mainWindow: Window1, context: AccountContextImpl, accountManager: AccountManager<TelegramAccountManagerTypes>, showCallsTab: Bool, reinitializedNotificationSettings: @escaping () -> Void) {
         self.sharedApplicationContext = sharedApplicationContext
-
+        
         setupLegacyComponents(context: context)
         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-
+        
         self.mainWindow = mainWindow
         self.lockedCoveringView = LockedWindowCoveringView(theme: presentationData.theme)
-
+        
         self.context = context
-
+        
         self.showCallsTab = showCallsTab
         self.showNewsTab = isNewsFeedEnabled(appConfiguration: context.currentAppConfiguration.with { $0 })
-
+        
         self.notificationController = NotificationContainerController(context: context)
-
+        
         self.rootController = TelegramRootController(context: context)
         self.rootController.minimizedContainer = self.sharedApplicationContext.minimizedContainer[context.account.id]
         self.rootController.minimizedContainerUpdated = { [weak self] minimizedContainer in
@@ -185,7 +185,7 @@ final class AuthorizedApplicationContext {
             }
             self.sharedApplicationContext.minimizedContainer[self.context.account.id] = minimizedContainer
         }
-
+        
         self.rootController.globalOverlayControllersUpdated = { [weak self] in
             guard let strongSelf = self else {
                 return
@@ -197,14 +197,14 @@ final class AuthorizedApplicationContext {
                     break
                 }
             }
-
+            
             strongSelf.notificationController.updateIsTemporaryHidden(hasContext)
         }
-
+        
         if KeyShortcutsController.isAvailable {
             let keyShortcutsController = KeyShortcutsController { [weak self] f in
                 if let strongSelf = self, let appLockContext = strongSelf.context.sharedContext.appLockContext as? AppLockContextImpl {
-                    _ = (appLockContext.isCurrentlyLocked
+                    let _ = (appLockContext.isCurrentlyLocked
                     |> take(1)
                     |> deliverOnMainQueue).start(next: { locked in
                         guard !locked else {
@@ -212,7 +212,7 @@ final class AuthorizedApplicationContext {
                         }
                         if let tabController = strongSelf.rootController.rootTabController {
                             let selectedController = tabController.controllers[tabController.selectedIndex]
-
+                            
                             if let index = strongSelf.rootController.viewControllers.lastIndex(where: { controller in
                                 guard let controller = controller as? ViewController else {
                                     return false
@@ -236,7 +236,7 @@ final class AuthorizedApplicationContext {
                                     return
                                 }
                             }
-
+                            
                             if let controller = strongSelf.rootController.topViewController as? ViewController, controller !== selectedController {
                                 if !f(controller) {
                                     return
@@ -254,7 +254,7 @@ final class AuthorizedApplicationContext {
             }
             context.keyShortcutsController = keyShortcutsController
         }
-
+        
         if self.rootController.rootTabController == nil {
             self.rootController.addRootControllers(showCallsTab: self.showCallsTab, showNewsTab: self.showNewsTab)
         }
@@ -270,13 +270,13 @@ final class AuthorizedApplicationContext {
         } else {
             self.isReady.set(.single(true))
         }
-
+        
         let accountId = context.account.id
         self.loggedOutDisposable.set((context.account.loggedOut
         |> deliverOnMainQueue).start(next: { [weak self] value in
             if value {
                 Logger.shared.log("ApplicationContext", "account logged out")
-                _ = logoutFromAccount(id: accountId, accountManager: accountManager, alreadyLoggedOutRemotely: false).start()
+                let _ = logoutFromAccount(id: accountId, accountManager: accountManager, alreadyLoggedOutRemotely: false).start()
                 if let strongSelf = self {
                     strongSelf.rootController.currentWindow?.forEachController { controller in
                         if let controller = controller as? TermsOfServiceController {
@@ -286,7 +286,7 @@ final class AuthorizedApplicationContext {
                 }
             }
         }))
-
+        
         self.inAppNotificationSettingsDisposable.set(((context.sharedContext.accountManager.sharedData(keys: [ApplicationSpecificSharedDataKeys.inAppNotificationSettings])) |> deliverOnMainQueue).start(next: { [weak self] sharedData in
             if let strongSelf = self {
                 if let settings = sharedData.entries[ApplicationSpecificSharedDataKeys.inAppNotificationSettings]?.get(InAppNotificationSettings.self) {
@@ -342,18 +342,18 @@ final class AuthorizedApplicationContext {
                         }
                         chatLocation = .peer(EnginePeer(peer))
                     }
-
+                    
                     var chatIsVisible = false
                     if let topController = strongSelf.rootController.topViewController as? ChatControllerImpl, topController.traceVisibility() {
                         if topController.chatLocation.peerId == firstMessage.id.peerId, topController.chatLocation.threadId == nil || topController.chatLocation.threadId == firstMessage.threadId {
                             chatIsVisible = true
                         }
                     }
-
+                    
                     if !notify {
                         chatIsVisible = true
                     }
-
+                    
                     if !chatIsVisible {
                         strongSelf.mainWindow.forEachViewController({ controller in
                             if let controller = controller as? ChatControllerImpl, controller.chatLocation.peerId == chatLocation.peerId, chatLocation.threadId == nil || chatLocation.threadId == controller.chatLocation.threadId {
@@ -363,22 +363,22 @@ final class AuthorizedApplicationContext {
                             return true
                         })
                     }
-
+                    
                     let inAppNotificationSettings: InAppNotificationSettings
                     if let current = strongSelf.inAppNotificationSettings {
                         inAppNotificationSettings = current
                     } else {
                         inAppNotificationSettings = InAppNotificationSettings.defaultSettings
                     }
-
+                    
                     if let appLockContext = strongSelf.context.sharedContext.appLockContext as? AppLockContextImpl {
-                        _ = (appLockContext.isCurrentlyLocked
+                        let _ = (appLockContext.isCurrentlyLocked
                         |> take(1)
                         |> deliverOnMainQueue).start(next: { locked in
                             guard let strongSelf = self else {
                                 return
                             }
-
+                            
                             guard !locked else {
                                 return
                             }
@@ -412,11 +412,11 @@ final class AuthorizedApplicationContext {
                                     }
                                 }
                             }
-
+                            
                             if chatIsVisible {
                                 return
                             }
-
+                            
                             if firstMessage.restrictionReason(platform: "ios", contentSettings: strongSelf.context.currentContentSettings.with { $0 }) != nil {
                                 return
                             }
@@ -425,7 +425,7 @@ final class AuthorizedApplicationContext {
                                     return
                                 }
                             }
-
+                            
                             if inAppNotificationSettings.displayPreviews {
                                 let presentationData = strongSelf.context.sharedContext.currentPresentationData.with { $0 }
                                 strongSelf.notificationController.enqueue(ChatMessageNotificationItem(context: strongSelf.context, strings: presentationData.strings, dateTimeFormat: presentationData.dateTimeFormat, nameDisplayOrder: presentationData.nameDisplayOrder, messages: messages, threadData: threadData, tapAction: {
@@ -438,18 +438,18 @@ final class AuthorizedApplicationContext {
                                             }
                                             return true
                                         }, excludeNavigationSubControllers: true)
-
+                                        
                                         if foundOverlay {
                                             return true
                                         }
-
+                                        
                                         if let topController = strongSelf.rootController.topViewController as? ViewController, isInlineControllerForChatNotificationOverlayPresentation(topController) {
                                             return true
                                         }
-
+                                        
                                         if let topController = strongSelf.rootController.topViewController as? ChatControllerImpl, topController.chatLocation.peerId == chatLocation.peerId, topController.chatLocation.threadId == nil || topController.chatLocation.threadId == chatLocation.threadId {
                                             strongSelf.notificationController.removeItemsWithGroupingKey(firstMessage.id.peerId)
-
+                                            
                                             return false
                                         }
 
@@ -458,7 +458,7 @@ final class AuthorizedApplicationContext {
                                                 minimizedContainer.collapse()
                                             } else if let topContoller = strongSelf.rootController.topViewController as? AttachmentController {
                                                 topContoller.minimizeIfNeeded()
-                                            } else if let topContoller = strongSelf.rootController.topViewController as? BrowserScreen {
+                                            }  else if let topContoller = strongSelf.rootController.topViewController as? BrowserScreen {
                                                 topContoller.requestMinimize(topEdgeOffset: nil, initialVelocity: nil)
                                             }
 
@@ -498,13 +498,13 @@ final class AuthorizedApplicationContext {
 
                                         if let topController = strongSelf.rootController.topViewController as? ChatControllerImpl {
                                             let didPresentAlert = topController.presentVoiceMessageDiscardAlert(action: {
-                                                _ = proceedAction(false)
+                                                let _ = proceedAction(false)
                                             }, discardIfVideo: true, performAction: false)
                                             if didPresentAlert {
                                                 return false
                                             }
                                         }
-
+                                        
                                         return proceedAction(true)
                                     }
                                     return false
@@ -521,13 +521,13 @@ final class AuthorizedApplicationContext {
                 }
             }
         }))
-
+        
         self.termsOfServiceUpdatesDisposable.set((context.account.stateManager.termsOfServiceUpdate
         |> deliverOnMainQueue).start(next: { [weak self] termsOfServiceUpdate in
             guard let strongSelf = self, strongSelf.currentTermsOfServiceUpdate != termsOfServiceUpdate else {
                 return
             }
-
+            
             strongSelf.currentTermsOfServiceUpdate = termsOfServiceUpdate
             if let termsOfServiceUpdate = termsOfServiceUpdate {
                 let presentationData = strongSelf.context.sharedContext.currentPresentationData.with { $0 }
@@ -542,13 +542,13 @@ final class AuthorizedApplicationContext {
                         UIApplication.shared.open(parsedUrl, options: [:], completionHandler: nil)
                     }
                 })
-
+                
                 acceptImpl = { [weak controller] botName in
                     controller?.inProgress = true
                     guard let strongSelf = self else {
                         return
                     }
-                    _ = (strongSelf.context.engine.accountData.acceptTermsOfService(id: termsOfServiceUpdate.id)
+                    let _ = (strongSelf.context.engine.accountData.acceptTermsOfService(id: termsOfServiceUpdate.id)
                     |> deliverOnMainQueue).start(completed: {
                         controller?.dismiss()
                         if let strongSelf = self, let botName = botName {
@@ -567,14 +567,14 @@ final class AuthorizedApplicationContext {
                         }
                     })
                 }
-
+                
                 declineImpl = { [weak controller] in
                     guard let strongSelf = self else {
                         return
                     }
                     let accountId = strongSelf.context.account.id
                     let accountManager = strongSelf.context.sharedContext.accountManager
-                    _ = (strongSelf.context.engine.auth.deleteAccount(reason: "GDPR", password: nil)
+                    let _ = (strongSelf.context.engine.auth.deleteAccount(reason: "GDPR", password: nil)
                     |> deliverOnMainQueue).start(error: { _ in
                         guard let strongSelf = self else {
                             return
@@ -584,27 +584,27 @@ final class AuthorizedApplicationContext {
                         (strongSelf.rootController.viewControllers.last as? ViewController)?.present(controller, in: .window(.root))
                     }, completed: {
                         controller?.dismiss()
-                        _ = logoutFromAccount(id: accountId, accountManager: accountManager, alreadyLoggedOutRemotely: true).start()
+                        let _ = logoutFromAccount(id: accountId, accountManager: accountManager, alreadyLoggedOutRemotely: true).start()
                     })
                 }
-
+                
                 (strongSelf.rootController.viewControllers.last as? ViewController)?.present(controller, in: .window(.root))
             }
         }))
-
+        
         self.appUpdateInfoDisposable.set((context.account.stateManager.appUpdateInfo
         |> deliverOnMainQueue).start(next: { [weak self] appUpdateInfo in
             guard let strongSelf = self, strongSelf.currentAppUpdateInfo != appUpdateInfo else {
                 return
             }
-
+            
             strongSelf.currentAppUpdateInfo = appUpdateInfo
             if let appUpdateInfo = appUpdateInfo {
                 let controller = updateInfoController(context: strongSelf.context, appUpdateInfo: appUpdateInfo)
                 strongSelf.mainWindow.present(controller, on: .update)
             }
         }))
-
+        
         if #available(iOS 10.0, *) {
             let permissionsPosition = ValuePromise(0, ignoreRepeated: true)
             self.permissionsDisposable.set((combineLatest(queue: .mainQueue(), requiredPermissions(context: context), permissionUISplitTest(postbox: context.account.postbox), permissionsPosition.get(), context.sharedContext.accountManager.noticeEntry(key: ApplicationSpecificNotice.permissionWarningKey(permission: .contacts)!), context.sharedContext.accountManager.noticeEntry(key: ApplicationSpecificNotice.permissionWarningKey(permission: .notifications)!), context.sharedContext.accountManager.noticeEntry(key: ApplicationSpecificNotice.permissionWarningKey(permission: .cellularData)!))
@@ -612,7 +612,7 @@ final class AuthorizedApplicationContext {
                 guard let strongSelf = self else {
                     return
                 }
-
+                
                 let contactsTimestamp = contactsPermissionWarningNotice.value.flatMap({ ApplicationSpecificNotice.getTimestampValue($0) })
                 let notificationsTimestamp = notificationsPermissionWarningNotice.value.flatMap({ ApplicationSpecificNotice.getTimestampValue($0) })
                 let cellularDataTimestamp = cellularDataPermissionWarningNotice.value.flatMap({ ApplicationSpecificNotice.getTimestampValue($0) })
@@ -622,7 +622,7 @@ final class AuthorizedApplicationContext {
                 if notificationsTimestamp == nil, case .requestable = required.1.status {
                     ApplicationSpecificNotice.setPermissionWarning(accountManager: context.sharedContext.accountManager, permission: .notifications, value: 1)
                 }
-
+                
                 let config = splitTest.configuration
                 var order = config.order
                 if !order.contains(.cellularData) {
@@ -665,7 +665,7 @@ final class AuthorizedApplicationContext {
                     }
                     i += 1
                 }
-
+                
                 if let (state, modal) = requestedPermissions.first {
                     if modal {
                         var didAppear = false
@@ -677,9 +677,9 @@ final class AuthorizedApplicationContext {
                             controller = PermissionController(context: context, splitTest: splitTest)
                             strongSelf.currentPermissionsController = controller
                         }
-
+                        
                         controller.setState(.permission(state), animated: didAppear)
-                        controller.proceed = { _ in
+                        controller.proceed = { resolved in
                             permissionsPosition.set(position + 1)
                             switch state {
                                 case .contacts:
@@ -692,7 +692,7 @@ final class AuthorizedApplicationContext {
                                     break
                             }
                         }
-
+                        
                         if !didAppear {
                             Queue.mainQueue().after(0.15, {
                                 (strongSelf.rootController.viewControllers.last as? ViewController)?.present(controller, in: .window(.root), with: ViewControllerPresentationArguments(presentationAnimation: .modalSheet))
@@ -727,20 +727,20 @@ final class AuthorizedApplicationContext {
                                         ApplicationSpecificNotice.setPermissionWarning(accountManager: context.sharedContext.accountManager, permission: .notifications, value: 0)
                                     })
                                 case .cellularData:
-                                    DeviceAccess.authorizeAccess(to: .cellularData, presentationData: context.sharedContext.currentPresentationData.with { $0 }, present: { [weak self] c, _ in
+                                    DeviceAccess.authorizeAccess(to: .cellularData, presentationData: context.sharedContext.currentPresentationData.with { $0 }, present: { [weak self] c, a in
                                         if let strongSelf = self {
                                             (strongSelf.rootController.viewControllers.last as? ViewController)?.present(c, in: .window(.root))
                                         }
                                     }, openSettings: {
                                         context.sharedContext.applicationBindings.openSettings()
-                                    }, { _ in
+                                    }, { result in
                                         permissionsPosition.set(position + 1)
                                         ApplicationSpecificNotice.setPermissionWarning(accountManager: context.sharedContext.accountManager, permission: .cellularData, value: 0)
                                     })
                                 case .siri:
                                     DeviceAccess.authorizeAccess(to: .siri, requestSiriAuthorization: { completion in
                                         return context.sharedContext.applicationBindings.requestSiriAuthorization(completion)
-                                    }, { _ in
+                                    }, { result in
                                         permissionsPosition.set(position + 1)
                                     })
                             }
@@ -755,7 +755,7 @@ final class AuthorizedApplicationContext {
                 }
             }))
         }
-
+        
         self.displayAlertsDisposable = (context.account.stateManager.displayAlerts
         |> deliverOnMainQueue).start(next: { [weak self] alerts in
             if let strongSelf = self {
@@ -765,7 +765,7 @@ final class AuthorizedApplicationContext {
                     if isDropAuth {
                         actions = [TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {}), TextAlertAction(type: .genericAction, title: presentationData.strings.LogoutOptions_LogOut, action: {
                             if let strongSelf = self {
-                                _ = logoutFromAccount(id: strongSelf.context.account.id, accountManager: strongSelf.context.sharedContext.accountManager, alreadyLoggedOutRemotely: false).start()
+                                let _ = logoutFromAccount(id: strongSelf.context.account.id, accountManager: strongSelf.context.sharedContext.accountManager, alreadyLoggedOutRemotely: false).start()
                             }
                         })]
                     } else {
@@ -776,12 +776,12 @@ final class AuthorizedApplicationContext {
                 }
             }
         })
-
+        
         // Novagram: clear-on-read is now handled in SharedNotificationManager for ALL live accounts.
         // The per-primary subscription here was replaced so non-primary accounts also clear their
         // delivered notifications when chats are read (dynamic multi-account, cap=5).
         // removeNotificationsDisposable kept as nil; dispose in deinit is a safe no-op.
-
+       
         let importableContacts = self.context.sharedContext.contactDataManager?.importable() ?? .single([:])
         let optionalImportableContacts = self.context.engine.data.subscribe(TelegramEngine.EngineData.Item.Configuration.ApplicationSpecificPreference(key: PreferencesKeys.contactsSettings))
         |> mapToSignal { preferences -> Signal<[DeviceContactNormalizedPhoneNumber: ImportableDeviceContactData], NoError> in
@@ -797,7 +797,7 @@ final class AuthorizedApplicationContext {
         |> map { contacts in
             return Set(contacts.keys.map { cleanPhoneNumber($0.rawValue) })
         })
-
+        
         let previousTheme = Atomic<PresentationTheme?>(value: nil)
         self.presentationDataDisposable = (context.sharedContext.presentationData
         |> deliverOnMainQueue).start(next: { [weak self] presentationData in
@@ -808,7 +808,7 @@ final class AuthorizedApplicationContext {
                 }
             }
         })
-
+        
         let showCallsTabSignal = context.sharedContext.accountManager.sharedData(keys: [ApplicationSpecificSharedDataKeys.callListSettings])
         |> map { sharedData -> Bool in
             var value = CallListSettings.defaultSettings.showTab
@@ -869,7 +869,7 @@ final class AuthorizedApplicationContext {
             }
         })
     }
-
+    
     deinit {
         self.context.account.postbox.clearCaches()
         self.showNewsTabDisposable?.dispose()
@@ -890,11 +890,11 @@ final class AuthorizedApplicationContext {
         self.permissionsDisposable.dispose()
         self.scheduledCallPeerDisposable.dispose()
     }
-
+    
     func openNotificationSettings() {
         self.rootController.pushViewController(notificationsAndSoundsController(context: self.context, exceptionsList: nil))
     }
-
+    
     func startCall(peerId: EnginePeer.Id, isVideo: Bool) {
         guard let appLockContext = self.context.sharedContext.appLockContext as? AppLockContextImpl else {
             return
@@ -908,10 +908,10 @@ final class AuthorizedApplicationContext {
             guard let strongSelf = self else {
                 return
             }
-            _ = strongSelf.context.sharedContext.callManager?.requestCall(context: strongSelf.context, peerId: peerId, isVideo: isVideo, endCurrentIfAny: false)
+            let _ = strongSelf.context.sharedContext.callManager?.requestCall(context: strongSelf.context, peerId: peerId, isVideo: isVideo, endCurrentIfAny: false)
         }))
     }
-
+    
     func openChatWithPeerId(peerId: EnginePeer.Id, threadId: Int64?, messageId: EngineMessage.Id? = nil, activateInput: Bool = false, storyId: EngineStoryId?, openAppIfAny: Bool = false, alwaysKeepMessageId: Bool = false) {
         if let storyId {
             var controllers = self.rootController.viewControllers
@@ -922,14 +922,14 @@ final class AuthorizedApplicationContext {
                 return true
             }
             self.rootController.setViewControllers(controllers, animated: false)
-
+            
             self.rootController.chatListController?.openStoriesFromNotification(peerId: storyId.peerId, storyId: storyId.id)
         } else {
             var visiblePeerId: EnginePeer.Id?
             if let controller = self.rootController.topViewController as? ChatControllerImpl, controller.chatLocation.peerId == peerId, controller.chatLocation.threadId == threadId {
                 visiblePeerId = peerId
             }
-
+            
             if visiblePeerId != peerId || messageId != nil {
                 let isOutgoingMessage: Signal<Bool, NoError>
                 if let messageId {
@@ -945,7 +945,7 @@ final class AuthorizedApplicationContext {
                 } else {
                     isOutgoingMessage = .single(false)
                 }
-                _ = combineLatest(
+                let _ = combineLatest(
                     queue: Queue.mainQueue(),
                     self.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: peerId)),
                     isOutgoingMessage
@@ -953,7 +953,7 @@ final class AuthorizedApplicationContext {
                     guard let peer = peer else {
                         return
                     }
-
+                    
                     let chatLocation: NavigateToChatControllerParams.Location
                     if let threadId = threadId {
                         chatLocation = .replyThread(ChatReplyThreadMessage(
@@ -962,7 +962,7 @@ final class AuthorizedApplicationContext {
                     } else {
                         chatLocation = .peer(peer)
                     }
-
+                    
                     if openAppIfAny, case let .user(user) = peer, let botInfo = user.botInfo, botInfo.flags.contains(.hasWebApp), let parentController = self.rootController.viewControllers.last as? ViewController {
                         self.context.sharedContext.openWebApp(
                             context: self.context,
@@ -986,7 +986,7 @@ final class AuthorizedApplicationContext {
             }
         }
     }
-
+    
     func openUrl(_ url: URL, external: Bool = false) {
         if self.rootController.rootTabController != nil {
             let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
@@ -997,25 +997,25 @@ final class AuthorizedApplicationContext {
             self.scheduledOpenExternalUrl = url
         }
     }
-
+    
     func openRootSearch() {
         self.rootController.openChatsController(activateSearch: true)
     }
-
+    
     func openRootCompose() {
         self.rootController.openRootCompose()
     }
-
+    
     func openRootCamera() {
         self.rootController.openRootCamera()
     }
-
+    
     func openAppIcon() {
         self.rootController.openAppIcon()
     }
-
+    
     func switchAccount() {
-        _ = (activeAccountsAndPeers(context: self.context)
+        let _ = (activeAccountsAndPeers(context: self.context)
         |> take(1)
         |> map { primaryAndAccounts -> (AccountContext, EnginePeer, Int32)? in
             return primaryAndAccounts.1.first
@@ -1034,7 +1034,7 @@ final class AuthorizedApplicationContext {
             strongSelf.context.sharedContext.switchToAccount(id: context.account.id, fromSettingsController: nil, withChatListController: nil)
         })
     }
-
+    
     private func updateCoveringViewSnaphot(_ visible: Bool) {
         if visible {
             let scale: CGFloat = 0.5

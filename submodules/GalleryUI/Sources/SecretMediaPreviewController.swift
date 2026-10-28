@@ -550,7 +550,7 @@ public final class SecretMediaPreviewController: ViewController {
                 }
                 self._ready.set(ready |> map { true })
                 if !(UserDefaults(suiteName: "pro_messager")?.bool(forKey: "is_ghost_mode_active") ?? false) {
-                    self.markMessageAsConsumedDisposable.set(self.context.engine.messages.markMessageContentAsConsumedInteractively(messageId: message.id).start())
+                self.markMessageAsConsumedDisposable.set(self.context.engine.messages.markMessageContentAsConsumedInteractively(messageId: message.id).start())
                 }
             } else {
                 var beginTimeAndTimeout: (Double, Double, Bool)?

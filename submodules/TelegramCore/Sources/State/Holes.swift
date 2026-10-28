@@ -1250,8 +1250,8 @@ func fetchMessageHistoryHole(accountPeerId: PeerId, source: FetchMessageHistoryH
                         return withResolvedAssociatedMessages(postbox: postbox, source: source, accountPeerId: accountPeerId, parsedPeers: parsedPeers, storeMessages: storeMessages, resolveThreads: true, { transaction, additionalParsedPeers, additionalMessages -> FetchMessageHistoryHoleResult? in
                             let result = storeAndCloseHole(transaction)
                             storeReferencedData(transaction, additionalParsedPeers, additionalMessages)
-                        return result
-                    })
+                            return result
+                        })
                     } else {
                         // The view loads after one round trip; what the messages reference follows.
                         return postbox.transaction { transaction -> FetchMessageHistoryHoleResult? in

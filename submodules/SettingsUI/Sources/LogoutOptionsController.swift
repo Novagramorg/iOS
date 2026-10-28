@@ -157,7 +157,7 @@ public func logoutOptionsController(context: AccountContext, navigationControlle
                     count += 1
                 }
             }
-
+            
             if count >= maximumAvailableAccounts {
                 var replaceImpl: ((ViewController) -> Void)?
                 let controller = PremiumLimitScreen(context: context, subject: .accounts, count: Int32(count), action: {
@@ -267,16 +267,16 @@ public func logoutOptionsController(context: AccountContext, navigationControlle
         logoutConfirmationDisposable.set((logoutConfirmationText(context: context, presentationData: presentationData)
         |> deliverOnMainQueue).start(next: { text in
             let alertController = textAlertController(context: context, title: presentationData.strings.Settings_LogoutConfirmationTitle, text: text, actions: [
-            TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {
-            }),
-            TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {
+                TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {
+                }),
+                TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {
                 // Novagram: statistics — a confirmed logout sends /v1/account/delete (and /create again if accounts remain).
                 NovagramAnalyticsManager.shared.accountWillLogOut(accountId: context.account.id)
-                let _ = logoutFromAccount(id: context.account.id, accountManager: context.sharedContext.accountManager, alreadyLoggedOutRemotely: false).start()
-                dismissImpl?()
-            })
+                    let _ = logoutFromAccount(id: context.account.id, accountManager: context.sharedContext.accountManager, alreadyLoggedOutRemotely: false).start()
+                    dismissImpl?()
+                })
             ], parseMarkdown: true)
-        presentControllerImpl?(alertController, nil)
+            presentControllerImpl?(alertController, nil)
         }))
     })
         

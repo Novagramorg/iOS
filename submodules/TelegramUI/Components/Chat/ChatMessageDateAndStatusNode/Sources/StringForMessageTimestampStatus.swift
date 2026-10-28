@@ -18,12 +18,12 @@ private func dateStringForDay(strings: PresentationStrings, dateTimeFormat: Pres
     var t: time_t = time_t(timestamp)
     var timeinfo: tm = tm()
     localtime_r(&t, &timeinfo)
-
+    
     let timestampNow = Int32(CFAbsoluteTimeGetCurrent() + NSTimeIntervalSince1970)
     var now: time_t = time_t(timestampNow)
     var timeinfoNow: tm = tm()
     localtime_r(&now, &timeinfoNow)
-
+    
     if timeinfo.tm_year != timeinfoNow.tm_year {
         return "\(stringForTimestamp(day: timeinfo.tm_mday, month: timeinfo.tm_mon + 1, year: timeinfo.tm_year, dateTimeFormat: dateTimeFormat))"
     } else {
@@ -80,7 +80,7 @@ public func stringForMessageTimestampStatus(
             return strings.Message_RecommendedLabel
         }
     }
-
+    
     var format = format
     var timestamp: Int32
     var isFullEditedDate = false
@@ -95,7 +95,7 @@ public func stringForMessageTimestampStatus(
             timestamp = message.timestamp
         }
     }
-
+    
     var displayFullDate = false
     if case .full = format, timestamp > 100000 {
         displayFullDate = true
@@ -103,16 +103,16 @@ public func stringForMessageTimestampStatus(
         displayFullDate = true
         timestamp = forwardInfo.date
     }
-
+    
     if let sourceAuthorInfo = message.sourceAuthorInfo, let orignalDate = sourceAuthorInfo.orignalDate {
         timestamp = orignalDate
     }
-
+    
     var dateText = stringForMessageTimestamp(timestamp: timestamp, dateTimeFormat: dateTimeFormat)
     if timestamp == scheduleWhenOnlineTimestamp {
         dateText = "         "
     }
-
+    
     if let repeatPeriod = message.scheduleRepeatPeriod {
         let repeatString: String
         switch repeatPeriod {
@@ -139,24 +139,24 @@ public func stringForMessageTimestampStatus(
         }
         dateText = strings.Message_RepeatAt(repeatString, dateText).string
     }
-
+    
     if message.id.namespace == Namespaces.Message.ScheduledCloud, let _ = message.pendingProcessingAttribute {
         return strings.Message_Approximate(dateText).string
     }
-
+    
     if displayFullDate {
         let dayText: String
-
+        
         let nowTimestamp = Int32(CFAbsoluteTimeGetCurrent() + NSTimeIntervalSince1970)
-
+        
         var t: time_t = time_t(timestamp)
         var timeinfo: tm = tm()
         localtime_r(&t, &timeinfo)
-
+        
         var now: time_t = time_t(nowTimestamp)
         var timeinfoNow: tm = tm()
         localtime_r(&now, &timeinfoNow)
-
+        
         if timeinfo.tm_year == timeinfoNow.tm_year {
             if format != .full || isFullEditedDate, timeinfo.tm_yday == timeinfoNow.tm_yday {
                 if isFullEditedDate {
@@ -182,7 +182,7 @@ public func stringForMessageTimestampStatus(
     } else if let forwardInfo = message.forwardInfo, forwardInfo.flags.contains(.isImported) {
         dateText = strings.Message_ImportedDateFormat(dateStringForDay(strings: strings, dateTimeFormat: dateTimeFormat, timestamp: forwardInfo.date), stringForMessageTimestamp(timestamp: forwardInfo.date, dateTimeFormat: dateTimeFormat), dateText).string
     }
-
+    
     var authorTitle: String?
     if let author = message.author, case .user = author {
         if let peer = message.peers[message.id.peerId] as? TelegramChannel, case .broadcast = peer.info {
@@ -205,7 +205,7 @@ public func stringForMessageTimestampStatus(
                 }
             }
         }
-
+        
         if message.id.peerId != context.account.peerId {
             for attribute in message.attributes {
                 if let attribute = attribute as? SourceReferenceMessageAttribute {
@@ -221,7 +221,7 @@ public func stringForMessageTimestampStatus(
             }
         }
     }
-
+    
     if authorTitle == nil {
         for attribute in message.attributes {
             if let attribute = attribute as? InlineBusinessBotMessageAttribute {
@@ -236,22 +236,22 @@ public func stringForMessageTimestampStatus(
     if (Namespaces.Message.allEphemeral.contains(message.id.namespace) || Namespaces.Message.allWelcomeMessages.contains(message.id.namespace)), let channel = message.peers[message.id.peerId] as? TelegramChannel, case .broadcast = channel.info {
         authorTitle = nil
     }
-
+    
     if let subject = associatedData.subject, case let .messageOptions(_, _, info) = subject, case .forward = info {
         authorTitle = nil
     }
     if ignoreAuthor {
         authorTitle = nil
     }
-
+    
     if case .minimal = format {
-
+        
     } else {
         if let authorTitle = authorTitle, !authorTitle.isEmpty {
             dateText = "\(authorTitle), \(dateText)"
         }
     }
-
+    
     if let del = message.attributes.first(where: { $0 is DeletedMessageAttribute }) as? DeletedMessageAttribute {
         if del.timestamp > 0 {
             let deletedTimeText = stringForMessageTimestamp(timestamp: del.timestamp, dateTimeFormat: dateTimeFormat)

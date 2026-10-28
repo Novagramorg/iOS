@@ -70,11 +70,11 @@ func matchingDeviceContacts(stableIds: [String]) -> Signal<[MatchingDeviceContac
 
 @available(iOSApplicationExtension 10.0, iOS 10.0, *)
 func matchingDeviceContact(_ contact: CNContact) -> MatchingDeviceContact {
-        let phoneNumbers = contact.phoneNumbers.compactMap({ number -> String? in
-            if !number.value.stringValue.isEmpty {
+    let phoneNumbers = contact.phoneNumbers.compactMap({ number -> String? in
+        if !number.value.stringValue.isEmpty {
             return number.value.stringValue
-            } else {
-                return nil
+        } else {
+            return nil
             }
         })
         
@@ -84,8 +84,8 @@ func matchingDeviceContact(_ contact: CNContact) -> MatchingDeviceContact {
                 contactPeerId = peerId
             }
         }
-        
-        return MatchingDeviceContact(stableId: contact.identifier, firstName: contact.givenName, lastName: contact.familyName, phoneNumbers: phoneNumbers, peerId: contactPeerId)
+
+    return MatchingDeviceContact(stableId: contact.identifier, firstName: contact.givenName, lastName: contact.familyName, phoneNumbers: phoneNumbers, peerId: contactPeerId)
 }
 
 private func matchPhoneNumbers(_ lhs: String, _ rhs: String) -> Bool {
@@ -118,8 +118,8 @@ func matchingCloudContacts(postbox: Postbox, contacts: [MatchingDeviceContact]) 
 /// behind, so a record counts only while its user is still a contact, the same bound the digits
 /// have.
 func matchingCloudContacts(transaction: Transaction, contacts: [MatchingDeviceContact]) -> [(String, TelegramUser)] {
-        var result: [(String, TelegramUser)] = []
-        var matchingIds = Set<EnginePeer.Id>()
+    var result: [(String, TelegramUser)] = []
+    var matchingIds = Set<EnginePeer.Id>()
     func add(_ stableId: String, _ peer: TelegramUser) {
         if matchingIds.insert(peer.id).inserted {
             result.append((stableId, peer))
@@ -127,8 +127,8 @@ func matchingCloudContacts(transaction: Transaction, contacts: [MatchingDeviceCo
         }
     let contactPeerIds = transaction.getContactPeerIds()
 
-        for contact in contacts {
-            if let peerId = contact.peerId, let peer = transaction.getPeer(peerId) as? TelegramUser {
+    for contact in contacts {
+        if let peerId = contact.peerId, let peer = transaction.getPeer(peerId) as? TelegramUser {
             add(contact.stableId, peer)
         }
     }
@@ -152,8 +152,8 @@ func matchingCloudContacts(transaction: Transaction, contacts: [MatchingDeviceCo
                 }
             }
         }
-        
-        return result
+
+    return result
 }
 
 func matchingCloudContact(postbox: Postbox, peerId: PeerId) -> Signal<TelegramUser?, NoError> {

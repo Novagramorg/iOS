@@ -1086,15 +1086,15 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                             |> map { pack -> (TelegramMediaFile, LoadedStickerPack)? in
                                 if let pack, case let .result(_, items, _) = pack {
                                     return items.first.flatMap { ($0.file._parse(), pack) }
-                                        } else {
+                                } else {
                                     return nil
-                                        }
-                                    }).startStrict(next: { fileAndPackTitle in
-                                        guard let strongSelf = self else {
-                                            return
-                                        }
-                                        strongSelf.emojiStatusFileAndPackTitle.set(.single(fileAndPackTitle))
-                                    }))
+                                }
+                            }).startStrict(next: { fileAndPackTitle in
+                                guard let strongSelf = self else {
+                                    return
+                                }
+                                strongSelf.emojiStatusFileAndPackTitle.set(.single(fileAndPackTitle))
+                            }))
                         } else {
                             strongSelf.emojiStatusPackDisposable.set(nil)
                             strongSelf.emojiStatusFileAndPackTitle.set(.single(nil))
@@ -1263,7 +1263,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 } else {
                 }
             }
-            
+
             titleStringText = title
             titleAttributes = MultiScaleTextState.Attributes(font: Font.medium(28.0), color: .white)
             smallTitleAttributes = MultiScaleTextState.Attributes(font: Font.medium(28.0), color: .white, shadowColor: titleShadowColor)
@@ -1749,7 +1749,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             titleCollapseFraction = max(0.0, min(1.0, contentOffset / titleCollapseOffset))
             
             subtitleFrame = CGRect(origin: CGPoint(x: 16.0 + stripLeft - subtitleButtonHorizontalOffset * (1.0 - titleCollapseFraction), y: minTitleFrame.maxY + 2.0), size: subtitleSize)
-                subtitleFrame.origin.x += subtitleRatingInset
+            subtitleFrame.origin.x += subtitleRatingInset
             if let ratingView = self.subtitleRating?.view as? PeerInfoRatingComponent.View {
                 subtitleFrame.origin.x -= ratingView.visibleLeftInset
             }
@@ -1829,12 +1829,12 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 
                 panelSubtitleOffset = (1.0 - effectiveAreaExpansionFraction) * 5.0
             } else {
-                    if effectiveAreaExpansionFraction == 1.0 {
-                        subtitleAlpha = 0.0
-                        panelSubtitleAlpha = 1.0
-                    } else {
-                        subtitleAlpha = 1.0
-                        panelSubtitleAlpha = 0.0
+                if effectiveAreaExpansionFraction == 1.0 {
+                    subtitleAlpha = 0.0
+                    panelSubtitleAlpha = 1.0
+                } else {
+                    subtitleAlpha = 1.0
+                    panelSubtitleAlpha = 0.0
                     }
                 }
             }
@@ -1861,9 +1861,9 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         
         let avatarScale: CGFloat
         let avatarOffset: CGFloat
-            //
-            avatarScale = 1.0 * (1.0 - titleCollapseFraction) + avatarMinScale * titleCollapseFraction
-            avatarOffset = apparentTitleLockOffset + 0.0 * (1.0 - titleCollapseFraction) + 10.0 * titleCollapseFraction
+        //
+        avatarScale = 1.0 * (1.0 - titleCollapseFraction) + avatarMinScale * titleCollapseFraction
+        avatarOffset = apparentTitleLockOffset + 0.0 * (1.0 - titleCollapseFraction) + 10.0 * titleCollapseFraction
         
         if subtitleIsButton {
             subtitleFrame.origin.y += 11.0 * (1.0 - titleCollapseFraction)
@@ -1882,8 +1882,8 @@ final class PeerInfoHeaderNode: ASDisplayNode {
  
         if self.isAvatarExpanded {
             self.avatarListNode.listContainerNode.isHidden = false
-                transition.updateCornerRadius(node: self.avatarListNode.listContainerNode, cornerRadius: 0.0)
-                transition.updateCornerRadius(node: self.avatarListNode.listContainerNode.controlsClippingNode, cornerRadius: 0.0)
+            transition.updateCornerRadius(node: self.avatarListNode.listContainerNode, cornerRadius: 0.0)
+            transition.updateCornerRadius(node: self.avatarListNode.listContainerNode.controlsClippingNode, cornerRadius: 0.0)
         } else if self.avatarListNode.listContainerNode.cornerRadius != avatarCornerRadius {
             transition.updateCornerRadius(node: self.avatarListNode.listContainerNode.controlsClippingNode, cornerRadius: avatarCornerRadius)
             transition.updateCornerRadius(node: self.avatarListNode.listContainerNode, cornerRadius: avatarCornerRadius, completion: { [weak self] _ in
@@ -1935,7 +1935,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             let expandedAvatarListCenter = CGPoint(x: expandedAvatarListSize.width / 2.0, y: expandedAvatarListSize.height / 2.0 - contentOffset / 2.0)
             apparentAvatarListFrame = CGRect(origin: expandedAvatarListCenter, size: CGSize())
             
-                controlsClippingFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: expandedAvatarListSize)
+            controlsClippingFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: expandedAvatarListSize)
         } else {
             apparentAvatarFrame = roundAvatarFrame
             apparentAvatarListFrame = apparentAvatarFrame
@@ -1950,7 +1950,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         let avatarListContainerScale: CGFloat
         var avatarListVerticalOffset: CGFloat = 0.0
         if self.isAvatarExpanded {
-                avatarListContainerFrame = CGRect(origin: CGPoint(x: -expandedAvatarListSize.width / 2.0, y: -expandedAvatarListSize.width / 2.0), size: expandedAvatarListSize)
+            avatarListContainerFrame = CGRect(origin: CGPoint(x: -expandedAvatarListSize.width / 2.0, y: -expandedAvatarListSize.width / 2.0), size: expandedAvatarListSize)
             avatarListContainerScale = 1.0 + max(0.0, -contentOffset / avatarListContainerFrame.width)
             // Keep the scaled avatar's bottom edge aligned with the stretched header.
             avatarListVerticalOffset = (avatarListContainerFrame.width - avatarListContainerFrame.height) * (avatarListContainerScale - 1.0)
@@ -2076,20 +2076,20 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         let apparentBackgroundHeight = backgroundHeight
         
         if !titleSize.width.isZero && !titleSize.height.isZero {
-                let titleScale: CGFloat
-                let subtitleScale: CGFloat
-                var subtitleOffset: CGFloat = 0.0
-                let subtitleBadgeFraction: CGFloat
-                if self.isAvatarExpanded {
-                    titleScale = expandedTitleScale
-                    subtitleScale = 1.0
-                    subtitleBadgeFraction = 1.0
-                } else {
-                    titleScale = (1.0 - titleCollapseFraction) * 1.0 + titleCollapseFraction * titleMinScale
-                    subtitleScale = (1.0 - titleCollapseFraction) * 1.0 + titleCollapseFraction * subtitleMinScale
-                    subtitleOffset = titleCollapseFraction * -1.0
-                    subtitleBadgeFraction = (1.0 - titleCollapseFraction)
-                }
+            let titleScale: CGFloat
+            let subtitleScale: CGFloat
+            var subtitleOffset: CGFloat = 0.0
+            let subtitleBadgeFraction: CGFloat
+            if self.isAvatarExpanded {
+                titleScale = expandedTitleScale
+                subtitleScale = 1.0
+                subtitleBadgeFraction = 1.0
+            } else {
+                titleScale = (1.0 - titleCollapseFraction) * 1.0 + titleCollapseFraction * titleMinScale
+                subtitleScale = (1.0 - titleCollapseFraction) * 1.0 + titleCollapseFraction * subtitleMinScale
+                subtitleOffset = titleCollapseFraction * -1.0
+                subtitleBadgeFraction = (1.0 - titleCollapseFraction)
+            }
                 
                 let rawTitleFrame = titleFrame.offsetBy(dx: self.isAvatarExpanded ? titleExpandedHorizontalOffset : titleHorizontalOffset * titleScale, dy: 0.0)
                 self.titleNodeRawContainer.frame = rawTitleFrame
@@ -2105,10 +2105,10 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 } else {
                     transition.updateFrameAdditiveToCenter(node: self.titleNodeContainer, frame: CGRect(origin: rawTitleFrame.center, size: CGSize()).offsetBy(dx: 0.0, dy: titleOffset + apparentTitleLockOffset))
                     
-                    var subtitleCenter = rawSubtitleFrame.center
-                    subtitleCenter.x = rawTitleFrame.center.x + (subtitleCenter.x - rawTitleFrame.center.x) * subtitleScale
-                    subtitleCenter.y += subtitleOffset
-                    transition.updateFrameAdditiveToCenter(node: self.subtitleNodeContainer, frame: CGRect(origin: subtitleCenter, size: CGSize()).offsetBy(dx: 0.0, dy: titleOffset))
+                var subtitleCenter = rawSubtitleFrame.center
+                subtitleCenter.x = rawTitleFrame.center.x + (subtitleCenter.x - rawTitleFrame.center.x) * subtitleScale
+                subtitleCenter.y += subtitleOffset
+                transition.updateFrameAdditiveToCenter(node: self.subtitleNodeContainer, frame: CGRect(origin: subtitleCenter, size: CGSize()).offsetBy(dx: 0.0, dy: titleOffset))
                     
                     var usernameCenter = rawUsernameFrame.center
                     usernameCenter.x = rawTitleFrame.center.x + (usernameCenter.x - rawTitleFrame.center.x) * subtitleScale
@@ -2121,21 +2121,21 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 transition.updateSublayerTransformScaleAdditive(node: self.subtitleNodeContainer, scale: subtitleScale)
                 transition.updateSublayerTransformScaleAdditive(node: self.usernameNodeContainer, scale: subtitleScale)
                 
-                if let subtitleBadgeView = self.subtitleBadgeView, let subtitleBadgeSize {
-                    let subtitleBadgeFrame = CGRect(origin: CGPoint(x: (subtitleSize.width + 8.0) * 0.5, y: floor((-subtitleBadgeSize.height) * 0.5)), size: subtitleBadgeSize)
-                    transition.updateFrameAdditive(view: subtitleBadgeView, frame: subtitleBadgeFrame)
+            if let subtitleBadgeView = self.subtitleBadgeView, let subtitleBadgeSize {
+                let subtitleBadgeFrame = CGRect(origin: CGPoint(x: (subtitleSize.width + 8.0) * 0.5, y: floor((-subtitleBadgeSize.height) * 0.5)), size: subtitleBadgeSize)
+                transition.updateFrameAdditive(view: subtitleBadgeView, frame: subtitleBadgeFrame)
                 transition.updateAlpha(layer: subtitleBadgeView.layer, alpha: subtitleBadgeFraction)
-                }
+            }
                 
                 if let subtitleRatingView = self.subtitleRating?.view, let subtitleRatingSize {
                     let subtitleBadgeFrame = CGRect(origin: CGPoint(x: (-subtitleSize.width) * 0.5 - subtitleRatingInset, y: floor((-subtitleRatingSize.height) * 0.5)), size: subtitleRatingSize)
                     
-                    if subtitleRatingView.frame.isEmpty {
-                        subtitleRatingView.frame = subtitleBadgeFrame
-                        subtitleRatingView.alpha = subtitleAlpha
-                    } else {
-                        transition.updateFrameAdditive(view: subtitleRatingView, frame: subtitleBadgeFrame)
-                        transition.updateAlpha(layer: subtitleRatingView.layer, alpha: subtitleAlpha)
+                if subtitleRatingView.frame.isEmpty {
+                    subtitleRatingView.frame = subtitleBadgeFrame
+                    subtitleRatingView.alpha = subtitleAlpha
+                } else {
+                    transition.updateFrameAdditive(view: subtitleRatingView, frame: subtitleBadgeFrame)
+                    transition.updateAlpha(layer: subtitleRatingView.layer, alpha: subtitleAlpha)
                     }
                 }
             }
@@ -2670,80 +2670,80 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             let stripSecondaryColor = hasCoverColor ? navigationContentsSecondaryColor.mixedWith(.white, alpha: 0.45) : navigationContentsSecondaryColor
             let musicBandWidth = max(0.0, backgroundFrame.width - stripLeft - stripRight)
             if let currentSavedMusic {
-            var artist = presentationData.strings.MediaPlayer_UnknownArtist
-            var track: String?
-            for attribute in currentSavedMusic.attributes {
-                if case let  .Audio(_, _, title, performer, _) = attribute {
-                    artist = performer ?? artist
-                    track = title
-                    break
+                var artist = presentationData.strings.MediaPlayer_UnknownArtist
+                var track: String?
+                for attribute in currentSavedMusic.attributes {
+                    if case let  .Audio(_, _, title, performer, _) = attribute {
+                        artist = performer ?? artist
+                        track = title
+                        break
                 }
             }
-            if track == nil {
-                if let fileName = currentSavedMusic.fileName {
-                    track = fileName
-                } else {
-                    track = presentationData.strings.MediaPlayer_UnknownTrack
+                if track == nil {
+                    if let fileName = currentSavedMusic.fileName {
+                        track = fileName
+                    } else {
+                        track = presentationData.strings.MediaPlayer_UnknownTrack
                 }
             }
-            
-            let music = self.music ?? {
-                let componentView = ComponentView<Empty>()
-                self.music = componentView
-                return componentView
-            }()
-            
-            let musicString = NSMutableAttributedString()
+
+                let music = self.music ?? {
+                    let componentView = ComponentView<Empty>()
+                    self.music = componentView
+                    return componentView
+                }()
+
+                let musicString = NSMutableAttributedString()
                 // Keep music inside the profile band, including when a side strip is visible.
-            musicString.append(NSAttributedString(string: track ?? "", font: Font.semibold(12.0), textColor: isOverlay ? .white : presentationData.theme.list.itemAccentColor))
+                musicString.append(NSAttributedString(string: track ?? "", font: Font.semibold(12.0), textColor: isOverlay ? .white : presentationData.theme.list.itemAccentColor))
                 let artistSeparatorIndex = musicString.length
                 musicString.append(NSAttributedString(string: " \(artist)", font: Font.regular(12.0), textColor: stripSecondaryColor))
                 musicString.addAttribute(.kern, value: CGFloat(2.0), range: NSRange(location: artistSeparatorIndex, length: 1))
-            
-            let musicSize = music.update(
-                transition: .immediate,
-                component: AnyComponent(
-                    PlainButtonComponent(
-                        content: AnyComponent(
-                            HStack([
-                                AnyComponentWithIdentity(
-                                    id: "icon",
-                                    component: AnyComponent(BundleIconComponent(name: "Media Editor/SmallAudio", tintColor: isOverlay ? .white : presentationData.theme.list.itemAccentColor))
-                                ),
-                                AnyComponentWithIdentity(
-                                    id: "label",
+
+                let musicSize = music.update(
+                    transition: .immediate,
+                    component: AnyComponent(
+                        PlainButtonComponent(
+                            content: AnyComponent(
+                                HStack([
+                                    AnyComponentWithIdentity(
+                                        id: "icon",
+                                        component: AnyComponent(BundleIconComponent(name: "Media Editor/SmallAudio", tintColor: isOverlay ? .white : presentationData.theme.list.itemAccentColor))
+                                    ),
+                                    AnyComponentWithIdentity(
+                                        id: "label",
                                         component: AnyComponent(MarqueeComponent(attributedText: musicString, maxWidth: max(1.0, musicBandWidth - 96.0)))
-                                ),
-                                AnyComponentWithIdentity(
-                                    id: "arrow",
+                                    ),
+                                    AnyComponentWithIdentity(
+                                        id: "arrow",
                                         component: AnyComponent(BundleIconComponent(name: "Item List/InlineTextRightArrow", tintColor: stripSecondaryColor))
-                                )
-                            ], spacing: 4.0)
-                        ),
+                                    )
+                                ], spacing: 4.0)
+                            ),
                             minSize: CGSize(width: musicBandWidth, height: musicHeight),
-                        action: { [weak self] in
-                            self?.displaySavedMusic?()
-                        }
-                    )
-                ),
-                environment: {},
+                            action: { [weak self] in
+                                self?.displaySavedMusic?()
+                            }
+                        )
+                    ),
+                    environment: {},
                     containerSize: CGSize(width: musicBandWidth, height: musicHeight)
-            )
+                )
                 let musicFrame = CGRect(origin: CGPoint(x: stripLeft, y: (apparentBackgroundHeight - backgroundHeight) + backgroundHeight - musicHeight - (hasBackground || self.isAvatarExpanded ? 0.0 : 4.0) + 1.0 - UIScreenPixel), size: musicSize)
-            if let musicView = music.view {
-                if musicView.superview == nil {
+                if let musicView = music.view {
+                    if musicView.superview == nil {
                         // A newly loaded strip item fades in at its final position.
                         ContainedViewLayoutTransition.immediate.updateFrame(view: musicView, frame: musicFrame)
-                    self.regularContentNode.view.addSubview(musicView)
-                    if transition.isAnimated {
-                        musicView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
-                    }
+                        self.regularContentNode.view.addSubview(musicView)
+                        if transition.isAnimated {
+                            musicView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
+                        }
                     } else if additive {
-                    musicTransition.updateFrameAdditiveToCenter(view: musicView, frame: musicFrame)
-                } else {
-                    musicTransition.updateFrame(view: musicView, frame: musicFrame)
-                }
-                
+                        musicTransition.updateFrameAdditiveToCenter(view: musicView, frame: musicFrame)
+                    } else {
+                        musicTransition.updateFrame(view: musicView, frame: musicFrame)
+                    }
+
                     ContainedViewLayoutTransition.animated(duration: 0.2, curve: .easeInOut).updateAlpha(layer: musicView.layer, alpha: backgroundBannerAlpha)
                 }
             }
@@ -2783,7 +2783,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 balance.view?.removeFromSuperview()
             }
         }
-        
+
         if isFirstTime {
             self.updateAvatarMask(transition: .immediate)
         }
@@ -2826,8 +2826,8 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         var result = super.point(inside: point, with: event)
         for stripView in [self.music?.view, self.walletBalance?.view].compactMap({ $0 }) {
             if stripView.alpha > 0.0, stripView.bounds.contains(self.view.convert(point, to: stripView)) {
-            result = true
-        }
+                result = true
+            }
         }
         return result
     }

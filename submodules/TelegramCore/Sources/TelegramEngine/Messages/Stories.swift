@@ -2085,7 +2085,7 @@ func _internal_markStoryAsSeen(account: Account, peerId: PeerId, id: Int32, asPi
                 return .complete()
             }
             #endif
-
+            
             if isNovagramGhostModeActive {
                 return .complete()
             }

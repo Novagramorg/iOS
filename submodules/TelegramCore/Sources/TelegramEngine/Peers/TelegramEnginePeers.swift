@@ -725,7 +725,7 @@ public extension TelegramEngine {
         public func sendBotRequestedPeer(peerId: PeerId, requestId: String, buttonId: Int32, requestedPeerIds: [PeerId]) -> Signal<Void, SendBotRequestedPeerError> {
             return _internal_sendBotRequestedPeer(account: self.account, peerId: peerId, messageId: nil, requestId: requestId, buttonId: buttonId, requestedPeerIds: requestedPeerIds)
         }
-
+        
         public func checkBotUsername(_ username: String) -> Signal<BotUsernameAvailability, NoError> {
             return _internal_checkBotUsername(account: self.account, username: username)
         }
@@ -1481,7 +1481,7 @@ public extension TelegramEngine {
         public func exportContactToken() -> Signal<ExportedContactToken?, NoError> {
             return _internal_exportContactToken(account: self.account)
         }
-        
+
         public func getShareTheme(peerId: EnginePeer.Id) -> Signal<TelegramShareTheme?, NoError> {
             return _internal_getShareTheme(account: self.account, peerId: peerId)
         }

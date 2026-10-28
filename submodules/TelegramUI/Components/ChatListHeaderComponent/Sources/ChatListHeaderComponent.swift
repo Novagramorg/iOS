@@ -21,7 +21,7 @@ public final class ChatListHeaderComponent: Component {
         public let backPressed: (() -> Void)?
         /// iPhone Duo: the buttons' column behavior and VoiceOver titles, by button id.
         public let overflowInfo: [AnyHashable: NavigationBarComponent.OverflowInfo]
-        
+
         public init(
             title: String,
             titleComponent: AnyComponent<Empty>?,
@@ -39,7 +39,7 @@ public final class ChatListHeaderComponent: Component {
             self.backPressed = backPressed
             self.overflowInfo = overflowInfo
         }
-        
+
         public static func ==(lhs: Content, rhs: Content) -> Bool {
             if lhs.title != rhs.title {
                 return false
@@ -65,7 +65,7 @@ public final class ChatListHeaderComponent: Component {
             return true
         }
     }
-    
+
     public let leftInset: CGFloat
     public let rightInset: CGFloat
     public let primaryContent: Content?
@@ -79,7 +79,7 @@ public final class ChatListHeaderComponent: Component {
     public let context: AccountContext
     public let theme: PresentationTheme
     public let strings: PresentationStrings
-    
+
     public let openStatusSetup: (UIView) -> Void
     public let toggleIsLocked: () -> Void
     /// iPhone Duo: the side column's length (`SideColumnRegion.frame.height`); nil lays every
@@ -90,7 +90,7 @@ public final class ChatListHeaderComponent: Component {
     /// status island beside the bar (`ContainerViewLayout.navigationBarTrailingButtonsInset`). The title keeps
     /// centering on the bar.
     public let trailingButtonsInset: CGFloat
-    
+
     public init(
         leftInset: CGFloat,
         rightInset: CGFloat,
@@ -130,7 +130,7 @@ public final class ChatListHeaderComponent: Component {
         self.sideColumnLength = sideColumnLength
         self.openSideColumnOverflow = openSideColumnOverflow
     }
-    
+
     public static func ==(lhs: ChatListHeaderComponent, rhs: ChatListHeaderComponent) -> Bool {
         if lhs.leftInset != rhs.leftInset {
             return false
@@ -179,25 +179,25 @@ public final class ChatListHeaderComponent: Component {
         }
         return true
     }
-    
+
     public final class View: UIView {
         private var component: ChatListHeaderComponent?
         private weak var state: EmptyComponentState?
-        
+
         private let navigationBar = ComponentView<Empty>()
         private var navigationBarTheme: (source: PresentationTheme, value: NavigationBarTheme)?
         private var navigationBarStrings: (source: PresentationStrings, value: NavigationBarStrings)?
-        
+
         private let storyPeerListExternalState = StoryPeerListComponent.ExternalState()
         private var storyPeerList: ComponentView<Empty>?
         public var storyPeerAction: ((EnginePeer?) -> Void)?
         public var storyContextPeerAction: ((ContextExtractedContentContainingNode, ContextGesture, EnginePeer) -> Void)?
         public var storyComposeAction: ((CGFloat) -> Void)?
-        
+
         private var navigationBarView: NavigationBarComponent.View? {
             return self.navigationBar.view as? NavigationBarComponent.View
         }
-        
+
         /// The row the chat list's header is built on (the regular bar's component).
         public var navigationBarComponentView: NavigationBarComponent.View? {
             return self.navigationBarView
@@ -210,29 +210,29 @@ public final class ChatListHeaderComponent: Component {
         override init(frame: CGRect) {
             super.init(frame: frame)
         }
-        
+
         required public init?(coder: NSCoder) {
             fatalError("init(coder:) has not been implemented")
         }
-        
+
         /// iPhone Duo: the side column (back circle and capsule), laid out in its own bounds. The host
         /// (`ChatListNavigationBar`) adds it to its hierarchy and sets its frame. Nil before the first update.
         public var sideColumnView: UIView? {
             return self.navigationBarView?.sideColumnView
         }
-        
+
         public var rightButtonViews: [AnyHashable: UIView] {
             return self.navigationBarView?.rightButtonViews ?? [:]
         }
-        
+
         public func storyPeerListView() -> StoryPeerListComponent.View? {
             return self.storyPeerList?.view as? StoryPeerListComponent.View
         }
-        
+
         public func navigationButtonContextContainer(sourceView: UIView) -> ContextExtractableContainer? {
             return self.navigationBarView?.navigationButtonContextContainer(sourceView: sourceView)
         }
-        
+
         override public func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
             if let storyPeerListView = self.storyPeerList?.view {
                 if let result = storyPeerListView.hitTest(self.convert(point, to: storyPeerListView), with: event) {
@@ -246,7 +246,7 @@ public final class ChatListHeaderComponent: Component {
             }
             return super.hitTest(point, with: event)
         }
-        
+
         func openEmojiStatusSetup() {
             if let storyPeerListView = self.storyPeerList?.view as? StoryPeerListComponent.View {
                 storyPeerListView.openEmojiStatusSetup()
@@ -254,7 +254,7 @@ public final class ChatListHeaderComponent: Component {
                 self.findTitleView()?.openEmojiStatusSetup()
             }
         }
-        
+
         public func findTitleView() -> ChatListTitleView? {
             return (self.navigationBarView?.primaryTitleView as? ChatListTitleComponent.View)?.titleView
         }
@@ -332,7 +332,7 @@ public final class ChatListHeaderComponent: Component {
         func update(component: ChatListHeaderComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             self.state = state
             self.component = component
-            
+
             let primaryContent = component.primaryContent.flatMap { self.navigationBarContent($0, isSecondary: false, component: component) }
             let secondaryContent = component.secondaryContent.flatMap { self.navigationBarContent($0, isSecondary: true, component: component) }
             self.transitionContent = NavigationBarComponent.visibleContent(primary: primaryContent, secondary: secondaryContent, secondaryTransition: component.secondaryTransition)
@@ -340,7 +340,7 @@ public final class ChatListHeaderComponent: Component {
             let navigationBarStrings = self.resolvedNavigationBarStrings(component.strings)
             self.navigationBarThemeValue = navigationBarTheme
             self.navigationBarStringsValue = navigationBarStrings
-            
+
             let navigationBarSize = self.navigationBar.update(
                 transition: transition,
                 component: AnyComponent(NavigationBarComponent(
@@ -364,13 +364,13 @@ public final class ChatListHeaderComponent: Component {
             if navigationBarView.superview == nil {
                 self.addSubview(navigationBarView)
                 navigationBarView.frame = CGRect(origin: CGPoint(), size: navigationBarSize)
-                } else {
+            } else {
                 transition.setFrame(view: navigationBarView, frame: CGRect(origin: CGPoint(), size: navigationBarSize))
-                }
-                
+            }
+
             let centeredContentFrame = navigationBarView.centeredContentFrame
             let symmetricInset = min(component.leftInset, component.rightInset)
-            
+
             var storyListTransition = transition
             if let storySubscriptions = component.storySubscriptions {
                 let storyPeerList: ComponentView<Empty>
@@ -463,21 +463,21 @@ public final class ChatListHeaderComponent: Component {
                 self.storyPeerList = nil
                 storyPeerList.view?.removeFromSuperview()
             }
-            
+
             if let storyPeerList = self.storyPeerList, let storyPeerListComponentView = storyPeerList.view as? StoryPeerListComponent.View {
                 if storyPeerListComponentView.superview == nil {
                     navigationBarView.underButtonsView.addSubview(storyPeerListComponentView)
                 }
-                
+
                 let storyPeerListMaxOffset: CGFloat = availableSize.height + 2.0
-                
+
                 var storiesX: CGFloat = centeredContentFrame.minX
                 storiesX -= availableSize.width * component.secondaryTransition
-                
+
                 storyListTransition.setFrame(view: storyPeerListComponentView, frame: CGRect(origin: CGPoint(x: storiesX, y: storyPeerListMaxOffset), size: CGSize(width: centeredContentFrame.width, height: 79.0)))
-                
+
                 let storyListNormalAlpha: CGFloat = 1.0
-                
+
                 let storyListAlpha: CGFloat = (1.0 - component.secondaryTransition) * storyListNormalAlpha
                 storyListTransition.setAlpha(view: storyPeerListComponentView, alpha: storyListAlpha)
             }
@@ -485,11 +485,11 @@ public final class ChatListHeaderComponent: Component {
             return availableSize
         }
     }
-    
+
     public func makeView() -> View {
         return View(frame: CGRect())
     }
-    
+
     public func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
         return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
     }

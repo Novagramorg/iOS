@@ -151,11 +151,11 @@ public final class AuthorizationSequenceCodeEntryController: ViewController {
     
     override public func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-
+        
         if let navigationController = self.navigationController as? NavigationController, let layout = self.validLayout {
             addTemporaryKeyboardSnapshotView(navigationController: navigationController, layout: layout)
         }
-
+                
         self.controllerNode.activateInput()
 
         // Novagram: Apple Review demo akkount uchun SMS kodni avtomatik fetch + iOS alert

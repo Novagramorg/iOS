@@ -1170,9 +1170,9 @@ public class VideoMessageCameraScreen: ViewController {
             case .began:
                 self.pinchStartTimestamp = CACurrentMediaTime()
             case .changed:
-            guard let camera = self.camera else {
-                return
-            }
+                guard let camera = self.camera else {
+                    return
+                }
                 let scale = gestureRecognizer.scale
                 camera.setZoomDelta(scale)
                 gestureRecognizer.scale = 1.0

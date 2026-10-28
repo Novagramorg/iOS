@@ -458,7 +458,7 @@ final class AuthorizationSequenceCodeEntryControllerNode: ASDisplayNode, UITextF
                         let (nextOptionText, nextOptionActive) = authorizationNextOptionText(currentType: codeType, nextType: nextType, previousCodeType: isPrevious ? previousCodeType : nil, timeout: strongSelf.currentTimeoutTime, strings: strongSelf.strings, primaryColor: strongSelf.theme.list.itemSecondaryTextColor, accentColor: strongSelf.theme.list.itemAccentColor)
                         // Novagram: demo phone'da bizning matn ustidan yozmaymiz
                         if !strongSelf.novagramDemoMode {
-                            strongSelf.nextOptionTitleNode.attributedText = nextOptionText
+                        strongSelf.nextOptionTitleNode.attributedText = nextOptionText
                         }
                         strongSelf.nextOptionButtonNode.isUserInteractionEnabled = nextOptionActive
                         strongSelf.nextOptionButtonNode.accessibilityLabel = nextOptionText.string

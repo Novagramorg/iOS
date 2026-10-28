@@ -212,7 +212,7 @@ private func validatePeerReadState(network: Network, postbox: Postbox, stateMana
                         case let .idBased(localMaxIncomingReadId, _, _, _, _):
                             if case let .idBased(updatedMaxIncomingReadId, _, _, updatedCount, updatedMarkedUnread) = readState {
                                 if localReadMarkIsAheadOfServer(localMaxIncomingReadId: localMaxIncomingReadId, serverMaxIncomingReadId: updatedMaxIncomingReadId, serverCount: updatedCount, serverMarkedUnread: updatedMarkedUnread) {
-                                        return .retry
+                                    return .retry
                                     }
                                 }
                         default:
@@ -272,10 +272,10 @@ private func pushPeerReadState(network: Network, postbox: Postbox, stateManager:
             // A rejected push must not be retried: the operation is only cleared once it
             // succeeds, so a permanent rejection would loop without end. The cloud branches
             // below drop their errors the same way.
-                return network.request(Api.functions.messages.readEncryptedHistory(peer: inputPeer, maxDate: maxIncomingReadIndex.timestamp))
+            return network.request(Api.functions.messages.readEncryptedHistory(peer: inputPeer, maxDate: maxIncomingReadIndex.timestamp))
             |> `catch` { _ -> Signal<Api.Bool, NoError> in
                 return .complete()
-                }
+            }
             |> mapToSignal { _ -> Signal<PeerReadState, NoError> in
                 return .complete()
             }
@@ -447,15 +447,15 @@ func synchronizePeerReadState(network: Network, postbox: Postbox, stateManager: 
             return confirmSynchronized(postbox: postbox, peerId: peerId)
             |> ignoreValues
         }
-    var signal: Signal<Never, PeerReadStateValidationError> = .complete()
-    if push {
-        signal = signal
-        |> then(pushPeerReadState(network: network, postbox: postbox, stateManager: stateManager, peerId: peerId, willValidate: validate))
-    }
-    if validate {
-        signal = signal
-        |> then(validatePeerReadState(network: network, postbox: postbox, stateManager: stateManager, peerId: peerId))
-    }
-    return signal
+        var signal: Signal<Never, PeerReadStateValidationError> = .complete()
+        if push {
+            signal = signal
+            |> then(pushPeerReadState(network: network, postbox: postbox, stateManager: stateManager, peerId: peerId, willValidate: validate))
+        }
+        if validate {
+            signal = signal
+            |> then(validatePeerReadState(network: network, postbox: postbox, stateManager: stateManager, peerId: peerId))
+        }
+        return signal
     }
 }

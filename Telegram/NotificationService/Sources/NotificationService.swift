@@ -570,24 +570,24 @@ private struct NotificationContent: CustomStringConvertible {
                 name = "\(topicTitle) (\(name))"
             }
             self.sender = Sender(peerId: peer.id, name: name, contactIdentifier: contactIdentifier)
-            }
-            }
-            
+        }
+    }
+
     @available(iOS 15.0, *)
     private func incomingMessageIntent(sender: Sender, senderName: String, groupName: String, body: String) -> INSendMessageIntent {
-            var personNameComponents = PersonNameComponents()
+        var personNameComponents = PersonNameComponents()
         personNameComponents.nickname = senderName
-            
+
         let senderPerson = INPerson(
             personHandle: INPersonHandle(value: "\(sender.peerId.toInt64())", type: .unknown),
-                nameComponents: personNameComponents,
+            nameComponents: personNameComponents,
             displayName: senderName,
             image: self.senderImage,
             contactIdentifier: sender.contactIdentifier,
             customIdentifier: "\(sender.peerId.toInt64())",
-                isMe: false,
-                suggestionType: .none
-            )
+            isMe: false,
+            suggestionType: .none
+        )
         let mePerson = INPerson(
             personHandle: INPersonHandle(value: "0", type: .unknown),
             nameComponents: nil,
@@ -623,8 +623,8 @@ private struct NotificationContent: CustomStringConvertible {
         let names = NotificationNames(title: self.title, senderName: self.sender?.name, silent: self.silent, recipientAccountName: self.recipientAccountName)
 
         if let title = names.title {
-                content.title = title
-            }
+            content.title = title
+        }
         
         if let subtitle = self.subtitle {
             content.subtitle = subtitle
@@ -1551,7 +1551,7 @@ private final class NotificationServiceHandler {
                                     |> ignoreValues
                                 }
                             }
-                            
+
                             updateCurrentContent(content)
                         } else if let aps = payloadJson["aps"] as? [String: Any], let url = payloadJson["url"] as? String {
                             var content: NotificationContent = NotificationContent(isLockedMessage: nil)
@@ -1742,7 +1742,7 @@ private final class NotificationServiceHandler {
                                 }
                                 
                                 let shouldKeepConnection = stateManager.network.shouldKeepConnection
-                                
+
                                 // iOS expires the extension about 30 s after didReceive. Everything on
                                 // this path that needs the connection is cut off at one deadline counted
                                 // from handler creation, leaving slack for the postbox-only work after the
@@ -2244,7 +2244,7 @@ private final class NotificationServiceHandler {
                                 }
 
                                 let pollSignal: Signal<Never, NoError>
-                                
+
                                 if !shouldSynchronizeState {
                                     pollSignal = .complete()
                                 } else {
@@ -2252,7 +2252,7 @@ private final class NotificationServiceHandler {
                                     let unboundedPollSignal: Signal<Never, NoError>
                                     if peerId.namespace == Namespaces.Peer.CloudChannel {
                                         Logger.shared.log("NotificationService \(episode)", "Will poll channel \(peerId)")
-                                        
+
                                         unboundedPollSignal = standalonePollChannelOnce(
                                             accountPeerId: stateManager.accountPeerId,
                                             postbox: stateManager.postbox,
@@ -2736,7 +2736,7 @@ private final class NotificationServiceHandler {
                                         _internal_deleteMessages(transaction: transaction, mediaBox: mediaBox, ids: actuallyDeletedIds, deleteMedia: true)
                                     }
                                 } else {
-                                    _internal_deleteMessages(transaction: transaction, mediaBox: mediaBox, ids: ids, deleteMedia: true)
+                                _internal_deleteMessages(transaction: transaction, mediaBox: mediaBox, ids: ids, deleteMedia: true)
                                 }
                             }
                             |> deliverOn(strongSelf.queue)).start(completed: {

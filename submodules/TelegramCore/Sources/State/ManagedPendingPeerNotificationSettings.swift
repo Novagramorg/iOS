@@ -4,21 +4,22 @@ import SwiftSignalKit
 internal import TelegramApi
 import MtProtoKit
 
+
 private final class ManagedPendingPeerNotificationSettingsHelper {
     var operationDisposables: [PeerId: (PeerNotificationSettings, Disposable)] = [:]
-
+    
     func update(entries: [PeerId: PeerNotificationSettings]) -> (disposeOperations: [Disposable], beginOperations: [(PeerId, PeerNotificationSettings, MetaDisposable)]) {
         var disposeOperations: [Disposable] = []
         var beginOperations: [(PeerId, PeerNotificationSettings, MetaDisposable)] = []
-
+        
         var validIds = Set<PeerId>()
         for (peerId, settings) in entries {
             validIds.insert(peerId)
-
+            
             if let (currentSettings, currentDisposable) = self.operationDisposables[peerId] {
                 if !currentSettings.isEqual(to: settings) {
                     disposeOperations.append(currentDisposable)
-
+                    
                     let disposable = MetaDisposable()
                     beginOperations.append((peerId, settings, disposable))
                     self.operationDisposables[peerId] = (settings, disposable)
@@ -29,7 +30,7 @@ private final class ManagedPendingPeerNotificationSettingsHelper {
                 self.operationDisposables[peerId] = (settings, disposable)
             }
         }
-
+        
         var removeIds: [PeerId] = []
         for (id, settingsAndDisposable) in self.operationDisposables {
             if !validIds.contains(id) {
@@ -37,14 +38,14 @@ private final class ManagedPendingPeerNotificationSettingsHelper {
                 disposeOperations.append(settingsAndDisposable.1)
             }
         }
-
+        
         for id in removeIds {
             self.operationDisposables.removeValue(forKey: id)
         }
-
+        
         return (disposeOperations, beginOperations)
     }
-
+    
     func reset() -> [Disposable] {
         let disposables = Array(self.operationDisposables.values).map { $0.1 }
         self.operationDisposables.removeAll()
@@ -55,27 +56,27 @@ private final class ManagedPendingPeerNotificationSettingsHelper {
 func managedPendingPeerNotificationSettings(postbox: Postbox, network: Network) -> Signal<Void, NoError> {
     return Signal { _ in
         let helper = Atomic<ManagedPendingPeerNotificationSettingsHelper>(value: ManagedPendingPeerNotificationSettingsHelper())
-
+        
         let disposable = postbox.combinedView(keys: [.pendingPeerNotificationSettings]).start(next: { view in
             var entries: [PeerId: PeerNotificationSettings] = [:]
             if let v = view.views[.pendingPeerNotificationSettings] as? PendingPeerNotificationSettingsView {
                 entries = v.entries
             }
-
+            
             let (disposeOperations, beginOperations) = helper.with { helper -> (disposeOperations: [Disposable], beginOperations: [(PeerId, PeerNotificationSettings, MetaDisposable)]) in
                 return helper.update(entries: entries)
             }
-
+            
             for disposable in disposeOperations {
                 disposable.dispose()
             }
-
+            
             for (peerId, settings, disposable) in beginOperations {
                 let signal = pushPeerNotificationSettings(postbox: postbox, network: network, peerId: peerId, threadId: nil, settings: settings)
                 disposable.set(signal.start())
             }
         })
-
+        
         return ActionDisposable {
             let disposables = helper.with { helper -> [Disposable] in
                 return helper.reset()
@@ -95,11 +96,11 @@ func pushPeerNotificationSettings(postbox: Postbox, network: Network, peerId: Pe
             if peer is TelegramSecretChat, let associatedPeerId = peer.associatedPeerId {
                 notificationPeerId = associatedPeerId
             }
-
+            
             if let threadId = threadId {
                 if let data = transaction.getMessageHistoryThreadInfo(peerId: peerId, threadId: threadId)?.data.get(MessageHistoryThreadData.self) {
                     let settings = data.notificationSettings
-
+                    
                     let showPreviews: Api.Bool?
                     switch settings.displayPreviews {
                     case .default:
@@ -129,7 +130,7 @@ func pushPeerNotificationSettings(postbox: Postbox, network: Network, peerId: Pe
                     if sound != nil {
                         flags |= (1 << 3)
                     }
-
+                    
                     let storiesMuted: Api.Bool?
                     switch settings.storySettings.mute {
                     case .default:
@@ -142,7 +143,7 @@ func pushPeerNotificationSettings(postbox: Postbox, network: Network, peerId: Pe
                     if storiesMuted != nil {
                         flags |= (1 << 6)
                     }
-
+                    
                     let storiesHideSender: Api.Bool?
                     switch settings.storySettings.hideSender {
                     case .default:
@@ -155,12 +156,12 @@ func pushPeerNotificationSettings(postbox: Postbox, network: Network, peerId: Pe
                     if storiesHideSender != nil {
                         flags |= (1 << 7)
                     }
-
+                    
                     let storiesSound: Api.NotificationSound? = settings.storySettings.sound.apiSound
                     if storiesSound != nil {
                         flags |= (1 << 8)
                     }
-
+                    
                     let inputSettings = Api.InputPeerNotifySettings.inputPeerNotifySettings(.init(flags: flags, showPreviews: showPreviews, silent: nil, muteUntil: muteUntil, sound: sound, storiesMuted: storiesMuted, storiesHideSender: storiesHideSender, storiesSound: storiesSound))
                     return network.request(Api.functions.account.updateNotifySettings(peer: .inputNotifyForumTopic(.init(peer: inputPeer, topMsgId: Int32(clamping: threadId))), settings: inputSettings))
                     |> `catch` { _ -> Signal<Api.Bool, NoError> in
@@ -204,7 +205,7 @@ func pushPeerNotificationSettings(postbox: Postbox, network: Network, peerId: Pe
                     if sound != nil {
                         flags |= (1 << 3)
                     }
-
+                    
                     let storiesMuted: Api.Bool?
                     switch settings.storySettings.mute {
                     case .default:
@@ -217,7 +218,7 @@ func pushPeerNotificationSettings(postbox: Postbox, network: Network, peerId: Pe
                     if storiesMuted != nil {
                         flags |= (1 << 6)
                     }
-
+                    
                     let storiesHideSender: Api.Bool?
                     switch settings.storySettings.hideSender {
                     case .default:
@@ -230,19 +231,19 @@ func pushPeerNotificationSettings(postbox: Postbox, network: Network, peerId: Pe
                     if storiesHideSender != nil {
                         flags |= (1 << 7)
                     }
-
+                    
                     let storiesSound: Api.NotificationSound? = settings.storySettings.sound.apiSound
                     if storiesSound != nil {
                         flags |= (1 << 8)
                     }
-
+                    
                     let inputSettings = Api.InputPeerNotifySettings.inputPeerNotifySettings(.init(flags: flags, showPreviews: showPreviews, silent: nil, muteUntil: muteUntil, sound: sound, storiesMuted: storiesMuted, storiesHideSender: storiesHideSender, storiesSound: storiesSound))
                     return network.request(Api.functions.account.updateNotifySettings(peer: .inputNotifyPeer(.init(peer: inputPeer)), settings: inputSettings))
                     |> `catch` { _ -> Signal<Api.Bool, NoError> in
                         return .single(.boolFalse)
                     }
                     |> mapToSignal { _ -> Signal<Void, NoError> in
-                        return postbox.transaction { transaction in
+                        return postbox.transaction { transaction -> Void in
                             transaction.updateCurrentPeerNotificationSettings([notificationPeerId: settings])
                             if let pending = transaction.getPendingPeerNotificationSettings(peerId), pending.isEqual(to: settings) {
                                 transaction.updatePendingPeerNotificationSettings(peerId: peerId, settings: nil)
