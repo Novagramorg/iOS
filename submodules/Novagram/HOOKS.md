@@ -72,7 +72,7 @@ Each line we change in a Telegram file is a line an upstream update can conflict
    and a 1–3 line call. Fat hooks are thinned one at a time, when we work on them anyway.
 3. **Weekly upstream updates.** `~/Library/Application Support/Novagram/novagram-upstream-weekly.sh` runs every Monday at
    10:00 (launchd `uz.novagram.upstream-weekly`): trial merges of GitHub's `main` of both forks against Telegram's master in
-   small mirrors (`~/Library/Caches/novagram-upstream/`), result to the phone (`notify-phone.sh`) and
+   small mirrors (`~/Library/Caches/novagram-upstream/`), result as a macOS notification and in
    `~/Library/Logs/novagram-upstream-weekly.log`. It never touches a working copy. The update itself is
    `submodules/Novagram/scripts/novagram-upstream-update.sh`.
 
