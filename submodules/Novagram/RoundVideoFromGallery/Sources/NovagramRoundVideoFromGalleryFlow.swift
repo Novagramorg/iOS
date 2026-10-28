@@ -5,7 +5,6 @@ import AVFoundation
 import UniformTypeIdentifiers
 import Display
 import SwiftSignalKit
-import Postbox
 import TelegramCore
 import AccountContext
 import LocalMediaResources

@@ -16,7 +16,6 @@ swift_library(
     deps = [
         "//submodules/Display:Display",
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
-        "//submodules/Postbox:Postbox",
         "//submodules/TelegramCore:TelegramCore",
         "//submodules/AccountContext:AccountContext",
         # Novagram: localized strings for the export-progress alert and the failure alert (2026-08-27).

@@ -54,7 +54,6 @@ swift_library(
         ":NovagramAutoProxyResources",
     ],
     deps = [
-        "//submodules/Postbox:Postbox",
         "//submodules/TelegramCore:TelegramCore",
         "//submodules/AccountContext:AccountContext",
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
