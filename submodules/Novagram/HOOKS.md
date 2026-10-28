@@ -58,6 +58,46 @@ The `NavigationButtonComponent` sections further down are history.
 
 ---
 
+## 🪶 Thin hooks and the formatter (2026-10-28)
+
+Each line we change in a Telegram file is a line an upstream update can conflict on. Three rules keep that number small:
+
+1. **No formatter on Telegram files.** `~/.claude/scripts/auto-lint.sh` (swiftlint --fix after every Edit/Write) reads
+   `.claude/auto-lint-only` at the repo root and lints only the files it lists: `submodules/Novagram/*.swift`,
+   `submodules/TelegramCore/Sources/Novagram/*.swift` and `*/Novagram*.swift`. The file is local (`.claude/` is gitignored);
+   recreate it on a new machine. Before 2026-10-28 swiftlint rewrote whole Telegram files (`let _ =` → `_ =`, unused
+   closure parameters → `_`, `async()` → `async`, re-indent): 9 856 such lines in 83 files were put back to upstream's text
+   (`ChatController.swift` went from +1291/-1165 to +154/-26 against upstream).
+2. **Thin hooks** (see "Adding a new hook"): the logic lives in `submodules/Novagram/`, the Telegram file keeps an import
+   and a 1–3 line call. Fat hooks are thinned one at a time, when we work on them anyway.
+3. **Weekly upstream updates.** `~/Library/Application Support/Novagram/novagram-upstream-weekly.sh` runs every Monday at
+   10:00 (launchd `uz.novagram.upstream-weekly`): trial merges of GitHub's `main` of both forks against Telegram's master in
+   small mirrors (`~/Library/Caches/novagram-upstream/`), result to the phone (`notify-phone.sh`) and
+   `~/Library/Logs/novagram-upstream-weekly.log`. It never touches a working copy. The update itself is
+   `submodules/Novagram/scripts/novagram-upstream-update.sh`.
+
+**Fat-hook backlog** (our lines in Telegram files against upstream 13.1.1, whitespace ignored, 2026-10-28; 157 Swift files,
+~4 970 added lines). Thin the top ones first:
+
+| Telegram file | Ours | What is in it |
+| --- | --- | --- |
+| `Chat/ChatTextInputPanelNode/Sources/ChatTextInputPanelNode.swift` | +473 | speech-to-text, round video from gallery, send-confirm, composer buttons |
+| `TelegramUI/Sources/SharedAccountContext.swift` | +388 | account switching, hidden-chats factory, Novagram screens |
+| `ChatListUI/Sources/ChatListController.swift` | +363 | ghost/fold buttons, Secret Vault, folder style, chat lock, ads |
+| `Telegram/NotificationService/Sources/NotificationService.swift` | +323 | multi-account and Ghost notification handling |
+| `AuthorizationUI/Sources/AuthorizationSequencePhoneEntryControllerNode.swift` | +265 | demo login, bot token login, QR logo |
+| `TelegramUI/Sources/ChatControllerNode.swift` | +179 | send-path features (heart effect, translate, sticker auto-add) |
+| `TelegramUI/Sources/ChatController.swift` | +142 | chat lock, auto-accept, edited history, ghost |
+| `TelegramUI/Sources/AppDelegate.swift` | +122 | managers started at launch |
+| `PeerInfoScreen/Sources/PeerInfoScreenPerformButtonAction.swift` | +137 | profile actions |
+| `AuthorizationUI/Sources/AuthorizationSequencePhoneEntryController.swift` | +128 | demo login |
+| `TelegramCore/Sources/State/AccountStateManagementUtils.swift` | +108 | ghost mode, deleted messages, edited history |
+| `ChatListUI/Sources/ChatContextMenus.swift` | +116 | chat menu items (hide, lock, recent actions) |
+
+`InAppPurchaseManager.swift` (+70/-1113) is the App Store IAP gate: removing upstream's code there is the feature.
+
+---
+
 ## 🔀 Upstream 13.0 merge (2026-10-12)
 
 > Upstream `release-13.0.0` (`f1dd7a2dbd`) `feature/upstream-13.0` branch'ga merge qilindi: `git merge --no-ff -X ignore-space-change release-13.0.0` (alohida worktree `../Telegram-iOS-13`). To'liq reja va o'zgarishlar ro'yxati: repo root'dagi `UPSTREAM_13.0_MERGE_PLAN.md` va `UPSTREAM_13.0_CHANGES.md`. Hook nazorati: main'dagi 1707 ta Novagram/Novagram qatoridan faqat quyida yozilgan, ataylab olib tashlanganlari kamaydi.
@@ -1566,11 +1606,14 @@ submodules/Novagram/scripts/novagram-upstream-update.sh           # snapshot, fe
 When you must touch a Telegram-owned file for a new Novagram feature:
 
 1. Put 100% of the logic into `submodules/Novagram/<Feature>/`
-2. Keep the Telegram-side hook to 1–8 lines: an import + a single function call OR a tiny accessor method
-3. **Append a new section to this file** documenting the exact hook code and reason
-4. Commit the HOOKS.md update in the same commit as the hook itself
+2. Keep the Telegram-side hook to 1–3 lines: an import + a single function call OR a tiny accessor method
+   (`let (text, entities) = NovagramOutgoingText.apply(...)`, `content: .image(NovagramHeaderIcons.ghostMode(isActive:))`)
+3. Never reformat the lines around the hook: change only the lines the hook needs (see "Thin hooks and the formatter")
+4. **Append a new section to this file** documenting the exact hook code and reason
+5. Commit the HOOKS.md update in the same commit as the hook itself
 
-If a hook grows beyond ~10 lines, refactor: move state into a Novagram module and expose a single delegate-style call site.
+If a hook grows beyond ~3 lines, refactor: move state into a Novagram module and expose a single delegate-style call site.
+When you work on an existing fat hook (the backlog below), thin it in the same change.
 
 ---
 

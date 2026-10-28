@@ -20,7 +20,9 @@
 #
 # Usage:
 #   submodules/Novagram/scripts/novagram-upstream-update.sh            everything (steps 1-5)
-#   submodules/Novagram/scripts/novagram-upstream-update.sh --check    only report what upstream has: no branch, no merge
+#   submodules/Novagram/scripts/novagram-upstream-update.sh --check    only report what upstream has and a trial merge against
+#                                                                      main: works from any branch and any working tree, changes
+#                                                                      nothing but the upstream/master ref (safe in the background)
 #   submodules/Novagram/scripts/novagram-upstream-update.sh --finish   after resolving merge conflicts by hand: steps 4-5
 #   NOVAGRAM_TRAILER='Co-Authored-By: ...'  optional trailer line for the snapshot and merge commits
 #   NOVAGRAM_HOOKS_REVIEWED=1               go past a hook-count drop you checked (a hook ported because
@@ -93,7 +95,7 @@ hooks_compare() {
 
 # ---- reporting ---------------------------------------------------------------
 
-upstream_report() { # $1 = old snapshot, $2 = new snapshot
+upstream_report() { # $1 = old snapshot, $2 = new snapshot, $3 = hook counts of the base
     local old_up new_up n
     old_up="$(snapshot_upstream_commit "$1")"
     new_up="$(snapshot_upstream_commit "$2")"
@@ -106,7 +108,7 @@ upstream_report() { # $1 = old snapshot, $2 = new snapshot
         echo "upstream rewrote its history since the last snapshot ($(git rev-parse --short "$1")): only the file changes are listed"
     fi
     echo "upstream changed $(git diff --name-only "$1" "$2" | wc -l | tr -d ' ') files; these also hold our hooks (check them on screen):"
-    comm -12 <(git diff --name-only "$1" "$2" | sort) <(cut -d: -f1 "$STATE/hooks-before.txt" | sort) | sed 's/^/  /'
+    comm -12 <(git diff --name-only "$1" "$2" | sort) <(cut -d: -f1 "$3" | sort) | sed 's/^/  /'
     echo "submodules moved by upstream:"
     git diff --raw "$1" "$2" | awk '$2 == "160000" { print "  " $6 }'
 }
@@ -162,10 +164,37 @@ finish() {
     build
     echo
     echo "DONE on branch $branch"
-    upstream_report "$old" "$new"
+    upstream_report "$old" "$new" "$STATE/hooks-before.txt"
     echo
     echo "next: check the app on screen (the files above first). Then:"
     echo "  git switch main && git merge --ff-only $branch && git push origin main && git branch -d $branch"
+}
+
+check() {
+    echo "fetching upstream..."
+    git fetch --no-recurse-submodules upstream master >> "$LOG" 2>&1 || die "git fetch upstream failed, see $LOG"
+    git update-ref "refs/remotes/$UPSTREAM_REF" FETCH_HEAD
+    local base old up new hooks
+    base="$(git rev-parse --verify -q "$BASE_BRANCH")" || die "no branch $BASE_BRANCH"
+    old="$(last_snapshot "$base")"
+    [ -n "$old" ] || die "no snapshot commit (Upstream-Commit: trailer) in $BASE_BRANCH's history"
+    up="$(git rev-parse "$UPSTREAM_REF")"
+    if [ "$(git rev-parse "$up^{tree}")" = "$(git rev-parse "$old^{tree}")" ]; then
+        echo "already up to date with $UPSTREAM_REF ($(git rev-parse --short "$up"))"
+        exit 0
+    fi
+    hooks="$(mktemp)"
+    hooks_snapshot "$base" "$hooks"
+    new="$(make_snapshot "$old" "$up")" || die "could not create the snapshot commit"
+    upstream_report "$old" "$new" "$hooks"
+    rm -f "$hooks"
+    if git merge-tree --write-tree -X ignore-space-change "$base" "$new" > /dev/null 2>&1; then
+        echo "trial merge: no conflicts"
+    else
+        echo "trial merge: CONFLICTS in:"
+        git merge-tree --write-tree --name-only -X ignore-space-change "$base" "$new" 2> /dev/null | sed -n '2,/^$/p' | sed '/^$/d; s/^/  /'
+    fi
+    exit 0
 }
 
 start() {
@@ -190,16 +219,7 @@ $dirty"
     mkdir -p "$STATE"
     hooks_snapshot HEAD "$STATE/hooks-before.txt"
     new="$(make_snapshot "$old" "$up")" || die "could not create the snapshot commit"
-    upstream_report "$old" "$new"
-    if [ "$MODE" = "--check" ]; then
-        if git merge-tree --write-tree -X ignore-space-change HEAD "$new" > /dev/null 2>&1; then
-            echo "trial merge: no conflicts"
-        else
-            echo "trial merge: CONFLICTS in:"
-            git merge-tree --write-tree --name-only -X ignore-space-change HEAD "$new" 2> /dev/null | sed -n '2,/^$/p' | sed '/^$/d; s/^/  /'
-        fi
-        exit 0
-    fi
+    upstream_report "$old" "$new" "$STATE/hooks-before.txt"
     local branch n
     branch="feature/upstream-$(date +%Y-%m-%d)"
     n=2
@@ -233,7 +253,8 @@ $dirty"
 }
 
 case "$MODE" in
-    start | --check) start ;;
+    start) start ;;
+    --check) check ;;
     --finish) finish ;;
     *)
         echo "usage: $0 [--check|--finish]" >&2
