@@ -672,6 +672,7 @@ three calls and delete the two lines.
 221. `AppDelegate.swift` (TelegramUI), `Telegram/BUILD`, `TelegramUI/BUILD`: UIScene life cycle (`NovagramSceneDelegate`), iOS 27 SDK bilan ilova ochilishi uchun. **13.0: olib tashlandi, upstream `SceneDelegate` (13a2694420); `Novagram/SceneLifecycle` o'chirildi.**
 222. `UIViewController+Navigation.m` (UIKitRuntimeUtils): iOS 27'da yashirin klaviatura API chaqirilmaydi, ilova ishga tushganda to'xtamaydi. **13.0: olib tashlandi, upstream 93af3a138e.**
 223. `publish.sh`, `release.sh`: App Store build uchun Swift 6.4 flag'lari.
+245. `Telegram/BUILD`, `TelegramUI/Resources/Fonts/`: Apple'ning SF Camera shrifti (`AremacFS-*.otf`) va `UIAppFonts` olib tashlangan (Apple upload ogohlantirishi, 2027-10-01 dan reject). `Font.with(design: .camera)` tizim shriftiga o'tadi.
 
 #### CarPlay
 
@@ -7530,3 +7531,25 @@ from the SDK core.
 
 **Upstream pull:** nothing upstream is touched.
 
+
+## 📌 SF Camera font removed (Apple "Disallowed font") — 2026-10-28
+
+**Why:** App Store upload validation of 13.1.1 (87) warned that `Novagram.app/AremacFS-Regular.otf` and
+`AremacFS-Semibold.otf` are Apple's `SFCamera-Regular` / `SFCamera-Semibold` (the file names are the reverse of
+"SFCamera"), and that uploads embedding Apple fonts are rejected from 2027-10-01
+([TN3214](https://developer.apple.com/documentation/technotes/tn3214-validating-the-fonts-you-ship-in-your-app)).
+Upstream still ships them (checked at `fb0e62ba8a`, 2026-10-22).
+
+- `submodules/TelegramUI/Resources/Fonts/AremacFS-Regular.otf`, `AremacFS-Semibold.otf`: deleted (they reached the
+  bundle through the `TelegramUIResources` glob).
+- `Telegram/BUILD` (`TelegramInfoPlist`): the `UIAppFonts` key and its two entries are removed.
+- `submodules/Display/Source/Font.swift` is **not** changed: its `.camera` case already falls back to
+  `UIFont.systemFont(ofSize:weight:)` when the font is not found. Digit widths were measured: SF Camera's digits are
+  proportional like SF Pro's, so recording timers do not start to jitter.
+- Users of `design: .camera`: camera mode labels and duration, voice/video recording timers, story location, link
+  and weather stickers, the video chat camera preview, the sticker picker. They now draw in SF Pro.
+- `Telegram/Telegram-iOS/Info.plist` and `InfoBazel.plist` still list `SFCompactRounded-Semibold.otf`; neither file is
+  used by the Bazel build and that font is not in the bundle.
+
+**Upstream pull:** if upstream still adds `AremacFS-*.otf` or `UIAppFonts`, keep them out. If upstream removes them
+itself, take upstream's version and drop this entry.

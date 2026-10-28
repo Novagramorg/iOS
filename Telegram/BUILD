@@ -1818,11 +1818,6 @@ plist_fragment(
         <string>INStartCallIntent</string>
         <string>RemindAboutChatIntent</string>
     </array>
-    <key>UIAppFonts</key>
-    <array>
-        <string>AremacFS-Regular.otf</string>
-        <string>AremacFS-Semibold.otf</string>
-    </array>
     <key>UIApplicationSceneManifest</key>
     <dict>
         <key>UIApplicationSupportsMultipleScenes</key>
