@@ -571,9 +571,14 @@ for runtime, devices in data.get('devices', {}).items():
 
     step "Simulator boot qilinmoqda..."
     xcrun simctl boot "$SIM_UDID" 2>/dev/null || true
-    # xcode-select sudo'siz bo'lsa Simulator.app system'da yo'q — Xcode ichidan to'g'ridan-to'g'ri ochamiz
-    if ! open -a Simulator 2>/dev/null; then
-        open "/Applications/Xcode.app/Contents/Developer/Applications/Simulator.app" || true
+    xcrun simctl bootstatus "$SIM_UDID" -b >/dev/null 2>&1 || true
+    # Xcode 27: Simulator.app yo'q, simulator oynasi Device Hub ichida (boot headless bo'ladi).
+    # Xcode 26: xcode-select sudo'siz bo'lsa Simulator.app system'da yo'q — Xcode ichidan ochamiz.
+    XCODE_DEV="$(xcode-select -p 2>/dev/null)"
+    if [ -d "${XCODE_DEV%/Contents/Developer}/Contents/Applications/DeviceHub.app" ]; then
+        open "devices://device/open?id=$SIM_UDID" 2>/dev/null || open -a DeviceHub 2>/dev/null || true
+    elif ! open -a Simulator 2>/dev/null; then
+        open "$XCODE_DEV/Applications/Simulator.app" || true
     fi
     ok "Simulator tayyor"
 
