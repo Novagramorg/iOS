@@ -240,7 +240,7 @@ final class NovagramCurrencyRatesController: ViewController {
 // The glass bar the Settings screens use (as in ItemListController).
 private func novagramCurrencyRatesNavigationBarData(_ presentationData: PresentationData) -> NavigationBarPresentationData {
     return NavigationBarPresentationData(
-        theme: NavigationBarTheme(rootControllerTheme: presentationData.theme, hideBackground: false, hideSeparator: false, edgeEffectColor: presentationData.theme.list.blocksBackgroundColor, style: .glass),
+        theme: NavigationBarTheme(rootControllerTheme: presentationData.theme, edgeEffectColor: presentationData.theme.list.blocksBackgroundColor),
         strings: NavigationBarStrings(presentationStrings: presentationData.strings)
     )
 }

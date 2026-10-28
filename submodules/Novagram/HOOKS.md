@@ -6,9 +6,55 @@ This file is the **source of truth** for every line of Novagram code that lives 
 2. The hook code itself
 3. Why it lives outside a Novagram module (i.e. cannot be expressed as pure Novagram code)
 
-On every `git pull upstream master`, an AI assistant uses this file to re-apply hooks if upstream code moved. **Novagram hooks always win** against upstream changes; surrounding upstream code is taken as-is.
+On every upstream update (`submodules/Novagram/scripts/novagram-upstream-update.sh`, see "Pull conflict workflow"), an AI assistant uses this file to re-apply hooks if upstream code moved. **Novagram hooks always win** against upstream changes; surrounding upstream code is taken as-is.
 
 > Last verified: 2026-05-19 against upstream commit `9ed152eb6b` (Novagram master). 2026-05-16 added DeviceAccess contacts-consent hook for Apple Review 5.1.2 rejection fix. 2026-05-19 added ApplicationContext.swift hook to defer the silent post-login contacts auto-prompt by 1 second (initial attempt that day silenced the auto-prompt entirely; that was reverted the same day after the user reported the consent + iOS alerts never appeared — the deferred version restores both alerts while still letting the Chats tab finish its layout before the alert presents). 2026-05-19 (later same day) replaced the `InAppPurchaseManager.swift` runtime gate with a complete rewrite that removes the StoreKit code path entirely (`SKPaymentQueue`, `SKProductsRequest`, `SKPayment`, `SKReceipt*` no longer reachable); also dropped the now-unused `import StoreKit` from `AuthorizationUI/Sources/AuthorizationSequencePaymentScreen.swift`, and in `TelegramUI/Sources/AppDelegate.swift` both dropped the import and replaced the iOS 15+ `AppStore.showManageSubscriptions(in:)` Manage Subscriptions sheet with the web fallback URL (no StoreKit-backed subscriptions exist on this fork so the system sheet would be empty anyway). 2026-07-17 added the "Deleted messages (anti-delete)" section documenting `DeletedMessageAttribute` (new TelegramCore file) plus its five Telegram-owned hook sites (AccountManager registration, AccountStateManagementUtils delete interception, ChatHistoryEntriesForView display filter, StringForMessageTimestampStatus label, ChatHistoryListNode reactivity gate) — this feature previously had zero HOOKS.md coverage despite touching 5 upstream files, a merge risk now closed. 2026-07-17 (same day, Wave 2) updated that section: `DeletedMessageAttribute` gained a `timestamp: Int32` payload (key `"t"`, backward-compatible decode), `AccountStateManagementUtils.swift`'s delete interception is now itself gated on `show_deleted_messages` (capture+retain only when ON, real delete when OFF — previously capture was unconditional and only display was gated), and `StringForMessageTimestampStatus.swift`'s label now renders the captured deletion time. Also flagged (not fixed) a pre-existing gap: `AccountManager.swift:247`'s `declareEncodable` factory still ignores its decoder argument, so the persisted timestamp does not currently survive a disk decode round-trip — see the ⚠️ note in that section. 2026-07-17 (later same day) added the "Bot token login" section documenting the new `submodules/TelegramCore/Sources/NovagramBotAuthorization.swift` file plus three `AuthorizationUI` hook sites (`AuthorizationSequencePhoneEntryController(+Node)` secondary button, `AuthorizationSequenceController` screen wiring) and the `AuthorizationUI/BUILD` dep — login-only, additive, existing phone-login path untouched. 2026-07-17 (later same day) added the "Novagram banner ads" section documenting the OURS-FIRST `.link` `ChatListNotice` injection in `GlobalControlPanelsContext.swift` (producer branch + dismiss branch) and the click-report branch in `ChatListUI/Sources/ChatListControllerNode.swift`, plus the `GlobalControlPanelsContext/BUILD` dep addition (`ChatListUI/BUILD` and `NovagramAds/BUILD` needed no change — already satisfied by the earlier search-ads/chat-ads hooks). 2026-08-26 (Wave 3) closed two remaining gaps in the "Deleted messages" feature: `AccountManager.swift`'s `declareEncodable` factory now honors its decoder so the persisted `timestamp` survives a disk decode / app relaunch (previously flagged in Wave 2 as a known gap, now fixed — line moved `:247` → `:251`), `SyncCore_StandaloneAccountTransaction.swift` gained a `DeletedMessageAttribute` carry-forward (same shape as the existing `EditedMessageHistoryAttribute` one, fixing the same groups/channels re-sync loss), and — the actual P0 fix — `Telegram/NotificationService/Sources/NotificationService.swift` received its first-ever Novagram hook: the notification extension's silent `MESSAGE_DELETED` handling is now gated on the toggle too, via a new shared/App-Group-aware helper (`submodules/TelegramCore/Sources/Novagram/NovagramShowDeletedMessages.swift`, also wired into `AccountStateManagementUtils.swift`'s two capture-gate call sites) — this fixes anti-delete silently doing nothing whenever the app was backgrounded, which is when a peer's delete most commonly arrives. 2026-08-27 added two independent hooks: `ResolvePeerByName.swift` gained a `ResolvedPeerByPhone`/`EngineResolvedPeerByPhone` split so `TelegramEnginePeers.swift`'s new `resolvePeerByPhoneWithStatus(phone:ageLimit:)` (and `ChatControllerOpenPhoneContextMenu.swift`, which now calls it) can tell a failed RPC apart from a genuine "not on Telegram" answer — the phone context menu previously collapsed both into the same "This number is not on Telegram" text, now a failed lookup gets a "Try Again" action (no "Invite to Telegram") and an honest `phoneMenu_lookupFailed` message instead; and `TelegramPresentationData/BUILD` + `PresentationData.swift`'s `dictFromLocalization` now run every server-delivered language-pack string through the new `NovagramBrandStrings.applyBrand(to:)` (`submodules/Novagram/Brand/Sources/NovagramBrandStrings.swift`), rewriting "Telegram"/"TELEGRAM" to "Novagram"/"NOVAGRAM" everywhere except a `protectedPhrases` allowlist (Premium/Stars/Business/Passport/Desktop/Web/App/Terms/Team) — this is the fix for the 286 hand-rebranded strings in the bundled `en.lproj/Localizable.strings` never reaching a logged-in user, since `PresentationStrings` is actually built from the server's `langpack.getLangPack`, not the bundle.
+
+---
+
+## 🔀 Upstream 13.1.1 merge and the short history (2026-10-28)
+
+**History.** Telegram force-pushed `TelegramMessenger/Telegram-iOS` master in October 2026: the commit merged on
+2026-10-12 (`3e543cc192`) is gone from it, so a plain `git merge upstream/master` took a 2019 merge base. `main` was
+rebuilt without Telegram's history (the old one is in `~/Documents/Novagram-backups/Telegram-iOS-before-reroot-2026-10-28.bundle`):
+
+- `added telegram 13.0 source from upstream f1dd7a2dbd`: upstream's tree at `f1dd7a2dbd` (same tree as `3e543cc192`).
+- `added novagram on top of telegram 13.0`: all our work up to `e3fe797097` in one commit.
+- `updated telegram to fb0e62ba8a (2026-10-22)`: a snapshot of upstream 13.1.1, merged into main.
+
+Every snapshot commit carries an `Upstream-Commit: <sha>` line; the update script finds the last one in main and
+puts the next snapshot on top of it, so the merge base is always the previous snapshot.
+
+**Merging.** `-X ignore-space-change`: a formatter had re-indented and rewritten (`let _ =` → `_ =`) many Telegram
+files on our side. Without it 37 files conflicted, with it 25, and most remaining hunks were that noise
+(upstream's side was taken there). Hooks ported to moved or deleted upstream code:
+
+| File | What changed upstream | Hook now |
+| --- | --- | --- |
+| `ChatListHeaderComponent/Sources/NavigationButtonComponent.swift` | deleted (`16b065d8d0`, one glass `NavigationBarComponent`) | gone; its `.systemIcon` / `.iconTinted` / `.iconOriginal` cases, the 28 pt clamp and the haptic are replaced by `NovagramHeaderIcons` (`Novagram/ForeignUserBlock/Sources/ChatList_NovagramHeaderIcons.swift`, images made once) |
+| `ChatListUI/Sources/ChatListController.swift` | header buttons are `NavigationBarComponent.Button` | `ghostModeButton` / the fold button are `NavigationBarComponent.Button(content: .image(NovagramHeaderIcons...))`, light haptic in their actions; the vault filter and `foldableButtons` stay in `rightButtons` |
+| `TelegramUI/Sources/ChatControllerNode.swift` | the send loop moved into `chatComposerTextMessages` (TextFormat) | per piece: `NovagramOutgoingText.apply(text:entities:businessLinkSetup:)` (`Novagram/Messenger/Sources/NovagramOutgoingText.swift`) appends Auto Text, regenerates entities with upstream's rule and adds the Text Style entity |
+| `TelegramCore/Sources/State/AccountStateManagementUtils.swift` | `.EditMessage` merge moved into `mergedServerMessageUpdate` (also used by feed pages) | `novagramAppendEditHistory` runs on the merged message's attributes in `.EditMessage` only |
+| `TabBarUI/Sources/TabBarContollerNode.swift` | no search button in iPhone Duo's side placement | `search: sidePlacement != nil ? nil : { …always a search state… }()` |
+| `TelegramUI/Sources/TelegramRootController.swift` | a removed selected tab selects Chats; a News tab (`showNewsTab`) | upstream's `selectedIndex`, then the bot layout selects Chats by identity; `currentShowNewsTab` is kept like `currentShowCallsTab` and a bot session hides News too (Chats + Settings only) |
+| `CallScreen/Sources/Components/ButtonGroupView.swift` | `centeredX` band for iPhone Duo | our 5-button spacing formula + upstream's band |
+| `ContactListUI/Sources/ContactsController.swift`, `ChatListUI/Sources/ChatListController.swift` (Secret Vault long press on the title) | the header's `titleContentView` is gone, the bar draws the title | the title hit test uses `headerView.navigationBarComponentView?.primaryTitleView` |
+| `Novagram/BotTokenLogin`, `Novagram/CurrencyRates` (ours) | `NavigationBarTheme` lost its background, separator and `style` arguments (every bar is glass) | the same arguments as upstream's `AuthorizationSequenceController` / `NavigationBarTheme(rootControllerTheme:edgeEffectColor:)` |
+| `AccountContext/Sources/AccountContext.swift`, `TelegramUI/Sources/NavigateToChatController.swift` | `showsUnreadChatsBackBadge` added | both parameters, upstream's first, then `isSecretRead` |
+
+**Postbox visibility** (upstream's refactor lets only listed packages depend on Postbox):
+
+- `submodules/Postbox/BUILD`, `clients` package group: `"//submodules/Novagram/...",` (one line, after `MediaPlayer`).
+- `build-system/Make/PostboxImportCheck.py`: `'submodules/Novagram/'` in `EXEMPT_PREFIXES` (the check runs in `Make.py` only, not in `run.sh`).
+- `SettingsUI/Sources/Notifications/NotificationsAndSoundsController.swift`: our `import Postbox` was unused, removed.
+- `TelegramUI/Components/Chat/ChatTextInputPanelNode/BUILD`: our unused `//submodules/Postbox` dep removed.
+- TelegramCore switched every file to `internal import TelegramApi`; our two TelegramCore files
+  (`NovagramBotAuthorization.swift`, `Novagram/NovagramGhostReadOnSend.swift`) do the same, a plain import is an error now.
+
+Also: `versions.json` takes upstream's 13.1.1 / Xcode 27.1; submodules `tgcalls` → `8d6dd4c61e`, `mtproto-engine` →
+`da4b217021` from `TelegramMessenger/mtproto-engine` (run `git submodule sync` once).
+
+The `NavigationButtonComponent` sections further down are history.
 
 ---
 
@@ -311,7 +357,7 @@ On every `git pull upstream master`, an AI assistant uses this file to re-apply 
 56. `StandaloneSendMessage.swift`, `PendingMessageManager.swift` (TelegramCore): screenshot bildirishnomasi yuborilmaydi.
 57. `AdMessages.swift` (TelegramCore): reklama "ko'rildi" va click yuborilmaydi.
 58. `ChatListController.swift` (ChatListUI): chatlar tepasida Ghost tugmasi (yoqiq/o'chiq ikonka).
-59. `NavigationButtonComponent.swift` (TelegramUI): Ghost ikonkasi uchun yangi `Content` turlari, katta ikonka kichraytiriladi.
+59. ~~`NavigationButtonComponent.swift` (TelegramUI)~~: upstream faylni o'chirdi (2026-10-28), ghost ikonkalari endi `NovagramHeaderIcons` da.
 60. `NovagramGhostActive/Inactive/Icon.imageset` (TelegramUI, yangi asset): Ghost ikonkalari.
 
 #### Chat
@@ -467,7 +513,7 @@ On every `git pull upstream master`, an AI assistant uses this file to re-apply 
 155. `ApplicationContext.swift` (TelegramUI): birinchi launch'da Tips, keyingilarida App Store yangilanish tekshiruvi.
 156. `AppDelegate.swift` (TelegramUI), `ThemeSettingsAppIconItem.swift` (SettingsUI): 7 ta Nova ikonka va ularning lokalizatsiya qilingan nomlari.
 157. `Info.plist`, `Telegram/BUILD`, `Nova*Icon.alticon` (Telegram app): alternate ikonka fayllari.
-158. `NavigationButtonComponent.swift` (TelegramUI), `ChatListController.swift` (ChatListUI): header va story kamera tugmalarida haptic.
+158. `ChatListController.swift` (ChatListUI): header (ghost, fold) va story kamera tugmalarida haptic, tugmalarning o'z action'ida (2026-10-28 dan).
 159. `ItemListSwitchItem.swift` (ItemListUI): switch'dagi "NEW" badge joyi tuzatilgan.
 224. `PeerInfoSettingsItems.swift` (PeerInfoScreen): Settings tab'ining eng pastida (`support` section ostida) ilova versiyasi — "Novagram 13.0 (85)". Matn `NovagramAppVersion.displayText` (UpdateCheck moduli), hook — `PeerInfoScreenCommentItem(id: 100, ...)` + `import NovagramUpdateCheck` (2026-10-12). 2026-10-27 dan: qatorni 20 s bosib turish Developer bo'limini ochadi/yashiradi (`novagramLongPressDuration` / `novagramLongPressAction` = `NovagramDeveloperSection`), batafsil pastda "Developer section".
 242. `PeerInfoScreenCommentItem.swift` (PeerInfoScreen): ixtiyoriy yashirin long press — item'da 2 ta `var` (`novagramLongPressDuration`, `novagramLongPressAction`), node `update`'ida `NovagramHiddenLongPress(view:recognizesSimultaneously: true)` + `import NovagramChannelStats` (2026-10-27, #224 uchun).
@@ -1491,20 +1537,25 @@ Next to the other `--define`s:
 
 ## 🔄 Pull conflict workflow (manual, AI-assisted)
 
-Whenever `git pull upstream master` is run:
+`main` has no Telegram history: Telegram's code comes in as snapshot commits (see "Upstream 13.1.1 merge and the short
+history"). One command does an update, about once a week:
 
-1. Run a checkpoint:
-   ```sh
-   git tag pre-pull-checkpoint-$(date +%Y%m%d-%H%M)
-   git branch backup-before-merge-$(date +%Y%m%d)
-   ```
-2. `git pull upstream master --no-rebase`
-3. If merge conflicts surface in any of the files listed above, **do NOT auto-resolve**. Instead:
-   - Open `submodules/Novagram/HOOKS.md` (this file)
-   - For each conflicted file, locate its hook block above
-   - Manually re-apply the hook at the new line position (upstream code wins for everything else; Novagram hook re-inserted)
-   - Ask the AI assistant: _"Re-apply the Novagram hook for `<file>` based on HOOKS.md"_
-4. Run `./run.sh` and verify a clean build before deleting checkpoint tags
+```sh
+submodules/Novagram/scripts/novagram-upstream-update.sh --check   # what upstream has and a trial merge, changes nothing
+submodules/Novagram/scripts/novagram-upstream-update.sh           # snapshot, feature/upstream-<date>, merge, hook check, ./run.sh
+```
+
+1. On a conflict it stops (exit 2) and lists each file with its number of `// Novagram` lines. For each one, **do
+   NOT auto-resolve**: find its hook block in this file and re-apply the hook on upstream's code (upstream wins for
+   everything else). Hunks where our side differs only by the old formatter noise take upstream's side.
+2. `git add` the files, `git commit`, then `submodules/Novagram/scripts/novagram-upstream-update.sh --finish`.
+3. `--finish` updates the submodules upstream moved, compares the `// Novagram` lines per file with main's, runs
+   `verify-hooks.sh` and builds. A hook ported on purpose (its upstream file was deleted) is passed with
+   `NOVAGRAM_HOOKS_REVIEWED=1`. Unmarked hooks are not counted: check that every line we added to a conflicted file is
+   still there (or ported).
+4. Check the app on screen (the script lists the hook files upstream changed), then
+   `git switch main && git merge --ff-only <branch> && git push origin main && git branch -d <branch>`. No force-push.
+5. Document every ported hook here, in the same commit.
 
 **Never** merge upstream changes without re-applying hooks. If a hook is silently dropped, the consequence is silent feature-breakage (demo auto-fill stops, custom Settings panel disappears, intro screen reverts to blue, etc.).
 

@@ -20,6 +20,7 @@ swift_library(
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
         "//submodules/Postbox:Postbox",
         "//submodules/TelegramCore:TelegramCore",
+        "//submodules/TextFormat:TextFormat",
         "//submodules/AccountContext:AccountContext",
         "//submodules/TelegramPresentationData:TelegramPresentationData",
         "//submodules/TelegramUIPreferences:TelegramUIPreferences",

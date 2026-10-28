@@ -200,6 +200,10 @@ public final class PrivateCallScreen: OverlayMaskContainerView, AVPictureInPictu
     private let backButtonView: BackButtonView
     private var conferenceButtonView: ConferenceButtonView?
     
+    /// Where the back button goes in a side strip (iPhone Duo), in this view's coordinates; nil keeps it in the
+    /// top-left corner. Set by the controller from its layout before `update`.
+    public var sideColumnBackButtonFrame: CGRect?
+    
     private var statusView: StatusView
     private var weakSignalView: WeakSignalView?
     
@@ -867,6 +871,9 @@ public final class PrivateCallScreen: OverlayMaskContainerView, AVPictureInPictu
         }*/
         let displayClose = false
         
+        // The avatar, title, status and emoji key center in the band between the side insets when they differ (iPhone
+        // Duo's side strip); the screen's center otherwise.
+        let contentCenterX: CGFloat = params.insets.left != params.insets.right ? params.insets.left + (params.size.width - params.insets.left - params.insets.right) * 0.5 : params.size.width * 0.5
         let contentBottomInset = self.buttonGroupView.update(size: params.size, insets: params.insets, minWidth: wideContentWidth, controlsHidden: currentAreControlsHidden, displayClose: displayClose, strings: params.state.strings, buttons: buttons, notices: notices, isAnimatedOutToGroupCall: self.isAnimatedOutToGroupCall, transition: transition)
         
         var expandedEmojiKeyRect: CGRect?
@@ -906,7 +913,7 @@ public final class PrivateCallScreen: OverlayMaskContainerView, AVPictureInPictu
             }
             
             let emojiExpandedInfoSize = emojiExpandedInfoView.update(width: wideContentWidth, transition: emojiExpandedInfoTransition)
-            let emojiExpandedInfoFrame = CGRect(origin: CGPoint(x: floor((params.size.width - emojiExpandedInfoSize.width) * 0.5), y: params.insets.top + 73.0), size: emojiExpandedInfoSize)
+            let emojiExpandedInfoFrame = CGRect(origin: CGPoint(x: floor(contentCenterX - emojiExpandedInfoSize.width * 0.5), y: params.insets.top + 73.0), size: emojiExpandedInfoSize)
             emojiExpandedInfoTransition.setPosition(view: emojiExpandedInfoView, position: CGPoint(x: emojiExpandedInfoFrame.minX + emojiExpandedInfoView.layer.anchorPoint.x * emojiExpandedInfoFrame.width, y: emojiExpandedInfoFrame.minY + emojiExpandedInfoView.layer.anchorPoint.y * emojiExpandedInfoFrame.height))
             emojiExpandedInfoTransition.setBounds(view: emojiExpandedInfoView, bounds: CGRect(origin: CGPoint(), size: emojiExpandedInfoFrame.size))
             
@@ -932,6 +939,12 @@ public final class PrivateCallScreen: OverlayMaskContainerView, AVPictureInPictu
             }
         }
         
+        let backButtonFrame: CGRect
+        if let sideColumnBackButtonFrame = self.sideColumnBackButtonFrame {
+            // iPhone Duo: the back button is a circle in the side strip, as every screen's is.
+            let backButtonSize = self.backButtonView.updateCircle(text: params.state.strings.Common_Back, diameter: sideColumnBackButtonFrame.width)
+            backButtonFrame = CGRect(origin: sideColumnBackButtonFrame.origin, size: backButtonSize)
+        } else {
         let backButtonSize = self.backButtonView.update(text: params.state.strings.Common_Back)
         
         let backButtonY: CGFloat
@@ -940,7 +953,8 @@ public final class PrivateCallScreen: OverlayMaskContainerView, AVPictureInPictu
         } else {
             backButtonY = params.insets.top + 12.0
         }
-        let backButtonFrame = CGRect(origin: CGPoint(x: params.insets.left + 10.0, y: backButtonY), size: backButtonSize)
+            backButtonFrame = CGRect(origin: CGPoint(x: params.insets.left + 10.0, y: backButtonY), size: backButtonSize)
+        }
         transition.setFrame(view: self.backButtonView, frame: backButtonFrame)
         genericAlphaTransition.setAlpha(view: self.backButtonView, alpha: (currentAreControlsHidden || self.isAnimatedOutToGroupCall) ? 0.0 : 1.0)
         
@@ -992,7 +1006,7 @@ public final class PrivateCallScreen: OverlayMaskContainerView, AVPictureInPictu
         let collapsedAvatarSize: CGFloat = 136.0
         let blobSize: CGFloat = collapsedAvatarSize + 40.0
         
-        let collapsedAvatarFrame = CGRect(origin: CGPoint(x: floor((params.size.width - collapsedAvatarSize) * 0.5), y: max(params.insets.top + 8.0, floor(params.size.height * 0.49) - 39.0 - collapsedAvatarSize)), size: CGSize(width: collapsedAvatarSize, height: collapsedAvatarSize))
+        let collapsedAvatarFrame = CGRect(origin: CGPoint(x: floor(contentCenterX - collapsedAvatarSize * 0.5), y: max(params.insets.top + 8.0, floor(params.size.height * 0.49) - 39.0 - collapsedAvatarSize)), size: CGSize(width: collapsedAvatarSize, height: collapsedAvatarSize))
         let expandedAvatarFrame = CGRect(origin: CGPoint(), size: params.size)
         let expandedVideoFrame = CGRect(origin: CGPoint(), size: params.size)
         let avatarFrame = havePrimaryVideo ? expandedAvatarFrame : collapsedAvatarFrame
@@ -1271,7 +1285,7 @@ public final class PrivateCallScreen: OverlayMaskContainerView, AVPictureInPictu
             fontSize: 28.0,
             fontWeight: 0.0,
             color: .white,
-            constrainedWidth: params.size.width - 16.0 * 2.0,
+            constrainedWidth: (params.insets.left != params.insets.right ? params.size.width - params.insets.left - params.insets.right : params.size.width) - 16.0 * 2.0,
             transition: transition
         )
         
@@ -1338,7 +1352,7 @@ public final class PrivateCallScreen: OverlayMaskContainerView, AVPictureInPictu
         }
         let titleFrame = CGRect(
             origin: CGPoint(
-                x: (params.size.width - titleSize.width) * 0.5,
+                x: contentCenterX - titleSize.width * 0.5,
                 y: titleY
             ),
             size: titleSize
@@ -1382,7 +1396,7 @@ public final class PrivateCallScreen: OverlayMaskContainerView, AVPictureInPictu
             emojiViewSizeValue = emojiViewSize
             
             if self.isEmojiKeyExpanded {
-                let emojiViewFrame = CGRect(origin: CGPoint(x: floor((params.size.width - emojiViewSize.width) * 0.5), y: params.insets.top + 93.0), size: emojiViewSize)
+                let emojiViewFrame = CGRect(origin: CGPoint(x: floor(contentCenterX - emojiViewSize.width * 0.5), y: params.insets.top + 93.0), size: emojiViewSize)
                 
                 if case let .curve(duration, curve) = transition.animation, !emojiViewWasExpanded {
                     let distance = CGPoint(x: emojiViewFrame.midX - emojiView.center.x, y: emojiViewFrame.midY - emojiView.center.y)
@@ -1425,7 +1439,7 @@ public final class PrivateCallScreen: OverlayMaskContainerView, AVPictureInPictu
         
         let statusFrame = CGRect(
             origin: CGPoint(
-                x: (params.size.width - statusSize.width) * 0.5,
+                x: contentCenterX - statusSize.width * 0.5,
                 y: titleFrame.maxY + 4.0
             ),
             size: statusSize
@@ -1452,7 +1466,7 @@ public final class PrivateCallScreen: OverlayMaskContainerView, AVPictureInPictu
                     emojiViewY = params.insets.top + 14.0
                 }
                 
-                let emojiViewFrame = CGRect(origin: CGPoint(x: floor((params.size.width - emojiViewSize.width) * 0.5), y: emojiViewY), size: emojiViewSize)
+                let emojiViewFrame = CGRect(origin: CGPoint(x: floor(contentCenterX - emojiViewSize.width * 0.5), y: emojiViewY), size: emojiViewSize)
                 
                 if case let .curve(duration, curve) = transition.animation, emojiViewWasExpanded {
                     let distance = CGPoint(x: emojiViewFrame.midX - emojiView.center.x, y: emojiViewFrame.midY - emojiView.center.y)
@@ -1479,7 +1493,7 @@ public final class PrivateCallScreen: OverlayMaskContainerView, AVPictureInPictu
                         self.addSubview(emojiTooltipView)
                     }
                     
-                    let emojiTooltipSize = emojiTooltipView.update(constrainedWidth: params.size.width - 32.0 * 2.0, subjectWidth: emojiViewSize.width * 0.5)
+                    let emojiTooltipSize = emojiTooltipView.update(constrainedWidth: (params.insets.left != params.insets.right ? params.size.width - params.insets.left - params.insets.right : params.size.width) - 32.0 * 2.0, subjectWidth: emojiViewSize.width * 0.5)
                     let emojiTooltipFrame = CGRect(origin: CGPoint(x: emojiViewFrame.minX + floor((emojiViewFrame.width - emojiTooltipSize.width) * 0.5), y: emojiViewFrame.maxY + 8.0), size: emojiTooltipSize)
                     emojiTooltipTransition.setFrame(view: emojiTooltipView, frame: emojiTooltipFrame)
                     
@@ -1511,7 +1525,7 @@ public final class PrivateCallScreen: OverlayMaskContainerView, AVPictureInPictu
             } else {
                 weakSignalY = statusFrame.maxY + (havePrimaryVideo ? 12.0 : 12.0)
             }
-            let weakSignalFrame = CGRect(origin: CGPoint(x: floor((params.size.width - weakSignalSize.width) * 0.5), y: weakSignalY), size: weakSignalSize)
+            let weakSignalFrame = CGRect(origin: CGPoint(x: floor(contentCenterX - weakSignalSize.width * 0.5), y: weakSignalY), size: weakSignalSize)
             if weakSignalView.bounds.isEmpty {
                 weakSignalView.frame = weakSignalFrame
                 if !transition.animation.isImmediate {

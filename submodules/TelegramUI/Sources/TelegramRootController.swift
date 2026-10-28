@@ -30,6 +30,7 @@ import PeerInfoScreen
 import PeerInfoStoryGridScreen
 import ShareWithPeersScreen
 import ChatEmptyNode
+import NewsScreen
 
 private class DetailsChatPlaceholderNode: ASDisplayNode, NavigationDetailsPlaceholderNode {
     private var presentationData: PresentationData
@@ -79,6 +80,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
     public var callListController: CallListController?
     public var chatListController: ChatListController?
     public var accountSettingsController: PeerInfoScreen?
+    public var newsController: NewsScreen?
 
     private var permissionsDisposable: Disposable?
     private var presentationDataDisposable: Disposable?
@@ -92,6 +94,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
     // Novagram: a bot session only needs Chats + Settings; hide Contacts/Calls (bots can't use them).
     private var isBotAccount = false
     private var currentShowCallsTab = false
+    private var currentShowNewsTab = false
     private var botAccountDisposable: Disposable?
 
     override public var minimizedContainer: MinimizedContainer? {
@@ -200,7 +203,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         super.containerLayoutUpdated(layout, transition: transition)
     }
 
-    public func addRootControllers(showCallsTab: Bool) {
+    public func addRootControllers(showCallsTab: Bool, showNewsTab: Bool) {
         let tabBarController = TabBarControllerImpl(theme: self.presentationData.theme, strings: self.presentationData.strings)
         tabBarController.navigationPresentation = .master
         let chatListController = self.context.sharedContext.makeChatListController(context: self.context, location: .chatList(groupId: .root), controlsHistoryPreload: true, hideNetworkActivityStatus: false, previewing: false, enableDebugActions: !GlobalExperimentalSettings.isAppStoreBuild)
@@ -208,6 +211,8 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
             chatListController.tabBarItem.badgeValue = sharedContext.switchingData.chatListBadge
         }
         let callListController = CallListController(context: self.context, mode: .tab)
+        // Created even when hidden, like the calls tab: `updateRootControllers` shows and hides it.
+        let newsController = NewsScreen(context: self.context)
 
         var controllers: [ViewController] = []
 
@@ -216,6 +221,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
             self?.openChatsController(activateSearch: false)
         }
         self.currentShowCallsTab = showCallsTab
+        self.currentShowNewsTab = showNewsTab
         if !self.isBotAccount {
             controllers.append(contactsController) // Novagram: Contacts tab re-enabled 2026-06-16 (init/startup path)
         }
@@ -225,6 +231,9 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         }
 
         controllers.append(chatListController)
+        if showNewsTab && !self.isBotAccount {
+            controllers.append(newsController)
+        }
 
         var restoreSettignsController: (ViewController & SettingsController)?
         if let sharedContext = self.context.sharedContext as? SharedAccountContextImpl {
@@ -245,10 +254,12 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         accountSettingsController.parentController = self
         controllers.append(accountSettingsController)
 
-        tabBarController.setControllers(controllers, selectedIndex: restoreSettignsController != nil ? (controllers.count - 1) : (controllers.count - 2))
+        let chatsIndex = controllers.firstIndex(where: { $0 === chatListController }) ?? 0
+        tabBarController.setControllers(controllers, selectedIndex: restoreSettignsController != nil ? (controllers.count - 1) : chatsIndex)
 
         self.contactsController = contactsController
         self.callListController = callListController
+        self.newsController = newsController
         self.chatListController = chatListController
         self.accountSettingsController = accountSettingsController
         self.rootTabController = tabBarController
@@ -261,15 +272,16 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                 return
             }
             strongSelf.isBotAccount = true
-            strongSelf.updateRootControllers(showCallsTab: strongSelf.currentShowCallsTab)
+            strongSelf.updateRootControllers(showCallsTab: strongSelf.currentShowCallsTab, showNewsTab: strongSelf.currentShowNewsTab)
         })
     }
 
-    public func updateRootControllers(showCallsTab: Bool) {
+    public func updateRootControllers(showCallsTab: Bool, showNewsTab: Bool) {
         guard let rootTabController = self.rootTabController as? TabBarControllerImpl else {
             return
         }
         self.currentShowCallsTab = showCallsTab
+        self.currentShowNewsTab = showNewsTab
         var controllers: [ViewController] = []
         if !self.isBotAccount {
             controllers.append(self.contactsController!) // Novagram: Contacts tab re-enabled 2026-06-16 (was hidden for Apple 5.1.2 review; consent hook covers it)
@@ -279,10 +291,21 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         }
 
         controllers.append(self.chatListController!)
+        if showNewsTab && !self.isBotAccount, let newsController = self.newsController {
+            controllers.append(newsController)
+        }
         controllers.append(self.accountSettingsController!)
 
-        // Novagram: when we just collapsed to the bot layout, select Chats (second-to-last); else keep current.
-        rootTabController.setControllers(controllers, selectedIndex: self.isBotAccount ? (controllers.count - 2) : nil)
+        // A removed selected tab would otherwise fall back to index 0 (Contacts): select Chats instead.
+        var selectedIndex: Int?
+        if let currentController = rootTabController.currentController, !controllers.contains(where: { $0 === currentController }) {
+            selectedIndex = controllers.firstIndex(where: { $0 === self.chatListController })
+        }
+        // Novagram: when we just collapsed to the bot layout (Chats + Settings), select Chats.
+        if self.isBotAccount {
+            selectedIndex = controllers.firstIndex(where: { $0 === self.chatListController })
+        }
+        rootTabController.setControllers(controllers, selectedIndex: selectedIndex)
     }
 
     public func openChatsController(activateSearch: Bool, filter: ChatListSearchFilter = .chats, query: String? = nil) {

@@ -102,6 +102,7 @@ private final class PeerInfoScreenCommentItemNode: PeerInfoScreenItemNode {
         }
         
         let sideInset: CGFloat = 16.0 + safeInsets.left
+        let sideInsetRight: CGFloat = 16.0 + safeInsets.right
         let verticalInset: CGFloat = 7.0
         
         self.textNode.maximumNumberOfLines = 0
@@ -211,7 +212,7 @@ private final class PeerInfoScreenCommentItemNode: PeerInfoScreenItemNode {
             }
         }
         
-        let textSize = self.textNode.updateLayout(CGSize(width: width - sideInset * 2.0 - leftTextInset, height: .greatestFiniteMagnitude))
+        let textSize = self.textNode.updateLayout(CGSize(width: width - sideInset - sideInsetRight - leftTextInset, height: .greatestFiniteMagnitude))
         
         let textFrame = CGRect(origin: CGPoint(x: sideInset + leftTextInset, y: verticalInset), size: textSize)
         

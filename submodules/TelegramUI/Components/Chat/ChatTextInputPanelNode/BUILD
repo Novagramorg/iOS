@@ -27,7 +27,6 @@ swift_library(
         "//submodules/LottieSettings:LottieSettings",
         "//submodules/AsyncDisplayKit",
         "//submodules/SSignalKit/SwiftSignalKit",
-        "//submodules/Postbox",
         "//submodules/TelegramCore",
         "//submodules/TelegramPresentationData",
         "//submodules/TextFormat",
