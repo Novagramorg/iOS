@@ -3,7 +3,6 @@ import UIKit
 import Display
 import AsyncDisplayKit
 import SwiftSignalKit
-import Postbox
 import TelegramCore
 import TelegramPresentationData
 import AccountContext
@@ -109,7 +108,7 @@ private final class NovagramForwardEditScreenNode: ASDisplayNode {
     struct FinalContent {
         let text: String
         let entities: [MessageTextEntity]
-        let inlineStickers: [MediaId: Media]
+        let inlineStickers: [EngineMedia.Id: EngineRawMedia]
     }
 
     private let context: AccountContext
@@ -232,7 +231,7 @@ private final class NovagramForwardEditScreenNode: ASDisplayNode {
             entities = NovagramForwardEditCopy.removingCustomEmoji(entities)
         }
 
-        var inlineStickers: [MediaId: Media] = [:]
+        var inlineStickers: [EngineMedia.Id: EngineRawMedia] = [:]
         text.enumerateAttribute(ChatTextInputAttributes.customEmoji, in: NSRange(location: 0, length: text.length), options: [], using: { value, _, _ in
             if let value = value as? ChatTextInputTextCustomEmojiAttribute, let file = value.file {
                 inlineStickers[file.fileId] = file
@@ -437,11 +436,11 @@ private final class NovagramForwardEditThumbnailView: UIView {
 
         switch item {
         case let .photo(message, image):
-            self.imageNode.setSignal(mediaGridMessagePhoto(account: context.account, userLocation: .peer(message.id.peerId), photoReference: .message(message: MessageReference(message), media: image)))
+            self.imageNode.setSignal(mediaGridMessagePhoto(account: context.account, userLocation: .peer(message.id.peerId), photoReference: .message(message: MessageReference(message._asMessage()), media: image)))
             self.imageDimensions = largestImageRepresentation(image.representations)?.dimensions.cgSize
             self.addSubview(self.imageNode.view)
         case let .video(message, file):
-            self.imageNode.setSignal(mediaGridMessageVideo(postbox: context.account.postbox, userLocation: .peer(message.id.peerId), videoReference: .message(message: MessageReference(message), media: file), autoFetchFullSizeThumbnail: true))
+            self.imageNode.setSignal(mediaGridMessageVideo(postbox: context.account.postbox, userLocation: .peer(message.id.peerId), videoReference: .message(message: MessageReference(message._asMessage()), media: file), autoFetchFullSizeThumbnail: true))
             self.imageDimensions = file.dimensions?.cgSize
             self.addSubview(self.imageNode.view)
             if !file.isAnimated {

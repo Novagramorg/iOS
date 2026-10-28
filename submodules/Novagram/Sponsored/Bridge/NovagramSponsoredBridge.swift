@@ -1,5 +1,4 @@
 import Foundation
-import Postbox
 import TelegramCore
 import AccountContext
 import Display
@@ -25,7 +24,7 @@ public enum NovagramSponsoredBridge {
     }
 
     /// True when `message` is one of OUR sponsored messages.
-    public static func isOurs(_ message: Message) -> Bool {
+    public static func isOurs(_ message: EngineRawMessage) -> Bool {
         guard let attribute = message.attributes.first(where: { $0 is AdMessageAttribute }) as? AdMessageAttribute else {
             return false
         }
@@ -33,7 +32,7 @@ public enum NovagramSponsoredBridge {
     }
 
     /// OUR ad's display durations (from the server), or nil for Telegram's own ads.
-    public static func displayDurations(_ message: Message) -> (min: Int32, max: Int32)? {
+    public static func displayDurations(_ message: EngineRawMessage) -> (min: Int32, max: Int32)? {
         guard let attribute = message.attributes.first(where: { $0 is AdMessageAttribute }) as? AdMessageAttribute, self.isOurs(opaqueId: attribute.opaqueId) else {
             return nil
         }
@@ -47,7 +46,7 @@ public enum NovagramSponsoredBridge {
 public protocol NovagramAdsProvider: AnyObject {
     /// A per-gallery-item handle for the VIDEO slot. Always returned for a message (even when the
     /// channel is not eligible) so the fallback rules for Telegram's own video ads apply too.
-    func videoAdHandle(context: AccountContext, message: Message, onUpdate: @escaping () -> Void) -> NovagramVideoAdHandle
+    func videoAdHandle(context: AccountContext, message: EngineRawMessage, onUpdate: @escaping () -> Void) -> NovagramVideoAdHandle
 
     /// Records `video_open` for OUR ad (full-screen open of its video). False for Telegram's ads.
     func recordVideoOpenIfOurs(opaqueId: Data) -> Bool
@@ -64,16 +63,16 @@ public protocol NovagramVideoAdHandle: AnyObject {
 
     /// The banner to draw now: OUR banner, Telegram's `telegram` candidate as a fallback, or nil.
     /// `initialTimestamp` keeps the countdown component on playback time (it stays put while paused).
-    func resolveBanner(telegram: (initialTimestamp: Int32, message: Message?)?) -> (initialTimestamp: Int32, message: Message?)?
+    func resolveBanner(telegram: (initialTimestamp: Int32, message: EngineRawMessage?)?) -> (initialTimestamp: Int32, message: EngineRawMessage?)?
 
     /// Counts a view of OUR banner. False for Telegram's ads.
-    func recordViewIfOurs(_ message: Message) -> Bool
+    func recordViewIfOurs(_ message: EngineRawMessage) -> Bool
 
     /// The banner's close control was pressed. For OUR banner it closes only when allowed
     /// (`min_display_duration` reached) and never offers Premium. False for Telegram's ads.
-    func closeIfOurs(_ message: Message, available: Bool) -> Bool
+    func closeIfOurs(_ message: EngineRawMessage, available: Bool) -> Bool
 
     /// The banner was tapped: queues OUR click, hides the banner, then calls `open` with the url on the
     /// main queue. False for Telegram's ads.
-    func clickIfOurs(_ message: Message, open: @escaping (String) -> Void) -> Bool
+    func clickIfOurs(_ message: EngineRawMessage, open: @escaping (String) -> Void) -> Bool
 }

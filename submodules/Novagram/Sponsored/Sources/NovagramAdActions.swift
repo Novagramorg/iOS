@@ -1,6 +1,5 @@
 import Foundation
 import SwiftSignalKit
-import Postbox
 import TelegramCore
 import AccountContext
 import NovagramAds
@@ -70,7 +69,7 @@ enum NovagramAdActions {
         guard let telegramId, telegramId < -self.botApiChannelIdBase else {
             return byUsername
         }
-        let peerId = PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(-telegramId - self.botApiChannelIdBase))
+        let peerId = EnginePeer.Id(namespace: Namespaces.Peer.CloudChannel, id: EnginePeer.Id.Id._internalFromInt64Value(-telegramId - self.botApiChannelIdBase))
         return context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: peerId))
         |> mapToSignal { peer -> Signal<EnginePeer.Id?, NoError> in
             if peer != nil {
@@ -116,10 +115,9 @@ enum NovagramAdActions {
             guard let peerId else {
                 return .single(false)
             }
-            let key = PostboxViewKey.topChatMessage(peerIds: [peerId])
-            return context.account.postbox.combinedView(keys: [key])
-            |> map { views -> Bool in
-                guard let view = views.views[key] as? TopChatMessageView, let message = view.messages[peerId] else {
+            return context.engine.data.subscribe(TelegramEngine.EngineData.Item.Messages.TopMessage(id: peerId))
+            |> map { message -> Bool in
+                guard let message else {
                     return false
                 }
                 return !message.flags.contains(.Incoming) && message.timestamp >= clickedAt && message.text.hasPrefix("/start")

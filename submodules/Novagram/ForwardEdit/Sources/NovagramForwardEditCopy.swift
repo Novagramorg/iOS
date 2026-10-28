@@ -1,20 +1,19 @@
 import Foundation
-import Postbox
 import TelegramCore
 import TextFormat
 
 /// The post the user is forwarding: one message, or one album (up to 10 grouped messages).
 struct NovagramForwardEditSource {
     enum PreviewItem {
-        case photo(message: Message, image: TelegramMediaImage)
-        case video(message: Message, file: TelegramMediaFile)
+        case photo(message: EngineMessage, image: TelegramMediaImage)
+        case video(message: EngineMessage, file: TelegramMediaFile)
         case file(file: TelegramMediaFile)
     }
 
     /// Sorted by id, which is the album order.
-    let messages: [Message]
+    let messages: [EngineMessage]
     /// The message whose text the editor shows — the album caption, or the post text.
-    let captionMessage: Message
+    let captionMessage: EngineMessage
     let previewItems: [PreviewItem]
     /// Users can't send inline keyboards, so a copy always loses them.
     let hasButtons: Bool
@@ -23,7 +22,7 @@ struct NovagramForwardEditSource {
         return !self.previewItems.isEmpty
     }
 
-    init?(messages: [Message], targetPeerId: PeerId) {
+    init?(messages: [EngineMessage], targetPeerId: EnginePeer.Id) {
         // The copy re-sends the media by its cloud id, which a secret chat can't take.
         if targetPeerId.namespace == Namespaces.Peer.SecretChat {
             return nil
@@ -43,7 +42,7 @@ struct NovagramForwardEditSource {
         var previewItems: [PreviewItem] = []
         var hasButtons = false
         for message in sortedMessages {
-            if message.id.namespace != Namespaces.Message.Cloud || message.isCopyProtected() || message.richText != nil {
+            if message.id.namespace != Namespaces.Message.Cloud || message._asMessage().isCopyProtected() || message.richText != nil {
                 return nil
             }
             guard let content = NovagramForwardEditCopy.content(of: message) else {
@@ -91,13 +90,13 @@ enum NovagramForwardEditCopy {
 
     enum Content {
         case text
-        case media(Media)
+        case media(EngineRawMedia)
         case webpage(TelegramMediaWebpage)
     }
 
     /// What a message carries, or nil when it holds something a copy can't reproduce
     /// (poll, location, contact, dice, story, paid media, sticker, round video, …).
-    static func content(of message: Message) -> Content? {
+    static func content(of message: EngineMessage) -> Content? {
         var result: Content = .text
         for media in message.media {
             guard case .text = result else {
@@ -145,7 +144,7 @@ enum NovagramForwardEditCopy {
         }
     }
 
-    static func makeMessages(source: NovagramForwardEditSource, text: String, entities: [MessageTextEntity], inlineStickers: [MediaId: Media], threadId: Int64?, allowCustomEmoji: Bool) -> [EnqueueMessage] {
+    static func makeMessages(source: NovagramForwardEditSource, text: String, entities: [MessageTextEntity], inlineStickers: [EngineMedia.Id: EngineRawMedia], threadId: Int64?, allowCustomEmoji: Bool) -> [EnqueueMessage] {
         let groupingKey: Int64? = source.messages.count > 1 ? Int64.random(in: Int64.min ... Int64.max) : nil
 
         var result: [EnqueueMessage] = []
@@ -164,7 +163,7 @@ enum NovagramForwardEditCopy {
                 messageEntities = removingCustomEmoji(messageEntities)
             }
 
-            var attributes: [MessageAttribute] = []
+            var attributes: [EngineMessage.Attribute] = []
             if !messageEntities.isEmpty {
                 attributes.append(TextEntitiesMessageAttribute(entities: messageEntities))
             }
@@ -172,7 +171,7 @@ enum NovagramForwardEditCopy {
             var mediaReference: AnyMediaReference?
             switch content(of: message) {
             case let .media(media):
-                mediaReference = .message(message: MessageReference(message), media: media)
+                mediaReference = .message(message: MessageReference(message._asMessage()), media: media)
                 for attribute in message.attributes {
                     if attribute is MediaSpoilerMessageAttribute || attribute is InvertMediaMessageAttribute {
                         attributes.append(attribute)
@@ -196,10 +195,10 @@ enum NovagramForwardEditCopy {
                 }
             }
 
-            var messageInlineStickers: [MediaId: Media] = [:]
+            var messageInlineStickers: [EngineMedia.Id: EngineRawMedia] = [:]
             for entity in messageEntities {
                 if case let .CustomEmoji(_, fileId) = entity.type {
-                    let mediaId = MediaId(namespace: Namespaces.Media.CloudFile, id: fileId)
+                    let mediaId = EngineMedia.Id(namespace: Namespaces.Media.CloudFile, id: fileId)
                     if let file = inlineStickers[mediaId] ?? message.associatedMedia[mediaId] {
                         messageInlineStickers[mediaId] = file
                     }
@@ -235,7 +234,7 @@ enum NovagramForwardEditCopy {
 
     /// The preview stays only while the text still links to the previewed page. A preview whose
     /// link was never in the text (attached by hand) always stays.
-    private static func keepsLinkPreview(_ webpage: TelegramMediaWebpageLoadedContent, source: Message, editedText: String, editedEntities: [MessageTextEntity]) -> Bool {
+    private static func keepsLinkPreview(_ webpage: TelegramMediaWebpageLoadedContent, source: EngineMessage, editedText: String, editedEntities: [MessageTextEntity]) -> Bool {
         let targets = Set([normalizedLink(webpage.url), normalizedLink(webpage.displayUrl)])
         let sourceEntities = source.textEntitiesAttribute?.entities ?? []
         if !links(text: source.text, entities: sourceEntities).contains(where: { targets.contains($0) }) {

@@ -1,12 +1,11 @@
 import Foundation
 import SwiftSignalKit
-import Postbox
 import TelegramCore
 import AccountContext
 import NovagramAds
 
 /// The ad-source tuple `ChatHistoryListNode` consumes (`adMessagesContext.state`).
-public typealias NovagramAdMessagesState = (interPostInterval: Int32?, messages: [Message], startDelay: Int32?, betweenDelay: Int32?)
+public typealias NovagramAdMessagesState = (interPostInterval: Int32?, messages: [EngineRawMessage], startDelay: Int32?, betweenDelay: Int32?)
 
 /// CHANNEL_MESSAGE slot: one sponsored message after the last post of a public broadcast channel
 /// with at least 1000 subscribers (contract §3.3 — the app does this filter, the server does not).
@@ -74,23 +73,23 @@ public enum NovagramChannelAds {
         }
     }
 
-    static func ourAdMessage(context: AccountContext, peerId: EnginePeer.Id) -> Signal<Message?, NoError> {
+    static func ourAdMessage(context: AccountContext, peerId: EnginePeer.Id) -> Signal<EngineRawMessage?, NoError> {
         guard NovagramSponsored.isConfigured, let channelId = self.botApiChannelId(peerId) else {
             return .single(nil)
         }
         return self.eligibleChannel(context: context, peerId: peerId, channelId: channelId)
-        |> mapToSignal { peer -> Signal<Message?, NoError> in
+        |> mapToSignal { peer -> Signal<EngineRawMessage?, NoError> in
             guard let peer else {
                 return .single(nil)
             }
             return NovagramSponsored.visibleAd(context: context, slot: .channel(channelId: self.requestChannelId(channelId)))
-            |> mapToSignal { served -> Signal<Message?, NoError> in
+            |> mapToSignal { served -> Signal<EngineRawMessage?, NoError> in
                 guard let served else {
                     return .single(nil)
                 }
                 // The advertiser photo when there is one (waits up to NovagramAdAvatar.loadTimeout).
-                return NovagramAdAvatar.load(postbox: context.account.postbox, ad: served.ad)
-                |> map { avatar -> Message? in
+                return NovagramAdAvatar.load(engine: context.engine, ad: served.ad)
+                |> map { avatar -> EngineRawMessage? in
                     let strings = context.sharedContext.currentPresentationData.with { $0 }.strings
                     return NovagramAdMessage.make(served: served, peerId: peerId, chatPeer: peer._asPeer(), strings: strings, avatar: avatar)
                 }

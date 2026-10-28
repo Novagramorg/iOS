@@ -1,7 +1,6 @@
 import Foundation
 import ImageIO
 import SwiftSignalKit
-import Postbox
 import TelegramCore
 import NovagramAds
 
@@ -31,7 +30,7 @@ enum NovagramAdAvatar {
     }
 
     /// Emits once: the loaded photo, or nil (no url, PHOTO / VIDEO ad, load failed or timed out).
-    static func load(postbox: Postbox, ad: SDKSponsoredAd) -> Signal<Loaded?, NoError> {
+    static func load(engine: TelegramEngine, ad: SDKSponsoredAd) -> Signal<Loaded?, NoError> {
         // An ad with content media shows that media; Telegram does not show the sponsor photo then either.
         guard NovagramAdMessage.mediaSpec(ad) == nil, let url = self.url(ad) else {
             return .single(nil)
@@ -39,11 +38,11 @@ enum NovagramAdAvatar {
         let resource = HttpReferenceMediaResource(url: url.absoluteString, size: nil)
         // Not tied to this signal: a timeout must not cancel the download. The media box runs one fetch
         // per url, and it ends by itself when the file arrives or the request fails.
-        _ = fetchedMediaResource(mediaBox: postbox.mediaBox, userLocation: .other, userContentType: .avatar, reference: .standalone(resource: resource), statsCategory: .generic).start()
+        _ = engine.resources.fetch(reference: .standalone(resource: resource), userLocation: .other, userContentType: .avatar, statsCategory: .generic).start()
 
-        return postbox.mediaBox.resourceData(resource)
+        return engine.resources.data(resource: EngineMediaResource(resource))
         |> filter { data in
-            return data.complete
+            return data.isComplete
         }
         |> take(1)
         |> map { data -> Loaded? in

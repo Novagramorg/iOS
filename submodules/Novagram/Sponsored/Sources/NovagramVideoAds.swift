@@ -1,7 +1,6 @@
 import Foundation
 import UIKit
 import SwiftSignalKit
-import Postbox
 import TelegramCore
 import TelegramPresentationData
 import AccountContext
@@ -13,7 +12,7 @@ import NovagramAds
 /// The bridge implementation GalleryUI and the bubble components reach through
 /// `NovagramSponsoredBridge.provider` (installed by `NovagramAdsRegistry.init`).
 final class NovagramAdsBridgeProvider: NovagramAdsProvider {
-    func videoAdHandle(context: AccountContext, message: Message, onUpdate: @escaping () -> Void) -> NovagramVideoAdHandle {
+    func videoAdHandle(context: AccountContext, message: EngineRawMessage, onUpdate: @escaping () -> Void) -> NovagramVideoAdHandle {
         let state = NovagramVideoAds.channelState(context: context, message: message)
         return NovagramVideoAdHandleImpl(context: context, state: state, messageId: Int64(message.id.id), onUpdate: onUpdate)
     }
@@ -41,7 +40,7 @@ enum NovagramVideoAds {
 
     /// Main queue only. Nil for messages that cannot carry OUR video ad (not a channel post, an ad
     /// itself, no API key) — the handle then only applies the fallback rules to Telegram's video ads.
-    static func channelState(context: AccountContext, message: Message) -> NovagramVideoChannelState? {
+    static func channelState(context: AccountContext, message: EngineRawMessage) -> NovagramVideoChannelState? {
         guard NovagramSponsored.isConfigured, message.id.namespace == Namespaces.Message.Cloud, message.id.id > 0, !NovagramSponsoredBridge.isOurs(message), !message.attributes.contains(where: { $0 is AdMessageAttribute }) else {
             return nil
         }
@@ -62,7 +61,7 @@ enum NovagramVideoAds {
 final class NovagramVideoChannelState {
     private struct Showing {
         let served: SDKServedAd
-        let message: Message
+        let message: EngineRawMessage
         let shownAt: Double
     }
 
@@ -152,7 +151,7 @@ final class NovagramVideoChannelState {
     // MARK: Banner
 
     /// The banner on screen and a countdown origin that follows playback time.
-    func currentBanner() -> (initialTimestamp: Int32, message: Message)? {
+    func currentBanner() -> (initialTimestamp: Int32, message: EngineRawMessage)? {
         self.accumulate()
         guard let showing = self.showing else {
             return nil
@@ -375,7 +374,7 @@ final class NovagramVideoAdHandleImpl: NovagramVideoAdHandle {
         self.state?.setPlaying(ObjectIdentifier(self), isPlaying: isPlaying, messageId: self.messageId)
     }
 
-    func resolveBanner(telegram: (initialTimestamp: Int32, message: Message?)?) -> (initialTimestamp: Int32, message: Message?)? {
+    func resolveBanner(telegram: (initialTimestamp: Int32, message: EngineRawMessage?)?) -> (initialTimestamp: Int32, message: EngineRawMessage?)? {
         guard NovagramShowAdsGate.isEnabled else {
             return nil
         }
@@ -389,7 +388,7 @@ final class NovagramVideoAdHandleImpl: NovagramVideoAdHandle {
         return telegram
     }
 
-    func recordViewIfOurs(_ message: Message) -> Bool {
+    func recordViewIfOurs(_ message: EngineRawMessage) -> Bool {
         guard let token = self.token(message) else {
             return false
         }
@@ -397,7 +396,7 @@ final class NovagramVideoAdHandleImpl: NovagramVideoAdHandle {
         return true
     }
 
-    func closeIfOurs(_ message: Message, available: Bool) -> Bool {
+    func closeIfOurs(_ message: EngineRawMessage, available: Bool) -> Bool {
         guard let token = self.token(message) else {
             return false
         }
@@ -408,7 +407,7 @@ final class NovagramVideoAdHandleImpl: NovagramVideoAdHandle {
         return true
     }
 
-    func clickIfOurs(_ message: Message, open: @escaping (String) -> Void) -> Bool {
+    func clickIfOurs(_ message: EngineRawMessage, open: @escaping (String) -> Void) -> Bool {
         guard let token = self.token(message), let attribute = message.attributes.first(where: { $0 is AdMessageAttribute }) as? AdMessageAttribute else {
             return false
         }
@@ -420,7 +419,7 @@ final class NovagramVideoAdHandleImpl: NovagramVideoAdHandle {
         return true
     }
 
-    private func token(_ message: Message) -> String? {
+    private func token(_ message: EngineRawMessage) -> String? {
         guard let attribute = message.attributes.first(where: { $0 is AdMessageAttribute }) as? AdMessageAttribute else {
             return nil
         }

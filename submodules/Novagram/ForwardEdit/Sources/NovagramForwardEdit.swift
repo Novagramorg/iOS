@@ -1,7 +1,6 @@
 import Foundation
 import UIKit
 import Display
-import Postbox
 import TelegramCore
 import AccountContext
 import ContextUI
@@ -26,11 +25,11 @@ public enum NovagramForwardEdit {
         context: AccountContext,
         targetPeerId: EnginePeer.Id,
         threadId: Int64?,
-        messages: [Message],
+        messages: [EngineRawMessage],
         present: @escaping (ViewController) -> Void,
         send: @escaping ([EnqueueMessage]) -> Void
     ) -> ContextMenuItem? {
-        guard let source = NovagramForwardEditSource(messages: messages, targetPeerId: targetPeerId) else {
+        guard let source = NovagramForwardEditSource(messages: messages.map { EngineMessage($0) }, targetPeerId: targetPeerId) else {
             return nil
         }
         let strings = NovagramForwardEditStrings(context.sharedContext.currentPresentationData.with { $0 }.strings)

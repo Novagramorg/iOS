@@ -9,19 +9,19 @@ import AccountContext
 import AppBundle
 import ContextUI
 import Markdown
-import Postbox
 import PhotoResources
 
 // MARK: - EditedMessageHistoryController
 public final class EditedMessageHistoryController: ViewController {
     private let context: AccountContext
-    private let message: Message
+    private let message: EngineMessage
     private var presentationData: PresentationData
     private var presentationDataDisposable: MetaDisposable?
 
     private let listNode: EditedMessageHistoryListNode
 
-    public init(context: AccountContext, message: Message) {
+    public init(context: AccountContext, message: EngineRawMessage) {
+        let message = EngineMessage(message)
         self.context = context
         self.message = message
         self.presentationData = context.sharedContext.currentPresentationData.with { $0 }
@@ -78,14 +78,14 @@ public final class EditedMessageHistoryController: ViewController {
 // MARK: - EditedMessageHistoryListNode
 private final class EditedMessageHistoryListNode: ASDisplayNode {
     private let context: AccountContext
-    private let message: Message
+    private let message: EngineMessage
     private var presentationData: PresentationData
 
     private let scrollNode: ASScrollNode
     private var historyEntries: [EditedMessageHistoryEntry] = []
     private var entryNodes: [EditedMessageHistoryEntryNode] = []
 
-    init(context: AccountContext, message: Message, presentationData: PresentationData) {
+    init(context: AccountContext, message: EngineMessage, presentationData: PresentationData) {
         self.context = context
         self.message = message
         self.presentationData = presentationData
@@ -151,7 +151,7 @@ private final class EditedMessageHistoryEntryNode: ASDisplayNode {
     private var fileTextNode: ASTextNode?
     private var mediaDimensions: CGSize?
 
-    init(context: AccountContext, message: Message, entry: EditedMessageHistoryEntry, presentationData: PresentationData) {
+    init(context: AccountContext, message: EngineMessage, entry: EditedMessageHistoryEntry, presentationData: PresentationData) {
         self.entry = entry
         self.presentationData = presentationData
 
@@ -181,7 +181,7 @@ private final class EditedMessageHistoryEntryNode: ASDisplayNode {
         self.setupMediaPreview(context: context, message: message)
     }
 
-    private func setupMediaPreview(context: AccountContext, message: Message) {
+    private func setupMediaPreview(context: AccountContext, message: EngineMessage) {
         guard !self.entry.media.isEmpty else {
             return
         }

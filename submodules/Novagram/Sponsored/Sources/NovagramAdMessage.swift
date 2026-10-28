@@ -1,5 +1,4 @@
 import Foundation
-import Postbox
 import TelegramCore
 import TelegramPresentationData
 import NovagramAds
@@ -8,13 +7,13 @@ import NovagramAds
 /// same shape as `AdMessagesHistoryContextImpl.CachedMessage.toMessage` / the `fakeAds` debug path.
 enum NovagramAdMessage {
     /// Telegram uses this synthetic author id for every sponsored message.
-    private static let authorPeerId = PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(1))
+    private static let authorPeerId = EnginePeer.Id(namespace: Namespaces.Peer.CloudChannel, id: EnginePeer.Id.Id._internalFromInt64Value(1))
 
     /// - Parameter displayDurations: VIDEO slot only — `min_display_duration` / `max_display_duration`
     ///   from the response, read by the banner's countdown.
     /// - Parameter avatar: the advertiser photo, already in the media box (`NovagramAdAvatar.load`).
     ///   Shown as the small inline image, like Telegram's sponsor photo, only when there is no content media.
-    static func make(served: SDKServedAd, peerId: PeerId, chatPeer: Peer?, strings: PresentationStrings, displayDurations: (min: Int32, max: Int32)? = nil, avatar: NovagramAdAvatar.Loaded? = nil) -> Message {
+    static func make(served: SDKServedAd, peerId: EnginePeer.Id, chatPeer: EngineRawPeer?, strings: PresentationStrings, displayDurations: (min: Int32, max: Int32)? = nil, avatar: NovagramAdAvatar.Loaded? = nil) -> EngineRawMessage {
         let ad = served.ad
         let contentMedia = self.contentMedia(ad)
         let otherInfo = ad.otherInfo.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -32,14 +31,14 @@ enum NovagramAdMessage {
             maxDisplayDuration: displayDurations?.max
         )
 
-        var messagePeers = SimpleDictionary<PeerId, Peer>()
+        var messagePeers = EngineSimpleDictionary<EnginePeer.Id, EngineRawPeer>()
         if let chatPeer {
             messagePeers[chatPeer.id] = chatPeer
         }
         let author = self.author(title: ad.displayTitle)
         messagePeers[author.id] = author
 
-        var media: [Media] = []
+        var media: [EngineRawMedia] = []
         if let contentMedia {
             media.append(contentMedia)
         } else if let avatar {
@@ -49,10 +48,10 @@ enum NovagramAdMessage {
         // A new random_id is a new showing, so the list must treat it as a changed item.
         let messageStableVersion = UInt32(bitPattern: Int32(truncatingIfNeeded: ad.randomId.hashValue))
 
-        return Message(
+        return EngineRawMessage(
             stableId: 0,
             stableVersion: messageStableVersion,
-            id: MessageId(peerId: peerId, namespace: Namespaces.Message.Local, id: self.messageId(token: ad.randomId)),
+            id: EngineMessage.Id(peerId: peerId, namespace: Namespaces.Message.Local, id: self.messageId(token: ad.randomId)),
             globallyUniqueId: nil,
             groupingKey: nil,
             groupInfo: nil,
@@ -69,7 +68,7 @@ enum NovagramAdMessage {
             attributes: [adAttribute],
             media: media,
             peers: messagePeers,
-            associatedMessages: SimpleDictionary<MessageId, Message>(),
+            associatedMessages: EngineSimpleDictionary<EngineMessage.Id, EngineRawMessage>(),
             associatedMessageIds: [],
             associatedMedia: [:],
             associatedThreadInfo: nil,
@@ -89,7 +88,7 @@ enum NovagramAdMessage {
         return Int32(bitPattern: hash & 0x7FFF_FFFF) | 1
     }
 
-    private static func author(title: String) -> Peer {
+    private static func author(title: String) -> EngineRawPeer {
         return TelegramChannel(
             id: self.authorPeerId,
             accessHash: nil,
@@ -191,13 +190,13 @@ enum NovagramAdMessage {
     }
 
     /// Stable media id for an immutable media url (FNV-1a 64-bit).
-    private static func mediaId(namespace: Int32, url: URL) -> MediaId {
+    private static func mediaId(namespace: Int32, url: URL) -> EngineMedia.Id {
         var hash: UInt64 = 14695981039346656037
         for byte in url.absoluteString.utf8 {
             hash ^= UInt64(byte)
             hash = hash &* 1099511628211
         }
-        return MediaId(namespace: namespace, id: Int64(bitPattern: hash & 0x7FFF_FFFF_FFFF_FFFF))
+        return EngineMedia.Id(namespace: namespace, id: Int64(bitPattern: hash & 0x7FFF_FFFF_FFFF_FFFF))
     }
 
     /// The advertiser photo as a web image (same `HttpReferenceMediaResource` path as a PHOTO ad). Its
@@ -225,7 +224,7 @@ enum NovagramAdMessage {
     /// fetcher downloads the whole file over HTTPS into the media box (files are immutable and small —
     /// photo ≤ 5 MB, video ≤ 20 MB), keyed by url, after which Telegram's own media pipeline shows it
     /// (muted inline autoplay for the video, like Telegram's own sponsored video).
-    private static func contentMedia(_ ad: SDKSponsoredAd) -> Media? {
+    private static func contentMedia(_ ad: SDKSponsoredAd) -> EngineRawMedia? {
         guard let spec = self.mediaSpec(ad) else {
             return nil
         }
