@@ -1,6 +1,5 @@
 import Foundation
 import UIKit
-import Postbox
 import TelegramCore
 import AccountContext
 import SwiftSignalKit
@@ -111,11 +110,11 @@ public final class NovagramAdminFoldersManager {
 
     // MARK: - Per-account category → filterId map
 
-    private static func mapKey(accountPeerId: PeerId) -> String {
+    private static func mapKey(accountPeerId: EnginePeer.Id) -> String {
         return "\(mapKeyPrefix)\(accountPeerId.toInt64())"
     }
 
-    private static func storedMap(accountPeerId: PeerId) -> [String: Int32] {
+    private static func storedMap(accountPeerId: EnginePeer.Id) -> [String: Int32] {
         guard let defaults = UserDefaults(suiteName: suiteName),
               let raw = defaults.dictionary(forKey: mapKey(accountPeerId: accountPeerId)) as? [String: NSNumber]
         else {
@@ -124,7 +123,7 @@ public final class NovagramAdminFoldersManager {
         return raw.mapValues { $0.int32Value }
     }
 
-    private static func storeMap(_ map: [String: Int32], accountPeerId: PeerId) {
+    private static func storeMap(_ map: [String: Int32], accountPeerId: EnginePeer.Id) {
         guard let defaults = UserDefaults(suiteName: suiteName) else { return }
         let storeKey = mapKey(accountPeerId: accountPeerId)
         if map.isEmpty {
@@ -285,7 +284,7 @@ public final class NovagramAdminFoldersManager {
             let maxChatsPerFolder = Int(isPremium ? premiumLimits.maxFolderChatsCount : freeLimits.maxFolderChatsCount)
 
             // Newest chats first, so the per-folder cap keeps the active ones when truncating.
-            var byCategory: [Category: [PeerId]] = [:]
+            var byCategory: [Category: [EnginePeer.Id]] = [:]
             for item in (archiveList.items + rootList.items).reversed() {
                 guard let peer = item.renderedPeer.chatMainPeer else { continue }
                 guard let category = classify(peer: peer._asPeer()) else { continue }
@@ -297,7 +296,7 @@ public final class NovagramAdminFoldersManager {
         })
     }
 
-    private static func classify(peer: Peer) -> Category? {
+    private static func classify(peer: EngineRawPeer) -> Category? {
         if let channel = peer as? TelegramChannel {
             guard case .member = channel.participationStatus else { return nil }
             let isOwner = channel.flags.contains(.isCreator)
@@ -325,7 +324,7 @@ public final class NovagramAdminFoldersManager {
         return nil
     }
 
-    private static func applyToFilters(context: AccountContext, accountPeerId: PeerId, byCategory: [Category: [PeerId]], maxChats: Int, langCode: String, completion: ((Int, Int) -> Void)?) {
+    private static func applyToFilters(context: AccountContext, accountPeerId: EnginePeer.Id, byCategory: [Category: [EnginePeer.Id]], maxChats: Int, langCode: String, completion: ((Int, Int) -> Void)?) {
         let createdCount = Atomic<Int>(value: 0)
         let managedCount = Atomic<Int>(value: 0)
 

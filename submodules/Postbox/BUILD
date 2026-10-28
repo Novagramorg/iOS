@@ -19,8 +19,6 @@ package_group(
         "//submodules/GalleryUI",
         "//submodules/LegacyMediaPickerUI",
         "//submodules/MediaPlayer",
-        # Novagram: our modules still use Postbox (HOOKS.md, "Postbox visibility").
-        "//submodules/Novagram/...",
         "//submodules/PassportUI",
         "//submodules/PhotoResources",
         "//submodules/PremiumUI",

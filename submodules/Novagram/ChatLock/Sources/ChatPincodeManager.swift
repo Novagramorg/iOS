@@ -1,7 +1,7 @@
 import Foundation
 import Security
 import CryptoKit
-import Postbox
+import TelegramCore
 
 // Keychain service identifier — picks up our own bundle's namespace so
 // extensions cannot accidentally read this app's pincodes.
@@ -66,14 +66,14 @@ public final class ChatPincodeManager {
 
     // MARK: - Public credential API
 
-    public func getPincode(for peerId: PeerId) -> String? {
+    public func getPincode(for peerId: EnginePeer.Id) -> String? {
         return self.readPassword(account: self.account(for: peerId))
     }
 
     /// Store a credential together with its options.
     public func setPincode(
         _ code: String,
-        for peerId: PeerId,
+        for peerId: EnginePeer.Id,
         type: ChatLockPasswordType = .pin,
         biometricEnabled: Bool = false
     ) {
@@ -82,7 +82,7 @@ public final class ChatPincodeManager {
         self.writeMetadata(ChatLockMetadata(passwordType: type, biometricEnabled: biometricEnabled), account: key)
     }
 
-    public func removePincode(for peerId: PeerId) {
+    public func removePincode(for peerId: EnginePeer.Id) {
         let key = self.account(for: peerId)
         self.deletePassword(account: key)
         self.deleteMetadata(account: key)
@@ -90,12 +90,12 @@ public final class ChatPincodeManager {
         self.deleteFallbackMetadata(account: key)
     }
 
-    public func isLocked(_ peerId: PeerId) -> Bool {
+    public func isLocked(_ peerId: EnginePeer.Id) -> Bool {
         let key = self.account(for: peerId)
         return self.readPassword(account: key) != nil || self.readFallbackPasswordHash(account: key) != nil
     }
 
-    public func verify(_ code: String, for peerId: PeerId) -> Bool {
+    public func verify(_ code: String, for peerId: EnginePeer.Id) -> Bool {
         let key = self.account(for: peerId)
         if let stored = self.readPassword(account: key) {
             // Constant-time compare to avoid timing side channels.
@@ -109,12 +109,12 @@ public final class ChatPincodeManager {
 
     // MARK: - Metadata API
 
-    public func getMetadata(for peerId: PeerId) -> ChatLockMetadata {
+    public func getMetadata(for peerId: EnginePeer.Id) -> ChatLockMetadata {
         return self.readMetadata(account: self.account(for: peerId)) ?? .defaultLegacy
     }
 
     /// Update only the biometric flag without changing the stored credential.
-    public func setBiometricEnabled(_ enabled: Bool, for peerId: PeerId) {
+    public func setBiometricEnabled(_ enabled: Bool, for peerId: EnginePeer.Id) {
         let key = self.account(for: peerId)
         var meta = self.readMetadata(account: key) ?? .defaultLegacy
         meta.biometricEnabled = enabled
@@ -277,7 +277,7 @@ public final class ChatPincodeManager {
 
     // MARK: - Keychain account key
 
-    private func account(for peerId: PeerId) -> String {
+    private func account(for peerId: EnginePeer.Id) -> String {
         return "\(peerId.toInt64())"
     }
 

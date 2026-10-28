@@ -1,5 +1,4 @@
 import Foundation
-import Postbox
 import TelegramCore
 import AccountContext
 import SwiftSignalKit
@@ -17,10 +16,10 @@ import SwiftSignalKit
 public final class NovagramAutoAcceptManager {
 
     // Keep importer contexts alive so their in-flight network requests aren't cancelled on dealloc.
-    private static var retainedContexts: [PeerId: PeerInvitationImportersContext] = [:]
+    private static var retainedContexts: [EnginePeer.Id: PeerInvitationImportersContext] = [:]
 
     // Short per-peer debounce so a genuinely-new request isn't suppressed for minutes.
-    private static var lastApprovedAt: [PeerId: Int32] = [:]
+    private static var lastApprovedAt: [EnginePeer.Id: Int32] = [:]
     private static let cooldownSeconds: Int32 = 15
 
     // Global-monitor state.
@@ -38,7 +37,7 @@ public final class NovagramAutoAcceptManager {
     // MARK: - Fast path (viewDidAppear)
 
     /// Call from ChatController.viewDidAppear. No-op if the flag is off or user is not an admin.
-    public static func autoApproveIfNeeded(context: AccountContext, peerId: PeerId, peer: Peer?) {
+    public static func autoApproveIfNeeded(context: AccountContext, peerId: EnginePeer.Id, peer: EngineRawPeer?) {
         guard isEnabled else { return }
 
         if let peer = peer {
@@ -103,7 +102,7 @@ public final class NovagramAutoAcceptManager {
     // MARK: - Approve
 
     /// Read cached data for the peer and approve all requests only if some are pending.
-    private static func approveIfPending(context: AccountContext, peerId: PeerId) {
+    private static func approveIfPending(context: AccountContext, peerId: EnginePeer.Id) {
         let now = Int32(Date().timeIntervalSince1970)
         if let last = lastApprovedAt[peerId], now - last < cooldownSeconds { return }
 
@@ -117,7 +116,7 @@ public final class NovagramAutoAcceptManager {
         })
     }
 
-    private static func pendingRequestCount(_ cachedData: CachedPeerData?) -> Int32 {
+    private static func pendingRequestCount(_ cachedData: EngineCachedPeerData?) -> Int32 {
         if let channel = cachedData as? CachedChannelData {
             return channel.inviteRequestsPending ?? 0
         } else if let group = cachedData as? CachedGroupData {
@@ -126,7 +125,7 @@ public final class NovagramAutoAcceptManager {
         return 0
     }
 
-    private static func approveAll(context: AccountContext, peerId: PeerId) {
+    private static func approveAll(context: AccountContext, peerId: EnginePeer.Id) {
         let importersContext = context.engine.peers.peerInvitationImporters(
             peerId: peerId,
             subject: .requests(query: nil)
@@ -144,7 +143,7 @@ public final class NovagramAutoAcceptManager {
 
     // Returns true when the local peer object indicates the current user can approve requests.
     // Matches upstream's canManageInvitations gate (creator OR admin with canInviteUsers rights).
-    private static func canApproveRequests(peer: Peer?) -> Bool {
+    private static func canApproveRequests(peer: EngineRawPeer?) -> Bool {
         if let channel = peer as? TelegramChannel {
             return channel.hasPermission(.inviteMembers)
         } else if let group = peer as? TelegramGroup {

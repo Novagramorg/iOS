@@ -67,6 +67,8 @@ submodules/MediaPlayer/Sources/FFMpegMediaFrameSourceContext.swift
 submodules/MediaPlayer/Sources/MediaPlayer.swift
 submodules/MediaPlayer/Sources/MediaPlayerFramePreview.swift
 submodules/NotificationSoundSelectionUI/Sources/NotificationSoundSelection.swift
+submodules/Novagram/EditedHistory/Sources/EditedMessageHistoryController.swift
+submodules/Novagram/ForwardEdit/Sources/NovagramForwardEditScreen.swift
 submodules/PassportUI/Sources/LegacySecureIdAttachmentMenu.swift
 submodules/PassportUI/Sources/SecureIdAuthController.swift
 submodules/PassportUI/Sources/SecureIdDocumentFormControllerNode.swift

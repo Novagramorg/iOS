@@ -35,8 +35,7 @@ ACCESS_ALLOWLIST_PATH = 'submodules/Postbox/AllowedPostboxAccess.txt'
 
 SCAN_ROOTS = ('submodules', 'Telegram')
 
-# Novagram: our own modules are outside the refactor (HOOKS.md, "Postbox visibility").
-EXEMPT_PREFIXES = ('submodules/Postbox/', 'submodules/TelegramCore/', 'submodules/Novagram/')
+EXEMPT_PREFIXES = ('submodules/Postbox/', 'submodules/TelegramCore/')
 
 # Directory names the filesystem walk never enters. The walk is used when the tree has no git
 # metadata: the CI VM receives the source by rsync without .git (TartBuild.py).

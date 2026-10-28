@@ -1,5 +1,4 @@
 import Foundation
-import Postbox
 import TelegramCore
 import AccountContext
 
@@ -240,7 +239,7 @@ public func arePhoneNumbersFromSameCountry(_ phone1: String?, _ phone2: String?)
 
 /// Berilgan peer foreign user (boshqa davlat raqamli) ekanligini tekshiradi.
 /// Faqat 1:1 shaxsiy chatlar uchun ishlaydi (guruh, kanal, bot uchun false qaytaradi).
-public func isForeignUser(peer: Peer?, myPhone: String?) -> Bool {
+public func isForeignUser(peer: EngineRawPeer?, myPhone: String?) -> Bool {
     guard let user = peer as? TelegramUser else {
         // Guruh, kanal yoki bot emas — cheklov qo'llanilmaydi
         return false

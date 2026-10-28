@@ -44,8 +44,9 @@ files on our side. Without it 37 files conflicted, with it 25, and most remainin
 
 **Postbox visibility** (upstream's refactor lets only listed packages depend on Postbox):
 
-- `submodules/Postbox/BUILD`, `clients` package group: `"//submodules/Novagram/...",` (one line, after `MediaPlayer`).
-- `build-system/Make/PostboxImportCheck.py`: `'submodules/Novagram/'` in `EXEMPT_PREFIXES` (the check runs in `Make.py` only, not in `run.sh`).
+- Later the same day our modules moved off Postbox ("Our modules off Postbox" below), so `submodules/Postbox/BUILD` and
+  `build-system/Make/PostboxImportCheck.py` are upstream's again. The one hook left is in
+  `submodules/Postbox/AllowedPostboxAccess.txt` (two lines, byte-sorted like the rest).
 - `SettingsUI/Sources/Notifications/NotificationsAndSoundsController.swift`: our `import Postbox` was unused, removed.
 - `TelegramUI/Components/Chat/ChatTextInputPanelNode/BUILD`: our unused `//submodules/Postbox` dep removed.
 - TelegramCore switched every file to `internal import TelegramApi`; our two TelegramCore files
@@ -95,6 +96,35 @@ Each line we change in a Telegram file is a line an upstream update can conflict
 | `ChatListUI/Sources/ChatContextMenus.swift` | +116 | chat menu items (hide, lock, recent actions) |
 
 `InAppPurchaseManager.swift` (+70/-1113) is the App Store IAP gate: removing upstream's code there is the feature.
+
+---
+
+## 🧩 Our modules off Postbox (2026-10-28)
+
+No file under `submodules/Novagram/` imports Postbox and no Novagram BUILD depends on `//submodules/Postbox`.
+`build-system/Make/PostboxImportCheck.py` (run by `Make.py build`/`test`) now checks our modules like Telegram's, so new
+Novagram code that imports Postbox fails it. Our files inside TelegramCore (`submodules/TelegramCore/Sources/Novagram/`,
+`NovagramBotAuthorization.swift`) may still use Postbox, as all of TelegramCore does.
+
+How the code was moved (behaviour unchanged, types are the same under engine names):
+
+| Postbox | Our code now uses |
+| --- | --- |
+| `PeerId`, `MessageId`, `MediaId` | `EnginePeer.Id`, `EngineMessage.Id`, `EngineMedia.Id` |
+| `Peer`, `Message`, `Media` as types | `EngineRawPeer`, `EngineRawMessage`, `EngineRawMedia` (`TelegramEngine/Utils/EnginePostboxCoding.swift`), or the `EnginePeer` / `EngineMessage` wrappers inside a module |
+| `AccountManager`, `AccountRecordId` | nothing to change: they live in TelegramCore now |
+| `postbox.combinedView(keys: [.topChatMessage…])` | `context.engine.data.subscribe(TelegramEngine.EngineData.Item.Messages.TopMessage(id:))` (NovagramAdActions) |
+| `fetchedMediaResource(mediaBox:…)`, `mediaBox.resourceData` | `context.engine.resources.fetch(reference:userLocation:userContentType:statsCategory:)`, `.data(resource:)` (NovagramAdAvatar) |
+
+Public entry points that Telegram files call (`NovagramSponsoredBridge.isOurs(_:)`, `EditedMessageHistoryController(message:)`,
+`NovagramForwardEdit.menuItem(messages:)`) take `EngineRawMessage`, so the Telegram call sites did not change.
+
+**`submodules/Postbox/AllowedPostboxAccess.txt`** lists two of our files:
+`submodules/Novagram/EditedHistory/Sources/EditedMessageHistoryController.swift` and
+`submodules/Novagram/ForwardEdit/Sources/NovagramForwardEditScreen.swift`. They pass `context.account.postbox` to PhotoResources'
+`chatMessagePhoto` / `chatMessageVideo` / `mediaGridMessageVideo`, which have no engine variant (the `account:` variants draw
+differently); upstream's own callers of these functions are listed the same way. When PhotoResources gets engine variants, switch the
+three calls and delete the two lines.
 
 ---
 

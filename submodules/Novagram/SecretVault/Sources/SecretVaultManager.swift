@@ -1,5 +1,5 @@
 import Foundation
-import Postbox
+import TelegramCore
 import NovagramChatLock
 
 public extension Notification.Name {
@@ -65,7 +65,7 @@ public final class SecretVaultManager {
 
     // MARK: - Vaulted set
 
-    public func isVaulted(_ peerId: PeerId) -> Bool {
+    public func isVaulted(_ peerId: EnginePeer.Id) -> Bool {
         return self.rawIds().contains(peerId.toInt64())
     }
 
@@ -74,7 +74,7 @@ public final class SecretVaultManager {
     /// Surfaces that build their own feed never pass through the chat-list entry filter in
     /// ChatListNodeEntries — the story bar is one of them, which is how a vaulted peer's story
     /// still surfaced after the chat itself was hidden. Those call sites use this instead.
-    public func removingVaulted<T>(_ items: [T], peerId: (T) -> PeerId) -> [T] {
+    public func removingVaulted<T>(_ items: [T], peerId: (T) -> EnginePeer.Id) -> [T] {
         guard self.isEnabled else {
             return items
         }
@@ -88,7 +88,7 @@ public final class SecretVaultManager {
     /// Same as `removingVaulted(_:peerId:)` for lists whose items do not all carry a peerId —
     /// the contacts list mixes Telegram peers with device-only contacts. Items that return nil
     /// are always kept, since there is nothing to match them against.
-    public func removingVaulted<T>(_ items: [T], optionalPeerId: (T) -> PeerId?) -> [T] {
+    public func removingVaulted<T>(_ items: [T], optionalPeerId: (T) -> EnginePeer.Id?) -> [T] {
         guard self.isEnabled else {
             return items
         }
@@ -104,15 +104,15 @@ public final class SecretVaultManager {
         }
     }
 
-    public func vaultedPeerIds() -> Set<PeerId> {
-        return Set(self.rawIds().map { PeerId($0) })
+    public func vaultedPeerIds() -> Set<EnginePeer.Id> {
+        return Set(self.rawIds().map { EnginePeer.Id($0) })
     }
 
     public func count() -> Int {
         return self.rawIds().count
     }
 
-    public func addToVault(_ peerIds: [PeerId]) {
+    public func addToVault(_ peerIds: [EnginePeer.Id]) {
         guard !peerIds.isEmpty else { return }
         self.mutate { ids in
             for peerId in peerIds {
@@ -121,7 +121,7 @@ public final class SecretVaultManager {
         }
     }
 
-    public func removeFromVault(_ peerIds: [PeerId]) {
+    public func removeFromVault(_ peerIds: [EnginePeer.Id]) {
         guard !peerIds.isEmpty else { return }
         self.mutate { ids in
             for peerId in peerIds {
