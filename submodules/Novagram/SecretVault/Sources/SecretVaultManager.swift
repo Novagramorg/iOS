@@ -15,7 +15,7 @@ public extension Notification.Name {
 ///
 /// Muting of vaulted chats is NOT done here — it is a side effect applied by the
 /// call sites that have engine access (see `ChatListController` / settings), so this
-/// store stays free of TelegramCore.
+/// store has no engine access (TelegramCore is imported only for the `EnginePeer.Id` name).
 public final class SecretVaultManager {
     public static let shared = SecretVaultManager()
 

@@ -102,8 +102,9 @@ Each line we change in a Telegram file is a line an upstream update can conflict
 ## 🧩 Our modules off Postbox (2026-10-28)
 
 No file under `submodules/Novagram/` imports Postbox and no Novagram BUILD depends on `//submodules/Postbox`.
-`build-system/Make/PostboxImportCheck.py` (run by `Make.py build`/`test`) now checks our modules like Telegram's, so new
-Novagram code that imports Postbox fails it. Our files inside TelegramCore (`submodules/TelegramCore/Sources/Novagram/`,
+`build-system/Make/PostboxImportCheck.py` now checks our modules like Telegram's, and `run.sh`, `publish.sh` and `release.sh`
+run it before the Bazel build (upstream runs it from `Make.py build`/`test`), so new Novagram code that imports Postbox or
+uses `.postbox` stops the build. A plain `import Postbox` would otherwise still compile through TelegramCore's dependency. Our files inside TelegramCore (`submodules/TelegramCore/Sources/Novagram/`,
 `NovagramBotAuthorization.swift`) may still use Postbox, as all of TelegramCore does.
 
 How the code was moved (behaviour unchanged, types are the same under engine names):
@@ -111,6 +112,8 @@ How the code was moved (behaviour unchanged, types are the same under engine nam
 | Postbox | Our code now uses |
 | --- | --- |
 | `PeerId`, `MessageId`, `MediaId` | `EnginePeer.Id`, `EngineMessage.Id`, `EngineMedia.Id` |
+| `PeerId.Id`, `MessageAttribute` | `EnginePeer.Id.Id`, `EngineMessage.Attribute` |
+| `CachedPeerData`, `SimpleDictionary` | `EngineCachedPeerData`, `EngineSimpleDictionary` |
 | `Peer`, `Message`, `Media` as types | `EngineRawPeer`, `EngineRawMessage`, `EngineRawMedia` (`TelegramEngine/Utils/EnginePostboxCoding.swift`), or the `EnginePeer` / `EngineMessage` wrappers inside a module |
 | `AccountManager`, `AccountRecordId` | nothing to change: they live in TelegramCore now |
 | `postbox.combinedView(keys: [.topChatMessage…])` | `context.engine.data.subscribe(TelegramEngine.EngineData.Item.Messages.TopMessage(id:))` (NovagramAdActions) |

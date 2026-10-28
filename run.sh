@@ -395,6 +395,8 @@ except Exception:
 fi
 
 # ─── Step 3: Bazel build ──────────────────────────────────────────────────────
+# Upstream's Postbox guard (Make.py runs it too): no new `import Postbox` / `.postbox` outside its allow lists.
+python3 build-system/Make/PostboxImportCheck.py . || err "PostboxImportCheck failed: use TelegramEngine instead of Postbox (HOOKS.md, \"Our modules off Postbox\")"
 if [ "$MODE" = "simulator" ]; then
     step "Bazel build (${COMPILATION_MODE}_sim_arm64, simulator)..."
 else
