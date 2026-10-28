@@ -5174,7 +5174,9 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             // Feature: agar translate_confirm_enabled yoqilgan bo'lsa, yuborishdan oldin tasdiq so'raydi.
             // Mavjud #31 auto-translate hook'dan OLDIN tekshiriladi — agar confirm yo'q bo'lsa, #31 ishlaydi.
             let proTranslateConfirmEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "translate_confirm_enabled") ?? false
-            if overrideText == nil && !sendAsRichMessage && proTranslateConfirmEnabled && !proTranslateLang.isEmpty && currentInputText.length > 0 && !hasTranslateAttr {
+            // Novagram: Auto-translate language, else the Translation language row, else English (HOOKS.md #37).
+            let proConfirmLang = NovagramSendTranslate.confirmTargetLanguage()
+            if overrideText == nil && !sendAsRichMessage && proTranslateConfirmEnabled && !proConfirmLang.isEmpty && currentInputText.length > 0 && !hasTranslateAttr {
                 if let controller = self.controller {
                     let langCode = NovagramL10n.languageKey(for: self.chatPresentationInterfaceState.strings)
                     let alertTitle: String
@@ -5199,10 +5201,17 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                         sendOriginalAction = "Send Original"
                     }
                     // Input maydonini tozalab, foydalanuvchi UI ni ko'rmaydi (original text saqlangan)
+                    let novagramInputBeforeConfirm = effectivePresentationInterfaceState.interfaceState.effectiveInputState
                     if let textInputPanelNode = self.textInputPanelNode {
                         textInputPanelNode.updateInputTextState(ChatTextInputState(inputText: NSAttributedString()))
                     }
                     controller.present(textAlertController(context: self.context, title: nil, text: alertTitle, actions: [
+                        // Novagram: Cancel puts the text back and sends nothing.
+                        TextAlertAction(type: .genericAction, title: self.chatPresentationInterfaceState.strings.Common_Cancel, action: { [weak self] in
+                            self?.interfaceInteraction?.updateTextInputStateAndMode { _, inputMode in
+                                return (novagramInputBeforeConfirm, inputMode)
+                            }
+                        }),
                         TextAlertAction(type: .genericAction, title: sendOriginalAction, action: { [weak self] in
                             guard let self else { return }
                             // Original matnni pro_translated attr bilan yuborish (qayta confirm oldini oladi)
@@ -5213,7 +5222,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                         TextAlertAction(type: .defaultAction, title: translateAction, action: { [weak self] in
                             guard let self else { return }
                             let engine = self.context.engine
-                            _ = (engine.messages.translate(text: currentInputText.string, toLang: proTranslateLang, entities: [])
+                            _ = (engine.messages.translate(text: currentInputText.string, toLang: proConfirmLang, entities: [])
                             |> deliverOnMainQueue).start(next: { [weak self] translatedStr in
                                 guard let self else { return }
                                 if let translatedStr = translatedStr, !translatedStr.0.isEmpty {
@@ -5236,7 +5245,8 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                                 self.sendCurrentMessage(silentPosting: silentPosting, scheduleTime: scheduleTime, repeatPeriod: repeatPeriod, postpone: postpone, messageEffect: messageEffect, overrideText: fallbackAttrString, completion: completion)
                             })
                         })
-                    ]), in: .window(.root))
+                    // Novagram: a tap outside would drop the cleared text; Cancel is the way out.
+                    ], dismissOnOutsideTap: false), in: .window(.root))
                 }
                 return
             }

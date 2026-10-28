@@ -3052,6 +3052,15 @@ Agar shart bajarilsa:
 5. `return` — `#31` hook ishlamaydi (confirm allaqachon hal qildi)
 
 Anchor (noyob): `            // PRO MESSAGER: Automatic Translation\n`
+
+**2026-10-28 tuzatish:** til endi `NovagramSendTranslate.confirmTargetLanguage()` dan olinadi (`Novagram/Messenger/Sources/NovagramSendTranslate.swift`):
+Auto-translate tili (`auto_translate_lang`), bo'lmasa "Translation language" qatori (`pro_messager_translation.selected_language`), bo'lmasa `en`.
+Ilgari faqat `auto_translate_lang` o'qilardi va u bo'sh bo'lsa switch jim ishlamas edi (ustidagi "Translation language" esa English ko'rsatardi).
+Hook'dagi o'zgarish: shartda va "Translate & Send" da `proTranslateLang` o'rniga `proConfirmLang` (#31 avtomatik tarjima o'zgarmagan),
+hamda birinchi tugma **Cancel**: funksiya boshidagi input holati (`effectivePresentationInterfaceState.interfaceState.effectiveInputState`)
+`interfaceInteraction?.updateTextInputStateAndMode` bilan qaytariladi, hech narsa yuborilmaydi; alert `dismissOnOutsideTap: false`
+(tashqariga bosish tozalangan matnni yo'qotardi).
+Settings'da switch ostida maqsadli til yoziladi (`NovagramSendTranslateStrings.targetLine`, ekran qayta ochilganda yangilanadi).
 Tasdiqlash: `python3 -c "content=open('...ChatControllerNode.swift').read(); assert content.count('// PRO MESSAGER: Automatic Translation') == 1"`
 
 NOTE: there are TWO tab-build paths — the init (~line 223, startup) and `updateRootControllers` (~line 281, calls-tab toggle). BOTH now append `contactsController` so the Contacts tab shows at launch and survives a calls-tab refresh.

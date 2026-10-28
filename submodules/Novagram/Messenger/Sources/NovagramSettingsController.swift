@@ -1152,6 +1152,7 @@ private struct NovagramSettingsState: Equatable {
     var autoDownloadDisabled: Bool
     // Feature #37: yuborishdan oldin tarjima tasdiq so'rovi
     var translateConfirmEnabled: Bool
+    var translateConfirmTargetLanguage: String
     // Feature #38: yuborishdan oldin umumiy tasdiq so'rovi (ovoz, stiker, sovg'a)
     var sendConfirmEnabled: Bool
     // Feature #30: Sticker auto-add — after each text message, append last saved sticker
@@ -1215,6 +1216,7 @@ private struct NovagramSettingsState: Equatable {
         self.autoDownloadDisabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "auto_download_disabled") ?? false
         // Default off — user opts in (Feature #37)
         self.translateConfirmEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "translate_confirm_enabled") ?? false
+        self.translateConfirmTargetLanguage = NovagramSendTranslate.confirmTargetLanguage()
         // Default off — user opts in (Feature #38)
         self.sendConfirmEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "send_confirm_enabled") ?? false
         // Default off — user opts in (Feature #30)
@@ -1318,6 +1320,9 @@ private struct NovagramSettingsState: Equatable {
             return false
         }
         if lhs.translateConfirmEnabled != rhs.translateConfirmEnabled {
+            return false
+        }
+        if lhs.translateConfirmTargetLanguage != rhs.translateConfirmTargetLanguage {
             return false
         }
         if lhs.sendConfirmEnabled != rhs.sendConfirmEnabled {
@@ -1477,7 +1482,8 @@ private func novagramSettingsEntries(presentationData: PresentationData, state: 
     // Feature #37: Send-Translate 2-tap confirm toggle
     // isNew: true — set to false here when this feature is no longer new
     let sendConfirmTitle    = NovagramSendTranslateStrings.toggleTitle(langCode: langCode)
-    let sendConfirmSubtitle = NovagramSendTranslateStrings.toggleSubtitle(langCode: langCode)
+    let sendConfirmTarget = NovagramSendTranslate.languageName(code: state.translateConfirmTargetLanguage, appLangCode: langCode)
+    let sendConfirmSubtitle = NovagramSendTranslateStrings.toggleSubtitle(langCode: langCode) + "\n" + NovagramSendTranslateStrings.targetLine(sendConfirmTarget, langCode: langCode)
     entries.append(.sendTranslateConfirm(presentationData.theme, sendConfirmTitle, sendConfirmSubtitle, state.translateConfirmEnabled, false))
 
     // Feature #30: Sticker auto-add toggle
@@ -1724,6 +1730,14 @@ public func novagramSettingsController(context: AccountContext, highlightFeature
         updateState { state in
             var state = state
             state.chatLockMasterEnabled = ChatPincodeManager.shared.isMasterEnabled()
+            return state
+        }
+    }
+
+    let refreshTranslateConfirmTarget: () -> Void = {
+        updateState { state in
+            var state = state
+            state.translateConfirmTargetLanguage = NovagramSendTranslate.confirmTargetLanguage()
             return state
         }
     }
@@ -2437,6 +2451,7 @@ public func novagramSettingsController(context: AccountContext, highlightFeature
         Queue.mainQueue().after(0.3, {
             refreshChatLockMaster()
             refreshSecretVault()
+            refreshTranslateConfirmTarget()
         })
         guard firstTime else { return }
 
@@ -2724,6 +2739,16 @@ private enum NovagramSendTranslateStrings {
         case "ru": return "При отправке диалог: перевести или отправить. Включение отключает голосовой авто-перевод"
         case "zh": return "发送前弹窗询问是翻译后发送还是发送原文。开启后将关闭语音自动翻译"
         default:   return "Before sending, a dialog asks to translate or send original. Enabling turns off voice auto-translate"
+        }
+    }
+
+    // The language comes from Auto-translate, else from Translation language (NovagramSendTranslate).
+    static func targetLine(_ language: String, langCode: String) -> String {
+        switch langCode {
+        case "uz": return "Tarjima tili: \(language)"
+        case "ru": return "Язык перевода: \(language)"
+        case "zh": return "翻译成：\(language)"
+        default:   return "Translates into \(language)"
         }
     }
 }
