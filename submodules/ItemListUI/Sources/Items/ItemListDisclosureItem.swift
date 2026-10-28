@@ -53,6 +53,7 @@ public class ItemListDisclosureItem: ListViewItem, ItemListItem, ListItemCompone
     let icon: UIImage?
     let context: AccountContext?
     let iconPeer: EnginePeer?
+    let iconPeerSize: CGFloat
     let title: String
     let attributedTitle: NSAttributedString?
     let titleColor: ItemListDisclosureItemTitleColor
@@ -80,6 +81,7 @@ public class ItemListDisclosureItem: ListViewItem, ItemListItem, ListItemCompone
         icon: UIImage? = nil,
         context: AccountContext? = nil,
         iconPeer: EnginePeer? = nil,
+        iconPeerSize: CGFloat = 40.0,
         title: String,
         attributedTitle: NSAttributedString? = nil,
         enabled: Bool = true,
@@ -106,6 +108,7 @@ public class ItemListDisclosureItem: ListViewItem, ItemListItem, ListItemCompone
         self.icon = icon
         self.context = context
         self.iconPeer = iconPeer
+        self.iconPeerSize = iconPeerSize
         self.title = title
         self.attributedTitle = attributedTitle
         self.titleColor = titleColor
@@ -556,7 +559,7 @@ public class ItemListDisclosureItemNode: ListViewItemNode, ItemListItemNode {
                 height += titleSpacing + additionalDetailLabelInfo.0.size.height
             }
             if item.iconPeer != nil {
-                height = max(height, 40.0 + verticalInset * 2.0)
+                height = max(height, (item.iconPeer != nil ? item.iconPeerSize : 40.0) + verticalInset * 2.0)
             }
             
             switch item.style {
@@ -619,7 +622,7 @@ public class ItemListDisclosureItemNode: ListViewItemNode, ItemListItemNode {
                             strongSelf.avatarNode = avatarNode
                             strongSelf.addSubnode(avatarNode)
                         }
-                        let avatarSize: CGFloat = 40.0
+                        let avatarSize: CGFloat = item.iconPeerSize
                         avatarNode.frame = CGRect(origin: CGPoint(x: params.leftInset + floor((leftInset - params.leftInset - avatarSize) / 2.0), y: floor((height - avatarSize) / 2.0)), size: CGSize(width: avatarSize, height: avatarSize))
                         var clipStyle: AvatarNodeClipStyle = .round
                         if case let .channel(channel) = iconPeer, channel.isForumOrMonoForum {

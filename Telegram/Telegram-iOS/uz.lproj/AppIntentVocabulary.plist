@@ -9,7 +9,17 @@
 			<string>INSendMessageIntent</string>
 			<key>IntentExamples</key>
 			<array>
-				<string>Send a Telegram message to Alex saying I&apos;ll be there in 10 minutes</string>
+				<string>Novagram orqali Sardorga 10 daqiqada yetib boraman deb xabar yubor</string>
+				<string>Novagram orqali xabar yoz</string>
+			</array>
+		</dict>
+		<dict>
+			<key>IntentName</key>
+			<string>INSearchForMessagesIntent</string>
+			<key>IntentExamples</key>
+			<array>
+				<string>Novagram xabarlarimni o&apos;qi</string>
+				<string>Novagramdagi yangi xabarlarni o&apos;qi</string>
 			</array>
 		</dict>
 	</array>

@@ -615,8 +615,12 @@ private func sendUploadedMessageContent(
                         replyTo = .inputReplyToMessage(.init(flags: replyFlags, replyToMsgId: 0, topMsgId: nil, replyToPeerId: nil, quoteText: nil, quoteEntities: nil, quoteOffset: nil, monoforumPeerId: nil, todoItemId: nil, pollOption: nil))
                     }
                 
-                    sendMessageRequest = network.request(Api.functions.messages.sendScreenshotNotification(peer: inputPeer, replyTo: replyTo, randomId: uniqueId))
-                    |> map(NetworkRequestResult.result)
+                    if isNovagramGhostModeActive {
+                        sendMessageRequest = .complete()
+                    } else {
+                        sendMessageRequest = network.request(Api.functions.messages.sendScreenshotNotification(peer: inputPeer, replyTo: replyTo, randomId: uniqueId))
+                        |> map(NetworkRequestResult.result)
+                    }
                 case .secretMedia:
                     assertionFailure()
                     sendMessageRequest = .fail(MTRpcError(errorCode: 400, errorDescription: "internal"))
@@ -689,7 +693,7 @@ public func standaloneSendMessage(account: Account, peerId: PeerId, text: String
                 case let .result(result):
                     // The server's refusal (a blocked user, a restriction, a fee, flood) fails
                     // the send, so the caller never reports as sent what was not.
-                    let sendContent = sendMessageContent(account: account, peerId: peerId, attributes: attributes, content: result, threadId: threadId) |> map({ _ -> Float in return 1.0 })
+                let sendContent = sendMessageContent(account: account, peerId: peerId, attributes: attributes, content: result, threadId: threadId) |> map({ _ -> Float in return 1.0 })
                     return .single(1.0) |> then(sendContent)
                 
             }

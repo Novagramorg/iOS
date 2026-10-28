@@ -46,6 +46,7 @@ import SliderContextItem
 import SaveProgressScreen
 import DirectMediaImageCache
 import PromptUI
+import NovagramStoryUnlock
 
 public final class StoryAvailableReactions: Equatable {
     let reactionItems: [ReactionItem]
@@ -7310,7 +7311,7 @@ public final class StoryItemSetContainerComponent: Component {
                             if isHq {
                                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/QualitySd"), color: theme.contextMenu.primaryColor)
                             } else {
-                                return generateTintedImage(image: UIImage(bundleImageName: accountUser.isPremium ? "Chat/Context Menu/QualityHd" : "Chat/Context Menu/QualityHdLocked"), color: theme.contextMenu.primaryColor)
+                                return generateTintedImage(image: UIImage(bundleImageName: (accountUser.isPremium || NovagramStoryUnlock.isEnabled) ? "Chat/Context Menu/QualityHd" : "Chat/Context Menu/QualityHdLocked"), color: theme.contextMenu.primaryColor)
                             }
                         }, action: { [weak self] _, a in
                             a(.default)
@@ -7319,7 +7320,7 @@ public final class StoryItemSetContainerComponent: Component {
                                 return
                             }
                             
-                            if !component.slice.additionalPeerData.preferHighQualityStories && !accountUser.isPremium {
+                            if !component.slice.additionalPeerData.preferHighQualityStories && !accountUser.isPremium && !NovagramStoryUnlock.isEnabled {
                                 self.presentQualityUpgradeScreen()
                                 
                                 return
@@ -7427,7 +7428,7 @@ public final class StoryItemSetContainerComponent: Component {
                     } else if !component.slice.item.storyItem.isForwardingDisabled {
                         let saveText: String = component.strings.Story_Context_SaveToGallery
                         items.append(.action(ContextMenuActionItem(text: saveText, icon: { theme in
-                            return generateTintedImage(image: UIImage(bundleImageName: accountUser.isPremium ? "Chat/Context Menu/Download" : "Chat/Context Menu/DownloadLocked"), color: theme.contextMenu.primaryColor)
+                            return generateTintedImage(image: UIImage(bundleImageName: (accountUser.isPremium || NovagramStoryUnlock.isEnabled) ? "Chat/Context Menu/Download" : "Chat/Context Menu/DownloadLocked"), color: theme.contextMenu.primaryColor)
                         }, action: { [weak self] _, a in
                             a(.default)
                             
@@ -7435,7 +7436,7 @@ public final class StoryItemSetContainerComponent: Component {
                                 return
                             }
                             
-                            if accountUser.isPremium {
+                            if accountUser.isPremium || NovagramStoryUnlock.isEnabled {
                                 self.requestSave()
                             } else {
                                 self.presentSaveUpgradeScreen()
@@ -7882,7 +7883,11 @@ private func generateParabollicMotionKeyframes(from sourcePoint: CGPoint, to tar
     let numPoints: Int = Int(ceil(Double(UIScreen.main.maximumFramesPerSecond) * duration))
     
     var keyframes: [CGPoint] = []
-    if abs(y1 - y3) < 5.0 && abs(x1 - x3) < 5.0 {
+    // midPoint.x is (x1 + x3) / 2, so the parabola's denominator below reduces to
+    // (x1 - x3)^3 / 4 — zero whenever source and destination share an x, which makes a/b/c
+    // NaN and CALayer.setPosition raise. Take the straight-line path if EITHER axis is close;
+    // for two vertically aligned points the parabola is a straight line anyway.
+    if abs(y1 - y3) < 5.0 || abs(x1 - x3) < 5.0 {
         for rawI in 0 ..< numPoints {
             let i = reverse ? (numPoints - 1 - rawI) : rawI
             let ks = CGFloat(i) / CGFloat(numPoints - 1)

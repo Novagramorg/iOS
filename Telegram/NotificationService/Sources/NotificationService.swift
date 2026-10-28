@@ -519,6 +519,8 @@ private struct NotificationContent: CustomStringConvertible {
     var userInfo: [AnyHashable: Any] = [:]
     var attachments: [UNNotificationAttachment] = []
     var silent = false
+    // Novagram: set by novagramIncomingCallFallbackContent; generate() turns it into a ringing call notification
+    var novagramIncomingCallIsVideo: Bool?
     /// The account this notification was delivered to, set only while more than one is signed
     /// in (see `notificationRecipientAccountName`).
     var recipientAccountName: String?
@@ -568,24 +570,24 @@ private struct NotificationContent: CustomStringConvertible {
                 name = "\(topicTitle) (\(name))"
             }
             self.sender = Sender(peerId: peer.id, name: name, contactIdentifier: contactIdentifier)
-        }
-    }
-
+            }
+            }
+            
     @available(iOS 15.0, *)
     private func incomingMessageIntent(sender: Sender, senderName: String, groupName: String, body: String) -> INSendMessageIntent {
-        var personNameComponents = PersonNameComponents()
+            var personNameComponents = PersonNameComponents()
         personNameComponents.nickname = senderName
-
+            
         let senderPerson = INPerson(
             personHandle: INPersonHandle(value: "\(sender.peerId.toInt64())", type: .unknown),
-            nameComponents: personNameComponents,
+                nameComponents: personNameComponents,
             displayName: senderName,
             image: self.senderImage,
             contactIdentifier: sender.contactIdentifier,
             customIdentifier: "\(sender.peerId.toInt64())",
-            isMe: false,
-            suggestionType: .none
-        )
+                isMe: false,
+                suggestionType: .none
+            )
         let mePerson = INPerson(
             personHandle: INPersonHandle(value: "0", type: .unknown),
             nameComponents: nil,
@@ -621,8 +623,8 @@ private struct NotificationContent: CustomStringConvertible {
         let names = NotificationNames(title: self.title, senderName: self.sender?.name, silent: self.silent, recipientAccountName: self.recipientAccountName)
 
         if let title = names.title {
-            content.title = title
-        }
+                content.title = title
+            }
         
         if let subtitle = self.subtitle {
             content.subtitle = subtitle
@@ -697,6 +699,11 @@ private struct NotificationContent: CustomStringConvertible {
             }
         }
 
+        // Novagram: see novagramRingingCallContent
+        if #available(iOS 15.2, *), let isVideo = self.novagramIncomingCallIsVideo, let ringingContent = novagramRingingCallContent(content, caller: self.novagramCallerPerson, isVideo: isVideo) {
+            return ringingContent
+        }
+
         if #available(iOS 15.0, *) {
             if self.isLockedMessage == nil, let sender = self.sender, let donatedSenderName = names.donatedSenderName, let displayedSenderName = names.displayedSenderName {
                 let donatedIntent = self.incomingMessageIntent(sender: sender, senderName: donatedSenderName, groupName: donatedSenderName, body: content.body)
@@ -725,8 +732,145 @@ private struct NotificationContent: CustomStringConvertible {
             }
         }
 
+        // Novagram: a content with no visible text at all means "this push is housekeeping — a read
+        // receipt, a deletion, a reaction read — the user must not see anything". Upstream can rely on
+        // that because official Telegram carries com.apple.developer.usernotifications.filtering, which
+        // lets its extension genuinely suppress the banner. Telegram/BUILD gates that entitlement to
+        // ph.telegra.Telegraph, so on this fork it is absent, and Apple is explicit about what happens
+        // then: "the system always displays the notification banner to the user." Worse, iOS refuses to
+        // draw a wholly empty banner and falls back to the ORIGINAL server payload, whose alert body is
+        // PUSH_ENCRYPTED_MESSAGE — which is exactly the phantom "You have a new message" users report.
+        //
+        // We cannot suppress it, so make it as close to invisible as the API allows: a single space
+        // keeps the content non-empty (so iOS renders OUR mutation instead of the raw payload), and
+        // .passive stops the screen lighting up and any sound. It still lands in the notification list,
+        // where the extension's own sweep removes it on the next service push. This mirrors what
+        // Swiftgram ships for the same reason. Verified: no other API can prevent the banner —
+        // apns-collapse-id is sender-side and pre-delivery, threadIdentifier only groups,
+        // hiddenPreviewsBodyPlaceholder is static and user-setting dependent, relevanceScore only
+        // affects the scheduled summary. Telegram's own engineer states the entitlement is the only way.
+        if content.title.isEmpty && content.subtitle.isEmpty && content.body.isEmpty {
+            content.title = " "
+            // Group every one of these under one thread so repeated service pushes collapse into a
+            // single row instead of stacking, and stamp them so both sweeps (the extension's own and
+            // AppDelegate's) can find and delete them. We build a brand new UNMutableNotificationContent
+            // here, so the encrypted "p" key from the original payload is NOT present and the existing
+            // "still carries p" rule would never match these.
+            content.threadIdentifier = "novagram-service-push"
+            var blankInfo = content.userInfo
+            blankInfo["fenixuz_blank"] = "1"
+            content.userInfo = blankInfo
+            if #available(iOS 15.0, *) {
+                content.interruptionLevel = .passive
+                content.relevanceScore = 0.0
+            }
+        }
+
         return content
     }
+}
+
+// Novagram: an incoming call that arrives as a regular push reaches CallKit only through
+// CXProvider.reportNewIncomingVoIPPushPayload, and Apple lets an extension call that only when it
+// carries com.apple.developer.usernotifications.filtering. Telegram/BUILD grants the entitlement to
+// ph.telegra.Telegraph alone, so on this fork the hand-off fails (CXErrorDomainNotificationServiceExtension
+// code 2) and the empty content published before it would end up as the invisible blank row above:
+// the phone neither rang nor showed anything, and the caller just waited. Show the banner upstream
+// uses when iOS call integration is off instead, with a sound, and point a tap at the caller's chat on
+// the called account so the app connects while the call is still ringing. If the entitlement is ever
+// granted, the hand-off succeeds and this never runs.
+private func novagramIncomingCallFallbackContent(callerTitle: String?, callerPeer: Peer?, callerPeerId: PeerId, accountId: Int64, isVideo: Bool, incomingCallMessage: String, payloadJson: [String: Any], mediaBox: MediaBox, accountPeerId: PeerId) -> NotificationContent {
+    var content = NotificationContent(isLockedMessage: nil)
+    if let callerTitle {
+        content.title = callerTitle
+        content.body = incomingCallMessage
+    } else {
+        content.body = "Incoming Call"
+    }
+    if let aps = payloadJson["aps"] as? [String: Any], let sound = aps["sound"] as? String {
+        content.sound = sound
+    } else {
+        content.sound = "0.m4a"
+    }
+    content.userInfo["peerId"] = "\(callerPeerId.toInt64())"
+    content.userInfo["accountId"] = "\(accountId)"
+    if let callerPeer {
+        content.addSenderInfo(mediaBox: mediaBox, accountPeerId: accountPeerId, peer: callerPeer, topicTitle: nil, contactIdentifier: nil, isStory: false)
+    }
+    content.novagramIncomingCallIsVideo = isVideo
+    return content
+}
+
+// Novagram: upstream 13.0 dropped the stored `senderPerson` (it keeps `sender` and builds the
+// INPerson per intent), so build the caller for the ringing call notification the same way.
+@available(iOS 15.0, *)
+private extension NotificationContent {
+    var novagramCallerPerson: INPerson? {
+        guard let sender = self.sender else {
+            return nil
+        }
+        var personNameComponents = PersonNameComponents()
+        personNameComponents.nickname = sender.name
+        return INPerson(
+            personHandle: INPersonHandle(value: "\(sender.peerId.toInt64())", type: .unknown),
+            nameComponents: personNameComponents,
+            displayName: sender.name,
+            image: self.senderImage,
+            contactIdentifier: sender.contactIdentifier,
+            customIdentifier: "\(sender.peerId.toInt64())",
+            isMe: false,
+            suggestionType: .none
+        )
+    }
+}
+
+// Novagram: a plain banner with a 3-second sound reads as a text message, so people missed the calls
+// anyway. UNNotificationSound.defaultRingtone plays the user's own ringtone and haptics for 30
+// seconds — the documented replacement for CallKit when an extension cannot use it — but only on
+// content updated from an INStartCallIntent with destinationType .normal (see UNNotificationSound.h).
+// The intent also makes it a communication notification with the caller's avatar. Requires
+// INStartCallIntent in NSUserActivityTypes (Telegram/BUILD). Returns nil when iOS rejects the intent,
+// and generate() then falls back to the plain banner.
+@available(iOS 15.2, *)
+private func novagramRingingCallContent(_ content: UNMutableNotificationContent, caller: INPerson?, isVideo: Bool) -> UNNotificationContent? {
+    let callerPerson = caller ?? INPerson(
+        personHandle: INPersonHandle(value: content.title, type: .unknown),
+        nameComponents: nil,
+        displayName: content.title,
+        image: nil,
+        contactIdentifier: nil,
+        customIdentifier: nil
+    )
+    let intent = INStartCallIntent(
+        callRecordFilter: nil,
+        callRecordToCallBack: nil,
+        audioRoute: .unknown,
+        destinationType: .normal,
+        contacts: [callerPerson],
+        callCapability: isVideo ? .videoCall : .audioCall
+    )
+    let interaction = INInteraction(intent: intent, response: nil)
+    interaction.direction = .incoming
+    interaction.donate(completion: nil)
+
+    content.sound = .defaultRingtone
+    do {
+        return try content.updating(from: intent)
+    } catch let e {
+        Logger.shared.log("NotificationService", "Novagram ringing call content failed: \(e)")
+        return nil
+    }
+}
+
+private func novagramIsVideoCall(updates: String) -> Bool {
+    var updateString = updates.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+    while updateString.count % 4 != 0 {
+        updateString.append("=")
+    }
+    guard let updateData = Data(base64Encoded: updateString), let callUpdate = AccountStateManager.extractIncomingCallUpdate(data: updateData) else {
+        return false
+    }
+    return callUpdate.isVideo
 }
 
 private func getCurrentRenderedTotalUnreadCount(accountManager: AccountManager<TelegramAccountManagerTypes>, postbox: Postbox) -> Signal<(Int32, RenderedTotalUnreadCountType), NoError> {
@@ -1165,6 +1309,26 @@ private final class NotificationServiceHandler {
                     } else if let groupCallData {
                         action = .groupCall(groupCallData)
                     } else if let locKey = payloadJson["loc-key"] as? String {
+                        // Novagram: every loc-key below is a SILENT service push — read receipts,
+                        // deletions, reaction reads, story reads, session revoke. None of them may
+                        // ever put anything on screen. This branch used to leave the content atomic
+                        // nil for the whole duration of its async action, so if the extension stalled
+                        // or was killed mid-flight both completion sites fell through to
+                        // contentHandler(initialContent) and iOS drew the RAW server payload, whose
+                        // alert body is PUSH_ENCRYPTED_MESSAGE = "You have a new message".
+                        //
+                        // That is exactly where the phantom banners came from: with several devices
+                        // on one account, reading a chat on any of them makes the server send
+                        // READ_HISTORY to the others to REMOVE the delivered banner — and a removal
+                        // that failed here turned into a brand new bogus banner instead of clearing
+                        // one. Removal is also the slowest thing this extension does (~1 s for six
+                        // notifications, vs ~250 ms for a normal message), so it is the likeliest
+                        // path to run out of budget.
+                        //
+                        // Publish empty content up front: the floor becomes "invisible", which is
+                        // what a service push means. Anything that genuinely needs a banner still
+                        // overwrites it downstream via updateCurrentContent.
+                        updateCurrentContent(NotificationContent(isLockedMessage: nil))
                         switch locKey {
                         case "SESSION_REVOKE":
                             action = .logout
@@ -1239,6 +1403,12 @@ private final class NotificationServiceHandler {
                             } else if let alert = aps["alert"] as? String {
                                 content.body = alert
                             } else {
+                                // Novagram: publish the (bodyless) content before completing. Leaving the
+                                // atomic nil here makes both completion sites fall through to
+                                // contentHandler(initialContent), which re-emits the raw server payload —
+                                // the generic "You have a new message" banner. An empty content is
+                                // suppressed by iOS instead, which is what this branch means.
+                                updateCurrentContent(content)
                                 completed()
                                 return
                             }
@@ -1381,7 +1551,7 @@ private final class NotificationServiceHandler {
                                     |> ignoreValues
                                 }
                             }
-
+                            
                             updateCurrentContent(content)
                         } else if let aps = payloadJson["aps"] as? [String: Any], let url = payloadJson["url"] as? String {
                             var content: NotificationContent = NotificationContent(isLockedMessage: nil)
@@ -1449,6 +1619,10 @@ private final class NotificationServiceHandler {
                                         CXProvider.reportNewIncomingVoIPPushPayload(voipPayload, completion: { error in
                                             Logger.shared.log("NotificationService \(episode)", "Did report voip notification, error: \(String(describing: error))")
 
+                                            // Novagram: see novagramIncomingCallFallbackContent
+                                            if error != nil {
+                                                updateCurrentContent(novagramIncomingCallFallbackContent(callerTitle: callData.peer?.debugDisplayTitle, callerPeer: callData.peer?._asPeer(), callerPeerId: callData.fromId, accountId: callData.accountId, isVideo: novagramIsVideoCall(updates: callData.updates), incomingCallMessage: incomingCallMessage, payloadJson: payloadJson, mediaBox: stateManager.postbox.mediaBox, accountPeerId: stateManager.accountPeerId))
+                                            }
                                             completed()
                                         })
                                     } else {
@@ -1495,6 +1669,10 @@ private final class NotificationServiceHandler {
                                         CXProvider.reportNewIncomingVoIPPushPayload(voipPayload, completion: { error in
                                             Logger.shared.log("NotificationService \(episode)", "Did report voip notification, error: \(String(describing: error))")
 
+                                            // Novagram: see novagramIncomingCallFallbackContent
+                                            if error != nil {
+                                                updateCurrentContent(novagramIncomingCallFallbackContent(callerTitle: fromPeer?.debugDisplayTitle, callerPeer: fromPeer, callerPeerId: groupCallData.fromId, accountId: groupCallData.accountId, isVideo: groupCallData.isVideo, incomingCallMessage: incomingCallMessage, payloadJson: payloadJson, mediaBox: stateManager.postbox.mediaBox, accountPeerId: stateManager.accountPeerId))
+                                            }
                                             completed()
                                         })
                                     } else {
@@ -1521,8 +1699,50 @@ private final class NotificationServiceHandler {
                         case let .poll(peerId, initialContent, messageId, reportDelivery, enableInlineEmoji):
                             Logger.shared.log("NotificationService \(episode)", "Will poll")
                             if let stateManager = strongSelf.stateManager {
+                                // MARK: - Boshqa davlat raqamlariga cheklov (Foreign User Block) — Push Notification
+                                let blockForeignUsersNotif = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "block_foreign_users") ?? false
+                                if blockForeignUsersNotif && peerId.namespace == Namespaces.Peer.CloudUser {
+                                    let myPhone = UserDefaults(suiteName: "pro_messager")?.string(forKey: "my_phone_number")
+                                    if let myPhoneValue = myPhone, !myPhoneValue.isEmpty {
+                                        var shouldBlock = false
+                                        let sem = DispatchSemaphore(value: 0)
+                                        let _ = (stateManager.postbox.transaction { transaction -> String? in
+                                            if let peer = transaction.getPeer(peerId) as? TelegramUser, peer.botInfo == nil {
+                                                return peer.phone
+                                            }
+                                            return nil
+                                        }).start(next: { peerPhone in
+                                            if let pp = peerPhone, !pp.isEmpty {
+                                                let myDigits = myPhoneValue.filter { $0.isNumber }
+                                                let peerDigits = pp.filter { $0.isNumber }
+                                                func nsExtractCode(from d: String) -> String? {
+                                                    let three: Set<String> = ["998","992","993","994","995","996","374","375","380","373","371","370","372","971","966","965","968","974","973","964","963","962","961","967","856","855","852","853","886","880","977","960","976","975","670","673","959","234","254","255","256","251","233","237","243","221","225","227","223","226","229","228","231","232","235","236","241","242","244","249","252","253","257","258","261","263","260","264","265","266","267","268","269","351","352","353","354","355","356","357","358","359","381","382","383","385","386","387","389","420","421","591","592","593","594","595","596","597","598","212","213","216","218","220","222","238","239","240","245","246","247","248","250","262","290","291","297","298","299"]
+                                                    let two: Set<String> = ["20","27","30","31","32","33","34","36","39","40","41","43","44","45","46","47","48","49","51","52","53","54","55","56","57","58","60","61","62","63","64","65","66","81","82","84","86","90","91","92","93","94","95","98"]
+                                                    let one: Set<String> = ["1","7"]
+                                                    if d.count >= 3 { let p = String(d.prefix(3)); if three.contains(p) { return p } }
+                                                    if d.count >= 2 { let p = String(d.prefix(2)); if two.contains(p) { return p } }
+                                                    if d.count >= 1 { let p = String(d.prefix(1)); if one.contains(p) { return p } }
+                                                    return nil
+                                                }
+                                                if let mc = nsExtractCode(from: myDigits), let pc = nsExtractCode(from: peerDigits), mc != pc {
+                                                    shouldBlock = true
+                                                }
+                                            }
+                                            sem.signal()
+                                        })
+                                        sem.wait()
+                                        if shouldBlock {
+                                            Logger.shared.log("NotificationService \(episode)", "Blocked notification from foreign user")
+                                            let content = NotificationContent(isLockedMessage: nil)
+                                            updateCurrentContent(content)
+                                            completed()
+                                            break
+                                        }
+                                    }
+                                }
+                                
                                 let shouldKeepConnection = stateManager.network.shouldKeepConnection
-
+                                
                                 // iOS expires the extension about 30 s after didReceive. Everything on
                                 // this path that needs the connection is cut off at one deadline counted
                                 // from handler creation, leaving slack for the postbox-only work after the
@@ -2024,7 +2244,7 @@ private final class NotificationServiceHandler {
                                 }
 
                                 let pollSignal: Signal<Never, NoError>
-
+                                
                                 if !shouldSynchronizeState {
                                     pollSignal = .complete()
                                 } else {
@@ -2032,7 +2252,7 @@ private final class NotificationServiceHandler {
                                     let unboundedPollSignal: Signal<Never, NoError>
                                     if peerId.namespace == Namespaces.Peer.CloudChannel {
                                         Logger.shared.log("NotificationService \(episode)", "Will poll channel \(peerId)")
-
+                                        
                                         unboundedPollSignal = standalonePollChannelOnce(
                                             accountPeerId: stateManager.accountPeerId,
                                             postbox: stateManager.postbox,
@@ -2483,8 +2703,41 @@ private final class NotificationServiceHandler {
                         case let .deleteMessage(ids):
                             Logger.shared.log("NotificationService \(episode)", "Will delete messages \(ids)")
                             let mediaBox = stateManager.postbox.mediaBox
+                            // Novagram: anti-delete ("Deleted messages" toggle). Telegram sends a silent
+                            // MESSAGE_DELETED push and THIS extension is what removes the message from the
+                            // shared Postbox whenever the app is backgrounded — so the app-side gate in
+                            // AccountStateManagementUtils never gets to see the delete at all. Read the
+                            // toggle from the App Group suite (the "pro_messager" suite is per-process and
+                            // always reads false here) and, when it is on, mark the message instead of
+                            // deleting it, with the same logic as the in-app path. Delivered-banner removal
+                            // below is unchanged either way — the peer did delete it, we only keep the row.
+                            let novagramShowDeleted = UserDefaults(suiteName: appGroupName)?.bool(forKey: "show_deleted_messages") ?? false
                             let _ = (stateManager.postbox.transaction { transaction -> Void in
-                                _internal_deleteMessages(transaction: transaction, mediaBox: mediaBox, ids: ids, deleteMedia: true)
+                                if novagramShowDeleted {
+                                    var actuallyDeletedIds: [MessageId] = []
+                                    for id in ids {
+                                        guard let message = transaction.getMessage(id) else {
+                                            actuallyDeletedIds.append(id)
+                                            continue
+                                        }
+                                        if message.attributes.contains(where: { $0 is DeletedMessageAttribute }) {
+                                            // Already marked — don't overwrite the original deletion time.
+                                            continue
+                                        }
+                                        var newAttributes = message.attributes.filter { !($0 is DeletedMessageAttribute) }
+                                        newAttributes.append(DeletedMessageAttribute(timestamp: Int32(Date().timeIntervalSince1970)))
+
+                                        let storeForwardInfo = message.forwardInfo.flatMap(StoreMessageForwardInfo.init)
+                                        transaction.updateMessage(id, update: { _ in
+                                            return .update(StoreMessage(id: message.id, customStableId: nil, globallyUniqueId: message.globallyUniqueId, groupingKey: message.groupingKey, threadId: message.threadId, timestamp: message.timestamp, flags: StoreMessageFlags(message.flags), tags: message.tags, globalTags: message.globalTags, localTags: message.localTags, forwardInfo: storeForwardInfo, authorId: message.author?.id, text: message.text, attributes: newAttributes, media: message.media))
+                                        })
+                                    }
+                                    if !actuallyDeletedIds.isEmpty {
+                                        _internal_deleteMessages(transaction: transaction, mediaBox: mediaBox, ids: actuallyDeletedIds, deleteMedia: true)
+                                    }
+                                } else {
+                                    _internal_deleteMessages(transaction: transaction, mediaBox: mediaBox, ids: ids, deleteMedia: true)
+                                }
                             }
                             |> deliverOn(strongSelf.queue)).start(completed: {
                                 UNUserNotificationCenter.current().getDeliveredNotifications(completionHandler: { notifications in
@@ -2590,6 +2843,16 @@ private final class NotificationServiceHandler {
                                             if PeerId(peerIdValue) == id.peerId && messageIdValue <= id.id {
                                                 removeIdentifiers.append(notification.request.identifier)
                                             }
+                                        } else if notification.request.content.userInfo["p"] != nil || notification.request.content.userInfo["fenixuz_blank"] != nil {
+                                            // Novagram: a banner this extension never rewrote — it still carries the
+                                            // encrypted "p" payload, which only survives when iOS displayed the RAW
+                                            // server alert ("You have a new message") because the extension was not
+                                            // launched for that push. Such a banner has no peerId/msg_id, so the match
+                                            // above can never remove it and it sits on the lock screen until the user
+                                            // opens the app. Sweep it here instead: on a multi-account/multi-device
+                                            // setup these read-receipt pushes arrive constantly, so a stray clears
+                                            // within minutes without the user doing anything.
+                                            removeIdentifiers.append(notification.request.identifier)
                                         }
                                     }
 
@@ -2707,6 +2970,30 @@ final class NotificationService: UNNotificationServiceExtension {
         
         self.initialContent = request.content
         self.contentHandler = contentHandler
+        let requestIdentifier = request.identifier
+
+        // Novagram: sweep leftover blank service rows at the START of every invocation, whatever the
+        // push turns out to be. Without the filtering entitlement iOS insists on showing something for
+        // a read-receipt push, so we hand it a blank .passive row (see NotificationContent.generate())
+        // and delete it as soon as we can. Deleting it from the run that created it is unreliable — the
+        // extension is usually suspended the moment contentHandler returns — so the practical clock was
+        // "whenever the next READ_HISTORY arrives". Doing it here instead means ANY next push clears it,
+        // including a plain message, which is much sooner. Fire-and-forget: it never delays this push.
+        UNUserNotificationCenter.current().getDeliveredNotifications(completionHandler: { notifications in
+            let stale = notifications.compactMap { notification -> String? in
+                if notification.request.identifier == requestIdentifier {
+                    return nil
+                }
+                if notification.request.content.userInfo["fenixuz_blank"] != nil {
+                    return notification.request.identifier
+                }
+                return nil
+            }
+            if !stale.isEmpty {
+                Logger.shared.log("NotificationService \(episode)", "Sweeping \(stale.count) leftover blank service rows")
+                UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: stale)
+            }
+        })
 
         self.impl = nil
 
@@ -2731,7 +3018,17 @@ final class NotificationService: UNNotificationServiceExtension {
                         strongSelf.contentHandler = nil
                         
                         if let content = content.with({ $0 }) {
-                            contentHandler(content.generate())
+                            let generated = content.generate()
+                            contentHandler(generated)
+                            // A service push (read receipt, deletion, reaction read) has nothing to show,
+                            // but without the filtering entitlement iOS refuses to let us suppress it, so
+                            // it lands as a blank row. It only becomes a *delivered* notification once the
+                            // handler above returns, which is the first moment we are allowed to delete it.
+                            // Best effort: the extension may be torn down before this XPC call lands, in
+                            // which case the two sweeps still catch it on the next push or app launch.
+                            if generated.userInfo["fenixuz_blank"] != nil {
+                                UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [requestIdentifier])
+                            }
                         } else if let initialContent = strongSelf.initialContent {
                             contentHandler(initialContent)
                         }
@@ -2743,6 +3040,31 @@ final class NotificationService: UNNotificationServiceExtension {
                 payload: request.content.userInfo
             ))
         })
+
+        // Novagram: watchdog against the generic-banner bug.
+        // Everything before the content pre-set inside the handler runs on ONE process-global
+        // serial queue (`queue`, file scope) with no timeout anywhere in that segment, and each
+        // invocation builds a full Postbox plus a live MTProto Network. iOS reuses a single NSE
+        // process for a burst of pushes, so later ones starve past the extension budget. When
+        // that happens both completion sites fall through to `contentHandler(initialContent)`
+        // and re-emit the raw server payload — the useless "You have a new message" banner that
+        // then stacks up on the lock screen. Publishing an empty content instead makes iOS
+        // suppress the banner, which is the same idiom upstream already uses for silent pushes.
+        // Deliberately NOT scheduled on `queue`: that queue is precisely what is starved.
+        // Scheduled on main because that is exactly where the system already calls
+        // serviceExtensionTimeWillExpire from — reusing that thread means this introduces no new
+        // concurrent access to `contentHandler` beyond the main/queue pair upstream already has.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 20.0) { [weak self] in
+            guard let strongSelf = self, let contentHandler = strongSelf.contentHandler else {
+                return
+            }
+            if content.with({ $0 }) != nil {
+                return
+            }
+            strongSelf.contentHandler = nil
+            Logger.shared.log("NotificationService \(episode)", "Watchdog: still no content after 20s, suppressing the raw server fallback")
+            contentHandler(NotificationContent(isLockedMessage: nil).generate())
+        }
     }
     
     override func serviceExtensionTimeWillExpire() {

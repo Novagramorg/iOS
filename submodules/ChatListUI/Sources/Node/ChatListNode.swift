@@ -309,6 +309,11 @@ public struct ChatListNodeState: Equatable {
     public var selectedPeerMap: [EnginePeer.Id: EnginePeer]
     public var selectedThreadIds: Set<Int64>
     public var archiveStoryState: StoryState?
+    // Novagram Secret Vault: when true this list shows ONLY vaulted chats (the vault
+    // screen); the main list keeps it false and hides vaulted chats instead.
+    public var novagramVaultMode: Bool = false
+    // Bumped to force an entries rebuild when the vaulted set changes.
+    public var novagramVaultRevision: Int = 0
     
     public init(
         presentationData: ChatListPresentationData,
@@ -383,6 +388,12 @@ public struct ChatListNodeState: Equatable {
             return false
         }
         if lhs.archiveStoryState != rhs.archiveStoryState {
+            return false
+        }
+        if lhs.novagramVaultMode != rhs.novagramVaultMode {
+            return false
+        }
+        if lhs.novagramVaultRevision != rhs.novagramVaultRevision {
             return false
         }
         return true

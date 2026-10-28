@@ -9,6 +9,7 @@ import TelegramPresentationData
 import LegacyComponents
 import SolidRoundedButtonNode
 import RMIntro
+import NovagramBrand
 
 public final class AuthorizationSequenceSplashController: ViewController {
     private var controllerNode: AuthorizationSequenceSplashControllerNode {
@@ -70,9 +71,12 @@ public final class AuthorizationSequenceSplashController: ViewController {
             })
         })
         
-        self.controller = RMIntroViewController(backgroundColor: theme.list.plainBackgroundColor, primaryColor: theme.list.itemPrimaryTextColor, buttonColor: theme.intro.startButtonColor, accentColor: theme.list.itemAccentColor, regularDotColor: theme.intro.dotColor, highlightedDotColor: theme.list.itemAccentColor, suggestedLocalizationSignal: localizationSignal)
-        
-        self.startButton = SolidRoundedButtonNode(title: "Start Messaging", theme: SolidRoundedButtonTheme(theme: theme), glass: false, height: 50.0, cornerRadius: 50.0 * 0.5, isShimmering: true)
+        // Novagram: brand emerald (#10B981/#059669) Telegram blue o'rniga.
+        let novagramPrimary = NovagramBrandColors.primary
+        self.controller = RMIntroViewController(backgroundColor: theme.list.plainBackgroundColor, primaryColor: theme.list.itemPrimaryTextColor, buttonColor: novagramPrimary, accentColor: novagramPrimary, regularDotColor: theme.intro.dotColor, highlightedDotColor: novagramPrimary, suggestedLocalizationSignal: localizationSignal)
+
+        let novagramButtonTheme = SolidRoundedButtonTheme(backgroundColor: novagramPrimary, foregroundColor: .white)
+        self.startButton = SolidRoundedButtonNode(title: "Start Messaging", theme: novagramButtonTheme, glass: false, height: 50.0, cornerRadius: 50.0 * 0.5, isShimmering: true)
         self.startButton.accessibilityIdentifier = "Auth.Welcome.StartButton"
 
         super.init(navigationBarPresentationData: nil)

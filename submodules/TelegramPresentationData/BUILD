@@ -10,6 +10,9 @@ swift_library(
         "-warnings-as-errors",
     ],
     deps = [
+        # Novagram: brand rewrite for server-delivered localization (NovagramBrand has no deps of
+        # its own, so this cannot create a cycle with NovagramLocalization, which depends on us).
+        "//submodules/Novagram/Brand:NovagramBrand",
         "//submodules/TelegramCore:TelegramCore",
         "//submodules/Postbox:Postbox",
         "//submodules/Display:Display",

@@ -449,7 +449,10 @@ final class ChatListNoticeItemNode: ItemListRevealOptionsItemNode {
                     
                     let hasCloseButton: Bool
                     switch item.notice {
-                    case .xmasPremiumGift, .setupBirthday, .birthdayPremiumGift, .premiumGrace, .starsSubscriptionLowBalance, .setupPhoto, .link:
+                    case let .link(id, _, _, _):
+                        // Novagram: a non-closable Novagram banner has no "X" (id "novagram-banner-fixed:…").
+                        hasCloseButton = !id.hasPrefix("novagram-banner-fixed:")
+                    case .xmasPremiumGift, .setupBirthday, .birthdayPremiumGift, .premiumGrace, .starsSubscriptionLowBalance, .setupPhoto:
                         hasCloseButton = true
                     default:
                         hasCloseButton = false

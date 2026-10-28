@@ -9,7 +9,7 @@ func _internal_applyMaxReadIndexInteractively(postbox: Postbox, stateManager: Ac
         _internal_applyMaxReadIndexInteractively(transaction: transaction, stateManager: stateManager, index: index)
     }
 }
-
+    
 /// Applies a read from a caller that has only a message id and no `MessageIndex` - a
 /// notification action or a Siri intent.
 ///
@@ -194,7 +194,9 @@ func _internal_toggleForumThreadUnreadMarkInteractively(transaction: Transaction
         if peer.isForum {
         } else if peer.isMonoForum {
             if let inputPeer = apiInputPeer(peer), let subPeer = transaction.getPeer(PeerId(threadId)).flatMap(apiInputPeer) {
-                let _ = network.request(Api.functions.messages.markDialogUnread(flags: 1 << 0, parentPeer: inputPeer, peer: .inputDialogPeer(.init(peer: subPeer)))).start()
+                if !isNovagramGhostModeActive {
+                    let _ = network.request(Api.functions.messages.markDialogUnread(flags: 1 << 0, parentPeer: inputPeer, peer: .inputDialogPeer(.init(peer: subPeer)))).start()
+                }
             }
         }
     } else {
@@ -210,11 +212,15 @@ func _internal_toggleForumThreadUnreadMarkInteractively(transaction: Transaction
             
             if peer.isForum {
                 if let inputPeer = apiInputPeer(peer) {
-                    let _ = network.request(Api.functions.messages.readDiscussion(peer: inputPeer, msgId: Int32(clamping: threadId), readMaxId: messageIndex.id.id)).start()
+                    if !isNovagramGhostModeActive {
+                        let _ = network.request(Api.functions.messages.readDiscussion(peer: inputPeer, msgId: Int32(clamping: threadId), readMaxId: messageIndex.id.id)).start()
+                    }
                 }
             } else if peer.isMonoForum {
                 if let inputPeer = apiInputPeer(peer), let subPeer = transaction.getPeer(PeerId(threadId)).flatMap(apiInputPeer) {
-                    let _ = network.request(Api.functions.messages.readSavedHistory(parentPeer: inputPeer, peer: subPeer, maxId: messageIndex.id.id)).start()
+                    if !isNovagramGhostModeActive {
+                        let _ = network.request(Api.functions.messages.readSavedHistory(parentPeer: inputPeer, peer: subPeer, maxId: messageIndex.id.id)).start()
+                    }
                 }
             }
         }
@@ -239,11 +245,15 @@ func _internal_markForumThreadAsReadInteractively(transaction: Transaction, netw
         data.isMarkedUnread = false
         data.maxIncomingReadId = max(messageIndex.id.id, data.maxIncomingReadId)
         data.maxKnownMessageId = max(data.maxKnownMessageId, messageIndex.id.id)
-        
+
         if let entry = StoredMessageHistoryThreadInfo(data) {
             transaction.setMessageHistoryThreadInfo(peerId: peerId, threadId: threadId, info: entry)
         }
-        
+
+        if isNovagramGhostModeActive {
+            return
+        }
+
         if peer.isForum {
             if let inputPeer = apiInputPeer(peer) {
                 let _ = network.request(Api.functions.messages.readDiscussion(peer: inputPeer, msgId: Int32(clamping: threadId), readMaxId: messageIndex.id.id)).start()
@@ -292,7 +302,9 @@ func _internal_togglePeerUnreadMarkInteractively(transaction: Transaction, netwo
                     }
                 } else if peer.isMonoForum {
                     if let inputPeer = apiInputPeer(peer), let subPeer = transaction.getPeer(PeerId(item.threadId)).flatMap(apiInputPeer) {
+                        if !isNovagramGhostModeActive {
                         let _ = network.request(Api.functions.messages.readSavedHistory(parentPeer: inputPeer, peer: subPeer, maxId: messageIndex.id.id)).start()
+                    }
                     }
                 }
             }

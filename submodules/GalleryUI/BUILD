@@ -8,9 +8,14 @@ swift_library(
     ]),
     copts = [
         "-warnings-as-errors",
+        # Novagram: min iOS 15 surfaces iOS-14/15 deprecations here; the APIs still work, so keep
+        # every other warning fatal and downgrade only this group. Must follow -warnings-as-errors.
+        "-Wwarning",
+        "DeprecatedDeclaration",
     ],
     deps = [
         "//submodules/UrlWhitelist",
+        "//submodules/Novagram/Sponsored:NovagramSponsoredBridge",
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
         "//submodules/LottieSettings:LottieSettings",
         "//submodules/AsyncDisplayKit:AsyncDisplayKit",

@@ -2,6 +2,7 @@ import Foundation
 import UIKit
 import Display
 import SwiftSignalKit
+import Postbox
 import TelegramCore
 import TelegramPresentationData
 import TelegramUIPreferences
@@ -535,29 +536,29 @@ private func notificationsAndSoundsEntries(authorizationStatus: AccessType, warn
         entries.append(.accountsInfo(presentationData.theme, inAppSettings.displayNotificationsFromAllAccounts ? presentationData.strings.NotificationSettings_ShowNotificationsAllAccountsInfoOn : presentationData.strings.NotificationSettings_ShowNotificationsAllAccountsInfoOff))
     }
     
-    let title: String
-    let text: String
-    if case .unreachable = authorizationStatus {
-        title = presentationData.strings.Notifications_PermissionsUnreachableTitle
-        text = presentationData.strings.Notifications_PermissionsUnreachableText
-    } else {
-        title = presentationData.strings.Notifications_PermissionsTitle
-        text = presentationData.strings.Notifications_PermissionsText
-    }
-
-    switch (authorizationStatus, warningSuppressed) {
-        case (.denied, _):
-            entries.append(.permissionInfo(presentationData.theme, title, text, true))
-            entries.append(.permissionEnable(presentationData.theme, presentationData.strings.Notifications_PermissionsAllowInSettings))
-        case (.unreachable, false):
-            entries.append(.permissionInfo(presentationData.theme, title, text, false))
-            entries.append(.permissionEnable(presentationData.theme, presentationData.strings.Notifications_PermissionsOpenSettings))
-        case (.notDetermined, _):
-            entries.append(.permissionInfo(presentationData.theme, title, text, true))
-            entries.append(.permissionEnable(presentationData.theme, presentationData.strings.Notifications_PermissionsAllow))
-        default:
-            break
-    }
+        let title: String
+        let text: String
+        if case .unreachable = authorizationStatus {
+            title = presentationData.strings.Notifications_PermissionsUnreachableTitle
+            text = presentationData.strings.Notifications_PermissionsUnreachableText
+        } else {
+            title = presentationData.strings.Notifications_PermissionsTitle
+            text = presentationData.strings.Notifications_PermissionsText
+        }
+    
+        switch (authorizationStatus, warningSuppressed) {
+            case (.denied, _):
+                entries.append(.permissionInfo(presentationData.theme, title, text, true))
+                entries.append(.permissionEnable(presentationData.theme, presentationData.strings.Notifications_PermissionsAllowInSettings))
+            case (.unreachable, false):
+                entries.append(.permissionInfo(presentationData.theme, title, text, false))
+                entries.append(.permissionEnable(presentationData.theme, presentationData.strings.Notifications_PermissionsOpenSettings))
+            case (.notDetermined, _):
+                entries.append(.permissionInfo(presentationData.theme, title, text, true))
+                entries.append(.permissionEnable(presentationData.theme, presentationData.strings.Notifications_PermissionsAllow))
+            default:
+                break
+        }
     
     entries.append(.categoriesHeader(presentationData.theme, presentationData.strings.Notifications_MessageNotifications.uppercased()))
     entries.append(.privateChats(presentationData.theme, presentationData.strings.Notifications_PrivateChats, !exceptions.users.isEmpty ? presentationData.strings.Notifications_CategoryExceptions(Int32(exceptions.users.peerIds.count)) : "", globalSettings.privateChats.enabled ? presentationData.strings.Notifications_On : presentationData.strings.Notifications_Off))
@@ -845,9 +846,25 @@ public func notificationsAndSoundsController(context: AccountContext, exceptions
             }))
     }
     
-    let hasMoreThanOneAccount = context.sharedContext.activeAccountContexts
-    |> map { _, contexts, _ -> Bool in
-        return contexts.count > 1
+    // Novagram: count LOGGED-IN RECORDS, not live contexts. The fork's account working-set keeps only
+    // the primary account live, so activeAccountContexts is permanently 1 and this section - the only
+    // way to stop notifications from the other accounts - never rendered for multi-account users.
+    let hasMoreThanOneAccount = context.sharedContext.accountManager.accountRecords()
+    |> map { view -> Bool in
+        var count = 0
+        for record in view.records {
+            let isLoggedOut = record.attributes.contains(where: { attribute in
+                if case .loggedOut = attribute {
+                    return true
+                } else {
+                    return false
+                }
+            })
+            if !isLoggedOut {
+                count += 1
+            }
+        }
+        return count > 1
     }
     |> distinctUntilChanged
     

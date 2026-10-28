@@ -1,6 +1,7 @@
 #!/bin/bash
 
 set -e
+export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
 set -x
 
 ARCH="$1"

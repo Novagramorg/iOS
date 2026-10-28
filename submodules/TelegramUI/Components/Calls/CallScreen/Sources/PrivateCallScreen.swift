@@ -834,13 +834,15 @@ public final class PrivateCallScreen: OverlayMaskContainerView, AVPictureInPictu
                 }
                 self.flipCameraAction?()
             }), at: 0)
-        } else {
+        }
+        // Novagram: video calls keep the speaker button, right after flip camera (HOOKS.md).
+        do {
             buttons.insert(ButtonGroupView.Button(content: .speaker(audioOutput: params.state.audioOutput), isEnabled: !isTerminated && params.state.canSwitchAudioOutput, action: { [weak self] in
                 guard let self else {
                     return
                 }
                 self.speakerAction?()
-            }), at: 0)
+            }), at: self.activeLocalVideoSource != nil ? 1 : 0)
         }
         
         var notices: [ButtonGroupView.Notice] = []

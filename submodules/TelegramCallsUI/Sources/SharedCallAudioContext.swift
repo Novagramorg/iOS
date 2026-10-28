@@ -35,6 +35,8 @@ public final class SharedCallAudioContext {
     private var audioOutputStateValue: ([AudioSessionOutput], AudioSessionOutput?) = ([], nil)
     public private(set) var currentAudioOutputValue: AudioSessionOutput = .builtin
     private var didSetCurrentAudioOutputValue: Bool = false
+    // Novagram: the route the session itself last reported (see setCurrentAudioOutput, HOOKS.md).
+    private var sessionReportedAudioOutput: AudioSessionOutput?
     var audioOutputState: Signal<([AudioSessionOutput], AudioSessionOutput?), NoError> {
         return self.audioOutputStatePromise.get()
     }
@@ -243,6 +245,7 @@ public final class SharedCallAudioContext {
                     return
                 }
                 self.audioOutputStateValue = (availableOutputs, currentOutput)
+                self.sessionReportedAudioOutput = currentOutput
                 if let currentOutput = currentOutput, self.acceptReportedAudioOutput(currentOutput) {
                     self.currentAudioOutputValue = currentOutput
                     self.didSetCurrentAudioOutputValue = true
@@ -360,7 +363,8 @@ public final class SharedCallAudioContext {
         self.initialSetupTimer = nil
         self.isInitialOutputPending = false
         
-        guard self.currentAudioOutputValue != output else {
+        // Novagram: still apply while the session reports another route, or video calls stay on the earpiece (HOOKS.md).
+        guard self.currentAudioOutputValue != output || (self.sessionReportedAudioOutput.map({ $0 != output }) ?? false) else {
             return
         }
         self.currentAudioOutputValue = output

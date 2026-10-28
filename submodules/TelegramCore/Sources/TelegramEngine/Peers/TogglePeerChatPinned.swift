@@ -49,11 +49,19 @@ func _internal_toggleItemPinned(postbox: Postbox, accountPeerId: PeerId, locatio
                 additionalCount = 1
             }
             
-            let limitCount: Int
+            var limitCount: Int
             if case .root = groupId {
                 limitCount = Int(userLimitsConfiguration.maxPinnedChatCount)
             } else {
                 limitCount = Int(userLimitsConfiguration.maxArchivedPinnedChatCount)
+            }
+            // Novagram: unlimited pins. Raising the gate is only half of it — the pins past the
+            // server's limit have to be remembered separately, or the next sync overwrites this
+            // list with the server's shorter one and they disappear (see NovagramLocalPins).
+            let novagramServerLimit = limitCount
+            let novagramUnlimitedPins = NovagramLocalPins.isEnabled
+            if novagramUnlimitedPins {
+                limitCount = 1000
             }
             
             let count = sameKind.count + additionalCount
@@ -64,6 +72,22 @@ func _internal_toggleItemPinned(postbox: Postbox, accountPeerId: PeerId, locatio
                     itemIds.remove(at: index)
                 } else {
                     itemIds.insert(itemId, at: 0)
+                }
+                // Novagram: the list is newest-first and the server keeps its head, so whatever sits
+                // past the server's limit is the device-local tail. Record it before the sync runs.
+                if novagramUnlimitedPins {
+                    var overflow: [PeerId] = []
+                    if itemIds.count > novagramServerLimit {
+                        for item in itemIds[novagramServerLimit...] {
+                            if case let .peer(peerId) = item {
+                                overflow.append(peerId)
+                            }
+                        }
+                    }
+                    NovagramLocalPins.setOverflowPeerIds(overflow, accountPeerId: accountPeerId, groupId: groupId)
+                } else if case let .peer(peerId) = itemId {
+                    // Toggle is off: keep the store from holding an id the user just unpinned.
+                    NovagramLocalPins.removePeerId(peerId, accountPeerId: accountPeerId, groupId: groupId)
                 }
                 addSynchronizePinnedChatsOperation(transaction: transaction, groupId: groupId)
                 transaction.setPinnedItemIds(groupId: groupId, itemIds: itemIds)

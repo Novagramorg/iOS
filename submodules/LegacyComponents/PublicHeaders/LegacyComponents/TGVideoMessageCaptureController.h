@@ -3,6 +3,7 @@
 #import <LegacyComponents/LegacyComponentsContext.h>
 #import <LegacyComponents/TGVideoMessageCaptureController.h>
 #import <LegacyComponents/TGLiveUploadInterface.h>
+#import <AVFoundation/AVFoundation.h>
 
 @class TGVideoEditAdjustments;
 @class TGModernConversationInputMicPallete;
@@ -37,6 +38,7 @@
     
 - (void)buttonInteractionUpdate:(CGPoint)value;
 - (void)setLocked;
+- (void)setCameraPosition:(AVCaptureDevicePosition)position;
 
 - (CGRect)frameForSendButton;
 

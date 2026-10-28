@@ -322,21 +322,22 @@ filegroup(
 )
 
 alternate_icon_folders = [
-    "BlackIcon",
-    "BlackClassicIcon",
-    "BlackFilledIcon",
-    "BlueIcon",
-    "BlueClassicIcon",
-    "BlueFilledIcon",
-    "WhiteFilledIcon",
-    "New1",
-    "New2",
-    "Premium",
-    "PremiumBlack",
-    "PremiumTurbo",
+    "AppIconLLCIcon",
+    "NovaBlueIcon",
+    "NovaTealIcon",
+    "NovaPurpleIcon",
+    "NovaPinkIcon",
+    "NovaOrangeIcon",
+    "NovaBlackIcon",
+    "NovaRedIcon",
 ]
 
-composer_icon_folders = ["Telegram"]
+composer_icon_folders = []
+
+filegroup(
+    name = "AppIcon",
+    srcs = glob(["Telegram-iOS/NovagramAppIcon.xcassets/AppIcon.appiconset/**"]),
+)
 
 [
     filegroup(
@@ -361,6 +362,11 @@ filegroup(
     srcs = glob([
         "Telegram-iOS/Base.lproj/LaunchScreen.xib",
     ]),
+)
+
+filegroup(
+    name = "PrivacyManifest",
+    srcs = ["Telegram-iOS/PrivacyInfo.xcprivacy"],
 )
 
 objc_library(
@@ -437,8 +443,6 @@ plist_fragment(
             <array>
                 <string>tg</string>
                 <string>tonsite</string>
-                <string>ton</string>
-                <string>tc</string>
             </array>
         </dict>
     </array>
@@ -495,11 +499,13 @@ official_unrestricted_voip_fragment = """
 """
 unrestricted_voip_fragment = official_unrestricted_voip_fragment if telegram_bundle_id in official_bundle_ids else ""
 
+# Novagram: Novagram holds the iOS 14+ CarPlay Communication entitlement, not Telegram's older
+# carplay-messaging. The simulator bundle gets the same key so CarPlay tests match the App Store build.
 official_carplay_fragment = """
-<key>com.apple.developer.carplay-messaging</key>
+<key>com.apple.developer.carplay-communication</key>
 <true/>
 """
-carplay_fragment = official_carplay_fragment if telegram_bundle_id in official_bundle_ids else ""
+carplay_fragment = official_carplay_fragment if (telegram_bundle_id in official_bundle_ids or telegram_bundle_id == "uz.fenixuz.app") else ""
 
 icloud_fragment = "" if not telegram_enable_icloud else """
 <key>com.apple.developer.icloud-services</key>
@@ -558,7 +564,7 @@ official_communication_notifications_fragment = """
 <key>com.apple.developer.usernotifications.communication</key>
 <true/>
 """
-communication_notifications_fragment = official_communication_notifications_fragment if telegram_bundle_id in official_bundle_ids else ""
+communication_notifications_fragment = official_communication_notifications_fragment if (telegram_bundle_id in official_bundle_ids or telegram_bundle_id == "uz.fenixuz.app") else ""
 
 official_notification_filtering_fragment = """
 <key>com.apple.developer.usernotifications.filtering</key>
@@ -636,7 +642,7 @@ plist_fragment(
     template =
     """
     <key>CFBundleDisplayName</key>
-    <string>Telegram</string>
+    <string>Novagram</string>
     """
 )
 
@@ -975,7 +981,7 @@ plist_fragment(
     <key>CFBundleIdentifier</key>
     <string>{telegram_bundle_id}.Share</string>
     <key>CFBundleName</key>
-    <string>Telegram</string>
+    <string>Novagram</string>
     <key>CFBundlePackageType</key>
     <string>XPC!</string>
     <key>NSExtension</key>
@@ -1023,6 +1029,10 @@ swift_library(
     ]),
     copts = [
         "-warnings-as-errors",
+        # Novagram: min iOS 15 surfaces iOS-14/15 deprecations here; the APIs still work, so keep
+        # every other warning fatal and downgrade only this group. Must follow -warnings-as-errors.
+        "-Wwarning",
+        "DeprecatedDeclaration",
     ],
     deps = [
         "//submodules/TelegramUI",
@@ -1068,7 +1078,7 @@ plist_fragment(
     <key>CFBundleIdentifier</key>
     <string>{telegram_bundle_id}.NotificationContent</string>
     <key>CFBundleName</key>
-    <string>Telegram</string>
+    <string>Novagram</string>
     <key>CFBundlePackageType</key>
     <string>XPC!</string>
     <key>NSExtension</key>
@@ -1111,6 +1121,10 @@ swift_library(
     ]),
     copts = [
         "-warnings-as-errors",
+        # Novagram: min iOS 15 surfaces iOS-14/15 deprecations here; the APIs still work, so keep
+        # every other warning fatal and downgrade only this group. Must follow -warnings-as-errors.
+        "-Wwarning",
+        "DeprecatedDeclaration",
     ],
     deps = [
         "//submodules/TelegramUI:TelegramUI",
@@ -1176,7 +1190,7 @@ plist_fragment(
     <key>CFBundleIdentifier</key>
     <string>{telegram_bundle_id}.Widget</string>
     <key>CFBundleName</key>
-    <string>Telegram</string>
+    <string>Novagram</string>
     <key>CFBundlePackageType</key>
     <string>XPC!</string>
     <key>NSExtension</key>
@@ -1207,6 +1221,10 @@ swift_library(
     ]),
     copts = [
         "-warnings-as-errors",
+        # Novagram: min iOS 15 surfaces iOS-14/15 deprecations here; the APIs still work, so keep
+        # every other warning fatal and downgrade only this group. Must follow -warnings-as-errors.
+        "-Wwarning",
+        "DeprecatedDeclaration",
     ],
     data = [
         ":WidgetAssets",
@@ -1230,7 +1248,10 @@ genrule(
     cmd_bash =
 """
     name=WidgetExtension.appex
-    cat $(location PatchMinOSVersion.source.sh) | sed -e "s/<<<MIN_OS_VERSION>>>/14\\.0/g" | sed -e "s/<<<NAME>>>/$$name/g" > $(location SetMinOsVersionWidgetExtension.sh)
+    # Novagram: was 14.0 (upstream pinned it there because WidgetKit needs iOS 14 while their app
+    # minimum was lower). Our app minimum is now 15.0, so a 14.0 widget is both meaningless — an
+    # extension never runs below its host app — and a bundle that could trip Apple's 90068 check.
+    cat $(location PatchMinOSVersion.source.sh) | sed -e "s/<<<MIN_OS_VERSION>>>/15\\.0/g" | sed -e "s/<<<NAME>>>/$$name/g" > $(location SetMinOsVersionWidgetExtension.sh)
 """,
     srcs = [
         "PatchMinOSVersion.source.sh",
@@ -1294,7 +1315,7 @@ plist_fragment(
     <key>CFBundleIdentifier</key>
     <string>{telegram_bundle_id}.SiriIntents</string>
     <key>CFBundleName</key>
-    <string>Telegram</string>
+    <string>Novagram</string>
     <key>CFBundlePackageType</key>
     <string>XPC!</string>
     <key>NSExtension</key>
@@ -1347,6 +1368,14 @@ swift_library(
     ]),
     copts = [
         "-warnings-as-errors",
+        # Novagram: with minimum_os_version at 15.0 the iOS-15 deprecations in this module become
+        # visible, and -warnings-as-errors turns them into build failures. The APIs still behave
+        # exactly as before (e.g. adjustsImageWhenHighlighted is only ignored when the button uses
+        # UIButton.Configuration, which this code does not), so downgrade just that diagnostic
+        # group back to a warning instead of rewriting working UI code. MUST come after
+        # -warnings-as-errors — Swift applies these in order and the later flag wins.
+        "-Wwarning",
+        "DeprecatedDeclaration",
     ],
     data = glob([
         "SiriIntents/*.lproj/Intents.intentdefinition"
@@ -1458,7 +1487,7 @@ plist_fragment(
     <key>CFBundleIdentifier</key>
     <string>{telegram_bundle_id}.BroadcastUpload</string>
     <key>CFBundleName</key>
-    <string>Telegram</string>
+    <string>Novagram</string>
     <key>CFBundlePackageType</key>
     <string>XPC!</string>
     <key>NSExtension</key>
@@ -1483,6 +1512,10 @@ swift_library(
     ]),
     copts = [
         "-warnings-as-errors",
+        # Novagram: min iOS 15 surfaces iOS-14/15 deprecations here; the APIs still work, so keep
+        # every other warning fatal and downgrade only this group. Must follow -warnings-as-errors.
+        "-Wwarning",
+        "DeprecatedDeclaration",
     ],
     deps = [
         "//submodules/TelegramUI:TelegramUI",
@@ -1552,7 +1585,7 @@ plist_fragment(
     <key>CFBundleIdentifier</key>
     <string>{telegram_bundle_id}.NotificationService</string>
     <key>CFBundleName</key>
-    <string>Telegram</string>
+    <string>Novagram</string>
     <key>CFBundlePackageType</key>
     <string>XPC!</string>
     <key>NSExtension</key>
@@ -1621,11 +1654,11 @@ plist_fragment(
     <key>CFBundleDevelopmentRegion</key>
     <string>en</string>
     <key>CFBundleDisplayName</key>
-    <string>Telegram</string>
+    <string>Novagram</string>
     <key>CFBundleIdentifier</key>
     <string>{telegram_bundle_id}</string>
     <key>CFBundleName</key>
-    <string>Telegram</string>
+    <string>Novagram</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleSignature</key>
@@ -1686,10 +1719,12 @@ plist_fragment(
     <string>Telegram stores your contacts heavily encrypted in the cloud to let you connect with your friends across all your devices.</string>
     <key>NSFaceIDUsageDescription</key>
     <string>You can use Face ID to unlock the app.</string>
+    <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+    <string>Novagram uses your location only when you actively share it with a chat. We never track you in the background.</string>
     <key>NSLocationAlwaysUsageDescription</key>
-    <string>When you send your location to your friends, Telegram needs access to show them a map. You also need this to send locations from an Apple Watch.</string>
+    <string>When you send your location to your friends, Novagram needs access to show them a map. You also need this to send locations from an Apple Watch.</string>
     <key>NSLocationWhenInUseUsageDescription</key>
-    <string>When you send your location to your friends, Telegram needs access to show them a map.</string>
+    <string>When you send your location to your friends, Novagram needs access to show them a map.</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>We need this so that you can record and share voice messages and videos with sound.</string>
     <key>NSMotionUsageDescription</key>
@@ -1705,6 +1740,7 @@ plist_fragment(
     <key>NSUserActivityTypes</key>
     <array>
         <string>INSendMessageIntent</string>
+        <string>INStartCallIntent</string>
         <string>RemindAboutChatIntent</string>
     </array>
     <key>UIAppFonts</key>
@@ -1830,6 +1866,7 @@ apple_prebuilt_watchos_application(
 
 ios_application(
     name = "Telegram",
+    bundle_name = "Novagram",
     bundle_id = "{telegram_bundle_id}".format(
         telegram_bundle_id = telegram_bundle_id,
     ),
@@ -1847,12 +1884,13 @@ ios_application(
         ":RequiredDeviceCapabilitiesPlist",
         ":UrlTypesInfoPlist",
     ],
-    app_icons = [ ":{}_icon".format(name) for name in composer_icon_folders ],
+    app_icons = [":AppIcon"],
     alternate_icons = [
         ":{}".format(name) for name in alternate_icon_folders
     ],
     resources = [
         ":LaunchScreen",
+        ":PrivacyManifest",
         #":DefaultAppIcon",
     ],
     frameworks = [

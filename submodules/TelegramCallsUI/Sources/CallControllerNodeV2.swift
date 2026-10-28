@@ -83,6 +83,8 @@ final class CallControllerNodeV2: ViewControllerTracingNode, CallControllerNodeP
     private var isMicrophoneMutedDisposable: Disposable?
     private var audioLevelDisposable: Disposable?
     private var audioOutputCheckTimer: Foundation.Timer?
+    // Novagram: the output the user picked during this call (HOOKS.md).
+    private var userChosenAudioOutput: AudioSessionOutput?
     
     private var applicationInForegroundDisposable: Disposable?
     
@@ -622,6 +624,10 @@ final class CallControllerNodeV2: ViewControllerTracingNode, CallControllerNodeP
         }
     }
     
+    func noteAudioOutputChosenByUser(_ output: AudioSessionOutput) {
+        self.userChosenAudioOutput = output
+    }
+    
     private func setupAudioOutputForVideoIfNeeded() {
         guard let callScreenState = self.callScreenState, let currentAudioOutput = self.currentAudioOutput else {
             return
@@ -633,7 +639,10 @@ final class CallControllerNodeV2: ViewControllerTracingNode, CallControllerNodeP
             case let .port(port) where port.type == .bluetooth || port.type == .wired:
                 break
             default:
-                self.setCurrentAudioOutput?(.speaker)
+                // Novagram: an earpiece the user picked during the video call stays (HOOKS.md).
+                if self.userChosenAudioOutput == nil || self.userChosenAudioOutput == .speaker {
+                    self.setCurrentAudioOutput?(.speaker)
+                }
             }
             
             if self.audioOutputCheckTimer == nil {

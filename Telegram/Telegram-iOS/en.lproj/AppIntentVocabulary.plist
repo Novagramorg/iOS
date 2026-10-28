@@ -9,7 +9,17 @@
 			<string>INSendMessageIntent</string>
 			<key>IntentExamples</key>
 			<array>
-				<string>Send a Telegram message to Alex saying I&apos;ll be there in 10 minutes</string>
+				<string>Send a Novagram message to Alex saying I&apos;ll be there in 10 minutes</string>
+				<string>Send a message using Novagram</string>
+			</array>
+		</dict>
+		<dict>
+			<key>IntentName</key>
+			<string>INSearchForMessagesIntent</string>
+			<key>IntentExamples</key>
+			<array>
+				<string>Read my Novagram messages</string>
+				<string>Read new messages in Novagram</string>
 			</array>
 		</dict>
 	</array>

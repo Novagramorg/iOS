@@ -467,7 +467,7 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					F8E880AF01A492CCA4C21162 = {
-						DevelopmentTeam = C67CF9S4VU;
+						DevelopmentTeam = ZDBP5RSRZF;
 					};
 				};
 			};
@@ -631,7 +631,7 @@
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_IDENTITY = "";
-				DEVELOPMENT_TEAM = C67CF9S4VU;
+				DEVELOPMENT_TEAM = ZDBP5RSRZF;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "tgwatch Watch App/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
@@ -653,7 +653,7 @@
 				CODE_SIGN_IDENTITY = "";
 				DEAD_CODE_STRIPPING = YES;
 				DEPLOYMENT_POSTPROCESSING = YES;
-				DEVELOPMENT_TEAM = C67CF9S4VU;
+				DEVELOPMENT_TEAM = ZDBP5RSRZF;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "tgwatch Watch App/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";

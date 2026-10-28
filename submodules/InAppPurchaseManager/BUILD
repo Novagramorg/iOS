@@ -10,11 +10,9 @@ swift_library(
         "-warnings-as-errors",
     ],
     deps = [
+        "//submodules/Novagram/AppStoreIAP:NovagramAppStoreIAP",
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
         "//submodules/TelegramCore:TelegramCore",
-        "//submodules/TelegramStringFormatting:TelegramStringFormatting",
-        "//submodules/TelegramUIPreferences:TelegramUIPreferences",
-        "//submodules/PersistentStringHash:PersistentStringHash",
     ],
     visibility = [
         "//visibility:public",

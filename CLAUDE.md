@@ -1,25 +1,86 @@
 # CLAUDE.md
 
-This file provides guidance to AI assistants when working with code in this repository.
+This file provides guidance to AI assistants working with the **Novagram fork of Telegram-iOS** (internal codename **Fenixuz** until 2026-10-27; the code now says **Novagram** too).
 
-## Build
+## Novagram fork — context
 
-The app is built using Bazel via the `Make.py` wrapper. There is no selective per-module build — the only supported invocation builds the full `Telegram/Telegram` target.
+- Brand: **Novagram** — the user-visible app name + icon since 2026-06-20 (previously "Fenixuz" / display name "Fenix Uz"). Since 2026-10-27 the code says **Novagram** as well: module paths (`submodules/Novagram/`), Bazel targets and file/type names (`NovagramL10n`, `NovagramDemoCodeFetcher`, `NovagramMessenger`, `NovagramSponsored`, …). The brand is final (~300K users): do not add new `Fenix` / `Fenixuz` / `ProMessager` names. **Persisted identifiers keep their old spelling and must NEVER be renamed**: the bundle id `uz.fenixuz.app` and its extension ids, App Group and Keychain groups, the Keychain services `uz.fenixuz.app.ChatLock` / `uz.fenixuz.app.Analytics`, the `pro_messager` UserDefaults suite and every `fenix_*` / `fenixuz_*` key, `uz.fenixuz.theme`, `fenixuz.unreadReminder`, the provisioning profile files `Fenixuz*.mobileprovision`. Renaming one wipes users' settings or PINs, counts devices twice in statistics or breaks App Store updates (full list: `submodules/Novagram/HOOKS.md` → "Fenixuz → Novagram rename"). Brand accent color: Novagram blue `#0A9BF5`. Organization: **Vipads MCHJ**, Apple Team ID `ZDBP5RSRZF`, Apple ID `vipadsllc@gmail.com`.
+- **Apple team rule** — every Apple reference (certs, App Store Connect, provisioning profiles, App Groups, keychain groups, `DEVELOPMENT_TEAM` in pbxproj/xcconfig) MUST point to Team ID `ZDBP5RSRZF` (Vipads MCHJ). Never a personal team. Development certs may display the individual developer's name in their label ("Apple Development: Azimjon Abdurasulov") because Apple labels Dev certs by Apple ID owner — but the **Team ID** under which they are issued is always `ZDBP5RSRZF`.
+- App Store bundle: `uz.fenixuz.app` (kept in `build-system/appstore-configuration.json` for release builds).
+- Simulator/dev bundle: `ph.telegra.Telegraph` (kept in `build-system/my-config.json`, fake codesigning).
+- All Novagram-specific code lives in `submodules/Novagram/<Feature>/` modules. Telegram source files contain at most 1–3 line `import NovagramX` hooks. **Never** add Novagram feature code into Telegram-owned files (TelegramUI/Sources, ChatListUI/Sources, SettingsUI/Sources, AuthorizationUI/Sources, etc.) — always create or extend a Novagram submodule.
+- **Every hook in a Telegram-owned file MUST be documented in `submodules/Novagram/HOOKS.md`.** That file is the source-of-truth index used by the AI on every `git pull upstream` to re-apply hooks. If you touch a Telegram-owned file, you also touch HOOKS.md in the same commit.
 
-**Command:**
+### Upstream-pull conflict policy
 
-```sh
-python3 build-system/Make/Make.py --overrideXcodeVersion \
- --cacheDir ~/telegram-bazel-cache \
- build \
- --configurationPath build-system/appstore-configuration.json \
- --gitCodesigningRepository git@gitlab.com:peter-iakovlev/fastlanematch.git \
- --gitCodesigningType development --gitCodesigningUseCurrent --buildNumber=1 --configuration=debug_sim_arm64
+On every `git pull upstream master`:
+
+1. **Checkpoint first** — `git tag pre-pull-checkpoint-$(date +%Y%m%d-%H%M)` + `git branch backup-before-merge-$(date +%Y%m%d)` (or run the equivalent helper script). These let us roll back if the merge goes wrong.
+2. `git pull upstream master --no-rebase` — surface conflicts, do not silently absorb them.
+3. **Novagram hooks always win** — the lines themselves are non-negotiable. Upstream code wins for everything around them.
+4. **AI conflict resolution is manual, one file at a time.** Open `submodules/Novagram/HOOKS.md`, locate the hook section for the conflicting file, ask the AI assistant to re-apply that hook block at the new line position based on the upstream surroundings. Do NOT auto-merge / auto-accept either side.
+5. **Build before deleting checkpoints** — `./run.sh` must succeed, simulator must launch, demo-login auto-fill must still work. Only then drop the backup tags.
+6. **Existing safety nets:** `backup-before-merge` branch + `pre-pull-checkpoint-*` tags are kept as rollback anchors.
+
+If a hook is silently lost during a merge, the consequence is silent feature-breakage (demo auto-fill stops, custom Settings panel disappears, etc.) — this is why HOOKS.md exists and why pulls are always AI-assisted.
+
+Active Novagram modules (as of 2026-05-08):
+
+```
+submodules/Novagram/
+├── ChatLock/          (NovagramChatLock)         — Pincode + manager
+├── EditedHistory/     (NovagramEditedHistory)    — Edited message history viewer
+├── ForeignUserBlock/  (NovagramForeignUserBlock) — Country code helpers
+├── Messenger/         (NovagramMessenger)       — Novagram Settings UI (5 controllers)
+└── SpeechToText/      (NovagramSpeechToText)     — STT manager
 ```
 
-Add `--continueOnError` after `build` (forwards to bazel's `--keep_going`) when verifying changes that may surface errors in many files at once — it lets the full set of errors land in one pass instead of stopping at the first failing target.
+## Build — ALWAYS use `./run.sh`
 
-The build needs `TELEGRAM_CODESIGNING_GIT_PASSWORD` in the environment. It is set in `~/.zshrc` but Claude Code's bash tool does NOT source shell config by default. Prefix build commands with `source ~/.zshrc 2>/dev/null;` to pick it up.
+The canonical simulator build is **`./run.sh`** (Bazel-based, no Xcode UI). It does config → build → install → launch in one step, uses fake codesigning + `disableProvisioningProfiles`, auto-tunes resources to the host hardware (M4 Pro 24GB → 10 jobs / ~18GB RAM), enables `--keep_going`, `--disk_cache`, `--repository_cache`, and the right Swift module-cache features.
+
+**Always run builds via `./run.sh`** — do NOT invoke `Make.py` directly with `appstore-configuration.json` (that path needs the gitlab codesigning repo + `TELEGRAM_CODESIGNING_GIT_PASSWORD` env var, which we don't use for Novagram dev). Calling `Make.py` directly also bypasses our resource auto-tuning and hardcoded simulator/install steps.
+
+```sh
+./run.sh                                # default: iPhone 17 Pro Max
+SIM_NAME="iPhone 16 Pro" ./run.sh       # override target simulator
+```
+
+The Make.py + appstore-configuration.json + gitlab match path is reserved for the actual App Store release flow only (Phase 3) and must not be used for day-to-day iteration.
+
+### Background-friendly invocation (for AI assistants)
+
+Each iteration writes to `/tmp/run-sh-output.log` and ends with the line `Build muvaffaqiyatli tugadi` on success or `ERROR: Build did NOT complete successfully` on failure. The expected pattern is:
+
+```sh
+rm -f /tmp/run-sh-output.log && nohup bash run.sh > /tmp/run-sh-output.log 2>&1 &
+disown 2>/dev/null
+
+# then poll with:
+until grep -qE "Build muvaffaqiyatli|ERROR: Build did NOT" /tmp/run-sh-output.log; do sleep 5; done
+tail -25 /tmp/run-sh-output.log
+```
+
+First clean build ≈ 10–12 min, cache-warm incremental ≈ 1–3 min, single-file edit ≈ 30–90 s.
+
+### Cache limits and the simulator `.app` (Novagram, 2026-10-13)
+
+Measured 2026-10-13: a fresh output base with a warm disk cache builds in ~4 min, a no-op `run.sh` takes ~5 s, and a one-line change in a Novagram module takes ~38 s, most of it recompiling PeerInfoScreen and TelegramUI, which import it.
+
+- **Disk cache limit.** `run.sh`, `publish.sh` and `release.sh` cap `~/telegram-bazel-cache/disk` with `--experimental_disk_cache_gc_max_size=20G` and `--experimental_disk_cache_gc_max_age=14d`.
+  - Bazel trims the cache in the background about 5 min after a build, while its server is idle.
+  - Using an entry refreshes its age (measured), so only entries unused for 14 days expire.
+  - Never put these flags in `.bazelrc`; the comment there explains why.
+- **Output base limit.** Once a day `run.sh` runs `bazel clean` when the checkout's output base is over 30GB. Bazel never prunes old configurations on its own; the output base had reached 35GB.
+- **Simulator builds produce no `.ipa`.** They pass `--define=apple.experimental.tree_artifact_outputs=1`, so the output is the folder `bazel-bin/Telegram/Telegram_archive-root/Payload/Novagram.app`, which Bazel keeps current. Use that folder as `SRC` in the recipe below instead of unzipping an `.ipa`.
+- **Device builds still produce `Telegram.ipa`, and `run.sh` unzips it.** Without tree artifacts, `Telegram_archive-root/` is a stale scratch folder (see below). `run.sh` used to install from it and put a previous build on the simulator after a revert.
+
+## Known simulator quirks
+
+- **iOS 26.x simulator emoji font is broken** — `AppleColorEmoji.ttc` is missing. Color emojis render as `[?]` boxes (e.g. country flag picker, Telegram default monogram avatars, the Ghost button before we replaced its emoji with a bundled icon). Verify any emoji-bearing UI on a real device or an iOS 18 simulator before reporting "this is broken." For new Novagram UI, prefer SF Symbols or bundled `Item List/Icons/*` assets over color emoji in titles/buttons.
+- **Country flag rendering** in the login screen uses regional-indicator emoji and inherits the same `[?]` issue on iOS 26 simulators. It's correct on real iPhone.
+
+## Code Style Guidelines
 
 **Running tests.** `Make.py test` runs Bazel test targets (same config + codesigning as `build`, forced `debug_sim_arm64`). It accepts `--target <label>` (added 2026-06-19; default `Tests/AllTests`) so a single `ios_unit_test` can run in isolation, e.g.:
 
@@ -666,9 +727,9 @@ derive from the web-page media rather than the URL entity. Tests belong in
 
 A gradual migration is underway to eliminate direct `import Postbox` from consumer submodules in favor of `TelegramEngine`.
 
-**Historical record:** Wave-by-wave outcomes, the running tally of Postbox-free modules, the full wave-selection guidance, and the `TelegramEngine.Resources` facade inventory (also authoritatively defined in `submodules/TelegramCore/Sources/TelegramEngine/Resources/TelegramEngineResources.swift`) live in [`docs/superpowers/postbox-refactor-log.md`](docs/superpowers/postbox-refactor-log.md). Read that file when you need wave-specific context, a full worked example of a pattern, or the history of a particular module's migration.
+**Historical record:** Wave-by-wave outcomes, the running tally of Postbox-free modules, and full verbose forms of the guidance subsections below live in [`docs/superpowers/postbox-refactor-log.md`](docs/superpowers/postbox-refactor-log.md). Read that file when you need wave-specific context, a full worked example of a pattern, or the history of a particular module's migration.
 
-See the log for per-wave detail; the current wave count and the list of still-open migration opportunities live in the `project_postbox_refactor_next_wave.md` memory file.
+Waves landed so far (as of 2026-04-24): 45 waves plus standalone cleanups. See the log file for per-wave detail; the list of still-open migration opportunities lives in the `project_postbox_refactor_next_wave.md` memory file.
 
 ### Rules that apply to every wave
 
@@ -679,7 +740,6 @@ See the log for per-wave detail; the current wave count and the list of still-op
 5. **Abandonment protocol:** if a module can only be refactored by violating rule 2 or by editing a module outside the current wave's list, mark the task Abandoned with a recorded reason. Do NOT substitute a new module mid-wave.
 6. Full project build per module. No unit tests exist in this project.
 7. **TelegramCore never imports UIKit/Display.** `TelegramCore` is shared with the Telegram-Mac codebase; its Bazel `deps` and source files must not reference UIKit, Display, or any Apple-UI framework. UIKit-needing helpers (image scaling, rendering, etc.) stay in consumer-side submodules.
-8. **Never substitute Postbox protocols (`Media`, `Peer`, `Message`) with `Any` / `AnyObject`** in code that previously used them. Type erasure throws away the domain semantics that the next reader expects. Use the matching engine wrapper (`EngineMedia`, `EnginePeer`, `EngineMessage`) — extending it as needed (e.g. add a missing case-init or convenience). If neither typealias nor wrapper covers the use site, restore the original Postbox import + type for now and flag the case for a future facade. Existing `Any`/`AnyObject` parameters predating the refactor are not in scope for this rule.
 
 ### Engine typealias cheat sheet (existing aliases)
 
@@ -702,31 +762,7 @@ AdaptedPostboxDecoder → EngineAdaptedPostboxDecoder (added 2026-04)
 ItemCollectionId    → EngineItemCollectionId       (added 2026-04-20)
 FetchResourceSourceType → EngineFetchResourceSourceType (added 2026-04-20)
 FetchResourceError  → EngineFetchResourceError     (added 2026-04-20)
-StoryId             → EngineStoryId                (added 2026-05-02)
-ChatListIndex       → EngineChatListIndex          (added 2026-05-03)
-TempBoxFile         → EngineTempBoxFile            (added 2026-05-03)
-ItemCollectionItemIndex → EngineItemCollectionItemIndex (added 2026-05-03)
-ItemCollectionViewEntryIndex → EngineItemCollectionViewEntryIndex (added 2026-05-03)
-ValueBoxEncryptionParameters → EngineValueBoxEncryptionParameters (added 2026-05-03)
-MessageAndThreadId  → EngineMessageAndThreadId      (added 2026-05-03)
-PeerStoryStats      → EnginePeerStoryStats          (added 2026-05-03)
-MessageHistoryAnchorIndex → EngineMessageHistoryAnchorIndex (added 2026-05-03)
-ChatListTotalUnreadStateCategory → EngineChatListTotalUnreadStateCategory (added 2026-05-03)
-ChatListTotalUnreadStateStats → EngineChatListTotalUnreadStateStats (added 2026-05-03)
-PeerSummaryCounterTags → EnginePeerSummaryCounterTags (added 2026-05-03)
-ChatListTotalUnreadState → EngineChatListTotalUnreadState (added 2026-05-04)
-ItemCacheEntryId    → EngineItemCacheEntryId        (added 2026-05-04)
-HashFunctions       → EngineHashFunctions           (added 2026-05-04 wave 251)
-CachedMediaResourceRepresentationResult → EngineCachedMediaResourceRepresentationResult (added 2026-05-04 wave 265)
-MediaResourceDataFetchResult → EngineMediaResourceDataFetchResult (added 2026-05-04 wave 266)
-MediaResourceDataFetchError → EngineMediaResourceDataFetchError (added 2026-05-04 wave 266)
-MediaResourceStatus → EngineMediaResourceStatus     (added 2026-05-04 wave 272)
 ```
-
-**Free-function thin forwarders in TelegramCore** (rule 3 allows):
-- `engineFileSize(_ path:, useTotalFileAllocatedSize: Bool = false)` — forwards to Postbox's `fileSize(...)` (added 2026-05-04 wave 268)
-
-**TelegramEngineUnauthorized.resources facade**: `UnauthorizedResources.storeResourceData(id: EngineMediaResource.Id, data:, synchronous:)` — bridges to `account.postbox.mediaBox.storeResourceData` (added 2026-05-04 wave 271)
 
 For the `MediaResource` Postbox protocol, prefer the TelegramCore subtype `TelegramMediaResource` when the consumer's usage allows (note: `EngineMediaResource` is a wrapper **class**, not a typealias, so it is not interchangeable with the protocol).
 
@@ -745,9 +781,9 @@ Do **not** add opt-in `EngineMediaResource` overloads alongside raw-`MediaResour
 
 For consumer modules, prefer `EngineMediaResource` as the type in properties, locals, generic arguments and function parameters when the usage is a pure type reference. Do **not** try to use `EngineMediaResource` where a class must conform to `TelegramMediaResource` (Postbox protocol) or override `isEqual(to: MediaResource)` — those remain `import Postbox`.
 
-## tgcalls Testbench
+### Wave-selection guidance
 
-This repo includes a tgcalls testbench (CLI tool, Go/Pion SFU, Docker build) layered on top of the iOS source. All testbench code, build instructions, and architecture docs live inside the tgcalls submodule:
+Distilled lessons from waves 1–26. Each bullet below has a full-form counterpart in `postbox-refactor-log.md` (same subsection heading) with backstory, example scripts, and per-wave numbers.
 
 - `submodules/TgVoipWebrtc/tgcalls/CLAUDE.md` — top-level testbench overview, build/run commands
 - `submodules/TgVoipWebrtc/tgcalls/tools/cli/CLAUDE.md` — CLI test tool architecture
@@ -755,6 +791,6 @@ This repo includes a tgcalls testbench (CLI tool, Go/Pion SFU, Docker build) lay
 - `submodules/TgVoipWebrtc/CLAUDE.md` — tgcalls library internals + macOS/Linux build patches
 - `submodules/TgVoipWebrtc/tgcalls/tgcalls/v2wasm/CLAUDE.md` — pump-boundary call core: `InstanceV2ReferenceImpl`'s control logic behind a C ABI (since Phase 2.5 a PeerConnection-projection contract: SDP munge point, transceiver/parameter/ICE-restart commands, rich stats, and since Phase 2.6 core-owned signaling framing, N named data channels, and audio/ICE config knobs), runnable natively or as a WASM module in the vendored WAMR interpreter. **Ships as call versions `18.0.0` (native core) and `19.0.0` (the same source as wasm embedded in the binary)** so a server-side A/B can measure the substrate alone; the client advertises both and the server reconciles. `customParameters.wasm_core_path` and the filesystem module loader are compiled out of the app (`TGCALLS_ALLOW_EXTERNAL_WASM_CORE`, CLI target only) — never add that define to the `TgVoipWebrtc` objc_library. A second module `variant-core-abi1.wasm` demonstrates behavior changes (fmtp munge, adaptive bitrate cap, periodic ICE restart) shipped as wasm only, CLI-loaded. Design/validation records in `docs/superpowers/specs/2026-07-*-tgcalls-wasm-*`
 
-Build the test binary from this directory with:
+**Inventory at execution time, not just planning time.** Planning-time grep often undercounts. Re-inventory at Task-1 time using the full token set `\b(postbox|mediaBox|transaction|PostboxView|combinedView|MediaResource|PostboxDecoder|PostboxEncoder|MemoryBuffer)\b|^import Postbox` over the module's sources. If the count exceeds the plan, abandon before editing code rather than substituting a different module.
 
 `./build-input/bazel-9.2.0-darwin-arm64 build //submodules/TgVoipWebrtc/tgcalls/tools/cli:tgcalls_cli`

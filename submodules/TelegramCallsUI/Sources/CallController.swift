@@ -197,6 +197,7 @@ public final class CallController: ViewController {
             if availableOutputs.count == 2 {
                 for output in availableOutputs {
                     if output != currentOutput {
+                        (strongSelf.controllerNode as? CallControllerNodeV2)?.noteAudioOutputChosenByUser(output) // Novagram (HOOKS.md)
                         strongSelf.call.setCurrentAudioOutput(output)
                         break
                     }
@@ -235,6 +236,7 @@ public final class CallController: ViewController {
                     }
                     items.append(CallRouteActionSheetItem(title: title, icon: icon, selected: output == currentOutput, action: { [weak actionSheet] in
                         actionSheet?.dismissAnimated()
+                        (self?.controllerNode as? CallControllerNodeV2)?.noteAudioOutputChosenByUser(output) // Novagram (HOOKS.md)
                         self?.call.setCurrentAudioOutput(output)
                     }))
                 }

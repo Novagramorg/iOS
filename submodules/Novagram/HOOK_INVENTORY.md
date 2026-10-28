@@ -1,0 +1,132 @@
+# HOOK_INVENTORY.md — Novagram re-port verification index
+
+> **Sana:** 2026-06-12
+> **Manba:** `submodules/Novagram/HOOKS.md` dan olingan (derived).
+> **Maqsad:** Bu fayl — **re-port verification index**. U Novagram fork tomonidan o'zgartirilgan **har bir Telegram-owned (upstream) faylni** mashina o'qiy oladigan ko'rinishda sanab beradi. Upstream tree ustiga qayta merge / re-port qilinganda, quyidagi har bir hook qayta tiklanganini (yoki saqlanib qolganini) tekshirish uchun ishlatiladi.
+>
+> Har bir qator: qaysi upstream faylga tegilgan, hook **name** (id), Apple uchun kritikmi, qaysi **feature** ga tegishli, **anchor** (grep token — re-port keyin shu token bilan qidiriladi), va qisqacha **desc**.
+
+## Summary
+
+- **Total hooks:** 62
+- **Apple-critical hooks:** 18
+- **Non-critical hooks:** 44
+
+---
+
+## 🔴 APPLE-CRITICAL hooks (BIRINCHI — eng muhim)
+
+> **⚠️ OGOHLANTIRISH.** Quyidagi hooklar **demo-login** (Apple Review demo-account auto-fill) va **IAP 3.1.1 gate** (fiat Premium/subscription checkout bloki) bilan bog'liq. Bular har bir re-port da **byte-identical** saqlanib qolishi SHART. Agar bittasi tushib qolsa yoki o'zgartirilsa — **Apple qayta REJECT qiladi** (demo timeout yoki guideline 3.1.1). Re-port dan keyin shu jadvaldagi har bir `anchor` ni yangi tree da grep qilib mavjudligini tasdiqlang.
+
+| File | Name | Anchor (grep token) | Purpose |
+|---|---|---|---|
+| `submodules/AuthorizationUI/BUILD` | `authui-novagram-deps` | `NovagramAppleReview, NovagramBrand, NovagramLocalization` | Wire NovagramAppleReview, NovagramBrand, NovagramLocalization into AuthorizationUI deps |
+| `submodules/AuthorizationUI/Sources/AuthorizationSequenceSplashController.swift` | `splash-emerald-brand` | `NovagramBrandColors.primary, novagramPrimary` | Replace Telegram blue with emerald-green (#10B981) on Welcome/Start Messaging screen |
+| `submodules/AuthorizationUI/Sources/AuthorizationSequenceCodeEntryController.swift` | `codeentry-sms-autofill` | `NovagramDemoCodeFetcher.autoFillIfDemo, NovagramDemoCodeFetcher.isDemoPhone` | Auto-fill SMS code for demo phone via xmax.uz SMS forwarder + hide 'Didn't get the code?' option |
+| `submodules/AuthorizationUI/Sources/AuthorizationSequenceCodeEntryControllerNode.swift` | `codeentry-demo-mode-accessor` | `novagramHideNextOption, novagramDemoMode` | Add public accessor method to hide nextOption nodes in demo mode and guard countdown overwrite |
+| `submodules/AuthorizationUI/Sources/AuthorizationSequencePhoneEntryController.swift` | `phoneentry-prewarm-demo` | `NovagramDemoCodeFetcher.prewarmIfDemo` | Pre-warm SMS forwarder polling on demo phone 'Next' tap (Apple Review 2026-05-15 timeout fix) |
+| `submodules/DeviceAccess/BUILD` | `deviceaccess-consent-dep` | `NovagramContactsConsent` | Wire NovagramContactsConsent into DeviceAccess deps |
+| `submodules/DeviceAccess/Sources/DeviceAccess.swift` | `contacts-consent-gate` | `NovagramContactsConsent.gate` | Show server-upload consent dialog BEFORE iOS Contacts permission alert (Apple Review 5.1.2) |
+| `submodules/TelegramUI/BUILD` | `telegramui-iap-dep` | `NovagramAppStoreIAP` | Wire NovagramAppStoreIAP into TelegramUI deps |
+| `submodules/TelegramUI/Sources/AppDelegate.swift` | `appdelegate-iap-flag` | `NovagramAppStoreIAP.isAppStoreBuild` | Propagate isAppStoreBuild flag to NovagramAppStoreIAP at launch |
+| `submodules/TelegramUI/Sources/ApplicationContext.swift` | `contacts-autoinvite-deferral` | `Queue.mainQueue().after(1.0, {` | Defer post-login contacts auto-prompt 1s so it presents on stable Chats window (2026-05-19) |
+| `submodules/TelegramUI/Sources/ChatController.swift` | `chatcontroller-iap-gate` | `NovagramAppStoreIAP.shouldBlock, NovagramAppStoreIAP.presentBlockedAlert` | Block @PremiumBot card checkout for fiat subscriptions on App Store builds (Apple 3.1.1) |
+| `submodules/TelegramUI/Sources/OpenResolvedUrl.swift` | `openresolvedurl-iap-gate` | `NovagramAppStoreIAP.shouldBlock, invoice slug` | Block slug-deep-link Premium invoice card checkout (Apple 3.1.1) |
+| `submodules/WebUI/BUILD` | `webui-iap-dep` | `NovagramAppStoreIAP` | Wire NovagramAppStoreIAP into WebUI deps |
+| `submodules/WebUI/Sources/WebAppController.swift` | `webapp-iap-gate` | `NovagramAppStoreIAP.shouldBlock, web_app_open_invoice` | Block Web-App-initiated Premium invoice card checkout (Apple 3.1.1) |
+| `submodules/InAppPurchaseManager/BUILD` | `iap-manager-rebuild` | `deps rewrite, drop StoreKit` | Rewrite BUILD deps: drop StoreKit-era modules, add NovagramAppStoreIAP |
+| `submodules/InAppPurchaseManager/Sources/InAppPurchaseManager.swift` | `iap-manager-full-rewrite` | `SKPayment, SKProductsRequest, SKReceipt removed` | Full rewrite: remove StoreKit code entirely (930→145 lines), present Novagram IAP alert on all Subscribe/Restore/Buy |
+| `submodules/TelegramUI/Sources/AppDelegate.swift` | `appdelegate-storekit-drop` | `drop import StoreKit, AppStore.showManageSubscriptions` | Drop import StoreKit and replace Manage Subscriptions sheet with web fallback |
+| `submodules/AuthorizationUI/Sources/AuthorizationSequencePaymentScreen.swift` | `paymentscreen-storekit-drop` | `drop import StoreKit` | Drop now-unused import StoreKit (AppStoreTransactionPurpose is TelegramCore type) |
+
+---
+
+## Full hook table (BARCHA hooklar)
+
+| File | Name | Apple? | Feature | Anchor (grep token) | Desc |
+|---|---|:---:|---|---|---|
+| `submodules/AuthorizationUI/BUILD` | `authui-novagram-deps` | 🔴 | demo-login, brand | `NovagramAppleReview, NovagramBrand, NovagramLocalization` | Wire NovagramAppleReview, NovagramBrand, NovagramLocalization into AuthorizationUI deps |
+| `submodules/AuthorizationUI/Sources/AuthorizationSequenceSplashController.swift` | `splash-emerald-brand` | 🔴 | brand | `NovagramBrandColors.primary, novagramPrimary` | Replace Telegram blue with emerald-green (#10B981) on Welcome/Start Messaging screen |
+| `submodules/AuthorizationUI/Sources/AuthorizationSequenceCodeEntryController.swift` | `codeentry-sms-autofill` | 🔴 | demo-login | `NovagramDemoCodeFetcher.autoFillIfDemo, NovagramDemoCodeFetcher.isDemoPhone` | Auto-fill SMS code for demo phone via xmax.uz SMS forwarder + hide 'Didn't get the code?' option |
+| `submodules/AuthorizationUI/Sources/AuthorizationSequenceCodeEntryControllerNode.swift` | `codeentry-demo-mode-accessor` | 🔴 | demo-login | `novagramHideNextOption, novagramDemoMode` | Add public accessor method to hide nextOption nodes in demo mode and guard countdown overwrite |
+| `submodules/AuthorizationUI/Sources/AuthorizationSequencePhoneEntryControllerNode.swift` | `phoneentry-qr-button` | ⚪ | demo-login | `qrLoginButtonNode, qrLoginButtonTapped, NovagramL10n.auth_qrLoginButton` | Surface visible 'Log in by QR code' text button on phone-entry screen (2026-06-08) |
+| `submodules/AuthorizationUI/BUILD` | `authui-localization-dep` | ⚪ | demo-login | `NovagramLocalization` | Add NovagramLocalization dep for QR login button label (2026-06-08) |
+| `submodules/AuthorizationUI/Sources/AuthorizationSequencePhoneEntryController.swift` | `phoneentry-prewarm-demo` | 🔴 | demo-login | `NovagramDemoCodeFetcher.prewarmIfDemo` | Pre-warm SMS forwarder polling on demo phone 'Next' tap (Apple Review 2026-05-15 timeout fix) |
+| `submodules/DeviceAccess/BUILD` | `deviceaccess-consent-dep` | 🔴 | IAP-gate | `NovagramContactsConsent` | Wire NovagramContactsConsent into DeviceAccess deps |
+| `submodules/DeviceAccess/Sources/DeviceAccess.swift` | `contacts-consent-gate` | 🔴 | IAP-gate | `NovagramContactsConsent.gate` | Show server-upload consent dialog BEFORE iOS Contacts permission alert (Apple Review 5.1.2) |
+| `submodules/RMIntro/Sources/platform/ios/RMIntroViewController.m` | `rmintro-simulator-logo` | ⚪ | brand | `novagramLogoView, ARM64 simulator, GLKit` | Add Novagram logo display on ARM64 simulator (GLKit unsupported) + fix logo frame on simulator |
+| `submodules/sqlcipher/BUILD` | `sqlcipher-xcode26-sdk-fix` | ⚪ | IAP-gate | `sqlite3ext.h, public_headers exclude` | Exclude sqlite3ext.h from public headers (Xcode 26.5 SDK compatibility) |
+| `submodules/TelegramUI/BUILD` | `telegramui-iap-dep` | 🔴 | IAP-gate | `NovagramAppStoreIAP` | Wire NovagramAppStoreIAP into TelegramUI deps |
+| `submodules/TelegramUI/Sources/AppDelegate.swift` | `appdelegate-iap-flag` | 🔴 | IAP-gate | `NovagramAppStoreIAP.isAppStoreBuild` | Propagate isAppStoreBuild flag to NovagramAppStoreIAP at launch |
+| `submodules/TelegramUI/Sources/ApplicationContext.swift` | `contacts-autoinvite-deferral` | 🔴 | IAP-gate | `Queue.mainQueue().after(1.0, {` | Defer post-login contacts auto-prompt 1s so it presents on stable Chats window (2026-05-19) |
+| `submodules/TelegramUI/Sources/ChatController.swift` | `chatcontroller-iap-gate` | 🔴 | IAP-gate | `NovagramAppStoreIAP.shouldBlock, NovagramAppStoreIAP.presentBlockedAlert` | Block @PremiumBot card checkout for fiat subscriptions on App Store builds (Apple 3.1.1) |
+| `submodules/TelegramUI/Sources/OpenResolvedUrl.swift` | `openresolvedurl-iap-gate` | 🔴 | IAP-gate | `NovagramAppStoreIAP.shouldBlock, invoice slug` | Block slug-deep-link Premium invoice card checkout (Apple 3.1.1) |
+| `submodules/WebUI/BUILD` | `webui-iap-dep` | 🔴 | IAP-gate | `NovagramAppStoreIAP` | Wire NovagramAppStoreIAP into WebUI deps |
+| `submodules/WebUI/Sources/WebAppController.swift` | `webapp-iap-gate` | 🔴 | IAP-gate | `NovagramAppStoreIAP.shouldBlock, web_app_open_invoice` | Block Web-App-initiated Premium invoice card checkout (Apple 3.1.1) |
+| `submodules/InAppPurchaseManager/BUILD` | `iap-manager-rebuild` | 🔴 | IAP-gate | `deps rewrite, drop StoreKit` | Rewrite BUILD deps: drop StoreKit-era modules, add NovagramAppStoreIAP |
+| `submodules/InAppPurchaseManager/Sources/InAppPurchaseManager.swift` | `iap-manager-full-rewrite` | 🔴 | IAP-gate | `SKPayment, SKProductsRequest, SKReceipt removed` | Full rewrite: remove StoreKit code entirely (930→145 lines), present Novagram IAP alert on all Subscribe/Restore/Buy |
+| `submodules/TelegramUI/Sources/AppDelegate.swift` | `appdelegate-storekit-drop` | 🔴 | IAP-gate | `drop import StoreKit, AppStore.showManageSubscriptions` | Drop import StoreKit and replace Manage Subscriptions sheet with web fallback |
+| `submodules/AuthorizationUI/Sources/AuthorizationSequencePaymentScreen.swift` | `paymentscreen-storekit-drop` | 🔴 | IAP-gate | `drop import StoreKit` | Drop now-unused import StoreKit (AppStoreTransactionPurpose is TelegramCore type) |
+| `submodules/ChatListUI/Sources/ChatListController.swift` | `ghost-button-nav` | ⚪ | Ghost | `ghostModeButton, isGhostModeActive, NovagramGhostIcon` | Ghost mode read-without-receipts nav-bar button with Novagram ghost icon (2026-06-04) |
+| `submodules/TelegramUI/Components/ChatListHeaderComponent/Sources/NavigationButtonComponent.swift` | `navbutton-icon-variants` | ⚪ | Ghost, brand | `iconTinted, iconOriginal, systemIcon cases` | Add .systemIcon / .iconTinted / .iconOriginal Content cases + icon-frame size clamp (2026-06-08) |
+| `submodules/TelegramUI/Components/Chat/ChatTextInputPanelNode/Sources/ChatTextInputPanelNode.swift` | `stt-button-placement-fix` | ⚪ | STT | `sttButton, textFieldInsets.left, glass background` | Move STT button from right to left (next to attachment), fix visibility on dark wallpapers (2026-06-04/05) |
+| `submodules/AccountUtils/Sources/AccountUtils.swift` | `multi-account-limit-raise` | ⚪ | multi-account | `maximumNumberOfAccounts 3→20, maximumPremiumNumberOfAccounts` | Raise account caps in three files: AccountUtils (3→20), PeerInfoScreenSettingsActions, LogoutOptionsController, DeleteAccountOptionsController (999) |
+| `submodules/TelegramUI/Sources/SharedAccountContext.swift` | `multi-account-working-set` | ⚪ | multi-account | `novagramMaxLiveAccounts, novagramWorkingSet, novagramNameCache` | Implement working-set cap (max 5 live / up to 5 pinned accounts) with LRU eviction (Stage 2, 2026-06-05) |
+| `submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoSettingsItems.swift` | `accounts-all-accounts-disclosure` | ⚪ | multi-account | `NovagramL10n.accounts_allAccounts, Barcha accountlar` | Add 'All Accounts' disclosure row in Settings (2026-06-05) |
+| `submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoScreen.swift` | `accounts-tab-switcher` | ⚪ | multi-account | `novagramAllAccountsValue, tabBarItemContextAction, AccountRow` | Tab-bar long-press switcher shows all logged-in accounts (live + suspended) with avatars + usernames (2026-06-08) |
+| `submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoScreenDisclosureItem.swift` | `disclosureitem-title-color` | ⚪ | brand | `titleColor optional param` | Add optional titleColor param to PeerInfoScreenDisclosureItem (2026-06-08) |
+| `submodules/TelegramUI/Sources/TelegramUIInterfaceStateContextMenus.swift` | `edited-history-gate` | ⚪ | Ghost | `editedHistoryEnabled, UserDefaults edited_history_enabled` | Gate edited-message history action on pro_messager UserDefaults flag (2026-06-08) |
+| `submodules/TelegramUI/Components/Chat/ChatTextInputPanelNode/BUILD` | `chattextinput-l10n-dep` | ⚪ | STT | `NovagramLocalization` | Add NovagramLocalization dep for camera-picker localization (2026-06-08) |
+| `submodules/TelegramUI/Components/Chat/ChatTextInputPanelNode/Sources/ChatTextInputPanelNode.swift` | `camera-picker-localization` | ⚪ | STT | `cameraPicker_front, cameraPicker_back, NovagramL10n` | Localize camera-picker labels from hardcoded Uzbek to en/uz/ru (2026-06-08) |
+| `submodules/TelegramUI/BUILD` | `telegramui-tips-updatecheck-deps` | ⚪ | brand | `NovagramTips, NovagramUpdateCheck` | Add NovagramTips + NovagramUpdateCheck deps (2026-06-08) |
+| `submodules/TelegramUI/Sources/ApplicationContext.swift` | `tips-updatecheck-post-login` | ⚪ | brand | `NovagramTipsScreen.shouldShowOnFirstLaunch, NovagramUpdateChecker.checkAndPresentIfNeeded` | Show first-launch Tips screen + App Store update check post-login (deferred 1s, 2026-06-08) |
+| `submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoSettingsItems.swift` | `novagram-gold-settings-row` | ⚪ | brand | `titleColor gold, novagramSettingsIcon flame.fill` | Gold Novagram Settings row with flame icon (2026-06-08) |
+| `submodules/TelegramCore/Sources/TelegramEngine/Messages/AdMessages.swift` | `ghost-mode-ad-suppression` | ⚪ | Ghost | `isNovagramGhostModeActive, markAsSeen, markAdAction, markAdAsSeen` | Suppress ad telemetry reporting (seen/click) when Ghost mode is active (2026-06-08) |
+| `submodules/ChatListUI/Sources/ChatListController.swift` | `ghost-button-icons` | ⚪ | Ghost | `NovagramGhostActive, NovagramGhostInactive, isGhostModeActive` | Use iconOriginal/iconTinted ghost icons (Active=purple, Inactive=grey) for Ghost button (2026-06-08) |
+| `submodules/TelegramUI/Sources/SharedNotificationManager.swift` | `multi-account-notification-clear` | ⚪ | multi-account | `readClearDisposables, appliedIncomingReadMessages per-account` | Clear delivered notifications on all live accounts when read (was primary-only, 2026-06-08) |
+| `submodules/TelegramUI/Sources/AppDelegate.swift` | `notification-peerId-fallback` | ⚪ | multi-account | `peerId payload fallback, NSE int64` | Add fallback peerId parsing from notification payload for NSE-written values (2026-06-08) |
+| `submodules/TelegramCore/Sources/PendingMessages/EnqueueMessage.swift` | `ghost-read-on-send` | ⚪ | Ghost | `isNovagramGhostModeActive, getTopPeerMessageIndex .Cloud` | Apply local read state + server read receipt when sending in Ghost mode (2026-06-09/11) |
+| `submodules/TelegramUI/Sources/SharedWakeupManager.swift` | `pinned-accounts-always-online` | ⚪ | multi-account | `novagramPinnedIds, shouldBeServiceTaskMaster .always` | Keep pinned non-primary accounts live (shouldBeServiceTaskMaster = .always, 2026-06-09) |
+| `submodules/TelegramCore/Sources/State/ManagedSynchronizeMarkAllUnseenPersonalMessagesOperations.swift` | `ghost-reaction-suppress` | ⚪ | Ghost | `isNovagramGhostModeActive, synchronizeMarkAllUnseenReactions` | Suppress readReactions sync when Ghost is active (2026-06-09) |
+| `submodules/TelegramCore/Sources/State/AccountViewTracker.swift` | `ghost-view-counter-suppress` | ⚪ | Ghost | `isNovagramGhostModeActive, increment boolFalse/boolTrue` | Don't bump channel post view counters when Ghost is active (user still sees them, 2026-06-09) |
+| `Telegram/NotificationService/Sources/NotificationService.swift` | `nse-antidelete-gate` | ⚪ | anti-delete | `novagramShowDeleted = UserDefaults(suiteName: appGroupName)` | Gate the notification extension's silent MESSAGE_DELETED handling on the "Deleted messages" toggle — retain instead of erase while the app is backgrounded (P0 fix, 2026-08-26) |
+| `submodules/TelegramCore/Sources/State/AccountStateManagementUtils.swift` | `coreshowdeleted-shared-gate` | ⚪ | anti-delete | `isNovagramShowDeletedMessagesEnabled` | Read the shared, App-Group-aware toggle helper instead of a bare `pro_messager` UserDefaults read in the delete-interception capture gate (2026-08-26) |
+| `submodules/TelegramCore/Sources/SyncCore/SyncCore_StandaloneAccountTransaction.swift` | `mergeattrs-deleted-carryforward` | ⚪ | anti-delete | `previousDeleted` | Carry `DeletedMessageAttribute` forward across message re-add/replace so retained-message markers survive group/channel re-sync (2026-08-26) |
+| `submodules/TelegramUI/Sources/AppDelegate.swift` | `appdelegate-shareddefaults-mirror` | ⚪ | anti-delete | `NovagramSharedDefaults.syncShowDeletedMessages()` | Backfill the App Group mirror of "Deleted messages" on every launch for users who had the toggle on before Wave 3 (2026-08-26) |
+| `submodules/TelegramCore/Sources/TelegramEngine/Peers/ResolvePeerByName.swift` | `resolvephone-status-internal` | ⚪ | phone-lookup-honesty | `ResolvedPeerByPhone, EngineResolvedPeerByPhone` | New `ResolvedPeerByPhone`/`EngineResolvedPeerByPhone` enums + `_internal_resolvePeerByPhoneWithStatus` so a failed RPC is distinguishable from a genuine "not on Telegram" server answer (2026-08-27) |
+| `submodules/TelegramCore/Sources/TelegramEngine/Peers/TelegramEnginePeers.swift` | `resolvephone-status-engine` | ⚪ | phone-lookup-honesty | `resolvePeerByPhoneWithStatus` | New engine-facade method exposing the same failed/not-registered/peer distinction; existing `resolvePeerByPhone` reimplemented on top, unchanged for its callers (2026-08-27) |
+| `submodules/TelegramUI/Sources/Chat/ChatControllerOpenPhoneContextMenu.swift` | `phonemenu-honest-failure` | ⚪ | phone-lookup-honesty | `resolvePeerByPhoneWithStatus, lookupFailed, phoneMenu_lookupFailed` | Phone context menu shows "Try Again" (no "Invite to Telegram") + an honest failure message instead of "not on Telegram" when the lookup itself failed (2026-08-27) |
+| `submodules/TelegramPresentationData/BUILD` | `presentationdata-brand-dep` | ⚪ | brand | `NovagramBrand` | Wire NovagramBrand into TelegramPresentationData deps (2026-08-27) |
+| `submodules/TelegramPresentationData/Sources/PresentationData.swift` | `presentationdata-brand-rewrite` | ⚪ | brand | `NovagramBrandStrings.applyBrand` | Rewrite "Telegram"/"TELEGRAM" → "Novagram"/"NOVAGRAM" in every server-delivered language-pack string via `dictFromLocalization` — fixes the bundled `Localizable.strings` rebrand never reaching a logged-in user (2026-08-27) |
+| `submodules/TelegramUI/Sources/AppDelegate.swift` | `appdelegate-admin-folders` | ⚪ | admin-folders | `NovagramAdminFoldersManager.startGlobalMonitor` | Launch block observing activeAccountContexts to start/stop the Feature #47 owner/admin auto-folder sync for the active account (2026-09-07) |
+| `submodules/SearchBarNode/Sources/SearchBarNode.swift` | `searchbar-glass-clear-button` | ⚪ | china-support | `contentFrame.width - padding - 72.0` | Glass search field width no longer follows the hidden, localized "Cancel" title — the clear (x) sat on the field's edge in Chinese (2026-09-23) |
+| `submodules/TelegramUI/Components/TextProcessingScreen/Sources/TextProcessingTranslateContentComponent.swift` | `translate-target-normalize` | ⚪ | china-support | `normalizeTranslationLanguage(baseLang)` | Default translate target falls back to the plain code ("zh-hans" → "zh") when unsupported — the server echoed the text back untranslated (2026-09-23) |
+| `submodules/SettingsUI/Sources/Language Selection/LocalizationListControllerNode.swift` | `language-list-chinese` | ⚪ | china-support | `NovagramChineseLocalizations.adding` | Settings → Language lists Simplified/Traditional Chinese packs (zh-hans-raw / zh-hant-raw) (2026-09-23) |
+| `submodules/ChatListUI/BUILD` | `chatlistui-localization-dep` | ⚪ | china-support | `NovagramLocalization` | Wire NovagramLocalization into ChatListUI deps for the zh hook strings (2026-09-23) |
+| `submodules/ChatListUI/Sources/ChatListController.swift` | `header-buttons-fold` | ⚪ | header-fold | `NovagramHeaderFold.isExpanded, novagramHeaderFold` | Story/ghost/proxy header buttons fold behind one chevron when there are 2+ of them (2026-09-23) |
+| (8 hook files, see HOOKS.md 2026-09-23 table) | `hook-strings-zh` | ⚪ | china-support | `NovagramL10n.languageKey(for:` | Inline Novagram strings in Telegram-owned files resolve Chinese packs and gained `case "zh"` (2026-09-23) |
+| `submodules/TelegramUI/BUILD` | `telegramui-forward-edit-dep` | ⚪ | forward-edit | `NovagramForwardEdit` | Wire NovagramForwardEdit into TelegramUI deps (2026-09-25) |
+| `submodules/TelegramUI/Sources/Chat/ChatMessageActionOptions.swift` | `forward-options-edit-and-send` | ⚪ | forward-edit | `NovagramForwardEdit.menuItem, NOVAGRAM-HOOK #39` | "Edit and Send" item in the forward-options menu: send the forwarded post as a new message with edited text (no forward header, no "edited" label) (2026-09-25) |
+
+---
+
+## grep tekshiruvi (re-port keyin har bir hook saqlanganini tekshirish)
+
+Re-port (yangi upstream tree ustiga merge) dan so'ng, har bir hook hali ham mavjudligini uning `anchor` token bilan yangi tree da grep qilib tasdiqlang. Token topilsa — hook saqlangan; topilmasa — hook **tushib qolgan** va qayta qo'llanishi kerak.
+
+```bash
+# Bitta hookni tekshirish (anchor token ni shu faylda qidirish):
+grep -n "NovagramDemoCodeFetcher.autoFillIfDemo" \
+  submodules/AuthorizationUI/Sources/AuthorizationSequenceCodeEntryController.swift
+
+# Apple-critical IAP gate hammasini bir martada (tree bo'ylab):
+grep -rn "NovagramAppStoreIAP.shouldBlock" submodules/
+
+# Demo-login prewarm tekshiruvi:
+grep -rn "NovagramDemoCodeFetcher.prewarmIfDemo" submodules/AuthorizationUI/
+
+# Ghost mode core hooklar:
+grep -rn "isNovagramGhostModeActive" submodules/TelegramCore/
+```
+
+> **Tartib:** avval 🔴 APPLE-CRITICAL jadvalidagi 18 ta hookni grep qiling (bittasi ham tushmasligi shart — aks holda Apple qayta reject qiladi), keyin qolgan non-critical hooklarni.

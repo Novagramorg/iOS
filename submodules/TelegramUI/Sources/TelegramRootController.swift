@@ -34,36 +34,36 @@ import ChatEmptyNode
 private class DetailsChatPlaceholderNode: ASDisplayNode, NavigationDetailsPlaceholderNode {
     private var presentationData: PresentationData
     private var presentationInterfaceState: ChatPresentationInterfaceState
-    
+
     let wallpaperBackgroundNode: WallpaperBackgroundNode
     let emptyNode: ChatEmptyNode
-    
+
     init(context: AccountContext) {
         self.presentationData = context.sharedContext.currentPresentationData.with { $0 }
         self.presentationInterfaceState = ChatPresentationInterfaceState(chatWallpaper: self.presentationData.chatWallpaper, theme: self.presentationData.theme, preferredGlassType: .default, strings: self.presentationData.strings, dateTimeFormat: self.presentationData.dateTimeFormat, nameDisplayOrder: self.presentationData.nameDisplayOrder, limitsConfiguration: context.currentLimitsConfiguration.with { $0 }, fontSize: self.presentationData.chatFontSize, bubbleCorners: self.presentationData.chatBubbleCorners, accountPeerId: context.account.peerId, mode: .standard(.default), chatLocation: .peer(id: context.account.peerId), subject: nil, greetingData: nil, pendingUnpinnedAllMessages: false, activeGroupCallInfo: nil, hasActiveGroupCall: false, threadData: nil, isGeneralThreadClosed: nil, replyMessage: nil, accountPeerColor: nil, businessIntro: nil)
-        
+
         self.wallpaperBackgroundNode = createWallpaperBackgroundNode(context: context, forChatDisplay: true, useSharedAnimationPhase: true)
         self.emptyNode = ChatEmptyNode(context: context, interaction: nil)
-        
+
         super.init()
-        
+
         self.addSubnode(self.wallpaperBackgroundNode)
         self.addSubnode(self.emptyNode)
     }
-    
+
     func updatePresentationData(_ presentationData: PresentationData) {
         self.presentationData = presentationData
         let preferredGlassType = self.presentationInterfaceState.preferredGlassType
         self.presentationInterfaceState = ChatPresentationInterfaceState(chatWallpaper: self.presentationData.chatWallpaper, theme: self.presentationData.theme, preferredGlassType: preferredGlassType, strings: self.presentationData.strings, dateTimeFormat: self.presentationData.dateTimeFormat, nameDisplayOrder: self.presentationData.nameDisplayOrder, limitsConfiguration: self.presentationInterfaceState.limitsConfiguration, fontSize: self.presentationData.chatFontSize, bubbleCorners: self.presentationData.chatBubbleCorners, accountPeerId: self.presentationInterfaceState.accountPeerId, mode: .standard(.default), chatLocation: self.presentationInterfaceState.chatLocation, subject: nil, greetingData: nil, pendingUnpinnedAllMessages: false, activeGroupCallInfo: nil, hasActiveGroupCall: false, threadData: nil, isGeneralThreadClosed: nil, replyMessage: nil, accountPeerColor: nil, businessIntro: nil)
-        
+
         self.wallpaperBackgroundNode.update(wallpaper: presentationData.chatWallpaper, animated: false)
     }
-    
+
     func updateLayout(size: CGSize, needsTiling: Bool, transition: ContainedViewLayoutTransition) {
         let contentBounds = CGRect(origin: .zero, size: size)
         self.wallpaperBackgroundNode.updateLayout(size: size, displayMode: needsTiling ? .aspectFit : .aspectFill, transition: transition)
         transition.updateFrame(node: self.wallpaperBackgroundNode, frame: contentBounds)
-        
+
         self.emptyNode.updateLayout(interfaceState: self.presentationInterfaceState, subject: .detailsPlaceholder, loadingNode: nil, backgroundNode: self.wallpaperBackgroundNode, size: contentBounds.size, insets: .zero, leftInset: 0.0, rightInset: 0.0, transition: transition)
         transition.updateFrame(node: self.emptyNode, frame: CGRect(origin: .zero, size: size))
         self.emptyNode.update(rect: contentBounds, within: contentBounds.size, transition: transition)
@@ -72,44 +72,49 @@ private class DetailsChatPlaceholderNode: ASDisplayNode, NavigationDetailsPlaceh
 
 public final class TelegramRootController: NavigationController, TelegramRootControllerInterface {
     private let context: AccountContext
-    
+
     public var rootTabController: TabBarController?
-    
+
     public var contactsController: ContactsController?
     public var callListController: CallListController?
     public var chatListController: ChatListController?
     public var accountSettingsController: PeerInfoScreen?
-    
+
     private var permissionsDisposable: Disposable?
     private var presentationDataDisposable: Disposable?
     private var presentationData: PresentationData
-    
+
     private var detailsPlaceholderNode: DetailsChatPlaceholderNode?
-    
+
     private var applicationInFocusDisposable: Disposable?
     private var storyUploadEventsDisposable: Disposable?
-    
+
+    // Novagram: a bot session only needs Chats + Settings; hide Contacts/Calls (bots can't use them).
+    private var isBotAccount = false
+    private var currentShowCallsTab = false
+    private var botAccountDisposable: Disposable?
+
     override public var minimizedContainer: MinimizedContainer? {
         didSet {
             self.minimizedContainer?.navigationController = self
             self.minimizedContainerUpdated(self.minimizedContainer)
         }
     }
-    
+
     public var minimizedContainerUpdated: (MinimizedContainer?) -> Void = { _ in }
-        
+
     public init(context: AccountContext) {
         self.context = context
-        
+
         self.presentationData = context.sharedContext.currentPresentationData.with { $0 }
-        
+
         super.init(mode: .automaticMasterDetail, theme: NavigationControllerTheme(presentationTheme: self.presentationData.theme))
-        
+
         self.presentationDataDisposable = (context.sharedContext.presentationData
         |> deliverOnMainQueue).startStrict(next: { [weak self] presentationData in
             if let strongSelf = self {
                 strongSelf.detailsPlaceholderNode?.updatePresentationData(presentationData)
-                
+
                 let previousTheme = strongSelf.presentationData.theme
                 strongSelf.presentationData = presentationData
                 if previousTheme !== presentationData.theme {
@@ -118,14 +123,14 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                 }
             }
         })
-        
+
         if context.sharedContext.applicationBindings.isMainApp {
             self.applicationInFocusDisposable = (context.sharedContext.applicationBindings.applicationIsActive
             |> distinctUntilChanged
             |> deliverOn(Queue.mainQueue())).startStrict(next: { value in
                 context.sharedContext.mainWindow?.setForceBadgeHidden(!value)
             })
-            
+
             self.storyUploadEventsDisposable = (context.engine.messages.allStoriesUploadEvents()
             |> deliverOnMainQueue).startStrict(next: { [weak self] event in
                 guard let self else {
@@ -136,38 +141,39 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
             })
         }
     }
-    
+
     required public init(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-    
+
     deinit {
         self.permissionsDisposable?.dispose()
         self.presentationDataDisposable?.dispose()
         self.applicationInFocusDisposable?.dispose()
         self.storyUploadEventsDisposable?.dispose()
+        self.botAccountDisposable?.dispose()
     }
-    
+
     public func getContactsController() -> ViewController? {
         return self.contactsController
     }
-    
+
     public func getChatsController() -> ViewController? {
         return self.chatListController
     }
-    
+
     public func getSettingsController() -> ViewController? {
         return self.accountSettingsController
     }
-    
+
     public func getPrivacySettings() -> Promise<AccountPrivacySettings?>? {
         return self.accountSettingsController?.privacySettings
     }
-    
+
     public func getNotificationExceptions() -> Promise<NotificationExceptionsList?>? {
         return self.accountSettingsController?.notificationExceptions
     }
-    
+
     override public func containerLayoutUpdated(_ layout: ContainerViewLayout, transition: ContainedViewLayoutTransition) {
         let needsRootWallpaperBackgroundNode: Bool
         if case .regular = layout.metrics.widthClass {
@@ -175,7 +181,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         } else {
             needsRootWallpaperBackgroundNode = false
         }
-        
+
         if needsRootWallpaperBackgroundNode {
             let detailsPlaceholderNode: DetailsChatPlaceholderNode
             if let current = self.detailsPlaceholderNode {
@@ -190,10 +196,10 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
             self.detailsPlaceholderNode = nil
             self.updateDetailsPlaceholderNode(nil)
         }
-    
+
         super.containerLayoutUpdated(layout, transition: transition)
     }
-    
+
     public func addRootControllers(showCallsTab: Bool) {
         let tabBarController = TabBarControllerImpl(theme: self.presentationData.theme, strings: self.presentationData.strings)
         tabBarController.navigationPresentation = .master
@@ -202,20 +208,24 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
             chatListController.tabBarItem.badgeValue = sharedContext.switchingData.chatListBadge
         }
         let callListController = CallListController(context: self.context, mode: .tab)
-        
+
         var controllers: [ViewController] = []
-        
+
         let contactsController = ContactsController(context: self.context)
         contactsController.switchToChatsController = {  [weak self] in
             self?.openChatsController(activateSearch: false)
         }
-        controllers.append(contactsController)
-        
-        if showCallsTab {
+        self.currentShowCallsTab = showCallsTab
+        if !self.isBotAccount {
+            controllers.append(contactsController) // Novagram: Contacts tab re-enabled 2026-06-16 (init/startup path)
+        }
+
+        if showCallsTab && !self.isBotAccount {
             controllers.append(callListController)
         }
+
         controllers.append(chatListController)
-        
+
         var restoreSettignsController: (ViewController & SettingsController)?
         if let sharedContext = self.context.sharedContext as? SharedAccountContextImpl {
             restoreSettignsController = sharedContext.switchingData.settingsController
@@ -224,7 +234,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         if let sharedContext = self.context.sharedContext as? SharedAccountContextImpl {
             sharedContext.switchingData = (nil, nil, nil)
         }
-        
+
         let accountSettingsController = PeerInfoScreenImpl(context: self.context, updatedPresentationData: nil, peerId: self.context.account.peerId, avatarInitiallyExpanded: false, isOpenedFromChat: false, reactionSourceMessageId: nil, callMessages: [], isSettings: true)
         accountSettingsController.tabBarItemDebugTapAction = { [weak self] in
             guard let strongSelf = self else {
@@ -234,54 +244,69 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         }
         accountSettingsController.parentController = self
         controllers.append(accountSettingsController)
-                
+
         tabBarController.setControllers(controllers, selectedIndex: restoreSettignsController != nil ? (controllers.count - 1) : (controllers.count - 2))
-        
+
         self.contactsController = contactsController
         self.callListController = callListController
         self.chatListController = chatListController
         self.accountSettingsController = accountSettingsController
         self.rootTabController = tabBarController
         self.pushViewController(tabBarController, animated: false)
+
+        // Novagram: once we know this is a bot session, rebuild the tab bar with only Chats + Settings.
+        self.botAccountDisposable = (novagramIsBotSessionSignal(account: self.context.account)
+        |> deliverOnMainQueue).start(next: { [weak self] isBot in
+            guard let strongSelf = self, isBot, !strongSelf.isBotAccount else {
+                return
+            }
+            strongSelf.isBotAccount = true
+            strongSelf.updateRootControllers(showCallsTab: strongSelf.currentShowCallsTab)
+        })
     }
-        
+
     public func updateRootControllers(showCallsTab: Bool) {
         guard let rootTabController = self.rootTabController as? TabBarControllerImpl else {
             return
         }
+        self.currentShowCallsTab = showCallsTab
         var controllers: [ViewController] = []
-        controllers.append(self.contactsController!)
-        if showCallsTab {
+        if !self.isBotAccount {
+            controllers.append(self.contactsController!) // Novagram: Contacts tab re-enabled 2026-06-16 (was hidden for Apple 5.1.2 review; consent hook covers it)
+        }
+        if showCallsTab && !self.isBotAccount {
             controllers.append(self.callListController!)
         }
+
         controllers.append(self.chatListController!)
         controllers.append(self.accountSettingsController!)
-        
-        rootTabController.setControllers(controllers, selectedIndex: nil)
+
+        // Novagram: when we just collapsed to the bot layout, select Chats (second-to-last); else keep current.
+        rootTabController.setControllers(controllers, selectedIndex: self.isBotAccount ? (controllers.count - 2) : nil)
     }
-    
+
     public func openChatsController(activateSearch: Bool, filter: ChatListSearchFilter = .chats, query: String? = nil) {
         guard let rootTabController = self.rootTabController else {
             return
         }
-        
+
         if activateSearch {
             self.popToRoot(animated: false)
         }
-        
+
         if let index = rootTabController.controllers.firstIndex(where: { $0 is ChatListController}) {
             rootTabController.selectedIndex = index
         }
-        
+
         if activateSearch {
             self.chatListController?.activateSearch(filter: filter, query: query)
         }
     }
-    
+
     public func openRootCompose() {
         self.chatListController?.activateCompose()
     }
-    
+
     public func openRootCamera() {
         guard let controller = self.viewControllers.last as? ViewController else {
             return
@@ -289,40 +314,40 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         controller.view.endEditing(true)
         presentedLegacyShortcutCamera(context: self.context, saveCapturedMedia: false, saveEditedPhotos: false, mediaGrouping: true, parentController: controller)
     }
-    
+
     public func openAppIcon() {
         guard let rootTabController = self.rootTabController else {
             return
         }
-        
+
         self.popToRoot(animated: false)
-        
+
         if let index = rootTabController.controllers.firstIndex(where: { $0 is PeerInfoScreenImpl }) {
             rootTabController.selectedIndex = index
         }
-        
+
         let themeController = themeSettingsController(context: self.context, focusOnItemTag: .icon)
         var controllers: [UIViewController] = Array(self.viewControllers.prefix(1))
         controllers.append(themeController)
         self.setViewControllers(controllers, animated: true)
     }
-    
+
     @discardableResult
     public func openStoryCamera(mode: StoryCameraMode, customTarget: Stories.PendingTarget?, resumeLiveStream: Bool, transitionIn: StoryCameraTransitionIn?, transitionedIn: @escaping () -> Void, transitionOut: @escaping (Stories.PendingTarget?, Bool) -> StoryCameraTransitionOut?) -> StoryCameraTransitionInCoordinator? {
         guard let controller = self.viewControllers.last as? ViewController else {
             return nil
         }
         controller.view.endEditing(true)
-        
+
         let context = self.context
-        
+
         let externalState = MediaEditorTransitionOutExternalState(
             storyTarget: nil,
             isForcedTarget: customTarget != nil,
             isPeerArchived: false,
             transitionOut: nil
         )
-        
+
         let mediaEditorCustomTarget = customTarget.flatMap { value -> EnginePeer.Id? in
             switch value {
             case .myStories:
@@ -333,7 +358,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                 return id
             }
         }
-        
+
         let cameraMode: CameraScreenImpl.CameraMode
         switch mode {
         case .photo:
@@ -343,7 +368,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         case .live:
             cameraMode = .live
         }
-        
+
         var presentImpl: ((ViewController) -> Void)?
         var returnToCameraImpl: (() -> Void)?
         var resetCollageImpl: (() -> Void)?
@@ -430,7 +455,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                         return .multiple(assets.map { .asset($0) })
                     }
                 }
-                
+
                 var transitionIn: MediaEditorScreenImpl.TransitionIn?
                 if let resultTransition, let sourceView = resultTransition.sourceView {
                     transitionIn = .gallery(
@@ -443,7 +468,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                 } else {
                     transitionIn = .camera
                 }
-                
+
                 let controller = MediaEditorScreenImpl(
                     context: context,
                     mode: .storyEditor(remainingCount: storyRemainingCount ?? 1),
@@ -474,11 +499,11 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                             commit({})
                             return
                         }
-                        
+
                         if let customTarget, case .botPreview = customTarget {
                             externalState.storyTarget = customTarget
                             self.proceedWithStoryUpload(target: customTarget, results: results, existingMedia: nil, forwardInfo: nil, externalState: externalState, commit: commit)
-                            
+
                             dismissCameraImpl?()
                             return
                          } else {
@@ -497,21 +522,21 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                                  }
                              }
                              externalState.storyTarget = target
-                             
-                             let _ = (self.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: targetPeerId))
+
+                             _ = (self.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: targetPeerId))
                              |> deliverOnMainQueue).startStandalone(next: { [weak self] peer in
                                 guard let self, let peer else {
                                     return
                                 }
-                                 
+
                                 if case let .user(user) = peer {
                                     externalState.isPeerArchived = user.storiesHidden ?? false
                                 } else if case let .channel(channel) = peer {
                                     externalState.isPeerArchived = channel.storiesHidden ?? false
                                 }
-                                 
+
                                  self.proceedWithStoryUpload(target: target, results: results, existingMedia: nil, forwardInfo: nil, externalState: externalState, commit: commit)
-                                
+
                                 dismissCameraImpl?()
                             })
                         }
@@ -579,7 +604,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                 }
             })
     }
-    
+
     public func proceedWithStoryUpload(target: Stories.PendingTarget, results: [MediaEditorScreenResult], existingMedia: EngineMedia?, forwardInfo: Stories.PendingForwardInfo?, externalState: MediaEditorTransitionOutExternalState, commit: @escaping (@escaping () -> Void) -> Void) {
         guard let results = results as? [MediaEditorScreenImpl.Result] else {
             return
@@ -594,7 +619,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         case .botPreview:
             targetPeerId = nil
         }
-        
+
         let folders: [Int64] = results.first?.options.folderIds ?? []
 
         if let rootTabController = self.rootTabController {
@@ -641,17 +666,17 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                 self.setViewControllers(viewControllers, animated: false)
             }
         }
-        
+
         let completionImpl: () -> Void = { [weak self] in
             guard let self else {
                 return
             }
-            
+
             var chatListController: ChatListControllerImpl?
-            
+
             if externalState.isPeerArchived {
                 var viewControllers = self.viewControllers
-                
+
                 let archiveController = ChatListControllerImpl(context: context, location: .chatList(groupId: .archive), controlsHistoryPreload: false, hideNetworkActivityStatus: false, previewing: false, enableDebugActions: false)
                 if !externalState.isForcedTarget {
                     externalState.transitionOut = archiveController.storyCameraTransitionOut()
@@ -665,9 +690,9 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                     externalState.transitionOut = chatListController?.storyCameraTransitionOut()
                 }
             }
-             
+
             if let chatListController {
-                let _ = (chatListController.hasPendingStories
+                _ = (chatListController.hasPendingStories
                 |> filter { $0 }
                 |> take(1)
                 |> timeout(externalState.isPeerArchived ? 0.5 : 0.25, queue: .mainQueue(), alternate: .single(true))
@@ -675,7 +700,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                     guard let chatListController else {
                         return
                     }
-                    
+
                     if let targetPeerId {
                         chatListController.scrollToStories(peerId: targetPeerId)
                     }
@@ -689,13 +714,13 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                 }
             }
         }
-        
+
         if let _ = self.chatListController as? ChatListControllerImpl {
             var index: Int32 = 0
             let groupingId = Int32.random(in: 2000000 ..< Int32.max)
             for result in results {
                 var media: EngineStoryInputMedia?
-                
+
                 if let mediaResult = result.media {
                     switch mediaResult {
                     case let .image(image, dimensions):
@@ -712,7 +737,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                             let data = EngineMemoryBuffer(data: valuesData)
                             let digest = EngineMemoryBuffer(data: data.md5Digest())
                             adjustments = VideoMediaResourceAdjustments(data: data, digest: digest, isStory: true)
-                            
+
                             let resource: TelegramMediaResource
                             switch content {
                             case let .imageFile(path):
@@ -735,7 +760,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                                     return nil
                                 }
                             }
-                            
+
                             var coverTime: Double?
                             if let coverImageTimestamp = values.coverImageTimestamp {
                                 if let trimRange = values.videoTrimRange {
@@ -744,7 +769,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                                     coverTime = min(duration, coverImageTimestamp)
                                 }
                             }
-                            
+
                             media = .video(dimensions: dimensions, duration: duration, resource: resource, firstFrameFile: firstFrameFile, stickers: result.stickers, coverTime: coverTime)
                         }
                     default:
@@ -753,15 +778,15 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                 } else if let existingMedia {
                     media = .existing(media: existingMedia._asMedia())
                 }
-                
+
                 if let media {
                     #if DEBUG
                     if !"".isEmpty {
-                        let _ = context.engine.messages.beginStoryLivestream(peerId: context.account.peerId, rtmp: true, privacy: result.options.privacy, isForwardingDisabled: false, messagesEnabled: true, sendPaidMessageStars: 0).startStandalone()
+                        _ = context.engine.messages.beginStoryLivestream(peerId: context.account.peerId, rtmp: true, privacy: result.options.privacy, isForwardingDisabled: false, messagesEnabled: true, sendPaidMessageStars: 0).startStandalone()
                     }
                     #endif
-                    
-                    let _ = (context.engine.messages.uploadStory(
+
+                    _ = (context.engine.messages.uploadStory(
                         target: target,
                         media: media,
                         mediaAreas: result.mediaAreas,
@@ -786,62 +811,62 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
             completionImpl()
         }
     }
-    
+
     public func openChats() {
         guard let rootTabController = self.rootTabController else {
             return
         }
-        
+
         self.popToRoot(animated: false)
-    
+
         if let index = rootTabController.controllers.firstIndex(where: { $0 is ChatListController }) {
             rootTabController.selectedIndex = index
         }
     }
-    
+
     public func openContacts() {
         guard let rootTabController = self.rootTabController else {
             return
         }
-        
+
         self.popToRoot(animated: false)
-    
+
         if let index = rootTabController.controllers.firstIndex(where: { $0 is ContactsController }) {
             rootTabController.selectedIndex = index
         }
     }
-        
+
     public func openSettings(edit: Bool) {
         guard let rootTabController = self.rootTabController else {
             return
         }
-        
+
         self.popToRoot(animated: false)
-    
+
         if let index = rootTabController.controllers.firstIndex(where: { $0 is PeerInfoScreenImpl }) {
             rootTabController.selectedIndex = index
         }
-        
+
         if edit {
             self.accountSettingsController?.activateEdit()
         }
     }
-    
+
     public func openBirthdaySetup() {
         self.accountSettingsController?.openBirthdaySetup()
     }
-    
+
     public func openPhotoSetup(completedWithUploadingImage: @escaping (UIImage, Signal<PeerInfoAvatarUploadStatus, NoError>) -> UIView?) {
         self.accountSettingsController?.openAvatarSetup(completedWithUploadingImage: completedWithUploadingImage)
     }
-    
+
     public func openAvatars() {
         if let accountSettingsController = self.accountSettingsController {
             self.rootTabController?.updateControllerLayout(controller: accountSettingsController)
             accountSettingsController.openAvatars()
         }
     }
-    
+
     public func startNewCall() {
         self.callListController?.tabBarActivateSearch()
     }

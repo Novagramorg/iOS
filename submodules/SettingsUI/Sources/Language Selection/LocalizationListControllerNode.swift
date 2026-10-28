@@ -16,6 +16,8 @@ import UndoUI
 import TelegramUIPreferences
 import TranslateUI
 import PremiumUI
+import NovagramPremiumUnlock
+import NovagramLocalization
 
 private enum LanguageListSection: ItemListSectionId {
     case translate
@@ -476,6 +478,8 @@ final class LocalizationListControllerNode: ViewControllerTracingNode {
             guard let strongSelf = self else {
                 return
             }
+            // Novagram: Telegram has no official Chinese, so list the Chinese packs here too.
+            let localizationListState = NovagramChineseLocalizations.adding(to: localizationListState)
             
             let isPremium = peer?.isPremium ?? false
                         
@@ -533,7 +537,7 @@ final class LocalizationListControllerNode: ViewControllerTracingNode {
                         entries.append(.translate(text: presentationData.strings.Localization_ShowTranslate, value: showTranslate))
                     }
                     if chatTranslationAvailable {
-                        entries.append(.translateEntire(text: presentationData.strings.Localization_TranslateEntireChat, value: translateChats, locked: !isPremium))
+                        entries.append(.translateEntire(text: presentationData.strings.Localization_TranslateEntireChat, value: translateChats, locked: !isPremium && !NovagramPremiumUnlock.isTranslateChatsUnlocked))
                     }
                     
                     var value = ""
@@ -621,6 +625,10 @@ final class LocalizationListControllerNode: ViewControllerTracingNode {
                     strongSelf.push(translationSettingsController(context: strongSelf.context))
                 }
             }, selectLocalization: { [weak self] info in self?.selectLocalization(info) }, setItemWithRevealedOptions: setItemWithRevealedOptions, removeItem: removeItem, showPremiumInfo: {
+                // Novagram: never pitch Premium for a feature this build has already unlocked.
+                if NovagramPremiumUnlock.isTranslateChatsUnlocked {
+                    return
+                }
                 var replaceImpl: ((ViewController) -> Void)?
                 let controller = PremiumDemoScreen(context: context, subject: .translation, action: {
                     let controller = PremiumIntroScreen(context: context, source: .translation)

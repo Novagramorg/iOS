@@ -8,6 +8,7 @@ import TelegramPresentationData
 import ItemListUI
 import PresentationDataUtils
 import AppBundle
+import NovagramLocalization
 
 private func generateBorderImage(theme: PresentationTheme, bordered: Bool, selected: Bool) -> UIImage? {
     return generateImage(CGSize(width: 30.0, height: 30.0), rotatedContext: { size, context in
@@ -373,37 +374,19 @@ class ThemeSettingsAppIconItemNode: ListViewItemNode, ItemListItemNode {
                         if let image = UIImage(named: icon.imageName, in: getAppBundle(), compatibleWith: nil) {
                             let selected = icon.name == item.currentIconName
 
-                            var name = "Icon"
-                            var bordered = true
+                            let bordered = true
+                            let novagramL10n = NovagramL10n(item.strings)
+                            var name: String
                             switch icon.name {
-                                case "BlueIcon":
-                                    name = item.strings.Appearance_AppIconDefault
-                                case "BlackIcon":
-                                    name = item.strings.Appearance_AppIconDefaultX
-                                case "BlueClassicIcon":
-                                    name = item.strings.Appearance_AppIconClassic
-                                case "BlackClassicIcon":
-                                    name = item.strings.Appearance_AppIconClassicX
-                                case "BlueFilledIcon":
-                                    name = item.strings.Appearance_AppIconFilled
-                                    bordered = false
-                                case "BlackFilledIcon":
-                                    name = item.strings.Appearance_AppIconFilledX
-                                    bordered = false
-                                case "WhiteFilled":
-                                    name = "⍺ White"
-                                case "New1":
-                                    name = item.strings.Appearance_AppIconNew1
-                                case "New2":
-                                    name = item.strings.Appearance_AppIconNew2
-                                case "Premium":
-                                    name = item.strings.Appearance_AppIconPremium
-                                case "PremiumBlack":
-                                    name = item.strings.Appearance_AppIconBlack
-                                case "PremiumTurbo":
-                                    name = item.strings.Appearance_AppIconTurbo
-                                default:
-                                    name = icon.name
+                                case "AppIconLLCIcon": name = novagramL10n.iconName_default
+                                case "NovaBlueIcon": name = novagramL10n.iconName_blue
+                                case "NovaTealIcon": name = novagramL10n.iconName_teal
+                                case "NovaPurpleIcon": name = novagramL10n.iconName_purple
+                                case "NovaPinkIcon": name = novagramL10n.iconName_pink
+                                case "NovaOrangeIcon": name = novagramL10n.iconName_orange
+                                case "NovaBlackIcon": name = novagramL10n.iconName_black
+                                case "NovaRedIcon": name = novagramL10n.iconName_red
+                                default: name = icon.name
                             }
                         
                             imageNode.setup(theme: item.theme, icon: image, title: NSAttributedString(string: name, font: selected ? selectedTextFont : textFont, textColor: selected  ? item.theme.list.itemAccentColor : item.theme.list.itemPrimaryTextColor, paragraphAlignment: .center), locked: !item.isPremium && icon.isPremium, color: item.theme.list.itemPrimaryTextColor, bordered: bordered, selected: selected, action: {

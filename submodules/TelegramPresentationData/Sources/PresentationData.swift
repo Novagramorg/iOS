@@ -1,4 +1,5 @@
 import Foundation
+import NovagramBrand
 import UIKit
 import SwiftSignalKit
 import Postbox
@@ -129,24 +130,27 @@ public func dictFromLocalization(_ value: Localization) -> [String: String] {
     for entry in value.entries {
         switch entry {
             case let .string(key, value):
-                dict[key] = value
+                // Novagram: every string the app renders passes through here, so this is the one
+                // place where the server's language pack can be rebranded for all languages at
+                // once. See NovagramBrandStrings for what is deliberately left as "Telegram".
+                dict[key] = NovagramBrandStrings.applyBrand(to: value)
             case let .pluralizedString(key, zero, one, two, few, many, other):
                 if let zero = zero {
-                    dict["\(key)_zero"] = zero
+                    dict["\(key)_zero"] = NovagramBrandStrings.applyBrand(to: zero)
                 }
                 if let one = one {
-                    dict["\(key)_1"] = one
+                    dict["\(key)_1"] = NovagramBrandStrings.applyBrand(to: one)
                 }
                 if let two = two {
-                    dict["\(key)_2"] = two
+                    dict["\(key)_2"] = NovagramBrandStrings.applyBrand(to: two)
                 }
                 if let few = few {
-                    dict["\(key)_3_10"] = few
+                    dict["\(key)_3_10"] = NovagramBrandStrings.applyBrand(to: few)
                 }
                 if let many = many {
-                    dict["\(key)_many"] = many
+                    dict["\(key)_many"] = NovagramBrandStrings.applyBrand(to: many)
                 }
-                dict["\(key)_any"] = other
+                dict["\(key)_any"] = NovagramBrandStrings.applyBrand(to: other)
         }
     }
     return dict

@@ -17,16 +17,22 @@ swift_library(
     ]),
     copts = [
         "-warnings-as-errors",
+        # Novagram: min iOS 15 surfaces iOS-14/15 deprecations here; the APIs still work, so keep
+        # every other warning fatal and downgrade only this group. Must follow -warnings-as-errors.
+        "-Wwarning",
+        "DeprecatedDeclaration",
     ],
     deps = [
         "//submodules/Display",
         "//submodules/LottieSettings:LottieSettings",
         "//submodules/AsyncDisplayKit",
         "//submodules/SSignalKit/SwiftSignalKit",
+        "//submodules/Postbox",
         "//submodules/TelegramCore",
         "//submodules/TelegramPresentationData",
         "//submodules/TextFormat",
         "//submodules/AccountContext",
+        "//submodules/TelegramAudio",
         "//submodules/TouchDownGesture",
         "//submodules/ImageTransparency",
         "//submodules/ActivityIndicator",
@@ -78,6 +84,10 @@ swift_library(
         "//submodules/TelegramUI/Components/StarsParticleEffect",
         "//submodules/TelegramUI/Components/Calls/VideoChatMicButtonComponent",
         "//submodules/TelegramUI/Components/RichTextEditor:RichTextEditorUIKit",
+        "//submodules/TelegramUI/Components/VideoMessageCameraScreen",
+        "//submodules/Novagram/SpeechToText:NovagramSpeechToText",
+        "//submodules/Novagram/Localization:NovagramLocalization",
+        "//submodules/Novagram/RoundVideoFromGallery:NovagramRoundVideoFromGallery",
         "//submodules/TelegramUI/Components/RichTextEditor:RichTextEditorCore",
     ],
     visibility = [

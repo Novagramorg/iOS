@@ -12,6 +12,12 @@ swift_library(
         "-warnings-as-errors",
     ],
     deps = [
+        "//submodules/Novagram/StoryUnlock:NovagramStoryUnlock",
+        "//submodules/Novagram/ChatLock:NovagramChatLock",
+        "//submodules/Novagram/SecretVault:NovagramSecretVault",
+        "//submodules/Novagram/ForeignUserBlock:NovagramForeignUserBlock",
+        "//submodules/Novagram/Sponsored:NovagramSponsored",
+        "//submodules/Novagram/Localization:NovagramLocalization",
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
         "//submodules/LottieSettings:LottieSettings",
         "//submodules/AsyncDisplayKit:AsyncDisplayKit",

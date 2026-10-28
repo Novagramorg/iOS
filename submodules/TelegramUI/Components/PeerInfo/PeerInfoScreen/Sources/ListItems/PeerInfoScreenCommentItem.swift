@@ -8,6 +8,7 @@ import Markdown
 import AccountContext
 import TextNodeWithEntities
 import TelegramCore
+import NovagramChannelStats
 
 final class PeerInfoScreenCommentItem: PeerInfoScreenItem {
     enum Icon {
@@ -25,6 +26,9 @@ final class PeerInfoScreenCommentItem: PeerInfoScreenItem {
     let attributedPrefix: NSAttributedString?
     let useAccentLinkColor: Bool
     let linkAction: ((LinkAction) -> Void)?
+    // Novagram: optional hidden long press on the comment (see submodules/Novagram/HOOKS.md).
+    var novagramLongPressDuration: TimeInterval = 0.0
+    var novagramLongPressAction: (() -> Void)?
     
     init(id: AnyHashable, icon: Icon? = nil, text: String, entities: [MessageTextEntity]? = nil, attributedPrefix: NSAttributedString? = nil, useAccentLinkColor: Bool = true, linkAction: ((LinkAction) -> Void)? = nil) {
         self.id = id
@@ -51,6 +55,8 @@ private final class PeerInfoScreenCommentItemNode: PeerInfoScreenItemNode {
     private var presentationData: PresentationData?
     
     private var chevronImage: UIImage?
+    // Novagram: hidden long press (see submodules/Novagram/HOOKS.md).
+    private var novagramLongPress: NovagramHiddenLongPress?
     
     override init() {
         self.textNode = ImmediateTextNodeWithEntities()
@@ -89,6 +95,11 @@ private final class PeerInfoScreenCommentItemNode: PeerInfoScreenItemNode {
         let themeUpdated = self.presentationData?.theme !== presentationData.theme
         self.item = item
         self.presentationData = presentationData
+        // Novagram: hidden long press (see submodules/Novagram/HOOKS.md).
+        if item.novagramLongPressAction != nil || self.novagramLongPress != nil {
+            self.novagramLongPress = self.novagramLongPress ?? NovagramHiddenLongPress(view: self.view, recognizesSimultaneously: true)
+            self.novagramLongPress?.update(duration: item.novagramLongPressDuration, action: item.novagramLongPressAction)
+        }
         
         let sideInset: CGFloat = 16.0 + safeInsets.left
         let verticalInset: CGFloat = 7.0

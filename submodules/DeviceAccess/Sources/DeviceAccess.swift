@@ -11,6 +11,7 @@ import UserNotifications
 import CoreTelephony
 import TelegramPresentationData
 import AccountContext
+import NovagramContactsConsent
 
 public enum DeviceAccessCameraSubject {
     case video
@@ -523,31 +524,36 @@ public final class DeviceAccess {
                             fatalError()
                 }
                 case .contacts:
-                    let _ = (self.contactsPromise.get()
-                    |> take(1)
-                    |> deliverOnMainQueue).start(next: { value in
-                        if let value = value {
-                            completion(value)
-                        } else {
-                            switch CNContactStore.authorizationStatus(for: .contacts) {
-                                case .notDetermined:
-                                    let store = CNContactStore()
-                                    store.requestAccess(for: .contacts, completionHandler: { authorized, _ in
-                                        self.contactsPromise.set(.single(authorized))
-                                        completion(authorized)
-                                    })
-                                case .authorized:
-                                    self.contactsPromise.set(.single(true))
-                                    completion(true)
-                                case .limited:
-                                    self.contactsPromise.set(.single(true))
-                                    completion(true)
-                                default:
-                                    self.contactsPromise.set(.single(false))
-                                    completion(false)
+                    // Novagram hook: Apple App Review 5.1.2 (Privacy — Data Use and Sharing).
+                    // Show explicit server-upload consent dialog BEFORE iOS permission alert.
+                    // NSContactsUsageDescription alone was rejected (submission d5a06920..., 2026-05-16).
+                    NovagramContactsConsent.gate(completion: completion) {
+                        let _ = (self.contactsPromise.get()
+                        |> take(1)
+                        |> deliverOnMainQueue).start(next: { value in
+                            if let value = value {
+                                completion(value)
+                            } else {
+                                switch CNContactStore.authorizationStatus(for: .contacts) {
+                                    case .notDetermined:
+                                        let store = CNContactStore()
+                                        store.requestAccess(for: .contacts, completionHandler: { authorized, _ in
+                                            self.contactsPromise.set(.single(authorized))
+                                            completion(authorized)
+                                        })
+                                    case .authorized:
+                                        self.contactsPromise.set(.single(true))
+                                        completion(true)
+                                    case .limited:
+                                        self.contactsPromise.set(.single(true))
+                                        completion(true)
+                                    default:
+                                        self.contactsPromise.set(.single(false))
+                                        completion(false)
+                                }
                             }
-                        }
-                    })
+                        })
+                    }
                 case .notifications:
                     if let registerForNotifications = registerForNotifications {
                         registerForNotifications { result in

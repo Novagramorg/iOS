@@ -15,6 +15,9 @@ import TelegramPresentationData
 import PresentationDataUtils
 import PasswordSetupUI
 import InstantPageCache
+import ContactListUI
+import NovagramMessenger
+import NovagramAnalytics
 import WalletContext
 import UndoUI
 
@@ -24,7 +27,7 @@ extension PeerInfoScreenNode {
             guard let strongSelf = self, let navigationController = strongSelf.controller?.navigationController as? NavigationController else {
                 return
             }
-            
+
             if strongSelf.isMyProfile {
                 navigationController.pushViewController(c)
             } else {
@@ -37,12 +40,12 @@ extension PeerInfoScreenNode {
                     }
                 }
                 updatedControllers.append(c)
-                
+
                 var animated = true
                 if let validLayout = strongSelf.validLayout?.0, case .regular = validLayout.metrics.widthClass {
                     switch c.navigationPresentation {
                     case .default, .master:
-                        animated = false
+                    animated = false
                     case .modal, .flatModal, .standaloneModal, .standaloneFlatModal, .modalInLargeLayout, .modalInCompactLayout:
                         break
                     }
@@ -69,10 +72,18 @@ extension PeerInfoScreenNode {
                 isMyProfile: true,
                 profileGiftsContext: self.data?.profileGiftsContext
             ))
+        case .novagramMessenger:
+            push(novagramSettingsController(context: self.context))
+        case .novagramBots:
+            push(novagramBotsController(context: self.context))
+        case .novagramAccounts:
+            push(novagramAccountsController(context: self.context))
+        case .analytics:
+            push(novagramAnalyticsController(context: self.context))
         case .stories:
             push(PeerInfoStoryGridScreen(context: self.context, peerId: self.context.account.peerId, scope: .saved))
         case .savedMessages:
-            let _ = (self.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: self.context.account.peerId))
+            _ = (self.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: self.context.account.peerId))
             |> deliverOnMainQueue).startStandalone(next: { [weak self] peer in
                 guard let self, let peer = peer else {
                     return
@@ -81,10 +92,18 @@ extension PeerInfoScreenNode {
                     self.context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: navigationController, context: self.context, chatLocation: .peer(peer)))
                 }
             })
+        case .contacts:
+            let contactsController = ContactsController(context: self.context)
+            contactsController.backPressed = { [weak contactsController] in
+                if let navigationController = contactsController?.navigationController as? NavigationController {
+                    _ = navigationController.popViewController(animated: true)
+                }
+            }
+            push(contactsController)
         case .recentCalls:
             push(CallListController(context: context, mode: .navigation))
         case .devices:
-            let _ = (self.activeSessionsContextAndCount.get()
+            _ = (self.activeSessionsContextAndCount.get()
             |> take(1)
             |> deliverOnMainQueue).startStandalone(next: { [weak self] activeSessionsContextAndCount in
                 if let strongSelf = self, let activeSessionsContextAndCount = activeSessionsContextAndCount {
@@ -101,7 +120,7 @@ extension PeerInfoScreenNode {
             }
         case .privacyAndSecurity:
             if let settings = self.data?.globalSettings {
-                let _ = (combineLatest(self.blockedPeers.get(), self.hasTwoStepAuth.get())
+                _ = (combineLatest(self.blockedPeers.get(), self.hasTwoStepAuth.get())
                 |> take(1)
                 |> deliverOnMainQueue).startStandalone(next: { [weak self] blockedPeersContext, hasTwoStepAuth in
                     if let strongSelf = self {
@@ -141,9 +160,9 @@ extension PeerInfoScreenNode {
                 guard let self else {
                     return
                 }
-                let _ = self.context.engine.notices.dismissServerProvidedSuggestion(suggestion: ServerProvidedSuggestion.setupPassword.id).startStandalone()
+                _ = self.context.engine.notices.dismissServerProvidedSuggestion(suggestion: ServerProvidedSuggestion.setupPassword.id).startStandalone()
             })
-            
+
             let controller = self.context.sharedContext.makeSetupTwoFactorAuthController(context: self.context)
             push(controller)
         case .dataAndStorage:
@@ -159,7 +178,7 @@ extension PeerInfoScreenNode {
             guard let controller = self.controller, !controller.presentAccountFrozenInfoIfNeeded() else {
                 return
             }
-            let _ = (self.context.account.stateManager.contactBirthdays
+            _ = (self.context.account.stateManager.contactBirthdays
             |> take(1)
             |> deliverOnMainQueue).start(next: { [weak self] birthdays in
                 guard let self else {
@@ -181,7 +200,7 @@ extension PeerInfoScreenNode {
         case .support:
             let supportPeer = Promise<EnginePeer.Id?>()
             supportPeer.set(context.engine.peers.supportPeerId())
-            
+
             self.controller?.present(textAlertController(context: self.context, updatedPresentationData: self.controller?.updatedPresentationData, title: nil, text: self.presentationData.strings.Settings_FAQ_Intro, actions: [
                 TextAlertAction(type: .genericAction, title: presentationData.strings.Settings_FAQ_Button, action: { [weak self] in
                     self?.openFaq()
@@ -217,27 +236,28 @@ extension PeerInfoScreenNode {
             }
             push(usernameSetupController(context: self.context))
         case .addAccount:
-            let _ = (activeAccountsAndPeers(context: context)
+            _ = (activeAccountsAndPeers(context: context)
             |> take(1)
             |> deliverOnMainQueue
             ).startStandalone(next: { [weak self] accountAndPeer, accountsAndPeers in
                 guard let strongSelf = self else {
                     return
                 }
-                var maximumAvailableAccounts: Int = 3
+                // Novagram: use the fork-wide account limit instead of the upstream 3/4 premium gate.
+                var maximumAvailableAccounts: Int = maximumNumberOfAccounts
                 if accountAndPeer?.1.isPremium == true && !strongSelf.context.account.testingEnvironment {
-                    maximumAvailableAccounts = 4
+                    maximumAvailableAccounts = maximumPremiumNumberOfAccounts
                 }
                 var count: Int = 1
                 for (accountContext, peer, _) in accountsAndPeers {
                     if !accountContext.account.testingEnvironment {
                         if peer.isPremium {
-                            maximumAvailableAccounts = 4
+                            maximumAvailableAccounts = maximumPremiumNumberOfAccounts
                         }
                         count += 1
                     }
                 }
-                
+
                 if count >= maximumAvailableAccounts {
                     var replaceImpl: ((ViewController) -> Void)?
                     let controller = PremiumLimitScreen(context: strongSelf.context, subject: .accounts, count: Int32(count), action: {
@@ -256,9 +276,10 @@ extension PeerInfoScreenNode {
                 }
             })
         case .logout:
-            if case let .user(user) = self.data?.peer, let phoneNumber = user.phone {
+            // Novagram: a bot account has no phone number; don't gate logout on user.phone (else "Log Out" is a no-op for a bot session).
+            if case let .user(user) = self.data?.peer {
                 if let controller = self.controller, let navigationController = controller.navigationController as? NavigationController {
-                    self.controller?.push(logoutOptionsController(context: self.context, navigationController: navigationController, canAddAccounts: true, phoneNumber: phoneNumber))
+                    self.controller?.push(logoutOptionsController(context: self.context, navigationController: navigationController, canAddAccounts: true, phoneNumber: user.phone ?? ""))
                 }
             }
         case .rememberPassword:
@@ -269,7 +290,7 @@ extension PeerInfoScreenNode {
                 return twoStepVerificationUnlockSettingsController(context: context, mode: .access(intro: false, data: .single(TwoStepVerificationUnlockSettingsControllerData.access(configuration: TwoStepVerificationAccessConfiguration(configuration: configuration, password: nil)))))
             }
             controller.passwordRemembered = {
-                let _ = context.engine.notices.dismissServerProvidedSuggestion(suggestion: ServerProvidedSuggestion.validatePassword.id).startStandalone()
+                _ = context.engine.notices.dismissServerProvidedSuggestion(suggestion: ServerProvidedSuggestion.validatePassword.id).startStandalone()
             }
             push(controller)
         case .emojiStatus:
@@ -316,16 +337,16 @@ extension PeerInfoScreenNode {
             self.didSetCachedFaq = true
         }
     }
-    
+
     func openFaq(anchor: String? = nil) {
         self.setupFaqIfNeeded()
-        
+
         let presentationData = self.presentationData
-        let progressSignal = Signal<Never, NoError> { [weak self] subscriber in
+        let progressSignal = Signal<Never, NoError> { [weak self] _ in
             let controller = OverlayStatusController(theme: presentationData.theme, type: .loading(cancelled: nil))
             self?.controller?.present(controller, in: .window(.root))
             return ActionDisposable { [weak controller] in
-                Queue.mainQueue().async() {
+                Queue.mainQueue().async {
                     controller?.dismiss()
                 }
             }
@@ -333,8 +354,8 @@ extension PeerInfoScreenNode {
         |> runOn(Queue.mainQueue())
         |> delay(0.15, queue: Queue.mainQueue())
         let progressDisposable = progressSignal.start()
-        
-        let _ = (self.cachedFaq.get()
+
+        _ = (self.cachedFaq.get()
         |> filter { $0 != nil }
         |> take(1)
         |> deliverOnMainQueue).start(next: { [weak self] resolvedUrl in
@@ -345,18 +366,18 @@ extension PeerInfoScreenNode {
                 if case let .instantView(webPage, _) = resolvedUrl, let customAnchor = anchor {
                     resolvedUrl = .instantView(webPage, customAnchor)
                 }
-                strongSelf.context.sharedContext.openResolvedUrl(resolvedUrl, context: strongSelf.context, urlContext: .generic, navigationController: strongSelf.controller?.navigationController as? NavigationController, forceExternal: false, forceUpdate: false, openPeer: { peer, navigation in
-                }, sendFile: nil, sendSticker: nil, sendEmoji: nil, requestMessageActionUrlAuth: nil, joinVoiceChat: nil, present: { [weak self] controller, arguments in
+                strongSelf.context.sharedContext.openResolvedUrl(resolvedUrl, context: strongSelf.context, urlContext: .generic, navigationController: strongSelf.controller?.navigationController as? NavigationController, forceExternal: false, forceUpdate: false, openPeer: { _, _ in
+                }, sendFile: nil, sendSticker: nil, sendEmoji: nil, requestMessageActionUrlAuth: nil, joinVoiceChat: nil, present: { [weak self] controller, _ in
                     self?.controller?.push(controller)
                 }, dismissInput: {}, contentContext: nil, progress: nil, completion: nil)
             }
         })
     }
-    
+
     private func openTips() {
         let controller = OverlayStatusController(theme: self.presentationData.theme, type: .loading(cancelled: nil))
         self.controller?.present(controller, in: .window(.root))
-        
+
         let context = self.context
         let navigationController = self.controller?.navigationController as? NavigationController
         self.tipsPeerDisposable.set((self.context.engine.peers.resolvePeerByName(name: self.presentationData.strings.Settings_TipsUsername, referrer: nil)

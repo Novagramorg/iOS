@@ -25,6 +25,7 @@ import TextFormat
 import SliderContextItem
 import Pasteboard
 import AdUI
+import UrlHandling // Novagram: isTelegramMeLink for OUR video banner click
 import AdsInfoScreen
 import AdsReportScreen
 import SaveProgressScreen
@@ -39,6 +40,7 @@ import BundleIconComponent
 import VideoPlaybackControlsComponent
 import PhotoResources
 import GlassBackgroundComponent
+import NovagramSponsoredBridge
 
 public enum UniversalVideoGalleryItemContentInfo {
     case message(Message, GalleryMediaSubject?)
@@ -231,6 +233,8 @@ private final class UniversalVideoGalleryItemOverlayNode: GalleryOverlayContentN
     private let adDisposable = MetaDisposable()
     
     private var adSchedule: [(Int32, Message?)] = []
+    // Novagram: OUR VIDEO-slot banner state for this item's channel (playback-time schedule).
+    var novagramVideoAd: NovagramVideoAdHandle?
 
     var performAction: ((GalleryControllerInteractionTapAction) -> Void)?
     var presentPremiumDemo: (() -> Void)?
@@ -248,6 +252,8 @@ private final class UniversalVideoGalleryItemOverlayNode: GalleryOverlayContentN
             return
         }
         self.message = message
+        // Novagram: Novagram video banner first; Telegram's below only as a fallback (never for Premium).
+        self.novagramVideoAd = NovagramSponsoredBridge.provider?.videoAdHandle(context: context, message: message, onUpdate: { [weak self] in if let self, let layout = self.validLayout { self.updateLayout(size: layout.size, metrics: layout.metrics, insets: layout.insets, isHidden: layout.isHidden, transition: .immediate) } })
         
         let adContext = context.engine.messages.adMessages(peerId: message.id.peerId, messageId: message.id)
         self.adContext = adContext
@@ -346,12 +352,17 @@ private final class UniversalVideoGalleryItemOverlayNode: GalleryOverlayContentN
                 currentAd = (time, maybeMessage)
             }
         }
+        // Novagram: OUR banner (playback time) wins; Telegram's wall-clock one only as a fallback, never for Premium.
+        if let novagramVideoAd = self.novagramVideoAd { currentAd = novagramVideoAd.resolveBanner(telegram: currentAd) }
         
         if let context = self.context, let (initialTimestamp, maybeMessage) = currentAd, let adMessage = maybeMessage, !self.hiddenMessages.contains(adMessage.id) {
             if let adAttribute = adMessage.adAttribute {
                 if !self.reportedMessages.contains(adAttribute.opaqueId) {
                     self.reportedMessages.insert(adAttribute.opaqueId)
-                    context.engine.messages.markAdAsSeen(opaqueId: adAttribute.opaqueId)
+                    // Novagram: OUR banner's view goes to the Novagram backend only.
+                    if self.novagramVideoAd?.recordViewIfOurs(adMessage) != true {
+                        context.engine.messages.markAdAsSeen(opaqueId: adAttribute.opaqueId)
+                    }
                 }
             }
                         
@@ -376,6 +387,10 @@ private final class UniversalVideoGalleryItemOverlayNode: GalleryOverlayContentN
                             guard let self else {
                                 return
                             }
+                            // Novagram: OUR banner closes only after min_display_duration and never offers Premium.
+                            if let novagramVideoAd = self.novagramVideoAd, novagramVideoAd.closeIfOurs(adMessage, available: available) {
+                                return
+                            }
                             if available {
                                 self.hiddenMessages.insert(adMessage.id)
                                 if let validLayout = self.validLayout {
@@ -386,6 +401,10 @@ private final class UniversalVideoGalleryItemOverlayNode: GalleryOverlayContentN
                             }
                         },
                         adAction: { [weak self] in
+                            // Novagram: OUR banner queues its Novagram click, hides, then opens the url (never markAdAction).
+                            if let self, let novagramVideoAd = self.novagramVideoAd, novagramVideoAd.clickIfOurs(adMessage, open: { [weak self] url in let inApp = isTelegramMeLink(url); self?.performAction?(.url(url: url, concealed: false, forceExternal: !inApp, dismiss: inApp)) }) {
+                                return
+                            }
                             if let self, let ad = adMessage.adAttribute {
                                 self.hiddenMessages.insert(adMessage.id)
                                 if let validLayout = self.validLayout {
@@ -1807,6 +1826,8 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
                     }
                     
                     strongSelf.hasStartedOnce = hasStarted
+                    // Novagram: the VIDEO-slot timers run on playback time.
+                    strongSelf.overlayContentNode.novagramVideoAd?.setPlaying(isPlaying)
                     
                     if !disablePlayerControls && strongSelf.isCentral == true && isPlaying {
                         strongSelf.isPlayingPromise.set(true)
@@ -3323,6 +3344,10 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
     private var playOnDismiss = false
     private func openMoreMenu(sourceView: UIView, gesture: ContextGesture?, adMessage: Message?, isSettings: Bool, actionsOnTop: Bool = false) {
         guard let controller = self.baseNavigationController()?.topViewController as? ViewController else {
+            return
+        }
+        // Novagram: OUR ad gets the Novagram About / Report sheet (no Premium "Remove ads").
+        if let adMessage, let adAttribute = adMessage.adAttribute, NovagramSponsoredBridge.provider?.presentMenuIfOurs(opaqueId: adAttribute.opaqueId, context: self.context, present: { [weak controller] c in controller?.present(c, in: .window(.root)) }) == true {
             return
         }
                 

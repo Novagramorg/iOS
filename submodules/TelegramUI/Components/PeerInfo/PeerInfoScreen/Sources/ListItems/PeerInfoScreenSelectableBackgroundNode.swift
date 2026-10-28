@@ -3,6 +3,7 @@ import UIKit
 import AsyncDisplayKit
 import Display
 import TelegramPresentationData
+import NovagramChannelStats
 
 final class PeerInfoScreenSelectableBackgroundNode: ASDisplayNode {
     private let backgroundNode: ASDisplayNode
@@ -11,6 +12,7 @@ final class PeerInfoScreenSelectableBackgroundNode: ASDisplayNode {
     let bringToFrontForHighlight: () -> Void
     
     private var isHighlighted: Bool = false
+    private var novagramLongPress: NovagramHiddenLongPress?
     
     var pressed: (() -> Void)? {
         didSet {
@@ -41,6 +43,16 @@ final class PeerInfoScreenSelectableBackgroundNode: ASDisplayNode {
     
     @objc private func buttonPressed() {
         self.pressed?()
+    }
+    
+    // Novagram: optional hidden long press on a row (see submodules/Novagram/HOOKS.md).
+    func setLongPress(duration: TimeInterval, action: (() -> Void)?) {
+        if action == nil && self.novagramLongPress == nil {
+            return
+        }
+        let longPress = self.novagramLongPress ?? NovagramHiddenLongPress(view: self.button)
+        self.novagramLongPress = longPress
+        longPress.update(duration: duration, action: action)
     }
     
     func updateIsHighlighted(_ isHighlighted: Bool) {

@@ -1,0 +1,202 @@
+// swift-interface-format-version: 1.0
+// swift-compiler-version: Apple Swift version 6.4 (swiftlang-6.4.0.34.1 clang-2100.3.34.1)
+// swift-module-flags: -target x86_64-apple-ios15.0-simulator -enable-objc-interop -enable-library-evolution -language-mode 6 -O -enable-experimental-feature DebugDescriptionMacro -module-name NovagramServices -package-name novagramservices
+// swift-module-flags-ignorable:  -formal-cxx-interoperability-mode=off -interface-compiler-version 6.4
+import CryptoKit
+import Foundation
+import StoreKit
+import Swift
+import _Concurrency
+import _StringProcessing
+import _SwiftConcurrencyShims
+public struct ServicesCachePolicy : Swift::Sendable, Swift::Equatable {
+  public var isEnabled: Swift::Bool
+  public var currencyRatesMaxAge: Foundation::TimeInterval
+  public var statisticsMaxAge: Foundation::TimeInterval
+  public init(isEnabled: Swift::Bool = true, currencyRatesMaxAge: Foundation::TimeInterval = 86_400, statisticsMaxAge: Foundation::TimeInterval = 3_600)
+  public static let `default`: NovagramServices::ServicesCachePolicy
+  public static let disabled: NovagramServices::ServicesCachePolicy
+  public static func == (a: NovagramServices::ServicesCachePolicy, b: NovagramServices::ServicesCachePolicy) -> Swift::Bool
+}
+public struct ServicesConfiguration : Swift::Sendable {
+  public var timeout: Foundation::TimeInterval
+  public var userAgent: Swift::String
+  public var cache: NovagramServices::ServicesCachePolicy
+  public init(timeout: Foundation::TimeInterval = 15, userAgent: Swift::String = "NovagramServices/\(NovagramServices.version)", cache: NovagramServices::ServicesCachePolicy = .default)
+}
+public enum NovagramServices {
+  public static let version: Swift::String
+}
+@_hasMissingDesignatedInitializers final public class ServicesClient : Swift::Sendable {
+  final public let reviewLogin: NovagramServices::ReviewLoginAPI
+  final public let currencyRates: NovagramServices::CurrencyRatesAPI
+  final public let weather: NovagramServices::WeatherAPI
+  final public let statistics: NovagramServices::StatisticsAPI
+  convenience public init(configuration: NovagramServices::ServicesConfiguration = ServicesConfiguration())
+  final public func clearCache() async throws
+  @objc deinit
+}
+public enum ServicesError : Swift::Error, Swift::Sendable, Swift::Equatable {
+  case notConfigured(service: Swift::String)
+  case notAllowed(service: Swift::String)
+  case invalidArgument(Swift::String)
+  case http(statusCode: Swift::Int)
+  case invalidResponse
+  case network(code: Swift::Int)
+  public var statusCode: Swift::Int? {
+    get
+  }
+  public var isRetryable: Swift::Bool {
+    get
+  }
+  public static func == (a: NovagramServices::ServicesError, b: NovagramServices::ServicesError) -> Swift::Bool
+}
+public struct CurrencyRate : Swift::Sendable, Swift::Equatable, Swift::Hashable {
+  public let code: Swift::String
+  public let numericCode: Swift::String
+  public let nameUzbek: Swift::String
+  public let nameUzbekCyrillic: Swift::String
+  public let nameRussian: Swift::String
+  public let nameEnglish: Swift::String
+  public let nominal: Swift::Int
+  public let rate: Foundation::Decimal
+  public let change: Foundation::Decimal
+  public let date: Foundation::Date
+  public init(code: Swift::String, numericCode: Swift::String, nameUzbek: Swift::String, nameUzbekCyrillic: Swift::String, nameRussian: Swift::String, nameEnglish: Swift::String, nominal: Swift::Int, rate: Foundation::Decimal, change: Foundation::Decimal, date: Foundation::Date)
+  public var ratePerUnit: Foundation::Decimal {
+    get
+  }
+  public func name(languageCode: Swift::String) -> Swift::String
+  public static func == (a: NovagramServices::CurrencyRate, b: NovagramServices::CurrencyRate) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public struct CurrencyRatesAPI : Swift::Sendable {
+  public func latest() async throws -> [NovagramServices::CurrencyRate]
+  public func rates(on date: Foundation::Date) async throws -> [NovagramServices::CurrencyRate]
+  public func rate(for currencyCode: Swift::String, on date: Foundation::Date? = nil) async throws -> NovagramServices::CurrencyRate?
+}
+public enum AppDistribution : Swift::Sendable, Swift::Equatable {
+  case appStore
+  case sandbox
+  case development
+  case unknown
+  public static func current() async -> NovagramServices::AppDistribution
+  public static func == (a: NovagramServices::AppDistribution, b: NovagramServices::AppDistribution) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public struct ReviewLoginAPI : Swift::Sendable {
+  public var isConfigured: Swift::Bool {
+    get
+  }
+  public func isReviewPhone(_ phoneNumber: Swift::String) -> Swift::Bool
+  public func isAllowedInThisInstall() async -> Swift::Bool
+  public func fetchCode() async throws -> Swift::String
+}
+extension NovagramServices::ReviewLoginAPI : Swift::CustomStringConvertible, Swift::CustomDebugStringConvertible, Swift::CustomReflectable {
+  public var description: Swift::String {
+    get
+  }
+  public var debugDescription: Swift::String {
+    get
+  }
+  public var customMirror: Swift::Mirror {
+    get
+  }
+}
+public struct StatisticsAPI : Swift::Sendable {
+  public var isConfigured: Swift::Bool {
+    get
+  }
+  public func registerInstall(deviceID: Swift::String) async throws -> NovagramServices::StatisticsChange
+  public func registerAccount(deviceID: Swift::String) async throws -> NovagramServices::StatisticsChange
+  public func deleteAccount(deviceID: Swift::String) async throws -> NovagramServices::StatisticsChange
+  public func counts() async throws -> NovagramServices::StatisticsCounts
+  public func isLive() async throws -> Swift::Bool
+  public func isReady() async throws -> Swift::Bool
+}
+extension NovagramServices::StatisticsAPI : Swift::CustomStringConvertible, Swift::CustomDebugStringConvertible, Swift::CustomReflectable {
+  public var description: Swift::String {
+    get
+  }
+  public var debugDescription: Swift::String {
+    get
+  }
+  public var customMirror: Swift::Mirror {
+    get
+  }
+}
+public struct StatisticsCounts : Swift::Sendable, Swift::Equatable {
+  public let downloads: Swift::Int
+  public let active: Swift::Int
+  public init(downloads: Swift::Int, active: Swift::Int)
+  public static func == (a: NovagramServices::StatisticsCounts, b: NovagramServices::StatisticsCounts) -> Swift::Bool
+}
+public struct StatisticsChange : Swift::Sendable, Swift::Equatable {
+  public let counts: NovagramServices::StatisticsCounts
+  public let downloadsChanged: Swift::Bool
+  public let activeChanged: Swift::Bool
+  public init(counts: NovagramServices::StatisticsCounts, downloadsChanged: Swift::Bool, activeChanged: Swift::Bool)
+  public static func == (a: NovagramServices::StatisticsChange, b: NovagramServices::StatisticsChange) -> Swift::Bool
+}
+public struct WeatherAPI : Swift::Sendable {
+  public func forecast(latitude: Swift::Double, longitude: Swift::Double, days: Swift::Int = 3, timeZone: Foundation::TimeZone? = nil) async throws -> NovagramServices::WeatherForecast
+}
+public struct WeatherForecast : Swift::Sendable, Swift::Equatable {
+  public let latitude: Swift::Double
+  public let longitude: Swift::Double
+  public let updatedAt: Foundation::Date
+  public let validUntil: Foundation::Date?
+  public let current: NovagramServices::CurrentWeather
+  public let days: [NovagramServices::DailyWeather]
+  public let timeZone: Foundation::TimeZone
+  public init(latitude: Swift::Double, longitude: Swift::Double, updatedAt: Foundation::Date, validUntil: Foundation::Date?, current: NovagramServices::CurrentWeather, days: [NovagramServices::DailyWeather], timeZone: Foundation::TimeZone)
+  public static func == (a: NovagramServices::WeatherForecast, b: NovagramServices::WeatherForecast) -> Swift::Bool
+}
+public struct CurrentWeather : Swift::Sendable, Swift::Equatable {
+  public let time: Foundation::Date
+  public let temperature: Swift::Double
+  public let relativeHumidity: Swift::Double?
+  public let windSpeed: Swift::Double?
+  public let windDirection: Swift::Double?
+  public let cloudCover: Swift::Double?
+  public let pressure: Swift::Double?
+  public let symbolCode: Swift::String?
+  public let condition: NovagramServices::WeatherCondition
+  public let precipitationNextHour: Swift::Double?
+  public init(time: Foundation::Date, temperature: Swift::Double, relativeHumidity: Swift::Double?, windSpeed: Swift::Double?, windDirection: Swift::Double?, cloudCover: Swift::Double?, pressure: Swift::Double?, symbolCode: Swift::String?, condition: NovagramServices::WeatherCondition, precipitationNextHour: Swift::Double?)
+  public static func == (a: NovagramServices::CurrentWeather, b: NovagramServices::CurrentWeather) -> Swift::Bool
+}
+public struct DailyWeather : Swift::Sendable, Swift::Equatable {
+  public let date: Foundation::Date
+  public let minTemperature: Swift::Double
+  public let maxTemperature: Swift::Double
+  public let symbolCode: Swift::String?
+  public let condition: NovagramServices::WeatherCondition
+  public init(date: Foundation::Date, minTemperature: Swift::Double, maxTemperature: Swift::Double, symbolCode: Swift::String?, condition: NovagramServices::WeatherCondition)
+  public static func == (a: NovagramServices::DailyWeather, b: NovagramServices::DailyWeather) -> Swift::Bool
+}
+public enum WeatherCondition : Swift::Sendable, Swift::Equatable, Swift::Hashable {
+  case clear
+  case fair
+  case partlyCloudy
+  case cloudy
+  case fog
+  case rain
+  case sleet
+  case snow
+  case thunderstorm
+  case unknown(Swift::String)
+  public init(symbolCode: Swift::String?)
+  public static func == (a: NovagramServices::WeatherCondition, b: NovagramServices::WeatherCondition) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+extension NovagramServices::AppDistribution : Swift::Hashable {}

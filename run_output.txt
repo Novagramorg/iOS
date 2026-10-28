@@ -1,0 +1,112 @@
+[0;34m
+╔════════════════════════════════════════╗
+║   Telegram iOS — Simulator Runner      ║
+╚════════════════════════════════════════╝
+[0m
+
+[0;34m▶ Konfiguratsiya tekshirilmoqda...[0m
+[0;32m✓ Config topildi: build-system/my-config.json[0m
+
+[0;34m▶ Bazel va konfiguratsiya tayyorlanmoqda...[0m
+[0;32m✓ Bazel: /Users/azimjon/Documents/GitHub/Telegram-iOS/build-input/bazel-8.4.2-darwin-arm64[0m
+variables.bzl o'zgarmadi — cache saqlanadi
+[0;32m✓ Konfiguratsiya repository tayyor[0m
+
+[0;34m▶ Bazel build (debug_sim_arm64, Xcode ochmaydi)...[0m
+[1;33m⚠ Birinchi run 10-30 daqiqa olishi mumkin...[0m
+INFO: Invocation ID: 5369c66f-ed79-4575-9b96-2efa372e1d3a
+INFO: Options provided by the client:
+  Inherited 'common' options: --isatty=0 --terminal_columns=80
+INFO: Reading rc options for 'build' from /Users/azimjon/Documents/GitHub/Telegram-iOS/.bazelrc:
+  Inherited 'common' options: --registry=https://raw.githubusercontent.com/bazelbuild/bazel-central-registry/main/
+INFO: Reading rc options for 'build' from /Users/azimjon/Documents/GitHub/Telegram-iOS/.bazelrc:
+  'build' options: --action_env=ZERO_AR_DATE=1 --apple_platform_type=ios --enable_platform_specific_config --apple_crosstool_top=@local_config_apple_cc//:toolchain --crosstool_top=@local_config_apple_cc//:toolchain --host_crosstool_top=@local_config_apple_cc//:toolchain --per_file_copt=.*.m$,@-fno-objc-msgsend-selector-stubs --per_file_copt=.*.mm$,@-fno-objc-msgsend-selector-stubs --features=debug_prefix_map_pwd_is_dot --features=swift.cacheable_swiftmodules --features=swift.debug_prefix_map --features=swift.enable_vfsoverlays --strategy=Genrule=standalone --spawn_strategy=standalone --strategy=SwiftCompile=worker
+Computing main repo mapping: 
+Loading: 
+Loading: 0 packages loaded
+Analyzing: target //Telegram:Telegram (0 packages loaded, 0 targets configured)
+Analyzing: target //Telegram:Telegram (0 packages loaded, 0 targets configured)
+
+INFO: Analyzed target //Telegram:Telegram (0 packages loaded, 0 targets configured).
+[1,424 / 1,469] Compiling Swift module //submodules/TabBarUI:TabBarUI; 1s disk-cache, worker
+[1,425 / 1,469] [Prepa] Linking submodules/TabBarUI/libTabBarUI.a
+[1,436 / 1,469] Linking Telegram/TelegramUIFramework_bin; 1s disk-cache, local
+INFO: From Linking Telegram/TelegramUIFramework_bin:
+ld: warning: object file (/Users/azimjon/telegram-bazel-cache/bazel-user-root/73210ff80dd8531eef96b9637322e27f/execroot/_main/bazel-out/ios_sim_arm64-dbg-ios-sim_arm64-min13.0-ST-28e2ff30e5be/bin/third-party/td/Public/td/lib/libtde2e.a[2](bip39.cpp.o)) was built for newer 'iOS-simulator' version (26.2) than being linked (14.0)
+ld: warning: object file (/Users/azimjon/telegram-bazel-cache/bazel-user-root/73210ff80dd8531eef96b9637322e27f/execroot/_main/bazel-out/ios_sim_arm64-dbg-ios-sim_arm64-min13.0-ST-28e2ff30e5be/bin/third-party/td/Public/td/lib/libtde2e.a[3](BitString.cpp.o)) was built for newer 'iOS-simulator' version (26.2) than being linked (14.0)
+ld: warning: object file (/Users/azimjon/telegram-bazel-cache/bazel-user-root/73210ff80dd8531eef96b9637322e27f/execroot/_main/bazel-out/ios_sim_arm64-dbg-ios-sim_arm64-min13.0-ST-28e2ff30e5be/bin/third-party/td/Public/td/lib/libtde2e.a[4](Blockchain.cpp.o)) was built for newer 'iOS-simulator' version (26.2) than being linked (14.0)
+ld: warning: object file (/Users/azimjon/telegram-bazel-cache/bazel-user-root/73210ff80dd8531eef96b9637322e27f/execroot/_main/bazel-out/ios_sim_arm64-dbg-ios-sim_arm64-min13.0-ST-28e2ff30e5be/bin/third-party/td/Public/td/lib/libtde2e.a[5](Call.cpp.o)) was built for newer 'iOS-simulator' version (26.2) than being linked (14.0)
+ld: warning: object file (/Users/azimjon/telegram-bazel-cache/bazel-user-root/73210ff80dd8531eef96b9637322e27f/execroot/_main/bazel-out/ios_sim_arm64-dbg-ios-sim_arm64-min13.0-ST-28e2ff30e5be/bin/third-party/td/Public/td/lib/libtde2e.a[7](DecryptedKey.cpp.o)) was built for newer 'iOS-simulator' version (26.2) than being linked (14.0)
+ld: warning: object file (/Users/azimjon/telegram-bazel-cache/bazel-user-root/73210ff80dd8531eef96b9637322e27f/execroot/_main/bazel-out/ios_sim_arm64-dbg-ios-sim_arm64-min13.0-ST-28e2ff30e5be/bin/third-party/td/Public/td/lib/libtde2e.a[8](e2e_api.cpp.o)) was built for newer 'iOS-simulator' version (26.2) than being linked (14.0)
+ld: warning: object file (/Users/azimjon/telegram-bazel-cache/bazel-user-root/73210ff80dd8531eef96b9637322e27f/execroot/_main/bazel-out/ios_sim_arm64-dbg-ios-sim_arm64-min13.0-ST-28e2ff30e5be/bin/third-party/td/Public/td/lib/libtde2e.a[9](EncryptedKey.cpp.o)) was built for newer 'iOS-simulator' version (26.2) than being linked (14.0)
+ld: warning: object file (/Users/azimjon/telegram-bazel-cache/bazel-user-root/73210ff80dd8531eef96b9637322e27f/execroot/_main/bazel-out/ios_sim_arm64-dbg-ios-sim_arm64-min13.0-ST-28e2ff30e5be/bin/third-party/td/Public/td/lib/libtde2e.a[10](EncryptedStorage.cpp.o)) was built for newer 'iOS-simulator' version (26.2) than being linked (14.0)
+ld: warning: object file (/Users/azimjon/telegram-bazel-cache/bazel-user-root/73210ff80dd8531eef96b9637322e27f/execroot/_main/bazel-out/ios_sim_arm64-dbg-ios-sim_arm64-min13.0-ST-28e2ff30e5be/bin/third-party/td/Public/td/lib/libtde2e.a[11](Keys.cpp.o)) was built for newer 'iOS-simulator' version (26.2) than being linked (14.0)
+ld: warning: object file (/Users/azimjon/telegram-bazel-cache/bazel-user-root/73210ff80dd8531eef96b9637322e27f/execroot/_main/bazel-out/ios_sim_arm64-dbg-ios-sim_arm64-min13.0-ST-28e2ff30e5be/bin/third-party/td/Public/td/lib/libtde2e.a[12](MessageEncryption.cpp.o)) was built for newer 'iOS-simulator' version (26.2) than being linked (14.0)
+ld: warning: object file (/Users/azimjon/telegram-bazel-cache/bazel-user-root/73210ff80dd8531eef96b9637322e27f/execroot/_main/bazel-out/ios_sim_arm64-dbg-ios-sim_arm64-min13.0-ST-28e2ff30e5be/bin/third-party/td/Public/td/lib/libtde2e.a[13](Mnemonic.cpp.o)) was built for newer 'iOS-simulator' version (26.2) than being linked (14.0)
+ld: warning: object file (/Users/azimjon/telegram-bazel-cache/bazel-user-root/73210ff80dd8531eef96b9637322e27f/execroot/_main/bazel-out/ios_sim_arm64-dbg-ios-sim_arm64-min13.0-ST-28e2ff30e5be/bin/third-party/td/Public/td/lib/libtde2e.a[14](QRHandshake.cpp.o)) was built for newer 'iOS-simulator' version (26.2) than being linked (14.0)
+ld: warning: object file (/Users/azimjon/telegram-bazel-cache/bazel-user-root/73210ff80dd8531eef96b9637322e27f/execroot/_main/bazel-out/ios_sim_arm64-dbg-ios-sim_arm64-min13.0-ST-28e2ff30e5be/bin/third-party/td/Public/td/lib/libtde2e.a[15](Trie.cpp.o)) was built for newer 'iOS-simulator' version (26.2) than being linked (14.0)
+ld: warning: object file (/Users/azimjon/telegram-bazel-cache/bazel-user-root/73210ff80dd8531eef96b9637322e27f/execroot/_main/bazel-out/ios_sim_arm64-dbg-ios-sim_arm64-min13.0-ST-28e2ff30e5be/bin/third-party/td/Public/td/lib/libtde2e.a[16](e2e_api.cpp.o)) was built for newer 'iOS-simulator' version (26.2) than being linked (14.0)
+ld: warning: object file (/Users/azimjon/telegram-bazel-cache/bazel-user-root/73210ff80dd8531eef96b9637322e27f/execroot/_main/bazel-out/ios_sim_arm64-dbg-ios-sim_arm64-min13.0-ST-28e2ff30e5be/bin/third-party/td/Public/td/lib/libtdutils.a[2](Clocks.cpp.o)) was built for newer 'iOS-simulator' version (26.2) than being linked (14.0)
+ld: warning: object file (/Users/azimjon/telegram-bazel-cache/bazel-user-root/73210ff80dd8531eef96b9637322e27f/execroot/_main/bazel-out/ios_sim_arm64-dbg-ios-sim_arm64-min13.0-ST-28e2ff30e5be/bin/third-party/td/Public/td/lib/libtdutils.a[3](FileFd.cpp.o)) was built for newer 'iOS-simulator' version (26.2) than being linked (14.0)
+ld: warning: object file (/Users/azimjon/telegram-bazel-cache/bazel-user-root/73210ff80dd8531eef96b9637322e27f/execroot/_main/bazel-out/ios_sim_arm64-dbg-ios-sim_arm64-min13.0-ST-28e2ff30e5be/bin/third-party/td/Public/td/lib/libtdutils.a[8](PollFlags.cpp.o)) was built for newer 'iOS-simulator' version (26.2) than being linked (14.0)
+ld: warning: object file (/Users/azimjon/telegram-bazel-cache/bazel-user-root/73210ff80dd8531eef96b9637322e27f/execroot/_main/bazel-out/ios_sim_arm64-dbg-ios-sim_arm64-min13.0-ST-28e2ff30e5be/bin/third-party/td/Public/td/lib/libtdutils.a[12](sleep.cpp.o)) was built for newer 'iOS-simulator' version (26.2) than being linked (14.0)
+ld: warning: object file (/Users/azimjon/telegram-bazel-cache/bazel-user-root/73210ff80dd8531eef96b9637322e27f/execroot/_main/bazel-out/ios_sim_arm64-dbg-ios-sim_arm64-min13.0-ST-28e2ff30e5be/bin/third-party/td/Public/td/lib/libtdutils.a[15](Stat.cpp.o)) was built for newer 'iOS-simulator' version (26.2) than being linked (14.0)
+ld: warning: object file (/Users/azimjon/telegram-bazel-cache/bazel-user-root/73210ff80dd8531eef96b9637322e27f/execroot/_main/bazel-out/ios_sim_arm64-dbg-ios-sim_arm64-min13.0-ST-28e2ff30e5be/bin/third-party/td/Public/td/lib/libtdutils.a[16](StdStreams.cpp.o)) was built for newer 'iOS-simulator' version (26.2) than being linked (14.0)
+ld: warning: object file (/Users/azimjon/telegram-bazel-cache/bazel-user-root/73210ff80dd8531eef96b9637322e27f/execroot/_main/bazel-out/ios_sim_arm64-dbg-ios-sim_arm64-min13.0-ST-28e2ff30e5be/bin/third-party/td/Public/td/lib/libtdutils.a[17](thread_local.cpp.o)) was built for newer 'iOS-simulator' version (26.2) than being linked (14.0)
+ld: warning: object file (/Users/azimjon/telegram-bazel-cache/bazel-user-root/73210ff80dd8531eef96b9637322e27f/execroot/_main/bazel-out/ios_sim_arm64-dbg-ios-sim_arm64-min13.0-ST-28e2ff30e5be/bin/third-party/td/Public/td/lib/libtdutils.a[28](NativeFd.cpp.o)) was built for newer 'iOS-simulator' version (26.2) than being linked (14.0)
+ld: warning: object file (/Users/azimjon/telegram-bazel-cache/bazel-user-root/73210ff80dd8531eef96b9637322e27f/execroot/_main/bazel-out/ios_sim_arm64-dbg-ios-sim_arm64-min13.0-ST-28e2ff30e5be/bin/third-party/td/Public/td/lib/libtdutils.a[37](base64.cpp.o)) was built for newer 'iOS-simulator' version (26.2) than being linked (14.0)
+ld: warning: object file (/Users/azimjon/telegram-bazel-cache/bazel-user-root/73210ff80dd8531eef96b9637322e27f/execroot/_main/bazel-out/ios_sim_arm64-dbg-ios-sim_arm64-min13.0-ST-28e2ff30e5be/bin/third-party/td/Public/td/lib/libtdutils.a[38](BigNum.cpp.o)) was built for newer 'iOS-simulator' version (26.2) than being linked (14.0)
+ld: warning: object file (/Users/azimjon/telegram-bazel-cache/bazel-user-root/73210ff80dd8531eef96b9637322e27f/execroot/_main/bazel-out/ios_sim_arm64-dbg-ios-sim_arm64-min13.0-ST-28e2ff30e5be/bin/third-party/td/Public/td/lib/libtdutils.a[39](buffer.cpp.o)) was built for newer 'iOS-simulator' version (26.2) than being linked (14.0)
+ld: warning: object file (/Users/azimjon/telegram-bazel-cache/bazel-user-root/73210ff80dd8531eef96b9637322e27f/execroot/_main/bazel-out/ios_sim_arm64-dbg-ios-sim_arm64-min13.0-ST-28e2ff30e5be/bin/third-party/td/Public/td/lib/libtdutils.a[41](check.cpp.o)) was built for newer 'iOS-simulator' version (26.2) than being linked (14.0)
+ld: warning: object file (/Users/azimjon/telegram-bazel-cache/bazel-user-root/73210ff80dd8531eef96b9637322e27f/execroot/_main/bazel-out/ios_sim_arm64-dbg-ios-sim_arm64-min13.0-ST-28e2ff30e5be/bin/third-party/td/Public/td/lib/libtdutils.a[42](crypto.cpp.o)) was built for newer 'iOS-simulator' version (26.2) than being linked (14.0)
+ld: warning: object file (/Users/azimjon/telegram-bazel-cache/bazel-user-root/73210ff80dd8531eef96b9637322e27f/execroot/_main/bazel-out/ios_sim_arm64-dbg-ios-sim_arm64-min13.0-ST-28e2ff30e5be/bin/third-party/td/Public/td/lib/libtdutils.a[43](Ed25519.cpp.o)) was built for newer 'iOS-simulator' version (26.2) than being linked (14.0)
+ld: warning: object file (/Users/azimjon/telegram-bazel-cache/bazel-user-root/73210ff80dd8531eef96b9637322e27f/execroot/_main/bazel-out/ios_sim_arm64-dbg-ios-sim_arm64-min13.0-ST-28e2ff30e5be/bin/third-party/td/Public/td/lib/libtdutils.a[45](ExitGuard.cpp.o)) was built for newer 'iOS-simulator' version (26.2) than being linked (14.0)
+ld: warning: object file (/Users/azimjon/telegram-bazel-cache/bazel-user-root/73210ff80dd8531eef96b9637322e27f/execroot/_main/bazel-out/ios_sim_arm64-dbg-ios-sim_arm64-min13.0-ST-28e2ff30e5be/bin/third-party/td/Public/td/lib/libtdutils.a[49](FlatHashTable.cpp.o)) was built for newer 'iOS-simulator' version (26.2) than being linked (14.0)
+ld: warning: object file (/Users/azimjon/telegram-bazel-cache/bazel-user-root/73210ff80dd8531eef96b9637322e27f/execroot/_main/bazel-out/ios_sim_arm64-dbg-ios-sim_arm64-min13.0-ST-28e2ff30e5be/bin/third-party/td/Public/td/lib/libtdutils.a[57](logging.cpp.o)) was built for newer 'iOS-simulator' version (26.2) than being linked (14.0)
+ld: warning: object file (/Users/azimjon/telegram-bazel-cache/bazel-user-root/73210ff80dd8531eef96b9637322e27f/execroot/_main/bazel-out/ios_sim_arm64-dbg-ios-sim_arm64-min13.0-ST-28e2ff30e5be/bin/third-party/td/Public/td/lib/libtdutils.a[58](misc.cpp.o)) was built for newer 'iOS-simulator' version (26.2) than being linked (14.0)
+ld: warning: object file (/Users/azimjon/telegram-bazel-cache/bazel-user-root/73210ff80dd8531eef96b9637322e27f/execroot/_main/bazel-out/ios_sim_arm64-dbg-ios-sim_arm64-min13.0-ST-28e2ff30e5be/bin/third-party/td/Public/td/lib/libtdutils.a[62](Random.cpp.o)) was built for newer 'iOS-simulator' version (26.2) than being linked (14.0)
+ld: warning: object file (/Users/azimjon/telegram-bazel-cache/bazel-user-root/73210ff80dd8531eef96b9637322e27f/execroot/_main/bazel-out/ios_sim_arm64-dbg-ios-sim_arm64-min13.0-ST-28e2ff30e5be/bin/third-party/td/Public/td/lib/libtdutils.a[64](Slice.cpp.o)) was built for newer 'iOS-simulator' version (26.2) than being linked (14.0)
+ld: warning: object file (/Users/azimjon/telegram-bazel-cache/bazel-user-root/73210ff80dd8531eef96b9637322e27f/execroot/_main/bazel-out/ios_sim_arm64-dbg-ios-sim_arm64-min13.0-ST-28e2ff30e5be/bin/third-party/td/Public/td/lib/libtdutils.a[65](StackAllocator.cpp.o)) was built for newer 'iOS-simulator' version (26.2) than being linked (14.0)
+ld: warning: object file (/Users/azimjon/telegram-bazel-cache/bazel-user-root/73210ff80dd8531eef96b9637322e27f/execroot/_main/bazel-out/ios_sim_arm64-dbg-ios-sim_arm64-min13.0-ST-28e2ff30e5be/bin/third-party/td/Public/td/lib/libtdutils.a[66](Status.cpp.o)) was built for newer 'iOS-simulator' version (26.2) than being linked (14.0)
+ld: warning: object file (/Users/azimjon/telegram-bazel-cache/bazel-user-root/73210ff80dd8531eef96b9637322e27f/execroot/_main/bazel-out/ios_sim_arm64-dbg-ios-sim_arm64-min13.0-ST-28e2ff30e5be/bin/third-party/td/Public/td/lib/libtdutils.a[67](StringBuilder.cpp.o)) was built for newer 'iOS-simulator' version (26.2) than being linked (14.0)
+ld: warning: object file (/Users/azimjon/telegram-bazel-cache/bazel-user-root/73210ff80dd8531eef96b9637322e27f/execroot/_main/bazel-out/ios_sim_arm64-dbg-ios-sim_arm64-min13.0-ST-28e2ff30e5be/bin/third-party/td/Public/td/lib/libtdutils.a[69](Time.cpp.o)) was built for newer 'iOS-simulator' version (26.2) than being linked (14.0)
+ld: warning: object file (/Users/azimjon/telegram-bazel-cache/bazel-user-root/73210ff80dd8531eef96b9637322e27f/execroot/_main/bazel-out/ios_sim_arm64-dbg-ios-sim_arm64-min13.0-ST-28e2ff30e5be/bin/third-party/td/Public/td/lib/libtdutils.a[70](Timer.cpp.o)) was built for newer 'iOS-simulator' version (26.2) than being linked (14.0)
+ld: warning: object file (/Users/azimjon/telegram-bazel-cache/bazel-user-root/73210ff80dd8531eef96b9637322e27f/execroot/_main/bazel-out/ios_sim_arm64-dbg-ios-sim_arm64-min13.0-ST-28e2ff30e5be/bin/third-party/td/Public/td/lib/libtdutils.a[71](tl_parsers.cpp.o)) was built for newer 'iOS-simulator' version (26.2) than being linked (14.0)
+ld: warning: object file (/Users/azimjon/telegram-bazel-cache/bazel-user-root/73210ff80dd8531eef96b9637322e27f/execroot/_main/bazel-out/ios_sim_arm64-dbg-ios-sim_arm64-min13.0-ST-28e2ff30e5be/bin/third-party/td/Public/td/lib/libtdutils.a[73](TsCerr.cpp.o)) was built for newer 'iOS-simulator' version (26.2) than being linked (14.0)
+ld: warning: object file (/Users/azimjon/telegram-bazel-cache/bazel-user-root/73210ff80dd8531eef96b9637322e27f/execroot/_main/bazel-out/ios_sim_arm64-dbg-ios-sim_arm64-min13.0-ST-28e2ff30e5be/bin/third-party/td/Public/td/lib/libtdutils.a[76](unicode.cpp.o)) was built for newer 'iOS-simulator' version (26.2) than being linked (14.0)
+ld: warning: object file (/Users/azimjon/telegram-bazel-cache/bazel-user-root/73210ff80dd8531eef96b9637322e27f/execroot/_main/bazel-out/ios_sim_arm64-dbg-ios-sim_arm64-min13.0-ST-28e2ff30e5be/bin/third-party/td/Public/td/lib/libtdutils.a[77](utf8.cpp.o)) was built for newer 'iOS-simulator' version (26.2) than being linked (14.0)
+ld: warning: reducing alignment of section __DATA,__common from 0x8000 to 0x4000 because it exceeds segment maximum alignment
+[1,437 / 1,469] [Prepa] Creating symlink Telegram/TelegramUIFramework_lipobin.dylib
+[1,463 / 1,469] Bundling TelegramUIFramework; 1s disk-cache, local ... (2 actions, 1 running)
+[1,466 / 1,469] Bundling Telegram; 0s disk-cache
+[1,466 / 1,469] Bundling Telegram; 1s disk-cache, local
+[1,467 / 1,469] [Prepa] Processing and signing Telegram
+[1,467 / 1,469] Processing and signing Telegram; 0s disk-cache, local
+[1,467 / 1,469] Processing and signing Telegram; 1s disk-cache, local
+[1,467 / 1,469] Processing and signing Telegram; 10s disk-cache, local
+INFO: Found 1 target...
+Target //Telegram:Telegram up-to-date:
+  bazel-bin/Telegram/Telegram.ipa
+INFO: Elapsed time: 22.975s, Critical Path: 22.67s
+INFO: 17 processes: 45 action cache hit, 4 internal, 12 local, 1 worker.
+INFO: Build completed successfully, 17 total actions
+INFO: 
+[0;32m✓ Build muvaffaqiyatli tugadi[0m
+
+[0;34m▶ .app fayl tayyorlanmoqda...[0m
+[0;32m✓ App: Telegram.app[0m
+
+[0;34m▶ 'iPhone 17 Pro' simulatori qidirilmoqda...[0m
+[0;32m✓ UDID: 3ACED817-DCE9-4461-ABFC-250C0CC64F39[0m
+
+[0;34m▶ Simulator boot qilinmoqda...[0m
+[0;32m✓ Simulator tayyor[0m
+
+[0;34m▶ O'rnatilmoqda va ishga tushirilmoqda...[0m
+[0;32m✓ O'rnatildi[0m
+org.0ad80029aab87260.Telegram: 90423
+
+[0;32m╔════════════════════════════════════════╗[0m
+[0;32m║  Telegram iPhone 17 Pro da ishlamoqda!  ║[0m
+[0;32m╚════════════════════════════════════════╝[0m
+

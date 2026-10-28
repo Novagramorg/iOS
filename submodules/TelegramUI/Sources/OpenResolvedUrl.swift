@@ -45,6 +45,8 @@ import ProxyServerPreviewScreen
 import AuthConfirmationScreen
 import OpenInExternalAppUI
 import CreateBotScreen
+// Novagram: Feature #40 — tg://settings/novagrampro deep link
+import NovagramMessenger
 import WalletSendScreen
 
 private func defaultNavigationForPeerId(_ peerId: PeerId?, navigation: ChatControllerInteractionNavigateToPeer) -> ChatControllerInteractionNavigateToPeer {
@@ -92,10 +94,9 @@ func openResolvedUrlImpl(
     switch resolvedUrl {
         case let .externalUrl(url):
             context.sharedContext.openExternalUrl(context: context, urlContext: urlContext, url: url, forceExternal: forceExternal, presentationData: context.sharedContext.currentPresentationData.with { $0 }, navigationController: navigationController, dismissInput: dismissInput)
-        case let .urlAuth(url):
+            case let .urlAuth(url):
             requestMessageActionUrlAuth?(.url(url: url, inAppOrigin: nil))
             dismissInput()
-            break
         case let .peer(peer, navigation):
             if let peer = peer {
                 openPeer(EnginePeer(peer), defaultNavigationForPeerId(peer.id, navigation: navigation))
@@ -130,7 +131,7 @@ func openResolvedUrlImpl(
             }
             let shouldForceStartGroupStartFlow = isStartGroup && !payload.isEmpty && adminRights == nil
             let shouldCheckExistingGroupAdmin = isStartGroup && !payload.isEmpty && adminRights != nil
-        
+
             var filter: ChatListNodePeersFilter = [.onlyGroupsAndChannels, .onlyManageable, .excludeDisabled, .excludeRecent, .doNotSearchMessages]
             var title: String = presentationData.strings.Bot_AddToChat_Title
             switch peerType {
@@ -146,11 +147,11 @@ func openResolvedUrlImpl(
             let controller = context.sharedContext.makePeerSelectionController(PeerSelectionControllerParams(context: context, filter: filter, hasContactSelector: false, title: title, selectForumThreads: true))
             controller.peerSelected = { [weak controller] peer, _ in
                 let peerId = peer.id
-                
+
                 let addMemberImpl = {
                     let presentationData = context.sharedContext.currentPresentationData.with { $0 }
                     let strings = presentationData.strings
-                    
+
                     var isGroup: Bool = false
                     var peerTitle: String = ""
                     if case let .legacyGroup(peer) = peer {
@@ -162,9 +163,9 @@ func openResolvedUrlImpl(
                         }
                         peerTitle = peer.title
                     }
-                    
+
                     let text = isGroup ? strings.Bot_AddToChat_Add_MemberAlertTextGroup(peerTitle).string : strings.Bot_AddToChat_Add_MemberAlertTextChannel(peerTitle).string
-                    
+
                     let alertController = textAlertController(
                         context: context,
                         title: strings.Bot_AddToChat_Add_MemberAlertTitle,
@@ -173,20 +174,20 @@ func openResolvedUrlImpl(
                             TextAlertAction(type: .defaultAction, title: strings.Bot_AddToChat_Add_MemberAlertAdd, action: {
                                 if payload.isEmpty {
                                     if peerId.namespace == Namespaces.Peer.CloudGroup {
-                                        let _ = (context.engine.peers.addGroupMember(peerId: peerId, memberId: botPeerId)
+                                        _ = (context.engine.peers.addGroupMember(peerId: peerId, memberId: botPeerId)
                                         |> deliverOnMainQueue).startStandalone(completed: {
                                             controller?.dismiss()
                                         })
                                     } else {
-                                        let _ = (context.engine.peers.addChannelMember(peerId: peerId, memberId: botPeerId)
+                                        _ = (context.engine.peers.addChannelMember(peerId: peerId, memberId: botPeerId)
                                         |> deliverOnMainQueue).startStandalone(completed: {
                                             controller?.dismiss()
                                         })
                                     }
                                 } else {
-                                    let _ = (context.engine.messages.requestStartBotInGroup(botPeerId: botPeerId, groupPeerId: peerId, payload: payload)
+                                    _ = (context.engine.messages.requestStartBotInGroup(botPeerId: botPeerId, groupPeerId: peerId, payload: payload)
                                     |> deliverOnMainQueue).startStandalone(next: { result in
-                                        let _ = (context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: peerId))
+                                        _ = (context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: peerId))
                                         |> deliverOnMainQueue).startStandalone(next: { peer in
                                             guard let peer = peer else {
                                                 return
@@ -203,7 +204,7 @@ func openResolvedUrlImpl(
                                             controller?.dismiss()
                                         })
                                     }, error: { _ in
-                                        
+
                                     })
                                 }
                             }),
@@ -227,7 +228,7 @@ func openResolvedUrlImpl(
                 }
                 let openAdminControllerWithResolvedRightsImpl: (Bool) -> Void = { isGroup in
                     if adminRights == nil {
-                        let _ = (defaultAdminRights.get()
+                        _ = (defaultAdminRights.get()
                         |> take(1)
                         |> deliverOnMainQueue).start(next: { defaultAdminRights in
                             let initialAdminRights = isGroup ? defaultAdminRights?.group?.rights : defaultAdminRights?.channel?.rights
@@ -237,7 +238,7 @@ func openResolvedUrlImpl(
                         openAdminControllerImpl(adminRights?.chatAdminRights)
                     }
                 }
-                
+
                 if case let .channel(peer) = peer {
                     var isGroup = false
                     if case .group = peer.info {
@@ -247,7 +248,7 @@ func openResolvedUrlImpl(
                         addMemberImpl()
                     } else if peer.flags.contains(.isCreator) || peer.adminRights?.rights.contains(.canAddAdmins) == true {
                         if shouldCheckExistingGroupAdmin && isGroup {
-                            let _ = (context.engine.peers.fetchChannelParticipant(peerId: peerId, participantId: botPeerId)
+                            _ = (context.engine.peers.fetchChannelParticipant(peerId: peerId, participantId: botPeerId)
                             |> deliverOnMainQueue).start(next: { participant in
                                 let isBotAlreadyAdmin: Bool
                                 if let participant = participant {
@@ -278,7 +279,7 @@ func openResolvedUrlImpl(
                     } else if case .member = peer.role {
                         addMemberImpl()
                     } else if shouldCheckExistingGroupAdmin {
-                        let _ = (context.engine.peers.fetchAndUpdateCachedPeerData(peerId: peerId)
+                        _ = (context.engine.peers.fetchAndUpdateCachedPeerData(peerId: peerId)
                         |> mapToSignal { _ in
                             context.engine.data.get(TelegramEngine.EngineData.Item.Peer.LegacyGroupParticipants(id: peerId))
                         }
@@ -317,10 +318,10 @@ func openResolvedUrlImpl(
                 } else {
                     text = presentationData.strings.Target_ShareGameConfirmationGroup(peer.displayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder)).string
                 }
-                
+
                 let alertController = textAlertController(context: context, title: nil, text: text, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.RequestPeer_SelectionConfirmationSend, action: {
                     controller?.inProgress = true
-                    let _ = (context.engine.messages.sendBotGame(botPeerId: botPeerId, game: game, to: peer.id, threadId: threadId)
+                    _ = (context.engine.messages.sendBotGame(botPeerId: botPeerId, game: game, to: peer.id, threadId: threadId)
                     |> deliverOnMainQueue).startStandalone(error: { _ in
                         controller?.inProgress = false
                         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
@@ -328,7 +329,7 @@ func openResolvedUrlImpl(
                     })
                     if let navigationController {
                         if let threadId {
-                            let _ = context.sharedContext.navigateToForumThread(context: context, peerId: peer.id, threadId: threadId, messageId: nil, navigationController: navigationController, activateInput: nil, scrollToEndIfExists: true, keepStack: .always, animated: true).startStandalone()
+                            _ = context.sharedContext.navigateToForumThread(context: context, peerId: peer.id, threadId: threadId, messageId: nil, navigationController: navigationController, activateInput: nil, scrollToEndIfExists: true, keepStack: .always, animated: true).startStandalone()
                         } else {
                             context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: navigationController, context: context, chatLocation: .peer(peer), keepStack: .always, useExisting: true, scrollToEndIfExists: true))
                         }
@@ -388,7 +389,7 @@ func openResolvedUrlImpl(
                     }
                 } else if let (info, items, action) = actions.first {
                     let isEmoji = info.id.namespace == Namespaces.ItemCollection.CloudEmojiPacks
-                    
+
                     switch action {
                     case .add:
                         present(UndoOverlayController(presentationData: presentationData, content: .stickersModified(title: isEmoji ? presentationData.strings.EmojiPackActionInfo_AddedTitle : presentationData.strings.StickerPackActionInfo_AddedTitle, text: isEmoji ? presentationData.strings.EmojiPackActionInfo_AddedText(info.title).string : presentationData.strings.StickerPackActionInfo_AddedText(info.title).string, undo: false, info: info, topItem: items.first, context: context), elevatedLayout: false, animateInAsReplacement: false, action: { _ in
@@ -397,7 +398,7 @@ func openResolvedUrlImpl(
                     case let .remove(positionInList):
                         present(UndoOverlayController(presentationData: presentationData, content: .stickersModified(title: isEmoji ? presentationData.strings.EmojiPackActionInfo_RemovedTitle : presentationData.strings.StickerPackActionInfo_RemovedTitle, text: isEmoji ? presentationData.strings.EmojiPackActionInfo_RemovedText(info.title).string : presentationData.strings.StickerPackActionInfo_RemovedText(info.title).string, undo: true, info: info, topItem: items.first, context: context), elevatedLayout: false, animateInAsReplacement: false, action: { action in
                             if case .undo = action {
-                                let _ = context.engine.stickers.addStickerPackInteractively(info: info, items: items, positionInList: positionInList).startStandalone()
+                                _ = context.engine.stickers.addStickerPackInteractively(info: info, items: items, positionInList: positionInList).startStandalone()
                             }
                             return true
                         }), nil)
@@ -411,12 +412,12 @@ func openResolvedUrlImpl(
             navigationController?.pushViewController(browserController)
         case let .join(link):
             dismissInput()
-        
+
             if let progress {
-                let progressSignal = Signal<Never, NoError> { subscriber in
+                let progressSignal = Signal<Never, NoError> { _ in
                     progress.set(.single(true))
                     return ActionDisposable {
-                        Queue.mainQueue().async() {
+                        Queue.mainQueue().async {
                             progress.set(.single(false))
                         }
                     }
@@ -424,7 +425,7 @@ func openResolvedUrlImpl(
                 |> runOn(Queue.mainQueue())
                 |> delay(0.1, queue: Queue.mainQueue())
                 let progressDisposable = progressSignal.startStrict()
-                
+
                 var signal = context.engine.peers.joinLinkInformation(link)
                 signal = signal
                 |> afterDisposed {
@@ -432,8 +433,8 @@ func openResolvedUrlImpl(
                         progressDisposable.dispose()
                     }
                 }
-            
-                let _ = (signal
+
+                _ = (signal
                 |> deliverOnMainQueue).startStandalone(next: { [weak navigationController] resolvedState in
                     switch resolvedState {
                     case let .alreadyJoined(peer):
@@ -449,7 +450,7 @@ func openResolvedUrlImpl(
                             }
                             let channel = TelegramChannel(id: PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(0)), accessHash: .genericPublic(0), title: invite.title, username: nil, photo: photo, creationDate: 0, version: 0, participationStatus: .left, info: .broadcast(TelegramChannelBroadcastInfo(flags: [])), flags: [], restrictionInfo: nil, adminRights: nil, bannedRights: nil, defaultBannedRights: nil, usernames: [], storiesHidden: nil, nameColor: invite.nameColor, backgroundEmojiId: nil, profileColor: nil, profileBackgroundEmojiId: nil, emojiStatus: nil, approximateBoostLevel: nil, subscriptionUntilDate: nil, verificationIconFileId: nil, sendPaidMessageStars: nil, linkedMonoforumId: nil)
                             let invoice = TelegramMediaInvoice(title: "", description: "", photo: nil, receiptMessageId: nil, currency: "XTR", totalAmount: subscriptionPricing.amount.value, startParam: "", extendedMedia: nil, subscriptionPeriod: nil, flags: [], version: 0)
-                            
+
                             inputData.set(.single(BotCheckoutController.InputData(
                                 form: BotPaymentForm(
                                     id: subscriptionFormId,
@@ -467,7 +468,7 @@ func openResolvedUrlImpl(
                                 validatedFormInfo: nil,
                                 botPeer: EnginePeer(channel)
                             )))
-                            
+
                             let starsInputData = combineLatest(
                                 inputData.get(),
                                 starsContext.state
@@ -479,7 +480,7 @@ func openResolvedUrlImpl(
                                     return nil
                                 }
                             }
-                            let _ = (starsInputData |> filter { $0 != nil } |> take(1) |> deliverOnMainQueue).start(next: { _ in
+                            _ = (starsInputData |> filter { $0 != nil } |> take(1) |> deliverOnMainQueue).start(next: { _ in
                                 let controller = context.sharedContext.makeStarsSubscriptionTransferScreen(context: context, starsContext: starsContext, invoice: invoice, link: link, inputData: starsInputData, navigateToPeer: { peer in
                                     openPeer(peer, .chat(textInputState: nil, subject: nil, peekData: nil))
                                 })
@@ -518,11 +519,11 @@ func openResolvedUrlImpl(
             }
         case let .joinCall(link):
             dismissInput()
-        
-            let progressSignal = Signal<Never, NoError> { subscriber in
+
+            let progressSignal = Signal<Never, NoError> { _ in
                 progress?.set(.single(true))
                 return ActionDisposable {
-                    Queue.mainQueue().async() {
+                    Queue.mainQueue().async {
                         progress?.set(.single(false))
                     }
                 }
@@ -530,7 +531,7 @@ func openResolvedUrlImpl(
             |> runOn(Queue.mainQueue())
             |> delay(0.1, queue: Queue.mainQueue())
             let progressDisposable = progressSignal.startStrict()
-            
+
             var signal = context.engine.peers.joinCallLinkInformation(link)
             signal = signal
             |> afterDisposed {
@@ -538,18 +539,18 @@ func openResolvedUrlImpl(
                     progressDisposable.dispose()
                 }
             }
-        
-            let _ = (signal
+
+            _ = (signal
             |> deliverOnMainQueue).startStandalone(next: { [weak navigationController] resolvedCallLink in
-                let _ = (context.engine.calls.getGroupCallPersistentSettings(callId: resolvedCallLink.id)
+                _ = (context.engine.calls.getGroupCallPersistentSettings(callId: resolvedCallLink.id)
                 |> deliverOnMainQueue).startStandalone(next: { value in
                     let value: PresentationGroupCallPersistentSettings = value?.get(PresentationGroupCallPersistentSettings.self) ?? PresentationGroupCallPersistentSettings.default
-                    
+
                     if let currentGroupCallController = context.sharedContext.currentGroupCallController as? VoiceChatController, case let .group(groupCall) = currentGroupCallController.call, let currentCallId = groupCall.callId, currentCallId == resolvedCallLink.id {
                         context.sharedContext.navigateToCurrentCall()
                         return
                     }
-                    
+
                     navigationController?.pushViewController(context.sharedContext.makeJoinSubjectScreen(context: context, mode: JoinSubjectScreenMode.groupCall(JoinSubjectScreenMode.GroupCall(
                         id: resolvedCallLink.id,
                         accessHash: resolvedCallLink.accessHash,
@@ -582,7 +583,7 @@ func openResolvedUrlImpl(
             }
 
             dismissInput()
-        
+
             let controller = ProxyServerPreviewScreen(context: context, server: server)
             navigationController?.pushViewController(controller)
         case let .webProxy(host, path, secret):
@@ -612,13 +613,13 @@ func openResolvedUrlImpl(
         case let .cancelAccountReset(phone, hash):
             let controller = OverlayStatusController(theme: presentationData.theme, type: .loading(cancelled: nil))
             present(controller, nil)
-            let _ = (context.engine.auth.requestCancelAccountResetData(hash: hash)
+            _ = (context.engine.auth.requestCancelAccountResetData(hash: hash)
             |> deliverOnMainQueue).startStandalone(next: { [weak controller] data in
                 controller?.dismiss()
                 present(confirmPhoneNumberCodeController(context: context, phoneNumber: phone, codeData: data), ViewControllerPresentationArguments(presentationAnimation: .modalSheet))
             }, error: { [weak controller] error in
                 controller?.dismiss()
-                
+
                 let text: String
                 switch error {
                     case .limitExceeded:
@@ -647,7 +648,7 @@ func openResolvedUrlImpl(
                 } else {
                     textInputState = nil
                 }
-                
+
                 let updateControllers = { [weak navigationController] in
                     guard let navigationController else {
                         return
@@ -659,7 +660,7 @@ func openResolvedUrlImpl(
                         chatController = .single(ChatControllerImpl(context: context, chatLocation: .peer(id: peerId), initialTextInputState: textInputState))
                     }
 
-                    let _ = (chatController
+                    _ = (chatController
                     |> deliverOnMainQueue).start(next: { [weak navigationController] chatController in
                         guard let navigationController else {
                             return
@@ -677,10 +678,10 @@ func openResolvedUrlImpl(
 
                 updateControllers()
             }
-            
+
             if let to = to {
                 if to.hasPrefix("@") {
-                    let _ = (context.engine.peers.resolvePeerByName(name: String(to[to.index(to.startIndex, offsetBy: 1)...]), referrer: nil)
+                    _ = (context.engine.peers.resolvePeerByName(name: String(to[to.index(to.startIndex, offsetBy: 1)...]), referrer: nil)
                     |> mapToSignal { result -> Signal<EnginePeer?, NoError> in
                         guard case let .result(result) = result else {
                             return .complete()
@@ -694,7 +695,7 @@ func openResolvedUrlImpl(
                         }
                     })
                 } else {
-                    let _ = (context.engine.peers.resolvePeerByPhone(phone: to)
+                    _ = (context.engine.peers.resolvePeerByPhone(phone: to)
                     |> deliverOnMainQueue).startStandalone(next: { peer in
                         if let peer = peer {
                             context.sharedContext.applicationBindings.dismissNativeController()
@@ -731,7 +732,7 @@ func openResolvedUrlImpl(
             }
         case let .wallpaper(parameter):
             var controller: ViewController?
-            
+
             let signal: Signal<TelegramWallpaper, GetWallpaperError>
             var options: WallpaperPresentationOptions?
             var colors: [UInt32] = []
@@ -751,13 +752,13 @@ func openResolvedUrlImpl(
                 case let .gradient(colors, rotation):
                     signal = .single(.gradient(TelegramWallpaper.Gradient(id: nil, colors: colors, settings: WallpaperSettings(rotation: rotation))))
             }
-            
-            let _ = (signal
+
+            _ = (signal
             |> deliverOnMainQueue).startStandalone(next: { [weak controller] wallpaper in
                 controller?.dismiss()
                 let galleryController = WallpaperGalleryController(context: context, source: .wallpaper(wallpaper, options, colors, intensity, rotation, nil))
                 navigationController?.pushViewController(galleryController)
-            }, error: { [weak controller] error in
+            }, error: { [weak controller] _ in
                 controller?.dismiss()
             })
             dismissInput()
@@ -771,7 +772,7 @@ func openResolvedUrlImpl(
                         subscriber.putCompletion()
                     } else if let resource = themeInfo.file?.resource {
                         disposables.add(context.engine.resources.fetch(reference: .standalone(resource: resource), userLocation: .other, userContentType: .other).start())
-                        
+
                         let maybeFetched = context.sharedContext.accountManager.resources.data(resource: EngineMediaResource(resource))
                         |> mapToSignal { maybeData -> Signal<Data?, NoError> in
                             if maybeData.isComplete {
@@ -789,7 +790,7 @@ func openResolvedUrlImpl(
                                 }
                             }
                         }
-                   
+
                         disposables.add(maybeFetched.start(next: { data in
                             if let data = data {
                                 subscriber.putNext((data, nil, themeInfo))
@@ -799,26 +800,26 @@ func openResolvedUrlImpl(
                     } else {
                         subscriber.putError(.unsupported)
                     }
-                    
+
                     return disposables
                 }
             }
-            
+
             var cancelImpl: (() -> Void)?
-            let progressSignal = Signal<Never, NoError> { subscriber in
-                let controller = OverlayStatusController(theme: presentationData.theme,  type: .loading(cancelled: {
+            let progressSignal = Signal<Never, NoError> { _ in
+                let controller = OverlayStatusController(theme: presentationData.theme, type: .loading(cancelled: {
                     cancelImpl?()
                 }))
                 present(controller, nil)
                 return ActionDisposable { [weak controller] in
-                    Queue.mainQueue().async() {
+                    Queue.mainQueue().async {
                         controller?.dismiss()
                     }
                 }
             }
             |> runOn(Queue.mainQueue())
             |> delay(0.35, queue: Queue.mainQueue())
-            
+
             let disposable = MetaDisposable()
             let progressDisposable = progressSignal.start()
             cancelImpl = {
@@ -871,7 +872,7 @@ func openResolvedUrlImpl(
                     completed: {}
                 )
             } else if case .invite = section {
-                let _ = (DeviceAccess.authorizationStatus(subject: .contacts)
+                _ = (DeviceAccess.authorizationStatus(subject: .contacts)
                 |> take(1)
                 |> deliverOnMainQueue).start(next: { value in
                     switch value {
@@ -889,7 +890,7 @@ func openResolvedUrlImpl(
                 if let rootController = context.sharedContext.mainWindow?.viewController as? TelegramRootControllerInterface {
                     rootController.popToRoot(animated: true)
                     rootController.openContacts()
-                    
+
                     switch section {
                     case .search:
                         Queue.mainQueue().after(0.1) {
@@ -950,7 +951,7 @@ func openResolvedUrlImpl(
             case .group:
                 let controller = context.sharedContext.makeContactMultiselectionController(ContactMultiselectionControllerParams(context: context, mode: .groupCreation(isCall: false), onlyWriteable: true))
                 navigationController?.pushViewController(controller)
-                let _ = (controller.result
+                _ = (controller.result
                 |> deliverOnMainQueue).startStandalone(next: { [weak navigationController] result in
                     var peerIds: [ContactListPeerId] = []
                     if case let .result(peerIdsValue, _) = result {
@@ -1000,6 +1001,10 @@ func openResolvedUrlImpl(
                         }
                         return
                     }
+                    // Novagram Feature #40: tg://settings/novagrampro[/<feature>] → NovagramPro settings screen
+                    if NovagramSettingsDeepLink.open(settingsPath: path, context: context, navigationController: navigationController) {
+                        return
+                    }
                     handleSettingsPathUrl(context: context, path: path, navigationController: navigationController)
                 }
             case let .legacy(legacySection):
@@ -1008,11 +1013,11 @@ func openResolvedUrlImpl(
                     if let navigationController {
                         let controller = themeSettingsController(context: context)
                         controller.navigationPresentation = .modal
-                        
+
                         var controllers = navigationController.viewControllers
                         controllers = controllers.filter { !($0 is ThemeSettingsController) }
                         controllers.append(controller)
-                        
+
                         navigationController.setViewControllers(controllers, animated: true)
                     }
                 case .devices:
@@ -1025,48 +1030,48 @@ func openResolvedUrlImpl(
                                 return state.sessions.filter({ !$0.isCurrent }).count
                             }
                             |> distinctUntilChanged
-                            
+
                             return otherSessionCount
                             |> map { value in
                                 return (activeSessionsContext, value, webSessionsContext)
                             }
                         }
-                        
-                        let _ = (activeSessions
+
+                        _ = (activeSessions
                         |> take(1)
-                        |> deliverOnMainQueue).start(next: { activeSessionsContext, count, webSessionsContext in
+                        |> deliverOnMainQueue).start(next: { activeSessionsContext, _, webSessionsContext in
                             let controller = recentSessionsController(context: context, activeSessionsContext: activeSessionsContext, webSessionsContext: webSessionsContext, websitesOnly: false)
                             controller.navigationPresentation = .modal
-                            
+
                             var controllers = navigationController.viewControllers
                             controllers = controllers.filter { !($0 is RecentSessionsController) }
                             controllers.append(controller)
-                            
+
                             navigationController.setViewControllers(controllers, animated: true)
                         })
                     }
                 case .autoremoveMessages:
-                    let _ = (context.engine.privacy.requestAccountPrivacySettings()
+                    _ = (context.engine.privacy.requestAccountPrivacySettings()
                     |> take(1)
                     |> deliverOnMainQueue).start(next: { settings in
                         navigationController?.pushViewController(globalAutoremoveScreen(context: context, initialValue: settings.messageAutoremoveTimeout ?? 0, updated: { _ in }), animated: true)
                     })
                 case .enableLog:
                     if let navigationController = navigationController {
-                        let _ = updateLoggingSettings(accountManager: context.sharedContext.accountManager, {
+                        _ = updateLoggingSettings(accountManager: context.sharedContext.accountManager, {
                             $0.withUpdatedLogToFile(true)
                         }).start()
-                        
+
                         if let controller = context.sharedContext.makeDebugSettingsController(context: context) {
                             var controllers = navigationController.viewControllers
                             controllers.append(controller)
-                            
+
                             navigationController.setViewControllers(controllers, animated: true)
                         }
                     }
                 case .phonePrivacy:
                     let privacySignal = context.engine.privacy.requestAccountPrivacySettings()
-                    let _ = (privacySignal
+                    _ = (privacySignal
                     |> deliverOnMainQueue).start(next: { info in
                         let current: SelectivePrivacySettings = info.phoneNumber
                         if let navigationController = navigationController {
@@ -1194,7 +1199,7 @@ func openResolvedUrlImpl(
                 }
             }
         case let .joinVoiceChat(peerId, invite):
-            let _ = (context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: peerId))
+            _ = (context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: peerId))
             |> deliverOnMainQueue).start(next: { peer in
                 guard let peer = peer else {
                     return
@@ -1226,17 +1231,17 @@ func openResolvedUrlImpl(
             }
         case let .shareStory(sessionId):
             dismissInput()
-        
+
             let rootPath = context.sharedContext.applicationBindings.containerPath + "/telegram-data"
             let storiesPath = rootPath + "/share/stories/\(sessionId)"
-        
+
             var filePaths: [String] = []
             do {
                 let directoryContents = try FileManager.default.contentsOfDirectory(atPath: storiesPath)
-                
+
                 for item in directoryContents {
                     let fullPath = storiesPath + "/" + item
-                    
+
                     var isDirectory: ObjCBool = false
                     if FileManager.default.fileExists(atPath: fullPath, isDirectory: &isDirectory) && !isDirectory.boolValue {
                         filePaths.append(fullPath)
@@ -1252,7 +1257,7 @@ func openResolvedUrlImpl(
                 }
             } catch {
             }
-        
+
             func subject(for path: String) -> MediaEditorScreenImpl.Subject? {
                 if path.hasSuffix(".jpg") {
                     if let image = UIImage(contentsOfFile: path)?.fixedOrientation() {
@@ -1268,7 +1273,7 @@ func openResolvedUrlImpl(
                 }
                 return nil
             }
-    
+
             var source: Any?
             if filePaths.count > 1 {
                 var subjects: [MediaEditorScreenImpl.Subject] = []
@@ -1283,7 +1288,7 @@ func openResolvedUrlImpl(
                     source = subject
                 }
             }
-        
+
             if let navigationController = context.sharedContext.mainWindow?.viewController as? NavigationController {
                 for controller in navigationController.overlayControllers {
                     controller.dismiss()
@@ -1292,14 +1297,14 @@ func openResolvedUrlImpl(
                     controller.dismiss()
                 }
             }
-        
-            let _ = (context.engine.messages.checkStoriesUploadAvailability(target: .myStories)
+
+            _ = (context.engine.messages.checkStoriesUploadAvailability(target: .myStories)
             |> deliverOnMainQueue).start(next: { availability in
                 if case let .available(remainingCount) = availability {
                     let controller = context.sharedContext.makeStoryMediaEditorScreen(context: context, source: source, text: nil, link: nil, remainingCount: remainingCount, completion: { results, externalState, commit in
                         let target: Stories.PendingTarget = results.first!.target
                         externalState.storyTarget = target
-                        
+
                         if let rootController = context.sharedContext.mainWindow?.viewController as? TelegramRootControllerInterface {
                             rootController.popToRoot(animated: false)
                             rootController.proceedWithStoryUpload(target: target, results: results, existingMedia: nil, forwardInfo: nil, externalState: externalState, commit: commit)
@@ -1342,7 +1347,7 @@ func openResolvedUrlImpl(
                     return true
                 }), nil)
             }
-            let _ = (context.engine.messages.attachMenuBots()
+            _ = (context.engine.messages.attachMenuBots()
             |> deliverOnMainQueue).start(next: { attachMenuBots in
                 func filterChooseTypes(_ chooseTypes: ResolvedBotChoosePeerTypes?, peerTypes: AttachMenuBots.Bot.PeerFlags) -> ResolvedBotChoosePeerTypes? {
                     var chooseTypes = chooseTypes
@@ -1362,10 +1367,10 @@ func openResolvedUrlImpl(
                     }
                     return (chooseTypes?.isEmpty ?? true) ? nil : chooseTypes
                 }
-                
+
                 if let bot = attachMenuBots.first(where: { $0.peer.id == peerId }), !bot.flags.contains(.notActivated) {
                     let choose = filterChooseTypes(choose, peerTypes: bot.peerTypes)
-                    
+
                     if let choose = choose {
                         var filters: ChatListNodePeersFilter = []
                         filters.insert(.onlyWriteable)
@@ -1383,37 +1388,37 @@ func openResolvedUrlImpl(
                         if !choose.contains(.channels) {
                             filters.insert(.excludeChannels)
                         }
-                        
+
                         if let navigationController = navigationController {
                             let controller = context.sharedContext.makePeerSelectionController(PeerSelectionControllerParams(context: context, updatedPresentationData: updatedPresentationData, filter: filters, hasChatListSelector: true, hasContactSelector: false, title: presentationData.strings.WebApp_SelectChat, selectForumThreads: true))
                             controller.peerSelected = { [weak navigationController] peer, _ in
                                 guard let navigationController else {
                                     return
                                 }
-                                let _ = context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: navigationController, context: context, chatLocation: .peer(peer), attachBotStart: ChatControllerInitialAttachBotStart(botId: bot.peer.id, payload: payload, justInstalled: false), keepStack: .never, useExisting: true))
+                                _ = context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: navigationController, context: context, chatLocation: .peer(peer), attachBotStart: ChatControllerInitialAttachBotStart(botId: bot.peer.id, payload: payload, justInstalled: false), keepStack: .never, useExisting: true))
                             }
                             navigationController.pushViewController(controller)
                         }
                     } else {
                         if case let .chat(chatPeerId, _, _) = urlContext {
-                            let _ = (context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: chatPeerId))
+                            _ = (context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: chatPeerId))
                             |> deliverOnMainQueue).start(next: { chatPeer in
                                 guard let navigationController = navigationController, let chatPeer else {
                                     return
                                 }
-                                let _ = context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: navigationController, context: context, chatLocation: .peer(chatPeer), attachBotStart: ChatControllerInitialAttachBotStart(botId: peerId, payload: payload, justInstalled: false), keepStack: .never, useExisting: true))
+                                _ = context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: navigationController, context: context, chatLocation: .peer(chatPeer), attachBotStart: ChatControllerInitialAttachBotStart(botId: peerId, payload: payload, justInstalled: false), keepStack: .never, useExisting: true))
                             })
                         } else {
                             presentError(presentationData.strings.WebApp_AddToAttachmentAlreadyAddedError)
                         }
                     }
                 } else {
-                    let _ = (context.engine.messages.getAttachMenuBot(botId: peerId)
+                    _ = (context.engine.messages.getAttachMenuBot(botId: peerId)
                     |> deliverOnMainQueue).start(next: { bot in
                         let choose = filterChooseTypes(choose, peerTypes: bot.peerTypes)
-                        
+
                         let controller = webAppTermsAlertController(context: context, updatedPresentationData: updatedPresentationData, completion: { allowWrite in
-                            let _ = (context.engine.messages.addBotToAttachMenu(botId: peerId, allowWrite: allowWrite)
+                            _ = (context.engine.messages.addBotToAttachMenu(botId: peerId, allowWrite: allowWrite)
                             |> deliverOnMainQueue).start(error: { _ in
                                 presentError(presentationData.strings.WebApp_AddToAttachmentUnavailableError)
                             }, completed: {
@@ -1434,26 +1439,26 @@ func openResolvedUrlImpl(
                                     if !choose.contains(.channels) {
                                         filters.insert(.excludeChannels)
                                     }
-                                    
+
                                     if let navigationController = navigationController {
                                         let controller = context.sharedContext.makePeerSelectionController(PeerSelectionControllerParams(context: context, updatedPresentationData: updatedPresentationData, filter: filters, hasChatListSelector: true, hasContactSelector: false, title: presentationData.strings.WebApp_SelectChat, selectForumThreads: true))
                                         controller.peerSelected = { [weak navigationController] peer, _ in
                                             guard let navigationController else {
                                                 return
                                             }
-                                            let _ = context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: navigationController, context: context, chatLocation: .peer(peer), attachBotStart: ChatControllerInitialAttachBotStart(botId: bot.peer.id, payload: payload, justInstalled: true), useExisting: true))
+                                            _ = context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: navigationController, context: context, chatLocation: .peer(peer), attachBotStart: ChatControllerInitialAttachBotStart(botId: bot.peer.id, payload: payload, justInstalled: true), useExisting: true))
                                         }
                                         navigationController.pushViewController(controller)
                                     }
                                 } else {
                                     if case let .chat(chatPeerId, _, _) = urlContext {
-                                        let _ = (context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: chatPeerId))
+                                        _ = (context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: chatPeerId))
                                         |> deliverOnMainQueue).start(next: { chatPeer in
                                             guard let navigationController = navigationController, let chatPeer else {
                                                 return
                                             }
-                                            
-                                            let _ = context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: navigationController, context: context, chatLocation: .peer(chatPeer), attachBotStart: ChatControllerInitialAttachBotStart(botId: bot.peer.id, payload: payload, justInstalled: true), useExisting: true))
+
+                                            _ = context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: navigationController, context: context, chatLocation: .peer(chatPeer), attachBotStart: ChatControllerInitialAttachBotStart(botId: bot.peer.id, payload: payload, justInstalled: true), useExisting: true))
                                         })
                                     }
                                 }
@@ -1467,7 +1472,7 @@ func openResolvedUrlImpl(
             })
         case let .invoice(slug, invoice):
             dismissInput()
-        
+
             if let invoice {
                 if let navigationController = navigationController {
                     let inputData = Promise<BotCheckoutController.InputData?>()
@@ -1488,12 +1493,12 @@ func openResolvedUrlImpl(
                                 return nil
                             }
                         }
-                        let _ = (starsInputData |> filter { $0 != nil } |> take(1) |> deliverOnMainQueue).start(next: { _ in
+                        _ = (starsInputData |> filter { $0 != nil } |> take(1) |> deliverOnMainQueue).start(next: { _ in
                             let controller = context.sharedContext.makeStarsTransferScreen(context: context, starsContext: starsContext, invoice: invoice, source: .slug(slug), extendedMedia: [], inputData: starsInputData, completion: { _ in })
                             navigationController.pushViewController(controller)
                         })
                     } else {
-                        let checkoutController = BotCheckoutController(context: context, invoice: invoice, source: .slug(slug), inputData: inputData, completed: { currencyValue, receiptMessageId in
+                        let checkoutController = BotCheckoutController(context: context, invoice: invoice, source: .slug(slug), inputData: inputData, completed: { _, _ in
                             /*strongSelf.present(UndoOverlayController(presentationData: strongSelf.presentationData, content: .paymentSent(currencyValue: currencyValue, itemTitle: invoice.title), elevatedLayout: false, action: { action in
                              guard let strongSelf = self, let receiptMessageId = receiptMessageId else {
                              return false
@@ -1516,22 +1521,22 @@ func openResolvedUrlImpl(
         case let .chatFolder(slug):
             if let navigationController = navigationController {
                 let signal = context.engine.peers.checkChatFolderLink(slug: slug)
-                
+
                 var cancelImpl: (() -> Void)?
-                let progressSignal = Signal<Never, NoError> { subscriber in
-                    let controller = OverlayStatusController(theme: presentationData.theme,  type: .loading(cancelled: {
+                let progressSignal = Signal<Never, NoError> { _ in
+                    let controller = OverlayStatusController(theme: presentationData.theme, type: .loading(cancelled: {
                         cancelImpl?()
                     }))
                     present(controller, nil)
                     return ActionDisposable { [weak controller] in
-                        Queue.mainQueue().async() {
+                        Queue.mainQueue().async {
                             controller?.dismiss()
                         }
                     }
                 }
                 |> runOn(Queue.mainQueue())
                 |> delay(0.35, queue: Queue.mainQueue())
-                
+
                 let disposable = MetaDisposable()
                 let progressDisposable = progressSignal.start()
                 cancelImpl = {
@@ -1559,7 +1564,7 @@ func openResolvedUrlImpl(
                 dismissInput()
             }
         case let .story(peerId, id):
-            let _ = (context.account.postbox.transaction { transaction -> Bool in
+            _ = (context.account.postbox.transaction { transaction -> Bool in
                 if let value = transaction.getStory(id: StoryId(peerId: peerId, id: id)), !value.data.isEmpty {
                     return true
                 } else {
@@ -1569,18 +1574,18 @@ func openResolvedUrlImpl(
             |> deliverOnMainQueue).startStandalone(next: { [navigationController] exists in
                 if exists {
                     let storyContent = SingleStoryContentContextImpl(context: context, storyId: StoryId(peerId: peerId, id: id), readGlobally: true)
-                    let _ = (storyContent.state
+                    _ = (storyContent.state
                     |> take(1)
                     |> deliverOnMainQueue).startStandalone(next: { [weak navigationController] _ in
                         let transitionIn: StoryContainerScreen.TransitionIn? = nil
-                        
+
                         let storyContainerScreen = StoryContainerScreen(
                             context: context,
                             content: storyContent,
                             transitionIn: transitionIn,
                             transitionOut: { _, _ in
                                 let transitionOut: StoryContainerScreen.TransitionOut? = nil
-                                
+
                                 return transitionOut
                             }
                         )
@@ -1605,7 +1610,7 @@ func openResolvedUrlImpl(
                     updateExternalController(nil)
                 }
             }
-        
+
             if let peerId, let status {
                 var isCurrent = false
                 if case let .chat(chatPeerId, _, _) = urlContext, chatPeerId == peerId {
@@ -1621,7 +1626,7 @@ func openResolvedUrlImpl(
                     mode: .user(mode: isCurrent ? .current : .external),
                     status: status,
                     myBoostStatus: myBoostStatus,
-                    openPeer:  { peer in
+                    openPeer: { peer in
                         openPeer(peer, .chat(textInputState: nil, subject: nil, peekData: nil))
                     },
                     forceDark: forceDark
@@ -1630,7 +1635,7 @@ func openResolvedUrlImpl(
                     dismissedImpl?()
                 }
                 navigationController?.pushViewController(controller)
-                
+
                 if let storyProgressPauseContext = contentContext as? StoryProgressPauseContext {
                     storyProgressPauseContext.update(controller)
                 }
@@ -1647,7 +1652,7 @@ func openResolvedUrlImpl(
                     dismissedImpl?()
                 }
                 present(alertController, nil)
-                
+
                 if let storyProgressPauseContext = contentContext as? StoryProgressPauseContext {
                     storyProgressPauseContext.update(alertController)
                 }
@@ -1657,12 +1662,12 @@ func openResolvedUrlImpl(
             if let updatedPresentationData, updatedPresentationData.initial.theme.overallDarkAppearance {
                 forceDark = true
             }
-        
-            let progressSignal = Signal<Never, NoError> { subscriber in
+
+            let progressSignal = Signal<Never, NoError> { _ in
                 if let progress {
                     progress.set(.single(true))
                     return ActionDisposable {
-                        Queue.mainQueue().async() {
+                        Queue.mainQueue().async {
                             progress.set(.single(false))
                         }
                     }
@@ -1673,7 +1678,7 @@ func openResolvedUrlImpl(
             |> runOn(Queue.mainQueue())
             |> delay(0.25, queue: Queue.mainQueue())
             let progressDisposable = progressSignal.startStrict()
-            
+
             var signal = context.engine.payments.checkPremiumGiftCode(slug: slug)
             signal = signal
             |> afterDisposed {
@@ -1681,8 +1686,8 @@ func openResolvedUrlImpl(
                     progressDisposable.dispose()
                 }
             }
-        
-            let _ = (signal
+
+            _ = (signal
             |> deliverOnMainQueue).startStandalone(next: { [weak navigationController] giftCode in
                 if let giftCode {
                     if giftCode.fromPeerId == nil, let toPeerId = giftCode.toPeerId {
@@ -1701,10 +1706,10 @@ func openResolvedUrlImpl(
                             subject: .giftCode(giftCode),
                             forceDark: forceDark,
                             action: { [weak navigationController] in
-                                let _ = (context.engine.payments.applyPremiumGiftCode(slug: slug)
+                                _ = (context.engine.payments.applyPremiumGiftCode(slug: slug)
                                 |> deliverOnMainQueue).startStandalone(error: { error in
                                     dismissImpl?()
-                                    
+
                                     if case let .waitForExpiration(date) = error {
                                         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
                                         let dateText = stringForMediumDate(timestamp: date, strings: presentationData.strings, dateTimeFormat: presentationData.dateTimeFormat)
@@ -1712,7 +1717,7 @@ func openResolvedUrlImpl(
                                     }
                                 }, completed: {
                                     dismissImpl?()
-                                    
+
                                     let controller = PremiumIntroScreen(context: context, source: .settings, forceDark: forceDark, forceHasPremium: true)
                                     navigationController?.pushViewController(controller)
                                     Queue.mainQueue().after(0.3, {
@@ -1729,7 +1734,7 @@ func openResolvedUrlImpl(
                                 }
                             },
                             openMessage: { messageId in
-                                let _ = (context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: messageId.peerId))
+                                _ = (context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: messageId.peerId))
                                 |> deliverOnMainQueue).startStandalone(next: { peer in
                                     guard let peer else {
                                         return
@@ -1742,18 +1747,18 @@ func openResolvedUrlImpl(
                             },
                             shareLink: { link in
                                 let messages: [EnqueueMessage] = [.message(text: link, attributes: [], inlineStickers: [:], mediaReference: nil, threadId: nil, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])]
-                                
+
                                 let peerSelectionController = context.sharedContext.makePeerSelectionController(PeerSelectionControllerParams(context: context, filter: [.onlyWriteable, .excludeDisabled], multipleSelection: false, selectForumThreads: true))
-                                peerSelectionController.peerSelected = { [weak peerSelectionController] peer, threadId in
+                                peerSelectionController.peerSelected = { [weak peerSelectionController] peer, _ in
                                     if let _ = peerSelectionController {
                                         Queue.mainQueue().after(0.88) {
                                             HapticFeedback().success()
                                         }
-                                        
+
                                         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
                                         (navigationController?.topViewController as? ViewController)?.present(UndoOverlayController(presentationData: presentationData, content: .forward(savedMessages: true, text: peer.id == context.account.peerId ? presentationData.strings.GiftLink_LinkSharedToSavedMessages : presentationData.strings.GiftLink_LinkSharedToChat(peer.compactDisplayTitle).string), elevatedLayout: false, animateInAsReplacement: true, action: { _ in return false }), in: .window(.root))
-                                        
-                                        let _ = (enqueueMessages(account: context.account, peerId: peer.id, messages: messages)
+
+                                        _ = (enqueueMessages(account: context.account, peerId: peer.id, messages: messages)
                                         |> deliverOnMainQueue).startStandalone()
                                         if let peerSelectionController = peerSelectionController {
                                             peerSelectionController.dismiss()
@@ -1782,7 +1787,7 @@ func openResolvedUrlImpl(
                     updateExternalController(nil)
                 }
             }
-            let controller = context.sharedContext.makeGiftViewScreen(context: context, gift: gift, shareStory: { [weak navigationController] uniqueGift in
+            let controller = context.sharedContext.makeGiftViewScreen(context: context, gift: gift, shareStory: { [weak navigationController] _ in
                 Queue.mainQueue().after(0.15) {
                     if let lastController = navigationController?.viewControllers.last as? ViewController {
                         let controller = context.sharedContext.makeStorySharingScreen(context: context, subject: .gift(gift), parentController: lastController)
@@ -1793,7 +1798,7 @@ func openResolvedUrlImpl(
                 dismissedImpl?()
             })
             navigationController?.pushViewController(controller)
-            
+
             if let storyProgressPauseContext = contentContext as? StoryProgressPauseContext {
                 storyProgressPauseContext.update(controller)
             }
@@ -1874,7 +1879,7 @@ func openResolvedUrlImpl(
                 ).get() else {
                     return
                 }
-                
+
                 guard let controller = context.sharedContext.makePeerInfoController(
                     context: context,
                     updatedPresentationData: updatedPresentationData,
@@ -1895,7 +1900,7 @@ func openResolvedUrlImpl(
                 ).get() else {
                     return
                 }
-                
+
                 guard let controller = context.sharedContext.makePeerInfoController(
                     context: context,
                     updatedPresentationData: updatedPresentationData,
@@ -1913,7 +1918,7 @@ func openResolvedUrlImpl(
             Task { @MainActor [weak navigationController] in
                 if let peerId {
                     let giftOptions = await (context.engine.payments.premiumGiftCodeOptions(peerId: nil, onlyCached: true) |> filter { !$0.isEmpty }).get()
-                    
+
                     let premiumOptions = giftOptions.filter { $0.users == 1 }.map { CachedPremiumGiftOption(months: $0.months, currency: $0.currency, amount: $0.amount, botUrl: "", storeProductId: $0.storeProductId) }
                     let controller = context.sharedContext.makeGiftOptionsController(context: context, peerId: peerId, premiumOptions: premiumOptions, hasBirthday: false, completion: nil)
                     controller.navigationPresentation = .modal
@@ -1924,12 +1929,12 @@ func openResolvedUrlImpl(
                 }
             }
         case let .unknownDeepLink(path):
-            let _ = (context.engine.resolve.getDeepLinkInfo(path: path)
+            _ = (context.engine.resolve.getDeepLinkInfo(path: path)
             |> deliverOnMainQueue).start(next: { result in
                 guard let result else {
                     return
                 }
-                
+
                 let actions: [AlertScreen.Action]
                 if result.updateApp {
                     actions = [
@@ -1943,11 +1948,11 @@ func openResolvedUrlImpl(
                         .init(title: presentationData.strings.Common_OK, type: .default)
                     ]
                 }
-                
+
                 let content: [AnyComponentWithIdentity<AlertComponentEnvironment>] = [
                     AnyComponentWithIdentity(id: "text", component: AnyComponent(AlertTextComponent(content: .textWithEntities(context, result.message, result.entities))))
                 ]
-                
+
                 let alertController = AlertScreen(
                     context: context,
                     content: content,
@@ -1957,22 +1962,22 @@ func openResolvedUrlImpl(
             })
         case let .oauth(url):
             let subject: MessageActionUrlSubject = .url(url: url, inAppOrigin: nil)
-            let _ = (context.engine.messages.requestMessageActionUrlAuth(subject: subject)
+            _ = (context.engine.messages.requestMessageActionUrlAuth(subject: subject)
             |> deliverOnMainQueue).start(next: { result in
                 if case .request = result {
                     var dismissImpl: (() -> Void)?
-                    let controller = AuthConfirmationScreen(context: context, requestSubject: subject, subject: result, completion: { accountContext, accountPeer, authResult, disposable in
+                    let controller = AuthConfirmationScreen(context: context, requestSubject: subject, subject: result, completion: { accountContext, _, authResult, disposable in
                         switch authResult {
                         case let .accept(allowWriteAccess, sharePhoneNumber, matchCode):
                             let signal = accountContext.engine.messages.acceptMessageActionUrlAuth(subject: subject, allowWriteAccess: allowWriteAccess, sharePhoneNumber: sharePhoneNumber, matchCode: matchCode)
                             |> afterDisposed {
                                 disposable.dispose()
                             }
-                            
-                            let _ = (signal
+
+                            _ = (signal
                             |> deliverOnMainQueue).start(next: { acceptResult in
                                 dismissImpl?()
-                                
+
                                 Queue.mainQueue().after(0.3) {
                                     let text: String
                                     if case let .request(domain, _, _, flags, _, _) = result {
@@ -1990,13 +1995,13 @@ func openResolvedUrlImpl(
                                         }
                                     }
                                 }
-                                
+
                                 if case let .accepted(url) = acceptResult, let url {
                                     var clientData: MessageActionUrlAuthResult.ClientData?
                                     if case let .request(_, _, value, _, _, _) = result {
                                         clientData = value
                                     }
-                                    
+
                                     var browserIdentifier = "safari"
                                     if let browser = clientData?.browser {
                                         if browser.hasPrefix("Safari") {
@@ -2023,7 +2028,7 @@ func openResolvedUrlImpl(
                                             browserIdentifier = "vivaldi"
                                         }
                                     }
-                                    
+
                                     let openInBrowser: () -> Void = {
                                         let isWebUrl = url.hasPrefix("http:") || url.hasPrefix("https:")
                                         let openInOptions = availableOpenInOptions(context: context, item: .url(url: url))
@@ -2033,7 +2038,7 @@ func openResolvedUrlImpl(
                                             context.sharedContext.openExternalUrl(context: context, urlContext: .external, url: url, forceExternal: true, presentationData: presentationData, navigationController: navigationController, dismissInput: {})
                                         }
                                     }
-                                    
+
                                     if clientData?.isApp == true, URL(string: url)?.scheme?.lowercased() == "https" {
                                         context.sharedContext.applicationBindings.openUniversalUrl(url, TelegramApplicationOpenUrlCompletion(completion: { success in
                                             if !success {
@@ -2046,7 +2051,7 @@ func openResolvedUrlImpl(
                                 }
                             }, error: { _ in
                                 dismissImpl?()
-                                
+
                                 Queue.mainQueue().after(0.3) {
                                     if case let .request(domain, _, _, _, _, _) = result {
                                         if var topViewController = navigationController?.topViewController as? ViewController {
@@ -2057,15 +2062,15 @@ func openResolvedUrlImpl(
                                             topViewController.present(controller, in: .current)
                                         }
                                     }
-                                    
+
                                     HapticFeedback().error()
                                 }
                             })
                         case .decline:
-                            let _ = context.engine.messages.declineUrlAuth(url: url).start()
+                            _ = context.engine.messages.declineUrlAuth(url: url).start()
                         case .failed:
                             dismissImpl?()
-                            
+
                             Queue.mainQueue().after(0.3) {
                                 if case let .request(domain, _, _, _, _, _) = result {
                                     if var topViewController = navigationController?.topViewController as? ViewController {
@@ -2076,7 +2081,7 @@ func openResolvedUrlImpl(
                                         topViewController.present(controller, in: .current)
                                     }
                                 }
-                                
+
                                 HapticFeedback().error()
                             }
                         }
@@ -2114,7 +2119,7 @@ func openResolvedUrlImpl(
                     present(alertController, nil)
                     return
                 }
-                
+
                 guard let controller = await CreateBotScreen(
                     context: context,
                     parentBot: parentBot.id,
@@ -2137,7 +2142,7 @@ func openResolvedUrlImpl(
                     ).get()
                 }
                 let isAlreadyAdded = await context.engine.messages.composeAIMessageStyles().get().contains(where: { $0.id == .style(.custom(style.id)) })
-                
+
                 let controller = await context.sharedContext.makeTextProcessingScreen(context: context, theme: nil, mode: .preview(style: style, authorPeer: authorPeer, initialPreview: initialPreview, isAlreadyAdded: isAlreadyAdded, added: {
                     Task { @MainActor in
                         guard let emojiFileId = style.emojiFileId, let file = await context.engine.stickers.resolveInlineStickers(fileIds: [emojiFileId]).get().first?.value else {

@@ -10,6 +10,7 @@ swift_library(
         "-warnings-as-errors",
     ],
     deps = [
+        "//submodules/Novagram/StoryUnlock:NovagramStoryUnlock",
         "//submodules/UrlWhitelist",
         "//submodules/Display",
         "//submodules/LottieSettings:LottieSettings",

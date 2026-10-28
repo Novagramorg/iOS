@@ -33,6 +33,16 @@ final class AuthorizationSequenceCodeEntryControllerNode: ASDisplayNode, UITextF
     private let nextOptionTitleNode: ImmediateTextNode
     private let nextOptionButtonNode: HighlightableButtonNode
     private let nextOptionArrowNode: ASImageNode
+
+    // Novagram: demo phone uchun "Didn't get the code?" tugma yashirish.
+    // Status matn alohida UIView banner orqali ko'rsatiladi (NovagramAppleReview module'da)
+    public var novagramDemoMode: Bool = false
+    public func novagramHideNextOption(_ hide: Bool) {
+        self.novagramDemoMode = hide
+        self.nextOptionTitleNode.isHidden = hide
+        self.nextOptionButtonNode.isHidden = hide
+        self.nextOptionArrowNode.isHidden = hide
+    }
     
     private let resetTextNode: ImmediateTextNode
     private let resetNode: HighlightableButtonNode
@@ -446,7 +456,10 @@ final class AuthorizationSequenceCodeEntryControllerNode: ASDisplayNode, UITextF
                     if let currentTimeoutTime = strongSelf.currentTimeoutTime, currentTimeoutTime > 0 {
                         strongSelf.currentTimeoutTime = currentTimeoutTime - 1
                         let (nextOptionText, nextOptionActive) = authorizationNextOptionText(currentType: codeType, nextType: nextType, previousCodeType: isPrevious ? previousCodeType : nil, timeout: strongSelf.currentTimeoutTime, strings: strongSelf.strings, primaryColor: strongSelf.theme.list.itemSecondaryTextColor, accentColor: strongSelf.theme.list.itemAccentColor)
-                        strongSelf.nextOptionTitleNode.attributedText = nextOptionText
+                        // Novagram: demo phone'da bizning matn ustidan yozmaymiz
+                        if !strongSelf.novagramDemoMode {
+                            strongSelf.nextOptionTitleNode.attributedText = nextOptionText
+                        }
                         strongSelf.nextOptionButtonNode.isUserInteractionEnabled = nextOptionActive
                         strongSelf.nextOptionButtonNode.accessibilityLabel = nextOptionText.string
                         if nextOptionActive {

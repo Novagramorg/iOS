@@ -15,6 +15,8 @@ import EmojiStatusComponent
 import TelegramUIPreferences
 import TranslateUI
 import TelegramNotices
+import NovagramPremiumUnlock
+import NovagramSponsored
 
 extension ChatControllerImpl {
     final class ContentData {
@@ -692,7 +694,8 @@ extension ChatControllerImpl {
                 
                 let adMessage: Signal<Message?, NoError>
                 if let adMessagesContext {
-                    adMessage = adMessagesContext.state |> map { $0.messages.first }
+                    // Novagram: OUR bot ad first in the bot panel, else Telegram's (unchanged).
+                    adMessage = NovagramBotAds.panelMessage(context: context, peerId: adMessagesContext.peerId, fallback: adMessagesContext.state |> map { $0.messages.first })
                 } else {
                     adMessage = .single(nil)
                 }
@@ -2220,7 +2223,7 @@ extension ChatControllerImpl {
                         if counterAndTimestamp.0 >= 3 {
                             maybeSuggestPremium = true
                         }
-                        if (isPremium || maybeSuggestPremium || hasAutoTranslate) && !isHidden {
+                        if (isPremium || maybeSuggestPremium || hasAutoTranslate || NovagramPremiumUnlock.isTranslateChatsUnlocked) && !isHidden {
                             return chatTranslationState(context: context, peerId: peerId, threadId: chatLocation.threadId)
                             |> map { translationState -> ChatPresentationTranslationState? in
                                 if let translationState, !translationState.fromLang.isEmpty && (translationState.fromLang != baseLanguageCode || translationState.isEnabled) {

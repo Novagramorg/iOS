@@ -41,6 +41,8 @@
 
 - (bool)micButtonShouldLock;
 
+- (void)micButtonInteractionPresentCameraSelection;
+
 - (id<TGModernConversationInputMicButtonPresentation>)micButtonPresenter;
 - (UIView<TGModernConversationInputMicButtonDecoration> *)micButtonDecoration;
 - (UIView<TGModernConversationInputMicButtonLock> *)micButtonLock;

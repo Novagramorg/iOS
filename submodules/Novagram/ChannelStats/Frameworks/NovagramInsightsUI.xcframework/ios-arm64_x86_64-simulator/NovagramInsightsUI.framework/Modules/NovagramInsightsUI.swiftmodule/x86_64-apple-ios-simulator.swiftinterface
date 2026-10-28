@@ -1,0 +1,41 @@
+// swift-interface-format-version: 1.0
+// swift-compiler-version: Apple Swift version 6.4 (swiftlang-6.4.0.34.1 clang-2100.3.34.1)
+// swift-module-flags: -target x86_64-apple-ios15.0-simulator -enable-objc-interop -enable-library-evolution -language-mode 6 -O -enable-experimental-feature DebugDescriptionMacro -module-name NovagramInsightsUI -package-name novagraminsightsui
+// swift-module-flags-ignorable:  -formal-cxx-interoperability-mode=off -interface-compiler-version 6.4
+import Accessibility
+import Charts
+import Foundation
+import NovagramAds
+import NovagramInsights
+import PhotosUI
+import Swift
+import SwiftUI
+import TipKit
+import UIKit
+import UniformTypeIdentifiers
+import _Concurrency
+import _PhotosUI_SwiftUI
+import _StringProcessing
+import _SwiftConcurrencyShims
+public typealias InsightsPlatformColor = UIKit::UIColor
+public struct InsightsConfiguration : Swift::Sendable {
+  public var environment: NovagramAds::SDKEnvironment
+  public var keychainKey: NovagramInsights::InsightsKeychainKey
+  public var language: NovagramInsights::InsightsLanguage
+  public var onClose: (@_Concurrency::MainActor @Sendable () -> Swift::Void)?
+  public init(environment: NovagramAds::SDKEnvironment, keychainKey: NovagramInsights::InsightsKeychainKey, language: NovagramInsights::InsightsLanguage = .english, onClose: (@_Concurrency::MainActor @Sendable () -> Swift::Void)? = nil)
+}
+public struct InsightsTheme {
+  public var accent: NovagramInsightsUI::InsightsPlatformColor
+  public var background: NovagramInsightsUI::InsightsPlatformColor?
+  public var primaryText: NovagramInsightsUI::InsightsPlatformColor?
+  public var secondaryText: NovagramInsightsUI::InsightsPlatformColor?
+  public init(accent: NovagramInsightsUI::InsightsPlatformColor, background: NovagramInsightsUI::InsightsPlatformColor? = nil, primaryText: NovagramInsightsUI::InsightsPlatformColor? = nil, secondaryText: NovagramInsightsUI::InsightsPlatformColor? = nil)
+  public static var system: NovagramInsightsUI::InsightsTheme {
+    get
+  }
+}
+@available(iOS 16.0, macOS 13.0, *)
+public enum InsightsUI {
+  @_Concurrency::MainActor public static func makeViewController(configuration: NovagramInsightsUI::InsightsConfiguration, theme: NovagramInsightsUI::InsightsTheme = .system) -> UIKit::UIViewController
+}

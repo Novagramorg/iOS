@@ -113,6 +113,40 @@ func unreadMessages(account: Account) -> Signal<[INMessage], NoError> {
     ))
 }
 
+/// Novagram: the unread messages of the chats CarPlay's conversation list hands to Siri. Unlike the
+/// "read my messages" scan these chats are read even when muted or outside the newest 20, because
+/// the user picked them.
+@available(iOSApplicationExtension 10.0, iOS 10.0, *)
+func unreadMessages(account: Account, peerIds: [PeerId]) -> Signal<[INMessage], NoError> {
+    let signals = peerIds.filter(unreadMessagesIncludePeer).map { peerId -> Signal<[INMessage], NoError> in
+        return account.postbox.transaction { transaction -> CombinedPeerReadState? in
+            return transaction.getCombinedPeerReadState(peerId)
+        }
+        |> mapToSignal { readState -> Signal<[INMessage], NoError> in
+            guard let readState, readState.count != 0 else {
+                return .single([])
+            }
+            return firstSettledValue(account.viewTracker.aroundMessageHistoryViewForLocation(.peer(peerId: peerId, threadId: nil), index: .upperBound, anchorIndex: .upperBound, count: 10, fixedCombinedReadStates: .peer([peerId: readState]), orderStatistics: .combinedLocation) |> map { $0.0 }, isSettled: { !$0.isLoading }, timeout: unreadMessagesSettleTimeout)
+            |> take(1)
+            |> map { view -> [INMessage] in
+                return view.entries.compactMap { entry -> INMessage? in
+                    if readState.isIncomingMessageIndexRead(entry.message.index) {
+                        return nil
+                    }
+                    return messageWithTelegramMessage(entry.message)
+                }
+            }
+        }
+    }
+    if signals.isEmpty {
+        return .single([])
+    }
+    return combineLatest(signals)
+    |> map { results -> [INMessage] in
+        return results.flatMap { $0 }.sorted { ($0.dateSent ?? .distantPast) > ($1.dateSent ?? .distantPast) }
+    }
+}
+
 /// The same scan over the raw store, for tests; a store without holes reads the same.
 @available(iOSApplicationExtension 10.0, iOS 10.0, *)
 func unreadMessages(postbox: Postbox) -> Signal<[INMessage], NoError> {

@@ -1,0 +1,161 @@
+// swift-interface-format-version: 1.0
+// swift-compiler-version: Apple Swift version 6.4 (swiftlang-6.4.0.34.1 clang-2100.3.34.1)
+// swift-module-flags: -target arm64-apple-ios15.0 -enable-objc-interop -enable-library-evolution -language-mode 6 -O -enable-experimental-feature DebugDescriptionMacro -module-name NovagramServicesUI -package-name novagramservicesui
+// swift-module-flags-ignorable:  -formal-cxx-interoperability-mode=off -interface-compiler-version 6.4
+import Foundation
+import NovagramServices
+import Swift
+import SwiftUI
+import UIKit
+import _Concurrency
+import _StringProcessing
+import _SwiftConcurrencyShims
+@_Concurrency::MainActor @preconcurrency public struct CurrencyCalculatorView : SwiftUICore::View {
+  @_Concurrency::MainActor @preconcurrency public init(rates: [NovagramServices::CurrencyRate]?, state: NovagramServicesUI::CurrencyConverterState = .default, strings: NovagramServicesUI::CurrencyConverterStrings, theme: NovagramServicesUI::ServicesUITheme, locale: Foundation::Locale, onStateChange: (@_Concurrency::MainActor @Sendable (NovagramServicesUI::CurrencyConverterState) -> Swift::Void)? = nil)
+  @_Concurrency::MainActor @preconcurrency public var body: some SwiftUICore::View {
+    get
+  }
+  public typealias Body = @_opaqueReturnTypeOf("$s18NovagramServicesUI22CurrencyCalculatorViewV4bodyQrvp", 0) __
+}
+public struct CurrencyConverterState : Swift::Sendable, Swift::Equatable, Swift::Codable {
+  public var from: Swift::String
+  public var to: Swift::String
+  public var amount: Foundation::Decimal
+  public init(from: Swift::String, to: Swift::String, amount: Foundation::Decimal)
+  public static let `default`: NovagramServicesUI::CurrencyConverterState
+  public static func == (a: NovagramServicesUI::CurrencyConverterState, b: NovagramServicesUI::CurrencyConverterState) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct CurrencyConverterStrings : Swift::Sendable, Swift::Equatable {
+  public var sumName: Swift::String
+  public var sumSymbol: Swift::String
+  public var footer: Swift::String?
+  public var swap: Swift::String
+  public var delete: Swift::String
+  public var copy: Swift::String
+  public var amountLabel: Swift::String
+  public var resultLabel: Swift::String
+  public var quickAmounts: Swift::String
+  public var yourAmount: Swift::String
+  public var favorites: Swift::String
+  public var tapHint: Swift::String
+  public var addCurrency: Swift::String
+  public var makeBase: Swift::String
+  public var remove: Swift::String
+  public var pickerTitle: Swift::String
+  public var search: Swift::String
+  public var frequent: Swift::String
+  public var allCurrencies: Swift::String
+  public var noResults: Swift::String
+  public var close: Swift::String
+  public var chooseCurrency: Swift::String
+  public init(sumName: Swift::String, sumSymbol: Swift::String, footer: Swift::String?, swap: Swift::String, delete: Swift::String, copy: Swift::String, amountLabel: Swift::String, resultLabel: Swift::String, quickAmounts: Swift::String, yourAmount: Swift::String, favorites: Swift::String, tapHint: Swift::String, addCurrency: Swift::String, makeBase: Swift::String, remove: Swift::String, pickerTitle: Swift::String, search: Swift::String, frequent: Swift::String, allCurrencies: Swift::String, noResults: Swift::String, close: Swift::String, chooseCurrency: Swift::String)
+  public static func == (a: NovagramServicesUI::CurrencyConverterStrings, b: NovagramServicesUI::CurrencyConverterStrings) -> Swift::Bool
+}
+@_Concurrency::MainActor @preconcurrency public struct MultiCurrencyView : SwiftUICore::View {
+  @_Concurrency::MainActor @preconcurrency public static let defaultFavorites: [Swift::String]
+  @_Concurrency::MainActor @preconcurrency public init(rates: [NovagramServices::CurrencyRate]?, base: Swift::String, amount: Foundation::Decimal, favorites: [Swift::String], strings: NovagramServicesUI::CurrencyConverterStrings, theme: NovagramServicesUI::ServicesUITheme, locale: Foundation::Locale, onFavoritesChange: (@_Concurrency::MainActor @Sendable ([Swift::String]) -> Swift::Void)? = nil)
+  @_Concurrency::MainActor @preconcurrency public var body: some SwiftUICore::View {
+    get
+  }
+  public typealias Body = @_opaqueReturnTypeOf("$s18NovagramServicesUI17MultiCurrencyViewV4bodyQrvp", 0) __
+}
+@_Concurrency::MainActor @preconcurrency public struct CurrencyRatesCard<Header> : SwiftUICore::View where Header : SwiftUICore::View {
+  @_Concurrency::MainActor @preconcurrency public init(rates: [NovagramServices::CurrencyRate]?, strings: NovagramServicesUI::CurrencyRatesStrings, theme: NovagramServicesUI::ServicesUITheme, locale: Foundation::Locale, @SwiftUICore::ViewBuilder header: () -> Header)
+  @_Concurrency::MainActor @preconcurrency public var body: some SwiftUICore::View {
+    get
+  }
+  public typealias Body = @_opaqueReturnTypeOf("$s18NovagramServicesUI17CurrencyRatesCardV4bodyQrvp", 0) __<Header>
+}
+extension NovagramServicesUI::CurrencyRatesCard where Header == SwiftUICore::EmptyView {
+  @_Concurrency::MainActor @preconcurrency public init(rates: [NovagramServices::CurrencyRate]?, strings: NovagramServicesUI::CurrencyRatesStrings, theme: NovagramServicesUI::ServicesUITheme, locale: Foundation::Locale)
+}
+public struct CurrencyRatesStrings : Swift::Sendable, Swift::Equatable {
+  public var title: Swift::String?
+  public var footer: Swift::String?
+  public var empty: Swift::String
+  public init(title: Swift::String? = nil, footer: Swift::String? = nil, empty: Swift::String)
+  public static func == (a: NovagramServicesUI::CurrencyRatesStrings, b: NovagramServicesUI::CurrencyRatesStrings) -> Swift::Bool
+}
+@_Concurrency::MainActor @preconcurrency public struct StatisticsCard<Header> : SwiftUICore::View where Header : SwiftUICore::View {
+  @_Concurrency::MainActor @preconcurrency public init(counts: NovagramServices::StatisticsCounts?, strings: NovagramServicesUI::StatisticsStrings, theme: NovagramServicesUI::ServicesUITheme, locale: Foundation::Locale, onInfo: (@_Concurrency::MainActor @Sendable (NovagramServicesUI::StatisticsCounter) -> Swift::Void)? = nil, @SwiftUICore::ViewBuilder header: () -> Header)
+  @_Concurrency::MainActor @preconcurrency public var body: some SwiftUICore::View {
+    get
+  }
+  public typealias Body = @_opaqueReturnTypeOf("$s18NovagramServicesUI14StatisticsCardV4bodyQrvp", 0) __<Header>
+}
+extension NovagramServicesUI::StatisticsCard where Header == SwiftUICore::EmptyView {
+  @_Concurrency::MainActor @preconcurrency public init(counts: NovagramServices::StatisticsCounts?, strings: NovagramServicesUI::StatisticsStrings, theme: NovagramServicesUI::ServicesUITheme, locale: Foundation::Locale, onInfo: (@_Concurrency::MainActor @Sendable (NovagramServicesUI::StatisticsCounter) -> Swift::Void)? = nil)
+}
+public struct StatisticsStrings : Swift::Sendable, Swift::Equatable {
+  public var subtitle: Swift::String?
+  public var downloadsCaption: Swift::String
+  public var activeCaption: Swift::String
+  public init(subtitle: Swift::String?, downloadsCaption: Swift::String, activeCaption: Swift::String)
+  public static func == (a: NovagramServicesUI::StatisticsStrings, b: NovagramServicesUI::StatisticsStrings) -> Swift::Bool
+}
+public enum StatisticsCounter : Swift::Sendable, Swift::Equatable, Swift::CaseIterable {
+  case downloads
+  case active
+  public static func == (a: NovagramServicesUI::StatisticsCounter, b: NovagramServicesUI::StatisticsCounter) -> Swift::Bool
+  public typealias AllCases = [NovagramServicesUI::StatisticsCounter]
+  nonisolated public static var allCases: [NovagramServicesUI::StatisticsCounter] {
+    get
+  }
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public struct ServicesUITheme : Swift::Sendable, Swift::Equatable {
+  public var cardBackground: SwiftUICore::Color
+  public var separator: SwiftUICore::Color
+  public var primaryText: SwiftUICore::Color
+  public var secondaryText: SwiftUICore::Color
+  public var accent: SwiftUICore::Color
+  public var positive: SwiftUICore::Color
+  public var negative: SwiftUICore::Color
+  public var isDark: Swift::Bool
+  public init(cardBackground: SwiftUICore::Color, separator: SwiftUICore::Color, primaryText: SwiftUICore::Color, secondaryText: SwiftUICore::Color, accent: SwiftUICore::Color, positive: SwiftUICore::Color, negative: SwiftUICore::Color, isDark: Swift::Bool)
+  public static let system: NovagramServicesUI::ServicesUITheme
+  public static func == (a: NovagramServicesUI::ServicesUITheme, b: NovagramServicesUI::ServicesUITheme) -> Swift::Bool
+}
+@_Concurrency::MainActor @preconcurrency public struct WeatherCard<Header> : SwiftUICore::View where Header : SwiftUICore::View {
+  @_Concurrency::MainActor @preconcurrency public init(forecast: NovagramServices::WeatherForecast?, strings: NovagramServicesUI::WeatherStrings, theme: NovagramServicesUI::ServicesUITheme, locale: Foundation::Locale, maxDays: Swift::Int = 3, @SwiftUICore::ViewBuilder header: () -> Header)
+  @_Concurrency::MainActor @preconcurrency public var body: some SwiftUICore::View {
+    get
+  }
+  public typealias Body = @_opaqueReturnTypeOf("$s18NovagramServicesUI11WeatherCardV4bodyQrvp", 0) __<Header>
+}
+extension NovagramServicesUI::WeatherCard where Header == SwiftUICore::EmptyView {
+  @_Concurrency::MainActor @preconcurrency public init(forecast: NovagramServices::WeatherForecast?, strings: NovagramServicesUI::WeatherStrings, theme: NovagramServicesUI::ServicesUITheme, locale: Foundation::Locale, maxDays: Swift::Int = 3)
+}
+extension NovagramServices::WeatherCondition {
+  public func symbolName(isNight: Swift::Bool = false) -> Swift::String
+  public static func isNight(symbolCode: Swift::String?) -> Swift::Bool
+}
+public struct WeatherStrings : Swift::Sendable, Swift::Equatable {
+  public var clear: Swift::String
+  public var fair: Swift::String
+  public var partlyCloudy: Swift::String
+  public var cloudy: Swift::String
+  public var fog: Swift::String
+  public var rain: Swift::String
+  public var sleet: Swift::String
+  public var snow: Swift::String
+  public var thunderstorm: Swift::String
+  public var unknown: Swift::String
+  public var humidity: Swift::String
+  public var wind: Swift::String
+  public var today: Swift::String?
+  public var attribution: Swift::String
+  public init(clear: Swift::String, fair: Swift::String, partlyCloudy: Swift::String, cloudy: Swift::String, fog: Swift::String, rain: Swift::String, sleet: Swift::String, snow: Swift::String, thunderstorm: Swift::String, unknown: Swift::String, humidity: Swift::String, wind: Swift::String, today: Swift::String?, attribution: Swift::String = "Data: MET Norway")
+  public static func == (a: NovagramServicesUI::WeatherStrings, b: NovagramServicesUI::WeatherStrings) -> Swift::Bool
+}
+extension NovagramServicesUI::CurrencyCalculatorView : Swift::Sendable {}
+extension NovagramServicesUI::MultiCurrencyView : Swift::Sendable {}
+extension NovagramServicesUI::CurrencyRatesCard : Swift::Sendable {}
+extension NovagramServicesUI::StatisticsCard : Swift::Sendable {}
+extension NovagramServicesUI::StatisticsCounter : Swift::Hashable {}
+extension NovagramServicesUI::WeatherCard : Swift::Sendable {}

@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Novagram needs access to speech recognition for voice message transcription.</string>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
 		<string>$(PRODUCT_BUNDLE_IDENTIFIER).refresh</string>
@@ -18,69 +20,82 @@
 	<dict>
 		<key>CFBundleAlternateIcons</key>
 		<dict>
-			<key>Black</key>
+			<key>AppIconLLCIcon</key>
 			<dict>
 				<key>CFBundleIconFiles</key>
 				<array>
-					<string>BlackIcon</string>
-					<string>BlackNotificationIcon</string>
+					<string>AppIconLLCIcon</string>
+					<string>AppIconLLCNotificationIcon</string>
 				</array>
 				<key>UIPrerenderedIcon</key>
 				<true/>
 			</dict>
-			<key>BlackClassic</key>
+			<key>NovaBlueIcon</key>
 			<dict>
 				<key>CFBundleIconFiles</key>
 				<array>
-					<string>BlackClassicIcon</string>
-					<string>BlackClassicNotificationIcon</string>
+					<string>NovaBlueIcon</string>
+					<string>NovaBlueIconNotificationIcon</string>
 				</array>
 				<key>UIPrerenderedIcon</key>
 				<true/>
 			</dict>
-			<key>BlackFilled</key>
+			<key>NovaTealIcon</key>
 			<dict>
 				<key>CFBundleIconFiles</key>
 				<array>
-					<string>BlackFilledIcon</string>
+					<string>NovaTealIcon</string>
+					<string>NovaTealIconNotificationIcon</string>
 				</array>
 				<key>UIPrerenderedIcon</key>
 				<true/>
 			</dict>
-			<key>Blue</key>
+			<key>NovaPurpleIcon</key>
 			<dict>
 				<key>CFBundleIconFiles</key>
 				<array>
-					<string>BlueIcon</string>
-					<string>BlueNotificationIcon</string>
+					<string>NovaPurpleIcon</string>
+					<string>NovaPurpleIconNotificationIcon</string>
 				</array>
 				<key>UIPrerenderedIcon</key>
 				<true/>
 			</dict>
-			<key>BlueClassic</key>
+			<key>NovaPinkIcon</key>
 			<dict>
 				<key>CFBundleIconFiles</key>
 				<array>
-					<string>BlueClassicIcon</string>
-					<string>BlueClassicNotificationIcon</string>
+					<string>NovaPinkIcon</string>
+					<string>NovaPinkIconNotificationIcon</string>
 				</array>
 				<key>UIPrerenderedIcon</key>
 				<true/>
 			</dict>
-			<key>BlueFilled</key>
+			<key>NovaOrangeIcon</key>
 			<dict>
 				<key>CFBundleIconFiles</key>
 				<array>
-					<string>BlueFilledIcon</string>
+					<string>NovaOrangeIcon</string>
+					<string>NovaOrangeIconNotificationIcon</string>
 				</array>
 				<key>UIPrerenderedIcon</key>
 				<true/>
 			</dict>
-			<key>WhiteFilled</key>
+			<key>NovaBlackIcon</key>
 			<dict>
 				<key>CFBundleIconFiles</key>
 				<array>
-					<string>WhiteFilledIcon</string>
+					<string>NovaBlackIcon</string>
+					<string>NovaBlackIconNotificationIcon</string>
+				</array>
+				<key>UIPrerenderedIcon</key>
+				<true/>
+			</dict>
+			<key>NovaRedIcon</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array>
+					<string>NovaRedIcon</string>
+					<string>NovaRedIconNotificationIcon</string>
 				</array>
 				<key>UIPrerenderedIcon</key>
 				<true/>
@@ -98,75 +113,90 @@
 	<dict>
 		<key>CFBundleAlternateIcons</key>
 		<dict>
-			<key>Black</key>
+			<key>AppIconLLCIcon</key>
 			<dict>
 				<key>CFBundleIconFiles</key>
 				<array>
-					<string>BlackIconIpad</string>
-					<string>BlackIconLargeIpad</string>
-					<string>BlackNotificationIcon</string>
+					<string>AppIconLLCIconIpad</string>
+					<string>AppIconLLCIconLargeIpad</string>
+					<string>AppIconLLCNotificationIcon</string>
 				</array>
 				<key>UIPrerenderedIcon</key>
 				<true/>
 			</dict>
-			<key>BlackClassic</key>
+			<key>NovaBlueIcon</key>
 			<dict>
 				<key>CFBundleIconFiles</key>
 				<array>
-					<string>BlackClassicIconIpad</string>
-					<string>BlackClassicIconLargeIpad</string>
-					<string>BlackClassicNotificationIcon</string>
+					<string>NovaBlueIconIpad</string>
+					<string>NovaBlueIconLargeIpad</string>
+					<string>NovaBlueIconNotificationIcon</string>
 				</array>
 				<key>UIPrerenderedIcon</key>
 				<true/>
 			</dict>
-			<key>BlackFilled</key>
+			<key>NovaTealIcon</key>
 			<dict>
 				<key>CFBundleIconFiles</key>
 				<array>
-					<string>BlackFilledIconIpad</string>
-					<string>BlackFilledIconLargeIpad</string>
+					<string>NovaTealIconIpad</string>
+					<string>NovaTealIconLargeIpad</string>
+					<string>NovaTealIconNotificationIcon</string>
 				</array>
 				<key>UIPrerenderedIcon</key>
 				<true/>
 			</dict>
-			<key>Blue</key>
+			<key>NovaPurpleIcon</key>
 			<dict>
 				<key>CFBundleIconFiles</key>
 				<array>
-					<string>BlueIconIpad</string>
-					<string>BlueIconLargeIpad</string>
-					<string>BlueNotificationIcon</string>
+					<string>NovaPurpleIconIpad</string>
+					<string>NovaPurpleIconLargeIpad</string>
+					<string>NovaPurpleIconNotificationIcon</string>
 				</array>
 				<key>UIPrerenderedIcon</key>
 				<true/>
 			</dict>
-			<key>BlueClassic</key>
+			<key>NovaPinkIcon</key>
 			<dict>
 				<key>CFBundleIconFiles</key>
 				<array>
-					<string>BlueClassicIconIpad</string>
-					<string>BlueClassicIconLargeIpad</string>
-					<string>BlueClassicNotificationIcon</string>
+					<string>NovaPinkIconIpad</string>
+					<string>NovaPinkIconLargeIpad</string>
+					<string>NovaPinkIconNotificationIcon</string>
 				</array>
 				<key>UIPrerenderedIcon</key>
 				<true/>
 			</dict>
-			<key>BlueFilled</key>
+			<key>NovaOrangeIcon</key>
 			<dict>
 				<key>CFBundleIconFiles</key>
 				<array>
-					<string>BlueFilledIconIpad</string>
-					<string>BlueFilledIconLargeIpad</string>
+					<string>NovaOrangeIconIpad</string>
+					<string>NovaOrangeIconLargeIpad</string>
+					<string>NovaOrangeIconNotificationIcon</string>
 				</array>
 				<key>UIPrerenderedIcon</key>
 				<true/>
 			</dict>
-			<key>WhiteFilled</key>
+			<key>NovaBlackIcon</key>
 			<dict>
 				<key>CFBundleIconFiles</key>
 				<array>
-					<string>WhiteFilledIcon</string>
+					<string>NovaBlackIconIpad</string>
+					<string>NovaBlackIconLargeIpad</string>
+					<string>NovaBlackIconNotificationIcon</string>
+				</array>
+				<key>UIPrerenderedIcon</key>
+				<true/>
+			</dict>
+			<key>NovaRedIcon</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array>
+					<string>NovaRedIconIpad</string>
+					<string>NovaRedIconLargeIpad</string>
+					<string>NovaRedIconNotificationIcon</string>
 				</array>
 				<key>UIPrerenderedIcon</key>
 				<true/>
@@ -229,7 +259,9 @@
 	<key>CFBundleVersion</key>
 	<string>${BUILD_NUMBER}</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
-	<false/>
+	<true/>
+	<key>ITSEncryptionExportComplianceCode</key>
+	<string></string>
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>instagram</string>
@@ -274,23 +306,25 @@
 		<true/>
 	</dict>
 	<key>NSCameraUsageDescription</key>
-	<string>We need this so that you can take and share photos and videos.</string>
+	<string>Novagram needs camera access so you can take and share photos and videos.</string>
 	<key>NSContactsUsageDescription</key>
-	<string>Telegram stores your contacts heavily encrypted in the cloud to let you connect with your friends across all your devices.</string>
+	<string>Novagram stores your contacts heavily encrypted in the cloud to let you connect with your friends across all your devices.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>You can use Face ID to unlock the app.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Novagram uses your location only when you actively share it with a chat. We never track you in the background.</string>
 	<key>NSLocationAlwaysUsageDescription</key>
-	<string>When you send your location to your friends, Telegram needs access to show them a map. You also need this to send locations from an Apple Watch.</string>
+	<string>When you send your location to your friends, Novagram needs access to show them a map. You also need this to send locations from an Apple Watch.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>When you send your location to your friends, Telegram needs access to show them a map.</string>
+	<string>When you send your location to your friends, Novagram needs access to show them a map.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>We need this so that you can record and share voice messages and videos with sound.</string>
+	<string>Novagram needs microphone access so you can record and share voice messages and videos with sound.</string>
 	<key>NSMotionUsageDescription</key>
-	<string>When you send your location to your friends, Telegram needs access to show them a map.</string>
+	<string>When you send your location to your friends, Novagram needs access to show them a map.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>We need this so that you can share photos and videos from your photo library.</string>
+	<string>Novagram needs photo library access so you can share photos and videos.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>We need this so that you can share photos and videos from your photo library.</string>
+	<string>Novagram needs photo library access so you can share photos and videos.</string>
 	<key>NSSiriUsageDescription</key>
 	<string>You can use Siri to send messages.</string>
 	<key>NSUserActivityTypes</key>
@@ -354,13 +388,13 @@
 				<string>public.data</string>
 			</array>
 			<key>UTTypeDescription</key>
-			<string>Telegram iOS Color Theme File</string>
+			<string>Novagram Theme</string>
 			<key>UTTypeIconFiles</key>
 			<array>
 				<string>BlueIcon@3x.png</string>
 			</array>
 			<key>UTTypeIdentifier</key>
-			<string>org.telegram.Telegram-iOS.theme</string>
+			<string>uz.fenixuz.theme</string>
 			<key>UTTypeTagSpecification</key>
 			<dict>
 				<key>public.filename-extension</key>

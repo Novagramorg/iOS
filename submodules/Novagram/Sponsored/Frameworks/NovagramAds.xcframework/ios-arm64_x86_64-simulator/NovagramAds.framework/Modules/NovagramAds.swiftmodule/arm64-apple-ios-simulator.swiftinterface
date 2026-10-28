@@ -1,0 +1,2697 @@
+// swift-interface-format-version: 1.0
+// swift-compiler-version: Apple Swift version 6.4 (swiftlang-6.4.0.34.1 clang-2100.3.34.1)
+// swift-module-flags: -target arm64-apple-ios15.0-simulator -enable-objc-interop -enable-library-evolution -language-mode 6 -O -enable-experimental-feature DebugDescriptionMacro -module-name NovagramAds -package-name novagramads
+// swift-module-flags-ignorable:  -formal-cxx-interoperability-mode=off -interface-compiler-version 6.4
+import CryptoKit
+import DeviceCheck
+import Foundation
+import Security
+import Swift
+import _Concurrency
+import _StringProcessing
+import _SwiftConcurrencyShims
+public struct SDKAdCabinetAPI : Swift::Sendable {
+  public func list(query: Swift::String? = nil, ordering: NovagramAds::SDKAdOrdering? = nil, page: Swift::Int? = nil, pageSize: Swift::Int? = nil) async throws -> NovagramAds::SDKPaginated<NovagramAds::SDKAdCampaign>
+  public func create(_ request: NovagramAds::SDKAdCreateRequest) async throws -> NovagramAds::SDKAdCampaign
+  public func detail(id: Foundation::UUID) async throws -> NovagramAds::SDKAdCampaign
+  public func update(id: Foundation::UUID, _ changes: NovagramAds::SDKAdUpdate) async throws -> NovagramAds::SDKAdUpdateResult
+  public func delete(id: Foundation::UUID) async throws -> NovagramAds::SDKAdDeletionResult
+  public func topUpBudget(id: Foundation::UUID, amount: NovagramAds::SDKDecimalString) async throws -> NovagramAds::SDKAdCampaign
+  public func budgetHistory(id: Foundation::UUID, page: Swift::Int? = nil, pageSize: Swift::Int? = nil) async throws -> NovagramAds::SDKPaginated<NovagramAds::SDKAdBudgetOperation>
+  public func stats(id: Foundation::UUID, from: NovagramAds::SDKDay? = nil, to: NovagramAds::SDKDay? = nil) async throws -> NovagramAds::SDKAdStats
+  public func copyToDraft(id: Foundation::UUID) async throws -> NovagramAds::SDKAdDraft
+  public func draft() async throws -> NovagramAds::SDKAdDraft
+  public func saveDraft(_ data: NovagramAds::SDKJSONValue) async throws -> NovagramAds::SDKAdDraft
+  public func clearDraft() async throws
+  public func uploadMedia(data: Foundation::Data, filename: Swift::String, mimeType: Swift::String? = nil) async throws -> NovagramAds::SDKAdCabinetMedia
+  public func uploadMedia(fileURL: Foundation::URL) async throws -> NovagramAds::SDKAdCabinetMedia
+  public func media(id: Foundation::UUID) async throws -> NovagramAds::SDKAdCabinetMedia
+  public func tableSettings() async throws -> NovagramAds::SDKAdTableSettings
+  public func updateTableSettings(columns: [NovagramAds::SDKAdTableColumn]) async throws -> NovagramAds::SDKAdTableSettings
+}
+public struct SDKAdCatalogAPI : Swift::Sendable {
+  public func pricing() async throws -> NovagramAds::SDKAdPricing
+  public func countries() async throws -> [NovagramAds::SDKCountry]
+  public func languages() async throws -> [NovagramAds::SDKLanguage]
+  public func locations(country: Swift::String? = nil, query: Swift::String? = nil) async throws -> [NovagramAds::SDKLocation]
+  public func topics() async throws -> [NovagramAds::SDKTopic]
+  public func resolve(link: Swift::String) async throws -> NovagramAds::SDKTelegramPeer
+  public func similarChannels(to channels: [Swift::String]) async throws -> [NovagramAds::SDKSimilarChannel]
+  public func similarBots(to bots: [Swift::String]) async throws -> [NovagramAds::SDKSimilarBot]
+}
+public struct SDKAdModerationAPI : Swift::Sendable {
+  public func pending(page: Swift::Int? = nil, pageSize: Swift::Int? = nil) async throws -> NovagramAds::SDKPaginated<NovagramAds::SDKModerationAd>
+  public func all(status: NovagramAds::SDKAdStatus? = nil, placement: NovagramAds::SDKAdFormat? = nil, page: Swift::Int? = nil, pageSize: Swift::Int? = nil) async throws -> NovagramAds::SDKPaginated<NovagramAds::SDKModerationAd>
+  public func detail(id: Foundation::UUID) async throws -> NovagramAds::SDKModerationAdDetail
+  @discardableResult
+  public func approve(id: Foundation::UUID) async throws -> NovagramAds::SDKAdModerationDecision
+  @discardableResult
+  public func decline(id: Foundation::UUID, reason: Swift::String) async throws -> NovagramAds::SDKAdModerationDecision
+  @discardableResult
+  public func block(id: Foundation::UUID, reason: Swift::String) async throws -> NovagramAds::SDKAdModerationDecision
+  public func pendingRevisions(page: Swift::Int? = nil, pageSize: Swift::Int? = nil) async throws -> NovagramAds::SDKPaginated<NovagramAds::SDKModerationRevision>
+  @discardableResult
+  public func approveRevision(id: Foundation::UUID) async throws -> NovagramAds::SDKAdRevisionDecision
+  @discardableResult
+  public func declineRevision(id: Foundation::UUID, reason: Swift::String) async throws -> NovagramAds::SDKAdRevisionDecision
+  public func reports(status: NovagramAds::SDKAdReportStatus? = nil, page: Swift::Int? = nil, pageSize: Swift::Int? = nil) async throws -> NovagramAds::SDKPaginated<NovagramAds::SDKAdReportGroup>
+  @discardableResult
+  public func reviewReport(id: Foundation::UUID) async throws -> NovagramAds::SDKAdReportReviewResult
+  public func channels(claimStatus: NovagramAds::SDKClaimStatus? = nil, missingMetaOnly: Swift::Bool = false, page: Swift::Int? = nil, pageSize: Swift::Int? = nil) async throws -> NovagramAds::SDKPaginated<NovagramAds::SDKModerationChannel>
+  public func updateChannel(channelId: Swift::Int64, language: Swift::String? = nil, topics: [Swift::Int]? = nil) async throws -> NovagramAds::SDKModerationChannel
+}
+public struct SDKAdminAPI : Swift::Sendable {
+  public func deposit(userId: Foundation::UUID, amount: NovagramAds::SDKDecimalString) async throws -> NovagramAds::SDKAdminDepositResult
+  public func users(search: Swift::String? = nil, page: Swift::Int? = nil, pageSize: Swift::Int? = nil) async throws -> NovagramAds::SDKPaginated<NovagramAds::SDKAdminUser>
+  public func setRole(userId: Foundation::UUID, role: NovagramAds::SDKRole) async throws -> NovagramAds::SDKRoleChangeResult
+  public func adgramUsers(role: NovagramAds::SDKRole? = nil, page: Swift::Int? = nil, pageSize: Swift::Int? = nil) async throws -> NovagramAds::SDKPaginated<NovagramAds::SDKAdGramUserRole>
+  public func adgramUser(id: Swift::String) async throws -> NovagramAds::SDKAdGramUserRole
+  public func setAdgramRole(adgramUserId: Swift::String, role: NovagramAds::SDKRole) async throws -> NovagramAds::SDKAdGramUserRole
+}
+public struct SDKAdsAPI : Swift::Sendable {
+  public func serve(slot: NovagramAds::SDKAdSlot, userId: Swift::Int64, targeting: NovagramAds::SDKAdTargeting = SDKAdTargeting()) async throws -> NovagramAds::SDKAdServeResponse
+  @discardableResult
+  public func sendEvents(_ events: [NovagramAds::SDKAdEvent], userId: Swift::Int64) async throws -> NovagramAds::SDKAdEventsResult
+  @discardableResult
+  public func report(randomId: Swift::String, reason: NovagramAds::SDKAdReportReason, details: Swift::String? = nil, userId: Swift::Int64) async throws -> NovagramAds::SDKAdReportResult
+}
+public struct SDKAuthAPI : Swift::Sendable {
+  @discardableResult
+  public func login(username: Swift::String, password: Swift::String) async throws -> NovagramAds::SDKTokenPair
+  @discardableResult
+  public func register(username: Swift::String, password: Swift::String, passwordConfirmation: Swift::String, email: Swift::String? = nil) async throws -> NovagramAds::SDKRegisteredUser
+  @discardableResult
+  public func refresh() async throws -> Swift::String
+  public func verify(token: Swift::String) async throws -> Swift::Bool
+  public func profile() async throws -> NovagramAds::SDKUserProfile
+  public func logout() async
+}
+public struct SDKBalanceAPI : Swift::Sendable {
+  public func current() async throws -> NovagramAds::SDKBalance
+}
+public struct SDKBannerAdsAPI : Swift::Sendable {
+  public func activeBanners(viewerId: Swift::String) async throws -> [NovagramAds::SDKBannerAd]
+  public func activeBanners(userId: Swift::Int64) async throws -> [NovagramAds::SDKBannerAd]
+  @discardableResult
+  public func click(bannerId: Foundation::UUID) async throws -> NovagramAds::SDKResponseMessage
+  @discardableResult
+  public func dismiss(bannerId: Foundation::UUID, viewerId: Swift::String) async throws -> NovagramAds::SDKResponseMessage
+  @discardableResult
+  public func dismiss(bannerId: Foundation::UUID, userId: Swift::Int64) async throws -> NovagramAds::SDKResponseMessage
+  public func manageList(page: Swift::Int? = nil, pageSize: Swift::Int? = nil) async throws -> NovagramAds::SDKPaginated<NovagramAds::SDKBannerAdManage>
+  public func create(title: Swift::String, text: Swift::String, link: Swift::String? = nil, dismissible: Swift::Bool? = nil, isActive: Swift::Bool? = nil, startsAt: Foundation::Date? = nil, endsAt: Foundation::Date? = nil, priority: Swift::Int? = nil) async throws -> NovagramAds::SDKBannerAdManage
+  public func detail(id: Foundation::UUID) async throws -> NovagramAds::SDKBannerAdManage
+  public func update(id: Foundation::UUID, title: Swift::String? = nil, text: Swift::String? = nil, link: Swift::String? = nil, dismissible: Swift::Bool? = nil, isActive: Swift::Bool? = nil, startsAt: Foundation::Date? = nil, endsAt: Foundation::Date? = nil, priority: Swift::Int? = nil) async throws -> NovagramAds::SDKBannerAdManage
+  public func delete(id: Foundation::UUID) async throws
+}
+public struct SDKChatAdsAPI : Swift::Sendable {
+  public func addMedia(data: Foundation::Data, filename: Swift::String, mimeType: Swift::String? = nil) async throws -> NovagramAds::SDKChatAdMedia
+  public func addMedia(fileURL: Foundation::URL) async throws -> NovagramAds::SDKChatAdMedia
+  @discardableResult
+  public func createOrder(_ order: NovagramAds::SDKChatAdOrderCreate) async throws -> NovagramAds::SDKResponseMessage
+  public func detail(orderId: Foundation::UUID) async throws -> NovagramAds::SDKChatAdOrder
+  @discardableResult
+  public func cancel(orderId: Foundation::UUID) async throws -> NovagramAds::SDKResponseMessage
+  @discardableResult
+  public func setActive(orderId: Foundation::UUID, isActive: Swift::Bool) async throws -> NovagramAds::SDKResponseMessage
+  @discardableResult
+  @available(*, deprecated, message: "v1 serving (legacy orders only; scheduled for removal). Use client.ads.sendEvents(_:userId:) with a v2 random_id.")
+  public func click(orderId: Foundation::UUID, viewerId: Swift::String) async throws -> NovagramAds::SDKResponseMessage
+  @available(*, deprecated, message: "v1 serving: new (v2) ads are not served here. Use client.ads.serve(slot:userId:targeting:).")
+  public func search(channelName: Swift::String, viewerId: Swift::String, channelId: Swift::Int64? = nil) async throws -> NovagramAds::SDKChatAdSearch
+  public func activeOrders(page: Swift::Int? = nil, pageSize: Swift::Int? = nil) async throws -> NovagramAds::SDKPaginated<NovagramAds::SDKChatAdOrder>
+  public func allOrders(page: Swift::Int? = nil, pageSize: Swift::Int? = nil) async throws -> NovagramAds::SDKPaginated<NovagramAds::SDKChatAdOrder>
+}
+extension NovagramAds::SDKModerationAPI {
+  public func allChatAds(status: NovagramAds::SDKOrderStatus? = nil, activeOnly: Swift::Bool = false, search: Swift::String? = nil, page: Swift::Int? = nil, pageSize: Swift::Int? = nil) async throws -> NovagramAds::SDKPaginated<NovagramAds::SDKModerationChatOrder>
+  public func allSearchAds(status: NovagramAds::SDKOrderStatus? = nil, activeOnly: Swift::Bool = false, search: Swift::String? = nil, page: Swift::Int? = nil, pageSize: Swift::Int? = nil) async throws -> NovagramAds::SDKPaginated<NovagramAds::SDKModerationSearchOrder>
+}
+public struct SDKModerationAPI : Swift::Sendable {
+  public func pendingChatAds(page: Swift::Int? = nil, pageSize: Swift::Int? = nil) async throws -> NovagramAds::SDKPaginated<NovagramAds::SDKModerationChatOrder>
+  public func pendingSearchAds(page: Swift::Int? = nil, pageSize: Swift::Int? = nil) async throws -> NovagramAds::SDKPaginated<NovagramAds::SDKModerationSearchOrder>
+  public func pendingCount() async throws -> NovagramAds::SDKPendingCount
+  @discardableResult
+  public func approve(orderType: NovagramAds::SDKModerationOrderType, orderId: Foundation::UUID) async throws -> NovagramAds::SDKResponseMessage
+  @discardableResult
+  public func reject(orderType: NovagramAds::SDKModerationOrderType, orderId: Foundation::UUID, reason: Swift::String) async throws -> NovagramAds::SDKResponseMessage
+  @discardableResult
+  public func block(orderType: NovagramAds::SDKModerationOrderType, orderId: Foundation::UUID, reason: Swift::String) async throws -> NovagramAds::SDKResponseMessage
+}
+public struct SDKNotificationsAPI : Swift::Sendable {
+  @discardableResult
+  public func registerDevice(token: Swift::String, platform: NovagramAds::SDKDevicePlatform = .ios) async throws -> NovagramAds::SDKResponseMessage
+  public func removeDevice(token: Swift::String) async throws
+  public func list(page: Swift::Int? = nil, pageSize: Swift::Int? = nil) async throws -> NovagramAds::SDKPaginated<NovagramAds::SDKNotification>
+  public func unreadCount() async throws -> Swift::Int
+  public func markRead(id: Swift::Int) async throws
+  public func markAllRead() async throws
+}
+extension NovagramAds::SDKPartnerAPI {
+  public func adminEarnings(search: Swift::String? = nil, page: Swift::Int? = nil, pageSize: Swift::Int? = nil) async throws -> NovagramAds::SDKPaginated<NovagramAds::SDKAdminEarning>
+  public func adminEarningsSummary(search: Swift::String? = nil) async throws -> NovagramAds::SDKAdminEarningsSummary
+  public func updateChannel(channelId: Swift::Int64, language: Swift::String? = nil, topics: [Swift::Int]? = nil) async throws -> NovagramAds::SDKMyEarning
+}
+public struct SDKPartnerAPI : Swift::Sendable {
+  public func earnings(channelId: Swift::Int64) async throws -> NovagramAds::SDKPublicEarning
+  public func myEarnings(page: Swift::Int? = nil, pageSize: Swift::Int? = nil) async throws -> NovagramAds::SDKPaginated<NovagramAds::SDKMyEarning>
+  @discardableResult
+  public func claim(channelId: Swift::Int64, channelName: Swift::String? = nil) async throws -> NovagramAds::SDKResponseMessage
+  @discardableResult
+  public func withdraw(channelId: Swift::Int64) async throws -> NovagramAds::SDKResponseMessage
+}
+public struct SDKSearchAdsAPI : Swift::Sendable {
+  @discardableResult
+  public func createOrder(_ order: NovagramAds::SDKCreateChannelOrder) async throws -> NovagramAds::SDKResponseMessage
+  public func detail(orderId: Foundation::UUID) async throws -> NovagramAds::SDKOrderDetail
+  @discardableResult
+  public func cancel(orderId: Foundation::UUID) async throws -> NovagramAds::SDKResponseMessage
+  @discardableResult
+  public func setActive(orderId: Foundation::UUID, isActive: Swift::Bool) async throws -> NovagramAds::SDKResponseMessage
+  @discardableResult
+  @available(*, deprecated, message: "v1 serving (legacy orders only; scheduled for removal). Use client.ads.sendEvents(_:userId:) with a v2 random_id.")
+  public func click(orderId: Foundation::UUID, viewerId: Swift::String) async throws -> NovagramAds::SDKResponseMessage
+  @available(*, deprecated, message: "v1 serving: new (v2) ads are not served here. Use client.ads.serve(slot:userId:targeting:).")
+  public func search(tag: Swift::String, viewerId: Swift::String) async throws -> NovagramAds::SDKSearchResult
+  public func activeOrders(page: Swift::Int? = nil, pageSize: Swift::Int? = nil) async throws -> NovagramAds::SDKPaginated<NovagramAds::SDKOrderDetail>
+  public func allOrders(page: Swift::Int? = nil, pageSize: Swift::Int? = nil) async throws -> NovagramAds::SDKPaginated<NovagramAds::SDKOrderDetail>
+}
+public enum SDKAdReportOutcome : Swift::Hashable, Swift::Sendable {
+  case reported
+  case alreadyReported
+  case failed(NovagramAds::SDKError)
+  public var isDelivered: Swift::Bool {
+    get
+  }
+  public static func == (a: NovagramAds::SDKAdReportOutcome, b: NovagramAds::SDKAdReportOutcome) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+@_hasMissingDesignatedInitializers public actor SDKAdsSession {
+  nonisolated final public let userId: Swift::Int64
+  public convenience init(client: NovagramAds::SDKClient, userId: Swift::Int64, targeting: NovagramAds::SDKAdTargeting = SDKAdTargeting(), configuration: NovagramAds::SDKAdsSessionConfiguration = .default)
+  @objc deinit
+  public func ad(for slot: NovagramAds::SDKAdSlot) async -> NovagramAds::SDKServedAd?
+  public func nextVideoAd(for slot: NovagramAds::SDKAdSlot) async -> NovagramAds::SDKServedAd?
+  public func updateTargeting(_ targeting: NovagramAds::SDKAdTargeting)
+  public func recordView(_ ad: NovagramAds::SDKServedAd, durationMs: Swift::Int? = nil, visibleRatio: Swift::Double? = nil) async
+  public func recordClick(_ ad: NovagramAds::SDKServedAd) async
+  public func recordAction(_ ad: NovagramAds::SDKServedAd) async
+  public func recordVideoOpen(_ ad: NovagramAds::SDKServedAd) async
+  public func flush() async
+  public func start()
+  public func stop()
+  public func report(_ ad: NovagramAds::SDKServedAd, reason: NovagramAds::SDKAdReportReason, details: Swift::String? = nil) async -> NovagramAds::SDKAdReportOutcome
+  @_semantics("defaultActor") nonisolated final public var unownedExecutor: _Concurrency::UnownedSerialExecutor {
+    get
+  }
+}
+public struct SDKAdsSessionConfiguration : Swift::Sendable {
+  public var flushInterval: Foundation::TimeInterval
+  public var flushThreshold: Swift::Int
+  public var maxBatch: Swift::Int
+  public var eventMaxAge: Foundation::TimeInterval
+  public var backoffBase: Foundation::TimeInterval
+  public var backoffCap: Foundation::TimeInterval
+  public var backoffJitter: Swift::Double
+  public var unavailableRetryDelay: Foundation::TimeInterval
+  public var logger: (@Sendable (Swift::String) -> Swift::Void)?
+  public init(flushInterval: Foundation::TimeInterval = 8, flushThreshold: Swift::Int = SDKAdsLimits.recommendedBatchSize, maxBatch: Swift::Int = SDKAdsLimits.maxEventsPerBatch, eventMaxAge: Foundation::TimeInterval = SDKAdsLimits.eventMaxAge, backoffBase: Foundation::TimeInterval = 2, backoffCap: Foundation::TimeInterval = 300, backoffJitter: Swift::Double = 0.2, unavailableRetryDelay: Foundation::TimeInterval = SDKAdsLimits.unavailableRetryDelay, logger: (@Sendable (Swift::String) -> Swift::Void)? = nil)
+  public static let `default`: NovagramAds::SDKAdsSessionConfiguration
+}
+public struct SDKServedAd : Swift::Hashable, Swift::Sendable {
+  public let ad: NovagramAds::SDKSponsoredAd
+  public let slot: NovagramAds::SDKAdSlot
+  public let servedAt: Foundation::Date
+  public let expiresAt: Foundation::Date
+  public let videoTimers: NovagramAds::SDKAdVideoTimers?
+  public init(ad: NovagramAds::SDKSponsoredAd, slot: NovagramAds::SDKAdSlot, servedAt: Foundation::Date, expiresAt: Foundation::Date, videoTimers: NovagramAds::SDKAdVideoTimers? = nil)
+  public var tokenExpiresAt: Foundation::Date {
+    get
+  }
+  public func isTokenExpired(at date: Foundation::Date = Date()) -> Swift::Bool
+  public func isExpired(at date: Foundation::Date = Date()) -> Swift::Bool
+  public static func == (a: NovagramAds::SDKServedAd, b: NovagramAds::SDKServedAd) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public struct SDKAdVideoTimers : Swift::Hashable, Swift::Sendable {
+  public let startDelay: Foundation::TimeInterval
+  public let betweenDelay: Foundation::TimeInterval
+  public let minDisplayDuration: Foundation::TimeInterval
+  public let maxDisplayDuration: Foundation::TimeInterval
+  public init(startDelay: Foundation::TimeInterval, betweenDelay: Foundation::TimeInterval, minDisplayDuration: Foundation::TimeInterval, maxDisplayDuration: Foundation::TimeInterval)
+  public static let fallback: NovagramAds::SDKAdVideoTimers
+  public static func == (a: NovagramAds::SDKAdVideoTimers, b: NovagramAds::SDKAdVideoTimers) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+@_hasMissingDesignatedInitializers public actor SDKBannerFeed {
+  public convenience init(client: NovagramAds::SDKClient, userId: Swift::Int64, refreshInterval: Foundation::TimeInterval = SDKAdsLimits.bannerRefreshInterval)
+  public func current(at date: Foundation::Date? = nil) -> NovagramAds::SDKBannerAd?
+  public func banners(at date: Foundation::Date? = nil) -> [NovagramAds::SDKBannerAd]
+  public func refresh(force: Swift::Bool = false) async
+  public func dismiss(_ banner: NovagramAds::SDKBannerAd) async
+  public func retryPendingDismissals() async
+  public func click(_ banner: NovagramAds::SDKBannerAd) -> Foundation::URL?
+  @objc deinit
+  @_semantics("defaultActor") nonisolated final public var unownedExecutor: _Concurrency::UnownedSerialExecutor {
+    get
+  }
+}
+public struct SDKAttestation : Swift::Sendable {
+  public let keyId: Swift::String
+  public let attestationBase64: Swift::String
+}
+public struct SDKAssertion : Swift::Sendable {
+  public let keyId: Swift::String
+  public let assertionBase64: Swift::String
+}
+public actor SDKAppAttestProvider {
+  public init(keychainService: Swift::String = "uz.vipads.novagramads.appattest")
+  public static var isSupported: Swift::Bool {
+    get
+  }
+  public func attest(challenge: Foundation::Data) async throws -> NovagramAds::SDKAttestation
+  public func assert(over requestData: Foundation::Data) async throws -> NovagramAds::SDKAssertion
+  @objc deinit
+  @_semantics("defaultActor") nonisolated final public var unownedExecutor: _Concurrency::UnownedSerialExecutor {
+    get
+  }
+}
+@_hasMissingDesignatedInitializers public actor SDKAuthProvider {
+  public var isAuthenticated: Swift::Bool {
+    get
+  }
+  public var currentTokens: NovagramAds::SDKTokenPair? {
+    get
+  }
+  public func setTokens(_ tokens: NovagramAds::SDKTokenPair)
+  public func logout()
+  @discardableResult
+  public func refresh() async throws -> Swift::String
+  @objc deinit
+  @_semantics("defaultActor") nonisolated final public var unownedExecutor: _Concurrency::UnownedSerialExecutor {
+    get
+  }
+}
+public struct SDKClient : Swift::Sendable {
+  public let auth: NovagramAds::SDKAuthAPI
+  public let balance: NovagramAds::SDKBalanceAPI
+  public let chatAds: NovagramAds::SDKChatAdsAPI
+  public let searchAds: NovagramAds::SDKSearchAdsAPI
+  public let partner: NovagramAds::SDKPartnerAPI
+  public let moderation: NovagramAds::SDKModerationAPI
+  public let bannerAds: NovagramAds::SDKBannerAdsAPI
+  public let ads: NovagramAds::SDKAdsAPI
+  public let notifications: NovagramAds::SDKNotificationsAPI
+  public let adCabinet: NovagramAds::SDKAdCabinetAPI
+  public let adCatalog: NovagramAds::SDKAdCatalogAPI
+  public let adModeration: NovagramAds::SDKAdModerationAPI
+  public let admin: NovagramAds::SDKAdminAPI
+  public let appAttest: NovagramAds::SDKAppAttestProvider
+  public init(configuration: NovagramAds::SDKConfiguration, tokenStore: any NovagramAds::SDKTokenStore = SDKEphemeralTokenStore())
+  public var isAuthenticated: Swift::Bool {
+    get async
+  }
+  public func currentTokens() async -> NovagramAds::SDKTokenPair?
+  public func setTokens(_ tokens: NovagramAds::SDKTokenPair) async
+  public func logout() async
+}
+public typealias NovagramAdsClient = NovagramAds::SDKClient
+public struct SDKConfiguration : Swift::Sendable {
+  public let environment: NovagramAds::SDKEnvironment
+  public let timeout: Foundation::TimeInterval
+  public let extraHeaders: [Swift::String : Swift::String]
+  public let retryPolicy: NovagramAds::SDKRetryPolicy
+  public init(environment: NovagramAds::SDKEnvironment, timeout: Foundation::TimeInterval = 30, retryPolicy: NovagramAds::SDKRetryPolicy = .default, extraHeaders: [Swift::String : Swift::String] = [:])
+  public func withoutAdServingKey() -> NovagramAds::SDKConfiguration
+}
+extension NovagramAds::SDKConfiguration : Swift::CustomStringConvertible, Swift::CustomDebugStringConvertible, Swift::CustomReflectable {
+  public var description: Swift::String {
+    get
+  }
+  public var debugDescription: Swift::String {
+    get
+  }
+  public var customMirror: Swift::Mirror {
+    get
+  }
+}
+public struct SDKDay : Swift::Hashable, Swift::Sendable, Swift::Comparable, Swift::Codable, Swift::CustomStringConvertible {
+  public let year: Swift::Int
+  public let month: Swift::Int
+  public let day: Swift::Int
+  public static let serverTimeZone: Foundation::TimeZone
+  public init(year: Swift::Int, month: Swift::Int, day: Swift::Int)
+  public init?(string: Swift::String)
+  public init(date: Foundation::Date, timeZone: Foundation::TimeZone = SDKDay.serverTimeZone)
+  public static func today(now: Foundation::Date = Date()) -> NovagramAds::SDKDay
+  public func startDate(in timeZone: Foundation::TimeZone = SDKDay.serverTimeZone) -> Foundation::Date?
+  public func adding(days: Swift::Int) -> NovagramAds::SDKDay
+  public var stringValue: Swift::String {
+    get
+  }
+  public var description: Swift::String {
+    get
+  }
+  public static func < (lhs: NovagramAds::SDKDay, rhs: NovagramAds::SDKDay) -> Swift::Bool
+  public init(from decoder: any Swift::Decoder) throws
+  public func encode(to encoder: any Swift::Encoder) throws
+  public static func == (a: NovagramAds::SDKDay, b: NovagramAds::SDKDay) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public struct SDKDecimalString : Swift::Hashable, Swift::Sendable, Swift::Codable, Swift::CustomStringConvertible, Swift::ExpressibleByStringLiteral, Swift::ExpressibleByIntegerLiteral {
+  public let value: Foundation::Decimal
+  public init(_ value: Foundation::Decimal)
+  public init(string: Swift::String)
+  public init(stringLiteral value: Swift::StringLiteralType)
+  public init(integerLiteral value: Swift::IntegerLiteralType)
+  public var stringValue: Swift::String {
+    get
+  }
+  public var doubleValue: Swift::Double {
+    get
+  }
+  public var description: Swift::String {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+  public func encode(to encoder: any Swift::Encoder) throws
+  public static func == (a: NovagramAds::SDKDecimalString, b: NovagramAds::SDKDecimalString) -> Swift::Bool
+  public typealias ExtendedGraphemeClusterLiteralType = Swift::StringLiteralType
+  public typealias IntegerLiteralType = Swift::IntegerLiteralType
+  public typealias StringLiteralType = Swift::StringLiteralType
+  public typealias UnicodeScalarLiteralType = Swift::StringLiteralType
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public enum SDKEnvironment : Swift::String, Swift::Sendable, Swift::CaseIterable {
+  case development
+  case production
+  public init?(infoPlistKey: Swift::String = "NovagramAdsEnvironment", bundle: Foundation::Bundle = .main)
+  public init?(rawValue: Swift::String)
+  public typealias AllCases = [NovagramAds::SDKEnvironment]
+  public typealias RawValue = Swift::String
+  nonisolated public static var allCases: [NovagramAds::SDKEnvironment] {
+    get
+  }
+  public var rawValue: Swift::String {
+    get
+  }
+}
+extension NovagramAds::SDKError {
+  public var statusCode: Swift::Int? {
+    get
+  }
+  public var isRateLimited: Swift::Bool {
+    get
+  }
+  public var isAPIKeyRejected: Swift::Bool {
+    get
+  }
+  public var isRetryable: Swift::Bool {
+    get
+  }
+}
+public enum SDKError : Swift::Error, Swift::Hashable, Swift::Sendable {
+  case invalidRequest(reason: Swift::String)
+  case transport(message: Swift::String)
+  case invalidResponse
+  case unauthorized(detail: Swift::String?)
+  case validation(fields: [Swift::String : [Swift::String]], status: Swift::Int)
+  case http(status: Swift::Int, detail: Swift::String?, body: Swift::String)
+  case decoding(message: Swift::String)
+  public var errorDescription: Swift::String {
+    get
+  }
+  public static func == (a: NovagramAds::SDKError, b: NovagramAds::SDKError) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+extension NovagramAds::SDKError : Swift::CustomStringConvertible {
+  public var description: Swift::String {
+    get
+  }
+}
+public enum SDKHTTPMethod : Swift::String, Swift::Hashable, Swift::Sendable {
+  case get
+  case post
+  case put
+  case patch
+  case delete
+  public init?(rawValue: Swift::String)
+  public typealias RawValue = Swift::String
+  public var rawValue: Swift::String {
+    get
+  }
+}
+public struct SDKJSONFileStore<Value> : Swift::Sendable where Value : Swift::Decodable, Value : Swift::Encodable, Value : Swift::Sendable {
+  public let fileURL: Foundation::URL
+  public init(fileURL: Foundation::URL)
+  public static func applicationSupport(name: Swift::String, scope: Swift::String? = nil) throws -> NovagramAds::SDKJSONFileStore<Value>
+  public func load() throws -> Value?
+  public func save(_ value: Value) throws
+  public func remove() throws
+}
+public enum SDKNullable<Wrapped> : Swift::Encodable, Swift::Sendable where Wrapped : Swift::Encodable, Wrapped : Swift::Sendable {
+  case value(Wrapped)
+  case null
+  public func encode(to encoder: any Swift::Encoder) throws
+}
+extension NovagramAds::SDKNullable : Swift::Equatable where Wrapped : Swift::Equatable {
+  public static func == (a: NovagramAds::SDKNullable<Wrapped>, b: NovagramAds::SDKNullable<Wrapped>) -> Swift::Bool
+}
+extension NovagramAds::SDKNullable : Swift::Hashable where Wrapped : Swift::Hashable {
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public struct SDKRetryPolicy : Swift::Hashable, Swift::Sendable {
+  public var maxRetries: Swift::Int
+  public var baseDelay: Foundation::TimeInterval
+  public var maxDelay: Foundation::TimeInterval
+  public init(maxRetries: Swift::Int = 2, baseDelay: Foundation::TimeInterval = 0.5, maxDelay: Foundation::TimeInterval = 8)
+  public static let `default`: NovagramAds::SDKRetryPolicy
+  public static let none: NovagramAds::SDKRetryPolicy
+  public static func == (a: NovagramAds::SDKRetryPolicy, b: NovagramAds::SDKRetryPolicy) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public protocol SDKTokenStore : Swift::Sendable {
+  func restore() -> NovagramAds::SDKTokenPair?
+  func persist(_ tokens: NovagramAds::SDKTokenPair?)
+}
+public struct SDKEphemeralTokenStore : NovagramAds::SDKTokenStore {
+  public init()
+  public func restore() -> NovagramAds::SDKTokenPair?
+  public func persist(_ tokens: NovagramAds::SDKTokenPair?)
+}
+public struct SDKKeychainTokenStore : NovagramAds::SDKTokenStore {
+  public init(service: Swift::String = "uz.vipads.novagramads.tokens", account: Swift::String = "default")
+  public func restore() -> NovagramAds::SDKTokenPair?
+  public func persist(_ tokens: NovagramAds::SDKTokenPair?)
+}
+public enum SDKMoneyOperationKind : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  case debit
+  case refund
+  case deposit
+  case unknown(Swift::String)
+  public static let allKnown: [NovagramAds::SDKMoneyOperationKind]
+  public var rawValue: Swift::String {
+    get
+  }
+  public init(rawValue: Swift::String)
+  public init(from decoder: any Swift::Decoder) throws
+  public func encode(to encoder: any Swift::Encoder) throws
+  public static func == (a: NovagramAds::SDKMoneyOperationKind, b: NovagramAds::SDKMoneyOperationKind) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public enum SDKBudgetOperationReason : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  case create
+  case reject
+  case block
+  case cancel
+  case completed
+  case compensation
+  case adminDeposit
+  case legacyFix
+  case topUp
+  case delete
+  case unknown(Swift::String)
+  public static let allKnown: [NovagramAds::SDKBudgetOperationReason]
+  public var rawValue: Swift::String {
+    get
+  }
+  public init(rawValue: Swift::String)
+  public init(from decoder: any Swift::Decoder) throws
+  public func encode(to encoder: any Swift::Encoder) throws
+  public static func == (a: NovagramAds::SDKBudgetOperationReason, b: NovagramAds::SDKBudgetOperationReason) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public enum SDKMoneyOperationStatus : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  case pending
+  case done
+  case failed
+  case unknown(Swift::String)
+  public static let allKnown: [NovagramAds::SDKMoneyOperationStatus]
+  public var rawValue: Swift::String {
+    get
+  }
+  public init(rawValue: Swift::String)
+  public init(from decoder: any Swift::Decoder) throws
+  public func encode(to encoder: any Swift::Encoder) throws
+  public static func == (a: NovagramAds::SDKMoneyOperationStatus, b: NovagramAds::SDKMoneyOperationStatus) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public enum SDKAdMediaStatus : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  case processing
+  case ready
+  case failed
+  case unknown(Swift::String)
+  public static let allKnown: [NovagramAds::SDKAdMediaStatus]
+  public var rawValue: Swift::String {
+    get
+  }
+  public init(rawValue: Swift::String)
+  public init(from decoder: any Swift::Decoder) throws
+  public func encode(to encoder: any Swift::Encoder) throws
+  public static func == (a: NovagramAds::SDKAdMediaStatus, b: NovagramAds::SDKAdMediaStatus) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public enum SDKAdTableColumn : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  case views
+  case openedVideo
+  case clicks
+  case actions
+  case ctr
+  case cvr
+  case cpm
+  case cpc
+  case cpa
+  case spent
+  case remainingBudget
+  case targeting
+  case url
+  case actionType
+  case status
+  case createdAt
+  case unknown(Swift::String)
+  public static let allKnown: [NovagramAds::SDKAdTableColumn]
+  public var rawValue: Swift::String {
+    get
+  }
+  public init(rawValue: Swift::String)
+  public init(from decoder: any Swift::Decoder) throws
+  public func encode(to encoder: any Swift::Encoder) throws
+  public static func == (a: NovagramAds::SDKAdTableColumn, b: NovagramAds::SDKAdTableColumn) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public enum SDKAdOrderingColumn : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  case createdAt
+  case title
+  case url
+  case status
+  case cpm
+  case spent
+  case remainingBudget
+  case views
+  case openedVideo
+  case clicks
+  case actions
+  case actionType
+  case ctr
+  case cvr
+  case cpc
+  case cpa
+  case unknown(Swift::String)
+  public static let allKnown: [NovagramAds::SDKAdOrderingColumn]
+  public var rawValue: Swift::String {
+    get
+  }
+  public init(rawValue: Swift::String)
+  public init(from decoder: any Swift::Decoder) throws
+  public func encode(to encoder: any Swift::Encoder) throws
+  public static func == (a: NovagramAds::SDKAdOrderingColumn, b: NovagramAds::SDKAdOrderingColumn) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public struct SDKAdUpdateResult : Swift::Hashable, Swift::Sendable {
+  public let ad: NovagramAds::SDKAdCampaign
+  public let isPendingReview: Swift::Bool
+  public init(ad: NovagramAds::SDKAdCampaign, isPendingReview: Swift::Bool)
+  public static func == (a: NovagramAds::SDKAdUpdateResult, b: NovagramAds::SDKAdUpdateResult) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public struct SDKAdDeletionResult : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  public let message: Swift::String?
+  public let refundAmount: NovagramAds::SDKDecimalString?
+  public let refundWalletAmount: NovagramAds::SDKDecimalString?
+  public init(message: Swift::String? = nil, refundAmount: NovagramAds::SDKDecimalString? = nil, refundWalletAmount: NovagramAds::SDKDecimalString? = nil)
+  public static func == (a: NovagramAds::SDKAdDeletionResult, b: NovagramAds::SDKAdDeletionResult) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct SDKAdBudgetOperation : Swift::Hashable, Swift::Sendable, Swift::Codable, Swift::Identifiable {
+  public let id: Foundation::UUID
+  public let kind: NovagramAds::SDKMoneyOperationKind
+  public let reason: NovagramAds::SDKBudgetOperationReason
+  public let status: NovagramAds::SDKMoneyOperationStatus
+  public let exactAmount: NovagramAds::SDKDecimalString
+  public let walletAmount: NovagramAds::SDKDecimalString
+  public let createdAt: Foundation::Date
+  public init(id: Foundation::UUID, kind: NovagramAds::SDKMoneyOperationKind, reason: NovagramAds::SDKBudgetOperationReason, status: NovagramAds::SDKMoneyOperationStatus, exactAmount: NovagramAds::SDKDecimalString, walletAmount: NovagramAds::SDKDecimalString, createdAt: Foundation::Date)
+  public static func == (a: NovagramAds::SDKAdBudgetOperation, b: NovagramAds::SDKAdBudgetOperation) -> Swift::Bool
+  public typealias ID = Foundation::UUID
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct SDKAdDraft : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  public let data: NovagramAds::SDKJSONValue?
+  public let updatedAt: Foundation::Date?
+  public init(data: NovagramAds::SDKJSONValue? = nil, updatedAt: Foundation::Date? = nil)
+  public var hasDraft: Swift::Bool {
+    get
+  }
+  public static func == (a: NovagramAds::SDKAdDraft, b: NovagramAds::SDKAdDraft) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct SDKAdCabinetMedia : Swift::Hashable, Swift::Sendable, Swift::Codable, Swift::Identifiable {
+  public let id: Foundation::UUID
+  public let type: NovagramAds::SDKAdMediaKind
+  public let url: Swift::String
+  public let width: Swift::Int?
+  public let height: Swift::Int?
+  public let duration: NovagramAds::SDKDecimalString?
+  public let status: NovagramAds::SDKAdMediaStatus
+  public let error: Swift::String?
+  public let size: Swift::Int?
+  public let createdAt: Foundation::Date?
+  public init(id: Foundation::UUID, type: NovagramAds::SDKAdMediaKind, url: Swift::String, width: Swift::Int? = nil, height: Swift::Int? = nil, duration: NovagramAds::SDKDecimalString? = nil, status: NovagramAds::SDKAdMediaStatus, error: Swift::String? = nil, size: Swift::Int? = nil, createdAt: Foundation::Date? = nil)
+  public var mediaURL: Foundation::URL? {
+    get
+  }
+  public var isReady: Swift::Bool {
+    get
+  }
+  public static func == (a: NovagramAds::SDKAdCabinetMedia, b: NovagramAds::SDKAdCabinetMedia) -> Swift::Bool
+  public typealias ID = Foundation::UUID
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct SDKAdTableSettings : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  public let columns: [NovagramAds::SDKAdTableColumn]
+  public let available: [NovagramAds::SDKAdTableColumn]
+  public let defaultColumns: [NovagramAds::SDKAdTableColumn]
+  public init(columns: [NovagramAds::SDKAdTableColumn], available: [NovagramAds::SDKAdTableColumn] = [], defaultColumns: [NovagramAds::SDKAdTableColumn] = [])
+  public init(from decoder: any Swift::Decoder) throws
+  public static func == (a: NovagramAds::SDKAdTableSettings, b: NovagramAds::SDKAdTableSettings) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public struct SDKAdCreateRequest : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  public var placement: NovagramAds::SDKAdFormat
+  public var title: Swift::String
+  public var text: Swift::String?
+  public var url: Swift::String
+  public var showChannelPicture: Swift::Bool?
+  public var otherInfo: Swift::String?
+  public var media: Foundation::UUID?
+  public var cpm: Swift::Int
+  public var budget: NovagramAds::SDKDecimalString
+  public var dailyLimit: Swift::Int?
+  public var viewsPerUserPerDay: Swift::Int?
+  public var initialStatus: NovagramAds::SDKAdInitialStatus?
+  public var startDate: Foundation::Date?
+  public var endDate: Foundation::Date?
+  public var schedule: NovagramAds::SDKAdSchedule?
+  public var targeting: NovagramAds::SDKJSONValue?
+  public var agreeTerms: Swift::Bool
+  public init(placement: NovagramAds::SDKAdFormat, title: Swift::String, text: Swift::String? = nil, url: Swift::String, showChannelPicture: Swift::Bool? = nil, otherInfo: Swift::String? = nil, media: Foundation::UUID? = nil, cpm: Swift::Int, budget: NovagramAds::SDKDecimalString, dailyLimit: Swift::Int? = nil, viewsPerUserPerDay: Swift::Int? = nil, initialStatus: NovagramAds::SDKAdInitialStatus? = nil, startDate: Foundation::Date? = nil, endDate: Foundation::Date? = nil, schedule: NovagramAds::SDKAdSchedule? = nil, targeting: NovagramAds::SDKJSONValue? = nil, agreeTerms: Swift::Bool)
+  public static func == (a: NovagramAds::SDKAdCreateRequest, b: NovagramAds::SDKAdCreateRequest) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct SDKAdUpdate : Swift::Hashable, Swift::Sendable, Swift::Encodable {
+  public var title: Swift::String?
+  public var text: Swift::String?
+  public var showChannelPicture: Swift::Bool?
+  public var otherInfo: Swift::String?
+  public var media: NovagramAds::SDKNullable<Foundation::UUID>?
+  public var cpm: Swift::Int?
+  public var dailyLimit: NovagramAds::SDKNullable<Swift::Int>?
+  public var viewsPerUserPerDay: Swift::Int?
+  public var status: NovagramAds::SDKAdInitialStatus?
+  public var startDate: NovagramAds::SDKNullable<Foundation::Date>?
+  public var endDate: NovagramAds::SDKNullable<Foundation::Date>?
+  public var schedule: NovagramAds::SDKNullable<NovagramAds::SDKAdSchedule>?
+  public init(title: Swift::String? = nil, text: Swift::String? = nil, showChannelPicture: Swift::Bool? = nil, otherInfo: Swift::String? = nil, media: NovagramAds::SDKNullable<Foundation::UUID>? = nil, cpm: Swift::Int? = nil, dailyLimit: NovagramAds::SDKNullable<Swift::Int>? = nil, viewsPerUserPerDay: Swift::Int? = nil, status: NovagramAds::SDKAdInitialStatus? = nil, startDate: NovagramAds::SDKNullable<Foundation::Date>? = nil, endDate: NovagramAds::SDKNullable<Foundation::Date>? = nil, schedule: NovagramAds::SDKNullable<NovagramAds::SDKAdSchedule>? = nil)
+  public static func == (a: NovagramAds::SDKAdUpdate, b: NovagramAds::SDKAdUpdate) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public struct SDKAdOrdering : Swift::Hashable, Swift::Sendable {
+  public var column: NovagramAds::SDKAdOrderingColumn
+  public var descending: Swift::Bool
+  public init(_ column: NovagramAds::SDKAdOrderingColumn, descending: Swift::Bool = false)
+  public init(rawColumn: Swift::String, descending: Swift::Bool = false)
+  public init?(queryValue: Swift::String)
+  public static let newestFirst: NovagramAds::SDKAdOrdering
+  public var queryValue: Swift::String {
+    get
+  }
+  public static func == (a: NovagramAds::SDKAdOrdering, b: NovagramAds::SDKAdOrdering) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public struct SDKAdCampaign : Swift::Hashable, Swift::Sendable, Swift::Codable, Swift::Identifiable {
+  public let id: Foundation::UUID
+  public let placement: NovagramAds::SDKAdFormat
+  public let adFormat: NovagramAds::SDKAdFormatFamily?
+  public let title: Swift::String
+  public let text: Swift::String
+  public let url: Swift::String
+  public let promotedPeer: NovagramAds::SDKTelegramPeer?
+  public let showChannelPicture: Swift::Bool?
+  public let otherInfo: Swift::String?
+  public let media: NovagramAds::SDKAdMediaBrief?
+  public let cpm: Swift::Int
+  public let budget: NovagramAds::SDKDecimalString
+  public let spent: NovagramAds::SDKDecimalString
+  public let refunded: NovagramAds::SDKDecimalString
+  public let remainingBudget: NovagramAds::SDKDecimalString
+  public let dailyLimit: Swift::Int?
+  public let viewsPerUserPerDay: Swift::Int?
+  public let status: NovagramAds::SDKAdStatus
+  public let initialStatus: NovagramAds::SDKAdInitialStatus?
+  public let startDate: Foundation::Date?
+  public let endDate: Foundation::Date?
+  public let schedule: NovagramAds::SDKJSONValue?
+  public let targeting: NovagramAds::SDKJSONValue?
+  public let targetingSummary: NovagramAds::SDKAdTargetingSummary?
+  public let views: Swift::Int
+  public let openedVideo: Swift::Int
+  public let clicks: Swift::Int
+  public let actions: Swift::Int
+  public let actionType: NovagramAds::SDKAdActionType?
+  public let ctr: NovagramAds::SDKDecimalString?
+  public let cvr: NovagramAds::SDKDecimalString?
+  public let cpc: NovagramAds::SDKDecimalString?
+  public let cpa: NovagramAds::SDKDecimalString?
+  public let moderationReason: Swift::String?
+  public let pendingRevision: NovagramAds::SDKAdRevision?
+  public let lastDeclinedRevision: NovagramAds::SDKAdRevision?
+  public let termsVersion: Swift::String?
+  public let termsAcceptedAt: Foundation::Date?
+  public let createdAt: Foundation::Date
+  public let updatedAt: Foundation::Date
+  public init(id: Foundation::UUID, placement: NovagramAds::SDKAdFormat, adFormat: NovagramAds::SDKAdFormatFamily? = nil, title: Swift::String, text: Swift::String, url: Swift::String, promotedPeer: NovagramAds::SDKTelegramPeer? = nil, showChannelPicture: Swift::Bool? = nil, otherInfo: Swift::String? = nil, media: NovagramAds::SDKAdMediaBrief? = nil, cpm: Swift::Int, budget: NovagramAds::SDKDecimalString, spent: NovagramAds::SDKDecimalString, refunded: NovagramAds::SDKDecimalString, remainingBudget: NovagramAds::SDKDecimalString, dailyLimit: Swift::Int? = nil, viewsPerUserPerDay: Swift::Int? = nil, status: NovagramAds::SDKAdStatus, initialStatus: NovagramAds::SDKAdInitialStatus? = nil, startDate: Foundation::Date? = nil, endDate: Foundation::Date? = nil, schedule: NovagramAds::SDKJSONValue? = nil, targeting: NovagramAds::SDKJSONValue? = nil, targetingSummary: NovagramAds::SDKAdTargetingSummary? = nil, views: Swift::Int, openedVideo: Swift::Int, clicks: Swift::Int, actions: Swift::Int, actionType: NovagramAds::SDKAdActionType? = nil, ctr: NovagramAds::SDKDecimalString? = nil, cvr: NovagramAds::SDKDecimalString? = nil, cpc: NovagramAds::SDKDecimalString? = nil, cpa: NovagramAds::SDKDecimalString? = nil, moderationReason: Swift::String? = nil, pendingRevision: NovagramAds::SDKAdRevision? = nil, lastDeclinedRevision: NovagramAds::SDKAdRevision? = nil, termsVersion: Swift::String? = nil, termsAcceptedAt: Foundation::Date? = nil, createdAt: Foundation::Date, updatedAt: Foundation::Date)
+  public var linkURL: Foundation::URL? {
+    get
+  }
+  public var decodedSchedule: NovagramAds::SDKAdSchedule? {
+    get
+  }
+  public static func == (a: NovagramAds::SDKAdCampaign, b: NovagramAds::SDKAdCampaign) -> Swift::Bool
+  public typealias ID = Foundation::UUID
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct SDKAdMediaBrief : Swift::Hashable, Swift::Sendable, Swift::Codable, Swift::Identifiable {
+  public let id: Foundation::UUID
+  public let type: NovagramAds::SDKAdMediaKind
+  public let url: Swift::String
+  public let width: Swift::Int?
+  public let height: Swift::Int?
+  public let duration: NovagramAds::SDKDecimalString?
+  public init(id: Foundation::UUID, type: NovagramAds::SDKAdMediaKind, url: Swift::String, width: Swift::Int? = nil, height: Swift::Int? = nil, duration: NovagramAds::SDKDecimalString? = nil)
+  public var mediaURL: Foundation::URL? {
+    get
+  }
+  public static func == (a: NovagramAds::SDKAdMediaBrief, b: NovagramAds::SDKAdMediaBrief) -> Swift::Bool
+  public typealias ID = Foundation::UUID
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct SDKAdRevision : Swift::Hashable, Swift::Sendable, Swift::Codable, Swift::Identifiable {
+  public let id: Foundation::UUID
+  public let text: Swift::String
+  public let showChannelPicture: Swift::Bool?
+  public let otherInfo: Swift::String?
+  public let media: NovagramAds::SDKAdMediaBrief?
+  public let status: NovagramAds::SDKAdRevisionStatus
+  public let reason: Swift::String?
+  public let createdAt: Foundation::Date
+  public let moderatedAt: Foundation::Date?
+  public init(id: Foundation::UUID, text: Swift::String, showChannelPicture: Swift::Bool? = nil, otherInfo: Swift::String? = nil, media: NovagramAds::SDKAdMediaBrief? = nil, status: NovagramAds::SDKAdRevisionStatus, reason: Swift::String? = nil, createdAt: Foundation::Date, moderatedAt: Foundation::Date? = nil)
+  public static func == (a: NovagramAds::SDKAdRevision, b: NovagramAds::SDKAdRevision) -> Swift::Bool
+  public typealias ID = Foundation::UUID
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct SDKAdTargetingSummary : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  public let kind: NovagramAds::SDKAdTargetingKind
+  public let count: Swift::Int?
+  public init(kind: NovagramAds::SDKAdTargetingKind, count: Swift::Int? = nil)
+  public static func == (a: NovagramAds::SDKAdTargetingSummary, b: NovagramAds::SDKAdTargetingSummary) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public enum SDKAdStatus : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  case inReview
+  case active
+  case onHold
+  case declined
+  case blocked
+  case stopped
+  case deleted
+  case unknown(Swift::String)
+  public static let allKnown: [NovagramAds::SDKAdStatus]
+  public var rawValue: Swift::String {
+    get
+  }
+  public init(rawValue: Swift::String)
+  public init(from decoder: any Swift::Decoder) throws
+  public func encode(to encoder: any Swift::Encoder) throws
+  public static func == (a: NovagramAds::SDKAdStatus, b: NovagramAds::SDKAdStatus) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public enum SDKAdInitialStatus : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  case active
+  case onHold
+  case unknown(Swift::String)
+  public var rawValue: Swift::String {
+    get
+  }
+  public init(rawValue: Swift::String)
+  public init(from decoder: any Swift::Decoder) throws
+  public func encode(to encoder: any Swift::Encoder) throws
+  public static func == (a: NovagramAds::SDKAdInitialStatus, b: NovagramAds::SDKAdInitialStatus) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public enum SDKAdFormatFamily : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  case search
+  case bot
+  case users
+  case channels
+  case unknown(Swift::String)
+  public var rawValue: Swift::String {
+    get
+  }
+  public init(rawValue: Swift::String)
+  public init(from decoder: any Swift::Decoder) throws
+  public func encode(to encoder: any Swift::Encoder) throws
+  public static func == (a: NovagramAds::SDKAdFormatFamily, b: NovagramAds::SDKAdFormatFamily) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public enum SDKAdActionType : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  case join
+  case start
+  case unknown(Swift::String)
+  public var rawValue: Swift::String {
+    get
+  }
+  public init(rawValue: Swift::String)
+  public init(from decoder: any Swift::Decoder) throws
+  public func encode(to encoder: any Swift::Encoder) throws
+  public static func == (a: NovagramAds::SDKAdActionType, b: NovagramAds::SDKAdActionType) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public enum SDKAdRevisionStatus : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  case pending
+  case approved
+  case declined
+  case superseded
+  case unknown(Swift::String)
+  public var rawValue: Swift::String {
+    get
+  }
+  public init(rawValue: Swift::String)
+  public init(from decoder: any Swift::Decoder) throws
+  public func encode(to encoder: any Swift::Encoder) throws
+  public static func == (a: NovagramAds::SDKAdRevisionStatus, b: NovagramAds::SDKAdRevisionStatus) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public enum SDKTelegramPeerType : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  case channel
+  case bot
+  case group
+  case user
+  case unknown(Swift::String)
+  public var rawValue: Swift::String {
+    get
+  }
+  public init(rawValue: Swift::String)
+  public init(from decoder: any Swift::Decoder) throws
+  public func encode(to encoder: any Swift::Encoder) throws
+  public static func == (a: NovagramAds::SDKTelegramPeerType, b: NovagramAds::SDKTelegramPeerType) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public enum SDKAdTargetingKind : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  case queries
+  case bots
+  case allBots
+  case channels
+  case languages
+  case locations
+  case countries
+  case unknown(Swift::String)
+  public var rawValue: Swift::String {
+    get
+  }
+  public init(rawValue: Swift::String)
+  public init(from decoder: any Swift::Decoder) throws
+  public func encode(to encoder: any Swift::Encoder) throws
+  public static func == (a: NovagramAds::SDKAdTargetingKind, b: NovagramAds::SDKAdTargetingKind) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public struct SDKCountry : Swift::Hashable, Swift::Sendable, Swift::Codable, Swift::Identifiable {
+  public let code: Swift::String
+  public let nameEn: Swift::String
+  public let nameRu: Swift::String?
+  public let nameUz: Swift::String?
+  public var id: Swift::String {
+    get
+  }
+  public init(code: Swift::String, nameEn: Swift::String, nameRu: Swift::String? = nil, nameUz: Swift::String? = nil)
+  public func localizedName(languageCode: Swift::String) -> Swift::String
+  public static func == (a: NovagramAds::SDKCountry, b: NovagramAds::SDKCountry) -> Swift::Bool
+  public typealias ID = Swift::String
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct SDKLanguage : Swift::Hashable, Swift::Sendable, Swift::Codable, Swift::Identifiable {
+  public let code: Swift::String
+  public let nameEn: Swift::String
+  public let nameRu: Swift::String?
+  public let nameUz: Swift::String?
+  public var id: Swift::String {
+    get
+  }
+  public init(code: Swift::String, nameEn: Swift::String, nameRu: Swift::String? = nil, nameUz: Swift::String? = nil)
+  public func localizedName(languageCode: Swift::String) -> Swift::String
+  public static func == (a: NovagramAds::SDKLanguage, b: NovagramAds::SDKLanguage) -> Swift::Bool
+  public typealias ID = Swift::String
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct SDKLocation : Swift::Hashable, Swift::Sendable, Swift::Codable, Swift::Identifiable {
+  public let id: Swift::Int
+  public let country: Swift::String
+  public let nameEn: Swift::String
+  public let nameRu: Swift::String?
+  public let nameUz: Swift::String?
+  public let regionEn: Swift::String?
+  public let regionRu: Swift::String?
+  public let regionUz: Swift::String?
+  public init(id: Swift::Int, country: Swift::String, nameEn: Swift::String, nameRu: Swift::String? = nil, nameUz: Swift::String? = nil, regionEn: Swift::String? = nil, regionRu: Swift::String? = nil, regionUz: Swift::String? = nil)
+  public func localizedName(languageCode: Swift::String) -> Swift::String
+  public func localizedRegion(languageCode: Swift::String) -> Swift::String?
+  public static func == (a: NovagramAds::SDKLocation, b: NovagramAds::SDKLocation) -> Swift::Bool
+  public typealias ID = Swift::Int
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct SDKTopic : Swift::Hashable, Swift::Sendable, Swift::Codable, Swift::Identifiable {
+  public let id: Swift::Int
+  public let nameEn: Swift::String
+  public let nameRu: Swift::String?
+  public let nameUz: Swift::String?
+  public init(id: Swift::Int, nameEn: Swift::String, nameRu: Swift::String? = nil, nameUz: Swift::String? = nil)
+  public func localizedName(languageCode: Swift::String) -> Swift::String
+  public static func == (a: NovagramAds::SDKTopic, b: NovagramAds::SDKTopic) -> Swift::Bool
+  public typealias ID = Swift::Int
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct SDKAdPricing : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  public let minCpm: [Swift::String : Swift::Int]
+  public let channelPictureMarkupPercent: NovagramAds::SDKDecimalString
+  public let photoMarkupPercent: NovagramAds::SDKDecimalString
+  public let videoMarkupPercent: NovagramAds::SDKDecimalString
+  public let photoSpecificMarkupPercent: NovagramAds::SDKDecimalString
+  public let videoSpecificMarkupPercent: NovagramAds::SDKDecimalString
+  public let minBudget: Swift::Int
+  public let termsVersion: Swift::String
+  public init(minCpm: [Swift::String : Swift::Int], channelPictureMarkupPercent: NovagramAds::SDKDecimalString, photoMarkupPercent: NovagramAds::SDKDecimalString, videoMarkupPercent: NovagramAds::SDKDecimalString, photoSpecificMarkupPercent: NovagramAds::SDKDecimalString, videoSpecificMarkupPercent: NovagramAds::SDKDecimalString, minBudget: Swift::Int, termsVersion: Swift::String)
+  public func minCPM(for placement: NovagramAds::SDKAdFormat) -> Swift::Int?
+  public static func == (a: NovagramAds::SDKAdPricing, b: NovagramAds::SDKAdPricing) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct SDKSimilarChannel : Swift::Hashable, Swift::Sendable, Swift::Codable, Swift::Identifiable {
+  public let username: Swift::String
+  public let title: Swift::String
+  public let avatarUrl: Swift::String?
+  public let subscribers: Swift::Int?
+  public var id: Swift::String {
+    get
+  }
+  public init(username: Swift::String, title: Swift::String, avatarUrl: Swift::String? = nil, subscribers: Swift::Int? = nil)
+  public var avatarURL: Foundation::URL? {
+    get
+  }
+  public static func == (a: NovagramAds::SDKSimilarChannel, b: NovagramAds::SDKSimilarChannel) -> Swift::Bool
+  public typealias ID = Swift::String
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct SDKSimilarBot : Swift::Hashable, Swift::Sendable, Swift::Codable, Swift::Identifiable {
+  public let username: Swift::String
+  public let title: Swift::String?
+  public let avatarUrl: Swift::String?
+  public let monthlyUsers: Swift::Int?
+  public var id: Swift::String {
+    get
+  }
+  public init(username: Swift::String, title: Swift::String? = nil, avatarUrl: Swift::String? = nil, monthlyUsers: Swift::Int? = nil)
+  public var avatarURL: Foundation::URL? {
+    get
+  }
+  public static func == (a: NovagramAds::SDKSimilarBot, b: NovagramAds::SDKSimilarBot) -> Swift::Bool
+  public typealias ID = Swift::String
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public enum SDKAdFormat : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  case search
+  case bot
+  case channelMessage
+  case usersChannelMessage
+  case usersBotBanner
+  case usersVideoBanner
+  case unknown(Swift::String)
+  public var rawValue: Swift::String {
+    get
+  }
+  public init(rawValue: Swift::String)
+  public var isUsersFormat: Swift::Bool {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+  public func encode(to encoder: any Swift::Encoder) throws
+  public static func == (a: NovagramAds::SDKAdFormat, b: NovagramAds::SDKAdFormat) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public enum SDKAdPeerType : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  case channel
+  case bot
+  case unknown(Swift::String)
+  public var rawValue: Swift::String {
+    get
+  }
+  public init(rawValue: Swift::String)
+  public init(from decoder: any Swift::Decoder) throws
+  public func encode(to encoder: any Swift::Encoder) throws
+  public static func == (a: NovagramAds::SDKAdPeerType, b: NovagramAds::SDKAdPeerType) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public enum SDKAdButtonType : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  case channel
+  case bot
+  case unknown(Swift::String)
+  public var rawValue: Swift::String {
+    get
+  }
+  public init(rawValue: Swift::String)
+  public init(from decoder: any Swift::Decoder) throws
+  public func encode(to encoder: any Swift::Encoder) throws
+  public static func == (a: NovagramAds::SDKAdButtonType, b: NovagramAds::SDKAdButtonType) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public enum SDKAdMediaKind : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  case photo
+  case video
+  case unknown(Swift::String)
+  public var rawValue: Swift::String {
+    get
+  }
+  public init(rawValue: Swift::String)
+  public init(from decoder: any Swift::Decoder) throws
+  public func encode(to encoder: any Swift::Encoder) throws
+  public static func == (a: NovagramAds::SDKAdMediaKind, b: NovagramAds::SDKAdMediaKind) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public enum SDKAdEventType : Swift::String, Swift::Hashable, Swift::Sendable, Swift::Codable, Swift::CaseIterable {
+  case view
+  case click
+  case action
+  case videoOpen
+  public init?(rawValue: Swift::String)
+  public typealias AllCases = [NovagramAds::SDKAdEventType]
+  public typealias RawValue = Swift::String
+  nonisolated public static var allCases: [NovagramAds::SDKAdEventType] {
+    get
+  }
+  public var rawValue: Swift::String {
+    get
+  }
+}
+public struct SDKAdEvent : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  public let randomId: Swift::String
+  public let type: NovagramAds::SDKAdEventType
+  public let durationMs: Swift::Int?
+  public let visibleRatio: Swift::Double?
+  public init(randomId: Swift::String, type: NovagramAds::SDKAdEventType, durationMs: Swift::Int? = nil, visibleRatio: Swift::Double? = nil)
+  public static func == (a: NovagramAds::SDKAdEvent, b: NovagramAds::SDKAdEvent) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct SDKAdEventsResult : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  public let accepted: Swift::Int
+  public let rejected: Swift::Int
+  public init(accepted: Swift::Int, rejected: Swift::Int)
+  public static func == (a: NovagramAds::SDKAdEventsResult, b: NovagramAds::SDKAdEventsResult) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct SDKAdOwner : Swift::Hashable, Swift::Sendable, Swift::Codable, Swift::Identifiable {
+  public let userId: Foundation::UUID
+  public let username: Swift::String
+  public let adgramUsername: Swift::String?
+  public let displayName: Swift::String?
+  public var id: Foundation::UUID {
+    get
+  }
+  public init(userId: Foundation::UUID, username: Swift::String, adgramUsername: Swift::String? = nil, displayName: Swift::String? = nil)
+  public static func == (a: NovagramAds::SDKAdOwner, b: NovagramAds::SDKAdOwner) -> Swift::Bool
+  public typealias ID = Foundation::UUID
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct SDKModerationAd : Swift::Hashable, Swift::Sendable, Swift::Codable, Swift::Identifiable {
+  public let ad: NovagramAds::SDKAdCampaign
+  public let owner: NovagramAds::SDKAdOwner
+  public var id: Foundation::UUID {
+    get
+  }
+  public init(ad: NovagramAds::SDKAdCampaign, owner: NovagramAds::SDKAdOwner)
+  public init(from decoder: any Swift::Decoder) throws
+  public func encode(to encoder: any Swift::Encoder) throws
+  public static func == (a: NovagramAds::SDKModerationAd, b: NovagramAds::SDKModerationAd) -> Swift::Bool
+  public typealias ID = Foundation::UUID
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public struct SDKModerationAdDetail : Swift::Hashable, Swift::Sendable, Swift::Codable, Swift::Identifiable {
+  public let ad: NovagramAds::SDKAdCampaign
+  public let owner: NovagramAds::SDKAdOwner
+  public let revisions: [NovagramAds::SDKAdRevision]
+  public let decisions: [NovagramAds::SDKAdDecision]
+  public var id: Foundation::UUID {
+    get
+  }
+  public init(ad: NovagramAds::SDKAdCampaign, owner: NovagramAds::SDKAdOwner, revisions: [NovagramAds::SDKAdRevision] = [], decisions: [NovagramAds::SDKAdDecision] = [])
+  public init(from decoder: any Swift::Decoder) throws
+  public func encode(to encoder: any Swift::Encoder) throws
+  public static func == (a: NovagramAds::SDKModerationAdDetail, b: NovagramAds::SDKModerationAdDetail) -> Swift::Bool
+  public typealias ID = Foundation::UUID
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public struct SDKAdDecision : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  public let action: NovagramAds::SDKAdDecisionAction
+  public let reason: Swift::String?
+  public let moderator: Swift::String?
+  public let moderatorName: Swift::String?
+  public let revisionId: Foundation::UUID?
+  public let createdAt: Foundation::Date
+  public init(action: NovagramAds::SDKAdDecisionAction, reason: Swift::String? = nil, moderator: Swift::String? = nil, moderatorName: Swift::String? = nil, revisionId: Foundation::UUID? = nil, createdAt: Foundation::Date)
+  public init(from decoder: any Swift::Decoder) throws
+  public static func == (a: NovagramAds::SDKAdDecision, b: NovagramAds::SDKAdDecision) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public struct SDKAdCreative : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  public let text: Swift::String
+  public let showChannelPicture: Swift::Bool
+  public let otherInfo: Swift::String
+  public let media: NovagramAds::SDKAdMediaBrief?
+  public init(text: Swift::String, showChannelPicture: Swift::Bool = false, otherInfo: Swift::String = "", media: NovagramAds::SDKAdMediaBrief? = nil)
+  public init(from decoder: any Swift::Decoder) throws
+  public static func == (a: NovagramAds::SDKAdCreative, b: NovagramAds::SDKAdCreative) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public struct SDKModerationRevision : Swift::Hashable, Swift::Sendable, Swift::Codable, Swift::Identifiable {
+  public let id: Foundation::UUID
+  public let adId: Foundation::UUID
+  public let adTitle: Swift::String
+  public let placement: NovagramAds::SDKAdFormat
+  public let adStatus: NovagramAds::SDKAdStatus
+  public let url: Swift::String
+  public let owner: NovagramAds::SDKAdOwner
+  public let current: NovagramAds::SDKAdCreative
+  public let proposed: NovagramAds::SDKAdCreative
+  public let status: NovagramAds::SDKAdRevisionStatus
+  public let createdAt: Foundation::Date
+  public init(id: Foundation::UUID, adId: Foundation::UUID, adTitle: Swift::String, placement: NovagramAds::SDKAdFormat, adStatus: NovagramAds::SDKAdStatus, url: Swift::String, owner: NovagramAds::SDKAdOwner, current: NovagramAds::SDKAdCreative, proposed: NovagramAds::SDKAdCreative, status: NovagramAds::SDKAdRevisionStatus, createdAt: Foundation::Date)
+  public var linkURL: Foundation::URL? {
+    get
+  }
+  public static func == (a: NovagramAds::SDKModerationRevision, b: NovagramAds::SDKModerationRevision) -> Swift::Bool
+  public typealias ID = Foundation::UUID
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct SDKModerationChannel : Swift::Hashable, Swift::Sendable, Swift::Codable, Swift::Identifiable {
+  public let channelId: Swift::Int64
+  public let channelName: Swift::String
+  public let owner: Swift::String?
+  public let ownerName: Swift::String?
+  public let claimStatus: NovagramAds::SDKClaimStatus
+  public let language: Swift::String?
+  public let topics: [Swift::Int]
+  public let metaUpdatedBy: Swift::String?
+  public let metaUpdatedByName: Swift::String?
+  public let metaUpdatedRole: NovagramAds::SDKChannelMetaRole?
+  public let metaUpdatedAt: Foundation::Date?
+  public var id: Swift::Int64 {
+    get
+  }
+  public var isMissingMeta: Swift::Bool {
+    get
+  }
+  public init(channelId: Swift::Int64, channelName: Swift::String, owner: Swift::String? = nil, ownerName: Swift::String? = nil, claimStatus: NovagramAds::SDKClaimStatus, language: Swift::String? = nil, topics: [Swift::Int] = [], metaUpdatedBy: Swift::String? = nil, metaUpdatedByName: Swift::String? = nil, metaUpdatedRole: NovagramAds::SDKChannelMetaRole? = nil, metaUpdatedAt: Foundation::Date? = nil)
+  public init(from decoder: any Swift::Decoder) throws
+  public static func == (a: NovagramAds::SDKModerationChannel, b: NovagramAds::SDKModerationChannel) -> Swift::Bool
+  public typealias ID = Swift::Int64
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public enum SDKAdDecisionAction : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  case approved
+  case declined
+  case blocked
+  case revisionApproved
+  case revisionDeclined
+  case unknown(Swift::String)
+  public var rawValue: Swift::String {
+    get
+  }
+  public init(rawValue: Swift::String)
+  public init(from decoder: any Swift::Decoder) throws
+  public func encode(to encoder: any Swift::Encoder) throws
+  public static func == (a: NovagramAds::SDKAdDecisionAction, b: NovagramAds::SDKAdDecisionAction) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public enum SDKAdReportStatus : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  case new
+  case reviewed
+  case unknown(Swift::String)
+  public var rawValue: Swift::String {
+    get
+  }
+  public init(rawValue: Swift::String)
+  public init(from decoder: any Swift::Decoder) throws
+  public func encode(to encoder: any Swift::Encoder) throws
+  public static func == (a: NovagramAds::SDKAdReportStatus, b: NovagramAds::SDKAdReportStatus) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public enum SDKChannelMetaRole : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  case owner
+  case moderator
+  case unknown(Swift::String)
+  public var rawValue: Swift::String {
+    get
+  }
+  public init(rawValue: Swift::String)
+  public init(from decoder: any Swift::Decoder) throws
+  public func encode(to encoder: any Swift::Encoder) throws
+  public static func == (a: NovagramAds::SDKChannelMetaRole, b: NovagramAds::SDKChannelMetaRole) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public struct SDKAdReportEntry : Swift::Hashable, Swift::Sendable, Swift::Codable, Swift::Identifiable {
+  public let id: Foundation::UUID
+  public let reason: Swift::String
+  public let details: Swift::String
+  public let status: NovagramAds::SDKAdReportStatus
+  public let createdAt: Foundation::Date
+  public let reviewedBy: Swift::String?
+  public let reviewedByName: Swift::String?
+  public let reviewedAt: Foundation::Date?
+  public init(id: Foundation::UUID, reason: Swift::String, details: Swift::String = "", status: NovagramAds::SDKAdReportStatus, createdAt: Foundation::Date, reviewedBy: Swift::String? = nil, reviewedByName: Swift::String? = nil, reviewedAt: Foundation::Date? = nil)
+  public var knownReason: NovagramAds::SDKAdReportReason? {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+  public static func == (a: NovagramAds::SDKAdReportEntry, b: NovagramAds::SDKAdReportEntry) -> Swift::Bool
+  public typealias ID = Foundation::UUID
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public struct SDKAdReportGroup : Swift::Hashable, Swift::Sendable, Swift::Codable, Swift::Identifiable {
+  public let id: Foundation::UUID
+  public let title: Swift::String
+  public let placement: NovagramAds::SDKAdFormat
+  public let status: NovagramAds::SDKAdStatus
+  public let url: Swift::String
+  public let owner: NovagramAds::SDKAdOwner
+  public let reportsCount: Swift::Int
+  public let reasons: [Swift::String : Swift::Int]
+  public let lastReportAt: Foundation::Date
+  public let reports: [NovagramAds::SDKAdReportEntry]
+  public init(id: Foundation::UUID, title: Swift::String, placement: NovagramAds::SDKAdFormat, status: NovagramAds::SDKAdStatus, url: Swift::String, owner: NovagramAds::SDKAdOwner, reportsCount: Swift::Int, reasons: [Swift::String : Swift::Int] = [:], lastReportAt: Foundation::Date, reports: [NovagramAds::SDKAdReportEntry] = [])
+  public init(from decoder: any Swift::Decoder) throws
+  public func encode(to encoder: any Swift::Encoder) throws
+  public static func == (a: NovagramAds::SDKAdReportGroup, b: NovagramAds::SDKAdReportGroup) -> Swift::Bool
+  public typealias ID = Foundation::UUID
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public struct SDKAdModerationDecision : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  public let message: Swift::String
+  public let adId: Foundation::UUID
+  public let status: NovagramAds::SDKAdStatus
+  public let refundAmount: NovagramAds::SDKDecimalString?
+  public let refundWalletAmount: NovagramAds::SDKDecimalString?
+  public init(message: Swift::String = "", adId: Foundation::UUID, status: NovagramAds::SDKAdStatus, refundAmount: NovagramAds::SDKDecimalString? = nil, refundWalletAmount: NovagramAds::SDKDecimalString? = nil)
+  public init(from decoder: any Swift::Decoder) throws
+  public static func == (a: NovagramAds::SDKAdModerationDecision, b: NovagramAds::SDKAdModerationDecision) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public struct SDKAdRevisionDecision : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  public let message: Swift::String
+  public let revisionId: Foundation::UUID
+  public let adId: Foundation::UUID
+  public let status: Swift::String
+  public init(message: Swift::String = "", revisionId: Foundation::UUID, adId: Foundation::UUID, status: Swift::String = "")
+  public init(from decoder: any Swift::Decoder) throws
+  public static func == (a: NovagramAds::SDKAdRevisionDecision, b: NovagramAds::SDKAdRevisionDecision) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public struct SDKAdReportReviewResult : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  public let message: Swift::String
+  public let reportId: Foundation::UUID
+  public let adId: Foundation::UUID
+  public let status: NovagramAds::SDKAdReportStatus
+  public init(message: Swift::String = "", reportId: Foundation::UUID, adId: Foundation::UUID, status: NovagramAds::SDKAdReportStatus)
+  public init(from decoder: any Swift::Decoder) throws
+  public static func == (a: NovagramAds::SDKAdReportReviewResult, b: NovagramAds::SDKAdReportReviewResult) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public enum SDKAdReportReason : Swift::String, Swift::Hashable, Swift::Sendable, Swift::Codable, Swift::CaseIterable {
+  case spam
+  case violence
+  case pornography
+  case illegal
+  case misleading
+  case other
+  public init?(rawValue: Swift::String)
+  public typealias AllCases = [NovagramAds::SDKAdReportReason]
+  public typealias RawValue = Swift::String
+  nonisolated public static var allCases: [NovagramAds::SDKAdReportReason] {
+    get
+  }
+  public var rawValue: Swift::String {
+    get
+  }
+}
+public struct SDKAdReportResult : Swift::Hashable, Swift::Sendable {
+  public let reported: Swift::Bool
+  public let alreadyReported: Swift::Bool
+  public init(reported: Swift::Bool, alreadyReported: Swift::Bool)
+  public static func == (a: NovagramAds::SDKAdReportResult, b: NovagramAds::SDKAdReportResult) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public struct SDKAdRequest : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  public var channelName: Swift::String
+  public var viewerId: Swift::String
+  public var channelId: Swift::Int64?
+  public init(channelName: Swift::String, viewerId: Swift::String, channelId: Swift::Int64? = nil)
+  public static func == (a: NovagramAds::SDKAdRequest, b: NovagramAds::SDKAdRequest) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct SDKAdSchedule : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  public var enabled: Swift::Bool
+  public var days: [Swift::Int]
+  public var timezone: Swift::String?
+  public init(enabled: Swift::Bool, days: [Swift::Int], timezone: Swift::String? = nil)
+  public init?(json: NovagramAds::SDKJSONValue?)
+  public var jsonValue: NovagramAds::SDKJSONValue {
+    get
+  }
+  public static func == (a: NovagramAds::SDKAdSchedule, b: NovagramAds::SDKAdSchedule) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct SDKAdServeResponse : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  public let ads: [NovagramAds::SDKSponsoredAd]
+  public let ttlSeconds: Swift::Int
+  public let startDelay: Swift::Int?
+  public let betweenDelay: Swift::Int?
+  public init(ads: [NovagramAds::SDKSponsoredAd], ttlSeconds: Swift::Int, startDelay: Swift::Int? = nil, betweenDelay: Swift::Int? = nil)
+  public var ad: NovagramAds::SDKSponsoredAd? {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+  public static func == (a: NovagramAds::SDKAdServeResponse, b: NovagramAds::SDKAdServeResponse) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public enum SDKAdSlot : Swift::Hashable, Swift::Sendable {
+  case search(query: Swift::String)
+  case bot(username: Swift::String)
+  case channel(channelId: Swift::Int64)
+  case video(channelId: Swift::Int64, messageId: Swift::Int64)
+  public var placement: Swift::String {
+    get
+  }
+  public var cacheKey: Swift::String {
+    get
+  }
+  public static func normalizedSearchQuery(_ query: Swift::String) -> Swift::String
+  public static func bareBotUsername(_ raw: Swift::String) -> Swift::String?
+  public static func isValidChannelId(_ channelId: Swift::Int64) -> Swift::Bool
+  public static func == (a: NovagramAds::SDKAdSlot, b: NovagramAds::SDKAdSlot) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public struct SDKAdStats : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  public let from: NovagramAds::SDKDay
+  public let to: NovagramAds::SDKDay
+  public let days: [NovagramAds::SDKAdStatsDay]
+  public let totals: NovagramAds::SDKAdStatsTotals
+  public init(from: NovagramAds::SDKDay, to: NovagramAds::SDKDay, days: [NovagramAds::SDKAdStatsDay], totals: NovagramAds::SDKAdStatsTotals)
+  public static func == (a: NovagramAds::SDKAdStats, b: NovagramAds::SDKAdStats) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct SDKAdStatsDay : Swift::Hashable, Swift::Sendable, Swift::Codable, Swift::Identifiable {
+  public let date: NovagramAds::SDKDay
+  public let views: Swift::Int
+  public let freeViews: Swift::Int
+  public let clicks: Swift::Int
+  public let actions: Swift::Int
+  public let videoOpens: Swift::Int
+  public let spent: NovagramAds::SDKDecimalString
+  public var id: NovagramAds::SDKDay {
+    get
+  }
+  public var totalViews: Swift::Int {
+    get
+  }
+  public init(date: NovagramAds::SDKDay, views: Swift::Int, freeViews: Swift::Int, clicks: Swift::Int, actions: Swift::Int, videoOpens: Swift::Int, spent: NovagramAds::SDKDecimalString)
+  public static func == (a: NovagramAds::SDKAdStatsDay, b: NovagramAds::SDKAdStatsDay) -> Swift::Bool
+  public typealias ID = NovagramAds::SDKDay
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct SDKAdStatsTotals : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  public let views: Swift::Int
+  public let freeViews: Swift::Int
+  public let clicks: Swift::Int
+  public let actions: Swift::Int
+  public let videoOpens: Swift::Int
+  public let spent: NovagramAds::SDKDecimalString
+  public let ctr: NovagramAds::SDKDecimalString?
+  public let cvr: NovagramAds::SDKDecimalString?
+  public let cpc: NovagramAds::SDKDecimalString?
+  public let cpa: NovagramAds::SDKDecimalString?
+  public var totalViews: Swift::Int {
+    get
+  }
+  public init(views: Swift::Int, freeViews: Swift::Int, clicks: Swift::Int, actions: Swift::Int, videoOpens: Swift::Int, spent: NovagramAds::SDKDecimalString, ctr: NovagramAds::SDKDecimalString? = nil, cvr: NovagramAds::SDKDecimalString? = nil, cpc: NovagramAds::SDKDecimalString? = nil, cpa: NovagramAds::SDKDecimalString? = nil)
+  public static func == (a: NovagramAds::SDKAdStatsTotals, b: NovagramAds::SDKAdStatsTotals) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct SDKAdTargeting : Swift::Hashable, Swift::Sendable {
+  public var phoneCountry: Swift::String?
+  public var lang: Swift::String?
+  public var platform: Swift::String?
+  public var appVersion: Swift::String?
+  public init(phoneCountry: Swift::String? = nil, lang: Swift::String? = nil, platform: Swift::String? = SDKAdTargeting.currentPlatform, appVersion: Swift::String? = nil)
+  public static var currentPlatform: Swift::String? {
+    get
+  }
+  public static var bundleAppVersion: Swift::String? {
+    get
+  }
+  public static func == (a: NovagramAds::SDKAdTargeting, b: NovagramAds::SDKAdTargeting) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public struct SDKAdminDepositResult : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  public struct UserInfo : Swift::Hashable, Swift::Sendable, Swift::Codable, Swift::Identifiable {
+    public let userId: Foundation::UUID?
+    public let username: Swift::String?
+    public let email: Swift::String?
+    public var id: Swift::String {
+      get
+    }
+    public init(userId: Foundation::UUID? = nil, username: Swift::String? = nil, email: Swift::String? = nil)
+    public static func == (a: NovagramAds::SDKAdminDepositResult.NovagramAds::UserInfo, b: NovagramAds::SDKAdminDepositResult.NovagramAds::UserInfo) -> Swift::Bool
+    public typealias ID = Swift::String
+    public func encode(to encoder: any Swift::Encoder) throws
+    public func hash(into hasher: inout Swift::Hasher)
+    public var hashValue: Swift::Int {
+      get
+    }
+    public init(from decoder: any Swift::Decoder) throws
+  }
+  public struct BalanceInfo : Swift::Hashable, Swift::Sendable, Swift::Codable {
+    public let oldBalance: NovagramAds::SDKDecimalString?
+    public let newBalance: NovagramAds::SDKDecimalString?
+    public let addedAmount: NovagramAds::SDKDecimalString?
+    public init(oldBalance: NovagramAds::SDKDecimalString? = nil, newBalance: NovagramAds::SDKDecimalString? = nil, addedAmount: NovagramAds::SDKDecimalString? = nil)
+    public static func == (a: NovagramAds::SDKAdminDepositResult.NovagramAds::BalanceInfo, b: NovagramAds::SDKAdminDepositResult.NovagramAds::BalanceInfo) -> Swift::Bool
+    public func encode(to encoder: any Swift::Encoder) throws
+    public func hash(into hasher: inout Swift::Hasher)
+    public var hashValue: Swift::Int {
+      get
+    }
+    public init(from decoder: any Swift::Decoder) throws
+  }
+  public let message: Swift::String?
+  public let userInfo: NovagramAds::SDKAdminDepositResult.NovagramAds::UserInfo?
+  public let balanceInfo: NovagramAds::SDKAdminDepositResult.NovagramAds::BalanceInfo?
+  public init(message: Swift::String? = nil, userInfo: NovagramAds::SDKAdminDepositResult.NovagramAds::UserInfo? = nil, balanceInfo: NovagramAds::SDKAdminDepositResult.NovagramAds::BalanceInfo? = nil)
+  public static func == (a: NovagramAds::SDKAdminDepositResult, b: NovagramAds::SDKAdminDepositResult) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct SDKAdminEarning : Swift::Hashable, Swift::Sendable, Swift::Codable, Swift::Identifiable {
+  public let channelId: Swift::Int64
+  public let channelName: Swift::String?
+  public let owner: Swift::String?
+  public let ownerName: Swift::String?
+  public let claimStatus: NovagramAds::SDKClaimStatus?
+  public let claimedAt: Foundation::Date?
+  public let available: NovagramAds::SDKDecimalString
+  public let totalEarned: NovagramAds::SDKDecimalString
+  public let totalImpressions: Swift::Int?
+  public let shareRate: NovagramAds::SDKDecimalString
+  public let createdAt: Foundation::Date
+  public var id: Swift::Int64 {
+    get
+  }
+  public init(channelId: Swift::Int64, channelName: Swift::String? = nil, owner: Swift::String? = nil, ownerName: Swift::String? = nil, claimStatus: NovagramAds::SDKClaimStatus? = nil, claimedAt: Foundation::Date? = nil, available: NovagramAds::SDKDecimalString, totalEarned: NovagramAds::SDKDecimalString, totalImpressions: Swift::Int? = nil, shareRate: NovagramAds::SDKDecimalString, createdAt: Foundation::Date)
+  public static func == (a: NovagramAds::SDKAdminEarning, b: NovagramAds::SDKAdminEarning) -> Swift::Bool
+  public typealias ID = Swift::Int64
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct SDKAdminEarningsSummary : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  public let totalEarned: NovagramAds::SDKDecimalString
+  public let available: NovagramAds::SDKDecimalString
+  public let channels: Swift::Int
+  public init(totalEarned: NovagramAds::SDKDecimalString, available: NovagramAds::SDKDecimalString, channels: Swift::Int)
+  public static func == (a: NovagramAds::SDKAdminEarningsSummary, b: NovagramAds::SDKAdminEarningsSummary) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct SDKRoleChangeResult : Swift::Hashable, Swift::Sendable, Swift::Codable, Swift::Identifiable {
+  public let message: Swift::String
+  public let userId: Foundation::UUID
+  public let role: NovagramAds::SDKRole
+  public var id: Foundation::UUID {
+    get
+  }
+  public init(message: Swift::String, userId: Foundation::UUID, role: NovagramAds::SDKRole)
+  public static func == (a: NovagramAds::SDKRoleChangeResult, b: NovagramAds::SDKRoleChangeResult) -> Swift::Bool
+  public typealias ID = Foundation::UUID
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct SDKAdGramUserRole : Swift::Hashable, Swift::Sendable, Swift::Codable, Swift::Identifiable {
+  public let adgramUserId: Swift::String?
+  public let adgramUsername: Swift::String?
+  public let role: NovagramAds::SDKRole
+  public let userId: Foundation::UUID?
+  public var id: Swift::String {
+    get
+  }
+  public init(adgramUserId: Swift::String? = nil, adgramUsername: Swift::String? = nil, role: NovagramAds::SDKRole, userId: Foundation::UUID? = nil)
+  public static func == (a: NovagramAds::SDKAdGramUserRole, b: NovagramAds::SDKAdGramUserRole) -> Swift::Bool
+  public typealias ID = Swift::String
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct SDKAdminUser : Swift::Hashable, Swift::Sendable, Swift::Codable, Swift::Identifiable {
+  public let userId: Foundation::UUID
+  public let username: Swift::String
+  public let displayName: Swift::String?
+  public let email: Swift::String?
+  public let role: NovagramAds::SDKRole?
+  public let telegramId: Swift::Int64?
+  public let balance: NovagramAds::SDKDecimalString?
+  public let dateJoined: Foundation::Date?
+  public var id: Foundation::UUID {
+    get
+  }
+  public init(userId: Foundation::UUID, username: Swift::String, displayName: Swift::String? = nil, email: Swift::String? = nil, role: NovagramAds::SDKRole? = nil, telegramId: Swift::Int64? = nil, balance: NovagramAds::SDKDecimalString? = nil, dateJoined: Foundation::Date? = nil)
+  public static func == (a: NovagramAds::SDKAdminUser, b: NovagramAds::SDKAdminUser) -> Swift::Bool
+  public typealias ID = Foundation::UUID
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public enum SDKAdsLimits {
+  public static let userIdUpperBound: Swift::Int64
+  public static let maxEventsPerBatch: Swift::Int
+  public static let recommendedBatchSize: Swift::Int
+  public static let tokenLifetime: Swift::Double
+  public static let eventMaxAge: Swift::Double
+  public static let defaultTTLSeconds: Swift::Int
+  public static let degradedTTLSeconds: Swift::Int
+  public static let maxSearchQueryLength: Swift::Int
+  public static let usefulSearchQueryLength: Swift::ClosedRange<Swift::Int>
+  public static let searchDebounce: Swift::Double
+  public static let maxReportDetailsLength: Swift::Int
+  public static let maxClientFieldLength: Swift::Int
+  public static let serveTimeout: Swift::Double
+  public static let serveConnectTimeout: Swift::Double
+  public static let requestTimeout: Swift::Double
+  public static let unavailableRetryDelay: Swift::Double
+  public static let bannerRefreshInterval: Swift::Double
+  public static let duplicateClickWindow: Swift::Double
+}
+public struct SDKBalance : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  public let username: Swift::String
+  public let amount: NovagramAds::SDKDecimalString
+  public let userId: Swift::String
+  public init(username: Swift::String, amount: NovagramAds::SDKDecimalString, userId: Swift::String)
+  public static func == (a: NovagramAds::SDKBalance, b: NovagramAds::SDKBalance) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct SDKBannerAd : Swift::Hashable, Swift::Sendable, Swift::Codable, Swift::Identifiable {
+  public let id: Foundation::UUID
+  public let title: Swift::String
+  public let text: Swift::String
+  public let link: Swift::String
+  public let dismissible: Swift::Bool
+  public let endsAt: Foundation::Date?
+  public init(id: Foundation::UUID, title: Swift::String, text: Swift::String, link: Swift::String, dismissible: Swift::Bool, endsAt: Foundation::Date? = nil)
+  public var linkURL: Foundation::URL? {
+    get
+  }
+  public var isClickable: Swift::Bool {
+    get
+  }
+  public func isExpired(at date: Foundation::Date) -> Swift::Bool
+  public static func == (a: NovagramAds::SDKBannerAd, b: NovagramAds::SDKBannerAd) -> Swift::Bool
+  public typealias ID = Foundation::UUID
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct SDKBannerAdManage : Swift::Hashable, Swift::Sendable, Swift::Codable, Swift::Identifiable {
+  public let id: Foundation::UUID
+  public let title: Swift::String
+  public let text: Swift::String
+  public let link: Swift::String
+  public let dismissible: Swift::Bool
+  public let isActive: Swift::Bool
+  public let startsAt: Foundation::Date
+  public let endsAt: Foundation::Date?
+  public let priority: Swift::Int
+  public let clicks: Swift::Int
+  public let dismissalsCount: Swift::Int
+  public let createdBy: Swift::String?
+  public let createdAt: Foundation::Date
+  public let updatedAt: Foundation::Date
+  public init(id: Foundation::UUID, title: Swift::String, text: Swift::String, link: Swift::String, dismissible: Swift::Bool, isActive: Swift::Bool, startsAt: Foundation::Date, endsAt: Foundation::Date? = nil, priority: Swift::Int, clicks: Swift::Int, dismissalsCount: Swift::Int, createdBy: Swift::String? = nil, createdAt: Foundation::Date, updatedAt: Foundation::Date)
+  public static func == (a: NovagramAds::SDKBannerAdManage, b: NovagramAds::SDKBannerAdManage) -> Swift::Bool
+  public typealias ID = Foundation::UUID
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct SDKChatAdMedia : Swift::Hashable, Swift::Sendable, Swift::Codable, Swift::Identifiable {
+  public let id: Foundation::UUID
+  public let file: Foundation::URL
+  public let mediaType: NovagramAds::SDKMediaType
+  public let createdAt: Foundation::Date
+  public let isLinked: Swift::Bool
+  public init(id: Foundation::UUID, file: Foundation::URL, mediaType: NovagramAds::SDKMediaType, createdAt: Foundation::Date, isLinked: Swift::Bool)
+  public static func == (a: NovagramAds::SDKChatAdMedia, b: NovagramAds::SDKChatAdMedia) -> Swift::Bool
+  public typealias ID = Foundation::UUID
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct SDKChatAdOrder : Swift::Hashable, Swift::Sendable, Swift::Codable, Swift::Identifiable {
+  public let orderId: Foundation::UUID
+  public let userId: Swift::String
+  public let orderName: Swift::String
+  public let text: Swift::String
+  public let link: Swift::String
+  public let channels: Swift::String
+  public let mediaUrl: Foundation::URL?
+  public let spm: NovagramAds::SDKDecimalString
+  public let budget: NovagramAds::SDKDecimalString
+  public let totalViews: Swift::Int
+  public let clicks: Swift::Int
+  public let maxViewsPerUser: Swift::Int?
+  public let shownViews: Swift::Int
+  public let remainingViews: Swift::Int
+  public let refundAmount: NovagramAds::SDKDecimalString
+  public let completed: Swift::Bool
+  public let cancelled: Swift::Bool
+  public let isActive: Swift::Bool?
+  public let status: NovagramAds::SDKOrderStatus
+  public let rejectReason: Swift::String?
+  public let createdAt: Foundation::Date
+  public let platform: NovagramAds::SDKPlatform?
+  public var id: Foundation::UUID {
+    get
+  }
+  public init(orderId: Foundation::UUID, userId: Swift::String, orderName: Swift::String, text: Swift::String, link: Swift::String, channels: Swift::String, mediaUrl: Foundation::URL? = nil, spm: NovagramAds::SDKDecimalString, budget: NovagramAds::SDKDecimalString, totalViews: Swift::Int, clicks: Swift::Int, maxViewsPerUser: Swift::Int? = nil, shownViews: Swift::Int, remainingViews: Swift::Int, refundAmount: NovagramAds::SDKDecimalString, completed: Swift::Bool, cancelled: Swift::Bool, isActive: Swift::Bool? = nil, status: NovagramAds::SDKOrderStatus = .pending, rejectReason: Swift::String? = nil, createdAt: Foundation::Date, platform: NovagramAds::SDKPlatform? = nil)
+  public static func == (a: NovagramAds::SDKChatAdOrder, b: NovagramAds::SDKChatAdOrder) -> Swift::Bool
+  public typealias ID = Foundation::UUID
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct SDKChatAdOrderCreate : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  public var orderName: Swift::String
+  public var text: Swift::String
+  public var link: Swift::String
+  public var channels: Swift::String
+  public var spm: NovagramAds::SDKDecimalString
+  public var budget: NovagramAds::SDKDecimalString
+  public var maxViewsPerUser: Swift::Int?
+  public var isActive: Swift::Bool?
+  public var mediaId: Foundation::UUID?
+  public var platform: NovagramAds::SDKPlatform?
+  public init(orderName: Swift::String, text: Swift::String, link: Swift::String, channels: Swift::String, spm: NovagramAds::SDKDecimalString, budget: NovagramAds::SDKDecimalString, maxViewsPerUser: Swift::Int? = nil, isActive: Swift::Bool? = nil, mediaId: Foundation::UUID? = nil, platform: NovagramAds::SDKPlatform? = nil)
+  public static func == (a: NovagramAds::SDKChatAdOrderCreate, b: NovagramAds::SDKChatAdOrderCreate) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct SDKChatAdSearch : Swift::Hashable, Swift::Sendable, Swift::Codable, Swift::Identifiable {
+  public let orderId: Foundation::UUID
+  public let orderName: Swift::String
+  public let text: Swift::String
+  public let link: Swift::String
+  public let mediaUrl: Foundation::URL?
+  public let mediaType: Swift::String?
+  public let totalViews: Swift::Int
+  public let clicks: Swift::Int
+  public let shownViews: Swift::Int
+  public let remainingViews: Swift::Int
+  public let platform: NovagramAds::SDKPlatform?
+  public var id: Foundation::UUID {
+    get
+  }
+  public init(orderId: Foundation::UUID, orderName: Swift::String, text: Swift::String, link: Swift::String, mediaUrl: Foundation::URL? = nil, mediaType: Swift::String? = nil, totalViews: Swift::Int, clicks: Swift::Int, shownViews: Swift::Int, remainingViews: Swift::Int, platform: NovagramAds::SDKPlatform? = nil)
+  public static func == (a: NovagramAds::SDKChatAdSearch, b: NovagramAds::SDKChatAdSearch) -> Swift::Bool
+  public typealias ID = Foundation::UUID
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public enum SDKClaimStatus : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  case unclaimed
+  case confirmed
+  case unknown(Swift::String)
+  public var rawValue: Swift::String {
+    get
+  }
+  public init(rawValue: Swift::String)
+  public init(from decoder: any Swift::Decoder) throws
+  public func encode(to encoder: any Swift::Encoder) throws
+  public static func == (a: NovagramAds::SDKClaimStatus, b: NovagramAds::SDKClaimStatus) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public struct SDKClickOrder : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  public var orderId: Foundation::UUID
+  public var viewerId: Swift::String
+  public init(orderId: Foundation::UUID, viewerId: Swift::String)
+  public static func == (a: NovagramAds::SDKClickOrder, b: NovagramAds::SDKClickOrder) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct SDKCreateChannelOrder : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  public var channelId: Swift::String
+  public var channelName: Swift::String
+  public var tags: [Swift::String]
+  public var orderName: Swift::String
+  public var spm: NovagramAds::SDKDecimalString
+  public var budget: NovagramAds::SDKDecimalString
+  public var maxViewsPerUser: Swift::Int
+  public var isActive: Swift::Bool
+  public var platform: NovagramAds::SDKPlatform
+  public init(channelId: Swift::String, channelName: Swift::String, orderName: Swift::String, spm: NovagramAds::SDKDecimalString, budget: NovagramAds::SDKDecimalString, tags: [Swift::String] = [], maxViewsPerUser: Swift::Int = 1, isActive: Swift::Bool = true, platform: NovagramAds::SDKPlatform = .telegram)
+  public static func == (a: NovagramAds::SDKCreateChannelOrder, b: NovagramAds::SDKCreateChannelOrder) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public enum SDKDevicePlatform : Swift::String, Swift::Hashable, Swift::Sendable, Swift::Codable {
+  case ios
+  case android
+  public init?(rawValue: Swift::String)
+  public typealias RawValue = Swift::String
+  public var rawValue: Swift::String {
+    get
+  }
+}
+public enum SDKJSONValue : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  case null
+  case bool(Swift::Bool)
+  case integer(Swift::Int64)
+  case number(Swift::Double)
+  case string(Swift::String)
+  case array([NovagramAds::SDKJSONValue])
+  case object([Swift::String : NovagramAds::SDKJSONValue])
+  public subscript(key: Swift::String) -> NovagramAds::SDKJSONValue? {
+    get
+  }
+  public subscript(index: Swift::Int) -> NovagramAds::SDKJSONValue? {
+    get
+  }
+  public var isNull: Swift::Bool {
+    get
+  }
+  public var boolValue: Swift::Bool? {
+    get
+  }
+  public var stringValue: Swift::String? {
+    get
+  }
+  public var int64Value: Swift::Int64? {
+    get
+  }
+  public var intValue: Swift::Int? {
+    get
+  }
+  public var doubleValue: Swift::Double? {
+    get
+  }
+  public var arrayValue: [NovagramAds::SDKJSONValue]? {
+    get
+  }
+  public var objectValue: [Swift::String : NovagramAds::SDKJSONValue]? {
+    get
+  }
+  public func decoded<T>(as type: T.Type) throws -> T where T : Swift::Decodable
+  public static func encoding<T>(_ value: T) throws -> NovagramAds::SDKJSONValue where T : Swift::Encodable
+  public init(from decoder: any Swift::Decoder) throws
+  public func encode(to encoder: any Swift::Encoder) throws
+  public static func == (a: NovagramAds::SDKJSONValue, b: NovagramAds::SDKJSONValue) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+extension NovagramAds::SDKJSONValue : Swift::ExpressibleByNilLiteral, Swift::ExpressibleByBooleanLiteral, Swift::ExpressibleByIntegerLiteral, Swift::ExpressibleByFloatLiteral, Swift::ExpressibleByStringLiteral, Swift::ExpressibleByArrayLiteral, Swift::ExpressibleByDictionaryLiteral {
+  public init(nilLiteral: ())
+  public init(booleanLiteral value: Swift::Bool)
+  public init(integerLiteral value: Swift::Int64)
+  public init(floatLiteral value: Swift::Double)
+  public init(stringLiteral value: Swift::String)
+  public init(arrayLiteral elements: NovagramAds::SDKJSONValue...)
+  public init(dictionaryLiteral elements: (Swift::String, NovagramAds::SDKJSONValue)...)
+  public typealias ArrayLiteralElement = NovagramAds::SDKJSONValue
+  public typealias BooleanLiteralType = Swift::Bool
+  public typealias ExtendedGraphemeClusterLiteralType = Swift::String
+  public typealias FloatLiteralType = Swift::Double
+  public typealias IntegerLiteralType = Swift::Int64
+  public typealias Key = Swift::String
+  public typealias StringLiteralType = Swift::String
+  public typealias UnicodeScalarLiteralType = Swift::String
+  public typealias Value = NovagramAds::SDKJSONValue
+}
+public enum SDKMediaType : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  case image
+  case video
+  case unknown(Swift::String)
+  public var rawValue: Swift::String {
+    get
+  }
+  public init(rawValue: Swift::String)
+  public init(from decoder: any Swift::Decoder) throws
+  public func encode(to encoder: any Swift::Encoder) throws
+  public static func == (a: NovagramAds::SDKMediaType, b: NovagramAds::SDKMediaType) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public struct SDKModerationChatOrder : Swift::Hashable, Swift::Sendable, Swift::Codable, Swift::Identifiable {
+  public let orderId: Foundation::UUID
+  public let userId: Swift::String
+  public let username: Swift::String
+  public let orderName: Swift::String
+  public let text: Swift::String
+  public let link: Swift::String
+  public let channels: Swift::String
+  public let platform: NovagramAds::SDKPlatform?
+  public let mediaUrl: Foundation::URL?
+  public let spm: NovagramAds::SDKDecimalString
+  public let budget: NovagramAds::SDKDecimalString
+  public let totalViews: Swift::Int
+  public let clicks: Swift::Int
+  public let maxViewsPerUser: Swift::Int?
+  public let shownViews: Swift::Int
+  public let remainingViews: Swift::Int
+  public let refundAmount: NovagramAds::SDKDecimalString
+  public let completed: Swift::Bool
+  public let cancelled: Swift::Bool
+  public let isActive: Swift::Bool?
+  public let status: NovagramAds::SDKOrderStatus
+  public let rejectReason: Swift::String?
+  public let createdAt: Foundation::Date
+  public let displayName: Swift::String?
+  public var id: Foundation::UUID {
+    get
+  }
+  public init(orderId: Foundation::UUID, userId: Swift::String, username: Swift::String, orderName: Swift::String, text: Swift::String, link: Swift::String, channels: Swift::String, platform: NovagramAds::SDKPlatform? = nil, mediaUrl: Foundation::URL? = nil, spm: NovagramAds::SDKDecimalString, budget: NovagramAds::SDKDecimalString, totalViews: Swift::Int, clicks: Swift::Int, maxViewsPerUser: Swift::Int? = nil, shownViews: Swift::Int, remainingViews: Swift::Int, refundAmount: NovagramAds::SDKDecimalString, completed: Swift::Bool, cancelled: Swift::Bool, isActive: Swift::Bool? = nil, status: NovagramAds::SDKOrderStatus = .pending, rejectReason: Swift::String? = nil, createdAt: Foundation::Date, displayName: Swift::String? = nil)
+  public static func == (a: NovagramAds::SDKModerationChatOrder, b: NovagramAds::SDKModerationChatOrder) -> Swift::Bool
+  public typealias ID = Foundation::UUID
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public enum SDKModerationOrderType : Swift::String, Swift::Sendable {
+  case chatAds
+  case searchAds
+  public init?(rawValue: Swift::String)
+  public typealias RawValue = Swift::String
+  public var rawValue: Swift::String {
+    get
+  }
+}
+public struct SDKModerationSearchOrder : Swift::Hashable, Swift::Sendable, Swift::Codable, Swift::Identifiable {
+  public let orderId: Foundation::UUID
+  public let channelId: Swift::String
+  public let channelName: Swift::String
+  public let orderName: Swift::String
+  public let username: Swift::String
+  public let platform: NovagramAds::SDKPlatform?
+  public let tags: [Swift::String]
+  public let spm: NovagramAds::SDKDecimalString
+  public let budget: NovagramAds::SDKDecimalString
+  public let totalViews: Swift::Int
+  public let shownViews: Swift::Int
+  public let remainingViews: Swift::Int
+  public let clicks: Swift::Int
+  public let completed: Swift::Bool
+  public let cancelled: Swift::Bool
+  public let isActive: Swift::Bool
+  public let status: NovagramAds::SDKOrderStatus
+  public let rejectReason: Swift::String?
+  public let refundAmount: NovagramAds::SDKDecimalString
+  public let maxViewsPerUser: Swift::Int
+  public let createdAt: Foundation::Date
+  public let updatedAt: Foundation::Date
+  public let displayName: Swift::String?
+  public var id: Foundation::UUID {
+    get
+  }
+  public init(orderId: Foundation::UUID, channelId: Swift::String, channelName: Swift::String, orderName: Swift::String, username: Swift::String, platform: NovagramAds::SDKPlatform? = nil, tags: [Swift::String], spm: NovagramAds::SDKDecimalString, budget: NovagramAds::SDKDecimalString, totalViews: Swift::Int, shownViews: Swift::Int, remainingViews: Swift::Int, clicks: Swift::Int, completed: Swift::Bool, cancelled: Swift::Bool, isActive: Swift::Bool, status: NovagramAds::SDKOrderStatus = .pending, rejectReason: Swift::String? = nil, refundAmount: NovagramAds::SDKDecimalString, maxViewsPerUser: Swift::Int, createdAt: Foundation::Date, updatedAt: Foundation::Date, displayName: Swift::String? = nil)
+  public static func == (a: NovagramAds::SDKModerationSearchOrder, b: NovagramAds::SDKModerationSearchOrder) -> Swift::Bool
+  public typealias ID = Foundation::UUID
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct SDKMyEarning : Swift::Hashable, Swift::Sendable, Swift::Codable, Swift::Identifiable {
+  public let channelId: Swift::Int64
+  public let shareRate: NovagramAds::SDKDecimalString
+  public let channelName: Swift::String?
+  public let available: NovagramAds::SDKDecimalString?
+  public let totalEarned: NovagramAds::SDKDecimalString?
+  public let totalImpressions: Swift::Int?
+  public let claimStatus: NovagramAds::SDKClaimStatus?
+  public let claimedAt: Foundation::Date?
+  public let language: Swift::String?
+  public let topics: [Swift::Int]?
+  public let metaLocked: Swift::Bool?
+  public var id: Swift::Int64 {
+    get
+  }
+  public init(channelId: Swift::Int64, shareRate: NovagramAds::SDKDecimalString, channelName: Swift::String? = nil, available: NovagramAds::SDKDecimalString? = nil, totalEarned: NovagramAds::SDKDecimalString? = nil, totalImpressions: Swift::Int? = nil, claimStatus: NovagramAds::SDKClaimStatus? = nil, claimedAt: Foundation::Date? = nil, language: Swift::String? = nil, topics: [Swift::Int]? = nil, metaLocked: Swift::Bool? = nil)
+  public static func == (a: NovagramAds::SDKMyEarning, b: NovagramAds::SDKMyEarning) -> Swift::Bool
+  public typealias ID = Swift::Int64
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct SDKNotification : Swift::Hashable, Swift::Sendable, Swift::Codable, Swift::Identifiable {
+  public let id: Swift::Int
+  public let title: Swift::String
+  public let body: Swift::String
+  public let type: NovagramAds::SDKNotificationType
+  public let payload: NovagramAds::SDKNotificationPayload?
+  public let isRead: Swift::Bool
+  public let createdAt: Foundation::Date
+  public init(id: Swift::Int, title: Swift::String, body: Swift::String, type: NovagramAds::SDKNotificationType, payload: NovagramAds::SDKNotificationPayload? = nil, isRead: Swift::Bool, createdAt: Foundation::Date)
+  public static func == (a: NovagramAds::SDKNotification, b: NovagramAds::SDKNotification) -> Swift::Bool
+  public typealias ID = Swift::Int
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct SDKNotificationPayload : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  public let orderId: Swift::String?
+  public let orderType: Swift::String?
+  public init(orderId: Swift::String? = nil, orderType: Swift::String? = nil)
+  public var orderUUID: Foundation::UUID? {
+    get
+  }
+  public var moderationOrderType: NovagramAds::SDKModerationOrderType? {
+    get
+  }
+  public static func == (a: NovagramAds::SDKNotificationPayload, b: NovagramAds::SDKNotificationPayload) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public enum SDKNotificationType : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  case newOrder
+  case orderApproved
+  case orderRejected
+  case orderBlocked
+  case unknown(Swift::String)
+  public var rawValue: Swift::String {
+    get
+  }
+  public init(rawValue: Swift::String)
+  public var isOrderDecision: Swift::Bool {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+  public func encode(to encoder: any Swift::Encoder) throws
+  public static func == (a: NovagramAds::SDKNotificationType, b: NovagramAds::SDKNotificationType) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public struct SDKOrderActivation : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  public var orderId: Foundation::UUID
+  public var isActive: Swift::Bool
+  public init(orderId: Foundation::UUID, isActive: Swift::Bool)
+  public static func == (a: NovagramAds::SDKOrderActivation, b: NovagramAds::SDKOrderActivation) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct SDKOrderDetail : Swift::Hashable, Swift::Sendable, Swift::Codable, Swift::Identifiable {
+  public let orderId: Foundation::UUID
+  public let channelId: Swift::String
+  public let channelName: Swift::String
+  public let orderName: Swift::String
+  public let tags: [Swift::String]
+  public let spm: NovagramAds::SDKDecimalString
+  public let budget: NovagramAds::SDKDecimalString
+  public let totalViews: Swift::Int
+  public let shownViews: Swift::Int
+  public let remainingViews: Swift::Int
+  public let clicks: Swift::Int
+  public let completed: Swift::Bool
+  public let cancelled: Swift::Bool
+  public let isActive: Swift::Bool
+  public let status: NovagramAds::SDKOrderStatus
+  public let rejectReason: Swift::String?
+  public let refundAmount: NovagramAds::SDKDecimalString
+  public let maxViewsPerUser: Swift::Int
+  public let createdAt: Foundation::Date
+  public let updatedAt: Foundation::Date
+  public let platform: NovagramAds::SDKPlatform?
+  public var id: Foundation::UUID {
+    get
+  }
+  public init(orderId: Foundation::UUID, channelId: Swift::String, channelName: Swift::String, orderName: Swift::String, tags: [Swift::String], spm: NovagramAds::SDKDecimalString, budget: NovagramAds::SDKDecimalString, totalViews: Swift::Int, shownViews: Swift::Int, remainingViews: Swift::Int, clicks: Swift::Int, completed: Swift::Bool, cancelled: Swift::Bool, isActive: Swift::Bool, status: NovagramAds::SDKOrderStatus = .pending, rejectReason: Swift::String? = nil, refundAmount: NovagramAds::SDKDecimalString, maxViewsPerUser: Swift::Int, createdAt: Foundation::Date, updatedAt: Foundation::Date, platform: NovagramAds::SDKPlatform? = nil)
+  public static func == (a: NovagramAds::SDKOrderDetail, b: NovagramAds::SDKOrderDetail) -> Swift::Bool
+  public typealias ID = Foundation::UUID
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public enum SDKOrderStatus : Swift::String, Swift::Codable, Swift::Sendable, Swift::Hashable {
+  case pending
+  case approved
+  case rejected
+  case blocked
+  case unknown
+  public init(from decoder: any Swift::Decoder) throws
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init?(rawValue: Swift::String)
+  public typealias RawValue = Swift::String
+  public var rawValue: Swift::String {
+    get
+  }
+}
+public struct SDKPaginated<Element> : Swift::Hashable, Swift::Sendable, Swift::Codable where Element : Swift::Decodable, Element : Swift::Encodable, Element : Swift::Hashable, Element : Swift::Sendable {
+  public let count: Swift::Int
+  public let next: Foundation::URL?
+  public let previous: Foundation::URL?
+  public let results: [Element]
+  public init(count: Swift::Int, next: Foundation::URL?, previous: Foundation::URL?, results: [Element])
+  public var hasNextPage: Swift::Bool {
+    get
+  }
+  public var nextPage: Swift::Int? {
+    get
+  }
+  public var previousPage: Swift::Int? {
+    get
+  }
+  public static func == (a: NovagramAds::SDKPaginated<Element>, b: NovagramAds::SDKPaginated<Element>) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct SDKPendingCount : Swift::Codable, Swift::Sendable, Swift::Hashable {
+  public let searchAds: Swift::Int
+  public let chatAds: Swift::Int
+  public let total: Swift::Int
+  public let ads: Swift::Int?
+  public let adRevisions: Swift::Int?
+  public let adReports: Swift::Int?
+  public let totalAll: Swift::Int?
+  public init(searchAds: Swift::Int, chatAds: Swift::Int, total: Swift::Int, ads: Swift::Int? = nil, adRevisions: Swift::Int? = nil, adReports: Swift::Int? = nil, totalAll: Swift::Int? = nil)
+  public static func == (a: NovagramAds::SDKPendingCount, b: NovagramAds::SDKPendingCount) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public enum SDKPlatform : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  case telegram
+  case novagram
+  case unknown(Swift::String)
+  public var rawValue: Swift::String {
+    get
+  }
+  public init(rawValue: Swift::String)
+  public init(from decoder: any Swift::Decoder) throws
+  public func encode(to encoder: any Swift::Encoder) throws
+  public static func == (a: NovagramAds::SDKPlatform, b: NovagramAds::SDKPlatform) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public struct SDKPublicEarning : Swift::Hashable, Swift::Sendable, Swift::Codable, Swift::Identifiable {
+  public let channelId: Swift::Int64
+  public let channelName: Swift::String
+  public let totalEarned: NovagramAds::SDKDecimalString
+  public let totalImpressions: Swift::Int
+  public let isClaimed: Swift::Bool
+  public var id: Swift::Int64 {
+    get
+  }
+  public init(channelId: Swift::Int64, channelName: Swift::String, totalEarned: NovagramAds::SDKDecimalString, totalImpressions: Swift::Int, isClaimed: Swift::Bool)
+  public static func == (a: NovagramAds::SDKPublicEarning, b: NovagramAds::SDKPublicEarning) -> Swift::Bool
+  public typealias ID = Swift::Int64
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct SDKRegisteredUser : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  public let username: Swift::String
+  public let email: Swift::String?
+  public init(username: Swift::String, email: Swift::String? = nil)
+  public static func == (a: NovagramAds::SDKRegisteredUser, b: NovagramAds::SDKRegisteredUser) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct SDKResponseMessage : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  public let message: Swift::String
+  public init(message: Swift::String)
+  public static func == (a: NovagramAds::SDKResponseMessage, b: NovagramAds::SDKResponseMessage) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public enum SDKRole : Swift::String, Swift::Codable, Swift::Sendable, Swift::Hashable {
+  case advertiser
+  case moderator
+  case admin
+  case unknown
+  public init(from decoder: any Swift::Decoder) throws
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init?(rawValue: Swift::String)
+  public typealias RawValue = Swift::String
+  public var rawValue: Swift::String {
+    get
+  }
+}
+public struct SDKSearchRequest : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  public var tag: Swift::String
+  public var viewerId: Swift::String
+  public init(tag: Swift::String, viewerId: Swift::String)
+  public static func == (a: NovagramAds::SDKSearchRequest, b: NovagramAds::SDKSearchRequest) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct SDKSearchResult : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  public let channelId: Swift::String
+  public let channelName: Swift::String
+  public let orderId: Foundation::UUID
+  public let platform: NovagramAds::SDKPlatform?
+  public init(channelId: Swift::String, channelName: Swift::String, orderId: Foundation::UUID, platform: NovagramAds::SDKPlatform? = nil)
+  public static func == (a: NovagramAds::SDKSearchResult, b: NovagramAds::SDKSearchResult) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct SDKSponsoredAd : Swift::Hashable, Swift::Sendable, Swift::Codable, Swift::Identifiable {
+  public let randomId: Swift::String
+  public let placement: NovagramAds::SDKAdFormat
+  public let text: Swift::String
+  public let url: Swift::String
+  public let promoted: NovagramAds::SDKAdPromoted
+  public let buttonType: NovagramAds::SDKAdButtonType?
+  public let media: NovagramAds::SDKAdMedia?
+  public let otherInfo: Swift::String
+  public let label: Swift::String
+  public let minDisplayDuration: Swift::Int?
+  public let maxDisplayDuration: Swift::Int?
+  public var id: Swift::String {
+    get
+  }
+  public var displayTitle: Swift::String {
+    get
+  }
+  public var linkURL: Foundation::URL? {
+    get
+  }
+  public init(randomId: Swift::String, placement: NovagramAds::SDKAdFormat, text: Swift::String, url: Swift::String, promoted: NovagramAds::SDKAdPromoted, buttonType: NovagramAds::SDKAdButtonType? = nil, media: NovagramAds::SDKAdMedia? = nil, otherInfo: Swift::String = "", label: Swift::String = "Ad", minDisplayDuration: Swift::Int? = nil, maxDisplayDuration: Swift::Int? = nil)
+  public init(from decoder: any Swift::Decoder) throws
+  public static func == (a: NovagramAds::SDKSponsoredAd, b: NovagramAds::SDKSponsoredAd) -> Swift::Bool
+  public typealias ID = Swift::String
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public struct SDKAdPromoted : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  public let username: Swift::String
+  public let title: Swift::String
+  public let avatarUrl: Swift::String?
+  public let telegramId: Swift::Int64?
+  public let type: NovagramAds::SDKAdPeerType
+  public init(username: Swift::String, title: Swift::String, avatarUrl: Swift::String? = nil, telegramId: Swift::Int64? = nil, type: NovagramAds::SDKAdPeerType)
+  public init(from decoder: any Swift::Decoder) throws
+  public var avatarURL: Foundation::URL? {
+    get
+  }
+  public static func == (a: NovagramAds::SDKAdPromoted, b: NovagramAds::SDKAdPromoted) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public struct SDKAdMedia : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  public let type: NovagramAds::SDKAdMediaKind
+  public let url: Swift::String
+  public let width: Swift::Int?
+  public let height: Swift::Int?
+  public let duration: NovagramAds::SDKDecimalString?
+  public init(type: NovagramAds::SDKAdMediaKind, url: Swift::String, width: Swift::Int? = nil, height: Swift::Int? = nil, duration: NovagramAds::SDKDecimalString? = nil)
+  public var mediaURL: Foundation::URL? {
+    get
+  }
+  public var aspectRatio: Swift::Double {
+    get
+  }
+  public static func == (a: NovagramAds::SDKAdMedia, b: NovagramAds::SDKAdMedia) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct SDKTelegramPeer : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  public let username: Swift::String
+  public let peerType: NovagramAds::SDKTelegramPeerType
+  public let telegramId: Swift::Int64?
+  public let title: Swift::String
+  public let avatarUrl: Swift::String?
+  public let subscribers: Swift::Int?
+  public let monthlyUsers: Swift::Int?
+  public init(username: Swift::String, peerType: NovagramAds::SDKTelegramPeerType, telegramId: Swift::Int64? = nil, title: Swift::String, avatarUrl: Swift::String? = nil, subscribers: Swift::Int? = nil, monthlyUsers: Swift::Int? = nil)
+  public var avatarURL: Foundation::URL? {
+    get
+  }
+  public static func == (a: NovagramAds::SDKTelegramPeer, b: NovagramAds::SDKTelegramPeer) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct SDKTokenPair : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  public let access: Swift::String
+  public let refresh: Swift::String
+  public init(access: Swift::String, refresh: Swift::String)
+  public static func == (a: NovagramAds::SDKTokenPair, b: NovagramAds::SDKTokenPair) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct SDKUserProfile : Swift::Hashable, Swift::Sendable, Swift::Codable, Swift::Identifiable {
+  public let userId: Foundation::UUID
+  public let username: Swift::String
+  public let email: Swift::String?
+  public let firstName: Swift::String?
+  public let lastName: Swift::String?
+  public let dateJoined: Foundation::Date?
+  public let role: NovagramAds::SDKRole?
+  public let displayName: Swift::String?
+  public let adgramUserId: Swift::String?
+  public var id: Foundation::UUID {
+    get
+  }
+  public init(userId: Foundation::UUID, username: Swift::String, email: Swift::String? = nil, firstName: Swift::String? = nil, lastName: Swift::String? = nil, dateJoined: Foundation::Date? = nil, role: NovagramAds::SDKRole? = nil, displayName: Swift::String? = nil, adgramUserId: Swift::String? = nil)
+  public static func == (a: NovagramAds::SDKUserProfile, b: NovagramAds::SDKUserProfile) -> Swift::Bool
+  public typealias ID = Foundation::UUID
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+extension NovagramAds::SDKEnvironment : Swift::Equatable {}
+extension NovagramAds::SDKEnvironment : Swift::Hashable {}
+extension NovagramAds::SDKEnvironment : Swift::RawRepresentable {}
+extension NovagramAds::SDKHTTPMethod : Swift::RawRepresentable {}
+extension NovagramAds::SDKAdEventType : Swift::RawRepresentable {}
+extension NovagramAds::SDKAdReportReason : Swift::RawRepresentable {}
+extension NovagramAds::SDKDevicePlatform : Swift::RawRepresentable {}
+extension NovagramAds::SDKModerationOrderType : Swift::Equatable {}
+extension NovagramAds::SDKModerationOrderType : Swift::Hashable {}
+extension NovagramAds::SDKModerationOrderType : Swift::RawRepresentable {}
+extension NovagramAds::SDKOrderStatus : Swift::RawRepresentable {}
+extension NovagramAds::SDKRole : Swift::RawRepresentable {}

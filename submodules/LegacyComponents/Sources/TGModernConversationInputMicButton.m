@@ -159,6 +159,9 @@ static const CGFloat outerCircleMinScale = innerCircleRadius / outerCircleRadius
     BOOL _yFeedbackOccured;
     
     bool _skipCancelUpdate;
+    bool _cameraSelectionPresented;
+    
+    NSTimer *_cameraSelectionTimer;
 }
 
 @end
@@ -297,8 +300,8 @@ static const CGFloat outerCircleMinScale = innerCircleRadius / outerCircleRadius
     _outerCircleView.center = centerPoint;
     // A decoration the host is flying into the sent message is positioned by the flight.
     if (!_decorationAnimatesOutExternally) {
-        _decoration.center = centerPoint;
-        _innerIconWrapperView.center = CGPointMake(CGRectGetMidX(_decoration.bounds), CGRectGetMidY(_decoration.bounds));
+    _decoration.center = centerPoint;
+    _innerIconWrapperView.center = CGPointMake(CGRectGetMidX(_decoration.bounds), CGRectGetMidY(_decoration.bounds));
     }
     
     _lockPanelWrapperView.frame = CGRectMake(floor(centerPoint.x - _lockPanelWrapperView.frame.size.width / 2.0f), floor(centerPoint.y - 122.0f - _lockPanelWrapperView.frame.size.height / 2.0f), _lockPanelWrapperView.frame.size.width, _lockPanelWrapperView.frame.size.height);
@@ -611,8 +614,8 @@ static const CGFloat outerCircleMinScale = innerCircleRadius / outerCircleRadius
         if (finished || [[[LegacyComponentsGlobals provider] applicationInstance] applicationState] == UIApplicationStateBackground) {
             // A host flying the decoration out dismisses the presentation itself, once the decoration has arrived.
             if (!_decorationAnimatesOutExternally) {
-                [_presentation dismiss];
-                _presentation = nil;
+            [_presentation dismiss];
+            _presentation = nil;
             }
             
             id<TGModernConversationInputMicButtonDelegate> delegate = _delegate;
@@ -783,6 +786,11 @@ static const CGFloat outerCircleMinScale = innerCircleRadius / outerCircleRadius
                     [delegate micButtonInteractionBegan];
                 
                 _touchLocation = [touch locationInView:self];
+                
+                _cameraSelectionPresented = false;
+                if ([delegate respondsToSelector:@selector(micButtonInteractionPresentCameraSelection)]) {
+                    [self startCameraSelectionTimer];
+                }
             }
         }
         
@@ -790,6 +798,32 @@ static const CGFloat outerCircleMinScale = innerCircleRadius / outerCircleRadius
     }
     
     return false;
+}
+
+- (void)startCameraSelectionTimer {
+    [self cancelCameraSelectionTimer];
+    _cameraSelectionTimer = [NSTimer scheduledTimerWithTimeInterval:0.4 target:self selector:@selector(cameraSelectionTimerEvent) userInfo:nil repeats:false];
+}
+
+- (void)cancelCameraSelectionTimer {
+    if (_cameraSelectionTimer != nil) {
+        [_cameraSelectionTimer invalidate];
+        _cameraSelectionTimer = nil;
+    }
+}
+
+- (void)cameraSelectionTimerEvent {
+    _cameraSelectionTimer = nil;
+    if (_processCurrentTouch && !_cameraSelectionPresented) {
+        _cameraSelectionPresented = true;
+        
+        id<TGModernConversationInputMicButtonDelegate> delegate = _delegate;
+        if ([delegate respondsToSelector:@selector(micButtonInteractionPresentCameraSelection)]) {
+            [delegate micButtonInteractionPresentCameraSelection];
+        }
+        
+        [self _commitLocked];
+    }
 }
 
 - (BOOL)continueTrackingWithTouch:(UITouch *)touch withEvent:(UIEvent *)event
@@ -814,6 +848,11 @@ static const CGFloat outerCircleMinScale = innerCircleRadius / outerCircleRadius
                 
                 _targetTranslation = distanceY;
                 _cancelTargetTranslation = distanceX;
+                
+                if (distanceX < -15.0f || distanceY < -15.0f) {
+                    [self cancelCameraSelectionTimer];
+                }
+                
                 CGFloat targetLockness = _locked ? 1.0f : MIN(1.0f, fabs(_targetTranslation) / 105.0f);
                 [_lock updateLockness:targetLockness];
                 _lockView.lockness = targetLockness;
@@ -869,6 +908,8 @@ static const CGFloat outerCircleMinScale = innerCircleRadius / outerCircleRadius
 
 - (void)cancelTrackingWithEvent:(UIEvent *)event
 {
+    [self cancelCameraSelectionTimer];
+    
     if (_processCurrentTouch)
     {
         _currentTranslation = 0.0f;
@@ -887,6 +928,8 @@ static const CGFloat outerCircleMinScale = innerCircleRadius / outerCircleRadius
 
 - (void)endTrackingWithTouch:(UITouch *)touch withEvent:(UIEvent *)event
 {
+    [self cancelCameraSelectionTimer];
+    
     if (_processCurrentTouch)
     {
         _targetTranslation = 0.0f;
@@ -979,8 +1022,8 @@ static const CGFloat outerCircleMinScale = innerCircleRadius / outerCircleRadius
         _innerCircleView.transform = transform;
         //_innerIconWrapperView.transform = transform;
         if (!_decorationAnimatesOutExternally) {
-            _decoration.transform = transform;
-        }
+        _decoration.transform = transform;
+    }
     }
 }
 

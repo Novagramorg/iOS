@@ -18,6 +18,7 @@ swift_library(
         "//submodules/TelegramCallsUI",
         "//submodules/Display",
         "//submodules/UndoUI",
+        "//submodules/Novagram/Sponsored:NovagramSponsored",
     ],
     visibility = [
         "//visibility:public",

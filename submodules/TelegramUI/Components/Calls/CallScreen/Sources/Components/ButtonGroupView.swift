@@ -90,7 +90,8 @@ final class ButtonGroupView: OverlayMaskContainerView {
         self.buttons = buttons
         
         let buttonSize: CGFloat = 56.0
-        let buttonSpacing: CGFloat = 36.0
+        // Novagram: a fifth button (speaker in video calls) narrows the spacing to fit the width (HOOKS.md).
+        let buttonSpacing: CGFloat = buttons.count > 4 ? max(8.0, min(36.0, floor((size.width - 32.0 - buttonSize * CGFloat(buttons.count)) / CGFloat(buttons.count - 1)))) : 36.0
         
         let buttonNoticeSpacing: CGFloat = 16.0
         let controlsHiddenNoticeSpacing: CGFloat = 0.0

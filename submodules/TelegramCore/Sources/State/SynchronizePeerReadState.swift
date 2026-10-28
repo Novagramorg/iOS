@@ -267,10 +267,10 @@ private func pushPeerReadState(network: Network, postbox: Postbox, stateManager:
             // A rejected push must not be retried: the operation is only cleared once it
             // succeeds, so a permanent rejection would loop without end. The cloud branches
             // below drop their errors the same way.
-            return network.request(Api.functions.messages.readEncryptedHistory(peer: inputPeer, maxDate: maxIncomingReadIndex.timestamp))
+                return network.request(Api.functions.messages.readEncryptedHistory(peer: inputPeer, maxDate: maxIncomingReadIndex.timestamp))
             |> `catch` { _ -> Signal<Api.Bool, NoError> in
                 return .complete()
-            }
+                }
             |> mapToSignal { _ -> Signal<PeerReadState, NoError> in
                 return .complete()
             }
@@ -285,6 +285,9 @@ private func pushPeerReadState(network: Network, postbox: Postbox, stateManager:
                 let (channelId, accessHash) = (inputPeerChannelData.channelId, inputPeerChannelData.accessHash)
                 switch readState {
                 case let .idBased(maxIncomingReadId, _, _, _, markedUnread):
+                    if isNovagramGhostModeActive {
+                        return Signal<PeerReadState, PeerReadStateValidationError>.single(readState)
+                    }
                     var pushSignal: Signal<Void, NoError> = network.request(Api.functions.channels.readHistory(channel: Api.InputChannel.inputChannel(.init(channelId: channelId, accessHash: accessHash)), maxId: maxIncomingReadId))
                     |> `catch` { _ -> Signal<Api.Bool, NoError> in
                         return .complete()
@@ -315,6 +318,9 @@ private func pushPeerReadState(network: Network, postbox: Postbox, stateManager:
             default:
                 switch readState {
                 case let .idBased(maxIncomingReadId, _, _, _, markedUnread):
+                    if isNovagramGhostModeActive {
+                        return Signal<PeerReadState, PeerReadStateValidationError>.single(readState)
+                    }
                     var pushSignal: Signal<Void, NoError> = network.request(Api.functions.messages.readHistory(peer: inputPeer, maxId: maxIncomingReadId))
                     |> map(Optional.init)
                     |> `catch` { _ -> Signal<Api.messages.AffectedMessages?, NoError> in

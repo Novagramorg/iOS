@@ -32,6 +32,7 @@ THIN="$BUILD_DIR/thin"
 PKG_CONFIG="$SOURCE_DIR/pkg-config"
 
 export PATH="$SOURCE_DIR:$PATH"
+export DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer"
 
 LIB_NAMES="libavcodec libavformat libavutil libswresample"
 

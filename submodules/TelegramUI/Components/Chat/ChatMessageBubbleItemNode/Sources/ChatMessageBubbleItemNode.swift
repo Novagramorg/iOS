@@ -1991,8 +1991,14 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             needsSummarizeButton = false
         }
         let isAd = item.content.firstMessage.adAttribute != nil
-        if isAd {
+        // Novagram: OUR Novagram ad (opaqueId "novagram:…") has no close "X" — nobody can hide channel ads.
+        let isNovagramAd = (item.content.firstMessage.adAttribute.flatMap { String(data: $0.opaqueId, encoding: .utf8) } ?? "").hasPrefix("novagram:")
+        if isAd && !isNovagramAd {
             needsShareButton = true
+        } else if isNovagramAd {
+            // The ad belongs to a broadcast channel, so the branches above turned the side pill on;
+            // for an ad that pill is the close "X". Menu stays on long-press / "what's this?".
+            needsShareButton = false
         }
         for attribute in item.content.firstMessage.attributes {
             if let attribute = attribute as? RestrictedContentMessageAttribute, attribute.platformText(platform: "ios", contentSettings: item.context.currentContentSettings.with { $0 }) != nil {
@@ -4534,7 +4540,8 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 strongSelf.rankBackgroundNode = nil
             }
             
-            if let _ = item.message.adAttribute {
+            // Novagram: no in-bubble close "X" on OUR Novagram ad (opaqueId "novagram:…").
+            if let adAttribute = item.message.adAttribute, !(String(data: adAttribute.opaqueId, encoding: .utf8) ?? "").hasPrefix("novagram:") {
                 let buttonNode: HighlightTrackingButtonNode
                 let iconNode: ASImageNode
                 if let currentButton = strongSelf.closeButtonNode, let currentIcon = strongSelf.closeIconNode {

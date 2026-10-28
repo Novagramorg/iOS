@@ -1026,15 +1026,15 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                             |> map { pack -> (TelegramMediaFile, LoadedStickerPack)? in
                                 if let pack, case let .result(_, items, _) = pack {
                                     return items.first.flatMap { ($0.file._parse(), pack) }
-                                } else {
+                                        } else {
                                     return nil
-                                }
-                            }).startStrict(next: { fileAndPackTitle in
-                                guard let strongSelf = self else {
-                                    return
-                                }
-                                strongSelf.emojiStatusFileAndPackTitle.set(.single(fileAndPackTitle))
-                            }))
+                                        }
+                                    }).startStrict(next: { fileAndPackTitle in
+                                        guard let strongSelf = self else {
+                                            return
+                                        }
+                                        strongSelf.emojiStatusFileAndPackTitle.set(.single(fileAndPackTitle))
+                                    }))
                         } else {
                             strongSelf.emojiStatusPackDisposable.set(nil)
                             strongSelf.emojiStatusFileAndPackTitle.set(.single(nil))
@@ -1218,10 +1218,9 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 } else if let addressName = peer.addressName {
                     title = "@\(addressName)"
                 } else {
-                    title = "_"
                 }
             }
-
+            
             titleStringText = title
             titleAttributes = MultiScaleTextState.Attributes(font: Font.medium(28.0), color: .white)
             smallTitleAttributes = MultiScaleTextState.Attributes(font: Font.medium(28.0), color: .white, shadowColor: titleShadowColor)

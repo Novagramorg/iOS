@@ -1238,6 +1238,8 @@ public protocol ChatController: ViewController {
     func removeAd(opaqueId: Data)
     
     func restrictedSendingContentsText() -> String
+    
+    func navigateToFirstMessage()
 }
 
 public protocol ChatMessagePreviewItemNode: AnyObject {

@@ -1,0 +1,4845 @@
+{
+  "ABIRoot": {
+    "kind": "Root",
+    "name": "NovagramInsightsUI",
+    "printedName": "NovagramInsightsUI",
+    "children": [
+      {
+        "kind": "Import",
+        "name": "NovagramInsights",
+        "printedName": "NovagramInsights",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "SwiftUI",
+        "printedName": "SwiftUI",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "NovagramAds",
+        "printedName": "NovagramAds",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "NovagramInsights",
+        "printedName": "NovagramInsights",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "SwiftUI",
+        "printedName": "SwiftUI",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "Charts",
+        "printedName": "Charts",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "NovagramAds",
+        "printedName": "NovagramAds",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "NovagramInsights",
+        "printedName": "NovagramInsights",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "SwiftUI",
+        "printedName": "SwiftUI",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "NovagramAds",
+        "printedName": "NovagramAds",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "NovagramInsights",
+        "printedName": "NovagramInsights",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "SwiftUI",
+        "printedName": "SwiftUI",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "Accessibility",
+        "printedName": "Accessibility",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "Charts",
+        "printedName": "Charts",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "NovagramAds",
+        "printedName": "NovagramAds",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "NovagramInsights",
+        "printedName": "NovagramInsights",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "SwiftUI",
+        "printedName": "SwiftUI",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "NovagramAds",
+        "printedName": "NovagramAds",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "NovagramInsights",
+        "printedName": "NovagramInsights",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "SwiftUI",
+        "printedName": "SwiftUI",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "NovagramAds",
+        "printedName": "NovagramAds",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "NovagramInsights",
+        "printedName": "NovagramInsights",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "SwiftUI",
+        "printedName": "SwiftUI",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "Charts",
+        "printedName": "Charts",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "NovagramAds",
+        "printedName": "NovagramAds",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "NovagramInsights",
+        "printedName": "NovagramInsights",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "SwiftUI",
+        "printedName": "SwiftUI",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "NovagramAds",
+        "printedName": "NovagramAds",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "NovagramInsights",
+        "printedName": "NovagramInsights",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "SwiftUI",
+        "printedName": "SwiftUI",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "SwiftUI",
+        "printedName": "SwiftUI",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "NovagramAds",
+        "printedName": "NovagramAds",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "NovagramInsights",
+        "printedName": "NovagramInsights",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "SwiftUI",
+        "printedName": "SwiftUI",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "UIKit",
+        "printedName": "UIKit",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "NovagramAds",
+        "printedName": "NovagramAds",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "NovagramInsights",
+        "printedName": "NovagramInsights",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "SwiftUI",
+        "printedName": "SwiftUI",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "TipKit",
+        "printedName": "TipKit",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "NovagramAds",
+        "printedName": "NovagramAds",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "NovagramInsights",
+        "printedName": "NovagramInsights",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "SwiftUI",
+        "printedName": "SwiftUI",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "PhotosUI",
+        "printedName": "PhotosUI",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "UniformTypeIdentifiers",
+        "printedName": "UniformTypeIdentifiers",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "NovagramAds",
+        "printedName": "NovagramAds",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "NovagramInsights",
+        "printedName": "NovagramInsights",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "SwiftUI",
+        "printedName": "SwiftUI",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "NovagramAds",
+        "printedName": "NovagramAds",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "NovagramInsights",
+        "printedName": "NovagramInsights",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "SwiftUI",
+        "printedName": "SwiftUI",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "Foundation",
+        "printedName": "Foundation",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "NovagramAds",
+        "printedName": "NovagramAds",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "NovagramInsights",
+        "printedName": "NovagramInsights",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "Foundation",
+        "printedName": "Foundation",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "NovagramAds",
+        "printedName": "NovagramAds",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "NovagramInsights",
+        "printedName": "NovagramInsights",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "NovagramAds",
+        "printedName": "NovagramAds",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "NovagramInsights",
+        "printedName": "NovagramInsights",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "SwiftUI",
+        "printedName": "SwiftUI",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "Import",
+        "name": "UIKit",
+        "printedName": "UIKit",
+        "declKind": "Import",
+        "moduleName": "NovagramInsightsUI"
+      },
+      {
+        "kind": "TypeDecl",
+        "name": "InsightsConfiguration",
+        "printedName": "InsightsConfiguration",
+        "children": [
+          {
+            "kind": "Var",
+            "name": "environment",
+            "printedName": "environment",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "SDKEnvironment",
+                "printedName": "NovagramAds.SDKEnvironment",
+                "usr": "s:11NovagramAds14SDKEnvironmentO"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:18NovagramInsightsUI0B13ConfigurationV11environment0A3Ads14SDKEnvironmentOvp",
+            "mangledName": "$s18NovagramInsightsUI0B13ConfigurationV11environment0A3Ads14SDKEnvironmentOvp",
+            "moduleName": "NovagramInsightsUI",
+            "declAttributes": [
+              "HasStorage",
+              "AccessControl",
+              "RawDocComment"
+            ],
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "SDKEnvironment",
+                    "printedName": "NovagramAds.SDKEnvironment",
+                    "usr": "s:11NovagramAds14SDKEnvironmentO"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:18NovagramInsightsUI0B13ConfigurationV11environment0A3Ads14SDKEnvironmentOvg",
+                "mangledName": "$s18NovagramInsightsUI0B13ConfigurationV11environment0A3Ads14SDKEnvironmentOvg",
+                "moduleName": "NovagramInsightsUI",
+                "implicit": true,
+                "accessorKind": "get"
+              },
+              {
+                "kind": "Accessor",
+                "name": "Set",
+                "printedName": "Set()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "SDKEnvironment",
+                    "printedName": "NovagramAds.SDKEnvironment",
+                    "usr": "s:11NovagramAds14SDKEnvironmentO"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:18NovagramInsightsUI0B13ConfigurationV11environment0A3Ads14SDKEnvironmentOvs",
+                "mangledName": "$s18NovagramInsightsUI0B13ConfigurationV11environment0A3Ads14SDKEnvironmentOvs",
+                "moduleName": "NovagramInsightsUI",
+                "implicit": true,
+                "accessorKind": "set"
+              },
+              {
+                "kind": "Accessor",
+                "name": "Modify",
+                "printedName": "Modify()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:18NovagramInsightsUI0B13ConfigurationV11environment0A3Ads14SDKEnvironmentOvM",
+                "mangledName": "$s18NovagramInsightsUI0B13ConfigurationV11environment0A3Ads14SDKEnvironmentOvM",
+                "moduleName": "NovagramInsightsUI",
+                "implicit": true,
+                "accessorKind": "_modify"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "keychainKey",
+            "printedName": "keychainKey",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "InsightsKeychainKey",
+                "printedName": "NovagramInsights.InsightsKeychainKey",
+                "usr": "s:16NovagramInsights0B11KeychainKeyV"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:18NovagramInsightsUI0B13ConfigurationV11keychainKey0aB00b8KeychainF0Vvp",
+            "mangledName": "$s18NovagramInsightsUI0B13ConfigurationV11keychainKey0aB00b8KeychainF0Vvp",
+            "moduleName": "NovagramInsightsUI",
+            "declAttributes": [
+              "HasStorage",
+              "AccessControl",
+              "RawDocComment"
+            ],
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "InsightsKeychainKey",
+                    "printedName": "NovagramInsights.InsightsKeychainKey",
+                    "usr": "s:16NovagramInsights0B11KeychainKeyV"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:18NovagramInsightsUI0B13ConfigurationV11keychainKey0aB00b8KeychainF0Vvg",
+                "mangledName": "$s18NovagramInsightsUI0B13ConfigurationV11keychainKey0aB00b8KeychainF0Vvg",
+                "moduleName": "NovagramInsightsUI",
+                "implicit": true,
+                "accessorKind": "get"
+              },
+              {
+                "kind": "Accessor",
+                "name": "Set",
+                "printedName": "Set()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "InsightsKeychainKey",
+                    "printedName": "NovagramInsights.InsightsKeychainKey",
+                    "usr": "s:16NovagramInsights0B11KeychainKeyV"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:18NovagramInsightsUI0B13ConfigurationV11keychainKey0aB00b8KeychainF0Vvs",
+                "mangledName": "$s18NovagramInsightsUI0B13ConfigurationV11keychainKey0aB00b8KeychainF0Vvs",
+                "moduleName": "NovagramInsightsUI",
+                "implicit": true,
+                "accessorKind": "set"
+              },
+              {
+                "kind": "Accessor",
+                "name": "Modify",
+                "printedName": "Modify()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:18NovagramInsightsUI0B13ConfigurationV11keychainKey0aB00b8KeychainF0VvM",
+                "mangledName": "$s18NovagramInsightsUI0B13ConfigurationV11keychainKey0aB00b8KeychainF0VvM",
+                "moduleName": "NovagramInsightsUI",
+                "implicit": true,
+                "accessorKind": "_modify"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "language",
+            "printedName": "language",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "InsightsLanguage",
+                "printedName": "NovagramInsights.InsightsLanguage",
+                "usr": "s:16NovagramInsights0B8LanguageO"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:18NovagramInsightsUI0B13ConfigurationV8language0aB00B8LanguageOvp",
+            "mangledName": "$s18NovagramInsightsUI0B13ConfigurationV8language0aB00B8LanguageOvp",
+            "moduleName": "NovagramInsightsUI",
+            "declAttributes": [
+              "HasStorage",
+              "AccessControl",
+              "RawDocComment"
+            ],
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "InsightsLanguage",
+                    "printedName": "NovagramInsights.InsightsLanguage",
+                    "usr": "s:16NovagramInsights0B8LanguageO"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:18NovagramInsightsUI0B13ConfigurationV8language0aB00B8LanguageOvg",
+                "mangledName": "$s18NovagramInsightsUI0B13ConfigurationV8language0aB00B8LanguageOvg",
+                "moduleName": "NovagramInsightsUI",
+                "implicit": true,
+                "accessorKind": "get"
+              },
+              {
+                "kind": "Accessor",
+                "name": "Set",
+                "printedName": "Set()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "InsightsLanguage",
+                    "printedName": "NovagramInsights.InsightsLanguage",
+                    "usr": "s:16NovagramInsights0B8LanguageO"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:18NovagramInsightsUI0B13ConfigurationV8language0aB00B8LanguageOvs",
+                "mangledName": "$s18NovagramInsightsUI0B13ConfigurationV8language0aB00B8LanguageOvs",
+                "moduleName": "NovagramInsightsUI",
+                "implicit": true,
+                "accessorKind": "set"
+              },
+              {
+                "kind": "Accessor",
+                "name": "Modify",
+                "printedName": "Modify()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:18NovagramInsightsUI0B13ConfigurationV8language0aB00B8LanguageOvM",
+                "mangledName": "$s18NovagramInsightsUI0B13ConfigurationV8language0aB00B8LanguageOvM",
+                "moduleName": "NovagramInsightsUI",
+                "implicit": true,
+                "accessorKind": "_modify"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "onClose",
+            "printedName": "onClose",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "(() -> ())?",
+                "children": [
+                  {
+                    "kind": "TypeFunc",
+                    "name": "Function",
+                    "printedName": "() -> ()",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Void",
+                        "printedName": "()"
+                      },
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Void",
+                        "printedName": "()"
+                      }
+                    ]
+                  }
+                ],
+                "usr": "s:Sq"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:18NovagramInsightsUI0B13ConfigurationV7onCloseyyYbScMYccSgvp",
+            "mangledName": "$s18NovagramInsightsUI0B13ConfigurationV7onCloseyyYbScMYccSgvp",
+            "moduleName": "NovagramInsightsUI",
+            "declAttributes": [
+              "HasInitialValue",
+              "HasStorage",
+              "AccessControl",
+              "RawDocComment"
+            ],
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Optional",
+                    "printedName": "(() -> ())?",
+                    "children": [
+                      {
+                        "kind": "TypeFunc",
+                        "name": "Function",
+                        "printedName": "() -> ()",
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "Void",
+                            "printedName": "()"
+                          },
+                          {
+                            "kind": "TypeNominal",
+                            "name": "Void",
+                            "printedName": "()"
+                          }
+                        ]
+                      }
+                    ],
+                    "usr": "s:Sq"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:18NovagramInsightsUI0B13ConfigurationV7onCloseyyYbScMYccSgvg",
+                "mangledName": "$s18NovagramInsightsUI0B13ConfigurationV7onCloseyyYbScMYccSgvg",
+                "moduleName": "NovagramInsightsUI",
+                "implicit": true,
+                "accessorKind": "get"
+              },
+              {
+                "kind": "Accessor",
+                "name": "Set",
+                "printedName": "Set()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Optional",
+                    "printedName": "(() -> ())?",
+                    "children": [
+                      {
+                        "kind": "TypeFunc",
+                        "name": "Function",
+                        "printedName": "() -> ()",
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "Void",
+                            "printedName": "()"
+                          },
+                          {
+                            "kind": "TypeNominal",
+                            "name": "Void",
+                            "printedName": "()"
+                          }
+                        ]
+                      }
+                    ],
+                    "usr": "s:Sq"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:18NovagramInsightsUI0B13ConfigurationV7onCloseyyYbScMYccSgvs",
+                "mangledName": "$s18NovagramInsightsUI0B13ConfigurationV7onCloseyyYbScMYccSgvs",
+                "moduleName": "NovagramInsightsUI",
+                "implicit": true,
+                "accessorKind": "set"
+              },
+              {
+                "kind": "Accessor",
+                "name": "Modify",
+                "printedName": "Modify()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:18NovagramInsightsUI0B13ConfigurationV7onCloseyyYbScMYccSgvM",
+                "mangledName": "$s18NovagramInsightsUI0B13ConfigurationV7onCloseyyYbScMYccSgvM",
+                "moduleName": "NovagramInsightsUI",
+                "implicit": true,
+                "accessorKind": "_modify"
+              }
+            ]
+          },
+          {
+            "kind": "Constructor",
+            "name": "init",
+            "printedName": "init(environment:keychainKey:language:onClose:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "InsightsConfiguration",
+                "printedName": "NovagramInsightsUI.InsightsConfiguration",
+                "usr": "s:18NovagramInsightsUI0B13ConfigurationV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "SDKEnvironment",
+                "printedName": "NovagramAds.SDKEnvironment",
+                "usr": "s:11NovagramAds14SDKEnvironmentO"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "InsightsKeychainKey",
+                "printedName": "NovagramInsights.InsightsKeychainKey",
+                "usr": "s:16NovagramInsights0B11KeychainKeyV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "InsightsLanguage",
+                "printedName": "NovagramInsights.InsightsLanguage",
+                "hasDefaultArg": true,
+                "usr": "s:16NovagramInsights0B8LanguageO"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "(() -> ())?",
+                "children": [
+                  {
+                    "kind": "TypeFunc",
+                    "name": "Function",
+                    "printedName": "() -> ()",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Void",
+                        "printedName": "()"
+                      },
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Void",
+                        "printedName": "()"
+                      }
+                    ]
+                  }
+                ],
+                "hasDefaultArg": true,
+                "usr": "s:Sq"
+              }
+            ],
+            "declKind": "Constructor",
+            "usr": "s:18NovagramInsightsUI0B13ConfigurationV11environment11keychainKey8language7onCloseAC0A3Ads14SDKEnvironmentO_0aB00b8KeychainG0VAK0B8LanguageOyyYbScMYccSgtcfc",
+            "mangledName": "$s18NovagramInsightsUI0B13ConfigurationV11environment11keychainKey8language7onCloseAC0A3Ads14SDKEnvironmentO_0aB00b8KeychainG0VAK0B8LanguageOyyYbScMYccSgtcfc",
+            "moduleName": "NovagramInsightsUI",
+            "declAttributes": [
+              "AccessControl",
+              "RawDocComment"
+            ],
+            "init_kind": "Designated"
+          }
+        ],
+        "declKind": "Struct",
+        "usr": "s:18NovagramInsightsUI0B13ConfigurationV",
+        "mangledName": "$s18NovagramInsightsUI0B13ConfigurationV",
+        "moduleName": "NovagramInsightsUI",
+        "declAttributes": [
+          "AccessControl",
+          "RawDocComment"
+        ],
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Sendable",
+            "printedName": "Sendable",
+            "usr": "s:s8SendableP",
+            "mangledName": "$ss8SendableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "SendableMetatype",
+            "printedName": "SendableMetatype",
+            "usr": "s:s16SendableMetatypeP",
+            "mangledName": "$ss16SendableMetatypeP"
+          }
+        ]
+      },
+      {
+        "kind": "TypeDecl",
+        "name": "InsightsTheme",
+        "printedName": "InsightsTheme",
+        "children": [
+          {
+            "kind": "Var",
+            "name": "accent",
+            "printedName": "accent",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "UIColor",
+                "printedName": "UIKit.UIColor",
+                "usr": "c:objc(cs)UIColor"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:18NovagramInsightsUI0B5ThemeV6accentSo7UIColorCvp",
+            "mangledName": "$s18NovagramInsightsUI0B5ThemeV6accentSo7UIColorCvp",
+            "moduleName": "NovagramInsightsUI",
+            "declAttributes": [
+              "HasStorage",
+              "AccessControl",
+              "RawDocComment"
+            ],
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "UIColor",
+                    "printedName": "UIKit.UIColor",
+                    "usr": "c:objc(cs)UIColor"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:18NovagramInsightsUI0B5ThemeV6accentSo7UIColorCvg",
+                "mangledName": "$s18NovagramInsightsUI0B5ThemeV6accentSo7UIColorCvg",
+                "moduleName": "NovagramInsightsUI",
+                "implicit": true,
+                "accessorKind": "get"
+              },
+              {
+                "kind": "Accessor",
+                "name": "Set",
+                "printedName": "Set()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "UIColor",
+                    "printedName": "UIKit.UIColor",
+                    "usr": "c:objc(cs)UIColor"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:18NovagramInsightsUI0B5ThemeV6accentSo7UIColorCvs",
+                "mangledName": "$s18NovagramInsightsUI0B5ThemeV6accentSo7UIColorCvs",
+                "moduleName": "NovagramInsightsUI",
+                "implicit": true,
+                "accessorKind": "set"
+              },
+              {
+                "kind": "Accessor",
+                "name": "Modify",
+                "printedName": "Modify()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:18NovagramInsightsUI0B5ThemeV6accentSo7UIColorCvM",
+                "mangledName": "$s18NovagramInsightsUI0B5ThemeV6accentSo7UIColorCvM",
+                "moduleName": "NovagramInsightsUI",
+                "implicit": true,
+                "accessorKind": "_modify"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "background",
+            "printedName": "background",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "UIKit.UIColor?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "UIColor",
+                    "printedName": "UIKit.UIColor",
+                    "usr": "c:objc(cs)UIColor"
+                  }
+                ],
+                "usr": "s:Sq"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:18NovagramInsightsUI0B5ThemeV10backgroundSo7UIColorCSgvp",
+            "mangledName": "$s18NovagramInsightsUI0B5ThemeV10backgroundSo7UIColorCSgvp",
+            "moduleName": "NovagramInsightsUI",
+            "declAttributes": [
+              "HasInitialValue",
+              "HasStorage",
+              "AccessControl",
+              "RawDocComment"
+            ],
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Optional",
+                    "printedName": "UIKit.UIColor?",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "UIColor",
+                        "printedName": "UIKit.UIColor",
+                        "usr": "c:objc(cs)UIColor"
+                      }
+                    ],
+                    "usr": "s:Sq"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:18NovagramInsightsUI0B5ThemeV10backgroundSo7UIColorCSgvg",
+                "mangledName": "$s18NovagramInsightsUI0B5ThemeV10backgroundSo7UIColorCSgvg",
+                "moduleName": "NovagramInsightsUI",
+                "implicit": true,
+                "accessorKind": "get"
+              },
+              {
+                "kind": "Accessor",
+                "name": "Set",
+                "printedName": "Set()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Optional",
+                    "printedName": "UIKit.UIColor?",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "UIColor",
+                        "printedName": "UIKit.UIColor",
+                        "usr": "c:objc(cs)UIColor"
+                      }
+                    ],
+                    "usr": "s:Sq"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:18NovagramInsightsUI0B5ThemeV10backgroundSo7UIColorCSgvs",
+                "mangledName": "$s18NovagramInsightsUI0B5ThemeV10backgroundSo7UIColorCSgvs",
+                "moduleName": "NovagramInsightsUI",
+                "implicit": true,
+                "accessorKind": "set"
+              },
+              {
+                "kind": "Accessor",
+                "name": "Modify",
+                "printedName": "Modify()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:18NovagramInsightsUI0B5ThemeV10backgroundSo7UIColorCSgvM",
+                "mangledName": "$s18NovagramInsightsUI0B5ThemeV10backgroundSo7UIColorCSgvM",
+                "moduleName": "NovagramInsightsUI",
+                "implicit": true,
+                "accessorKind": "_modify"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "primaryText",
+            "printedName": "primaryText",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "UIKit.UIColor?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "UIColor",
+                    "printedName": "UIKit.UIColor",
+                    "usr": "c:objc(cs)UIColor"
+                  }
+                ],
+                "usr": "s:Sq"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:18NovagramInsightsUI0B5ThemeV11primaryTextSo7UIColorCSgvp",
+            "mangledName": "$s18NovagramInsightsUI0B5ThemeV11primaryTextSo7UIColorCSgvp",
+            "moduleName": "NovagramInsightsUI",
+            "declAttributes": [
+              "HasInitialValue",
+              "HasStorage",
+              "AccessControl",
+              "RawDocComment"
+            ],
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Optional",
+                    "printedName": "UIKit.UIColor?",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "UIColor",
+                        "printedName": "UIKit.UIColor",
+                        "usr": "c:objc(cs)UIColor"
+                      }
+                    ],
+                    "usr": "s:Sq"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:18NovagramInsightsUI0B5ThemeV11primaryTextSo7UIColorCSgvg",
+                "mangledName": "$s18NovagramInsightsUI0B5ThemeV11primaryTextSo7UIColorCSgvg",
+                "moduleName": "NovagramInsightsUI",
+                "implicit": true,
+                "accessorKind": "get"
+              },
+              {
+                "kind": "Accessor",
+                "name": "Set",
+                "printedName": "Set()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Optional",
+                    "printedName": "UIKit.UIColor?",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "UIColor",
+                        "printedName": "UIKit.UIColor",
+                        "usr": "c:objc(cs)UIColor"
+                      }
+                    ],
+                    "usr": "s:Sq"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:18NovagramInsightsUI0B5ThemeV11primaryTextSo7UIColorCSgvs",
+                "mangledName": "$s18NovagramInsightsUI0B5ThemeV11primaryTextSo7UIColorCSgvs",
+                "moduleName": "NovagramInsightsUI",
+                "implicit": true,
+                "accessorKind": "set"
+              },
+              {
+                "kind": "Accessor",
+                "name": "Modify",
+                "printedName": "Modify()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:18NovagramInsightsUI0B5ThemeV11primaryTextSo7UIColorCSgvM",
+                "mangledName": "$s18NovagramInsightsUI0B5ThemeV11primaryTextSo7UIColorCSgvM",
+                "moduleName": "NovagramInsightsUI",
+                "implicit": true,
+                "accessorKind": "_modify"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "secondaryText",
+            "printedName": "secondaryText",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "UIKit.UIColor?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "UIColor",
+                    "printedName": "UIKit.UIColor",
+                    "usr": "c:objc(cs)UIColor"
+                  }
+                ],
+                "usr": "s:Sq"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:18NovagramInsightsUI0B5ThemeV13secondaryTextSo7UIColorCSgvp",
+            "mangledName": "$s18NovagramInsightsUI0B5ThemeV13secondaryTextSo7UIColorCSgvp",
+            "moduleName": "NovagramInsightsUI",
+            "declAttributes": [
+              "HasInitialValue",
+              "HasStorage",
+              "AccessControl",
+              "RawDocComment"
+            ],
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Optional",
+                    "printedName": "UIKit.UIColor?",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "UIColor",
+                        "printedName": "UIKit.UIColor",
+                        "usr": "c:objc(cs)UIColor"
+                      }
+                    ],
+                    "usr": "s:Sq"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:18NovagramInsightsUI0B5ThemeV13secondaryTextSo7UIColorCSgvg",
+                "mangledName": "$s18NovagramInsightsUI0B5ThemeV13secondaryTextSo7UIColorCSgvg",
+                "moduleName": "NovagramInsightsUI",
+                "implicit": true,
+                "accessorKind": "get"
+              },
+              {
+                "kind": "Accessor",
+                "name": "Set",
+                "printedName": "Set()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Optional",
+                    "printedName": "UIKit.UIColor?",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "UIColor",
+                        "printedName": "UIKit.UIColor",
+                        "usr": "c:objc(cs)UIColor"
+                      }
+                    ],
+                    "usr": "s:Sq"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:18NovagramInsightsUI0B5ThemeV13secondaryTextSo7UIColorCSgvs",
+                "mangledName": "$s18NovagramInsightsUI0B5ThemeV13secondaryTextSo7UIColorCSgvs",
+                "moduleName": "NovagramInsightsUI",
+                "implicit": true,
+                "accessorKind": "set"
+              },
+              {
+                "kind": "Accessor",
+                "name": "Modify",
+                "printedName": "Modify()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:18NovagramInsightsUI0B5ThemeV13secondaryTextSo7UIColorCSgvM",
+                "mangledName": "$s18NovagramInsightsUI0B5ThemeV13secondaryTextSo7UIColorCSgvM",
+                "moduleName": "NovagramInsightsUI",
+                "implicit": true,
+                "accessorKind": "_modify"
+              }
+            ]
+          },
+          {
+            "kind": "Constructor",
+            "name": "init",
+            "printedName": "init(accent:background:primaryText:secondaryText:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "InsightsTheme",
+                "printedName": "NovagramInsightsUI.InsightsTheme",
+                "usr": "s:18NovagramInsightsUI0B5ThemeV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "UIColor",
+                "printedName": "UIKit.UIColor",
+                "usr": "c:objc(cs)UIColor"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "UIKit.UIColor?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "UIColor",
+                    "printedName": "UIKit.UIColor",
+                    "usr": "c:objc(cs)UIColor"
+                  }
+                ],
+                "hasDefaultArg": true,
+                "usr": "s:Sq"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "UIKit.UIColor?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "UIColor",
+                    "printedName": "UIKit.UIColor",
+                    "usr": "c:objc(cs)UIColor"
+                  }
+                ],
+                "hasDefaultArg": true,
+                "usr": "s:Sq"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "UIKit.UIColor?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "UIColor",
+                    "printedName": "UIKit.UIColor",
+                    "usr": "c:objc(cs)UIColor"
+                  }
+                ],
+                "hasDefaultArg": true,
+                "usr": "s:Sq"
+              }
+            ],
+            "declKind": "Constructor",
+            "usr": "s:18NovagramInsightsUI0B5ThemeV6accent10background11primaryText09secondaryH0ACSo7UIColorC_AISgA2Jtcfc",
+            "mangledName": "$s18NovagramInsightsUI0B5ThemeV6accent10background11primaryText09secondaryH0ACSo7UIColorC_AISgA2Jtcfc",
+            "moduleName": "NovagramInsightsUI",
+            "declAttributes": [
+              "AccessControl"
+            ],
+            "init_kind": "Designated"
+          },
+          {
+            "kind": "Var",
+            "name": "system",
+            "printedName": "system",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "InsightsTheme",
+                "printedName": "NovagramInsightsUI.InsightsTheme",
+                "usr": "s:18NovagramInsightsUI0B5ThemeV"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:18NovagramInsightsUI0B5ThemeV6systemACvpZ",
+            "mangledName": "$s18NovagramInsightsUI0B5ThemeV6systemACvpZ",
+            "moduleName": "NovagramInsightsUI",
+            "static": true,
+            "declAttributes": [
+              "AccessControl",
+              "RawDocComment"
+            ],
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "InsightsTheme",
+                    "printedName": "NovagramInsightsUI.InsightsTheme",
+                    "usr": "s:18NovagramInsightsUI0B5ThemeV"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:18NovagramInsightsUI0B5ThemeV6systemACvgZ",
+                "mangledName": "$s18NovagramInsightsUI0B5ThemeV6systemACvgZ",
+                "moduleName": "NovagramInsightsUI",
+                "static": true,
+                "accessorKind": "get"
+              }
+            ]
+          }
+        ],
+        "declKind": "Struct",
+        "usr": "s:18NovagramInsightsUI0B5ThemeV",
+        "mangledName": "$s18NovagramInsightsUI0B5ThemeV",
+        "moduleName": "NovagramInsightsUI",
+        "declAttributes": [
+          "AccessControl",
+          "RawDocComment"
+        ],
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
+          }
+        ]
+      },
+      {
+        "kind": "TypeDecl",
+        "name": "InsightsUI",
+        "printedName": "InsightsUI",
+        "children": [
+          {
+            "kind": "Function",
+            "name": "makeViewController",
+            "printedName": "makeViewController(configuration:theme:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "UIViewController",
+                "printedName": "UIKit.UIViewController",
+                "usr": "c:objc(cs)UIViewController"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "InsightsConfiguration",
+                "printedName": "NovagramInsightsUI.InsightsConfiguration",
+                "usr": "s:18NovagramInsightsUI0B13ConfigurationV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "InsightsTheme",
+                "printedName": "NovagramInsightsUI.InsightsTheme",
+                "hasDefaultArg": true,
+                "usr": "s:18NovagramInsightsUI0B5ThemeV"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:18NovagramInsightsUI0bC0O18makeViewController13configuration5themeSo06UIViewF0CAA0B13ConfigurationV_AA0B5ThemeVtFZ",
+            "mangledName": "$s18NovagramInsightsUI0bC0O18makeViewController13configuration5themeSo06UIViewF0CAA0B13ConfigurationV_AA0B5ThemeVtFZ",
+            "moduleName": "NovagramInsightsUI",
+            "static": true,
+            "declAttributes": [
+              "AccessControl",
+              "Custom",
+              "RawDocComment"
+            ],
+            "funcSelfKind": "NonMutating"
+          }
+        ],
+        "declKind": "Enum",
+        "usr": "s:18NovagramInsightsUI0bC0O",
+        "mangledName": "$s18NovagramInsightsUI0bC0O",
+        "moduleName": "NovagramInsightsUI",
+        "intro_Macosx": "13.0",
+        "intro_iOS": "16.0",
+        "declAttributes": [
+          "AccessControl",
+          "Available",
+          "Available",
+          "RawDocComment"
+        ],
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
+          }
+        ]
+      }
+    ],
+    "json_format_version": 8
+  },
+  "ConstValues": [
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 331,
+      "length": 4,
+      "value": "\"en\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 354,
+      "length": 4,
+      "value": "\"ru\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 377,
+      "length": 4,
+      "value": "\"uz\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 510,
+      "length": 16,
+      "value": "\"cabinet.adName\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 555,
+      "length": 22,
+      "value": "\"cabinet.adNameFooter\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 597,
+      "length": 13,
+      "value": "\"cabinet.add\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 637,
+      "length": 20,
+      "value": "\"cabinet.agreeTerms\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 680,
+      "length": 16,
+      "value": "\"cabinet.amount\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 717,
+      "length": 14,
+      "value": "\"cabinet.back\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 755,
+      "length": 17,
+      "value": "\"cabinet.balance\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 801,
+      "length": 22,
+      "value": "\"cabinet.balanceValue\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 854,
+      "length": 24,
+      "value": "\"cabinet.botPlaceholder\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 899,
+      "length": 14,
+      "value": "\"cabinet.bots\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 940,
+      "length": 20,
+      "value": "\"cabinet.botsFooter\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 988,
+      "length": 21,
+      "value": "\"cabinet.budgetField\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 1038,
+      "length": 22,
+      "value": "\"cabinet.budgetFooter\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 1090,
+      "length": 23,
+      "value": "\"cabinet.budgetHistory\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 1142,
+      "length": 22,
+      "value": "\"cabinet.cancelUpload\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 1197,
+      "length": 26,
+      "value": "\"cabinet.channelLanguages\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 1254,
+      "length": 24,
+      "value": "\"cabinet.channelPicture\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 1315,
+      "length": 30,
+      "value": "\"cabinet.channelPictureFooter\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 1380,
+      "length": 28,
+      "value": "\"cabinet.channelPlaceholder\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 1447,
+      "length": 32,
+      "value": "\"cabinet.channelTargetingFooter\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 1505,
+      "length": 19,
+      "value": "\"cabinet.chargeNow\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 1554,
+      "length": 23,
+      "value": "\"cabinet.chooseAnother\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 1604,
+      "length": 20,
+      "value": "\"cabinet.chooseFile\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 1659,
+      "length": 28,
+      "value": "\"cabinet.choosePhotoOrVideo\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 1713,
+      "length": 19,
+      "value": "\"cabinet.countries\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 1757,
+      "length": 18,
+      "value": "\"cabinet.cpmField\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 1801,
+      "length": 19,
+      "value": "\"cabinet.cpmFooter\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 1843,
+      "length": 16,
+      "value": "\"cabinet.create\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 1889,
+      "length": 23,
+      "value": "\"cabinet.createConfirm\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 1949,
+      "length": 30,
+      "value": "\"cabinet.createConfirmMessage\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 2015,
+      "length": 29,
+      "value": "\"cabinet.createFailedUnknown\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 2075,
+      "length": 24,
+      "value": "\"cabinet.createdMessage\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 2128,
+      "length": 22,
+      "value": "\"cabinet.createdTitle\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 2177,
+      "length": 20,
+      "value": "\"cabinet.cropAdjust\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 2222,
+      "length": 18,
+      "value": "\"cabinet.cropArea\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 2269,
+      "length": 22,
+      "value": "\"cabinet.cropAreaHint\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 2323,
+      "length": 25,
+      "value": "\"cabinet.cropAreaHintMac\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 2378,
+      "length": 23,
+      "value": "\"cabinet.cropAreaValue\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 2428,
+      "length": 20,
+      "value": "\"cabinet.cropButton\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 2475,
+      "length": 20,
+      "value": "\"cabinet.cropCenter\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 2525,
+      "length": 23,
+      "value": "\"cabinet.cropExporting\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 2575,
+      "length": 20,
+      "value": "\"cabinet.cropFailed\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 2624,
+      "length": 22,
+      "value": "\"cabinet.cropMoveDown\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 2675,
+      "length": 22,
+      "value": "\"cabinet.cropMoveLeft\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 2727,
+      "length": 23,
+      "value": "\"cabinet.cropMoveRight\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 2777,
+      "length": 20,
+      "value": "\"cabinet.cropMoveUp\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 2824,
+      "length": 20,
+      "value": "\"cabinet.cropPoster\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 2876,
+      "length": 25,
+      "value": "\"cabinet.cropPosterValue\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 2931,
+      "length": 23,
+      "value": "\"cabinet.cropPreparing\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 2980,
+      "length": 19,
+      "value": "\"cabinet.cropReset\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 3024,
+      "length": 18,
+      "value": "\"cabinet.cropSize\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 3078,
+      "length": 29,
+      "value": "\"cabinet.cropSourceTooNarrow\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 3132,
+      "length": 18,
+      "value": "\"cabinet.cropStop\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 3176,
+      "length": 19,
+      "value": "\"cabinet.cropTitle\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 3225,
+      "length": 23,
+      "value": "\"cabinet.cropTooNarrow\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 3273,
+      "length": 18,
+      "value": "\"cabinet.cropTrim\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 3322,
+      "length": 24,
+      "value": "\"cabinet.cropTrimFooter\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 3379,
+      "length": 26,
+      "value": "\"cabinet.cropTrimRequired\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 3436,
+      "length": 24,
+      "value": "\"cabinet.cropUnreadable\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 3494,
+      "length": 27,
+      "value": "\"cabinet.cropVideoTooShort\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 3546,
+      "length": 18,
+      "value": "\"cabinet.cropZoom\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 3591,
+      "length": 20,
+      "value": "\"cabinet.cropZoomIn\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 3639,
+      "length": 21,
+      "value": "\"cabinet.cropZoomOut\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 3687,
+      "length": 20,
+      "value": "\"cabinet.dailyLimit\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 3736,
+      "length": 22,
+      "value": "\"cabinet.dailyLimitOn\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 3781,
+      "length": 16,
+      "value": "\"cabinet.delete\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 3827,
+      "length": 23,
+      "value": "\"cabinet.deleteConfirm\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 3887,
+      "length": 30,
+      "value": "\"cabinet.deleteConfirmMessage\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 3945,
+      "length": 21,
+      "value": "\"cabinet.draftFailed\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 3996,
+      "length": 23,
+      "value": "\"cabinet.draftRestored\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 4046,
+      "length": 20,
+      "value": "\"cabinet.draftSaved\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 4094,
+      "length": 21,
+      "value": "\"cabinet.draftSaving\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 4136,
+      "length": 14,
+      "value": "\"cabinet.edit\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 4176,
+      "length": 19,
+      "value": "\"cabinet.editTitle\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 4219,
+      "length": 17,
+      "value": "\"cabinet.endDate\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 4266,
+      "length": 23,
+      "value": "\"cabinet.exactChannels\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 4329,
+      "length": 33,
+      "value": "\"cabinet.issueBudgetAboveBalance\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 4402,
+      "length": 33,
+      "value": "\"cabinet.issueBudgetBelowMinimum\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 4470,
+      "length": 28,
+      "value": "\"cabinet.issueBudgetMissing\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 4536,
+      "length": 31,
+      "value": "\"cabinet.issueChannelTargeting\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 4598,
+      "length": 24,
+      "value": "\"cabinet.issueCountries\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 4659,
+      "length": 30,
+      "value": "\"cabinet.issueCpmBelowMinimum\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 4721,
+      "length": 25,
+      "value": "\"cabinet.issueCpmMissing\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 4778,
+      "length": 25,
+      "value": "\"cabinet.issueDailyLimit\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 4838,
+      "length": 28,
+      "value": "\"cabinet.issueDatesReversed\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 4901,
+      "length": 28,
+      "value": "\"cabinet.issueDuplicatePeer\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 4965,
+      "length": 29,
+      "value": "\"cabinet.issueDuplicateQuery\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 5031,
+      "length": 30,
+      "value": "\"cabinet.issueInvalidUsername\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 5094,
+      "length": 26,
+      "value": "\"cabinet.issueLinkInvalid\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 5157,
+      "length": 30,
+      "value": "\"cabinet.issueLinkNotResolved\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 5222,
+      "length": 28,
+      "value": "\"cabinet.issueLinkWrongType\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 5285,
+      "length": 28,
+      "value": "\"cabinet.issueMediaNotReady\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 5349,
+      "length": 29,
+      "value": "\"cabinet.issueNothingChanged\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 5416,
+      "length": 31,
+      "value": "\"cabinet.issueOtherInfoTooLong\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 5483,
+      "length": 29,
+      "value": "\"cabinet.issueQueriesMissing\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 5545,
+      "length": 26,
+      "value": "\"cabinet.issueQueryLength\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 5609,
+      "length": 31,
+      "value": "\"cabinet.issueTermsNotAccepted\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 5675,
+      "length": 28,
+      "value": "\"cabinet.issueTextLineBreak\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 5736,
+      "length": 26,
+      "value": "\"cabinet.issueTextMissing\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 5795,
+      "length": 26,
+      "value": "\"cabinet.issueTextTooLong\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 5855,
+      "length": 27,
+      "value": "\"cabinet.issueTitleMissing\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 5916,
+      "length": 27,
+      "value": "\"cabinet.issueTitleTooLong\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 5977,
+      "length": 27,
+      "value": "\"cabinet.issueTooManyPeers\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 6040,
+      "length": 29,
+      "value": "\"cabinet.issueTooManyQueries\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 6103,
+      "length": 27,
+      "value": "\"cabinet.issueTopUpInvalid\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 6164,
+      "length": 27,
+      "value": "\"cabinet.issueViewsPerUser\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 6217,
+      "length": 19,
+      "value": "\"cabinet.linkField\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 6263,
+      "length": 20,
+      "value": "\"cabinet.linkFooter\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 6311,
+      "length": 21,
+      "value": "\"cabinet.linkInvalid\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 6365,
+      "length": 26,
+      "value": "\"cabinet.linkLookupFailed\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 6423,
+      "length": 25,
+      "value": "\"cabinet.linkPlaceholder\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 6478,
+      "length": 23,
+      "value": "\"cabinet.linkResolving\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 6536,
+      "length": 28,
+      "value": "\"cabinet.loadingDirectories\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 6587,
+      "length": 16,
+      "value": "\"cabinet.manage\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 6631,
+      "length": 21,
+      "value": "\"cabinet.mediaAspect\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 6682,
+      "length": 23,
+      "value": "\"cabinet.mediaDuration\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 6738,
+      "length": 26,
+      "value": "\"cabinet.mediaFixOrRemove\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 6796,
+      "length": 25,
+      "value": "\"cabinet.mediaInspecting\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 6855,
+      "length": 27,
+      "value": "\"cabinet.mediaMarkupFooter\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 6912,
+      "length": 23,
+      "value": "\"cabinet.mediaMeasured\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 6964,
+      "length": 22,
+      "value": "\"cabinet.mediaNotH264\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 7013,
+      "length": 20,
+      "value": "\"cabinet.mediaPhoto\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 7065,
+      "length": 25,
+      "value": "\"cabinet.mediaProcessing\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 7128,
+      "length": 31,
+      "value": "\"cabinet.mediaProcessingFailed\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 7186,
+      "length": 20,
+      "value": "\"cabinet.mediaReady\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 7236,
+      "length": 23,
+      "value": "\"cabinet.mediaTimedOut\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 7291,
+      "length": 25,
+      "value": "\"cabinet.mediaTipMessage\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 7346,
+      "length": 23,
+      "value": "\"cabinet.mediaTipTitle\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 7396,
+      "length": 20,
+      "value": "\"cabinet.mediaTitle\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 7446,
+      "length": 23,
+      "value": "\"cabinet.mediaTooLarge\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 7500,
+      "length": 24,
+      "value": "\"cabinet.mediaTooNarrow\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 7556,
+      "length": 25,
+      "value": "\"cabinet.mediaUnreadable\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 7614,
+      "length": 26,
+      "value": "\"cabinet.mediaUnsupported\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 7671,
+      "length": 24,
+      "value": "\"cabinet.mediaUploading\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 7722,
+      "length": 20,
+      "value": "\"cabinet.mediaVideo\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 7771,
+      "length": 22,
+      "value": "\"cabinet.minimumValue\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 7824,
+      "length": 24,
+      "value": "\"cabinet.moderationNote\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 7870,
+      "length": 15,
+      "value": "\"cabinet.newAd\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 7906,
+      "length": 14,
+      "value": "\"cabinet.next\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 7946,
+      "length": 19,
+      "value": "\"cabinet.noHistory\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 7989,
+      "length": 17,
+      "value": "\"cabinet.noMedia\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 8037,
+      "length": 24,
+      "value": "\"cabinet.opAdminDeposit\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 8085,
+      "length": 17,
+      "value": "\"cabinet.opBlock\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 8127,
+      "length": 18,
+      "value": "\"cabinet.opCancel\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 8176,
+      "length": 24,
+      "value": "\"cabinet.opCompensation\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 8228,
+      "length": 21,
+      "value": "\"cabinet.opCompleted\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 8274,
+      "length": 18,
+      "value": "\"cabinet.opCreate\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 8317,
+      "length": 18,
+      "value": "\"cabinet.opDelete\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 8360,
+      "length": 18,
+      "value": "\"cabinet.opFailed\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 8406,
+      "length": 21,
+      "value": "\"cabinet.opLegacyFix\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 8453,
+      "length": 19,
+      "value": "\"cabinet.opPending\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 8497,
+      "length": 18,
+      "value": "\"cabinet.opReject\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 8539,
+      "length": 17,
+      "value": "\"cabinet.opTopUp\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 8581,
+      "length": 18,
+      "value": "\"cabinet.optional\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 8630,
+      "length": 24,
+      "value": "\"cabinet.otherInfoField\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 8686,
+      "length": 25,
+      "value": "\"cabinet.otherInfoFooter\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 8742,
+      "length": 24,
+      "value": "\"cabinet.outcomeDeleted\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 8805,
+      "length": 32,
+      "value": "\"cabinet.outcomeDeletedNoAmount\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 8872,
+      "length": 28,
+      "value": "\"cabinet.outcomeEditApplied\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 8935,
+      "length": 28,
+      "value": "\"cabinet.outcomeEditPending\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 8993,
+      "length": 23,
+      "value": "\"cabinet.outcomePaused\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 9047,
+      "length": 24,
+      "value": "\"cabinet.outcomeResumed\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 9103,
+      "length": 25,
+      "value": "\"cabinet.outcomeToppedUp\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 9150,
+      "length": 15,
+      "value": "\"cabinet.pause\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 9189,
+      "length": 17,
+      "value": "\"cabinet.peerBot\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 9234,
+      "length": 21,
+      "value": "\"cabinet.peerChannel\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 9281,
+      "length": 19,
+      "value": "\"cabinet.peerOther\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 9332,
+      "length": 25,
+      "value": "\"cabinet.pendingRevision\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 9386,
+      "length": 22,
+      "value": "\"cabinet.placementBot\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 9441,
+      "length": 26,
+      "value": "\"cabinet.placementBotHint\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 9500,
+      "length": 26,
+      "value": "\"cabinet.placementChannel\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 9563,
+      "length": 30,
+      "value": "\"cabinet.placementChannelHint\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 9625,
+      "length": 25,
+      "value": "\"cabinet.placementSearch\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 9686,
+      "length": 29,
+      "value": "\"cabinet.placementSearchHint\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 9749,
+      "length": 27,
+      "value": "\"cabinet.placementUsersBot\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 9814,
+      "length": 31,
+      "value": "\"cabinet.placementUsersBotHint\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 9883,
+      "length": 31,
+      "value": "\"cabinet.placementUsersChannel\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 9956,
+      "length": 35,
+      "value": "\"cabinet.placementUsersChannelHint\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 10027,
+      "length": 29,
+      "value": "\"cabinet.placementUsersVideo\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 10096,
+      "length": 33,
+      "value": "\"cabinet.placementUsersVideoHint\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 10161,
+      "length": 25,
+      "value": "\"cabinet.pricingFallback\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 10210,
+      "length": 17,
+      "value": "\"cabinet.queries\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 10257,
+      "length": 23,
+      "value": "\"cabinet.queriesFooter\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 10313,
+      "length": 26,
+      "value": "\"cabinet.queryPlaceholder\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 10367,
+      "length": 21,
+      "value": "\"cabinet.removeMedia\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 10414,
+      "length": 19,
+      "value": "\"cabinet.reqAspect\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 10459,
+      "length": 19,
+      "value": "\"cabinet.reqFailed\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 10511,
+      "length": 26,
+      "value": "\"cabinet.reqNotApplicable\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 10563,
+      "length": 19,
+      "value": "\"cabinet.reqPassed\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 10609,
+      "length": 20,
+      "value": "\"cabinet.reqPending\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 10658,
+      "length": 22,
+      "value": "\"cabinet.reqPhotoFile\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 10713,
+      "length": 26,
+      "value": "\"cabinet.reqVideoDuration\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 10768,
+      "length": 22,
+      "value": "\"cabinet.reqVideoFile\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 10815,
+      "length": 18,
+      "value": "\"cabinet.reqWidth\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 10867,
+      "length": 27,
+      "value": "\"cabinet.requirementsTitle\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 10917,
+      "length": 16,
+      "value": "\"cabinet.resume\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 10954,
+      "length": 14,
+      "value": "\"cabinet.save\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 11000,
+      "length": 25,
+      "value": "\"cabinet.sectionCreative\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 11057,
+      "length": 25,
+      "value": "\"cabinet.sectionSchedule\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 11114,
+      "length": 25,
+      "value": "\"cabinet.sectionSettings\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 11166,
+      "length": 20,
+      "value": "\"cabinet.setEndDate\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 11215,
+      "length": 22,
+      "value": "\"cabinet.setStartDate\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 11263,
+      "length": 19,
+      "value": "\"cabinet.startDate\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 11308,
+      "length": 19,
+      "value": "\"cabinet.startOver\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 11354,
+      "length": 20,
+      "value": "\"cabinet.stepBudget\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 11399,
+      "length": 18,
+      "value": "\"cabinet.stepLink\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 11443,
+      "length": 19,
+      "value": "\"cabinet.stepMedia\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 11485,
+      "length": 16,
+      "value": "\"cabinet.stepOf\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 11531,
+      "length": 23,
+      "value": "\"cabinet.stepPlacement\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 11582,
+      "length": 21,
+      "value": "\"cabinet.stepPricing\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 11631,
+      "length": 21,
+      "value": "\"cabinet.stepSummary\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 11682,
+      "length": 23,
+      "value": "\"cabinet.stepTargeting\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 11730,
+      "length": 18,
+      "value": "\"cabinet.stepText\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 11776,
+      "length": 21,
+      "value": "\"cabinet.subscribers\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 11817,
+      "length": 13,
+      "value": "\"cabinet.sum\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 11858,
+      "length": 21,
+      "value": "\"cabinet.textCounter\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 11905,
+      "length": 19,
+      "value": "\"cabinet.textField\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 11951,
+      "length": 20,
+      "value": "\"cabinet.textFooter\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 12003,
+      "length": 25,
+      "value": "\"cabinet.textPlaceholder\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 12055,
+      "length": 20,
+      "value": "\"cabinet.titleField\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 12097,
+      "length": 15,
+      "value": "\"cabinet.topUp\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 12141,
+      "length": 22,
+      "value": "\"cabinet.topUpConfirm\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 12199,
+      "length": 29,
+      "value": "\"cabinet.topUpConfirmMessage\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 12255,
+      "length": 20,
+      "value": "\"cabinet.topUpTitle\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 12298,
+      "length": 16,
+      "value": "\"cabinet.topics\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 12340,
+      "length": 19,
+      "value": "\"cabinet.unlimited\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 12389,
+      "length": 23,
+      "value": "\"cabinet.userLanguages\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 12441,
+      "length": 22,
+      "value": "\"cabinet.viewsPerUser\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 70266,
+      "length": 16,
+      "value": "\"common.account\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 70310,
+      "length": 20,
+      "value": "\"common.accountName\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 70358,
+      "length": 20,
+      "value": "\"common.accountRole\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 70414,
+      "length": 28,
+      "value": "\"common.accountSignInMethod\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 70471,
+      "length": 21,
+      "value": "\"common.actionFailed\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 70518,
+      "length": 18,
+      "value": "\"common.activeAds\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 70556,
+      "length": 12,
+      "value": "\"common.ads\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 70592,
+      "length": 16,
+      "value": "\"common.approve\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 70639,
+      "length": 23,
+      "value": "\"common.approveConfirm\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 70701,
+      "length": 31,
+      "value": "\"common.approveRevisionConfirm\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 70758,
+      "length": 18,
+      "value": "\"common.available\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 70798,
+      "length": 14,
+      "value": "\"common.block\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 70839,
+      "length": 19,
+      "value": "\"common.blockTitle\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 70881,
+      "length": 15,
+      "value": "\"common.budget\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 70919,
+      "length": 15,
+      "value": "\"common.cancel\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 70959,
+      "length": 17,
+      "value": "\"common.channels\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 70999,
+      "length": 15,
+      "value": "\"common.clicks\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 71042,
+      "length": 20,
+      "value": "\"common.clicksChart\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 71084,
+      "length": 14,
+      "value": "\"common.close\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 71118,
+      "length": 12,
+      "value": "\"common.ctr\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 71162,
+      "length": 24,
+      "value": "\"common.currentCreative\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 71212,
+      "length": 18,
+      "value": "\"common.dashboard\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 71250,
+      "length": 12,
+      "value": "\"common.day\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 71286,
+      "length": 16,
+      "value": "\"common.decline\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 71339,
+      "length": 29,
+      "value": "\"common.declineRevisionTitle\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 71397,
+      "length": 21,
+      "value": "\"common.declineTitle\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 71439,
+      "length": 13,
+      "value": "\"common.done\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 71477,
+      "length": 17,
+      "value": "\"common.earnings\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 71516,
+      "length": 14,
+      "value": "\"common.email\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 71558,
+      "length": 20,
+      "value": "\"common.errConflict\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 71607,
+      "length": 21,
+      "value": "\"common.errForbidden\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 71666,
+      "length": 30,
+      "value": "\"common.errInvalidCredentials\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 71728,
+      "length": 24,
+      "value": "\"common.errInvalidInput\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 71780,
+      "length": 20,
+      "value": "\"common.errNotFound\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 71827,
+      "length": 19,
+      "value": "\"common.errOffline\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 71877,
+      "length": 23,
+      "value": "\"common.errRateLimited\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 71928,
+      "length": 20,
+      "value": "\"common.errRejected\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 71974,
+      "length": 18,
+      "value": "\"common.errServer\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 72024,
+      "length": 24,
+      "value": "\"common.errUnauthorized\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 72078,
+      "length": 22,
+      "value": "\"common.errUnexpected\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 72128,
+      "length": 20,
+      "value": "\"common.impressions\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 72175,
+      "length": 19,
+      "value": "\"common.last30Days\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 72220,
+      "length": 18,
+      "value": "\"common.last7Days\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 72263,
+      "length": 17,
+      "value": "\"common.lifetime\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 72305,
+      "length": 17,
+      "value": "\"common.loadMore\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 72346,
+      "length": 16,
+      "value": "\"common.loading\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 72391,
+      "length": 21,
+      "value": "\"common.markReviewed\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 72442,
+      "length": 22,
+      "value": "\"common.methodBackend\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 72492,
+      "length": 20,
+      "value": "\"common.methodPanel\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 72539,
+      "length": 19,
+      "value": "\"common.moderation\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 72590,
+      "length": 24,
+      "value": "\"common.moderationQueue\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 72636,
+      "length": 14,
+      "value": "\"common.noAds\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 72679,
+      "length": 21,
+      "value": "\"common.noAdsMessage\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 72727,
+      "length": 19,
+      "value": "\"common.noChannels\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 72772,
+      "length": 18,
+      "value": "\"common.noResults\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 72817,
+      "length": 19,
+      "value": "\"common.noSections\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 72866,
+      "length": 22,
+      "value": "\"common.offlineBanner\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 72910,
+      "length": 14,
+      "value": "\"common.owner\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 72952,
+      "length": 20,
+      "value": "\"common.partialData\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 72997,
+      "length": 17,
+      "value": "\"common.password\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 73037,
+      "length": 15,
+      "value": "\"common.period\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 73078,
+      "length": 18,
+      "value": "\"common.placement\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 73129,
+      "length": 25,
+      "value": "\"common.proposedCreative\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 73179,
+      "length": 17,
+      "value": "\"common.queueAds\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 73223,
+      "length": 19,
+      "value": "\"common.queueEmpty\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 73271,
+      "length": 21,
+      "value": "\"common.queueReports\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 73323,
+      "length": 23,
+      "value": "\"common.queueRevisions\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 73369,
+      "length": 15,
+      "value": "\"common.reason\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 73414,
+      "length": 22,
+      "value": "\"common.reasonCounter\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 73470,
+      "length": 26,
+      "value": "\"common.reasonPlaceholder\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 73520,
+      "length": 16,
+      "value": "\"common.refresh\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 73572,
+      "length": 28,
+      "value": "\"common.refreshFailedBanner\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 73626,
+      "length": 18,
+      "value": "\"common.remaining\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 73673,
+      "length": 21,
+      "value": "\"common.reportsCount\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 73716,
+      "length": 14,
+      "value": "\"common.retry\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 73761,
+      "length": 23,
+      "value": "\"common.roleAdvertiser\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 73814,
+      "length": 22,
+      "value": "\"common.roleModerator\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 73867,
+      "length": 23,
+      "value": "\"common.roleSuperadmin\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 73918,
+      "length": 20,
+      "value": "\"common.roleUnknown\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 73963,
+      "length": 17,
+      "value": "\"common.scopeOwn\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 74010,
+      "length": 22,
+      "value": "\"common.scopePlatform\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 74055,
+      "length": 15,
+      "value": "\"common.search\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 74091,
+      "length": 13,
+      "value": "\"common.send\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 74127,
+      "length": 15,
+      "value": "\"common.signIn\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 74178,
+      "length": 28,
+      "value": "\"common.signInFooterBackend\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 74240,
+      "length": 26,
+      "value": "\"common.signInFooterPanel\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 74295,
+      "length": 21,
+      "value": "\"common.signInMethod\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 74344,
+      "length": 20,
+      "value": "\"common.signInTitle\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 74388,
+      "length": 16,
+      "value": "\"common.signOut\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 74442,
+      "length": 30,
+      "value": "\"common.signOutConfirmMessage\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 74508,
+      "length": 28,
+      "value": "\"common.signOutConfirmTitle\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 74558,
+      "length": 14,
+      "value": "\"common.spend\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 74599,
+      "length": 19,
+      "value": "\"common.spendChart\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 74640,
+      "length": 14,
+      "value": "\"common.spent\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 74681,
+      "length": 19,
+      "value": "\"common.statistics\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 74733,
+      "length": 25,
+      "value": "\"common.statsUnavailable\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 74781,
+      "length": 15,
+      "value": "\"common.status\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 74825,
+      "length": 21,
+      "value": "\"common.statusActive\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 74876,
+      "length": 22,
+      "value": "\"common.statusBlocked\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 74929,
+      "length": 23,
+      "value": "\"common.statusDeclined\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 74982,
+      "length": 22,
+      "value": "\"common.statusDeleted\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 75035,
+      "length": 23,
+      "value": "\"common.statusInReview\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 75087,
+      "length": 21,
+      "value": "\"common.statusOnHold\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 75138,
+      "length": 22,
+      "value": "\"common.statusStopped\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 75182,
+      "length": 14,
+      "value": "\"common.title\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 75218,
+      "length": 14,
+      "value": "\"common.today\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 75260,
+      "length": 20,
+      "value": "\"common.totalEarned\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 75306,
+      "length": 18,
+      "value": "\"common.updatedAt\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 75349,
+      "length": 17,
+      "value": "\"common.username\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 75388,
+      "length": 14,
+      "value": "\"common.views\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 75429,
+      "length": 19,
+      "value": "\"common.viewsChart\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 100198,
+      "length": 16,
+      "value": "\"overview.byDay\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 100245,
+      "length": 25,
+      "value": "\"overview.chartSelection\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 100296,
+      "length": 20,
+      "value": "\"overview.deltaDown\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 100342,
+      "length": 20,
+      "value": "\"overview.deltaFlat\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 100387,
+      "length": 19,
+      "value": "\"overview.deltaNew\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 100430,
+      "length": 18,
+      "value": "\"overview.deltaUp\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 100480,
+      "length": 26,
+      "value": "\"overview.emailOrUsername\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 100533,
+      "length": 21,
+      "value": "\"overview.lowBalance\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 100586,
+      "length": 26,
+      "value": "\"overview.manageAdsAction\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 100642,
+      "length": 24,
+      "value": "\"overview.noViewsInDays\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 100695,
+      "length": 23,
+      "value": "\"overview.noViewsToday\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 100745,
+      "length": 21,
+      "value": "\"overview.noViewsYet\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 100797,
+      "length": 25,
+      "value": "\"overview.partialFailure\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 100855,
+      "length": 27,
+      "value": "\"overview.partnerAvailable\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 100911,
+      "length": 23,
+      "value": "\"overview.queueWaiting\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 100963,
+      "length": 23,
+      "value": "\"overview.reviewAction\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 101018,
+      "length": 26,
+      "value": "\"overview.signInFooterAny\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 101081,
+      "length": 31,
+      "value": "\"overview.signInHeaderSubtitle\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 101146,
+      "length": 28,
+      "value": "\"overview.signInHeaderTitle\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 101197,
+      "length": 17,
+      "value": "\"overview.tabAds\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 101242,
+      "length": 22,
+      "value": "\"overview.tabEarnings\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 101292,
+      "length": 22,
+      "value": "\"overview.tabOverview\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 101340,
+      "length": 20,
+      "value": "\"overview.tabReview\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 101397,
+      "length": 31,
+      "value": "\"overview.todayVersusYesterday\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 101456,
+      "length": 22,
+      "value": "\"overview.updatedTime\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 101513,
+      "length": 29,
+      "value": "\"overview.versusPreviousDays\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 101574,
+      "length": 26,
+      "value": "\"overview.versusYesterday\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/GeneratedStrings.swift",
+      "kind": "StringLiteral",
+      "offset": 101633,
+      "length": 27,
+      "value": "\"overview.waitingForReview\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsAccountView.swift",
+      "kind": "BooleanLiteral",
+      "offset": 599,
+      "length": 5,
+      "value": "false"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsAccountView.swift",
+      "kind": "FloatLiteral",
+      "offset": 1798,
+      "length": 3,
+      "value": "0.4"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsAccountView.swift",
+      "kind": "BooleanLiteral",
+      "offset": 2233,
+      "length": 5,
+      "value": "false"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsAccountView.swift",
+      "kind": "IntegerLiteral",
+      "offset": 2362,
+      "length": 2,
+      "value": "48"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsAdCreateView.swift",
+      "kind": "BooleanLiteral",
+      "offset": 793,
+      "length": 5,
+      "value": "false"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsAdCreateView.swift",
+      "kind": "IntegerLiteral",
+      "offset": 888,
+      "length": 1,
+      "value": "0"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsAdCreateView.swift",
+      "kind": "IntegerLiteral",
+      "offset": 21836,
+      "length": 2,
+      "value": "40"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsAdDetailView.swift",
+      "kind": "BooleanLiteral",
+      "offset": 739,
+      "length": 5,
+      "value": "false"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsAdDetailView.swift",
+      "kind": "IntegerLiteral",
+      "offset": 977,
+      "length": 3,
+      "value": "180"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsAdDetailView.swift",
+      "kind": "BooleanLiteral",
+      "offset": 13551,
+      "length": 5,
+      "value": "false"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsAdsViews.swift",
+      "kind": "BooleanLiteral",
+      "offset": 5514,
+      "length": 5,
+      "value": "false"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsChart.swift",
+      "kind": "IntegerLiteral",
+      "offset": 2805,
+      "length": 1,
+      "value": "4"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsChart.swift",
+      "kind": "IntegerLiteral",
+      "offset": 2842,
+      "length": 1,
+      "value": "3"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsComponents.swift",
+      "kind": "IntegerLiteral",
+      "offset": 532,
+      "length": 1,
+      "value": "4"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsComponents.swift",
+      "kind": "IntegerLiteral",
+      "offset": 567,
+      "length": 1,
+      "value": "8"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsComponents.swift",
+      "kind": "IntegerLiteral",
+      "offset": 603,
+      "length": 2,
+      "value": "12"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsComponents.swift",
+      "kind": "IntegerLiteral",
+      "offset": 640,
+      "length": 2,
+      "value": "16"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsComponents.swift",
+      "kind": "IntegerLiteral",
+      "offset": 677,
+      "length": 2,
+      "value": "24"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsComponents.swift",
+      "kind": "IntegerLiteral",
+      "offset": 714,
+      "length": 2,
+      "value": "32"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsComponents.swift",
+      "kind": "IntegerLiteral",
+      "offset": 754,
+      "length": 2,
+      "value": "16"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsComponents.swift",
+      "kind": "IntegerLiteral",
+      "offset": 795,
+      "length": 2,
+      "value": "16"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsComponents.swift",
+      "kind": "IntegerLiteral",
+      "offset": 832,
+      "length": 2,
+      "value": "12"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsComponents.swift",
+      "kind": "IntegerLiteral",
+      "offset": 872,
+      "length": 2,
+      "value": "24"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsComponents.swift",
+      "kind": "IntegerLiteral",
+      "offset": 917,
+      "length": 3,
+      "value": "200"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsComponents.swift",
+      "kind": "IntegerLiteral",
+      "offset": 963,
+      "length": 3,
+      "value": "120"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsComponents.swift",
+      "kind": "IntegerLiteral",
+      "offset": 1008,
+      "length": 1,
+      "value": "2"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsComponents.swift",
+      "kind": "IntegerLiteral",
+      "offset": 1166,
+      "length": 2,
+      "value": "16"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsComponents.swift",
+      "kind": "IntegerLiteral",
+      "offset": 1211,
+      "length": 3,
+      "value": "720"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsComponents.swift",
+      "kind": "BooleanLiteral",
+      "offset": 3675,
+      "length": 5,
+      "value": "false"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsComponents.swift",
+      "kind": "IntegerLiteral",
+      "offset": 5696,
+      "length": 8,
+      "value": "0x1A7030"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsComponents.swift",
+      "kind": "IntegerLiteral",
+      "offset": 5731,
+      "length": 8,
+      "value": "0x30DB5B"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsComponents.swift",
+      "kind": "IntegerLiteral",
+      "offset": 5797,
+      "length": 8,
+      "value": "0xB23A00"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsComponents.swift",
+      "kind": "IntegerLiteral",
+      "offset": 5832,
+      "length": 8,
+      "value": "0xFFB340"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsComponents.swift",
+      "kind": "IntegerLiteral",
+      "offset": 5895,
+      "length": 8,
+      "value": "0xC2000F"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsComponents.swift",
+      "kind": "IntegerLiteral",
+      "offset": 5930,
+      "length": 8,
+      "value": "0xFF6961"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsComponents.swift",
+      "kind": "IntegerLiteral",
+      "offset": 6157,
+      "length": 8,
+      "value": "0x5F5F64"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsComponents.swift",
+      "kind": "IntegerLiteral",
+      "offset": 6192,
+      "length": 8,
+      "value": "0xAEAEB2"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsComponents.swift",
+      "kind": "FloatLiteral",
+      "offset": 9209,
+      "length": 4,
+      "value": "0.35"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsComponents.swift",
+      "kind": "IntegerLiteral",
+      "offset": 9445,
+      "length": 2,
+      "value": "26"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsComponents.swift",
+      "kind": "BooleanLiteral",
+      "offset": 12646,
+      "length": 5,
+      "value": "false"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsComponents.swift",
+      "kind": "BooleanLiteral",
+      "offset": 14181,
+      "length": 5,
+      "value": "false"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsComponents.swift",
+      "kind": "BooleanLiteral",
+      "offset": 24766,
+      "length": 5,
+      "value": "false"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsCropEditorView.swift",
+      "kind": "IntegerLiteral",
+      "offset": 1477,
+      "length": 1,
+      "value": "1"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsCropEditorView.swift",
+      "kind": "IntegerLiteral",
+      "offset": 1523,
+      "length": 1,
+      "value": "0"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsCropEditorView.swift",
+      "kind": "BooleanLiteral",
+      "offset": 1615,
+      "length": 5,
+      "value": "false"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsCropEditorView.swift",
+      "kind": "IntegerLiteral",
+      "offset": 1677,
+      "length": 1,
+      "value": "0"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsCropEditorView.swift",
+      "kind": "IntegerLiteral",
+      "offset": 1714,
+      "length": 1,
+      "value": "0"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsCropEditorView.swift",
+      "kind": "IntegerLiteral",
+      "offset": 1748,
+      "length": 1,
+      "value": "0"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsCropEditorView.swift",
+      "kind": "IntegerLiteral",
+      "offset": 1820,
+      "length": 2,
+      "value": "20"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsCropEditorView.swift",
+      "kind": "IntegerLiteral",
+      "offset": 1865,
+      "length": 2,
+      "value": "12"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsCropEditorView.swift",
+      "kind": "IntegerLiteral",
+      "offset": 1911,
+      "length": 2,
+      "value": "18"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsCropEditorView.swift",
+      "kind": "IntegerLiteral",
+      "offset": 1956,
+      "length": 1,
+      "value": "3"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsCropEditorView.swift",
+      "kind": "FloatLiteral",
+      "offset": 1990,
+      "length": 3,
+      "value": "0.6"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsCropEditorView.swift",
+      "kind": "FloatLiteral",
+      "offset": 2030,
+      "length": 4,
+      "value": "0.01"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsCropEditorView.swift",
+      "kind": "IntegerLiteral",
+      "offset": 2159,
+      "length": 3,
+      "value": "280"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsDashboardView.swift",
+      "kind": "StringLiteral",
+      "offset": 15757,
+      "length": 2,
+      "value": "\"\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsDashboardView.swift",
+      "kind": "StringLiteral",
+      "offset": 25848,
+      "length": 2,
+      "value": "\"\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsDashboardView.swift",
+      "kind": "StringLiteral",
+      "offset": 25872,
+      "length": 2,
+      "value": "\"\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsDashboardView.swift",
+      "kind": "IntegerLiteral",
+      "offset": 25884,
+      "length": 7,
+      "value": "128400"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsDashboardView.swift",
+      "kind": "IntegerLiteral",
+      "offset": 25903,
+      "length": 7,
+      "value": "110000"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsDashboardView.swift",
+      "kind": "StringLiteral",
+      "offset": 25955,
+      "length": 2,
+      "value": "\"\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsDashboardView.swift",
+      "kind": "StringLiteral",
+      "offset": 25979,
+      "length": 2,
+      "value": "\"\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsDashboardView.swift",
+      "kind": "IntegerLiteral",
+      "offset": 25991,
+      "length": 5,
+      "value": "3210"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsDashboardView.swift",
+      "kind": "IntegerLiteral",
+      "offset": 26008,
+      "length": 5,
+      "value": "3000"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsDashboardView.swift",
+      "kind": "StringLiteral",
+      "offset": 26055,
+      "length": 2,
+      "value": "\"\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsDashboardView.swift",
+      "kind": "StringLiteral",
+      "offset": 26079,
+      "length": 2,
+      "value": "\"\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsDashboardView.swift",
+      "kind": "FloatLiteral",
+      "offset": 26091,
+      "length": 5,
+      "value": "0.025"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsDashboardView.swift",
+      "kind": "FloatLiteral",
+      "offset": 26108,
+      "length": 5,
+      "value": "0.024"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsDashboardView.swift",
+      "kind": "StringLiteral",
+      "offset": 26157,
+      "length": 2,
+      "value": "\"\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsDashboardView.swift",
+      "kind": "StringLiteral",
+      "offset": 26181,
+      "length": 2,
+      "value": "\"\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsDashboardView.swift",
+      "kind": "IntegerLiteral",
+      "offset": 26193,
+      "length": 9,
+      "value": "1540000"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsDashboardView.swift",
+      "kind": "IntegerLiteral",
+      "offset": 26214,
+      "length": 9,
+      "value": "1400000"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsDashboardView.swift",
+      "kind": "IntegerLiteral",
+      "offset": 28132,
+      "length": 3,
+      "value": "300"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsFormComponents.swift",
+      "kind": "BooleanLiteral",
+      "offset": 427,
+      "length": 5,
+      "value": "false"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsFormComponents.swift",
+      "kind": "IntegerLiteral",
+      "offset": 529,
+      "length": 2,
+      "value": "12"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsFormComponents.swift",
+      "kind": "IntegerLiteral",
+      "offset": 2838,
+      "length": 6,
+      "value": "10000"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsFormComponents.swift",
+      "kind": "StringLiteral",
+      "offset": 4880,
+      "length": 2,
+      "value": "\"\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsFormComponents.swift",
+      "kind": "StringLiteral",
+      "offset": 6797,
+      "length": 2,
+      "value": "\"\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsKeyboard.swift",
+      "kind": "BooleanLiteral",
+      "offset": 1230,
+      "length": 5,
+      "value": "false"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsKeyboard.swift",
+      "kind": "IntegerLiteral",
+      "offset": 1488,
+      "length": 1,
+      "value": "0"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsKeyboard.swift",
+      "kind": "IntegerLiteral",
+      "offset": 2520,
+      "length": 1,
+      "value": "0"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsLoginView.swift",
+      "kind": "StringLiteral",
+      "offset": 523,
+      "length": 2,
+      "value": "\"\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsLoginView.swift",
+      "kind": "IntegerLiteral",
+      "offset": 807,
+      "length": 2,
+      "value": "56"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsLoginView.swift",
+      "kind": "StringLiteral",
+      "offset": 918,
+      "length": 2,
+      "value": "\"\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsMediaRequirementsView.swift",
+      "kind": "IntegerLiteral",
+      "offset": 734,
+      "length": 2,
+      "value": "22"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsMediaRequirementsView.swift",
+      "kind": "BooleanLiteral",
+      "offset": 6453,
+      "length": 5,
+      "value": "false"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsMediaSlotView.swift",
+      "kind": "IntegerLiteral",
+      "offset": 795,
+      "length": 3,
+      "value": "180"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsMediaSlotView.swift",
+      "kind": "BooleanLiteral",
+      "offset": 1004,
+      "length": 5,
+      "value": "false"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsMediaSlotView.swift",
+      "kind": "BooleanLiteral",
+      "offset": 1143,
+      "length": 5,
+      "value": "false"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsModerationView.swift",
+      "kind": "IntegerLiteral",
+      "offset": 1450,
+      "length": 1,
+      "value": "0"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsModerationView.swift",
+      "kind": "StringLiteral",
+      "offset": 14588,
+      "length": 2,
+      "value": "\"\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsRootView.swift",
+      "kind": "Array",
+      "offset": 1100,
+      "length": 2,
+      "value": "[]"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsRootView.swift",
+      "kind": "BooleanLiteral",
+      "offset": 1239,
+      "length": 5,
+      "value": "false"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsRootView.swift",
+      "kind": "StringLiteral",
+      "offset": 1377,
+      "length": 2,
+      "value": "\"\""
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsRootView.swift",
+      "kind": "Array",
+      "offset": 4935,
+      "length": 2,
+      "value": "[]"
+    },
+    {
+      "filePath": "\/Users\/codingtech\/Documents\/Telegram\/NovagramAds\/build\/static\/stage\/NovagramInsightsUI\/Sources\/NovagramInsightsUI\/InsightsRootView.swift",
+      "kind": "Array",
+      "offset": 4993,
+      "length": 2,
+      "value": "[]"
+    }
+  ]
+}

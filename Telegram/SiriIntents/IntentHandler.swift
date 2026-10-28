@@ -599,13 +599,13 @@ class DefaultIntentHandler: INExtension, INSendMessageIntentHandling, INSearchFo
                 }
                 // A refused send fails here (StandaloneSendMessage no longer swallows the
                 // server's answer), and Siri reports the failure instead of "sent".
-                return standaloneSendMessage(account: account, peerId: peerId, text: intent.content ?? "", attributes: [], media: nil, replyToMessageId: nil)
-                |> mapError { _ -> IntentHandlingError in
-                    return .generic
-                }
-                |> mapToSignal { _ -> Signal<Void, IntentHandlingError> in
-                    return .complete()
-                }
+            return standaloneSendMessage(account: account, peerId: peerId, text: intent.content ?? "", attributes: [], media: nil, replyToMessageId: nil)
+            |> mapError { _ -> IntentHandlingError in
+                return .generic
+            }
+            |> mapToSignal { _ -> Signal<Void, IntentHandlingError> in
+                return .complete()
+            }
             }
             |> afterDisposed {
                 account.shouldBeServiceTaskMaster.set(.single(.never))
@@ -683,7 +683,7 @@ class DefaultIntentHandler: INExtension, INSendMessageIntentHandling, INSearchFo
                     messages = getMessages(account: account, ids: ids)
                 case let .unread(excludingNotifications):
                     if excludingNotifications.isEmpty {
-                        messages = unreadMessages(account: account)
+                    messages = unreadMessages(account: account)
                     } else {
                         messages = account.postbox.transaction { transaction -> Set<String> in
                             return Set(excludingNotifications.compactMap { requestIdentifier in
@@ -698,7 +698,13 @@ class DefaultIntentHandler: INExtension, INSendMessageIntentHandling, INSearchFo
                         }
                     }
                 }
-                return messages
+                // Novagram: a chat picked in CarPlay's conversation list is read directly, even when
+                // muted or outside the chats the scan above looks at.
+                let conversationPeerIds = (intent.conversationIdentifiers ?? []).compactMap { Int64($0) }.map { PeerId($0) }
+                if !conversationPeerIds.isEmpty {
+                    Logger.shared.log("SiriIntents", "INSearchForMessagesIntent conversationIdentifiers: \(conversationPeerIds)")
+                }
+                return (conversationPeerIds.isEmpty ? messages : unreadMessages(account: account, peerIds: conversationPeerIds))
                 |> castError(IntentHandlingError.self)
                 |> afterDisposed {
                     account.shouldBeServiceTaskMaster.set(.single(.never))
@@ -756,17 +762,17 @@ class DefaultIntentHandler: INExtension, INSendMessageIntentHandling, INSearchFo
             // has to be skipped rather than indexed into.
             var maxMessageIdsToApply: [PeerId: MessageId] = [:]
             for identifier in intent.identifiers ?? [] {
-                let components = identifier.components(separatedBy: "_")
+                    let components = identifier.components(separatedBy: "_")
                 guard components.count == 3, let peerIdValue = Int64(components[0]), let namespace = Int32(components[1]), let id = Int32(components[2]) else {
                     continue
                 }
                 let peerId = PeerId(peerIdValue)
-                let messageId = MessageId(peerId: peerId, namespace: namespace, id: id)
+                        let messageId = MessageId(peerId: peerId, namespace: namespace, id: id)
                 if let currentMessageId = maxMessageIdsToApply[peerId], messageId < currentMessageId {
                     continue
                 }
-                maxMessageIdsToApply[peerId] = messageId
-            }
+                                maxMessageIdsToApply[peerId] = messageId
+                            }
             
             if maxMessageIdsToApply.isEmpty {
                 return .single(.failureMessageNotFound)
@@ -796,18 +802,18 @@ class DefaultIntentHandler: INExtension, INSendMessageIntentHandling, INSearchFo
                 return .single(.failureMessageAttributeNotSet)
             }
             
-            account.shouldBeServiceTaskMaster.set(.single(.now))
+                account.shouldBeServiceTaskMaster.set(.single(.now))
             return applied
             |> castError(IntentHandlingError.self)
             |> map { applied -> INSetMessageAttributeIntentResponseCode in
                 // Nothing was applied - every peer refused, which is what a secret chat does
                 // for a read. Saying "success" would tell the user it was marked when it was not.
                 return applied ? .success : .failureMessageAttributeNotSet
+                }
+                |> afterDisposed {
+                    account.shouldBeServiceTaskMaster.set(.single(.never))
+                }
             }
-            |> afterDisposed {
-                account.shouldBeServiceTaskMaster.set(.single(.never))
-            }
-        }
         |> deliverOnMainQueue).start(next: { code in
             let userActivity = NSUserActivity(activityType: NSStringFromClass(INSetMessageAttributeIntent.self))
             let response = INSetMessageAttributeIntentResponse(code: code, userActivity: userActivity)
@@ -883,7 +889,7 @@ class DefaultIntentHandler: INExtension, INSendMessageIntentHandling, INSearchFo
             completion(response)
         }))
     }
-
+    
     @available(iOSApplicationExtension 14.0, iOS 14.0, *)
     func provideFriendsOptionsCollection(for intent: SelectFriendsIntent, searchTerm: String?, with completion: @escaping (INObjectCollection<Friend>?, Error?) -> Void) {
         guard let rootPath = self.rootPath, let _ = self.accountManager, let encryptionParameters = self.encryptionParameters else {
@@ -1068,7 +1074,7 @@ private final class WidgetIntentHandler {
             //let presentationData = WidgetPresentationData.getForExtension()
             
             let error = NSError(domain: "Locked", code: 1, userInfo: [
-                NSLocalizedDescriptionKey: "Open Telegram and enter passcode to edit widget."
+                NSLocalizedDescriptionKey: "Open Novagram and enter passcode to edit widget."
             ])
             
             completion(nil, error)

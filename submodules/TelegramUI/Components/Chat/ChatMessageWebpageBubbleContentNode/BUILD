@@ -11,6 +11,7 @@ swift_library(
     ],
     deps = [
         "//submodules/Display",
+        "//submodules/Novagram/Sponsored:NovagramSponsoredBridge",
         "//submodules/LottieSettings:LottieSettings",
         "//submodules/AsyncDisplayKit",
         "//submodules/SSignalKit/SwiftSignalKit",

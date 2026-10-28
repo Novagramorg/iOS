@@ -1,0 +1,398 @@
+#!/bin/bash
+set -e
+
+# ─── Novagram App Store IPA builder ───────────────────────────────────────────
+# Production .ipa fayl yaratadi:
+#   • appstore-configuration.json (is_appstore_build=true)
+#   • Distribution provisioning profillar
+#   • Apple Distribution: Vipads MCHJ (ZDBP5RSRZF) cert
+# Tugagandan keyin .ipa Apple Transporter.app orqali qo'lda upload qilinadi
+# → App Store Connect → TestFlight → App Review.
+
+export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
+
+# ─── Colors ──────────────────────────────────────────────────────────────────
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+step() { echo -e "\n${BLUE}▶ $1${NC}"; }
+ok()   { echo -e "${GREEN}✓ $1${NC}"; }
+warn() { echo -e "${YELLOW}⚠ $1${NC}"; }
+err()  { echo -e "${RED}✗ $1${NC}"; exit 1; }
+
+# ─── Paths ───────────────────────────────────────────────────────────────────
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+CACHE_DIR="$HOME/telegram-bazel-cache"
+CONFIG_PATH="build-system/appstore-configuration.json"
+DIST_SRC="$HOME/Documents/Apple/Distribution"
+PROV_DIR="$SCRIPT_DIR/build-input/configuration-repository/provisioning"
+OUTPUT_DIR="${OUTPUT_DIR:-$HOME/Desktop}"
+VIPADS_TEAM_ID="ZDBP5RSRZF"
+
+# ─── Diagnostika qo'riqchisi ────────────────────────────────────────────────
+# Race condition'larni qo'lda reproduce qilish uchun manba kodiga vaqtinchalik
+# kechikish/log qo'yamiz. Ular App Store build'iga hech qachon tushmasligi kerak.
+if grep -rl "NOVAGRAM_REPRO_DELAY_DO_NOT_SHIP" submodules/ Telegram/ 2>/dev/null | head -1 | grep -q .; then
+    echo ""
+    echo "  Diagnostika kodi manbada qolib ketgan (NOVAGRAM_REPRO_DELAY_DO_NOT_SHIP):"
+    grep -rn "NOVAGRAM_REPRO_DELAY_DO_NOT_SHIP" submodules/ Telegram/ 2>/dev/null | sed 's/^/    /'
+    echo ""
+    err "Avval uni olib tashlang, keyin publish qiling."
+fi
+
+# ─── Step 0: Version param (optional) ───────────────────────────────────────
+# Usage: ./publish.sh [version]     e.g.  ./publish.sh 12.8.5
+# Agar versiya berilsa, appstore-configuration.json (app_version) va versions.json
+# (app) ni avtomatik yangilaydi — qo'lda edit qilish shart emas. Berilmasa, hozirgi
+# app_version ishlatiladi (eski xatti-harakat).
+VERSION_ARG="${1:-}"
+if [ -n "$VERSION_ARG" ]; then
+    if ! echo "$VERSION_ARG" | grep -qE '^[0-9]+\.[0-9]+(\.[0-9]+)?$'; then
+        err "Noto'g'ri versiya formati: '$VERSION_ARG'. Namuna: 12.8.5"
+    fi
+    python3 - "$VERSION_ARG" <<'PYEOF'
+import sys, re
+version = sys.argv[1]
+for path, key in [("build-system/appstore-configuration.json", "app_version"), ("versions.json", "app")]:
+    s = open(path).read()
+    new, n = re.subn(r'("%s"\s*:\s*")[^"]*(")' % key, r'\g<1>' + version + r'\g<2>', s, count=1)
+    if n == 0:
+        sys.exit('"%s" kaliti %s ichida topilmadi' % (key, path))
+    open(path, "w").write(new)
+PYEOF
+    ok "Versiya yangilandi: $VERSION_ARG (appstore-configuration.json + versions.json)"
+fi
+
+# ─── Step 1: API credentials ────────────────────────────────────────────────
+if [ -f "build-system/local-secrets.sh" ]; then
+    source build-system/local-secrets.sh
+fi
+API_ID="${API_ID:-0}"
+API_HASH="${API_HASH:-0000000000000000000000000000000}"
+if [ "$API_ID" = "0" ]; then
+    err "API_ID yo'q. build-system/local-secrets.sh ni tekshiring."
+fi
+ok "API credentials: $API_ID"
+
+# ─── Step 2: Distribution profillarni o'rnatish ─────────────────────────────
+step "Distribution profillarni o'rnatish..."
+
+[ ! -d "$DIST_SRC" ] && err "$DIST_SRC topilmadi. Apple Developer Portal'dan Distribution profillarni yuklab oling."
+[ ! -f "$DIST_SRC/Fenixuz_AppStore.mobileprovision" ] && err "Fenixuz_AppStore.mobileprovision $DIST_SRC ichida yo'q."
+
+mkdir -p "$PROV_DIR"
+cp -f "$DIST_SRC/Fenixuz_AppStore.mobileprovision"                       "$PROV_DIR/Telegram.mobileprovision"
+cp -f "$DIST_SRC/Fenixuz_AppStore_BroadcastUpload.mobileprovision"       "$PROV_DIR/BroadcastUpload.mobileprovision"
+cp -f "$DIST_SRC/Fenixuz_AppStore_NotificationContent.mobileprovision"   "$PROV_DIR/NotificationContent.mobileprovision"
+cp -f "$DIST_SRC/Fenixuz_AppStore_NotificationService.mobileprovision"   "$PROV_DIR/NotificationService.mobileprovision"
+cp -f "$DIST_SRC/Fenixuz_AppStore_Share.mobileprovision"                 "$PROV_DIR/Share.mobileprovision"
+cp -f "$DIST_SRC/Fenixuz_AppStore_SiriIntents.mobileprovision"           "$PROV_DIR/Intents.mobileprovision"
+cp -f "$DIST_SRC/Fenixuz_AppStore_Widget.mobileprovision"                "$PROV_DIR/Widget.mobileprovision"
+cp -f "$DIST_SRC/Fenixuz_AppStore.mobileprovision"                       "$PROV_DIR/WatchApp.mobileprovision"
+cp -f "$DIST_SRC/Fenixuz_AppStore.mobileprovision"                       "$PROV_DIR/WatchExtension.mobileprovision"
+
+ok "Distribution profillar joylashtirildi"
+
+# Distribution profil yaroqliligini tekshirish
+PROV_PLIST=$(security cms -D -i "$PROV_DIR/Telegram.mobileprovision" 2>/dev/null)
+PROV_TEAM=$(echo "$PROV_PLIST" | python3 -c "
+import sys, plistlib
+p = plistlib.loads(sys.stdin.read().encode())
+print((p.get('TeamIdentifier') or [''])[0])
+" 2>/dev/null)
+[ "$PROV_TEAM" != "$VIPADS_TEAM_ID" ] && err "Profil Vipads emas (team=$PROV_TEAM)"
+ok "Profil Vipads MCHJ: $PROV_TEAM"
+
+# Distribution sertifikat Keychain'da mavjudligini tekshirish
+if ! security find-identity -v -p codesigning | grep -q "Apple Distribution: Vipads MCHJ"; then
+    err "Apple Distribution: Vipads MCHJ ($VIPADS_TEAM_ID) sertifikati Keychain'da yo'q."
+fi
+ok "Distribution cert mavjud"
+
+# ─── Step 3: Bazel & configuration ──────────────────────────────────────────
+step "Bazel locator..."
+BAZEL_PATH=$(python3 - <<PYEOF
+import sys, os
+sys.path.insert(0, 'build-system/Make')
+from BazelLocation import locate_bazel
+print(locate_bazel(base_path=os.getcwd(), cache_host_or_path=None,
+                   cache_dir=os.path.expanduser('~/telegram-bazel-cache')))
+PYEOF
+)
+ok "Bazel: $BAZEL_PATH"
+
+step "Konfiguratsiya (App Store)..."
+
+python3 - <<PYEOF
+import sys, os, hashlib
+sys.path.insert(0, 'build-system/Make')
+from BuildConfiguration import build_configuration_from_json
+from BazelLocation import locate_bazel
+
+def write_if_changed(path, content):
+    if os.path.exists(path) and open(path).read() == content:
+        return False
+    with open(path, 'w') as f:
+        f.write(content)
+    return True
+
+base_path = os.getcwd()
+config    = build_configuration_from_json('$CONFIG_PATH')
+bazel     = locate_bazel(base_path=base_path, cache_host_or_path=None,
+                         cache_dir=os.path.expanduser('~/telegram-bazel-cache'))
+
+repo = '{}/build-input/configuration-repository'.format(base_path)
+os.makedirs(repo, exist_ok=True)
+
+for fname, content in [
+    ('/WORKSPACE',   ''),
+    ('/MODULE.bazel','module(\n    name = "build_configuration",\n)\n'),
+    ('/BUILD',       ''),
+]:
+    p = repo + fname
+    if not os.path.exists(p):
+        open(p, 'w').write(content)
+
+prov = repo + '/provisioning'
+os.makedirs(prov, exist_ok=True)
+prov_build = prov + '/BUILD'
+# Always regenerate from what is actually on disk. Writing an empty exports_files()
+# when the file happens to be missing makes every profile target unresolvable and the
+# build dies with "no such target ...:Telegram.mobileprovision". Same logic Make.py uses.
+profile_names = sorted(n for n in os.listdir(prov) if n.endswith('.mobileprovision'))
+with open(prov_build, 'w') as f:
+    f.write('exports_files([\n')
+    for name in profile_names:
+        f.write('    "{}",\n'.format(name))
+    f.write('])\n')
+
+tmp_path = repo + '/variables.bzl.tmp'
+# aps_environment='production' — Push Notifications uz.fenixuz.app App ID'da
+# yoqilgan (Apple Push Services cert 2026-07-07) va Fenixuz_AppStore.mobileprovision
+# 2026-07-15 da aps-environment:production bilan qayta generatsiya qilingan.
+# Bo'sh ('') qilsak push entitlement IPA'dan tushib qoladi va App Store'da push
+# umuman kelmaydi. O'zgartirmang.
+config.write_to_variables_file(
+    bazel_path=bazel,
+    use_xcode_managed_codesigning=False,
+    aps_environment='production',
+    path=tmp_path
+)
+new_content = open(tmp_path).read()
+changed = write_if_changed(repo + '/variables.bzl', new_content)
+os.remove(tmp_path)
+print('variables.bzl ' + ('yangilandi' if changed else 'o\'zgarmadi'))
+PYEOF
+
+ok "Konfiguratsiya repository (appstore) tayyor"
+
+# ─── Step 4: Resurs sozlamalari ─────────────────────────────────────────────
+TOTAL_CORES=$(sysctl -n hw.logicalcpu)
+TOTAL_RAM_MB=$(($(sysctl -n hw.memsize) / 1024 / 1024))
+BAZEL_RAM_MB=$((TOTAL_RAM_MB - 6144))
+[ "$BAZEL_RAM_MB" -lt 4096 ] && BAZEL_RAM_MB=4096
+BAZEL_JOBS=$((TOTAL_CORES - 2))
+[ "$BAZEL_JOBS" -lt 2 ] && BAZEL_JOBS=2
+
+ok "Resurs: ${BAZEL_JOBS} jobs, ${BAZEL_RAM_MB}MB RAM"
+
+# ─── Step 5: Build number (auto-increment) ──────────────────────────────────
+BUILD_NUMBER_FILE="$SCRIPT_DIR/build-system/.appstore-build-number"
+if [ -f "$BUILD_NUMBER_FILE" ]; then
+    BUILD_NUMBER=$(($(cat "$BUILD_NUMBER_FILE") + 1))
+else
+    BUILD_NUMBER=2  # last manual upload was 1, so we start at 2
+fi
+echo "$BUILD_NUMBER" > "$BUILD_NUMBER_FILE"
+
+VERSION=$(python3 -c "
+import json
+with open('$CONFIG_PATH') as f:
+    d = json.load(f)
+print(d.get('app_version') or '12.4')
+" 2>/dev/null)
+[ -z "$VERSION" ] && VERSION="12.4"
+
+ok "Version: $VERSION  Build: $BUILD_NUMBER"
+
+# ─── Step 6: Bazel build (release, real-device arm64) ───────────────────────
+step "App Store build (release, -c opt)..."
+warn "Birinchi opt-build 30-45 daqiqa olishi mumkin (dbg-cache yordam bermaydi)."
+
+"$BAZEL_PATH" \
+    --output_user_root="$CACHE_DIR/bazel-user-root" \
+    build \
+    Telegram/Telegram \
+    --keep_going \
+    --features=swift.use_global_module_cache \
+    --features=swift.cacheable_swiftmodules \
+    --verbose_failures \
+    --jobs="$BAZEL_JOBS" \
+    --local_resources=memory=$BAZEL_RAM_MB \
+    --local_resources=cpu=$BAZEL_JOBS \
+    --define=buildNumber=$BUILD_NUMBER \
+    --define=telegramVersion=$VERSION \
+    `# ads environment (development | production) from build-system/local-secrets.sh; passed only when set, else production` \
+    ${NOVAGRAM_ADS_ENVIRONMENT:+"--define=novagramAdsEnvironment=$NOVAGRAM_ADS_ENVIRONMENT"} \
+    --disk_cache="$CACHE_DIR/disk" \
+    `# same disk cache limits as run.sh (20GB, 14 days); never point these at CACHE_DIR` \
+    --experimental_disk_cache_gc_max_size=20G \
+    --experimental_disk_cache_gc_max_age=14d \
+    --repository_cache="$CACHE_DIR/repo-cache" \
+    --experimental_repository_cache_hardlinks \
+    -c opt \
+    `# Swift 6.4 (Xcode 27) added an ImplicitStrongCapture warning and -warnings-as-errors turns it into` \
+    `# an error in hundreds of upstream files; same flags as run.sh.` \
+    --@build_bazel_rules_swift//swift:copt=-no-warnings-as-errors \
+    --@build_bazel_rules_swift//swift:exec_copt=-no-warnings-as-errors \
+    --apple_generate_dsym \
+    --output_groups=+dsyms \
+    --ios_multi_cpus=arm64 \
+    --watchos_cpus=arm64_32 \
+    --//Telegram:embedWatchApp \
+    --define=watchApiId="$API_ID" \
+    --define=watchApiHash="$API_HASH" \
+    --define=watchProvisioningProfile="$DIST_SRC/Novagram_WatchApp_App_Store.mobileprovision"
+
+ok "App Store build muvaffaqiyatli"
+
+# ─── Step 7: IPA → Desktop ──────────────────────────────────────────────────
+step "IPA chiqarilmoqda..."
+TELEGRAM_IPA=$(find "$SCRIPT_DIR/bazel-bin/Telegram" -maxdepth 2 -name "Telegram.ipa" 2>/dev/null | head -1)
+[ -z "$TELEGRAM_IPA" ] && err "Telegram.ipa topilmadi."
+
+TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+OUT_IPA="$OUTPUT_DIR/Novagram-${VERSION}-${BUILD_NUMBER}-${TIMESTAMP}.ipa"
+cp -f "$TELEGRAM_IPA" "$OUT_IPA"
+
+ok "IPA: $OUT_IPA  ($(du -h "$OUT_IPA" | awk '{print $1}'))"
+
+# Verify embedded profile + entitlements inside IPA.
+# App bundle nomi Novagram.app (bundle_name) — oldin bu yerda Telegram.app deb qat'iy
+# yozilgani uchun tekshiruv jim o'tkazib yuborilardi; endi .app avtomatik topiladi.
+TMP_VERIFY="$(mktemp -d)"
+unzip -q "$OUT_IPA" -d "$TMP_VERIFY"
+EMBEDDED_APP="$(find "$TMP_VERIFY/Payload" -maxdepth 1 -name "*.app" | head -1)"
+EMBEDDED_PROV="$EMBEDDED_APP/embedded.mobileprovision"
+if [ -f "$EMBEDDED_PROV" ]; then
+    # PlistBuddy cannot read /dev/stdin — it returns "Error Reading File" and exit 1, which
+    # under `set -e` killed the script here silently, right after the IPA was written. That
+    # meant this whole Distribution-vs-Development guard, the entitlement check below and the
+    # Transporter instructions in Step 8 never ran once. Decode to a real file instead.
+    PROV_PLIST_FILE="$TMP_VERIFY/embedded-profile.plist"
+    security cms -D -i "$EMBEDDED_PROV" > "$PROV_PLIST_FILE" 2>/dev/null || true
+    GTA=$(/usr/libexec/PlistBuddy -c "Print :Entitlements:get-task-allow" "$PROV_PLIST_FILE" 2>/dev/null || echo "")
+    if [ "$GTA" = "true" ]; then
+        rm -rf "$TMP_VERIFY"
+        err "Embedded profil Development! App Store rad qiladi. Distribution profillarni qayta tekshiring."
+    fi
+    PROV_NAME=$(/usr/libexec/PlistBuddy -c "Print :Name" "$PROV_PLIST_FILE" 2>/dev/null || echo "nomsiz")
+    ok "Embedded profil: $PROV_NAME (Distribution)"
+    APS_ENV=$(codesign -d --entitlements :- "$EMBEDDED_APP" 2>/dev/null | sed -n 's/.*<key>aps-environment<\/key><string>\([a-z]*\)<\/string>.*/\1/p' | head -1)
+    if [ "$APS_ENV" = "production" ]; then
+        ok "aps-environment: production ✓ (push ishlaydi)"
+    else
+        warn "aps-environment = [${APS_ENV:-yoq}] — push ISHLAMAYDI. publish.sh aps_environment va Distribution profilni tekshiring."
+    fi
+    # Communication Notifications entitlement (lock-screen sender avatar) imzolanganini tekshirish
+    if codesign -d --entitlements :- "$EMBEDDED_APP" 2>/dev/null | grep -q "usernotifications.communication"; then
+        ok "Communication Notifications entitlement: signed ✓ (lock-screen avatar)"
+    else
+        warn "Communication Notifications entitlement YO'Q — lock-screen avatar ishlamaydi (BUILD:560 + App ID capability tekshiring)"
+    fi
+    # CarPlay Communication + Siri (CarPlay o'qish/javob Siri orqali ishlaydi). rules_apple
+    # carplay-communication'ni profilga solishtirmaydi, shuning uchun yo'qolgan hook faqat shu yerda bilinadi.
+    if codesign -d --entitlements :- "$EMBEDDED_APP" 2>/dev/null | grep -q "carplay-communication" \
+        && codesign -d --entitlements :- "$EMBEDDED_APP" 2>/dev/null | grep -q "com.apple.developer.siri"; then
+        ok "CarPlay Communication + Siri entitlement: signed ✓"
+    else
+        warn "CarPlay yoki Siri entitlement YO'Q — CarPlay'da Novagram chiqmaydi (BUILD carplay_fragment + appstore enable_siri tekshiring)"
+    fi
+else
+    warn "Embedded .app topilmadi — profil verify o'tkazib yuborildi"
+fi
+
+# ─── Step 7b: dSYM arxivi ───────────────────────────────────────────────────
+# Bazel ipa ichiga Symbols/ papkasini qo'ymaydi, shuning uchun Apple hech qachon symbol
+# olmaydi va Organizer'dagi har bir crash stack xom manzil bo'lib chiqadi. Xcode dSYM'ni
+# Archives papkasidan UUID bo'yicha topadi — shuning uchun har buildda shu yerga nusxa
+# olamiz. Busiz bir marta bazel-out ustiga yozilgach, o'sha versiyaning crash'larini
+# umuman symbolicate qilib bo'lmaydi.
+if [ -n "$EMBEDDED_APP" ] && [ -d "$EMBEDDED_APP" ]; then
+    step "dSYM arxivi saqlanmoqda..."
+    ARCHIVE_DIR="$HOME/Library/Developer/Xcode/Archives/$(date +%Y-%m-%d)"
+    ARCHIVE="$ARCHIVE_DIR/Novagram ${VERSION} (${BUILD_NUMBER}) ${TIMESTAMP}.xcarchive"
+    mkdir -p "$ARCHIVE/Products/Applications" "$ARCHIVE/dSYMs"
+    cp -Rp "$EMBEDDED_APP" "$ARCHIVE/Products/Applications/"
+    DSYM_COUNT=0
+    for d in "$SCRIPT_DIR"/bazel-bin/Telegram/*.dSYM "$SCRIPT_DIR"/bazel-bin/Telegram/Telegram_dsyms/*.dSYM; do
+        [ -e "$d" ] || continue
+        cp -RpL "$d" "$ARCHIVE/dSYMs/" 2>/dev/null && DSYM_COUNT=$((DSYM_COUNT + 1))
+    done
+    BUNDLE_ID_FOR_ARCHIVE=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$EMBEDDED_APP/Info.plist" 2>/dev/null || echo "uz.fenixuz.app")
+    cat > "$ARCHIVE/Info.plist" <<ARCHIVE_PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>ApplicationProperties</key>
+	<dict>
+		<key>ApplicationPath</key>
+		<string>Applications/$(basename "$EMBEDDED_APP")</string>
+		<key>CFBundleIdentifier</key>
+		<string>$BUNDLE_ID_FOR_ARCHIVE</string>
+		<key>CFBundleShortVersionString</key>
+		<string>$VERSION</string>
+		<key>CFBundleVersion</key>
+		<string>$BUILD_NUMBER</string>
+		<key>Team</key>
+		<string>ZDBP5RSRZF</string>
+	</dict>
+	<key>ArchiveVersion</key>
+	<integer>2</integer>
+	<key>CreationDate</key>
+	<date>$(date -u +%Y-%m-%dT%H:%M:%SZ)</date>
+	<key>Name</key>
+	<string>Novagram</string>
+	<key>SchemeName</key>
+	<string>Telegram</string>
+</dict>
+</plist>
+ARCHIVE_PLIST
+    if [ "$DSYM_COUNT" -gt 0 ]; then
+        ok "dSYM arxivi: $DSYM_COUNT ta — $ARCHIVE"
+    else
+        warn "dSYM topilmadi — Organizer bu buildning crash'larini symbolicate qila olmaydi"
+    fi
+fi
+
+rm -rf "$TMP_VERIFY"
+
+# ─── Step 8: Transporter ko'rsatma ──────────────────────────────────────────
+echo
+echo -e "${GREEN}╔════════════════════════════════════════════════════════════════╗${NC}"
+echo -e "${GREEN}║  IPA tayyor — Transporter.app bilan upload qiling             ║${NC}"
+echo -e "${GREEN}╚════════════════════════════════════════════════════════════════╝${NC}"
+echo
+echo "  Fayl: $OUT_IPA"
+echo
+echo "  1. Transporter.app oching (Mac App Store'dan bepul yuklab oling)"
+echo "  2. Apple ID bilan kirish (Vipads MCHJ team admin)"
+echo "  3. + yoki drag-drop:   $OUT_IPA"
+echo "  4. DELIVER tugmasini bosish (5-15 daqiqa upload)"
+echo "  5. App Store Connect → My Apps → Novagram → TestFlight"
+echo "     Build 5-15 daqiqa ichida \"Processing\" → \"Ready to Test\""
+echo "  6. Build'ni TestFlight Internal Testing'ga ulang"
+echo "  7. App Store Review uchun \"Submit for Review\""
+echo
+
+# ─── Step 9: Eslatma — keyingi `./run.sh -r` Development'ga qaytadi ─────────
+echo -e "${YELLOW}Eslatma:${NC}"
+echo "  Hozir provisioning/ ichida Distribution profillar turibdi."
+echo "  Keyingi \`./run.sh -r\` ishga tushganda Development profillarga avtomatik"
+echo "  qaytariladi (run.sh ichida shu mantiq qo'shilgan)."

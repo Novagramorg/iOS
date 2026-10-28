@@ -16,6 +16,7 @@ final class AuthorizationSequencePasswordEntryController: ViewController {
     
     private let sharedContext: SharedAccountContext
     private let presentationData: PresentationData
+    private let back: () -> Void
     
     var loginWithPassword: ((String) -> Void)?
     var forgot: (() -> Void)?
@@ -43,9 +44,10 @@ final class AuthorizationSequencePasswordEntryController: ViewController {
         }
     }
     
-    init(sharedContext: SharedAccountContext, presentationData: PresentationData, back: @escaping () -> Void) {
+    init(sharedContext: SharedAccountContext, presentationData: PresentationData, back: @escaping () -> Void, displayBack: Bool = true) {
         self.sharedContext = sharedContext
         self.presentationData = presentationData
+        self.back = back
         
         super.init(navigationBarPresentationData: NavigationBarPresentationData(theme: AuthorizationSequenceController.navigationBarTheme(presentationData.theme), strings: NavigationBarStrings(presentationStrings: presentationData.strings)))
         
@@ -58,9 +60,18 @@ final class AuthorizationSequencePasswordEntryController: ViewController {
         self.attemptNavigation = { _ in
             return false
         }
-        self.navigationBar?.backPressed = {
-            back()
+        self.navigationBar?.backPressed = { [weak self] in
+            self?.back()
         }
+
+        // First-account login makes this the root controller (no back button) — add an explicit Back to phone entry.
+        if displayBack {
+            self.navigationItem.leftBarButtonItem = UIBarButtonItem(title: presentationData.strings.Common_Back, style: .plain, target: self, action: #selector(self.backPressed))
+        }
+    }
+
+    @objc private func backPressed() {
+        self.back()
     }
     
     required init(coder aDecoder: NSCoder) {

@@ -19,6 +19,7 @@ import WallpaperPreviewMedia
 import ChatMessageInteractiveMediaNode
 import ChatMessageAttachedContentNode
 import ChatControllerInteraction
+import NovagramSponsoredBridge
 
 private let titleFont: UIFont = Font.semibold(15.0)
 
@@ -112,6 +113,8 @@ public final class ChatMessageWebpageBubbleContentNode: ChatMessageBubbleContent
         }
         self.contentNode.activateBadgeAction = { [weak self] in
             if let strongSelf = self, let item = strongSelf.item {
+                // Novagram: OUR ad's "what's this?" opens the Novagram About / Report sheet, not Telegram's screen.
+                if NovagramSponsoredBridge.isOurs(item.message) { item.controllerInteraction.adContextAction(item.message, strongSelf.contentNode, nil); return }
                 item.controllerInteraction.openAdsInfo()
             }
         }

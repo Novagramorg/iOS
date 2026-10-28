@@ -119,6 +119,7 @@ import AudioWaveform
 import PeerNameColorScreen
 import ChatEmptyNode
 import ChatMediaInputStickerGridItem
+import NovagramLocalization
 
 extension ChatControllerImpl {
     func requestAudioRecorder(beginWithTone: Bool, existingDraft: ChatInterfaceMediaDraftState.Audio? = nil) {
@@ -687,6 +688,26 @@ extension ChatControllerImpl {
         messageEffect: ChatSendMessageEffect? = nil,
         postpone: Bool = false
     ) {
+        // NOVAGRAM-HOOK #38 — ovozli xabarni yuborishdan oldin tasdiq (voice ACTUAL send entry; sticker kabi bypass-flag bilan)
+        if (UserDefaults(suiteName: "pro_messager")?.bool(forKey: "send_confirm_enabled") ?? false), !(UserDefaults(suiteName: "pro_messager")?.bool(forKey: "fenix_voice_bypass") ?? false) {
+            let novagramVTitle: String; let novagramVText: String; let novagramVSend: String; let novagramVCancel: String
+            switch NovagramL10n.languageKey(for: self.presentationInterfaceState.strings) {
+            case "uz": novagramVTitle = "Yuborishni tasdiqlang"; novagramVText = "Ovozli xabarni yubormoqchimisiz?"; novagramVSend = "Yuborish"; novagramVCancel = "Bekor qilish"
+            case "ru": novagramVTitle = "Подтвердите отправку"; novagramVText = "Отправить голосовое сообщение?"; novagramVSend = "Отправить"; novagramVCancel = "Отмена"
+            case "zh": novagramVTitle = "确认发送"; novagramVText = "要发送这条语音消息吗？"; novagramVSend = "发送"; novagramVCancel = "取消"
+            default: novagramVTitle = "Confirm sending"; novagramVText = "Send this voice message?"; novagramVSend = "Send"; novagramVCancel = "Cancel"
+            }
+            self.present(textAlertController(context: self.context, updatedPresentationData: self.updatedPresentationData, title: novagramVTitle, text: novagramVText, actions: [
+                TextAlertAction(type: .defaultAction, title: novagramVSend, action: { [weak self] in
+                    guard let self else { return }
+                    UserDefaults(suiteName: "pro_messager")?.set(true, forKey: "fenix_voice_bypass")
+                    self.sendMediaRecording(silentPosting: silentPosting, scheduleTime: scheduleTime, repeatPeriod: repeatPeriod, viewOnce: viewOnce, messageEffect: messageEffect, postpone: postpone)
+                    UserDefaults(suiteName: "pro_messager")?.set(false, forKey: "fenix_voice_bypass")
+                }),
+                TextAlertAction(type: .genericAction, title: novagramVCancel, action: {})
+            ]), in: .window(.root))
+            return
+        }
         self.chatDisplayNode.updateRecordedMediaDeleted(false)
         
         guard let recordedMediaPreview = self.presentationInterfaceState.interfaceState.mediaDraftState else {

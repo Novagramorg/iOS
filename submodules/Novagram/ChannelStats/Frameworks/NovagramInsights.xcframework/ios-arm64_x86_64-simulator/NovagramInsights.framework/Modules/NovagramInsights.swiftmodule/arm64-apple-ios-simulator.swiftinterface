@@ -1,0 +1,1780 @@
+// swift-interface-format-version: 1.0
+// swift-compiler-version: Apple Swift version 6.4 (swiftlang-6.4.0.34.1 clang-2100.3.34.1)
+// swift-module-flags: -target arm64-apple-ios15.0-simulator -enable-objc-interop -enable-library-evolution -language-mode 6 -O -enable-experimental-feature DebugDescriptionMacro -module-name NovagramInsights -package-name novagraminsights
+// swift-module-flags-ignorable:  -formal-cxx-interoperability-mode=off -interface-compiler-version 6.4
+import AVFoundation
+import Combine
+import CoreGraphics
+import CoreMedia
+import Foundation
+import ImageIO
+import NovagramAds
+import Security
+import Swift
+import _Concurrency
+import _StringProcessing
+import _SwiftConcurrencyShims
+public struct InsightsKeychainKey : Swift::Hashable, Swift::Sendable {
+  public let service: Swift::String
+  public let account: Swift::String
+  public static let defaultService: Swift::String
+  public init(service: Swift::String = InsightsKeychainKey.defaultService, account: Swift::String)
+  public static func == (a: NovagramInsights::InsightsKeychainKey, b: NovagramInsights::InsightsKeychainKey) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public enum InsightsRole : Swift::String, Swift::Codable, Swift::Sendable, Swift::Hashable, Swift::CaseIterable {
+  case advertiser
+  case moderator
+  case superadmin
+  case unknown
+  public init(_ role: NovagramAds::SDKRole?)
+  public var readsPlatformAds: Swift::Bool {
+    get
+  }
+  public var canModerate: Swift::Bool {
+    get
+  }
+  public var readsEarnings: Swift::Bool {
+    get
+  }
+  public init?(rawValue: Swift::String)
+  public typealias AllCases = [NovagramInsights::InsightsRole]
+  public typealias RawValue = Swift::String
+  nonisolated public static var allCases: [NovagramInsights::InsightsRole] {
+    get
+  }
+  public var rawValue: Swift::String {
+    get
+  }
+}
+public struct InsightsAccount : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  public let username: Swift::String
+  public let displayName: Swift::String?
+  public let role: NovagramInsights::InsightsRole
+  public let email: Swift::String?
+  public init(username: Swift::String, displayName: Swift::String? = nil, email: Swift::String? = nil, role: NovagramInsights::InsightsRole)
+  public var name: Swift::String {
+    get
+  }
+  public static func == (a: NovagramInsights::InsightsAccount, b: NovagramInsights::InsightsAccount) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct InsightsPanelProfile : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  public let name: Swift::String?
+  public let email: Swift::String?
+  public let balance: Foundation::Decimal?
+  public let adsCount: Swift::Int?
+  public init(name: Swift::String?, email: Swift::String?, balance: Foundation::Decimal?, adsCount: Swift::Int?)
+  public static func == (a: NovagramInsights::InsightsPanelProfile, b: NovagramInsights::InsightsPanelProfile) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public enum InsightsSection : Swift::String, Swift::Codable, Swift::Sendable, Swift::Hashable, Swift::CaseIterable {
+  case traffic
+  case activeAds
+  case moderation
+  case earnings
+  public init?(rawValue: Swift::String)
+  public typealias AllCases = [NovagramInsights::InsightsSection]
+  public typealias RawValue = Swift::String
+  nonisolated public static var allCases: [NovagramInsights::InsightsSection] {
+    get
+  }
+  public var rawValue: Swift::String {
+    get
+  }
+}
+@_hasMissingDesignatedInitializers @_Concurrency::MainActor final public class InsightsAdCreateStore : Combine::ObservableObject {
+  public enum LinkPreview : Swift::Equatable, Swift::Sendable {
+    case empty
+    case invalid
+    case resolving
+    case resolved(NovagramAds::SDKTelegramPeer)
+    case failed(NovagramInsights::InsightsError)
+    public static func == (a: NovagramInsights::InsightsAdCreateStore.NovagramInsights::LinkPreview, b: NovagramInsights::InsightsAdCreateStore.NovagramInsights::LinkPreview) -> Swift::Bool
+  }
+  public enum DraftStatus : Swift::Equatable, Swift::Sendable {
+    case idle
+    case saving
+    case saved(Foundation::Date)
+    case failed
+    public static func == (a: NovagramInsights::InsightsAdCreateStore.NovagramInsights::DraftStatus, b: NovagramInsights::InsightsAdCreateStore.NovagramInsights::DraftStatus) -> Swift::Bool
+  }
+  public enum PeerList : Swift::Sendable {
+    case bots, channels
+    public static func == (a: NovagramInsights::InsightsAdCreateStore.NovagramInsights::PeerList, b: NovagramInsights::InsightsAdCreateStore.NovagramInsights::PeerList) -> Swift::Bool
+    public func hash(into hasher: inout Swift::Hasher)
+    public var hashValue: Swift::Int {
+      get
+    }
+  }
+  @Combine::Published<NovagramInsights::InsightsAdForm> @_projectedValueProperty($form) @_Concurrency::MainActor final public var form: NovagramInsights::InsightsAdForm {
+    get
+    @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    set
+  }
+  @_Concurrency::MainActor final public var $form: Combine::Published<NovagramInsights::InsightsAdForm>.Combine::Publisher {
+    get
+    @available(macOS 11.0, iOS 14.0, tvOS 14.0, watchOS 7.0, *)
+    set
+  }
+  @Combine::Published<NovagramInsights::InsightsAdWizard> @_projectedValueProperty($wizard) @_Concurrency::MainActor final public var wizard: NovagramInsights::InsightsAdWizard {
+    get
+  }
+  @_Concurrency::MainActor final public var $wizard: Combine::Published<NovagramInsights::InsightsAdWizard>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<NovagramAds::SDKAdPricing?> @_projectedValueProperty($pricing) @_Concurrency::MainActor final public var pricing: NovagramAds::SDKAdPricing? {
+    get
+  }
+  @_Concurrency::MainActor final public var $pricing: Combine::Published<NovagramAds::SDKAdPricing?>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<NovagramInsights::InsightsError?> @_projectedValueProperty($pricingError) @_Concurrency::MainActor final public var pricingError: NovagramInsights::InsightsError? {
+    get
+  }
+  @_Concurrency::MainActor final public var $pricingError: Combine::Published<NovagramInsights::InsightsError?>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<Swift::Bool> @_projectedValueProperty($isAvailable) @_Concurrency::MainActor final public var isAvailable: Swift::Bool {
+    get
+  }
+  @_Concurrency::MainActor final public var $isAvailable: Combine::Published<Swift::Bool>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<Foundation::Decimal?> @_projectedValueProperty($balance) @_Concurrency::MainActor final public var balance: Foundation::Decimal? {
+    get
+  }
+  @_Concurrency::MainActor final public var $balance: Combine::Published<Foundation::Decimal?>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<NovagramInsights::InsightsAdCreateStore.NovagramInsights::LinkPreview> @_projectedValueProperty($linkPreview) @_Concurrency::MainActor final public var linkPreview: NovagramInsights::InsightsAdCreateStore.NovagramInsights::LinkPreview {
+    get
+  }
+  @_Concurrency::MainActor final public var $linkPreview: Combine::Published<NovagramInsights::InsightsAdCreateStore.NovagramInsights::LinkPreview>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<[NovagramAds::SDKCountry]> @_projectedValueProperty($countries) @_Concurrency::MainActor final public var countries: [NovagramAds::SDKCountry] {
+    get
+  }
+  @_Concurrency::MainActor final public var $countries: Combine::Published<[NovagramAds::SDKCountry]>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<[NovagramAds::SDKLanguage]> @_projectedValueProperty($languages) @_Concurrency::MainActor final public var languages: [NovagramAds::SDKLanguage] {
+    get
+  }
+  @_Concurrency::MainActor final public var $languages: Combine::Published<[NovagramAds::SDKLanguage]>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<[NovagramAds::SDKTopic]> @_projectedValueProperty($topics) @_Concurrency::MainActor final public var topics: [NovagramAds::SDKTopic] {
+    get
+  }
+  @_Concurrency::MainActor final public var $topics: Combine::Published<[NovagramAds::SDKTopic]>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<NovagramInsights::InsightsAdCreateStore.NovagramInsights::DraftStatus> @_projectedValueProperty($draftStatus) @_Concurrency::MainActor final public var draftStatus: NovagramInsights::InsightsAdCreateStore.NovagramInsights::DraftStatus {
+    get
+  }
+  @_Concurrency::MainActor final public var $draftStatus: Combine::Published<NovagramInsights::InsightsAdCreateStore.NovagramInsights::DraftStatus>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<Swift::Bool> @_projectedValueProperty($restoredFromDraft) @_Concurrency::MainActor final public var restoredFromDraft: Swift::Bool {
+    get
+  }
+  @_Concurrency::MainActor final public var $restoredFromDraft: Combine::Published<Swift::Bool>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<Swift::Bool> @_projectedValueProperty($isStarting) @_Concurrency::MainActor final public var isStarting: Swift::Bool {
+    get
+  }
+  @_Concurrency::MainActor final public var $isStarting: Combine::Published<Swift::Bool>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<Swift::Bool> @_projectedValueProperty($isSubmitting) @_Concurrency::MainActor final public var isSubmitting: Swift::Bool {
+    get
+  }
+  @_Concurrency::MainActor final public var $isSubmitting: Combine::Published<Swift::Bool>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<NovagramInsights::InsightsAdSummary?> @_projectedValueProperty($created) @_Concurrency::MainActor final public var created: NovagramInsights::InsightsAdSummary? {
+    get
+  }
+  @_Concurrency::MainActor final public var $created: Combine::Published<NovagramInsights::InsightsAdSummary?>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<NovagramInsights::InsightsError?> @_projectedValueProperty($submitError) @_Concurrency::MainActor final public var submitError: NovagramInsights::InsightsError? {
+    get
+  }
+  @_Concurrency::MainActor final public var $submitError: Combine::Published<NovagramInsights::InsightsError?>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<Swift::Bool> @_projectedValueProperty($submitOutcomeUnknown) @_Concurrency::MainActor final public var submitOutcomeUnknown: Swift::Bool {
+    get
+  }
+  @_Concurrency::MainActor final public var $submitOutcomeUnknown: Combine::Published<Swift::Bool>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<[NovagramInsights::InsightsAdFormIssue]> @_projectedValueProperty($stepIssues) @_Concurrency::MainActor final public var stepIssues: [NovagramInsights::InsightsAdFormIssue] {
+    get
+  }
+  @_Concurrency::MainActor final public var $stepIssues: Combine::Published<[NovagramInsights::InsightsAdFormIssue]>.Combine::Publisher {
+    get
+  }
+  @_Concurrency::MainActor final public let media: NovagramInsights::InsightsMediaUploader
+  @_Concurrency::MainActor final public var formatter: NovagramInsights::InsightsFormatter {
+    get
+  }
+  @_Concurrency::MainActor final public var context: NovagramInsights::InsightsAdValidationContext {
+    get
+  }
+  @_Concurrency::MainActor final public var resolvedPeer: NovagramAds::SDKTelegramPeer? {
+    get
+  }
+  @_Concurrency::MainActor final public var currentIssues: [NovagramInsights::InsightsAdFormIssue] {
+    get
+  }
+  @_Concurrency::MainActor final public var canAdvance: Swift::Bool {
+    get
+  }
+  @_Concurrency::MainActor final public var canCreate: Swift::Bool {
+    get
+  }
+  @_Concurrency::MainActor final public var steps: [NovagramInsights::InsightsAdWizard.NovagramInsights::Step] {
+    get
+  }
+  @_Concurrency::MainActor final public var minimumCPM: Swift::Int {
+    get
+  }
+  @_Concurrency::MainActor final public var minimumBudget: Swift::Int {
+    get
+  }
+  @_Concurrency::MainActor final public var chargeAmount: Foundation::Decimal {
+    get
+  }
+  @_Concurrency::MainActor final public func start() async
+  @_Concurrency::MainActor final public func discardDraft() async
+  @_Concurrency::MainActor final public func loadDirectories() async
+  @_Concurrency::MainActor final public func next()
+  @_Concurrency::MainActor final public func back()
+  @discardableResult
+  @_Concurrency::MainActor final public func go(to step: NovagramInsights::InsightsAdWizard.NovagramInsights::Step) -> Swift::Bool
+  @_Concurrency::MainActor final public func select(placement: NovagramAds::SDKAdFormat)
+  @discardableResult
+  @_Concurrency::MainActor final public func addQuery(_ raw: Swift::String) -> NovagramInsights::InsightsAdFormIssue?
+  @discardableResult
+  @_Concurrency::MainActor final public func addPeer(_ raw: Swift::String, to list: NovagramInsights::InsightsAdCreateStore.NovagramInsights::PeerList) -> NovagramInsights::InsightsAdFormIssue?
+  @_Concurrency::MainActor final public func retryResolve()
+  @discardableResult
+  @_Concurrency::MainActor final public func create() async -> Swift::Bool
+  @_Concurrency::MainActor final public func refreshBalance() async
+  @_Concurrency::MainActor final public func flushDraft() async
+  public typealias ObjectWillChangePublisher = Combine::ObservableObjectPublisher
+  @objc deinit
+}
+extension NovagramInsights::InsightsMediaUploader.NovagramInsights::Phase {
+  public var isRejected: Swift::Bool {
+    get
+  }
+}
+public struct InsightsAttachedMedia : Swift::Hashable, Swift::Sendable, Swift::Codable, Swift::Identifiable {
+  public let id: Foundation::UUID
+  public let kind: NovagramAds::SDKAdMediaKind
+  public let width: Swift::Int?
+  public let height: Swift::Int?
+  public let duration: Swift::Double?
+  public let url: Foundation::URL?
+  public init(id: Foundation::UUID, kind: NovagramAds::SDKAdMediaKind, width: Swift::Int? = nil, height: Swift::Int? = nil, duration: Swift::Double? = nil, url: Foundation::URL? = nil)
+  public static func == (a: NovagramInsights::InsightsAttachedMedia, b: NovagramInsights::InsightsAttachedMedia) -> Swift::Bool
+  public typealias ID = Foundation::UUID
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct InsightsAdTargeting : Swift::Hashable, Swift::Sendable {
+  public var queries: [Swift::String]
+  public var bots: [Swift::String]
+  public var channels: [Swift::String]
+  public var languages: [Swift::String]
+  public var countries: [Swift::String]
+  public var topics: [Swift::Int]
+  public init(queries: [Swift::String] = [], bots: [Swift::String] = [], channels: [Swift::String] = [], languages: [Swift::String] = [], countries: [Swift::String] = [], topics: [Swift::Int] = [])
+  public func json(for placement: NovagramAds::SDKAdFormat) -> NovagramAds::SDKJSONValue
+  public init(json: NovagramAds::SDKJSONValue?)
+  public static func == (a: NovagramInsights::InsightsAdTargeting, b: NovagramInsights::InsightsAdTargeting) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public struct InsightsAdForm : Swift::Hashable, Swift::Sendable {
+  public var placement: NovagramAds::SDKAdFormat
+  public var title: Swift::String
+  public var text: Swift::String
+  public var link: Swift::String
+  public var showChannelPicture: Swift::Bool
+  public var otherInfo: Swift::String
+  public var media: NovagramInsights::InsightsAttachedMedia?
+  public var cpm: Swift::Int?
+  public var budget: Swift::Int?
+  public var dailyLimit: Swift::Int?
+  public var viewsPerUserPerDay: Swift::Int
+  public var startDate: Foundation::Date?
+  public var endDate: Foundation::Date?
+  public var targeting: NovagramInsights::InsightsAdTargeting
+  public var agreeTerms: Swift::Bool
+  public init()
+  public var promotedUsername: Swift::String? {
+    get
+  }
+  public var promotedURL: Swift::String? {
+    get
+  }
+  public var hasSpecificChannels: Swift::Bool {
+    get
+  }
+  public func minimumCPM(pricing: NovagramAds::SDKAdPricing?) -> Swift::Int
+  public mutating func select(placement newPlacement: NovagramAds::SDKAdFormat)
+  public func createRequest() -> NovagramAds::SDKAdCreateRequest
+  public static func == (a: NovagramInsights::InsightsAdForm, b: NovagramInsights::InsightsAdForm) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+extension NovagramInsights::InsightsAdForm {
+  public func draftJSON() -> NovagramAds::SDKJSONValue
+  public init(draft: NovagramAds::SDKJSONValue)
+  public static func draftMediaID(_ draft: NovagramAds::SDKJSONValue) -> Foundation::UUID?
+}
+public struct InsightsAdEdit : Swift::Hashable, Swift::Sendable {
+  public var title: Swift::String
+  public var text: Swift::String
+  public var otherInfo: Swift::String
+  public var showChannelPicture: Swift::Bool
+  public var media: NovagramInsights::InsightsAttachedMedia?
+  public var cpm: Swift::Int?
+  public var dailyLimit: Swift::Int?
+  public var viewsPerUserPerDay: Swift::Int
+  public var startDate: Foundation::Date?
+  public var endDate: Foundation::Date?
+  public let placement: NovagramAds::SDKAdFormat
+  public init(campaign: NovagramAds::SDKAdCampaign)
+  public static func isApproved(_ status: NovagramAds::SDKAdStatus) -> Swift::Bool
+  public func changesCreative(from campaign: NovagramAds::SDKAdCampaign) -> Swift::Bool
+  public func goesToModeration(from campaign: NovagramAds::SDKAdCampaign) -> Swift::Bool
+  public func changes(from campaign: NovagramAds::SDKAdCampaign) -> NovagramAds::SDKAdUpdate?
+  public func issues(from campaign: NovagramAds::SDKAdCampaign, pricing: NovagramAds::SDKAdPricing?, mediaBusy: Swift::Bool = false) -> [NovagramInsights::InsightsAdFormIssue]
+  public func minimumCPM(campaign: NovagramAds::SDKAdCampaign, pricing: NovagramAds::SDKAdPricing?) -> Swift::Int
+  public static func == (a: NovagramInsights::InsightsAdEdit, b: NovagramInsights::InsightsAdEdit) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+@_hasMissingDesignatedInitializers @_Concurrency::MainActor final public class InsightsAdManageStore : Combine::ObservableObject {
+  public enum Action : Swift::Equatable, Swift::Sendable {
+    case pause, resume, topUp, edit, delete
+    public static func == (a: NovagramInsights::InsightsAdManageStore.NovagramInsights::Action, b: NovagramInsights::InsightsAdManageStore.NovagramInsights::Action) -> Swift::Bool
+    public func hash(into hasher: inout Swift::Hasher)
+    public var hashValue: Swift::Int {
+      get
+    }
+  }
+  public enum Outcome : Swift::Equatable, Swift::Sendable {
+    case paused
+    case resumed
+    case toppedUp(amount: Foundation::Decimal)
+    case editApplied
+    case editPendingReview
+    case deleted(refund: Foundation::Decimal?)
+    public static func == (a: NovagramInsights::InsightsAdManageStore.NovagramInsights::Outcome, b: NovagramInsights::InsightsAdManageStore.NovagramInsights::Outcome) -> Swift::Bool
+  }
+  @_Concurrency::MainActor final public let adID: Foundation::UUID
+  @Combine::Published<NovagramInsights::InsightsLoadState<NovagramAds::SDKAdCampaign>> @_projectedValueProperty($campaign) @_Concurrency::MainActor final public var campaign: NovagramInsights::InsightsLoadState<NovagramAds::SDKAdCampaign> {
+    get
+  }
+  @_Concurrency::MainActor final public var $campaign: Combine::Published<NovagramInsights::InsightsLoadState<NovagramAds::SDKAdCampaign>>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<Swift::Bool> @_projectedValueProperty($isAvailable) @_Concurrency::MainActor final public var isAvailable: Swift::Bool {
+    get
+  }
+  @_Concurrency::MainActor final public var $isAvailable: Combine::Published<Swift::Bool>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<NovagramInsights::InsightsLoadState<[NovagramAds::SDKAdBudgetOperation]>> @_projectedValueProperty($history) @_Concurrency::MainActor final public var history: NovagramInsights::InsightsLoadState<[NovagramAds::SDKAdBudgetOperation]> {
+    get
+  }
+  @_Concurrency::MainActor final public var $history: Combine::Published<NovagramInsights::InsightsLoadState<[NovagramAds::SDKAdBudgetOperation]>>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<Swift::Bool> @_projectedValueProperty($historyHasMore) @_Concurrency::MainActor final public var historyHasMore: Swift::Bool {
+    get
+  }
+  @_Concurrency::MainActor final public var $historyHasMore: Combine::Published<Swift::Bool>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<Swift::Bool> @_projectedValueProperty($isLoadingMoreHistory) @_Concurrency::MainActor final public var isLoadingMoreHistory: Swift::Bool {
+    get
+  }
+  @_Concurrency::MainActor final public var $isLoadingMoreHistory: Combine::Published<Swift::Bool>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<Foundation::Decimal?> @_projectedValueProperty($balance) @_Concurrency::MainActor final public var balance: Foundation::Decimal? {
+    get
+  }
+  @_Concurrency::MainActor final public var $balance: Combine::Published<Foundation::Decimal?>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<NovagramAds::SDKAdPricing?> @_projectedValueProperty($pricing) @_Concurrency::MainActor final public var pricing: NovagramAds::SDKAdPricing? {
+    get
+  }
+  @_Concurrency::MainActor final public var $pricing: Combine::Published<NovagramAds::SDKAdPricing?>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<NovagramInsights::InsightsAdManageStore.NovagramInsights::Action?> @_projectedValueProperty($activeAction) @_Concurrency::MainActor final public var activeAction: NovagramInsights::InsightsAdManageStore.NovagramInsights::Action? {
+    get
+  }
+  @_Concurrency::MainActor final public var $activeAction: Combine::Published<NovagramInsights::InsightsAdManageStore.NovagramInsights::Action?>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<NovagramInsights::InsightsAdManageStore.NovagramInsights::Outcome?> @_projectedValueProperty($outcome) @_Concurrency::MainActor final public var outcome: NovagramInsights::InsightsAdManageStore.NovagramInsights::Outcome? {
+    get
+  }
+  @_Concurrency::MainActor final public var $outcome: Combine::Published<NovagramInsights::InsightsAdManageStore.NovagramInsights::Outcome?>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<NovagramInsights::InsightsError?> @_projectedValueProperty($actionError) @_Concurrency::MainActor final public var actionError: NovagramInsights::InsightsError? {
+    get
+  }
+  @_Concurrency::MainActor final public var $actionError: Combine::Published<NovagramInsights::InsightsError?>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<Swift::Bool> @_projectedValueProperty($isDeleted) @_Concurrency::MainActor final public var isDeleted: Swift::Bool {
+    get
+  }
+  @_Concurrency::MainActor final public var $isDeleted: Combine::Published<Swift::Bool>.Combine::Publisher {
+    get
+  }
+  @_Concurrency::MainActor final public let media: NovagramInsights::InsightsMediaUploader
+  @_Concurrency::MainActor final public var formatter: NovagramInsights::InsightsFormatter {
+    get
+  }
+  @_Concurrency::MainActor final public var summary: NovagramInsights::InsightsAdSummary? {
+    get
+  }
+  @_Concurrency::MainActor final public var canPause: Swift::Bool {
+    get
+  }
+  @_Concurrency::MainActor final public var canResume: Swift::Bool {
+    get
+  }
+  @_Concurrency::MainActor final public var canTopUp: Swift::Bool {
+    get
+  }
+  @_Concurrency::MainActor final public var canEdit: Swift::Bool {
+    get
+  }
+  @_Concurrency::MainActor final public var canDelete: Swift::Bool {
+    get
+  }
+  @_Concurrency::MainActor final public func load() async
+  @_Concurrency::MainActor final public func loadMoreHistoryIfNeeded(after operation: NovagramAds::SDKAdBudgetOperation) async
+  @_Concurrency::MainActor final public func loadPricing() async
+  @discardableResult
+  @_Concurrency::MainActor final public func setPaused(_ paused: Swift::Bool) async -> Swift::Bool
+  @_Concurrency::MainActor final public func topUpIssues(amount: Swift::Int?) -> [NovagramInsights::InsightsAdFormIssue]
+  @discardableResult
+  @_Concurrency::MainActor final public func topUp(amount: Swift::Int) async -> Swift::Bool
+  @_Concurrency::MainActor final public func makeEdit() -> NovagramInsights::InsightsAdEdit?
+  @discardableResult
+  @_Concurrency::MainActor final public func save(_ edit: NovagramInsights::InsightsAdEdit) async -> Swift::Bool
+  @discardableResult
+  @_Concurrency::MainActor final public func delete() async -> Swift::Bool
+  @_Concurrency::MainActor final public func clearOutcome()
+  public typealias ObjectWillChangePublisher = Combine::ObservableObjectPublisher
+  @objc deinit
+}
+public enum InsightsAdFormIssue : Swift::Hashable, Swift::Sendable {
+  case titleMissing
+  case titleTooLong(max: Swift::Int)
+  case queriesMissing
+  case tooManyQueries(max: Swift::Int)
+  case queryLength(min: Swift::Int, max: Swift::Int)
+  case duplicateQuery
+  case invalidUsername(Swift::String)
+  case duplicatePeer
+  case tooManyPeers(max: Swift::Int)
+  case channelTargetingMissing
+  case countriesMissing
+  case linkInvalid
+  case linkNotResolved
+  case linkWrongType
+  case textMissing
+  case textTooLong(max: Swift::Int)
+  case textHasLineBreak
+  case otherInfoTooLong(max: Swift::Int)
+  case mediaNotReady
+  case cpmMissing
+  case cpmBelowMinimum(minimum: Swift::Int)
+  case dailyLimitInvalid
+  case viewsPerUserInvalid
+  case budgetMissing
+  case budgetBelowMinimum(minimum: Swift::Int)
+  case budgetAboveBalance(balance: Foundation::Decimal)
+  case topUpInvalid
+  case datesReversed
+  case termsNotAccepted
+  case nothingChanged
+  public static func == (a: NovagramInsights::InsightsAdFormIssue, b: NovagramInsights::InsightsAdFormIssue) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public enum InsightsMediaIssue : Swift::Hashable, Swift::Sendable {
+  case unsupportedType
+  case tooLarge(maxBytes: Swift::Int)
+  case wrongAspectRatio
+  case tooNarrow(minWidth: Swift::Int)
+  case durationOutOfRange(min: Swift::Double, max: Swift::Double)
+  case notH264
+  case unreadable
+  public static func == (a: NovagramInsights::InsightsMediaIssue, b: NovagramInsights::InsightsMediaIssue) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public struct InsightsMediaFile : Swift::Hashable, Swift::Sendable {
+  public let kind: NovagramAds::SDKAdMediaKind
+  public let width: Swift::Int
+  public let height: Swift::Int
+  public let byteCount: Swift::Int
+  public let duration: Swift::Double?
+  public let isH264: Swift::Bool?
+  public let filename: Swift::String
+  public init(kind: NovagramAds::SDKAdMediaKind, width: Swift::Int, height: Swift::Int, byteCount: Swift::Int, duration: Swift::Double? = nil, isH264: Swift::Bool? = nil, filename: Swift::String)
+  public static func == (a: NovagramInsights::InsightsMediaFile, b: NovagramInsights::InsightsMediaFile) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public enum InsightsAdRules {
+  public static let maxTitleLength: Swift::Int
+  public static let maxTextLength: Swift::Int
+  public static let maxOtherInfoLength: Swift::Int
+  public static let maxQueries: Swift::Int
+  public static let queryLength: Swift::ClosedRange<Swift::Int>
+  public static let maxPeers: Swift::Int
+  public static let viewsPerUserPerDay: Swift::ClosedRange<Swift::Int>
+  public static let fallbackMinimumBudget: Swift::Int
+  public static let maxPhotoBytes: Swift::Int
+  public static let maxVideoBytes: Swift::Int
+  public static let videoDuration: Swift::ClosedRange<Swift::Double>
+  public static let minMediaWidth: Swift::Int
+  public static let aspectRatio: Swift::Double
+  public static let aspectTolerance: Swift::Double
+  public static let creatablePlacements: [NovagramAds::SDKAdFormat]
+  public static let fallbackPricing: NovagramAds::SDKAdPricing
+  public static func usesText(_ placement: NovagramAds::SDKAdFormat) -> Swift::Bool
+  public static func supportsMedia(_ placement: NovagramAds::SDKAdFormat) -> Swift::Bool
+  public static func supportsChannelPicture(_ placement: NovagramAds::SDKAdFormat) -> Swift::Bool
+  public static func minimumCPM(placement: NovagramAds::SDKAdFormat, media: NovagramAds::SDKAdMediaKind?, showChannelPicture: Swift::Bool, specificChannels: Swift::Bool, pricing: NovagramAds::SDKAdPricing?) -> Swift::Int
+  public static func minimumBudget(pricing: NovagramAds::SDKAdPricing?) -> Swift::Int
+  public static func normalizedQuery(_ raw: Swift::String) -> Swift::String
+  public static func isValidQuery(_ query: Swift::String) -> Swift::Bool
+  public static func username(from raw: Swift::String) -> Swift::String?
+  public static func textIssues(_ text: Swift::String) -> [NovagramInsights::InsightsAdFormIssue]
+  public static func mediaIssues(_ file: NovagramInsights::InsightsMediaFile) -> [NovagramInsights::InsightsMediaIssue]
+  public static func isSixteenByNine(width: Swift::Int, height: Swift::Int) -> Swift::Bool
+  public static func needsCrop(_ file: NovagramInsights::InsightsMediaFile) -> Swift::Bool
+  public static func mediaKind(forFilename filename: Swift::String) -> NovagramAds::SDKAdMediaKind?
+}
+public struct InsightsAdValidationContext : Swift::Hashable, Swift::Sendable {
+  public var pricing: NovagramAds::SDKAdPricing?
+  public var balance: Foundation::Decimal?
+  public var resolvedPeer: NovagramAds::SDKTelegramPeer?
+  public var mediaBusy: Swift::Bool
+  public init(pricing: NovagramAds::SDKAdPricing? = nil, balance: Foundation::Decimal? = nil, resolvedPeer: NovagramAds::SDKTelegramPeer? = nil, mediaBusy: Swift::Bool = false)
+  public static func == (a: NovagramInsights::InsightsAdValidationContext, b: NovagramInsights::InsightsAdValidationContext) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public enum InsightsAdValidator {
+  public static func issues(step: NovagramInsights::InsightsAdWizard.NovagramInsights::Step, form: NovagramInsights::InsightsAdForm, context: NovagramInsights::InsightsAdValidationContext) -> [NovagramInsights::InsightsAdFormIssue]
+  public static func allIssues(form: NovagramInsights::InsightsAdForm, context: NovagramInsights::InsightsAdValidationContext) -> [NovagramInsights::InsightsAdFormIssue]
+}
+public struct InsightsAdWizard : Swift::Hashable, Swift::Sendable {
+  public enum Step : Swift::String, Swift::CaseIterable, Swift::Hashable, Swift::Sendable, Swift::Identifiable {
+    case placement, targeting, link, text, media, pricing, budget, summary
+    public var id: Swift::String {
+      get
+    }
+    public init?(rawValue: Swift::String)
+    public typealias AllCases = [NovagramInsights::InsightsAdWizard.NovagramInsights::Step]
+    public typealias ID = Swift::String
+    public typealias RawValue = Swift::String
+    nonisolated public static var allCases: [NovagramInsights::InsightsAdWizard.NovagramInsights::Step] {
+      get
+    }
+    public var rawValue: Swift::String {
+      get
+    }
+  }
+  public var step: NovagramInsights::InsightsAdWizard.NovagramInsights::Step {
+    get
+  }
+  public init(step: NovagramInsights::InsightsAdWizard.NovagramInsights::Step = .placement)
+  public static func steps(for placement: NovagramAds::SDKAdFormat) -> [NovagramInsights::InsightsAdWizard.NovagramInsights::Step]
+  public func position(for placement: NovagramAds::SDKAdFormat) -> (index: Swift::Int, count: Swift::Int)
+  public func isLastStep(for placement: NovagramAds::SDKAdFormat) -> Swift::Bool
+  public func isFirstStep(for placement: NovagramAds::SDKAdFormat) -> Swift::Bool
+  @discardableResult
+  public mutating func advance(form: NovagramInsights::InsightsAdForm, context: NovagramInsights::InsightsAdValidationContext) -> [NovagramInsights::InsightsAdFormIssue]
+  public mutating func goBack(placement: NovagramAds::SDKAdFormat)
+  @discardableResult
+  public mutating func jump(to target: NovagramInsights::InsightsAdWizard.NovagramInsights::Step, form: NovagramInsights::InsightsAdForm, context: NovagramInsights::InsightsAdValidationContext) -> Swift::Bool
+  public mutating func reconcile(placement: NovagramAds::SDKAdFormat)
+  public static func firstIncompleteStep(form: NovagramInsights::InsightsAdForm, context: NovagramInsights::InsightsAdValidationContext) -> NovagramInsights::InsightsAdWizard.NovagramInsights::Step
+  public static func == (a: NovagramInsights::InsightsAdWizard, b: NovagramInsights::InsightsAdWizard) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+@_hasMissingDesignatedInitializers @_Concurrency::MainActor final public class InsightsAdsStore : Combine::ObservableObject {
+  @Combine::Published<NovagramInsights::InsightsLoadState<[NovagramInsights::InsightsAdSummary]>> @_projectedValueProperty($state) @_Concurrency::MainActor final public var state: NovagramInsights::InsightsLoadState<[NovagramInsights::InsightsAdSummary]> {
+    get
+  }
+  @_Concurrency::MainActor final public var $state: Combine::Published<NovagramInsights::InsightsLoadState<[NovagramInsights::InsightsAdSummary]>>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<Swift::Bool> @_projectedValueProperty($hasMore) @_Concurrency::MainActor final public var hasMore: Swift::Bool {
+    get
+  }
+  @_Concurrency::MainActor final public var $hasMore: Combine::Published<Swift::Bool>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<Swift::Bool> @_projectedValueProperty($isLoadingMore) @_Concurrency::MainActor final public var isLoadingMore: Swift::Bool {
+    get
+  }
+  @_Concurrency::MainActor final public var $isLoadingMore: Combine::Published<Swift::Bool>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<Swift::Bool> @_projectedValueProperty($isRefreshing) @_Concurrency::MainActor final public var isRefreshing: Swift::Bool {
+    get
+  }
+  @_Concurrency::MainActor final public var $isRefreshing: Combine::Published<Swift::Bool>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<Swift::Bool> @_projectedValueProperty($isShowingCachedData) @_Concurrency::MainActor final public var isShowingCachedData: Swift::Bool {
+    get
+  }
+  @_Concurrency::MainActor final public var $isShowingCachedData: Combine::Published<Swift::Bool>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<Foundation::Date?> @_projectedValueProperty($updatedAt) @_Concurrency::MainActor final public var updatedAt: Foundation::Date? {
+    get
+  }
+  @_Concurrency::MainActor final public var $updatedAt: Combine::Published<Foundation::Date?>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<Swift::String> @_projectedValueProperty($searchText) @_Concurrency::MainActor final public var searchText: Swift::String {
+    get
+    @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    set
+    @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    _modify
+  }
+  @_Concurrency::MainActor final public var $searchText: Combine::Published<Swift::String>.Combine::Publisher {
+    get
+    @available(macOS 11.0, iOS 14.0, tvOS 14.0, watchOS 7.0, *)
+    set
+  }
+  @_Concurrency::MainActor final public let role: NovagramInsights::InsightsRole
+  @_Concurrency::MainActor final public var formatter: NovagramInsights::InsightsFormatter {
+    get
+  }
+  @_Concurrency::MainActor final public var visibleAds: [NovagramInsights::InsightsAdSummary] {
+    get
+  }
+  @_Concurrency::MainActor final public func load(force: Swift::Bool = false) async
+  @_Concurrency::MainActor final public func loadMoreIfNeeded(after ad: NovagramInsights::InsightsAdSummary) async
+  public typealias ObjectWillChangePublisher = Combine::ObservableObjectPublisher
+  @objc deinit
+}
+@_hasMissingDesignatedInitializers @_Concurrency::MainActor final public class InsightsAdDetailStore : Combine::ObservableObject {
+  @_Concurrency::MainActor final public let ad: NovagramInsights::InsightsAdSummary
+  @Combine::Published<NovagramInsights::InsightsPeriod> @_projectedValueProperty($period) @_Concurrency::MainActor final public var period: NovagramInsights::InsightsPeriod {
+    get
+    @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    set
+    @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    _modify
+  }
+  @_Concurrency::MainActor final public var $period: Combine::Published<NovagramInsights::InsightsPeriod>.Combine::Publisher {
+    get
+    @available(macOS 11.0, iOS 14.0, tvOS 14.0, watchOS 7.0, *)
+    set
+  }
+  @Combine::Published<NovagramInsights::InsightsLoadState<NovagramInsights::InsightsAdStatistics>> @_projectedValueProperty($statistics) @_Concurrency::MainActor final public var statistics: NovagramInsights::InsightsLoadState<NovagramInsights::InsightsAdStatistics> {
+    get
+  }
+  @_Concurrency::MainActor final public var $statistics: Combine::Published<NovagramInsights::InsightsLoadState<NovagramInsights::InsightsAdStatistics>>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<NovagramInsights::InsightsChartSeries> @_projectedValueProperty($viewsSeries) @_Concurrency::MainActor final public var viewsSeries: NovagramInsights::InsightsChartSeries {
+    get
+  }
+  @_Concurrency::MainActor final public var $viewsSeries: Combine::Published<NovagramInsights::InsightsChartSeries>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<NovagramInsights::InsightsChartSeries> @_projectedValueProperty($clicksSeries) @_Concurrency::MainActor final public var clicksSeries: NovagramInsights::InsightsChartSeries {
+    get
+  }
+  @_Concurrency::MainActor final public var $clicksSeries: Combine::Published<NovagramInsights::InsightsChartSeries>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<NovagramInsights::InsightsChartSeries> @_projectedValueProperty($spendSeries) @_Concurrency::MainActor final public var spendSeries: NovagramInsights::InsightsChartSeries {
+    get
+  }
+  @_Concurrency::MainActor final public var $spendSeries: Combine::Published<NovagramInsights::InsightsChartSeries>.Combine::Publisher {
+    get
+  }
+  @_Concurrency::MainActor final public var formatter: NovagramInsights::InsightsFormatter {
+    get
+  }
+  @_Concurrency::MainActor final public func load(force: Swift::Bool = false) async
+  public typealias ObjectWillChangePublisher = Combine::ObservableObjectPublisher
+  @objc deinit
+}
+public struct InsightsChartSeries : Swift::Hashable, Swift::Sendable {
+  public struct Point : Swift::Hashable, Swift::Sendable, Swift::Identifiable {
+    public let date: Foundation::Date
+    public let value: Swift::Double
+    public var id: Foundation::Date {
+      get
+    }
+    public init(date: Foundation::Date, value: Swift::Double)
+    public static func == (a: NovagramInsights::InsightsChartSeries.NovagramInsights::Point, b: NovagramInsights::InsightsChartSeries.NovagramInsights::Point) -> Swift::Bool
+    public typealias ID = Foundation::Date
+    public func hash(into hasher: inout Swift::Hasher)
+    public var hashValue: Swift::Int {
+      get
+    }
+  }
+  public static let maxPoints: Swift::Int
+  public let points: [NovagramInsights::InsightsChartSeries.NovagramInsights::Point]
+  public let maxValue: Swift::Double
+  public init(points: [NovagramInsights::InsightsChartSeries.NovagramInsights::Point])
+  public init(daily: [NovagramInsights::InsightsDailyPoint], value: (NovagramInsights::InsightsTotals) -> Swift::Double)
+  public var total: Swift::Double {
+    get
+  }
+  public static func == (a: NovagramInsights::InsightsChartSeries, b: NovagramInsights::InsightsChartSeries) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public enum InsightsSignInMethod : Swift::Hashable, Swift::Sendable {
+  case panel
+  case backend
+  public var usesEmail: Swift::Bool {
+    get
+  }
+  public static func inferred(from login: Swift::String, offered: [NovagramInsights::InsightsSignInMethod]) -> NovagramInsights::InsightsSignInMethod
+  public static func == (a: NovagramInsights::InsightsSignInMethod, b: NovagramInsights::InsightsSignInMethod) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public struct InsightsCropGeometry : Swift::Hashable, Swift::Sendable {
+  public static let zoomRange: Swift::ClosedRange<Swift::Double>
+  public static let nudgeFraction: Swift::Double
+  public static let zoomStep: Swift::Double
+  public enum Direction : Swift::Hashable, Swift::Sendable {
+    case left, right, up, down
+    public static func == (a: NovagramInsights::InsightsCropGeometry.NovagramInsights::Direction, b: NovagramInsights::InsightsCropGeometry.NovagramInsights::Direction) -> Swift::Bool
+    public func hash(into hasher: inout Swift::Hasher)
+    public var hashValue: Swift::Int {
+      get
+    }
+  }
+  public let imageWidth: Swift::Double
+  public let imageHeight: Swift::Double
+  public var zoom: Swift::Double {
+    get
+  }
+  public var centerX: Swift::Double {
+    get
+  }
+  public var centerY: Swift::Double {
+    get
+  }
+  public init(imageWidth: Swift::Int, imageHeight: Swift::Int)
+  public var fullCropWidth: Swift::Double {
+    get
+  }
+  public var cropWidth: Swift::Double {
+    get
+  }
+  public var cropHeight: Swift::Double {
+    get
+  }
+  public var exactCropRect: CoreFoundation::CGRect {
+    get
+  }
+  public var cropRect: CoreFoundation::CGRect {
+    get
+  }
+  public var outputWidth: Swift::Int {
+    get
+  }
+  public var outputHeight: Swift::Int {
+    get
+  }
+  public var meetsMinimumWidth: Swift::Bool {
+    get
+  }
+  public var sourceTooNarrow: Swift::Bool {
+    get
+  }
+  public var largestValidZoom: Swift::Double {
+    get
+  }
+  public var imageIsSixteenByNine: Swift::Bool {
+    get
+  }
+  public var isCentered: Swift::Bool {
+    get
+  }
+  public var isReset: Swift::Bool {
+    get
+  }
+  public func panned(byX dx: Swift::Double, y dy: Swift::Double, frameWidth: Swift::Double) -> NovagramInsights::InsightsCropGeometry
+  public func zoomed(to newZoom: Swift::Double) -> NovagramInsights::InsightsCropGeometry
+  public func zoomed(bySteps steps: Swift::Int) -> NovagramInsights::InsightsCropGeometry
+  public func nudged(_ direction: NovagramInsights::InsightsCropGeometry.NovagramInsights::Direction) -> NovagramInsights::InsightsCropGeometry
+  public func reset() -> NovagramInsights::InsightsCropGeometry
+  public func snappedToCenter(within points: Swift::Double, frameWidth: Swift::Double) -> (geometry: NovagramInsights::InsightsCropGeometry, didSnap: Swift::Bool)
+  public static func == (a: NovagramInsights::InsightsCropGeometry, b: NovagramInsights::InsightsCropGeometry) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public struct InsightsKPI : Swift::Hashable, Swift::Sendable, Swift::Identifiable {
+  public enum Kind : Swift::String, Swift::Hashable, Swift::Sendable, Swift::CaseIterable {
+    case views, clicks, ctr, spend, activeAds, moderationQueue
+    public init?(rawValue: Swift::String)
+    public typealias AllCases = [NovagramInsights::InsightsKPI.NovagramInsights::Kind]
+    public typealias RawValue = Swift::String
+    nonisolated public static var allCases: [NovagramInsights::InsightsKPI.NovagramInsights::Kind] {
+      get
+    }
+    public var rawValue: Swift::String {
+      get
+    }
+  }
+  public enum Trend : Swift::Hashable, Swift::Sendable {
+    case up, down, flat
+    case new
+    public static func == (a: NovagramInsights::InsightsKPI.NovagramInsights::Trend, b: NovagramInsights::InsightsKPI.NovagramInsights::Trend) -> Swift::Bool
+    public func hash(into hasher: inout Swift::Hasher)
+    public var hashValue: Swift::Int {
+      get
+    }
+  }
+  public let kind: NovagramInsights::InsightsKPI.NovagramInsights::Kind
+  public let value: Swift::String
+  public let accessibilityValue: Swift::String
+  public let isUnavailable: Swift::Bool
+  public let number: Swift::Double
+  public let previous: Swift::Double?
+  public var id: NovagramInsights::InsightsKPI.NovagramInsights::Kind {
+    get
+  }
+  public init(kind: NovagramInsights::InsightsKPI.NovagramInsights::Kind, value: Swift::String, accessibilityValue: Swift::String, isUnavailable: Swift::Bool = false, number: Swift::Double = 0, previous: Swift::Double? = nil)
+  public var change: Swift::Double? {
+    get
+  }
+  public var trend: NovagramInsights::InsightsKPI.NovagramInsights::Trend? {
+    get
+  }
+  public var hasNeutralTrend: Swift::Bool {
+    get
+  }
+  public static func == (a: NovagramInsights::InsightsKPI, b: NovagramInsights::InsightsKPI) -> Swift::Bool
+  public typealias ID = NovagramInsights::InsightsKPI.NovagramInsights::Kind
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+@_hasMissingDesignatedInitializers @_Concurrency::MainActor final public class InsightsDashboardStore : Combine::ObservableObject {
+  @Combine::Published<NovagramInsights::InsightsPeriod> @_projectedValueProperty($period) @_Concurrency::MainActor final public var period: NovagramInsights::InsightsPeriod {
+    get
+    @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    set
+    @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    _modify
+  }
+  @_Concurrency::MainActor final public var $period: Combine::Published<NovagramInsights::InsightsPeriod>.Combine::Publisher {
+    get
+    @available(macOS 11.0, iOS 14.0, tvOS 14.0, watchOS 7.0, *)
+    set
+  }
+  @Combine::Published<NovagramInsights::InsightsLoadState<NovagramInsights::InsightsOverview>> @_projectedValueProperty($state) @_Concurrency::MainActor final public var state: NovagramInsights::InsightsLoadState<NovagramInsights::InsightsOverview> {
+    get
+  }
+  @_Concurrency::MainActor final public var $state: Combine::Published<NovagramInsights::InsightsLoadState<NovagramInsights::InsightsOverview>>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<[NovagramInsights::InsightsKPI]> @_projectedValueProperty($kpis) @_Concurrency::MainActor final public var kpis: [NovagramInsights::InsightsKPI] {
+    get
+  }
+  @_Concurrency::MainActor final public var $kpis: Combine::Published<[NovagramInsights::InsightsKPI]>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<NovagramInsights::InsightsChartSeries> @_projectedValueProperty($viewsSeries) @_Concurrency::MainActor final public var viewsSeries: NovagramInsights::InsightsChartSeries {
+    get
+  }
+  @_Concurrency::MainActor final public var $viewsSeries: Combine::Published<NovagramInsights::InsightsChartSeries>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<NovagramInsights::InsightsChartSeries> @_projectedValueProperty($clicksSeries) @_Concurrency::MainActor final public var clicksSeries: NovagramInsights::InsightsChartSeries {
+    get
+  }
+  @_Concurrency::MainActor final public var $clicksSeries: Combine::Published<NovagramInsights::InsightsChartSeries>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<NovagramInsights::InsightsChartSeries> @_projectedValueProperty($spendSeries) @_Concurrency::MainActor final public var spendSeries: NovagramInsights::InsightsChartSeries {
+    get
+  }
+  @_Concurrency::MainActor final public var $spendSeries: Combine::Published<NovagramInsights::InsightsChartSeries>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<NovagramInsights::InsightsChartSeries> @_projectedValueProperty($ctrSeries) @_Concurrency::MainActor final public var ctrSeries: NovagramInsights::InsightsChartSeries {
+    get
+  }
+  @_Concurrency::MainActor final public var $ctrSeries: Combine::Published<NovagramInsights::InsightsChartSeries>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<Swift::Bool> @_projectedValueProperty($isShowingCachedData) @_Concurrency::MainActor final public var isShowingCachedData: Swift::Bool {
+    get
+  }
+  @_Concurrency::MainActor final public var $isShowingCachedData: Combine::Published<Swift::Bool>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<NovagramInsights::InsightsError?> @_projectedValueProperty($refreshError) @_Concurrency::MainActor final public var refreshError: NovagramInsights::InsightsError? {
+    get
+  }
+  @_Concurrency::MainActor final public var $refreshError: Combine::Published<NovagramInsights::InsightsError?>.Combine::Publisher {
+    get
+  }
+  @_Concurrency::MainActor final public let role: NovagramInsights::InsightsRole
+  @_Concurrency::MainActor final public var overview: NovagramInsights::InsightsOverview? {
+    get
+  }
+  @_Concurrency::MainActor final public var isRefreshing: Swift::Bool {
+    get
+  }
+  @_Concurrency::MainActor final public var isFirstLoad: Swift::Bool {
+    get
+  }
+  @_Concurrency::MainActor final public var isShowingOtherPeriod: Swift::Bool {
+    get
+  }
+  @_Concurrency::MainActor final public var isZeroState: Swift::Bool {
+    get
+  }
+  @_Concurrency::MainActor final public var formatter: NovagramInsights::InsightsFormatter {
+    get
+  }
+  @_Concurrency::MainActor final public func series(for kind: NovagramInsights::InsightsKPI.NovagramInsights::Kind) -> NovagramInsights::InsightsChartSeries
+  @_Concurrency::MainActor final public func load(force: Swift::Bool = false) async
+  public typealias ObjectWillChangePublisher = Combine::ObservableObjectPublisher
+  @objc deinit
+}
+public enum InsightsError : Swift::Error, Swift::Hashable, Swift::Sendable, Swift::Codable {
+  case invalidCredentials
+  case unauthorized
+  case forbidden
+  case notFound
+  case conflict
+  case rateLimited
+  case offline
+  case server(status: Swift::Int)
+  case rejected(status: Swift::Int)
+  case invalidInput(reason: Swift::String)
+  case unexpectedResponse
+  case cancelled
+  public init(_ error: any Swift::Error)
+  public var requiresLogin: Swift::Bool {
+    get
+  }
+  public var hidesSection: Swift::Bool {
+    get
+  }
+  public var isTemporary: Swift::Bool {
+    get
+  }
+  public static func == (a: NovagramInsights::InsightsError, b: NovagramInsights::InsightsError) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public enum InsightsLanguage : Swift::String, Swift::CaseIterable, Swift::Codable, Swift::Sendable, Swift::Hashable {
+  case uzbek
+  case russian
+  case english
+  public init(identifier: Swift::String)
+  public init?(rawValue: Swift::String)
+  public typealias AllCases = [NovagramInsights::InsightsLanguage]
+  public typealias RawValue = Swift::String
+  nonisolated public static var allCases: [NovagramInsights::InsightsLanguage] {
+    get
+  }
+  public var rawValue: Swift::String {
+    get
+  }
+}
+@_hasMissingDesignatedInitializers final public class InsightsFormatter : @unchecked Swift::Sendable {
+  final public let language: NovagramInsights::InsightsLanguage
+  public static func shared(for language: NovagramInsights::InsightsLanguage) -> NovagramInsights::InsightsFormatter
+  final public func count(_ value: Swift::Int) -> Swift::String
+  final public func compactCount(_ value: Swift::Int) -> Swift::String
+  final public func money(_ value: Foundation::Decimal) -> Swift::String
+  final public func spokenMoney(_ value: Foundation::Decimal) -> Swift::String
+  final public func percent(_ fraction: Swift::Double?) -> Swift::String
+  final public func dateTime(_ date: Foundation::Date) -> Swift::String
+  final public func day(_ date: Foundation::Date) -> Swift::String
+  final public func relative(_ date: Foundation::Date, now: Foundation::Date = Date()) -> Swift::String
+  @objc deinit
+}
+public enum InsightsLoadState<Value> : Swift::Equatable, Swift::Sendable where Value : Swift::Equatable, Value : Swift::Sendable {
+  case idle
+  case loading
+  case loaded(Value)
+  case failed(NovagramInsights::InsightsError)
+  public var value: Value? {
+    get
+  }
+  public var error: NovagramInsights::InsightsError? {
+    get
+  }
+  public var isLoading: Swift::Bool {
+    get
+  }
+  public static func == (a: NovagramInsights::InsightsLoadState<Value>, b: NovagramInsights::InsightsLoadState<Value>) -> Swift::Bool
+}
+public enum InsightsMediaRequirement : Swift::String, Swift::CaseIterable, Swift::Hashable, Swift::Sendable {
+  case photoFile
+  case videoFile
+  case videoDuration
+  case aspectRatio
+  case minimumWidth
+  public func applies(to kind: NovagramAds::SDKAdMediaKind?) -> Swift::Bool
+  public init?(rawValue: Swift::String)
+  public typealias AllCases = [NovagramInsights::InsightsMediaRequirement]
+  public typealias RawValue = Swift::String
+  nonisolated public static var allCases: [NovagramInsights::InsightsMediaRequirement] {
+    get
+  }
+  public var rawValue: Swift::String {
+    get
+  }
+}
+public enum InsightsMediaCheck : Swift::Hashable, Swift::Sendable {
+  case pending
+  case passed
+  case failed
+  case notApplicable
+  public static func == (a: NovagramInsights::InsightsMediaCheck, b: NovagramInsights::InsightsMediaCheck) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public struct InsightsMediaChecklist : Swift::Hashable, Swift::Sendable {
+  public struct Row : Swift::Hashable, Swift::Sendable, Swift::Identifiable {
+    public let requirement: NovagramInsights::InsightsMediaRequirement
+    public let check: NovagramInsights::InsightsMediaCheck
+    public var id: NovagramInsights::InsightsMediaRequirement {
+      get
+    }
+    public static func == (a: NovagramInsights::InsightsMediaChecklist.NovagramInsights::Row, b: NovagramInsights::InsightsMediaChecklist.NovagramInsights::Row) -> Swift::Bool
+    public typealias ID = NovagramInsights::InsightsMediaRequirement
+    public func hash(into hasher: inout Swift::Hasher)
+    public var hashValue: Swift::Int {
+      get
+    }
+  }
+  public let rows: [NovagramInsights::InsightsMediaChecklist.NovagramInsights::Row]
+  public static let pending: NovagramInsights::InsightsMediaChecklist
+  public func check(_ requirement: NovagramInsights::InsightsMediaRequirement) -> NovagramInsights::InsightsMediaCheck
+  public var allPassed: Swift::Bool {
+    get
+  }
+  public var hasFailure: Swift::Bool {
+    get
+  }
+  public static func evaluate(_ file: NovagramInsights::InsightsMediaFile) -> NovagramInsights::InsightsMediaChecklist
+  public static func evaluate(kind: NovagramAds::SDKAdMediaKind?, issues: [NovagramInsights::InsightsMediaIssue]) -> NovagramInsights::InsightsMediaChecklist
+  public static func == (a: NovagramInsights::InsightsMediaChecklist, b: NovagramInsights::InsightsMediaChecklist) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+@available(iOS 16.0, macOS 13.0, *)
+@_Concurrency::MainActor final public class InsightsMediaCropStore : Combine::ObservableObject, Swift::Identifiable {
+  public enum Phase : Swift::Equatable, Swift::Sendable {
+    case loading
+    case editing
+    case working(progress: Swift::Double?)
+    case unreadable
+    public static func == (a: NovagramInsights::InsightsMediaCropStore.NovagramInsights::Phase, b: NovagramInsights::InsightsMediaCropStore.NovagramInsights::Phase) -> Swift::Bool
+  }
+  public enum Block : Swift::Hashable, Swift::Sendable {
+    case sourceTooNarrow(width: Swift::Int, minimum: Swift::Int)
+    case cropTooNarrow(width: Swift::Int, minimum: Swift::Int)
+    case videoTooShort(duration: Swift::Double, minimum: Swift::Double)
+    case trimRequired(duration: Swift::Double, maximum: Swift::Double)
+    public static func == (a: NovagramInsights::InsightsMediaCropStore.NovagramInsights::Block, b: NovagramInsights::InsightsMediaCropStore.NovagramInsights::Block) -> Swift::Bool
+    public func hash(into hasher: inout Swift::Hasher)
+    public var hashValue: Swift::Int {
+      get
+    }
+  }
+  @_Concurrency::MainActor public static let previewPixelSize: Swift::Int
+  @_Concurrency::MainActor final public let source: NovagramInsights::InsightsMediaSource
+  @_Concurrency::MainActor final public let trim: NovagramInsights::InsightsVideoTrimDecision
+  @Combine::Published<NovagramInsights::InsightsCropGeometry> @_projectedValueProperty($geometry) @_Concurrency::MainActor final public var geometry: NovagramInsights::InsightsCropGeometry {
+    get
+    @available(macOS 13.0, iOS 16.0, tvOS 13.0, watchOS 6.0, *)
+    set
+    @available(macOS 13.0, iOS 16.0, tvOS 13.0, watchOS 6.0, *)
+    _modify
+  }
+  @_Concurrency::MainActor final public var $geometry: Combine::Published<NovagramInsights::InsightsCropGeometry>.Combine::Publisher {
+    get
+    @available(macOS 13.0, iOS 16.0, tvOS 14.0, watchOS 7.0, *)
+    set
+  }
+  @Combine::Published<CoreGraphics::CGImage?> @_projectedValueProperty($preview) @_Concurrency::MainActor final public var preview: CoreGraphics::CGImage? {
+    get
+  }
+  @_Concurrency::MainActor final public var $preview: Combine::Published<CoreGraphics::CGImage?>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<NovagramInsights::InsightsMediaCropStore.NovagramInsights::Phase> @_projectedValueProperty($phase) @_Concurrency::MainActor final public var phase: NovagramInsights::InsightsMediaCropStore.NovagramInsights::Phase {
+    get
+  }
+  @_Concurrency::MainActor final public var $phase: Combine::Published<NovagramInsights::InsightsMediaCropStore.NovagramInsights::Phase>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<Swift::Double> @_projectedValueProperty($posterTime) @_Concurrency::MainActor final public var posterTime: Swift::Double {
+    get
+  }
+  @_Concurrency::MainActor final public var $posterTime: Combine::Published<Swift::Double>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<Swift::Bool> @_projectedValueProperty($trimsToMaximum) @_Concurrency::MainActor final public var trimsToMaximum: Swift::Bool {
+    get
+    @available(macOS 13.0, iOS 16.0, tvOS 13.0, watchOS 6.0, *)
+    set
+    @available(macOS 13.0, iOS 16.0, tvOS 13.0, watchOS 6.0, *)
+    _modify
+  }
+  @_Concurrency::MainActor final public var $trimsToMaximum: Combine::Published<Swift::Bool>.Combine::Publisher {
+    get
+    @available(macOS 13.0, iOS 16.0, tvOS 14.0, watchOS 7.0, *)
+    set
+  }
+  @Combine::Published<Swift::Bool> @_projectedValueProperty($didFail) @_Concurrency::MainActor final public var didFail: Swift::Bool {
+    get
+  }
+  @_Concurrency::MainActor final public var $didFail: Combine::Published<Swift::Bool>.Combine::Publisher {
+    get
+  }
+  @_Concurrency::MainActor public init(source: NovagramInsights::InsightsMediaSource)
+  @_Concurrency::MainActor final public var kind: NovagramAds::SDKAdMediaKind {
+    get
+  }
+  @_Concurrency::MainActor final public var isVideo: Swift::Bool {
+    get
+  }
+  @_Concurrency::MainActor final public var duration: Swift::Double {
+    get
+  }
+  @_Concurrency::MainActor final public var block: NovagramInsights::InsightsMediaCropStore.NovagramInsights::Block? {
+    get
+  }
+  @_Concurrency::MainActor final public var canFinish: Swift::Bool {
+    get
+  }
+  @_Concurrency::MainActor final public var isWorking: Swift::Bool {
+    get
+  }
+  @_Concurrency::MainActor final public func load() async
+  @_Concurrency::MainActor final public func choosePoster(at seconds: Swift::Double)
+  @_Concurrency::MainActor final public func finish() async -> Foundation::URL?
+  @_Concurrency::MainActor final public func cancelWork()
+  @available(macOS 13.0, iOS 16.0, *)
+  public typealias ID = Swift::ObjectIdentifier
+  @available(macOS 13.0, iOS 16.0, *)
+  public typealias ObjectWillChangePublisher = Combine::ObservableObjectPublisher
+  @objc deinit
+}
+extension NovagramInsights::InsightsMediaIssue : Swift::Error {
+}
+public enum InsightsMediaInspector {
+  @available(iOS 15.0, macOS 12.0, *)
+  public static func inspect(fileURL: Foundation::URL) async throws -> NovagramInsights::InsightsMediaFile
+  public static func jpegData(from data: Foundation::Data, quality: Swift::Double = 0.9) throws -> Foundation::Data
+  @available(iOS 15.0, macOS 12.0, *)
+  public static func mp4File(from url: Foundation::URL) async throws -> Foundation::URL
+}
+@_hasMissingDesignatedInitializers @_Concurrency::MainActor final public class InsightsMediaUploader : Combine::ObservableObject {
+  public enum Phase : Swift::Equatable, Swift::Sendable {
+    case idle
+    case inspecting
+    case rejected([NovagramInsights::InsightsMediaIssue])
+    case uploading(NovagramInsights::InsightsMediaFile)
+    case processing(elapsed: Swift::Int)
+    case ready(NovagramInsights::InsightsAttachedMedia)
+    case processingFailed(reason: Swift::String?)
+    case timedOut
+    case failed(NovagramInsights::InsightsError)
+    public static func == (a: NovagramInsights::InsightsMediaUploader.NovagramInsights::Phase, b: NovagramInsights::InsightsMediaUploader.NovagramInsights::Phase) -> Swift::Bool
+  }
+  @Combine::Published<NovagramInsights::InsightsMediaUploader.NovagramInsights::Phase> @_projectedValueProperty($phase) @_Concurrency::MainActor final public var phase: NovagramInsights::InsightsMediaUploader.NovagramInsights::Phase {
+    get
+  }
+  @_Concurrency::MainActor final public var $phase: Combine::Published<NovagramInsights::InsightsMediaUploader.NovagramInsights::Phase>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<NovagramInsights::InsightsMediaSource?> @_projectedValueProperty($source) @_Concurrency::MainActor final public var source: NovagramInsights::InsightsMediaSource? {
+    get
+  }
+  @_Concurrency::MainActor final public var $source: Combine::Published<NovagramInsights::InsightsMediaSource?>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<NovagramInsights::InsightsMediaFile?> @_projectedValueProperty($inspected) @_Concurrency::MainActor final public var inspected: NovagramInsights::InsightsMediaFile? {
+    get
+  }
+  @_Concurrency::MainActor final public var $inspected: Combine::Published<NovagramInsights::InsightsMediaFile?>.Combine::Publisher {
+    get
+  }
+  @_Concurrency::MainActor final public var attached: NovagramInsights::InsightsAttachedMedia? {
+    get
+  }
+  @_Concurrency::MainActor final public var isBusy: Swift::Bool {
+    get
+  }
+  @_Concurrency::MainActor final public var checklist: NovagramInsights::InsightsMediaChecklist {
+    get
+  }
+  @_Concurrency::MainActor final public func attach(fileURL: Foundation::URL, isTemporary: Swift::Bool = false)
+  @_Concurrency::MainActor final public func attachCropped(fileURL: Foundation::URL)
+  @_Concurrency::MainActor final public func cancel()
+  @_Concurrency::MainActor final public func remove()
+  public typealias ObjectWillChangePublisher = Combine::ObservableObjectPublisher
+  @objc deinit
+}
+public struct InsightsMediaSource : Swift::Hashable, Swift::Sendable, Swift::Identifiable {
+  public let url: Foundation::URL
+  public let file: NovagramInsights::InsightsMediaFile
+  public init(url: Foundation::URL, file: NovagramInsights::InsightsMediaFile)
+  public var id: Foundation::URL {
+    get
+  }
+  public static func == (a: NovagramInsights::InsightsMediaSource, b: NovagramInsights::InsightsMediaSource) -> Swift::Bool
+  public typealias ID = Foundation::URL
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public struct InsightsTotals : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  public var views: Swift::Int
+  public var clicks: Swift::Int
+  public var actions: Swift::Int
+  public var spent: Foundation::Decimal
+  public init(views: Swift::Int = 0, clicks: Swift::Int = 0, actions: Swift::Int = 0, spent: Foundation::Decimal = 0)
+  public static let zero: NovagramInsights::InsightsTotals
+  public var ctr: Swift::Double? {
+    get
+  }
+  public static func + (lhs: NovagramInsights::InsightsTotals, rhs: NovagramInsights::InsightsTotals) -> NovagramInsights::InsightsTotals
+  public static func == (a: NovagramInsights::InsightsTotals, b: NovagramInsights::InsightsTotals) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct InsightsDailyPoint : Swift::Hashable, Swift::Sendable, Swift::Codable, Swift::Identifiable {
+  public let day: NovagramAds::SDKDay
+  public let totals: NovagramInsights::InsightsTotals
+  public init(day: NovagramAds::SDKDay, totals: NovagramInsights::InsightsTotals)
+  public var id: NovagramAds::SDKDay {
+    get
+  }
+  public var date: Foundation::Date {
+    get
+  }
+  public static func == (a: NovagramInsights::InsightsDailyPoint, b: NovagramInsights::InsightsDailyPoint) -> Swift::Bool
+  public typealias ID = NovagramAds::SDKDay
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct InsightsTraffic : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  public let totals: NovagramInsights::InsightsTotals
+  public let daily: [NovagramInsights::InsightsDailyPoint]
+  public let adsCounted: Swift::Int
+  public let adsSkipped: Swift::Int
+  public let previousTotals: NovagramInsights::InsightsTotals?
+  public init(totals: NovagramInsights::InsightsTotals, daily: [NovagramInsights::InsightsDailyPoint], adsCounted: Swift::Int, adsSkipped: Swift::Int, previousTotals: NovagramInsights::InsightsTotals? = nil)
+  public var isPartial: Swift::Bool {
+    get
+  }
+  public static func == (a: NovagramInsights::InsightsTraffic, b: NovagramInsights::InsightsTraffic) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct InsightsModerationQueue : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  public let pendingAds: Swift::Int?
+  public let pendingRevisions: Swift::Int?
+  public let reportedAds: Swift::Int?
+  public let legacyOrders: Swift::Int?
+  public init(pendingAds: Swift::Int?, pendingRevisions: Swift::Int?, reportedAds: Swift::Int?, legacyOrders: Swift::Int?)
+  public var total: Swift::Int {
+    get
+  }
+  public static func == (a: NovagramInsights::InsightsModerationQueue, b: NovagramInsights::InsightsModerationQueue) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct InsightsEarningsSummary : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  public let totalEarned: Foundation::Decimal
+  public let available: Foundation::Decimal
+  public let channels: Swift::Int
+  public init(totalEarned: Foundation::Decimal, available: Foundation::Decimal, channels: Swift::Int)
+  public static func == (a: NovagramInsights::InsightsEarningsSummary, b: NovagramInsights::InsightsEarningsSummary) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public enum InsightsScope : Swift::String, Swift::Codable, Swift::Sendable, Swift::Hashable {
+  case ownAds
+  case platform
+  public init?(rawValue: Swift::String)
+  public typealias RawValue = Swift::String
+  public var rawValue: Swift::String {
+    get
+  }
+}
+public struct InsightsOverview : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  public let period: NovagramInsights::InsightsPeriod
+  public let range: NovagramInsights::InsightsDayRange
+  public let scope: NovagramInsights::InsightsScope
+  public let traffic: NovagramInsights::InsightsTraffic?
+  public let activeAds: Swift::Int?
+  public let moderation: NovagramInsights::InsightsModerationQueue?
+  public let earnings: NovagramInsights::InsightsEarningsSummary?
+  public let hiddenSections: Swift::Set<NovagramInsights::InsightsSection>
+  public let failedSections: Swift::Set<NovagramInsights::InsightsSection>
+  public let updatedAt: Foundation::Date
+  public init(period: NovagramInsights::InsightsPeriod, range: NovagramInsights::InsightsDayRange, scope: NovagramInsights::InsightsScope, traffic: NovagramInsights::InsightsTraffic?, activeAds: Swift::Int?, moderation: NovagramInsights::InsightsModerationQueue?, earnings: NovagramInsights::InsightsEarningsSummary?, hiddenSections: Swift::Set<NovagramInsights::InsightsSection>, failedSections: Swift::Set<NovagramInsights::InsightsSection>, updatedAt: Foundation::Date)
+  public func isVisible(_ section: NovagramInsights::InsightsSection) -> Swift::Bool
+  public static func == (a: NovagramInsights::InsightsOverview, b: NovagramInsights::InsightsOverview) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct InsightsAdSummary : Swift::Hashable, Swift::Sendable, Swift::Codable, Swift::Identifiable {
+  public let id: Foundation::UUID
+  public let title: Swift::String
+  public let placement: NovagramAds::SDKAdFormat
+  public let status: NovagramAds::SDKAdStatus
+  public let ownerName: Swift::String?
+  public let budget: Foundation::Decimal
+  public let spent: Foundation::Decimal
+  public let remainingBudget: Foundation::Decimal
+  public let lifetime: NovagramInsights::InsightsTotals
+  public let moderationReason: Swift::String?
+  public let createdAt: Foundation::Date
+  public let updatedAt: Foundation::Date
+  public init(id: Foundation::UUID, title: Swift::String, placement: NovagramAds::SDKAdFormat, status: NovagramAds::SDKAdStatus, ownerName: Swift::String? = nil, budget: Foundation::Decimal, spent: Foundation::Decimal, remainingBudget: Foundation::Decimal, lifetime: NovagramInsights::InsightsTotals, moderationReason: Swift::String? = nil, createdAt: Foundation::Date, updatedAt: Foundation::Date)
+  public var budgetUsedFraction: Swift::Double? {
+    get
+  }
+  public static func == (a: NovagramInsights::InsightsAdSummary, b: NovagramInsights::InsightsAdSummary) -> Swift::Bool
+  public typealias ID = Foundation::UUID
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct InsightsAdStatistics : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  public let adID: Foundation::UUID
+  public let range: NovagramInsights::InsightsDayRange
+  public let totals: NovagramInsights::InsightsTotals
+  public let daily: [NovagramInsights::InsightsDailyPoint]
+  public init(adID: Foundation::UUID, range: NovagramInsights::InsightsDayRange, totals: NovagramInsights::InsightsTotals, daily: [NovagramInsights::InsightsDailyPoint])
+  public static func == (a: NovagramInsights::InsightsAdStatistics, b: NovagramInsights::InsightsAdStatistics) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct InsightsPage<Item> : Swift::Hashable, Swift::Sendable where Item : Swift::Hashable, Item : Swift::Sendable {
+  public let items: [Item]
+  public let totalCount: Swift::Int
+  public let hasMore: Swift::Bool
+  public init(items: [Item], totalCount: Swift::Int, hasMore: Swift::Bool)
+  public static func == (a: NovagramInsights::InsightsPage<Item>, b: NovagramInsights::InsightsPage<Item>) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public struct InsightsChannelEarning : Swift::Hashable, Swift::Sendable, Swift::Codable, Swift::Identifiable {
+  public let channelID: Swift::Int64
+  public let channelName: Swift::String
+  public let ownerName: Swift::String?
+  public let totalEarned: Foundation::Decimal
+  public let available: Foundation::Decimal
+  public let impressions: Swift::Int?
+  public var id: Swift::Int64 {
+    get
+  }
+  public init(channelID: Swift::Int64, channelName: Swift::String, ownerName: Swift::String?, totalEarned: Foundation::Decimal, available: Foundation::Decimal, impressions: Swift::Int?)
+  public static func == (a: NovagramInsights::InsightsChannelEarning, b: NovagramInsights::InsightsChannelEarning) -> Swift::Bool
+  public typealias ID = Swift::Int64
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+@_hasMissingDesignatedInitializers @_Concurrency::MainActor final public class InsightsModerationStore : Combine::ObservableObject {
+  public enum Queue : Swift::String, Swift::CaseIterable, Swift::Hashable, Swift::Sendable, Swift::Identifiable {
+    case ads, revisions, reports
+    public var id: Swift::String {
+      get
+    }
+    public init?(rawValue: Swift::String)
+    public typealias AllCases = [NovagramInsights::InsightsModerationStore.NovagramInsights::Queue]
+    public typealias ID = Swift::String
+    public typealias RawValue = Swift::String
+    nonisolated public static var allCases: [NovagramInsights::InsightsModerationStore.NovagramInsights::Queue] {
+      get
+    }
+    public var rawValue: Swift::String {
+      get
+    }
+  }
+  @_Concurrency::MainActor public static let maxReasonLength: Swift::Int
+  @Combine::Published<NovagramInsights::InsightsModerationStore.NovagramInsights::Queue> @_projectedValueProperty($queue) @_Concurrency::MainActor final public var queue: NovagramInsights::InsightsModerationStore.NovagramInsights::Queue {
+    get
+    @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    set
+    @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    _modify
+  }
+  @_Concurrency::MainActor final public var $queue: Combine::Published<NovagramInsights::InsightsModerationStore.NovagramInsights::Queue>.Combine::Publisher {
+    get
+    @available(macOS 11.0, iOS 14.0, tvOS 14.0, watchOS 7.0, *)
+    set
+  }
+  @Combine::Published<NovagramInsights::InsightsLoadState<[NovagramInsights::InsightsAdSummary]>> @_projectedValueProperty($pendingAds) @_Concurrency::MainActor final public var pendingAds: NovagramInsights::InsightsLoadState<[NovagramInsights::InsightsAdSummary]> {
+    get
+  }
+  @_Concurrency::MainActor final public var $pendingAds: Combine::Published<NovagramInsights::InsightsLoadState<[NovagramInsights::InsightsAdSummary]>>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<NovagramInsights::InsightsLoadState<[NovagramAds::SDKModerationRevision]>> @_projectedValueProperty($revisions) @_Concurrency::MainActor final public var revisions: NovagramInsights::InsightsLoadState<[NovagramAds::SDKModerationRevision]> {
+    get
+  }
+  @_Concurrency::MainActor final public var $revisions: Combine::Published<NovagramInsights::InsightsLoadState<[NovagramAds::SDKModerationRevision]>>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<NovagramInsights::InsightsLoadState<[NovagramAds::SDKAdReportGroup]>> @_projectedValueProperty($reports) @_Concurrency::MainActor final public var reports: NovagramInsights::InsightsLoadState<[NovagramAds::SDKAdReportGroup]> {
+    get
+  }
+  @_Concurrency::MainActor final public var $reports: Combine::Published<NovagramInsights::InsightsLoadState<[NovagramAds::SDKAdReportGroup]>>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<[NovagramInsights::InsightsModerationStore.NovagramInsights::Queue : Swift::Int]> @_projectedValueProperty($totals) @_Concurrency::MainActor final public var totals: [NovagramInsights::InsightsModerationStore.NovagramInsights::Queue : Swift::Int] {
+    get
+  }
+  @_Concurrency::MainActor final public var $totals: Combine::Published<[NovagramInsights::InsightsModerationStore.NovagramInsights::Queue : Swift::Int]>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<Swift::Set<Foundation::UUID>> @_projectedValueProperty($busyIDs) @_Concurrency::MainActor final public var busyIDs: Swift::Set<Foundation::UUID> {
+    get
+  }
+  @_Concurrency::MainActor final public var $busyIDs: Combine::Published<Swift::Set<Foundation::UUID>>.Combine::Publisher {
+    get
+  }
+  @_Concurrency::MainActor final public var formatter: NovagramInsights::InsightsFormatter {
+    get
+  }
+  @_Concurrency::MainActor final public func load() async
+  @_Concurrency::MainActor final public func approve(adID: Foundation::UUID) async throws
+  @_Concurrency::MainActor final public func decline(adID: Foundation::UUID, reason: Swift::String) async throws
+  @_Concurrency::MainActor final public func block(adID: Foundation::UUID, reason: Swift::String) async throws
+  @_Concurrency::MainActor final public func approveRevision(id: Foundation::UUID) async throws
+  @_Concurrency::MainActor final public func declineRevision(id: Foundation::UUID, reason: Swift::String) async throws
+  @_Concurrency::MainActor final public func markReportReviewed(reportID: Foundation::UUID) async throws
+  public typealias ObjectWillChangePublisher = Combine::ObservableObjectPublisher
+  @objc deinit
+}
+@_hasMissingDesignatedInitializers @_Concurrency::MainActor final public class InsightsEarningsStore : Combine::ObservableObject {
+  @Combine::Published<NovagramInsights::InsightsLoadState<NovagramInsights::InsightsEarningsSummary>> @_projectedValueProperty($summary) @_Concurrency::MainActor final public var summary: NovagramInsights::InsightsLoadState<NovagramInsights::InsightsEarningsSummary> {
+    get
+  }
+  @_Concurrency::MainActor final public var $summary: Combine::Published<NovagramInsights::InsightsLoadState<NovagramInsights::InsightsEarningsSummary>>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<NovagramInsights::InsightsLoadState<[NovagramInsights::InsightsChannelEarning]>> @_projectedValueProperty($channels) @_Concurrency::MainActor final public var channels: NovagramInsights::InsightsLoadState<[NovagramInsights::InsightsChannelEarning]> {
+    get
+  }
+  @_Concurrency::MainActor final public var $channels: Combine::Published<NovagramInsights::InsightsLoadState<[NovagramInsights::InsightsChannelEarning]>>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<Swift::Bool> @_projectedValueProperty($hasMore) @_Concurrency::MainActor final public var hasMore: Swift::Bool {
+    get
+  }
+  @_Concurrency::MainActor final public var $hasMore: Combine::Published<Swift::Bool>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<Swift::Bool> @_projectedValueProperty($isLoadingMore) @_Concurrency::MainActor final public var isLoadingMore: Swift::Bool {
+    get
+  }
+  @_Concurrency::MainActor final public var $isLoadingMore: Combine::Published<Swift::Bool>.Combine::Publisher {
+    get
+  }
+  @_Concurrency::MainActor final public var formatter: NovagramInsights::InsightsFormatter {
+    get
+  }
+  @_Concurrency::MainActor final public func load() async
+  @_Concurrency::MainActor final public func loadMoreIfNeeded(after channel: NovagramInsights::InsightsChannelEarning) async
+  public typealias ObjectWillChangePublisher = Combine::ObservableObjectPublisher
+  @objc deinit
+}
+public enum InsightsPeriod : Swift::String, Swift::CaseIterable, Swift::Codable, Swift::Sendable, Swift::Hashable, Swift::Identifiable {
+  case today
+  case last7Days
+  case last30Days
+  public var id: Swift::String {
+    get
+  }
+  public var dayCount: Swift::Int {
+    get
+  }
+  public func range(now: Foundation::Date = Date()) -> NovagramInsights::InsightsDayRange
+  public init?(rawValue: Swift::String)
+  public typealias AllCases = [NovagramInsights::InsightsPeriod]
+  public typealias ID = Swift::String
+  public typealias RawValue = Swift::String
+  nonisolated public static var allCases: [NovagramInsights::InsightsPeriod] {
+    get
+  }
+  public var rawValue: Swift::String {
+    get
+  }
+}
+public struct InsightsDayRange : Swift::Hashable, Swift::Sendable, Swift::Codable {
+  public let from: NovagramAds::SDKDay
+  public let to: NovagramAds::SDKDay
+  public init(from: NovagramAds::SDKDay, to: NovagramAds::SDKDay)
+  public var days: [NovagramAds::SDKDay] {
+    get
+  }
+  public func contains(_ day: NovagramAds::SDKDay) -> Swift::Bool
+  public static func == (a: NovagramInsights::InsightsDayRange, b: NovagramInsights::InsightsDayRange) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public enum InsightsJPEGBudget {
+  public struct Attempt : Swift::Hashable, Swift::Sendable {
+    public let quality: Swift::Double
+    public let scale: Swift::Double
+    public static func == (a: NovagramInsights::InsightsJPEGBudget.NovagramInsights::Attempt, b: NovagramInsights::InsightsJPEGBudget.NovagramInsights::Attempt) -> Swift::Bool
+    public func hash(into hasher: inout Swift::Hasher)
+    public var hashValue: Swift::Int {
+      get
+    }
+  }
+  public static let qualities: [Swift::Double]
+  public static let downscaleStep: Swift::Double
+  public static func attempts(width: Swift::Int) -> [NovagramInsights::InsightsJPEGBudget.NovagramInsights::Attempt]
+  public static func encode(width: Swift::Int, maxBytes: Swift::Int = InsightsAdRules.maxPhotoBytes, _ encode: (NovagramInsights::InsightsJPEGBudget.NovagramInsights::Attempt) throws -> Foundation::Data) throws -> (data: Foundation::Data, attempt: NovagramInsights::InsightsJPEGBudget.NovagramInsights::Attempt)
+}
+public enum InsightsPhotoCropper {
+  public static func preview(of url: Foundation::URL, maxPixelSize: Swift::Int) async throws -> CoreGraphics::CGImage
+  public static func crop(_ url: Foundation::URL, to rect: CoreFoundation::CGRect, maxBytes: Swift::Int = InsightsAdRules.maxPhotoBytes) async throws -> Foundation::URL
+}
+extension NovagramInsights::InsightsSession {
+  @_Concurrency::MainActor final public func makeAdCreateStore() -> NovagramInsights::InsightsAdCreateStore
+  @_Concurrency::MainActor final public func makeAdManageStore(adID: Foundation::UUID) -> NovagramInsights::InsightsAdManageStore
+}
+@_hasMissingDesignatedInitializers @_Concurrency::MainActor final public class InsightsSession : Combine::ObservableObject {
+  public enum State : Swift::Equatable, Swift::Sendable {
+    case restoring
+    case signedOut
+    case signedIn(NovagramInsights::InsightsAccount)
+    public static func == (a: NovagramInsights::InsightsSession.NovagramInsights::State, b: NovagramInsights::InsightsSession.NovagramInsights::State) -> Swift::Bool
+  }
+  @Combine::Published<NovagramInsights::InsightsSession.NovagramInsights::State> @_projectedValueProperty($state) @_Concurrency::MainActor final public var state: NovagramInsights::InsightsSession.NovagramInsights::State {
+    get
+  }
+  @_Concurrency::MainActor final public var $state: Combine::Published<NovagramInsights::InsightsSession.NovagramInsights::State>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<Swift::Bool> @_projectedValueProperty($isSigningIn) @_Concurrency::MainActor final public var isSigningIn: Swift::Bool {
+    get
+  }
+  @_Concurrency::MainActor final public var $isSigningIn: Combine::Published<Swift::Bool>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<NovagramInsights::InsightsPanelProfile?> @_projectedValueProperty($panelProfile) @_Concurrency::MainActor final public var panelProfile: NovagramInsights::InsightsPanelProfile? {
+    get
+  }
+  @_Concurrency::MainActor final public var $panelProfile: Combine::Published<NovagramInsights::InsightsPanelProfile?>.Combine::Publisher {
+    get
+  }
+  @Combine::Published<Foundation::Decimal?> @_projectedValueProperty($walletBalance) @_Concurrency::MainActor final public var walletBalance: Foundation::Decimal? {
+    get
+  }
+  @_Concurrency::MainActor final public var $walletBalance: Combine::Published<Foundation::Decimal?>.Combine::Publisher {
+    get
+  }
+  @_Concurrency::MainActor final public let signInMethods: [NovagramInsights::InsightsSignInMethod]
+  @Combine::Published<NovagramInsights::InsightsSignInMethod> @_projectedValueProperty($signInMethod) @_Concurrency::MainActor final public var signInMethod: NovagramInsights::InsightsSignInMethod {
+    get
+  }
+  @_Concurrency::MainActor final public var $signInMethod: Combine::Published<NovagramInsights::InsightsSignInMethod>.Combine::Publisher {
+    get
+  }
+  @_Concurrency::MainActor final public let language: NovagramInsights::InsightsLanguage
+  @_Concurrency::MainActor final public let formatter: NovagramInsights::InsightsFormatter
+  @_Concurrency::MainActor final public var account: NovagramInsights::InsightsAccount? {
+    get
+  }
+  @_Concurrency::MainActor convenience public init(environment: NovagramAds::SDKEnvironment, keychainKey: NovagramInsights::InsightsKeychainKey, language: NovagramInsights::InsightsLanguage = .english)
+  @_Concurrency::MainActor final public func restore() async
+  @_Concurrency::MainActor final public func signIn(login: Swift::String, password: Swift::String, method: NovagramInsights::InsightsSignInMethod? = nil) async throws
+  @_Concurrency::MainActor final public func signInMethod(for login: Swift::String) -> NovagramInsights::InsightsSignInMethod
+  @_Concurrency::MainActor final public func refreshPanelProfile() async
+  @_Concurrency::MainActor final public func refreshWalletBalance() async
+  @_Concurrency::MainActor final public func signOut() async
+  nonisolated public static func hasStoredSession(keychainKey: NovagramInsights::InsightsKeychainKey) -> Swift::Bool
+  @_Concurrency::MainActor final public func makeDashboardStore(period: NovagramInsights::InsightsPeriod = .last7Days) -> NovagramInsights::InsightsDashboardStore
+  @_Concurrency::MainActor final public func makeAdsStore() -> NovagramInsights::InsightsAdsStore
+  @_Concurrency::MainActor final public func makeAdDetailStore(ad: NovagramInsights::InsightsAdSummary, period: NovagramInsights::InsightsPeriod = .last30Days) -> NovagramInsights::InsightsAdDetailStore
+  @_Concurrency::MainActor final public func makeModerationStore() -> NovagramInsights::InsightsModerationStore
+  @_Concurrency::MainActor final public func makeEarningsStore() -> NovagramInsights::InsightsEarningsStore
+  public typealias ObjectWillChangePublisher = Combine::ObservableObjectPublisher
+  @objc deinit
+}
+public enum InsightsVideoTrimDecision : Swift::Hashable, Swift::Sendable {
+  case keep
+  case trimToFirst(seconds: Swift::Double)
+  case tooShort(minimum: Swift::Double)
+  public static func evaluate(duration: Swift::Double?) -> NovagramInsights::InsightsVideoTrimDecision
+  public static func == (a: NovagramInsights::InsightsVideoTrimDecision, b: NovagramInsights::InsightsVideoTrimDecision) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public enum InsightsVideoCropper {
+  public static let maxRenderWidth: Swift::Int
+  public static func renderSize(for crop: CoreFoundation::CGRect) -> CoreFoundation::CGSize
+  public static func transform(naturalSize: CoreFoundation::CGSize, preferredTransform: CoreFoundation::CGAffineTransform, crop: CoreFoundation::CGRect, renderSize: CoreFoundation::CGSize) -> CoreFoundation::CGAffineTransform
+  public static func presetIndex(estimates: [Swift::Int64?], maxBytes: Swift::Int = InsightsAdRules.maxVideoBytes) -> Swift::Int
+  @available(iOS 16.0, macOS 13.0, *)
+  public static func poster(of url: Foundation::URL, at seconds: Swift::Double, maxPixelSize: Swift::Int) async throws -> CoreGraphics::CGImage
+  @available(iOS 16.0, macOS 13.0, *)
+  public static func export(_ url: Foundation::URL, crop: CoreFoundation::CGRect, trim: NovagramInsights::InsightsVideoTrimDecision, progress: @escaping @Sendable (Swift::Double) -> Swift::Void) async throws -> Foundation::URL
+}
+extension NovagramInsights::InsightsRole : Swift::RawRepresentable {}
+extension NovagramInsights::InsightsSection : Swift::RawRepresentable {}
+extension NovagramInsights::InsightsAdCreateStore : Swift::Sendable {}
+extension NovagramInsights::InsightsAdCreateStore.NovagramInsights::PeerList : Swift::Equatable {}
+extension NovagramInsights::InsightsAdCreateStore.NovagramInsights::PeerList : Swift::Hashable {}
+extension NovagramInsights::InsightsAdManageStore : Swift::Sendable {}
+extension NovagramInsights::InsightsAdManageStore.NovagramInsights::Action : Swift::Hashable {}
+extension NovagramInsights::InsightsAdWizard.NovagramInsights::Step : Swift::RawRepresentable {}
+extension NovagramInsights::InsightsAdsStore : Swift::Sendable {}
+extension NovagramInsights::InsightsAdDetailStore : Swift::Sendable {}
+extension NovagramInsights::InsightsKPI.NovagramInsights::Kind : Swift::RawRepresentable {}
+extension NovagramInsights::InsightsDashboardStore : Swift::Sendable {}
+extension NovagramInsights::InsightsLanguage : Swift::RawRepresentable {}
+extension NovagramInsights::InsightsMediaRequirement : Swift::RawRepresentable {}
+@available(iOS 16.0, macOS 13.0, *)
+extension NovagramInsights::InsightsMediaCropStore : Swift::Sendable {}
+extension NovagramInsights::InsightsMediaUploader : Swift::Sendable {}
+extension NovagramInsights::InsightsScope : Swift::RawRepresentable {}
+extension NovagramInsights::InsightsModerationStore : Swift::Sendable {}
+extension NovagramInsights::InsightsModerationStore.NovagramInsights::Queue : Swift::RawRepresentable {}
+extension NovagramInsights::InsightsEarningsStore : Swift::Sendable {}
+extension NovagramInsights::InsightsPeriod : Swift::RawRepresentable {}
+extension NovagramInsights::InsightsSession : Swift::Sendable {}

@@ -955,7 +955,13 @@ final class NewContactScreenComponent: Component {
             }
             
             if let updateFocusTag {
-                self.activateInput(tag: updateFocusTag)
+                // becomeFirstResponder makes UIKit synchronously resign whichever field holds focus
+                // now, and that field's textFieldDidEndEditing calls state.updated() — re-entering
+                // the update we are still inside, which trips ComponentHostView's
+                // precondition(!isUpdating). Move the focus change to the next runloop turn.
+                Queue.mainQueue().justDispatch { [weak self] in
+                    self?.activateInput(tag: updateFocusTag)
+                }
             }
                     
             return availableSize

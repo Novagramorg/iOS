@@ -526,6 +526,12 @@ public final class WalletContext {
     }
 }
 
+// Novagram: Novagram keeps the wallet ("Money") off, whatever the server's `wallet_available` says,
+// until App Review (3.1.5) and the App Privacy answers are cleared. Before flipping this to true:
+// hide the onramp "Buy" button in WalletReceiveScreen (no exchange licence) and add the wallet
+// phrases to NovagramBrandStrings.protectedPhrases. See HOOKS.md (13.0 merge).
+private let novagramWalletEnabled = false
+
 @available(macOS 10.15, *)
 public struct WalletConfiguration: Equatable, Sendable {
     public static var defaultValue: WalletConfiguration {
@@ -559,7 +565,7 @@ public struct WalletConfiguration: Equatable, Sendable {
     }
 
     public static func with(appConfiguration: AppConfiguration) -> WalletConfiguration {
-        let isAvailable = appConfiguration.data?["wallet_available"] as? Bool ?? self.defaultValue.isAvailable
+        let isAvailable = novagramWalletEnabled && (appConfiguration.data?["wallet_available"] as? Bool ?? self.defaultValue.isAvailable)
         var explorerUrl = self.defaultValue.explorerUrl
         if let value = appConfiguration.data?["ton_blockchain_explorer_url"] as? String {
             explorerUrl = value

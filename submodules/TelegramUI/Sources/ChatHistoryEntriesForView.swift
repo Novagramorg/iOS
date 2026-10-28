@@ -12,13 +12,15 @@ import TextFormat
 import Markdown
 import Display
 import TelegramStringFormatting
+import NovagramForeignUserBlock
+import NovagramSponsored
 
 struct ChatHistoryEntriesForViewState {
     private var messageStableIdToLocalId: [UInt32: Int64] = [:]
-    
+
     init() {
     }
-    
+
     mutating func messageGroupStableId(messageStableId: UInt32, groupId: Int64, isLocal: Bool) -> Int64 {
         if isLocal {
             self.messageStableIdToLocalId[messageStableId] = groupId
@@ -63,7 +65,7 @@ func chatHistoryEntriesForView(
     pinToTopStableId: EngineMessage.StableId?
 ) -> ([ChatHistoryEntry], ChatHistoryEntriesForViewState) {
     var currentState = currentState
-    
+
     if historyAppearsCleared {
         return ([], currentState)
     }
@@ -105,10 +107,20 @@ func chatHistoryEntriesForView(
             }
         }
     }
-    
+
+    // MARK: - Boshqa davlat raqamlariga cheklov (Foreign User Block)
+    let blockForeignUsers = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "block_foreign_users") ?? false
+    if blockForeignUsers, let foreignPeer = chatPeer as? TelegramUser, foreignPeer.botInfo == nil {
+        // O'z foydalanuvchimizning telefon raqamini olish
+        let myPhone = UserDefaults(suiteName: "pro_messager")?.string(forKey: "my_phone_number")
+        if isForeignUser(peer: foreignPeer, myPhone: myPhone) {
+            return ([], currentState)
+        }
+    }
+
     var joinMessage: Message?
-    if (associatedData.subject?.isService ?? false) {
-        
+    if associatedData.subject?.isService ?? false {
+
     } else {
         if let peer = chatPeer as? TelegramChannel, case .broadcast = peer.info, case .member = peer.participationStatus, !peer.flags.contains(.isCreator) {
             joinMessage = Message(
@@ -139,21 +151,26 @@ func chatHistoryEntriesForView(
             )
         }
     }
-    
+
     var count = 0
+    let showDeletedMessages = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "show_deleted_messages") ?? false
     loop: for entry in view.entries {
         var message = entry.message.withAppliedEphemeralReplacementMessage()
         var isRead = entry.isRead
-        
+
         var pinToTop = false
         if message.stableId == pinToTopStableId {
             pinToTop = true
         }
-        
+
         if pendingRemovedMessages.contains(message.id) {
             continue
         }
-        
+
+        if !showDeletedMessages && message.attributes.contains(where: { $0 is DeletedMessageAttribute }) {
+            continue
+        }
+
         if case let .replyThread(replyThreadMessage) = location, replyThreadMessage.isForumPost {
             for media in message.media {
                 if let action = media as? TelegramMediaAction {
@@ -191,13 +208,13 @@ func chatHistoryEntriesForView(
                 }
             }
         }
-        
+
         count += 1
-        
+
         if let customThreadOutgoingReadState = customThreadOutgoingReadState {
             isRead = customThreadOutgoingReadState >= message.id
         }
-        
+
         if let customChannelDiscussionReadState = customChannelDiscussionReadState {
             attibuteLoop: for i in 0 ..< message.attributes.count {
                 if let attribute = message.attributes[i] as? ReplyThreadMessageAttribute {
@@ -212,15 +229,15 @@ func chatHistoryEntriesForView(
                 }
             }
         }
-        
+
         if skipViewOnceMedia, let minAutoremoveOrClearTimeout = message.minAutoremoveOrClearTimeout {
             if minAutoremoveOrClearTimeout <= 60 {
                 continue loop
             }
         }
-        
+
         var contentTypeHint: ChatMessageEntryContentType = .generic
-        
+
         for media in message.media {
             if media is TelegramMediaDice {
                 contentTypeHint = .animatedEmoji
@@ -234,22 +251,22 @@ func chatHistoryEntriesForView(
                 }
             }
         }
-    
+
         var adminRank: CachedChannelAdminRank?
         if let author = message.author {
             adminRank = adminRanks[author.id]
         }
-        
+
         if presentationData.largeEmoji, message.media.isEmpty {
             if messageIsEligibleForLargeCustomEmoji(EngineMessage(message)) {
                 contentTypeHint = .animatedEmoji
-            } else if stickersEnabled && message.text.count == 1, let _ = associatedData.animatedEmojiStickers[message.text.basicEmoji.0], (message.textEntitiesAttribute?.entities.isEmpty ?? true) {
+            } else if stickersEnabled && message.text.count == 1, let _ = associatedData.animatedEmojiStickers[message.text.basicEmoji.0], message.textEntitiesAttribute?.entities.isEmpty ?? true {
                 contentTypeHint = .animatedEmoji
             } else if messageIsEligibleForLargeEmoji(EngineMessage(message)) {
                 contentTypeHint = .animatedEmoji
             }
         }
-    
+
         if groupMessages || reverseGroupedMessages {
             if let messageGroupingKey = message.groupingKey {
                 let selection: ChatHistoryMessageSelection
@@ -258,33 +275,33 @@ func chatHistoryEntriesForView(
                 } else {
                     selection = .none
                 }
-                
+
                 var isCentered = false
                 if case let .messageOptions(_, _, info) = associatedData.subject, case let .link(link) = info {
                     isCentered = link.isCentered
                 }
-                
+
                 let attributes = ChatMessageEntryAttributes(rank: adminRank, isContact: entry.attributes.authorIsContact, contentTypeHint: contentTypeHint, updatingMedia: updatingMedia[message.id], isPlaying: message.index == associatedData.currentlyPlayingMessageId, isCentered: isCentered, authorStoryStats: message.author.flatMap { view.peerStoryStats[$0.id] }, displayContinueThreadFooter: false, pinToTop: pinToTop)
-                
+
                 let groupStableId = currentState.messageGroupStableId(messageStableId: message.stableId, groupId: messageGroupingKey, isLocal: Namespaces.Message.allLocal.contains(message.id.namespace))
                 var found = false
                 for i in 0 ..< entries.count {
                     if case let .MessageEntry(currentMessage, _, currentIsRead, currentLocation, currentSelection, currentAttributes) = entries[i], let currentGroupingKey = currentMessage.groupingKey, currentState.messageGroupStableId(messageStableId: currentMessage.stableId, groupId: currentGroupingKey, isLocal: Namespaces.Message.allLocal.contains(currentMessage.id.namespace)) == groupStableId {
                         found = true
-                        
+
                         var currentMessages: [(Message, Bool, ChatHistoryMessageSelection, ChatMessageEntryAttributes, MessageHistoryEntryLocation?)] = []
-                        
+
                         currentMessages.append((currentMessage, currentIsRead, currentSelection, currentAttributes, currentLocation))
                         if reverseGroupedMessages {
                             currentMessages.insert((message, isRead, selection, attributes, entry.location), at: 0)
                         } else {
                             currentMessages.append((message, isRead, selection, attributes, entry.location))
                         }
-                        
+
                         entries[i] = .MessageGroupEntry(groupStableId, currentMessages, presentationData)
                     } else if case let .MessageGroupEntry(currentGroupStableId, currentMessages, _) = entries[i], currentGroupStableId == groupStableId {
                         found = true
-                        
+
                         var currentMessages = currentMessages
                         if reverseGroupedMessages {
                             currentMessages.insert((message, isRead, selection, attributes, entry.location), at: 0)
@@ -304,12 +321,12 @@ func chatHistoryEntriesForView(
                 } else {
                     selection = .none
                 }
-                
+
                 var isCentered = false
                 if case let .messageOptions(_, _, info) = associatedData.subject, case let .link(link) = info {
                     isCentered = link.isCentered
                 }
-                
+
                 entries.append(.MessageEntry(message, presentationData, isRead, entry.location, selection, ChatMessageEntryAttributes(rank: adminRank, isContact: entry.attributes.authorIsContact, contentTypeHint: contentTypeHint, updatingMedia: updatingMedia[message.id], isPlaying: message.index == associatedData.currentlyPlayingMessageId, isCentered: isCentered, authorStoryStats: message.author.flatMap { view.peerStoryStats[$0.id] }, displayContinueThreadFooter: false, pinToTop: pinToTop)))
             }
         } else {
@@ -319,14 +336,14 @@ func chatHistoryEntriesForView(
             } else {
                 selection = .none
             }
-            
+
             entries.append(.MessageEntry(message, presentationData, isRead, entry.location, selection, ChatMessageEntryAttributes(rank: adminRank, isContact: entry.attributes.authorIsContact, contentTypeHint: contentTypeHint, updatingMedia: updatingMedia[message.id], isPlaying: message.index == associatedData.currentlyPlayingMessageId, isCentered: false, authorStoryStats: message.author.flatMap { view.peerStoryStats[$0.id] }, displayContinueThreadFooter: false, pinToTop: pinToTop)))
         }
     }
-    
+
     if !groupMessages && reverseGroupedMessages {
         var flatEntries: [ChatHistoryEntry] = []
-        
+
         for entry in entries {
             switch entry {
             case let .MessageGroupEntry(_, messages, presentationData):
@@ -339,7 +356,7 @@ func chatHistoryEntriesForView(
         }
         entries = flatEntries
     }
-    
+
     var addBotForumHeader = false
     if location.threadId == nil, let user = chatPeer as? TelegramUser, let botInfo = user.botInfo, botInfo.flags.contains(.hasForum), botInfo.flags.contains(.forumManagedByUser), !entries.isEmpty, !view.holeEarlier, !view.isLoading {
         addBotForumHeader = true
@@ -366,7 +383,7 @@ func chatHistoryEntriesForView(
             }
         }
     }
-    
+
     let insertPendingProcessingMessage: ([Message], Int) -> Void = { messages, index in
         let serviceMessage = Message(
             stableId: UInt32.max - messages[0].stableId,
@@ -396,7 +413,7 @@ func chatHistoryEntriesForView(
         )
         entries.insert(.MessageEntry(serviceMessage, presentationData, false, nil, .none, ChatMessageEntryAttributes(rank: nil, isContact: false, contentTypeHint: .generic, updatingMedia: nil, isPlaying: false, isCentered: false, authorStoryStats: nil, displayContinueThreadFooter: false, pinToTop: false)), at: index)
     }
-    
+
     for i in (0 ..< entries.count).reversed() {
         switch entries[i] {
         case let .MessageEntry(message, _, _, _, _, _):
@@ -419,7 +436,7 @@ func chatHistoryEntriesForView(
             break
         }
     }
-    
+
     if let lowerTimestamp = view.entries.last?.message.timestamp, let upperTimestamp = view.entries.first?.message.timestamp {
         if let joinMessage {
             var insertAtPosition: Int?
@@ -438,7 +455,7 @@ func chatHistoryEntriesForView(
             }
         }
     }
-        
+
     if let maxReadIndex = view.maxReadIndex, includeUnreadEntry {
         var i = 0
         let unreadEntry: ChatHistoryEntry = .UnreadEntry(maxReadIndex, presentationData)
@@ -458,7 +475,7 @@ func chatHistoryEntriesForView(
             i += 1
         }
     }
-    
+
     var addedThreadHead = false
     if case let .replyThread(replyThreadMessage) = location, !replyThreadMessage.isForumPost, view.earlierId == nil, !view.holeEarlier, !view.isLoading, !isMusicPlaylist {
         loop: for entry in view.additionalData {
@@ -466,9 +483,9 @@ func chatHistoryEntriesForView(
             case let .message(id, messages) where id == replyThreadMessage.effectiveTopId:
                 if !messages.isEmpty {
                     let selection: ChatHistoryMessageSelection = .none
-                    
+
                     let topMessage = messages[0]
-                    
+
                     var hasTopicCreated = false
                     inner: for media in topMessage.media {
                         if let action = media as? TelegramMediaAction {
@@ -481,12 +498,12 @@ func chatHistoryEntriesForView(
                             }
                         }
                     }
-                    
+
                     var adminRank: CachedChannelAdminRank?
                     if let author = topMessage.author {
                         adminRank = adminRanks[author.id]
                     }
-                    
+
                     var contentTypeHint: ChatMessageEntryContentType = .generic
                     if presentationData.largeEmoji, topMessage.media.isEmpty {
                         if messageIsEligibleForLargeCustomEmoji(EngineMessage(topMessage)) {
@@ -497,7 +514,7 @@ func chatHistoryEntriesForView(
                             contentTypeHint = .animatedEmoji
                         }
                     }
-                    
+
                     addedThreadHead = true
                     if messages.count > 1, let groupingKey = messages[0].groupingKey {
                         var groupMessages: [(Message, Bool, ChatHistoryMessageSelection, ChatMessageEntryAttributes, MessageHistoryEntryLocation?)] = []
@@ -510,7 +527,7 @@ func chatHistoryEntriesForView(
                             entries.insert(.MessageEntry(messages[0], presentationData, false, nil, selection, ChatMessageEntryAttributes(rank: adminRank, isContact: false, contentTypeHint: contentTypeHint, updatingMedia: updatingMedia[messages[0].id], isPlaying: false, isCentered: false, authorStoryStats: messages[0].author.flatMap { view.peerStoryStats[$0.id] }, displayContinueThreadFooter: false, pinToTop: false)), at: 0)
                         }
                     }
-                    
+
                     if !replyThreadMessage.isForumPost {
                         let replyCount = view.entries.isEmpty ? 0 : 1
                         entries.insert(.ReplyCountEntry(messages[0].index, replyThreadMessage.isChannelPost, replyCount, presentationData), at: 1)
@@ -522,7 +539,7 @@ func chatHistoryEntriesForView(
             }
         }
     }
-    
+
     if includeChatInfoEntry {
         if view.earlierId == nil, !view.isLoading {
             var chatPeer: Peer?
@@ -550,7 +567,7 @@ func chatHistoryEntriesForView(
                     entries.insert(.ChatInfoEntry(.botInfo(title: "", text: "", photo: nil, video: nil, peer: peer, managedByBot: EnginePeer(managedByBot)), presentationData), at: 0)
                 } else if let peerStatusSettings = cachedPeerData.peerStatusSettings, peerStatusSettings.registrationDate != nil || peerStatusSettings.phoneCountry != nil {
                     if peerStatusSettings.flags.contains(.canAddContact) || peerStatusSettings.flags.contains(.canReport) || peerStatusSettings.flags.contains(.canBlock) {
-                        
+
                         if let chatPeer, let photoChangeDate = peerStatusSettings.photoChangeDate, photoChangeDate > 0 {
                             let timeText = stringForIntervalSinceUpdateAction(strings: presentationData.strings, value: photoChangeDate)
                             let text = presentationData.strings.Chat_NonContactUser_UpdatedPhoto(timeText)
@@ -590,7 +607,7 @@ func chatHistoryEntriesForView(
                             )
                             entries.insert(.MessageEntry(message, presentationData, false, nil, .none, ChatMessageEntryAttributes(rank: nil, isContact: false, contentTypeHint: .generic, updatingMedia: nil, isPlaying: false, isCentered: false, authorStoryStats: nil, displayContinueThreadFooter: false, pinToTop: false)), at: 0)
                         }
-                        
+
                         if let chatPeer, let nameChangeDate = peerStatusSettings.nameChangeDate, nameChangeDate > 0 {
                             let timeText = stringForIntervalSinceUpdateAction(strings: presentationData.strings, value: nameChangeDate)
                             let text = presentationData.strings.Chat_NonContactUser_UpdatedName(timeText)
@@ -677,7 +694,7 @@ func chatHistoryEntriesForView(
                 }
             }
         }
-        
+
         if !dynamicAdMessages.isEmpty {
             assert(entries.sorted() == entries)
             for message in dynamicAdMessages {
@@ -687,7 +704,14 @@ func chatHistoryEntriesForView(
         }
 
         if view.laterId == nil && !view.isLoading {
-            if !entries.isEmpty, case let .MessageEntry(lastMessage, _, _, _, _, _) = entries[entries.count - 1], let message = adMessage {
+            // Novagram: OUR ad may also follow a last post that is an album (MessageGroupEntry); Telegram's ads keep the MessageEntry-only rule.
+            var adAnchorMessage: Message?
+            if case let .MessageEntry(lastMessage, _, _, _, _, _)? = entries.last {
+                adAnchorMessage = lastMessage
+            } else if case let .MessageGroupEntry(_, groupMessages, _)? = entries.last, let adAttribute = adMessage?.adAttribute, NovagramSponsored.isOurs(opaqueId: adAttribute.opaqueId) {
+                adAnchorMessage = groupMessages.last?.0
+            }
+            if let lastMessage = adAnchorMessage, let message = adMessage {
                 var nextAdMessageId: Int32 = 10000
                 let updatedMessage = Message(
                     stableId: ChatHistoryListNodeImpl.fixedAdMessageStableId,
@@ -751,7 +775,7 @@ func chatHistoryEntriesForView(
                     entities.append(MessageTextEntity(range: range.lowerBound ..< range.upperBound, type: .TextMention(peerId: context.account.peerId)))
                 }
             })
-            
+
             let message = Message(
                 stableId: UInt32.max - 1001,
                 stableVersion: 0,
@@ -781,7 +805,7 @@ func chatHistoryEntriesForView(
             entries.append(.MessageEntry(message, presentationData, false, nil, .none, ChatMessageEntryAttributes(rank: nil, isContact: false, contentTypeHint: .generic, updatingMedia: nil, isPlaying: false, isCentered: false, authorStoryStats: nil, displayContinueThreadFooter: false, pinToTop: false)))
         }
     }
-    
+
     if let subject = associatedData.subject, case let .customChatContents(customChatContents) = subject {
         var serviceHeaders: [String] = []
         switch customChatContents.kind {
@@ -826,7 +850,7 @@ func chatHistoryEntriesForView(
                         entities.append(MessageTextEntity(range: range.lowerBound ..< range.upperBound, type: .TextMention(peerId: context.account.peerId)))
                     }
                 })
-                
+
                 let message = Message(
                     stableId: UInt32.max - 1001 - UInt32(i),
                     stableVersion: 0,
@@ -857,11 +881,11 @@ func chatHistoryEntriesForView(
             }
         }
     }
-    
+
     if isMusicPlaylist && entries.count == 1 {
         return ([], currentState)
     }
-    
+
     if reverse {
         return (entries.reversed(), currentState)
     } else {

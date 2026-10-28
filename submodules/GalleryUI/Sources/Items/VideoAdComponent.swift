@@ -13,6 +13,7 @@ import AvatarNode
 import AccountContext
 import PhotoResources
 import TextFormat
+import NovagramSponsoredBridge
 
 final class VideoAdComponent: Component {
     let context: AccountContext
@@ -230,13 +231,15 @@ final class VideoAdComponent: Component {
             }
             self.buttonNode.frame = buttonFrame
             
+            // Novagram: OUR banner uses the server's min/max display durations; Telegram's keep 10 / 30.
+            let novagramDurations = NovagramSponsoredBridge.displayDurations(component.message._asMessage())
             let progressSize = self.progress.update(
                 transition: .immediate,
                 component: AnyComponent(
                     AdRemainingProgressComponent(
                         initialTimestamp: component.initialTimestamp,
-                        minDisplayDuration: 10,
-                        maxDisplayDuration: 30,
+                        minDisplayDuration: novagramDurations?.min ?? 10,
+                        maxDisplayDuration: novagramDurations?.max ?? 30,
                         action: { [weak self] available in
                             guard let self, let component = self.component else {
                                 return
