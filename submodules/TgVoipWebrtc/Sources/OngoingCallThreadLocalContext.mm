@@ -973,6 +973,23 @@ static std::atomic<bool> sharedCallAudioDeviceLegacyBehavior{false};
     });
 }
 
+- (void)setAudioTap:(void (^ _Nullable)(int16_t const * _Nonnull pcm, size_t frames, size_t channels, uint32_t sampleRate, bool isPlayout))audioTap { // Novagram
+    #ifdef WEBRTC_IOS
+    std::shared_ptr<webrtc::tgcalls_ios_adm::NovagramAudioTap> nativeTap; // Novagram
+    if (audioTap) { // Novagram
+        void (^copiedTap)(int16_t const *, size_t, size_t, uint32_t, bool) = [audioTap copy]; // Novagram
+        nativeTap = std::make_shared<webrtc::tgcalls_ios_adm::NovagramAudioTap>([copiedTap](int16_t const *pcm, size_t frames, size_t channels, uint32_t sampleRate, bool isPlayout) { // Novagram
+            copiedTap(pcm, frames, channels, sampleRate, isPlayout); // Novagram
+        }); // Novagram
+    } // Novagram
+    _audioDeviceModule->perform([nativeTap](tgcalls::SharedAudioDeviceModule *audioDeviceModule) { // Novagram
+        WrappedAudioDeviceModuleIOS *deviceModule = (WrappedAudioDeviceModuleIOS *)audioDeviceModule->audioDeviceModule().get(); // Novagram
+        webrtc::tgcalls_ios_adm::AudioDeviceModuleIOS *deviceModule_iOS = (webrtc::tgcalls_ios_adm::AudioDeviceModuleIOS *)deviceModule->WrappedInstance().get(); // Novagram
+        deviceModule_iOS->setAudioTap(nativeTap); // Novagram
+    }); // Novagram
+    #endif
+} // Novagram
+
 - (std::shared_ptr<tgcalls::ThreadLocalObject<tgcalls::SharedAudioDeviceModule>>)getAudioDeviceModule {
     return _audioDeviceModule;
 }

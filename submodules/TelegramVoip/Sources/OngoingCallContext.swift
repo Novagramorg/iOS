@@ -872,6 +872,11 @@ public final class OngoingCallContext {
                 CallAudioTone(samples: tone.samples, sampleRate: tone.sampleRate, loopCount: tone.loopCount)
             })
         }
+
+        /// Novagram call recording: `tap` runs on the audio thread (pcm, frames, channels, sample rate, isPlayout). // Novagram
+        public func setAudioTap(_ tap: ((UnsafePointer<Int16>, Int, Int, UInt32, Bool) -> Void)?) { // Novagram
+            self.impl.setAudioTap(tap) // Novagram
+        } // Novagram
     }
     
     public static func setupAudioSession() {

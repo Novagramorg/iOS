@@ -73,6 +73,10 @@
 
 - (void)setTone:(CallAudioTone * _Nullable)tone;
 
+/// Novagram: call recording tap, called on the audio thread (mic after AEC/NS, playout after the call tones).
+/// The block must copy the samples and return at once. nil removes it.
+- (void)setAudioTap:(void (^ _Nullable)(int16_t const * _Nonnull pcm, size_t frames, size_t channels, uint32_t sampleRate, bool isPlayout))audioTap; // Novagram
+
 /// Stops the real device for good and ignores every later activation change.
 - (void)stop;
 
