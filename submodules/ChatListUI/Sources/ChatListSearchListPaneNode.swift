@@ -3526,6 +3526,7 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                         } else {
                             switch searchScope {
                             case .everywhere:
+                                if novagramFilter.isActive { entries.append(.emptyMessagesFooter(presentationData, searchScope, query)) } // Novagram: keeps the filter menu reachable
                                 break
                             default:
                                 if let data = context.currentAppConfiguration.with({ $0 }).data, data["ios_killswitch_empty_search_footer"] != nil {

@@ -177,7 +177,7 @@ three calls and delete the two lines.
 
 ## 📋 Novagram features va hooklar (2026-10-10)
 
-> 1–44, 86, 89 va 91: Settings → Novagram Settings (ilovadagi tartibda). 45–85, 87, 88, 92 va 93: Settings'dan tashqaridagi features.
+> 1–44, 86, 89 va 91: Settings → Novagram Settings (ilovadagi tartibda). 45–85, 87, 88 va 92–94: Settings'dan tashqaridagi features.
 > Hooks: Telegram-owned fayllardagi barcha Novagram o'zgarishlari, feature bo'yicha. Har bir hookning kodi va anchor'i quyidagi 📌 bo'limlarda.
 
 ### 1. Novagram Settings
@@ -354,6 +354,7 @@ three calls and delete the two lines.
 
 92. **Qidiruvda yashirin va qulflangan chatlar**: yashirin chat (Secret Vault) global qidiruvning hech qayerida chiqmaydi (chat, xabar, top/recent, Channels/Apps tablari, peer chip'lari, hashtag/Posts, Downloads, galereya), yashirin ro'yxat ochiq bo'lsa ham. Qulflangan chat (Chat qulfi) nomi chiqadi, xabarlari chiqmaydi. Faqat joriy account.
 93. **Qidiruvda sana oralig'i**: MESSAGES sarlavhasidagi "From All Chats" menyusida "Sanadan…", "Sanagacha…" va "Sanalarni tozalash". Faqat xabarlar bo'limi (Posts/hashtag, Channels va Apps tablarida yo'q). Sarlavhada: `From All Chats · 01.10.26–29.10.26`. Hech narsa saqlanmaydi, qidiruv yopilsa tozalanadi.
+94. **Faqat o'qilmaganlar / Faqat mention'lar**: o'sha menyuda ikkita toggle (yoqilganda ✓, ikkalasi birga ham ishlaydi). Natija qisqa bo'lsa keyingi sahifalar o'zi yuklanadi. Galereya va pleer ham shu ro'yxatni ko'rsatadi.
 
 ---
 
@@ -502,6 +503,8 @@ three calls and delete the two lines.
 258. `ChatListSearchListPaneNode.swift` (ChatListUI): `.message`, `.messagePlaceholder`, `.emptyMessagesFooter` sarlavhasida faol filtrlar (`NovagramSearchFilter.headerTitle`).
 259. `ChatListSearchListPaneNode.swift` (ChatListUI): filtr `chatListInteraction`ga bog'lanadi (sarlavha uni shu orqali topadi).
 260. `ChatListSearchListPaneNode.swift` (ChatListUI): `openMessagesFilter` menyusining oxiriga bizning bandlar.
+261. `MessagesData.swift` (TelegramCore): `EnginePeerReadCounters.isIncomingMessageRead(_:)` — "Faqat o'qilmaganlar" uchun (`state` fileprivate qoladi).
+262. `ChatListSearchListPaneNode.swift` (ChatListUI): filtr yoqiq va xabar qolmasa "All Chats"da ham bo'sh-natija footer'i chiqadi, sarlavha va menyu yo'qolmaydi.
 
 #### Xabar eslatmasi
 
@@ -7673,3 +7676,26 @@ Feature 93 (dates), hooks #256–#260. The code is in `submodules/Novagram/Searc
 
 On an upstream update: if upstream changes the two `searchMessages` call lines, take theirs and put
 `novagramFilter.searchMessages(engine: context.engine, …)` back in place of `context.engine.messages.searchMessages(…)`.
+
+### Unread only / Mentions only (feature 94, hooks #261–#262)
+
+Two toggles after the dates (checkmark when on, both together = AND), shown in the header too
+(`… · Unread only · Mentions only`). No new pane line: the filtering runs inside the #257 calls, in
+`submodules/Novagram/Search/Sources/NovagramSearchFilledSearch.swift`.
+
+- Unread: an incoming message after the chat's max incoming read id. TelegramCore's merged search state keeps
+  `readStates` only for the last page's peers, so every filtered page reads `PeerReadCounters` for all its peers
+  through the engine and asks the new `isIncomingMessageRead(_:)` (a chat without a read state counts as read).
+- Mentions: the `.unseenPersonalMessage` tag or a `ConsumablePersonalMentionMessageAttribute`.
+- Reset: a toggle restarts the search (#256), so the list is rebuilt from page one with a new search state.
+- Filling: while fewer than 20 messages pass and the server is not completed, the next page is read, at most
+  5 extra pages per load. A first search may then show what it has and make up to 3 more loads by itself, because a
+  short list cannot scroll to ask for them. The pane's own "load more" keeps the last state and gets the same
+  5 extra pages.
+- The pane stores the filtered pages in `searchContexts` like any result, so the gallery / player list
+  (`foundMessages`) shows the same messages as the list.
+
+| File | Change |
+| --- | --- |
+| `TelegramCore/Sources/TelegramEngine/Data/MessagesData.swift` | in `EnginePeerReadCounters`, before `hasEverRead`: a comment and `public func isIncomingMessageRead(_ index: EngineMessage.Index) -> Bool { self.state?.isIncomingMessageIndexRead(index) ?? true }` (#261). 5 lines. |
+| `ChatListUI/Sources/ChatListSearchListPaneNode.swift` | #262: in `case .everywhere:` of the no-messages `switch searchScope`, before `break`: `if novagramFilter.isActive { entries.append(.emptyMessagesFooter(presentationData, searchScope, query)) }`. Telegram shows that footer only for a narrowed scope; without it a filter that leaves no messages would also hide the header, and with it the only way to turn the filter off. 1 line. |

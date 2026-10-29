@@ -17,11 +17,20 @@ public struct NovagramSearchFilterState: Equatable {
     public var minDate: Int32?
     /// Last second of the last day, local time.
     public var maxDate: Int32?
+    /// Only incoming messages the chat has not read yet.
+    public var unreadOnly = false
+    /// Only messages that mention the account.
+    public var mentionsOnly = false
 
     public init() {}
 
     var hasDates: Bool {
         return self.minDate != nil || self.maxDate != nil
+    }
+
+    /// True when messages are dropped on the client, so pages have to be filled up.
+    var filtersMessages: Bool {
+        return self.unreadOnly || self.mentionsOnly
     }
 }
 
@@ -32,6 +41,13 @@ public final class NovagramSearchFilter {
     private var stateValue = NovagramSearchFilterState()
 
     public init() {}
+
+    /// True while any filter is set. With no messages left the pane still shows the empty-messages footer,
+    /// whose header keeps the menu reachable.
+    public var isActive: Bool {
+        let state = self.state
+        return state.hasDates || state.filtersMessages
+    }
 
     public var state: NovagramSearchFilterState {
         self.lock.lock()
@@ -62,7 +78,10 @@ public final class NovagramSearchFilter {
     /// The location with the picked dates. A date typed into the search bar stays: both apply
     /// (the later start, the earlier end). Public posts have no dates.
     public func dated(_ location: SearchMessagesLocation) -> SearchMessagesLocation {
-        let state = self.state
+        return self.dated(location, state: self.state)
+    }
+
+    private func dated(_ location: SearchMessagesLocation, state: NovagramSearchFilterState) -> SearchMessagesLocation {
         guard state.hasDates else {
             return location
         }
@@ -87,7 +106,9 @@ public final class NovagramSearchFilter {
     }
 
     /// `engine.messages.searchMessages` with the filters applied. Paging passes the same location
-    /// again, so it keeps the range.
+    /// again, so it keeps the range. With "Unread only" / "Mentions only" each page is filtered here and
+    /// filled up from the next pages (`NovagramFilledSearch`); the pane keeps the returned state, so its
+    /// own "load more" goes on from the last page read.
     public func searchMessages(
         engine: TelegramEngine,
         location: SearchMessagesLocation,
@@ -95,7 +116,15 @@ public final class NovagramSearchFilter {
         state: SearchMessagesState?,
         limit: Int32
     ) -> Signal<(SearchMessagesResult, SearchMessagesState), NoError> {
-        return engine.messages.searchMessages(location: self.dated(location), query: query, state: state, limit: limit)
+        let filterState = self.state
+        let location = self.dated(location, state: filterState)
+        let page = engine.messages.searchMessages(location: location, query: query, state: state, limit: limit)
+        guard filterState.filtersMessages else {
+            return page
+        }
+        let search = NovagramFilledSearch(engine: engine, location: location, query: query, limit: limit, filter: filterState)
+        // Only a first page gets the extra loads: a short list cannot scroll to ask for more.
+        return search.load(page: page, extraPagesLeft: novagramExtraPagesPerLoad, autoLoadsLeft: state == nil ? novagramAutoLoads : 0)
     }
 
     func setDay(_ timestamp: Int32, isEnd: Bool) {
@@ -153,7 +182,20 @@ public final class NovagramSearchFilter {
                 }
             })))
         }
+
+        items.append(.separator)
+        items.append(self.toggleItem(title: l10n.search_unreadOnly, isOn: state.unreadOnly, toggle: { $0.unreadOnly.toggle() }))
+        items.append(self.toggleItem(title: l10n.search_mentionsOnly, isOn: state.mentionsOnly, toggle: { $0.mentionsOnly.toggle() }))
         return items
+    }
+
+    private func toggleItem(title: String, isOn: Bool, toggle: @escaping (inout NovagramSearchFilterState) -> Void) -> ContextMenuItem {
+        return .action(ContextMenuActionItem(text: title, icon: { theme in
+            return isOn ? generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor) : UIImage()
+        }, action: { [weak self] _, dismiss in
+            dismiss(.default)
+            self?.update(toggle)
+        }))
     }
 
     private func pickDay(isEnd: Bool, context: AccountContext, presentationData: PresentationData, push: (ViewController) -> Void) {
@@ -217,6 +259,12 @@ public final class NovagramSearchFilter {
             parts.append(l10n.search_toDateValue(novagramDayString(maxDate)))
         case (nil, nil):
             break
+        }
+        if state.unreadOnly {
+            parts.append(l10n.search_unreadOnly)
+        }
+        if state.mentionsOnly {
+            parts.append(l10n.search_mentionsOnly)
         }
         return parts
     }
