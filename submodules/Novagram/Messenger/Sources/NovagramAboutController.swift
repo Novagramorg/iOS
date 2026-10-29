@@ -973,7 +973,7 @@ private func novagramAboutEntries(presentationData: PresentationData) -> [Novagr
 
     // Intro
     entries.append(.introHeader(l10n.about_introHeader))
-    entries.append(.introBody(l10n.about_introBody))
+    entries.append(.introBody(l10n.about_introBody + " " + l10n.about_searchHint))
 
     // Every Novagram feature — icon/title row + a three-part (Enable/How it works/Disable) body.
     for (index, feature) in aboutFeatures(langCode: langCode).enumerated() {

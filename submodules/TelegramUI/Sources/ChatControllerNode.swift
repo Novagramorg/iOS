@@ -79,6 +79,7 @@ import ChatRichTextEditorComposer
 import NovagramLocalization
 import NovagramSponsored
 import NovagramMessenger
+import NovagramSearch // Novagram
 
 final class VideoNavigationControllerDropContentItem: NavigationControllerDropContentItem {
     let itemNode: OverlayMediaItemNode
@@ -3499,7 +3500,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                             }
                             
                             self.loadMoreSearchResultsDisposable?.dispose()
-                            self.loadMoreSearchResultsDisposable = (self.context.engine.messages.searchMessages(location: currentSearchState.location, query: currentSearchState.query, state: currentResultsState.state)
+                            self.loadMoreSearchResultsDisposable = (NovagramChatSearchFilter.searchMessages(engine: self.context.engine, location: currentSearchState.location, query: currentSearchState.query, state: currentResultsState.state) // Novagram
                             |> deliverOnMainQueue).startStrict(next: { [weak self] results, updatedState in
                                 guard let self, let controller = self.controller else {
                                     return

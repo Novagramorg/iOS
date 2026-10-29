@@ -177,7 +177,7 @@ three calls and delete the two lines.
 
 ## 📋 Novagram features va hooklar (2026-10-10)
 
-> 1–44, 86, 89 va 91: Settings → Novagram Settings (ilovadagi tartibda). 45–85, 87, 88 va 92–95: Settings'dan tashqaridagi features.
+> 1–44, 86, 89 va 91: Settings → Novagram Settings (ilovadagi tartibda). 45–85, 87, 88 va 92–96: Settings'dan tashqaridagi features.
 > Hooks: Telegram-owned fayllardagi barcha Novagram o'zgarishlari, feature bo'yicha. Har bir hookning kodi va anchor'i quyidagi 📌 bo'limlarda.
 
 ### 1. Novagram Settings
@@ -356,6 +356,7 @@ three calls and delete the two lines.
 93. **Qidiruvda sana oralig'i**: MESSAGES sarlavhasidagi "From All Chats" menyusida "Sanadan…", "Sanagacha…" va "Sanalarni tozalash". Faqat xabarlar bo'limi (Posts/hashtag, Channels va Apps tablarida yo'q). Sarlavhada: `From All Chats · 01.10.26–29.10.26`. Hech narsa saqlanmaydi, qidiruv yopilsa tozalanadi.
 94. **Faqat o'qilmaganlar / Faqat mention'lar**: o'sha menyuda ikkita toggle (yoqilganda ✓, ikkalasi birga ham ishlaydi). Natija qisqa bo'lsa keyingi sahifalar o'zi yuklanadi. Galereya va pleer ham shu ro'yxatni ko'rsatadi.
 95. **Tarjima qilingan so'rov bo'yicha qidirish**: Novagram Settings → Interfeys → "Tarjima qilingan so'rov bo'yicha ham qidirish" (`pro_messager` / `novagram_search_translate`, default o'chiq). Yoqilsa Chats tabidagi global qidiruv so'rovni `auto_translate_lang` tiliga (bo'lmasa `en`) tarjima qiladi va Messages ustida "Tarjima: …" bo'limini ko'rsatadi. So'rov Telegram'ning tarjima xizmatiga yuboriladi.
+96. **Chat ichida aniq ibora va regex qidiruvi**: chat qidiruvida `"ikki so'z"` (to'g'ri yoki egri qo'shtirnoq) faqat shu iborani o'z ichiga olgan xabarlarni qoldiradi (katta-kichik harf va diakritika farqsiz); `re:pattern` chat tarixini ko'rib chiqadi (sahifasi 100, ko'pi bilan 2000 xabar) va regular expression mos kelganlarini ko'rsatadi, noto'g'ri pattern oddiy qidiruv bo'ladi. Hisoblagich topilganlar sonini ko'rsatadi. Oddiy so'rov avvalgidek bitta so'rov. Ko'rsatma: About Novagram kirish matnining oxirida.
 
 ---
 
@@ -511,6 +512,10 @@ three calls and delete the two lines.
 265. `ChatListSearchListPaneNode.swift` (ChatListUI): `finalQuery`dan keyin `NovagramTranslatedSearch.section(...)` signali (Messages bilan bir xil location va filtrlar).
 266. `ChatListSearchListPaneNode.swift` (ChatListUI): natijalar `combineLatest`ining 13-argumenti va map'ning `novagramTranslated` parametri.
 267. `ChatListSearchListPaneNode.swift` (ChatListUI): Messages siklidan oldin "Tarjima: …" qatorlari (har emission uchun yangi id Set'i bilan dedupe).
+268. `ChatControllerUpdateSearch.swift` (TelegramUI): chat qidiruvining birinchi sahifasi va "load more" (`loadMoreState`) `NovagramChatSearchFilter.searchMessages(engine:...)` orqali (ibora / `re:`).
+269. `ChatControllerNode.swift` (TelegramUI): yuqori/pastki strelkalar chaqiradigan "load more" ham shu orqali.
+270. `ChatSearchResultsContollerNode.swift` (TelegramUI): natijalar ro'yxati ekranining `loadMore`i ham shu orqali.
+271. `TelegramUI/BUILD`: `//submodules/Novagram/Search:NovagramSearch`.
 
 #### Xabar eslatmasi
 
@@ -7739,3 +7744,54 @@ Feature 95, hooks #263–#267. Ours: `submodules/Novagram/Search/Sources/Novagra
 
 On an upstream update: #264's `} else` must stay directly above upstream's `if case .publicPosts = section {`; if
 upstream adds an argument to the final `combineLatest`, keep `novagramTranslated` last in both the list and the map.
+
+---
+
+## 📌 Search phrase and regex in a chat (2026-10-29)
+
+Feature 96, hooks #268–#271. Ours: `submodules/Novagram/Search/Sources/NovagramChatSearchFilter.swift`
+(`NovagramChatSearchFilter`, a port of the Mac's, on engine names, no Postbox). Hint `about_searchHint`
+(en/uz/ru word for word from the Mac, zh added) in `NovagramL10n.swift`, appended after `about_introBody` in
+`Novagram/Messenger/Sources/NovagramAboutController.swift`.
+
+- `"two words"`: the trimmed query is at least 3 characters, opens with `"`, `“`, `”` or `„`, closes with `"`, `“`
+  or `”`, and the trimmed inner phrase is not empty. The server gets the phrase without the quotes; a message stays
+  when its text contains the phrase (`.caseInsensitive`, `.diacriticInsensitive`).
+- `re:pattern`: the prefix is matched case-insensitively. The Mac takes lowercase `re:` only, but the iOS search
+  field capitalizes the first letter, so a typed `re:` arrives as `Re:` (seen on the simulator); `Re: invoice` is
+  therefore a regex scan for `invoice` here. The pattern is trimmed and not empty. The server query is empty (a channel then uses `getHistory`, other chats an empty
+  `messages.search`), 100 per page, at most 2000 messages scanned. Case-insensitive `NSRegularExpression`, each
+  message at most 50 ms (`enumerateMatches` with `.reportProgress`), each page at most 1 s, after which the search
+  counts as finished. An invalid pattern is a plain search for the text after `re:`. In a secret chat (local
+  search) an empty query finds nothing, so `re:` finds nothing there.
+- Any other query: `wrap` returns `search(query, state, limit)` unchanged, the same single request as before.
+- Filling: the search state is merged (each page returns every message so far). Filtering runs in a
+  cancellable signal on `Queue.concurrentDefaultQueue()`; messages already checked are not matched again. While a
+  request adds fewer than 10 new matches and the server is not done, the next page is read, at most 5 extra pages
+  per request. `totalCount` = matches loaded so far, so the header count shows them; `completed` = server done,
+  2000 scanned, page time limit hit or no progress.
+- Cache: the last 8 paging states (keyed by typed query + state) keep their result, match count, checked ids and
+  whether they finished, so "load more" continues the count and, once finished, returns the same result without
+  a request.
+- Cancellation: every hook's signal sits in a `MetaDisposable` / disposable that upstream replaces or disposes when
+  the query changes or the search closes; disposing stops the paging chain and the filter loop before its next
+  message.
+- Highlight: the in-message highlight still uses the typed query (`"…"` / `re:…`), so quoted and `re:` results are
+  not highlighted inside bubbles, the same as the Mac.
+- Upstream's first page subscribes to its search signal twice (`searchResult.set(search …)` and the
+  `searchDisposable`), so a filtered first page runs twice too; both write the same cache entry.
+
+| File | Change |
+| --- | --- |
+| `TelegramUI/Sources/ChatControllerUpdateSearch.swift` | `import NovagramSearch // Novagram`. #268: the first page `let search = self.context.engine.messages.searchMessages(location: searchState.location, query: searchState.query, state: nil, limit: limit)` and the `loadMoreState` call `searchDisposable.set((self.context.engine.messages.searchMessages(… state: loadMoreState, limit: limit)` call `NovagramChatSearchFilter.searchMessages(engine: self.context.engine, …)` with the same arguments. 1 added, 2 changed. |
+| `TelegramUI/Sources/ChatControllerNode.swift` | `import NovagramSearch // Novagram`. #269: `self.loadMoreSearchResultsDisposable = (NovagramChatSearchFilter.searchMessages(engine: self.context.engine, location: currentSearchState.location, query: currentSearchState.query, state: currentResultsState.state)` (the up/down arrows' load more). 1 added, 1 changed. |
+| `TelegramUI/Sources/ChatSearchResultsContollerNode.swift` | `import NovagramSearch // Novagram`. #270: `loadMore()`'s `self.loadMoreDisposable.set((NovagramChatSearchFilter.searchMessages(engine: self.context.engine, location: self.location, query: self.searchQuery, state: self.searchState)` (the list of results). 1 added, 1 changed. |
+| `TelegramUI/BUILD` | #271: `"//submodules/Novagram/Search:NovagramSearch"` after `NovagramCarPlay` (no cycle: ChatListUI, which TelegramUI imports, already depends on it). 1 line. |
+
+Not wrapped on purpose: `ChatHistorySearchContainerNode` (shared media / links search with a tag mask, and the
+browser bookmarks), the reaction-tag lookup in `ChatControllerNode` (`query: ""`, `centerId`) and
+`ChatControllerAdminBanUsers` (message count).
+
+On an upstream update: each hook is a drop-in for `self.context.engine.messages.searchMessages(` with the same
+arguments; if upstream changes a call, take theirs and put `NovagramChatSearchFilter.searchMessages(engine:
+self.context.engine, …)` back in its place.

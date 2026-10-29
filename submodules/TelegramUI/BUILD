@@ -84,6 +84,7 @@ swift_library(
         "//submodules/Novagram/Sponsored:NovagramSponsored",
         "//submodules/Novagram/ForwardEdit:NovagramForwardEdit",
         "//submodules/Novagram/CarPlay:NovagramCarPlay",
+        "//submodules/Novagram/Search:NovagramSearch",
         "//submodules/CrashReporting:CrashReporting",
         "//third-party/recaptcha:RecaptchaEnterprise",
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",

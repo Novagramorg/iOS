@@ -4,6 +4,7 @@ import AccountContext
 import ChatPresentationInterfaceState
 import SwiftSignalKit
 import TelegramCore
+import NovagramSearch // Novagram
 
 extension ChatControllerImpl {    
     func updateSearch(_ interfaceState: ChatPresentationInterfaceState) -> ChatPresentationInterfaceState? {
@@ -92,7 +93,7 @@ extension ChatControllerImpl {
                             self.searchDisposable = searchDisposable
                         }
 
-                        let search = self.context.engine.messages.searchMessages(location: searchState.location, query: searchState.query, state: nil, limit: limit)
+                        let search = NovagramChatSearchFilter.searchMessages(engine: self.context.engine, location: searchState.location, query: searchState.query, state: nil, limit: limit) // Novagram
                         |> delay(0.2, queue: Queue.mainQueue())
                         self.searchResult.set(search
                         |> map { (result, state) -> (SearchMessagesResult, SearchMessagesState, SearchMessagesLocation)? in
@@ -147,7 +148,7 @@ extension ChatControllerImpl {
                             searchDisposable = MetaDisposable()
                             self.searchDisposable = searchDisposable
                         }
-                        searchDisposable.set((self.context.engine.messages.searchMessages(location: searchState.location, query: searchState.query, state: loadMoreState, limit: limit)
+                        searchDisposable.set((NovagramChatSearchFilter.searchMessages(engine: self.context.engine, location: searchState.location, query: searchState.query, state: loadMoreState, limit: limit) // Novagram
                         |> delay(0.2, queue: Queue.mainQueue())
                         |> deliverOnMainQueue).startStrict(next: { [weak self] results, updatedState in
                             guard let strongSelf = self else {
