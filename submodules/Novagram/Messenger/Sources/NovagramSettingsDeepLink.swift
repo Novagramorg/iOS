@@ -34,6 +34,9 @@ public enum NovagramSettingsFeature: String, CaseIterable {
     case searchFeatures = "search-features"
     case searchTranslate = "search-translate"
 
+    // Calls (same slug as the Mac)
+    case callDataSaving = "call-data-saving"
+
     // Chat
     case deletedMessages = "deleted-messages"
     case editedHistory = "edited-history"

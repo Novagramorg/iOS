@@ -38,6 +38,7 @@ private enum NovagramSection: Int32 {
     case secretVault = 11
     case carPlay = 12
     case search = 13
+    case calls = 14
 }
 
 private func textStyleDisplayName(_ rawValue: String, l10n: NovagramL10n) -> String {
@@ -64,6 +65,8 @@ private enum NovagramEntry: ItemListNodeEntry {
     case searchHeader(String)
     case searchFeatures(PresentationTheme, String, String, Bool)
     case searchTranslate(PresentationTheme, String, String, Bool)
+    case callsHeader(String)
+    case callDataSaving(PresentationTheme, String, String, Bool)
     case chatFooter(PresentationTheme, String)
 
     // — Interface Section —
@@ -189,6 +192,8 @@ private enum NovagramEntry: ItemListNodeEntry {
             return NovagramSection.interface.rawValue
         case .searchHeader, .searchFeatures, .searchTranslate:
             return NovagramSection.search.rawValue
+        case .callsHeader, .callDataSaving:
+            return NovagramSection.calls.rawValue
         case .messagingHeader, .textStyle, .autoText, .autoTranslate, .translateToggle, .translateMessages, .sendTranslateConfirm, .autoStickerEnabled, .heartEffectEnabled, .messagingFooter:
             return NovagramSection.messaging.rawValue
         case .sttHeader, .sttEnabled, .sttLanguage, .voiceTranslate:
@@ -238,6 +243,9 @@ private enum NovagramEntry: ItemListNodeEntry {
         case .searchHeader:              return 17
         case .searchFeatures:            return 18
         case .searchTranslate:           return 19
+        // Calls (53–59; a future "Call recording" switch goes here too)
+        case .callsHeader:               return 53
+        case .callDataSaving:            return 54
         // Messaging
         case .messagingHeader:           return 20
         case .textStyle:                 return 21
@@ -313,8 +321,17 @@ private enum NovagramEntry: ItemListNodeEntry {
         }
     }
 
+    // The list is ordered by this, not by the array. Calls use the free stable ids 53–59 but sit right
+    // after Search (17–19), so every id is spread by 10 to leave room between 19 and 20.
     var sortId: Int {
-        return Int(self.stableId)
+        switch self {
+        case .callsHeader:
+            return 19 * 10 + 1
+        case .callDataSaving:
+            return 19 * 10 + 2
+        default:
+            return Int(self.stableId) * 10
+        }
     }
 
     static func == (lhs: NovagramEntry, rhs: NovagramEntry) -> Bool {
@@ -345,6 +362,10 @@ private enum NovagramEntry: ItemListNodeEntry {
             if case let .searchFeatures(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
         case let .searchTranslate(lhsTheme, lhsTitle, lhsText, lhsValue):
             if case let .searchTranslate(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
+        case let .callsHeader(lhsText):
+            if case let .callsHeader(rhsText) = rhs, lhsText == rhsText { return true } else { return false }
+        case let .callDataSaving(lhsTheme, lhsTitle, lhsText, lhsValue):
+            if case let .callDataSaving(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
         case let .chatFooter(lhsTheme, lhsText):
             if case let .chatFooter(rhsTheme, rhsText) = rhs, lhsTheme === rhsTheme, lhsText == rhsText { return true } else { return false }
 
@@ -515,6 +536,7 @@ private enum NovagramEntry: ItemListNodeEntry {
         case let .unlimitedPins(_, title, _, _, _):         return (.unlimitedPins, title)
         case let .searchFeatures(_, title, _, _):           return (.searchFeatures, title)
         case let .searchTranslate(_, title, _, _):          return (.searchTranslate, title)
+        case let .callDataSaving(_, title, _, _):           return (.callDataSaving, title)
 
         case let .deletedMessages(_, title, _, _):          return (.deletedMessages, title)
         case let .editedHistoryEnabled(_, title, _, _):     return (.editedHistory, title)
@@ -676,6 +698,14 @@ private enum NovagramEntry: ItemListNodeEntry {
             let badge: AnyComponent<Empty>? = AnyComponent(NovagramNewBadgeComponent(langCode: langCode))
             return ItemListSwitchItem(presentationData: presentationData, icon: novagramSettingsIcon(systemName: "character.magnify", color: .teal), title: title, text: text, titleBadgeComponent: badge, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateSearchTranslate(val)
+            }, tag: self.novagramTag)
+        case let .callsHeader(text):
+            return ItemListSectionHeaderItem(presentationData: presentationData, text: text, sectionId: self.section)
+        case let .callDataSaving(_, title, text, value):
+            let langCode = NovagramL10n.languageKey(for: presentationData.strings)
+            let badge: AnyComponent<Empty>? = AnyComponent(NovagramNewBadgeComponent(langCode: langCode))
+            return ItemListSwitchItem(presentationData: presentationData, icon: novagramSettingsIcon(systemName: "antenna.radiowaves.left.and.right", color: .green), title: title, text: text, titleBadgeComponent: badge, value: value, sectionId: self.section, style: .blocks, updated: { val in
+                arguments.updateCallDataSaving(val)
             }, tag: self.novagramTag)
         case let .chatFooter(_, text):
             return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
@@ -1507,7 +1537,7 @@ private func sttSupportedLanguages() -> [(String, String)] {
     ]
 }
 
-private func novagramSettingsEntries(presentationData: PresentationData, state: NovagramSettingsState, carPlayStatus: NovagramCarPlayStatus) -> [NovagramEntry] {
+private func novagramSettingsEntries(presentationData: PresentationData, state: NovagramSettingsState, carPlayStatus: NovagramCarPlayStatus, callDataSaving: Bool) -> [NovagramEntry] {
     var entries: [NovagramEntry] = []
     let l10n = NovagramL10n(presentationData.strings)
     // Resolved once at entry-build time; used by local string namespaces throughout.
@@ -1535,6 +1565,11 @@ private func novagramSettingsEntries(presentationData: PresentationData, state: 
     if state.searchFeatures {
         entries.append(.searchTranslate(presentationData.theme, l10n.settings_searchTranslate_title, l10n.settings_searchTranslate_subtitle, state.searchTranslate))
     }
+
+    // ─── CALLS ───
+    // The switch shows Telegram's live call data saving setting (NovagramCallDataSaving).
+    entries.append(.callsHeader(l10n.settings_section_calls))
+    entries.append(.callDataSaving(presentationData.theme, l10n.settings_callDataSaving_title, l10n.settings_callDataSaving_subtitle, callDataSaving))
 
     // ─── CHAT ───
     entries.append(.chatHeader(l10n.settings_section_chat))
@@ -1707,6 +1742,7 @@ private final class NovagramSettingsArguments {
     let updateUnlimitedPins: (Bool) -> Void
     let updateSearchFeatures: (Bool) -> Void
     let updateSearchTranslate: (Bool) -> Void
+    let updateCallDataSaving: (Bool) -> Void
     let updateTranslateMessages: (Bool) -> Void
     let openTranslationSettings: () -> Void
     let openTextStyleSettings: () -> Void
@@ -1747,7 +1783,7 @@ private final class NovagramSettingsArguments {
     let updateTranslateChatsUnlock: (Bool) -> Void
     let openCarPlay: () -> Void
 
-    init(openAccounts: @escaping () -> Void, openAbout: @escaping () -> Void, openNovagramBots: @escaping () -> Void, openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateEditedHistoryEnabled: @escaping (Bool) -> Void, updateRoundVideoFromGallery: @escaping (Bool) -> Void, updateForwardHideNames: @escaping (Bool) -> Void, updateUnlimitedPins: @escaping (Bool) -> Void, updateSearchFeatures: @escaping (Bool) -> Void, updateSearchTranslate: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateSttEnabled: @escaping (Bool) -> Void, openSttLanguageSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateEnableNovagramProxy: @escaping (Bool) -> Void, updateChatLockMaster: @escaping (Bool) -> Void, updateSecretVault: @escaping (Bool) -> Void, updateSecretVaultBiometric: @escaping (Bool) -> Void, updateWhiteThemeAccent: @escaping (Bool) -> Void, updateVoiceTranslate: @escaping (Bool) -> Void, updateAutoDownloadDisabled: @escaping (Bool) -> Void, updateSendTranslateConfirm: @escaping (Bool) -> Void, updateSendConfirmEnabled: @escaping (Bool) -> Void, updateAutoStickerEnabled: @escaping (Bool) -> Void, updateHeartEffectEnabled: @escaping (Bool) -> Void, updateReminderEnabled: @escaping (Bool) -> Void, openReminderTimeSettings: @escaping () -> Void, openReminderSoundSettings: @escaping () -> Void, addRecommendedFolders: @escaping () -> Void, openFolderStyle: @escaping () -> Void, updateChannelHistory: @escaping (Bool) -> Void, updateSettingsLinks: @escaping (Bool) -> Void, shareNovagramProLink: @escaping () -> Void, updateAutoAccept: @escaping (Bool) -> Void, updateAdminFolders: @escaping (Bool) -> Void, updateFoldersPrompt: @escaping (Bool) -> Void, updateShowAds: @escaping (Bool) -> Void, updateAdEventsOff: @escaping (Bool) -> Void, updateCurrencyRatesView: @escaping (Bool) -> Void, updateAdsPanel: @escaping (Bool) -> Void, updateStoryUnlock: @escaping (Bool) -> Void, updateTranslateChatsUnlock: @escaping (Bool) -> Void, openCarPlay: @escaping () -> Void) {
+    init(openAccounts: @escaping () -> Void, openAbout: @escaping () -> Void, openNovagramBots: @escaping () -> Void, openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateEditedHistoryEnabled: @escaping (Bool) -> Void, updateRoundVideoFromGallery: @escaping (Bool) -> Void, updateForwardHideNames: @escaping (Bool) -> Void, updateUnlimitedPins: @escaping (Bool) -> Void, updateSearchFeatures: @escaping (Bool) -> Void, updateSearchTranslate: @escaping (Bool) -> Void, updateCallDataSaving: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateSttEnabled: @escaping (Bool) -> Void, openSttLanguageSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateEnableNovagramProxy: @escaping (Bool) -> Void, updateChatLockMaster: @escaping (Bool) -> Void, updateSecretVault: @escaping (Bool) -> Void, updateSecretVaultBiometric: @escaping (Bool) -> Void, updateWhiteThemeAccent: @escaping (Bool) -> Void, updateVoiceTranslate: @escaping (Bool) -> Void, updateAutoDownloadDisabled: @escaping (Bool) -> Void, updateSendTranslateConfirm: @escaping (Bool) -> Void, updateSendConfirmEnabled: @escaping (Bool) -> Void, updateAutoStickerEnabled: @escaping (Bool) -> Void, updateHeartEffectEnabled: @escaping (Bool) -> Void, updateReminderEnabled: @escaping (Bool) -> Void, openReminderTimeSettings: @escaping () -> Void, openReminderSoundSettings: @escaping () -> Void, addRecommendedFolders: @escaping () -> Void, openFolderStyle: @escaping () -> Void, updateChannelHistory: @escaping (Bool) -> Void, updateSettingsLinks: @escaping (Bool) -> Void, shareNovagramProLink: @escaping () -> Void, updateAutoAccept: @escaping (Bool) -> Void, updateAdminFolders: @escaping (Bool) -> Void, updateFoldersPrompt: @escaping (Bool) -> Void, updateShowAds: @escaping (Bool) -> Void, updateAdEventsOff: @escaping (Bool) -> Void, updateCurrencyRatesView: @escaping (Bool) -> Void, updateAdsPanel: @escaping (Bool) -> Void, updateStoryUnlock: @escaping (Bool) -> Void, updateTranslateChatsUnlock: @escaping (Bool) -> Void, openCarPlay: @escaping () -> Void) {
         self.openAccounts = openAccounts
         self.openAbout = openAbout
         self.openNovagramBots = openNovagramBots
@@ -1765,6 +1801,7 @@ private final class NovagramSettingsArguments {
         self.updateUnlimitedPins = updateUnlimitedPins
         self.updateSearchFeatures = updateSearchFeatures
         self.updateSearchTranslate = updateSearchTranslate
+        self.updateCallDataSaving = updateCallDataSaving
         self.updateTranslateMessages = updateTranslateMessages
         self.openTranslationSettings = openTranslationSettings
         self.openTextStyleSettings = openTextStyleSettings
@@ -1971,6 +2008,8 @@ public func novagramSettingsController(context: AccountContext, highlightFeature
             state.searchTranslate = value
             return state
         }
+    }, updateCallDataSaving: { value in
+        NovagramCallDataSaving.set(value, accountManager: context.sharedContext.accountManager)
     }, updateTranslateMessages: { value in
         UserDefaults(suiteName: "pro_messager")?.set(value, forKey: "show_translate_messages")
         updateState { state in
@@ -2533,11 +2572,12 @@ public func novagramSettingsController(context: AccountContext, highlightFeature
     let signal = combineLatest(
         context.sharedContext.presentationData,
         statePromise.get(),
-        NovagramCarPlayStatus.signal(context: context)
+        NovagramCarPlayStatus.signal(context: context),
+        NovagramCallDataSaving.isOnSignal(accountManager: context.sharedContext.accountManager)
     ) |> deliverOnMainQueue
-        |> map { presentationData, state, carPlayStatus -> (ItemListControllerState, (ItemListNodeState, Any)) in
+        |> map { presentationData, state, carPlayStatus, callDataSaving -> (ItemListControllerState, (ItemListNodeState, Any)) in
             let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Novagram"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
-            let entries = novagramSettingsEntries(presentationData: presentationData, state: state, carPlayStatus: carPlayStatus)
+            let entries = novagramSettingsEntries(presentationData: presentationData, state: state, carPlayStatus: carPlayStatus, callDataSaving: callDataSaving)
             _ = latestEntries.swap(entries)
             // ensureVisibleItemTag only reaches rows whose nodes already exist, so a row far down
             // the list also needs an index-based scroll. ItemListNodeState applies this on the
