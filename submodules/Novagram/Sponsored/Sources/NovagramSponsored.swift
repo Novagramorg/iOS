@@ -231,6 +231,9 @@ public enum NovagramSponsored {
         guard let token = token(opaqueId: opaqueId) else {
             return false
         }
+        if self.skipEvent("video_open", token: token) {
+            return true
+        }
         logger.debug("video_open → novagram \(masked(token), privacy: .public)")
         guard let entry = registry.served(token: token), let session = registry.existingSession(userId: entry.userId) else {
             return true
@@ -257,7 +260,20 @@ public enum NovagramSponsored {
         return String(token.prefix(8)) + "…"
     }
 
+    /// True while the Developer switch "Don't send ad events" is on: the event is neither sent nor queued,
+    /// and the caller must not mark the ad as viewed either, so a once-per-user ad keeps showing.
+    static func skipEvent(_ event: String, token: String) -> Bool {
+        guard NovagramDeveloperFlags.isAdEventsOff else {
+            return false
+        }
+        logger.info("\(event, privacy: .public) → not sent (developer: ad events off) \(masked(token), privacy: .public)")
+        return true
+    }
+
     static func recordView(token: String) {
+        if self.skipEvent("view", token: token) {
+            return
+        }
         guard let entry = registry.served(token: token), registry.markViewed(token: token), let session = registry.existingSession(userId: entry.userId) else {
             return
         }
@@ -269,6 +285,13 @@ public enum NovagramSponsored {
     }
 
     static func recordClick(token: String, thenOpen open: (() -> Void)? = nil) {
+        if self.skipEvent("click", token: token) {
+            // The ad still opens; without a click there is no action to watch for.
+            if let open {
+                Queue.mainQueue().async(open)
+            }
+            return
+        }
         logger.debug("click → novagram \(masked(token), privacy: .public)")
         guard let entry = registry.served(token: token), let session = registry.existingSession(userId: entry.userId) else {
             if let open {

@@ -162,6 +162,8 @@ private enum NovagramEntry: ItemListNodeEntry {
     case developerHeader(String)
     // "Remove all ads": the value is the inverse of the stored fenix_show_ads flag
     case showAds(PresentationTheme, String, String, Bool)
+    // "Don't send ad events" (NovagramDeveloperFlags.isAdEventsOff)
+    case adEventsOff(PresentationTheme, String, String, Bool)
     case currencyRatesView(PresentationTheme, String, String, Bool)
     case adsPanel(PresentationTheme, String, String, Bool)
     case developerFooter(PresentationTheme, String)
@@ -198,7 +200,7 @@ private enum NovagramEntry: ItemListNodeEntry {
             return NovagramSection.reminder.rawValue
         case .featuresHeader, .addRecommendedFolders, .foldersPrompt, .adminFolders, .folderStyle, .channelHistoryButton, .settingsLinks, .autoAcceptRequests, .shareNovagramProLink, .storyUnlockEnabled, .translateChatsUnlock, .featuresFooter:
             return NovagramSection.features.rawValue
-        case .developerHeader, .showAds, .currencyRatesView, .adsPanel, .developerFooter:
+        case .developerHeader, .showAds, .adEventsOff, .currencyRatesView, .adsPanel, .developerFooter:
             return NovagramSection.developer.rawValue
         case .accountsHeader, .accountsManager, .aboutRow, .novagramBots:
             return NovagramSection.accounts.rawValue
@@ -286,9 +288,10 @@ private enum NovagramEntry: ItemListNodeEntry {
         // Developer section (hidden)
         case .developerHeader:           return 93
         case .showAds:                   return 94
-        case .currencyRatesView:         return 95
-        case .adsPanel:                  return 96
-        case .developerFooter:           return 97
+        case .adEventsOff:               return 95
+        case .currencyRatesView:         return 96
+        case .adsPanel:                  return 97
+        case .developerFooter:           return 98
         // Accounts (rendered at the top of the list)
         case .accountsHeader:            return -2
         case .accountsManager:           return -1
@@ -456,6 +459,8 @@ private enum NovagramEntry: ItemListNodeEntry {
             if case let .developerHeader(rhsText) = rhs, lhsText == rhsText { return true } else { return false }
         case let .showAds(lhsTheme, lhsTitle, lhsText, lhsValue):
             if case let .showAds(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
+        case let .adEventsOff(lhsTheme, lhsTitle, lhsText, lhsValue):
+            if case let .adEventsOff(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
         case let .currencyRatesView(lhsTheme, lhsTitle, lhsText, lhsValue):
             if case let .currencyRatesView(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
         case let .adsPanel(lhsTheme, lhsTitle, lhsText, lhsValue):
@@ -1054,6 +1059,20 @@ private enum NovagramEntry: ItemListNodeEntry {
                 },
                 tag: self.novagramTag
             )
+        case let .adEventsOff(_, title, text, value):
+            return ItemListSwitchItem(
+                presentationData: presentationData,
+                icon: novagramSettingsIcon(systemName: "antenna.radiowaves.left.and.right.slash", color: .red),
+                title: title,
+                text: text,
+                value: value,
+                sectionId: self.section,
+                style: .blocks,
+                updated: { value in
+                    arguments.updateAdEventsOff(value)
+                },
+                tag: self.novagramTag
+            )
         case let .currencyRatesView(_, title, text, value):
             return ItemListSwitchItem(
                 presentationData: presentationData,
@@ -1179,10 +1198,13 @@ private struct NovagramSettingsState: Equatable {
     // Default true: sponsored messages shown (standard Telegram behavior)
     var showAds: Bool
     // Mirror NovagramDeveloperFlags; default false.
+    var adEventsOff: Bool
     var currencyRatesViewEnabled: Bool
     var adsPanelEnabled: Bool
     // Default false: hidden until the 20 s hold on the Settings version line reveals it
     var developerSectionRevealed: Bool
+    // The login that revealed it decides which switches show
+    var developerRole: NovagramDeveloperRole
 
     init() {
         self.showDeletedMessages = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "show_deleted_messages") ?? false
@@ -1238,7 +1260,9 @@ private struct NovagramSettingsState: Equatable {
         self.translateChatsUnlock = NovagramPremiumUnlock.isTranslateChatsUnlocked
         // Developer section — default true (show ads), switches off, section hidden
         self.developerSectionRevealed = NovagramDeveloperSection.isRevealed
+        self.developerRole = NovagramDeveloperRole.current
         self.showAds = NovagramShowAdsGate.isEnabled
+        self.adEventsOff = NovagramDeveloperFlags.isAdEventsOff
         self.currencyRatesViewEnabled = NovagramDeveloperFlags.isCurrencyRatesViewEnabled
         self.adsPanelEnabled = NovagramDeveloperFlags.isAdsPanelEnabled
     }
@@ -1370,6 +1394,9 @@ private struct NovagramSettingsState: Equatable {
         if lhs.showAds != rhs.showAds {
             return false
         }
+        if lhs.adEventsOff != rhs.adEventsOff {
+            return false
+        }
         if lhs.currencyRatesViewEnabled != rhs.currencyRatesViewEnabled {
             return false
         }
@@ -1377,6 +1404,9 @@ private struct NovagramSettingsState: Equatable {
             return false
         }
         if lhs.developerSectionRevealed != rhs.developerSectionRevealed {
+            return false
+        }
+        if lhs.developerRole != rhs.developerRole {
             return false
         }
         return true
@@ -1587,9 +1617,19 @@ private func novagramSettingsEntries(presentationData: PresentationData, state: 
     if state.developerSectionRevealed {
         entries.append(.developerHeader(NovagramDeveloperStrings.sectionTitle(langCode: langCode)))
         // "Remove all ads" is the inverse of the stored fenix_show_ads flag (ON = no ads at all).
-        entries.append(.showAds(presentationData.theme, NovagramDeveloperStrings.removeAdsTitle(langCode: langCode), NovagramDeveloperStrings.removeAdsTip(langCode: langCode), !state.showAds))
-        entries.append(.currencyRatesView(presentationData.theme, NovagramDeveloperStrings.currencyRatesTitle(langCode: langCode), NovagramDeveloperStrings.currencyRatesTip(langCode: langCode), state.currencyRatesViewEnabled))
-        entries.append(.adsPanel(presentationData.theme, NovagramDeveloperStrings.adsPanelTitle(langCode: langCode), NovagramDeveloperStrings.adsPanelTip(langCode: langCode), state.adsPanelEnabled))
+        let role = state.developerRole
+        if role.canUse(.removeAllAds) {
+            entries.append(.showAds(presentationData.theme, NovagramDeveloperStrings.removeAdsTitle(langCode: langCode), NovagramDeveloperStrings.removeAdsTip(langCode: langCode), !state.showAds))
+        }
+        if role.canUse(.adEventsOff) {
+            entries.append(.adEventsOff(presentationData.theme, NovagramDeveloperStrings.adEventsOffTitle(langCode: langCode), NovagramDeveloperStrings.adEventsOffTip(langCode: langCode), state.adEventsOff))
+        }
+        if role.canUse(.currencyRatesView) {
+            entries.append(.currencyRatesView(presentationData.theme, NovagramDeveloperStrings.currencyRatesTitle(langCode: langCode), NovagramDeveloperStrings.currencyRatesTip(langCode: langCode), state.currencyRatesViewEnabled))
+        }
+        if role.canUse(.adsPanel) {
+            entries.append(.adsPanel(presentationData.theme, NovagramDeveloperStrings.adsPanelTitle(langCode: langCode), NovagramDeveloperStrings.adsPanelTip(langCode: langCode), state.adsPanelEnabled))
+        }
         entries.append(.developerFooter(presentationData.theme, NovagramDeveloperStrings.footer(langCode: langCode)))
     }
 
@@ -1647,13 +1687,14 @@ private final class NovagramSettingsArguments {
     let updateFoldersPrompt: (Bool) -> Void
     // Developer section (hidden)
     let updateShowAds: (Bool) -> Void
+    let updateAdEventsOff: (Bool) -> Void
     let updateCurrencyRatesView: (Bool) -> Void
     let updateAdsPanel: (Bool) -> Void
     let updateStoryUnlock: (Bool) -> Void
     let updateTranslateChatsUnlock: (Bool) -> Void
     let openCarPlay: () -> Void
 
-    init(openAccounts: @escaping () -> Void, openAbout: @escaping () -> Void, openNovagramBots: @escaping () -> Void, openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateEditedHistoryEnabled: @escaping (Bool) -> Void, updateRoundVideoFromGallery: @escaping (Bool) -> Void, updateForwardHideNames: @escaping (Bool) -> Void, updateUnlimitedPins: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateSttEnabled: @escaping (Bool) -> Void, openSttLanguageSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateEnableNovagramProxy: @escaping (Bool) -> Void, updateChatLockMaster: @escaping (Bool) -> Void, updateSecretVault: @escaping (Bool) -> Void, updateSecretVaultBiometric: @escaping (Bool) -> Void, updateWhiteThemeAccent: @escaping (Bool) -> Void, updateVoiceTranslate: @escaping (Bool) -> Void, updateAutoDownloadDisabled: @escaping (Bool) -> Void, updateSendTranslateConfirm: @escaping (Bool) -> Void, updateSendConfirmEnabled: @escaping (Bool) -> Void, updateAutoStickerEnabled: @escaping (Bool) -> Void, updateHeartEffectEnabled: @escaping (Bool) -> Void, updateReminderEnabled: @escaping (Bool) -> Void, openReminderTimeSettings: @escaping () -> Void, openReminderSoundSettings: @escaping () -> Void, addRecommendedFolders: @escaping () -> Void, openFolderStyle: @escaping () -> Void, updateChannelHistory: @escaping (Bool) -> Void, updateSettingsLinks: @escaping (Bool) -> Void, shareNovagramProLink: @escaping () -> Void, updateAutoAccept: @escaping (Bool) -> Void, updateAdminFolders: @escaping (Bool) -> Void, updateFoldersPrompt: @escaping (Bool) -> Void, updateShowAds: @escaping (Bool) -> Void, updateCurrencyRatesView: @escaping (Bool) -> Void, updateAdsPanel: @escaping (Bool) -> Void, updateStoryUnlock: @escaping (Bool) -> Void, updateTranslateChatsUnlock: @escaping (Bool) -> Void, openCarPlay: @escaping () -> Void) {
+    init(openAccounts: @escaping () -> Void, openAbout: @escaping () -> Void, openNovagramBots: @escaping () -> Void, openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateEditedHistoryEnabled: @escaping (Bool) -> Void, updateRoundVideoFromGallery: @escaping (Bool) -> Void, updateForwardHideNames: @escaping (Bool) -> Void, updateUnlimitedPins: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateSttEnabled: @escaping (Bool) -> Void, openSttLanguageSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateEnableNovagramProxy: @escaping (Bool) -> Void, updateChatLockMaster: @escaping (Bool) -> Void, updateSecretVault: @escaping (Bool) -> Void, updateSecretVaultBiometric: @escaping (Bool) -> Void, updateWhiteThemeAccent: @escaping (Bool) -> Void, updateVoiceTranslate: @escaping (Bool) -> Void, updateAutoDownloadDisabled: @escaping (Bool) -> Void, updateSendTranslateConfirm: @escaping (Bool) -> Void, updateSendConfirmEnabled: @escaping (Bool) -> Void, updateAutoStickerEnabled: @escaping (Bool) -> Void, updateHeartEffectEnabled: @escaping (Bool) -> Void, updateReminderEnabled: @escaping (Bool) -> Void, openReminderTimeSettings: @escaping () -> Void, openReminderSoundSettings: @escaping () -> Void, addRecommendedFolders: @escaping () -> Void, openFolderStyle: @escaping () -> Void, updateChannelHistory: @escaping (Bool) -> Void, updateSettingsLinks: @escaping (Bool) -> Void, shareNovagramProLink: @escaping () -> Void, updateAutoAccept: @escaping (Bool) -> Void, updateAdminFolders: @escaping (Bool) -> Void, updateFoldersPrompt: @escaping (Bool) -> Void, updateShowAds: @escaping (Bool) -> Void, updateAdEventsOff: @escaping (Bool) -> Void, updateCurrencyRatesView: @escaping (Bool) -> Void, updateAdsPanel: @escaping (Bool) -> Void, updateStoryUnlock: @escaping (Bool) -> Void, updateTranslateChatsUnlock: @escaping (Bool) -> Void, openCarPlay: @escaping () -> Void) {
         self.openAccounts = openAccounts
         self.openAbout = openAbout
         self.openNovagramBots = openNovagramBots
@@ -1700,6 +1741,7 @@ private final class NovagramSettingsArguments {
         self.updateAdminFolders = updateAdminFolders
         self.updateFoldersPrompt = updateFoldersPrompt
         self.updateShowAds = updateShowAds
+        self.updateAdEventsOff = updateAdEventsOff
         self.updateCurrencyRatesView = updateCurrencyRatesView
         self.updateAdsPanel = updateAdsPanel
         self.updateStoryUnlock = updateStoryUnlock
@@ -2332,6 +2374,13 @@ public func novagramSettingsController(context: AccountContext, highlightFeature
         updateState { state in
             var state = state
             state.showAds = value
+            return state
+        }
+    }, updateAdEventsOff: { value in
+        NovagramDeveloperFlags.isAdEventsOff = value
+        updateState { state in
+            var state = state
+            state.adEventsOff = value
             return state
         }
     }, updateCurrencyRatesView: { value in

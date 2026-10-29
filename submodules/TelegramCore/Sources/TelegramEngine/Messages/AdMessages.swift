@@ -590,8 +590,8 @@ private class AdMessagesHistoryContextImpl {
     }
 
     func markAsSeen(opaqueId: Data) {
-        // Novagram Ghost mode: do NOT report "seen" to TG servers when ghost is active.
-        if isNovagramGhostModeActive { return }
+        // Novagram Developer switch "Don't send ad events": no "seen" report while it is on.
+        if novagramAdEventsOff() { return }
         let signal: Signal<Never, NoError> = self.account.network.request(Api.functions.messages.viewSponsoredMessage(randomId: Buffer(data: opaqueId)))
         |> `catch` { _ -> Signal<Api.Bool, NoError> in
             return .single(.boolFalse)
@@ -688,8 +688,8 @@ public class AdMessagesHistoryContext {
 
 
 func _internal_markAdAction(account: Account, opaqueId: Data, media: Bool, fullscreen: Bool) {
-    // Novagram Ghost mode: do NOT report ad clicks to TG servers when ghost is active.
-    if isNovagramGhostModeActive { return }
+    // Novagram Developer switch "Don't send ad events": no click report while it is on.
+    if novagramAdEventsOff() { return }
     var flags: Int32 = 0
     if media {
         flags |= (1 << 0)
@@ -706,8 +706,8 @@ func _internal_markAdAction(account: Account, opaqueId: Data, media: Bool, fulls
 }
 
 func _internal_markAdAsSeen(account: Account, opaqueId: Data) {
-    // Novagram Ghost mode: do NOT report sponsored message views to TG servers when ghost is active.
-    if isNovagramGhostModeActive { return }
+    // Novagram Developer switch "Don't send ad events": no view report while it is on.
+    if novagramAdEventsOff() { return }
     let signal = account.network.request(Api.functions.messages.viewSponsoredMessage(randomId: Buffer(data: opaqueId)))
     |> `catch` { _ -> Signal<Api.Bool, NoError> in
         return .single(.boolFalse)

@@ -45,7 +45,8 @@ enum NovagramAdActions {
         |> take(1)
         |> timeout(remaining, queue: .mainQueue(), alternate: .single(false))
         |> deliverOnMainQueue).startStrict(next: { didAct in
-            if didAct {
+            // A watch started before the Developer switch "Don't send ad events" was turned on.
+            if didAct && !NovagramSponsored.skipEvent("action", token: token) {
                 NovagramSponsored.logger.debug("action → novagram \(NovagramSponsored.masked(token), privacy: .public)")
                 Task {
                     await session.recordAction(served)

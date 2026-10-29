@@ -177,7 +177,7 @@ three calls and delete the two lines.
 
 ## 📋 Novagram features va hooklar (2026-10-10)
 
-> 1–44, 86 va 89: Settings → Novagram Settings (ilovadagi tartibda). 45–85, 87 va 88: Settings'dan tashqaridagi features.
+> 1–44, 86, 89 va 91: Settings → Novagram Settings (ilovadagi tartibda). 45–85, 87 va 88: Settings'dan tashqaridagi features.
 > Hooks: Telegram-owned fayllardagi barcha Novagram o'zgarishlari, feature bo'yicha. Har bir hookning kodi va anchor'i quyidagi 📌 bo'limlarda.
 
 ### 1. Novagram Settings
@@ -267,9 +267,10 @@ three calls and delete the two lines.
 
 #### Reklama
 
-> Yashirin bo'lim. Ochish uchun sahifani 10 marta tez bosing.
+> Yashirin Developer bo'limi. Ochish uchun Settings pastidagi versiya qatorini 20 soniya bosib turing (2026-10-27).
 
 44. **Reklamani ko'rsatish**: kanal, bot, qidiruv va banner reklamalarini yoqadi yoki o'chiradi.
+91. **Reklama hodisalarini yubormaslik**: Novagram va Telegram reklamalarining ko'rish, bosish, harakat va video ochish hodisalari yuborilmaydi, shuning uchun bir marta ko'rsatiladigan reklama test paytida qayta chiqaveradi. Faqat shu qurilmada, default o'chiq (2026-10-29).
 
 ---
 
@@ -428,7 +429,7 @@ three calls and delete the two lines.
 54. `PeerMessagesMediaPlaylist.swift` (TelegramUI): ovozli xabar tinglansa ham "eshitildi" bo'lmaydi.
 55. `SecretMediaPreviewController.swift` (GalleryUI): yo'qoladigan media ochilgani yuborilmaydi.
 56. `StandaloneSendMessage.swift`, `PendingMessageManager.swift` (TelegramCore): screenshot bildirishnomasi yuborilmaydi.
-57. `AdMessages.swift` (TelegramCore): reklama "ko'rildi" va click yuborilmaydi.
+57. ~~`AdMessages.swift` (TelegramCore): reklama "ko'rildi" va click yuborilmaydi.~~ 2026-10-29: Ghost reklamaga tegmaydi (egasi qoidasi: Ghost'da Telegram va Novagram reklamalari to'liq ishlaydi). Bu fayldagi 3 ta guard endi Developer switch'iga bo'ysunadi, #246.
 58. `ChatListController.swift` (ChatListUI): chatlar tepasida Ghost tugmasi (yoqiq/o'chiq ikonka).
 59. ~~`NavigationButtonComponent.swift` (TelegramUI)~~: upstream faylni o'chirdi (2026-10-28), ghost ikonkalari endi `NovagramHeaderIcons` da.
 60. `NovagramGhostActive/Inactive/Icon.imageset` (TelegramUI, yangi asset): Ghost ikonkalari.
@@ -516,6 +517,8 @@ three calls and delete the two lines.
 238. `UniversalVideoGalleryItem.swift`, `VideoAdComponent.swift` (GalleryUI): to'liq ekran pleerda bizning video banner (playback vaqti bo'yicha); Telegram'niki faqat fallback, Premium'ga hech qachon.
 239. `ChatHistoryEntriesForView.swift` (TelegramUI): oxirgi post album bo'lsa ham bizning reklama undan keyin chiqadi.
 240. `ChatMessageWebpageBubbleContentNode.swift` (ChatMessageWebpageBubbleContentNode): bizning reklamada "what's this?" — Novagram "Reklama haqida / Shikoyat".
+246. `AdMessages.swift` (TelegramCore): Developer switch "Reklama hodisalarini yubormaslik" yoqiq bo'lsa Telegram reklamasining "ko'rildi" va click hisobotlari yuborilmaydi (chat, video, galereya, qidiruv). 2026-10-29, Ghost guard'lari o'rniga.
+247. `NovagramAdEvents.swift` (TelegramCore, yangi fayl): `novagramAdEventsOff()`, #246 uchun `novagram_ads_events_off` kalitini o'qiydi.
 
 #### Login
 
@@ -2600,41 +2603,48 @@ reused from the PeerInfoScreen module, and added a `.gold` case (`0xD4AF37` clas
 
 ---
 
-## 📌 Ghost mode ad-reporting suppression (2026-06-08, Task #7)
+## 📌 Developer switch "Don't send ad events" in sponsored-message reporting (2026-10-29; was Ghost mode ad-reporting suppression, 2026-06-08, Task #7)
+
+Ghost mode no longer touches ads (owner's rule, 2026-10-29: in Ghost mode Telegram and Novagram ads work fully).
+The three guards added for Ghost on 2026-06-08 now check the Developer switch "Don't send ad events"
+(`novagram_ads_events_off`, see "Developer section" below), so an ad the server shows once per user keeps
+showing while a developer tests it. Same shape on the Mac (`NOVAGRAM_HOOKS.md`, "Developer switch \"Don't send
+ad events\"").
 
 ### `submodules/TelegramCore/Sources/TelegramEngine/Messages/AdMessages.swift`
 
-Three functions call TG servers to report ad views/clicks. All three are guarded with the
-`isNovagramGhostModeActive` check so no sponsored-message telemetry is sent while Ghost mode is ON.
+Three functions call TG servers to report ad views/clicks. Each starts with the same one-line guard:
 
 **1. `AdMessagesHistoryContextImpl.markAsSeen(opaqueId:)` (~line 592)**
 Return type: `Void` (sets a disposable on `maskAsSeenDisposables` and returns). Guard before the signal:
 
 ```swift
-// Novagram Ghost mode: do NOT report "seen" to TG servers when ghost is active.
-if isNovagramGhostModeActive { return }
+// Novagram Developer switch "Don't send ad events": no "seen" report while it is on.
+if novagramAdEventsOff() { return }
 ```
 
 **2. `_internal_markAdAction(account:opaqueId:media:fullscreen:)` (~line 688)**
 Return type: `Void`. Guard at top of function:
 
 ```swift
-// Novagram Ghost mode: do NOT report ad clicks to TG servers when ghost is active.
-if isNovagramGhostModeActive { return }
+// Novagram Developer switch "Don't send ad events": no click report while it is on.
+if novagramAdEventsOff() { return }
 ```
 
 **3. `_internal_markAdAsSeen(account:opaqueId:)` (~line 704)**
 Return type: `Void`. Guard at top of function:
 
 ```swift
-// Novagram Ghost mode: do NOT report sponsored message views to TG servers when ghost is active.
-if isNovagramGhostModeActive { return }
+// Novagram Developer switch "Don't send ad events": no view report while it is on.
+if novagramAdEventsOff() { return }
 ```
 
-`isNovagramGhostModeActive` is the existing internal global in
-`submodules/TelegramCore/Sources/Novagram/NovagramGhostMode.swift` — same module, no import needed.
-These guards cover both the chat sponsored-message context (`AdMessagesHistoryContextImpl`) AND the
-global-search sponsored-peer context (both eventually call the `_internal_*` free functions).
+`novagramAdEventsOff()` is in our new TelegramCore file
+`submodules/TelegramCore/Sources/Novagram/NovagramAdEvents.swift` (same module, no import needed). TelegramCore
+cannot import the Novagram modules, so it reads `UserDefaults(suiteName: "pro_messager")` key
+`novagram_ads_events_off` directly; `NovagramDeveloperFlags.isAdEventsOff` writes the same key. These guards cover
+the chat sponsored-message context (`AdMessagesHistoryContextImpl`), the video/gallery ads and the global-search
+sponsored peers (all of them end in these three functions).
 
 ---
 
@@ -7461,11 +7471,33 @@ or chat PINs, counts devices twice in statistics, or breaks App Store updates):
 
 ## 📌 Developer section: 20 s hold on the Settings version line — 2026-10-27
 
-The hidden Novagram Settings section that held "Remove all ads" is now the **Developer** section with three
-switches: "Remove all ads" (`fenix_show_ads`, inverted, read through `NovagramShowAdsGate`), "Show currency
-rates" (`novagram_currency_rates_view`) and "Novagram ads panel" (`novagram_ads_panel`). The two new ones are
-off by default, per device, and read through `NovagramDeveloperFlags` (`isCurrencyRatesViewEnabled`,
-`isAdsPanelEnabled`, live `…Signal`s on `.novagramDeveloperFlagsChanged`). The rows have no deep link.
+The hidden Novagram Settings section that held "Remove all ads" is now the **Developer** section with four
+switches: "Remove all ads" (`fenix_show_ads`, inverted, read through `NovagramShowAdsGate`), "Don't send ad
+events" (`novagram_ads_events_off`, 2026-10-29), "Show currency rates" (`novagram_currency_rates_view`) and
+"Novagram ads panel" (`novagram_ads_panel`). The last three are off by default, per device, and read through
+`NovagramDeveloperFlags` (`isAdEventsOff`, `isCurrencyRatesViewEnabled`, `isAdsPanelEnabled`, live `…Signal`s on
+`.novagramDeveloperFlagsChanged`). The rows have no deep link.
+
+"Don't send ad events" (second row, right after "Remove all ads") stops every ad event, so an ad the backend
+shows once per user keeps showing while a developer tests it. Telegram's ads: the three `AdMessages.swift`
+guards (see "Developer switch \"Don't send ad events\" in sponsored-message reporting"). Novagram ads: no Telegram
+hook, all in `NovagramSponsored.swift` — `skipEvent(_:token:)` runs at the top of `recordView` (before
+`registry.markViewed`, so the ad is not treated as seen), `recordClick` (the ad still opens, but nothing is queued
+and no `NovagramAdActions` watch starts) and `recordVideoOpenIfOurs` (after the ours check, so Telegram's path is
+not taken for our ad), and in the `NovagramAdActions` watcher for a watch started before the switch was turned on.
+Each skipped event is logged: `view → not sent (developer: ad events off) <random_id…>` (category `NovagramAds`).
+Banner clicks and dismissals (`SDKBannerFeed`) are not affected. Strings: `NovagramDeveloperStrings.adEventsOff*`
+(en/uz/ru/zh). The Mac uses the same key.
+
+**Roles (2026-10-29).** The login decides what the section shows. `NovagramAdsAdminAuth.credentials` holds one
+digest per login (same salt and rounds), and `verify` returns its `NovagramDeveloperRole`: `developer` (the
+original login, every switch) or `director` (login `director`: "Don't send ad events" and "Novagram ads panel"
+only). The role is stored in `pro_messager` as `novagram_developer_role`; no stored role means `developer`, the
+only login that existed before. On login `NovagramDeveloperRole.didLogIn` turns off every switch the role cannot
+see ("Remove all ads" back to ads shown, currency rates off), so a hidden switch never stays on. The rows are
+filtered by `role.canUse(_:)` in `novagramSettingsEntries`. The hidden Ads Analytics hold
+(`NovagramAdsAdminGate.requestAccess`) accepts either login and does not change the role. A new digest:
+`submodules/Novagram/scripts/novagram-developer-digest.py <login>` (password from the terminal or stdin).
 
 "Show currency rates" adds a "Currency rates" row under Analytics in the Settings tab (id 4). It opens
 `NovagramCurrencyRatesController` (new module `submodules/Novagram/CurrencyRates/`, pushed on the root navigation

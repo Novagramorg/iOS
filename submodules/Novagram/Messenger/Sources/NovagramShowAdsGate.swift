@@ -24,6 +24,12 @@ public enum NovagramShowAdsGate {
         return UserDefaults(suiteName: udSuite)?.object(forKey: udKey) as? Bool ?? true
     }
 
+    /// Writes the toggle and tells open chats, so the ads gate re-reads it live.
+    static func setEnabled(_ value: Bool) {
+        UserDefaults(suiteName: udSuite)?.set(value, forKey: udKey)
+        NotificationCenter.default.post(name: .novagramShowAdsChanged, object: nil)
+    }
+
     /// Emits the current toggle value immediately, then re-emits whenever the toggle posts
     /// `.novagramShowAdsChanged`. Delivered on the main queue (NotificationCenter observer queue).
     public static var enabledSignal: Signal<Bool, NoError> {

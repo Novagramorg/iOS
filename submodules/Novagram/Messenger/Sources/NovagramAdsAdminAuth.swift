@@ -11,10 +11,17 @@ import CommonCrypto
 // Only a PBKDF2-HMAC-SHA256 digest of "<login>|<password>" (random salt, 600k rounds) ships in the
 // binary — never the credentials themselves. The rounds make an offline guess from the binary
 // expensive; the UI also throttles: 5 wrong tries lock the prompt for 5 minutes.
+//
+// Each login has its own digest and role (`NovagramDeveloperRole`): the developer's and the
+// director's. `submodules/Novagram/scripts/novagram-developer-digest.py` makes a digest for a new
+// login or password.
 enum NovagramAdsAdminAuth {
     private static let saltHex = "6ced8c7f8279470c768f8739196a445b"
     private static let rounds: UInt32 = 600_000
-    private static let credentialDigest = "bf0445f7b4c37604336598ba977f8065c2e90da61c1bbd933d64d018077203eb"
+    private static let credentials: [(digest: String, role: NovagramDeveloperRole)] = [
+        ("bf0445f7b4c37604336598ba977f8065c2e90da61c1bbd933d64d018077203eb", .developer),
+        ("17ca3795cd21c510e781c68eec2df12e1038f8e599cc80751f626a736d7d6fca", .director)
+    ]
 
     private static let maxFailedAttempts = 5
     private static let lockoutDuration: TimeInterval = 5 * 60
@@ -28,12 +35,17 @@ enum NovagramAdsAdminAuth {
 
     // MARK: Verification
 
-    /// `true` when the login (case-insensitive, trimmed) and the exact password match.
+    /// The role whose login (case-insensitive, trimmed) and exact password match, or nil.
     /// Slow on purpose (~0.3–0.6 s on a phone) — call it off the main thread.
-    static func verify(login: String, password: String) -> Bool {
+    static func verify(login: String, password: String) -> NovagramDeveloperRole? {
         let normalizedLogin = login.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard let digest = derive(secret: "\(normalizedLogin)|\(password)") else { return false }
-        return constantTimeEquals(digest, credentialDigest)
+        guard let digest = derive(secret: "\(normalizedLogin)|\(password)") else { return nil }
+        var matched: NovagramDeveloperRole?
+        // Compare with every digest, so the time taken does not tell which login was close.
+        for credential in credentials where constantTimeEquals(digest, credential.digest) {
+            matched = credential.role
+        }
+        return matched
     }
 
     private static func derive(secret: String) -> String? {
@@ -119,17 +131,17 @@ enum NovagramAdsAdminAuth {
 
     // MARK: Prompt
 
-    /// Ask for the admin login + password. `completion(true)` only on a match; cancel, a wrong
-    /// entry and an active lockout all end in `completion(false)` (after explaining why).
-    static func presentPrompt(from viewController: UIViewController, langCode: String, completion: @escaping (Bool) -> Void) {
+    /// Ask for the admin login + password. `completion(role)` only on a match; cancel, a wrong
+    /// entry and an active lockout all end in `completion(nil)` (after explaining why).
+    static func presentPrompt(from viewController: UIViewController, langCode: String, completion: @escaping (NovagramDeveloperRole?) -> Void) {
         guard let presenter = topPresenter(from: viewController) else {
-            completion(false)
+            completion(nil)
             return
         }
         if let lockedUntil {
             let minutes = max(1, Int((lockedUntil.timeIntervalSinceNow / 60).rounded(.up)))
             presentMessage(NovagramAdsAdminStrings.locked(minutes: minutes, langCode: langCode), from: presenter, langCode: langCode)
-            completion(false)
+            completion(nil)
             return
         }
 
@@ -151,25 +163,25 @@ enum NovagramAdsAdminAuth {
             field.textContentType = .password
         }
         alert.addAction(UIAlertAction(title: NovagramAdsAdminStrings.cancel(langCode: langCode), style: .cancel) { _ in
-            completion(false)
+            completion(nil)
         })
         alert.addAction(UIAlertAction(title: NovagramAdsAdminStrings.confirm(langCode: langCode), style: .default) { [weak alert] _ in
             let login = alert?.textFields?.first?.text ?? ""
             let password = alert?.textFields?.last?.text ?? ""
             // The key derivation is deliberately slow; keep it off the main thread.
             DispatchQueue.global(qos: .userInitiated).async {
-                let granted = verify(login: login, password: password)
+                let role = verify(login: login, password: password)
                 DispatchQueue.main.async {
-                    if granted {
+                    if let role {
                         registerSuccess()
-                        completion(true)
+                        completion(role)
                     } else {
                         registerFailure()
                         let text = lockedUntil != nil
                             ? NovagramAdsAdminStrings.locked(minutes: Int(lockoutDuration / 60), langCode: langCode)
                             : NovagramAdsAdminStrings.wrongCredentials(langCode: langCode)
                         presentMessage(text, from: presenter, langCode: langCode)
-                        completion(false)
+                        completion(nil)
                     }
                 }
             }
@@ -195,10 +207,12 @@ enum NovagramAdsAdminAuth {
 }
 
 /// Public entry to the admin check for other Novagram modules (the hidden "Ads Analytics" row asks for
-/// the same login + password as "Remove all ads"). `completion(true)` only on a match.
+/// the same logins as the Developer section). `completion(true)` on a match with any role.
 public enum NovagramAdsAdminGate {
     public static func requestAccess(from viewController: UIViewController, langCode: String, completion: @escaping (Bool) -> Void) {
-        NovagramAdsAdminAuth.presentPrompt(from: viewController, langCode: langCode, completion: completion)
+        NovagramAdsAdminAuth.presentPrompt(from: viewController, langCode: langCode, completion: { role in
+            completion(role != nil)
+        })
     }
 }
 

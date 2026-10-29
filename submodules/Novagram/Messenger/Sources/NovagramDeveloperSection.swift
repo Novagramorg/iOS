@@ -18,12 +18,21 @@ public extension NSNotification.Name {
 // MARK: - Flags
 
 /// Switches from the hidden Developer section (Novagram Settings) for features that are not public
-/// yet. They are per device and off by default. "Remove all ads" is the third switch there; it is
-/// read through `NovagramShowAdsGate`.
+/// yet. They are per device and off by default. "Remove all ads", the first switch there, is read
+/// through `NovagramShowAdsGate`.
 public enum NovagramDeveloperFlags {
     private static let udSuite = "pro_messager"
     private static let currencyRatesViewKey = "novagram_currency_rates_view"
     private static let adsPanelKey = "novagram_ads_panel"
+    // TelegramCore reads this key directly (`novagramAdEventsOff()`), and the Mac app uses it too.
+    private static let adEventsOffKey = "novagram_ads_events_off"
+
+    /// "Don't send ad events": views, clicks, actions and video opens of Novagram and Telegram ads are
+    /// not sent, so an ad the backend shows once per user keeps showing while a developer tests it.
+    public static internal(set) var isAdEventsOff: Bool {
+        get { return self.value(forKey: self.adEventsOffKey) }
+        set { self.setValue(newValue, forKey: self.adEventsOffKey) }
+    }
 
     /// Show the currency rates view.
     public static internal(set) var isCurrencyRatesViewEnabled: Bool {
@@ -78,11 +87,72 @@ public enum NovagramDeveloperFlags {
     }
 }
 
+// MARK: - Roles
+
+/// Who passed the developer login on this device. The login decides the role, and the role decides
+/// which Developer switches show. A switch a role cannot see is turned off when that role logs in, so
+/// it never stays on unseen.
+public enum NovagramDeveloperRole: String {
+    case developer
+    case director
+
+    /// The switches in the Developer section.
+    public enum Switch {
+        case removeAllAds
+        case adEventsOff
+        case currencyRatesView
+        case adsPanel
+    }
+
+    private static let udSuite = "pro_messager"
+    private static let roleKey = "novagram_developer_role"
+
+    /// The developer sees every switch; the director only the ones they use.
+    public func canUse(_ item: Switch) -> Bool {
+        switch self {
+        case .developer:
+            return true
+        case .director:
+            switch item {
+            case .adEventsOff, .adsPanel:
+                return true
+            case .removeAllAds, .currencyRatesView:
+                return false
+            }
+        }
+    }
+
+    /// The role of the last login. A device opened before roles existed was opened by the developer.
+    public static var current: NovagramDeveloperRole {
+        let stored = UserDefaults(suiteName: self.udSuite)?.string(forKey: self.roleKey)
+        return stored.flatMap(NovagramDeveloperRole.init(rawValue:)) ?? .developer
+    }
+
+    /// Stores the role that just logged in and turns off the switches it cannot see.
+    static func didLogIn(_ role: NovagramDeveloperRole) {
+        UserDefaults(suiteName: self.udSuite)?.set(role.rawValue, forKey: self.roleKey)
+        if !role.canUse(.removeAllAds) && !NovagramShowAdsGate.isEnabled {
+            NovagramShowAdsGate.setEnabled(true)
+        }
+        if !role.canUse(.adEventsOff) && NovagramDeveloperFlags.isAdEventsOff {
+            NovagramDeveloperFlags.isAdEventsOff = false
+        }
+        if !role.canUse(.currencyRatesView) && NovagramDeveloperFlags.isCurrencyRatesViewEnabled {
+            NovagramDeveloperFlags.isCurrencyRatesViewEnabled = false
+        }
+        if !role.canUse(.adsPanel) && NovagramDeveloperFlags.isAdsPanelEnabled {
+            NovagramDeveloperFlags.isAdsPanelEnabled = false
+        }
+        NotificationCenter.default.post(name: .novagramDeveloperFlagsChanged, object: nil)
+    }
+}
+
 // MARK: - Reveal
 
 /// The Developer section is not in Novagram Settings by default. Holding the app version line at the
 /// bottom of the Settings tab for `revealDuration` seconds toggles it: showing it asks for the
 /// developer login first (`NovagramAdsAdminAuth`), hiding it needs nothing. Persisted across launches.
+/// The login decides the role (`NovagramDeveloperRole`) and so which switches the section shows.
 public enum NovagramDeveloperSection {
     /// How long the version line must be held.
     public static let revealDuration: TimeInterval = 20.0
@@ -113,10 +183,11 @@ public enum NovagramDeveloperSection {
             guard let host = self.topViewController(context: context) else {
                 return
             }
-            NovagramAdsAdminAuth.presentPrompt(from: host, langCode: langCode) { granted in
-                guard granted else {
+            NovagramAdsAdminAuth.presentPrompt(from: host, langCode: langCode) { role in
+                guard let role else {
                     return
                 }
+                NovagramDeveloperRole.didLogIn(role)
                 self.setRevealed(true)
                 self.confirm(revealed: true, context: context, presentationData: presentationData, langCode: langCode)
             }
@@ -179,6 +250,31 @@ enum NovagramDeveloperStrings {
         case "ru": return "Вкл — на этом устройстве нет рекламы ни Novagram, ни Telegram"
         case "zh": return "开启后，此设备上不显示 Novagram 和 Telegram 的任何广告"
         default:   return "On — no Novagram or Telegram ads on this device"
+        }
+    }
+
+    static func adEventsOffTitle(langCode: String) -> String {
+        switch langCode {
+        case "uz": return "Reklama hodisalarini yubormaslik"
+        case "ru": return "Не отправлять события рекламы"
+        case "zh": return "不发送广告事件"
+        default:   return "Don't send ad events"
+        }
+    }
+
+    static func adEventsOffTip(langCode: String) -> String {
+        switch langCode {
+        case "uz":
+            return "Novagram va Telegram reklamalarining ko'rish, bosish va harakat hodisalari serverga yuborilmaydi, " +
+                   "shuning uchun bir marta ko'rsatiladigan reklama test paytida qayta chiqaveradi. Faqat shu qurilmada."
+        case "ru":
+            return "Просмотры, клики и действия по рекламе Novagram и Telegram не отправляются, поэтому реклама " +
+                   "с одним показом на пользователя продолжает показываться во время теста. Только на этом устройстве."
+        case "zh":
+            return "不发送 Novagram 和 Telegram 广告的浏览、点击和操作事件，因此每位用户只展示一次的广告在测试期间会继续展示。仅限此设备。"
+        default:
+            return "Views, clicks and actions of Novagram and Telegram ads are not sent, so an ad shown once per user " +
+                   "keeps showing while you test. This device only."
         }
     }
 
