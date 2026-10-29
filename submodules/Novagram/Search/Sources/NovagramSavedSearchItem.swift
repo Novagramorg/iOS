@@ -21,7 +21,8 @@ public final class NovagramSavedSearchScope {
     public init(context: AccountContext, location: ChatListControllerLocation, isPlainSearch: Bool) {
         self.context = context
         if case .chatList = location {
-            self.isEnabled = isPlainSearch
+            // "Search features" off: no section and nothing new is saved; the stored searches stay.
+            self.isEnabled = isPlainSearch && NovagramSearchFeatures.isEnabled
         } else {
             self.isEnabled = false
         }

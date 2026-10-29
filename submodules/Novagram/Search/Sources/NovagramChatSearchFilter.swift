@@ -64,7 +64,8 @@ public enum NovagramChatSearchFilter {
     }
 
     public static func wrap(query: String, state: SearchMessagesState?, limit: Int32, search: @escaping Search) -> Signal<(SearchMessagesResult, SearchMessagesState), NoError> {
-        guard let mode = mode(for: query) else {
+        // "Search features" off: quotes and re: are plain text again.
+        guard NovagramSearchFeatures.isEnabled, let mode = mode(for: query) else {
             return search(query, state, limit)
         }
         let request: Request

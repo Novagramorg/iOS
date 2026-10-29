@@ -6,7 +6,7 @@ import TelegramPresentationData
 import NovagramLocalization
 
 /// Translates a global-search query into the user's translation language (Settings → Novagram →
-/// Interface → "Search the translated query too"; off by default).
+/// Search → "Search the translated query too"; off by default, and only while "Search features" is on).
 public enum NovagramQueryTranslator {
     public static let defaultsKey = "novagram_search_translate"
     public static let minQueryLength = 3
@@ -39,7 +39,7 @@ public enum NovagramQueryTranslator {
     /// starts 600 ms late, so typing cancels it; a cached answer comes at once.
     public static func translatedQuery(engine: TelegramEngine, query: String) -> Signal<String?, NoError> {
         let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard isEnabled, query.count >= minQueryLength else {
+        guard NovagramSearchFeatures.isEnabled, isEnabled, query.count >= minQueryLength else {
             return .single(nil)
         }
         let lang = targetLanguage
@@ -128,7 +128,7 @@ public enum NovagramTranslatedSearch {
             return .single(nil)
         }
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.hasPrefix("#"), !trimmed.hasPrefix("$"), NovagramQueryTranslator.isEnabled else {
+        guard !trimmed.hasPrefix("#"), !trimmed.hasPrefix("$"), NovagramSearchFeatures.isEnabled, NovagramQueryTranslator.isEnabled else {
             return .single(nil)
         }
         let translated: Signal<NovagramTranslatedMessages?, NoError> = NovagramQueryTranslator.translatedQuery(engine: engine, query: trimmed)

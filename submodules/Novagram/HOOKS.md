@@ -355,9 +355,10 @@ three calls and delete the two lines.
 92. **Qidiruvda yashirin va qulflangan chatlar**: yashirin chat (Secret Vault) global qidiruvning hech qayerida chiqmaydi (chat, xabar, top/recent, Channels/Apps tablari, peer chip'lari, hashtag/Posts, Downloads, galereya), yashirin ro'yxat ochiq bo'lsa ham. Qulflangan chat (Chat qulfi) nomi chiqadi, xabarlari chiqmaydi. Faqat joriy account.
 93. **Qidiruvda sana oralig'i**: MESSAGES sarlavhasidagi "From All Chats" menyusida "Sanadan…", "Sanagacha…" va "Sanalarni tozalash". Faqat xabarlar bo'limi (Posts/hashtag, Channels va Apps tablarida yo'q). Sarlavhada: `From All Chats · 01.10.26–29.10.26`. Hech narsa saqlanmaydi, qidiruv yopilsa tozalanadi.
 94. **Faqat o'qilmaganlar / Faqat mention'lar**: o'sha menyuda ikkita toggle (yoqilganda ✓, ikkalasi birga ham ishlaydi). Natija qisqa bo'lsa keyingi sahifalar o'zi yuklanadi. Galereya va pleer ham shu ro'yxatni ko'rsatadi.
-95. **Tarjima qilingan so'rov bo'yicha qidirish**: Novagram Settings → Interfeys → "Tarjima qilingan so'rov bo'yicha ham qidirish" (`pro_messager` / `novagram_search_translate`, default o'chiq). Yoqilsa Chats tabidagi global qidiruv so'rovni `auto_translate_lang` tiliga (bo'lmasa `en`) tarjima qiladi va Messages ustida "Tarjima: …" bo'limini ko'rsatadi. So'rov Telegram'ning tarjima xizmatiga yuboriladi.
-96. **Chat ichida aniq ibora va regex qidiruvi**: chat qidiruvida `"ikki so'z"` (to'g'ri yoki egri qo'shtirnoq) faqat shu iborani o'z ichiga olgan xabarlarni qoldiradi (katta-kichik harf va diakritika farqsiz); `re:pattern` chat tarixini ko'rib chiqadi (sahifasi 100, ko'pi bilan 2000 xabar) va regular expression mos kelganlarini ko'rsatadi, noto'g'ri pattern oddiy qidiruv bo'ladi. Hisoblagich topilganlar sonini ko'rsatadi. Oddiy so'rov avvalgidek bitta so'rov. Ko'rsatma: About Novagram kirish matnining oxirida.
+95. **Tarjima qilingan so'rov bo'yicha qidirish**: Novagram Settings → Qidiruv → "Tarjima qilingan so'rov bo'yicha ham qidirish" (faqat "Qidiruv imkoniyatlari" yoqiq bo'lganda ko'rinadi) (`pro_messager` / `novagram_search_translate`, default o'chiq). Yoqilsa Chats tabidagi global qidiruv so'rovni `auto_translate_lang` tiliga (bo'lmasa `en`) tarjima qiladi va Messages ustida "Tarjima: …" bo'limini ko'rsatadi. So'rov Telegram'ning tarjima xizmatiga yuboriladi.
+96. **Chat ichida aniq ibora va regex qidiruvi**: chat qidiruvida `"ikki so'z"` (to'g'ri yoki egri qo'shtirnoq) faqat shu iborani o'z ichiga olgan xabarlarni qoldiradi (katta-kichik harf va diakritika farqsiz); `re:pattern` chat tarixini ko'rib chiqadi (sahifasi 100, ko'pi bilan 2000 xabar) va regular expression mos kelganlarini ko'rsatadi, noto'g'ri pattern oddiy qidiruv bo'ladi. Hisoblagich topilganlar sonini ko'rsatadi. Oddiy so'rov avvalgidek bitta so'rov. Ko'rsatma: About Novagram'da ikkita bo'lim ("Exact phrase search in a chat", "Regex search in a chat": misollar va belgilar jadvali).
 97. **Saqlangan va qadalgan qidiruvlar**: global qidiruvda natija (chat yoki xabar) ochilganda yozilgan so'rov saqlanadi (oxirgi 20 ta + cheklanmagan qadalganlar, har akkaunt alohida, `pro_messager` / `novagram_saved_searches_<peer id>`). Bo'sh qidiruv ekranida Recent ustida "Saqlangan qidiruvlar" bo'limi: avval qadalganlar ("Qadalgan" belgisi), keyin oxirgilar. Bosilsa matn qidiruv maydoniga qaytadi va qidiruv qayta ishlaydi; uzoq bosilsa "Qadash" / "Qadashni olish" va "O'chirish". Akkaunt logout bo'lsa (boshqa qurilmadan tugatilgan sessiya ham) o'chadi.
+98. **Qidiruv imkoniyatlari switch'i**: Novagram Settings → Qidiruv → "Qidiruv imkoniyatlari" (`pro_messager` / `novagram_search_features`, default yoqiq). O'chirilsa 93–97 ishlamaydi: "From All Chats" menyusida sana va filtrlar yo'q, chat ichida `"..."` va `re:` oddiy matn, saqlangan qidiruvlar bo'limi yashirin va yangisi saqlanmaydi (saqlanganlari o'chmaydi), tarjima bo'limi yo'q. 92 (yashirin va qulflangan chatlar) har doim ishlaydi. Telegram fayllarida hook yo'q.
 
 ---
 
@@ -7848,3 +7849,26 @@ On an upstream update: if `ChatListRecentEntry` gains a case, the `<` lhs line o
 `else`), but `.peer`'s inner switch and the other switches need nothing more; a new `ChatListRecentEntry` switch
 elsewhere needs a `.novagramSavedSearch` case. If upstream renames `search(filter:query:)` on the search container,
 point #276 at the method that sets the search field text.
+
+---
+
+## 📌 Search features switch (2026-10-29)
+
+Feature 98. No hook in a Telegram file: every gate is inside our modules. Owner's idea (2026-10-29): one switch for
+the search extras. Settings → Novagram → a new "SEARCH" section (`NovagramSection.search`, stable ids 17–19, right
+after Interface) holds "Search features" (`pro_messager` / `novagram_search_features`, Bool, default ON, deep-link
+slug `search-features`) and the translated-query switch, which moved there from Interface and shows only while
+"Search features" is on (its key `novagram_search_translate` is unchanged).
+
+| File (ours) | Gate |
+| --- | --- |
+| `Search/Sources/NovagramSearchFeatures.swift` | the key and `isEnabled` (missing key = on) |
+| `Search/Sources/NovagramSearchFilter.swift` | `menuItems` returns `[]`: no dates / Unread only / Mentions only items |
+| `Search/Sources/NovagramChatSearchFilter.swift` | `wrap` passes the query through: `"..."` and `re:` are plain text |
+| `Search/Sources/NovagramSavedSearchItem.swift` | `NovagramSavedSearchScope.isEnabled` false: no section, nothing saved; the stored JSON stays |
+| `Search/Sources/NovagramTranslatedSearch.swift` | `translatedQuery` and `section` return nil: no section, no translate request |
+
+The privacy filter (feature 92, `NovagramSearchPrivacy`) never reads this switch: hidden chats stay out of search
+and locked chats' messages stay hidden either way. A search that is already open keeps what it had; the switch applies
+to the next search (the pane builds its scope and filter once). The two About entries say how to turn it off.
+

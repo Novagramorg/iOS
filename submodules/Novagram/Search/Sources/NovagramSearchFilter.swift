@@ -160,7 +160,7 @@ public final class NovagramSearchFilter {
     /// Our items for the end of the "From All Chats" menu. `isAvailable` is false where search has no
     /// message dates (Channels and Apps tabs).
     public func menuItems(context: AccountContext, presentationData: PresentationData, isAvailable: Bool, push: @escaping (ViewController) -> Void) -> [ContextMenuItem] {
-        guard isAvailable else {
+        guard isAvailable, NovagramSearchFeatures.isEnabled else {
             return []
         }
         let l10n = NovagramL10n(languageCode: NovagramL10n.languageKey(for: presentationData.strings))

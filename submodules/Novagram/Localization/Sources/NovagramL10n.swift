@@ -122,6 +122,23 @@ public struct NovagramL10n {
         pick(en: "Remove", uz: "O'chirish", ru: "Удалить", zh: "移除")
     }
 
+    public var settings_section_search: String {
+        pick(en: "SEARCH", uz: "QIDIRUV", ru: "ПОИСК", zh: "搜索")
+    }
+
+    public var settings_searchFeatures_title: String {
+        pick(en: "Search features", uz: "Qidiruv imkoniyatlari", ru: "Возможности поиска", zh: "搜索功能")
+    }
+
+    public var settings_searchFeatures_subtitle: String {
+        pick(
+            en: "Dates, Unread only and Mentions only in global search, \"exact phrase\" and re: inside a chat, and saved searches. Hidden chats stay out of search either way.",
+            uz: "Global qidiruvda sanalar, \"Faqat o'qilmaganlar\" va \"Faqat mention'lar\", chat ichida \"aniq ibora\" va re:, hamda saqlangan qidiruvlar. Yashirin chatlar har holda qidiruvda chiqmaydi.",
+            ru: "Даты, «Только непрочитанные» и «Только упоминания» в глобальном поиске, \"точная фраза\" и re: в чате и сохранённые запросы. Скрытые чаты в поиск не попадают в любом случае.",
+            zh: "全局搜索中的日期、“仅未读”和“仅提及”，聊天内的“完整短语”和 re:，以及已保存的搜索。无论如何，隐藏聊天都不会出现在搜索中。"
+        )
+    }
+
     public var settings_searchTranslate_title: String {
         pick(en: "Search the translated query too", uz: "Tarjima qilingan so'rov bo'yicha ham qidirish", ru: "Искать и по переводу запроса", zh: "也按翻译后的查询搜索")
     }

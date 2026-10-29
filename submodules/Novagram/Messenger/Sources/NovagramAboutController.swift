@@ -863,10 +863,10 @@ private func allFeatureSpecs() -> [FeatureSpec] {
                 zh: "Telegram 先找出包含这些词的消息，然后 Novagram 只保留这些词按此顺序紧挨在一起的消息。不区分大小写和重音符号：\"Salom Dunyo\" 也能找到“salom dunyo”。计数显示找到了多少条完全匹配，用箭头在它们之间跳转；底部的列表按钮会把它们全部列出，向下滚动会继续加载。"
             ),
             disable: L3(
-                en: "Nothing to turn off: type the words without quotes and the normal Telegram search runs.",
-                uz: "O'chiradigan narsa yo'q: so'zlarni qo'shtirnoqsiz yozsangiz, oddiy Telegram qidiruvi ishlaydi.",
-                ru: "Выключать нечего: напишите слова без кавычек, и сработает обычный поиск Telegram.",
-                zh: "无需关闭：不加引号输入词语即为普通的 Telegram 搜索。"
+                en: "Settings → Novagram → Search → turn off “Search features”: quotes are then searched as normal text. You can also just type the words without quotes.",
+                uz: "Sozlamalar → Novagram → Qidiruv → “Qidiruv imkoniyatlari”ni o'chiring: shunda qo'shtirnoqlar oddiy matn sifatida qidiriladi. Yoki so'zlarni qo'shtirnoqsiz yozing.",
+                ru: "Настройки → Novagram → Поиск → выключите «Возможности поиска»: тогда кавычки ищутся как обычный текст. Или просто пишите слова без кавычек.",
+                zh: "设置 → Novagram → 搜索 → 关闭“搜索功能”：之后引号会按普通文字搜索。也可以直接不加引号输入词语。"
             )
         ),
         // Regex search in a chat
@@ -886,10 +886,10 @@ private func allFeatureSpecs() -> [FeatureSpec] {
                 zh: "Novagram 读取聊天中最近的消息（最多 2000 条，每次 100 条），保留文字或说明与规则匹配的消息。匹配结果边读边显示，计数显示目前已找到的数量。不区分大小写。符号：. 任意一个字符，\\d 数字，\\w 字母或数字，\\s 空格，* 零次或多次，+ 一次或多次，? 可有可无，{3} 正好 3 次，^ 消息开头，$ 消息结尾，| 或，( ) 分组，[abc] 其中任一字符，\\b 单词边界。要查找 . + ? ( ) 本身，请在前面加 \\。写错的规则（例如 re:(salom）会按 re: 后面的文字进行普通搜索。过慢的规则会自动停止。"
             ),
             disable: L3(
-                en: "Nothing to turn off: remove re: and the normal Telegram search runs. Closing the search stops the scan.",
-                uz: "O'chiradigan narsa yo'q: re: ni olib tashlasangiz, oddiy Telegram qidiruvi ishlaydi. Qidiruvni yopish skanni to'xtatadi.",
-                ru: "Выключать нечего: уберите re:, и сработает обычный поиск Telegram. Закрытие поиска останавливает проверку.",
-                zh: "无需关闭：去掉 re: 即为普通的 Telegram 搜索。关闭搜索会停止扫描。"
+                en: "Settings → Novagram → Search → turn off “Search features”: re: is then searched as normal text. You can also just remove re:. Closing the search stops the scan.",
+                uz: "Sozlamalar → Novagram → Qidiruv → “Qidiruv imkoniyatlari”ni o'chiring: shunda re: oddiy matn sifatida qidiriladi. Yoki re: ni olib tashlang. Qidiruvni yopish skanni to'xtatadi.",
+                ru: "Настройки → Novagram → Поиск → выключите «Возможности поиска»: тогда re: ищется как обычный текст. Или просто уберите re:. Закрытие поиска останавливает проверку.",
+                zh: "设置 → Novagram → 搜索 → 关闭“搜索功能”：之后 re: 会按普通文字搜索。也可以直接去掉 re:。关闭搜索会停止扫描。"
             )
         )
     ]
