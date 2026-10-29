@@ -32,6 +32,7 @@ import UndoUI
 import Postbox
 import FetchManagerImpl
 import NovagramSponsored
+import NovagramSearch // Novagram
 import AdsInfoScreen
 import AnimationCache
 import MultiAnimationRenderer
@@ -2041,6 +2042,7 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
 
         if enableRecentlySearched {
             fixedRecentlySearchedPeers = context.engine.peers.recentlySearchedPeers()
+            |> map { NovagramSearchPrivacy.keptRecentlySearchedPeers($0) } // Novagram: no vaulted chats in recent searches
             |> map { peers -> [RecentlySearchedPeer] in
                 var result: [RecentlySearchedPeer] = []
                 let _ = previousRecentlySearchedPeerOrder.modify { current in
@@ -2208,6 +2210,7 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                 |> map { presentationData, selectionState -> ([ChatListSearchEntry], Bool, String?)? in
                     var entries: [ChatListSearchEntry] = []
                     var existingMessageIds = Set<MessageId>()
+                    let novagramPrivacy = NovagramSearchPrivacyPass() // Novagram: hidden/locked chats stay out of search
 
                     var allPaused = true
                     for item in downloadItems.inProgressItems {
@@ -2222,6 +2225,7 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                             continue
                         }
                         existingMessageIds.insert(item.message.id)
+                        if novagramPrivacy.hidesMessage(item.message) { continue } // Novagram
 
                         let message = item.message
 
@@ -2255,6 +2259,7 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                             continue
                         }
                         existingMessageIds.insert(item.message.id)
+                        if novagramPrivacy.hidesMessage(item.message) { continue } // Novagram
 
                         let message = EngineMessage(item.message)
 
@@ -3058,6 +3063,8 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
             )
             |> map { accountPeer, foundLocalPeers, foundRemotePeers, foundRemoteMessages, foundPublicMessages, presentationData, searchState, selectionState, resolvedMessage, recentPeers, allAndFoundThreads, adsHidden -> ([ChatListSearchEntry], Bool, String?)? in
                 let isSearching = foundRemotePeers.3 || foundRemoteMessages.1 || foundPublicMessages.1
+                let novagramPrivacy = NovagramSearchPrivacyPass() // Novagram: hidden/locked chats stay out of search
+                let resolvedMessage = resolvedMessage.flatMap { novagramPrivacy.hidesMessage($0) ? nil : $0 } // Novagram
                 var entries: [ChatListSearchEntry] = []
                 var index = 0
 
@@ -3076,6 +3083,7 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                 let _ = currentRemotePeers.swap((foundRemotePeers.0, foundRemotePeers.1, foundRemotePeers.2))
 
                 let filteredPeer: (EnginePeer, EnginePeer) -> Bool = { peer, accountPeer in
+                    if novagramPrivacy.hidesPeer(peer) { return false } // Novagram: vaulted chats never show
                     if excludedPeerIds.contains(peer.id) {
                         return false
                     }
@@ -3455,6 +3463,7 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                                 continue
                             }
                             existingPostIds.insert(message.id)
+                            if novagramPrivacy.hidesMessage(message) { continue } // Novagram
 
                             let headerId = listMessageDateHeaderId(timestamp: message.timestamp)
                             if firstHeaderId == nil {
@@ -3481,6 +3490,7 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                                     continue
                                 }
                                 existingMessageIds.insert(message.id)
+                                if novagramPrivacy.hidesMessage(message) { continue } // Novagram
 
                                 if searchState.deletedMessageIds.contains(message.id) {
                                     continue
@@ -3537,6 +3547,7 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                 return ([], 0, false)
             }
         }
+        |> map { NovagramSearchPrivacy.keptMessagePage($0) } // Novagram: same messages in the gallery and the player
 
         let loadMore = {
             updateSearchContexts { previousMap in
@@ -4596,6 +4607,7 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
             self.updatedRecentPeersDisposable.set(context.engine.peers.managedUpdatedRecentPeers().startStrict())
         }
 
+        recentItems = recentItems |> map { items in var items = items; items.entries = NovagramSearchPrivacy.kept(items.entries, peerId: { if case let .peerId(id, _) = $0.stableId { return id } else { return nil } }); return items } // Novagram
         self.recentDisposable.set((combineLatest(queue: .mainQueue(),
             presentationDataPromise.get(),
             recentItems

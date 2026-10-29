@@ -40,6 +40,7 @@ import SectionTitleContextItem
 import EdgeEffect
 import ComponentFlow
 import ComponentDisplayAdapters
+import NovagramSearch // Novagram
 
 private enum ChatListTokenId: Int32 {
     case archive
@@ -455,6 +456,7 @@ public final class ChatListSearchContainerNode: SearchDisplayControllerContentNo
                     |> map { local -> [EnginePeer] in
                         return Array(local.compactMap { $0.peer }.prefix(10).map(EnginePeer.init))
                     }
+                    |> map { NovagramSearchPrivacy.keptPeers($0) } // Novagram: no vaulted chats in the peer chips
                 } else {
                     return .single([])
                 }

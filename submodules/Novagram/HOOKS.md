@@ -177,7 +177,7 @@ three calls and delete the two lines.
 
 ## 📋 Novagram features va hooklar (2026-10-10)
 
-> 1–44, 86, 89 va 91: Settings → Novagram Settings (ilovadagi tartibda). 45–85, 87 va 88: Settings'dan tashqaridagi features.
+> 1–44, 86, 89 va 91: Settings → Novagram Settings (ilovadagi tartibda). 45–85, 87, 88 va 92: Settings'dan tashqaridagi features.
 > Hooks: Telegram-owned fayllardagi barcha Novagram o'zgarishlari, feature bo'yicha. Har bir hookning kodi va anchor'i quyidagi 📌 bo'limlarda.
 
 ### 1. Novagram Settings
@@ -350,6 +350,10 @@ three calls and delete the two lines.
 84. **Kontaktlar roziligi (5.1.2)**: iOS Contacts ruxsatidan oldin kontaktlar serverga yuklanishiga rozilik so'raladi.
 85. **Demo login**: Apple Review demo raqami kiritilsa SMS kod avtomatik to'ldiriladi.
 
+#### Qidiruv
+
+92. **Qidiruvda yashirin va qulflangan chatlar**: yashirin chat (Secret Vault) global qidiruvning hech qayerida chiqmaydi (chat, xabar, top/recent, Channels/Apps tablari, peer chip'lari, hashtag/Posts, Downloads, galereya), yashirin ro'yxat ochiq bo'lsa ham. Qulflangan chat (Chat qulfi) nomi chiqadi, xabarlari chiqmaydi. Faqat joriy account.
+
 ---
 
 ### 3. Hooks
@@ -481,6 +485,17 @@ three calls and delete the two lines.
 91. `CallListNodeEntries.swift`, `CallListControllerNode.swift` (CallListUI): yashirin chatlarning qo'ng'iroqlari ko'rinmaydi.
 92. `Toolbar.swift`, `ToolbarNode.swift` (Display), `TabBarContollerNode.swift` (TabBarUI): toolbar'da qo'shimcha "Yashirish" tugmasi.
 93. `AccountContext.swift` (AccountContext), `SharedAccountContext.swift` (TelegramUI): yashirin ro'yxat ekrani factory'si.
+
+#### Qidiruv
+
+248. `ChatListSearchListPaneNode.swift` (ChatListUI): asosiy natijalar map'ida har emission uchun bitta `NovagramSearchPrivacyPass`; `filteredPeer` yashirin chatni o'tkazmaydi (local, global, reklama, Novagram promoted, recently searched va `.expand` sanog'i shu orqali); `resolvedMessage`, Posts/hashtag va xabarlar sikli yashirin/qulflangan chat xabarini tashlaydi.
+249. `ChatListSearchListPaneNode.swift` (ChatListUI): Downloads tabi, ikkala sikl.
+250. `ChatListSearchListPaneNode.swift` (ChatListUI): recent searches manbasi (`fixedRecentlySearchedPeers`) va recent ro'yxat (Chats, Channels, Apps tablari) `recentItems` emission'i.
+251. `ChatListSearchListPaneNode.swift` (ChatListUI): galereya va pleer ochadigan `foundMessages` sahifasi.
+252. `ChatListRecentPeersListItem.swift` (ChatListUI): top peers qatoriga `peerFilter`.
+253. `ChatListSearchContainerNode.swift` (ChatListUI): `suggestedPeers` (peer filter chip'lari).
+254. `HashtagSearchGlobalChatContents.swift` (HashtagSearchUI): hashtag / public posts ro'yxati, boshlang'ich va har yuklangan sahifa (`updateHistoryView`).
+255. `ChatListUI/BUILD`, `HashtagSearchUI/BUILD`: `//submodules/Novagram/Search:NovagramSearch`.
 
 #### Xabar eslatmasi
 
@@ -645,7 +660,7 @@ three calls and delete the two lines.
 
 196. `AuthorizationUI/BUILD`: AppleReview, Brand, Localization, AutoProxy, BotTokenLogin.
 197. `CallListUI/BUILD`: SecretVault.
-198. `ChatListUI/BUILD`: StoryUnlock, ChatLock, SecretVault, ForeignUserBlock, NovagramAds, Localization.
+198. `ChatListUI/BUILD`: StoryUnlock, ChatLock, SecretVault, ForeignUserBlock, NovagramAds, Localization, Search (#255).
 199. `ContactListUI/BUILD`: SecretVault, ChatLock.
 200. `DeviceAccess/BUILD`: ContactsConsent.
 201. `InAppPurchaseManager/BUILD`: AppStoreIAP (StoreKit davridagi deplar olib tashlangan).
@@ -7585,3 +7600,42 @@ Upstream still ships them (checked at `fb0e62ba8a`, 2026-10-22).
 
 **Upstream pull:** if upstream still adds `AremacFS-*.otf` or `UIAppFonts`, keep them out. If upstream removes them
 itself, take upstream's version and drop this entry.
+
+---
+
+## 📌 Search privacy (2026-10-29)
+
+Feature 92, hooks #248–#255. New module `submodules/Novagram/Search/` (`NovagramSearch`, deps TelegramCore,
+NovagramChatLock, NovagramSecretVault; no Postbox). It will also hold the later search features (dates, unread /
+mentions filters, translated query, in-chat phrase / regex).
+
+Rules (owner):
+
+- A chat in the Secret Vault never shows in search, also while the vault list is revealed. The check reads the
+  STORED list (`SecretVaultManager.vaultedPeerIds()`), not `removingVaulted(...)`, which does nothing while the
+  vault has no PIN. A secret chat goes too when its user is vaulted; an old basic group goes when the supergroup it
+  migrated to is vaulted.
+- A chat locked with Chat Lock keeps its name row; its messages never show. `isLocked` reads the keychain, so
+  `NovagramSearchPrivacyPass` caches it per peer for one emission. Not gated on the master PIN: `removeMaster()`
+  keeps the per-chat locks and opening such a chat still asks for its PIN.
+- Pure, per emission: every hook makes a new pass or calls a `NovagramSearchPrivacy` helper (which makes its own).
+  Nothing is written into the pane's cross-emission containers (`currentRemotePeers`, `searchContextsValue`,
+  `previousRecentlySearchedPeersState`, …). The recent-searches filter runs before upstream's ordering
+  (`previousRecentlySearchedPeerOrder`), so that state only ever sees kept peers.
+- Current account only.
+
+| File | Change |
+| --- | --- |
+| `ChatListUI/Sources/ChatListSearchListPaneNode.swift` | `import NovagramSearch`. Main results map (#248): after `let isSearching = …`, `let novagramPrivacy = NovagramSearchPrivacyPass()` and `let resolvedMessage = resolvedMessage.flatMap { … }`; first line of `filteredPeer`: `if novagramPrivacy.hidesPeer(peer) { return false }`; after `existingPostIds.insert(message.id)` and `existingMessageIds.insert(message.id)`: `if novagramPrivacy.hidesMessage(message) { continue }`. Downloads map (#249): a pass after `var existingMessageIds`, and `if novagramPrivacy.hidesMessage(item.message) { continue }` after both `existingMessageIds.insert(item.message.id)`. Recents (#250): `\|> map { NovagramSearchPrivacy.keptRecentlySearchedPeers($0) }` right after `context.engine.peers.recentlySearchedPeers()` in `fixedRecentlySearchedPeers`, and before `self.recentDisposable.set(…)` a one-line `recentItems = recentItems \|> map { … NovagramSearchPrivacy.kept(items.entries, peerId: { the `.peerId` of the entry's `stableId` }) … }`. Gallery / player (#251): `\|> map { NovagramSearchPrivacy.keptMessagePage($0) }` after `let foundMessages = searchContexts.get() \|> map { … }`. 12 lines. |
+| `ChatListUI/Sources/ChatListRecentPeersListItem.swift` | `import NovagramSearch`; `, peerFilter: { !NovagramSearchPrivacy.hidesPeer($0) }` as a new last argument of `ChatListSearchRecentPeersNode(…)` (#252). 2 lines. |
+| `ChatListUI/Sources/ChatListSearchContainerNode.swift` | `import NovagramSearch`; `\|> map { NovagramSearchPrivacy.keptPeers($0) }` after the `searchPeers` map of `suggestedPeers` (#253). 2 lines. |
+| `HashtagSearchUI/Sources/HashtagSearchGlobalChatContents.swift` | `import NovagramSearch`; in `updateHistoryView`, after `var entries = …`: `entries = NovagramSearchPrivacy.kept(entries, message: { $0.message })`, which covers the first page and every `loadMore` page (#254). 2 lines. |
+| `ChatListUI/BUILD`, `HashtagSearchUI/BUILD` | `"//submodules/Novagram/Search:NovagramSearch"` (#255). |
+
+Not filtered on purpose: forum topics (`foundThreads`) only show inside the forum the user already opened; the
+`totalCount` of a message section (server count) and the result count `HashtagSearchGlobalChatContents` hands to
+`hashtagSearchResultsUpdate` stay as the server sent them.
+
+On an upstream update: the hooks sit next to upstream lines that rarely move (`filteredPeer`, the two
+`existing…Ids.insert`, `recentlySearchedPeers()`, `self.recentDisposable.set`). If `ChatListRecentEntryStableId`
+loses `.peerId(id, section)`, #250's sink closure stops compiling: rewrite it to read the entry's peer id.

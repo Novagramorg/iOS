@@ -33,6 +33,7 @@ swift_library(
         "//submodules/UIKitRuntimeUtils",
         "//submodules/TelegramUI/Components/HorizontalTabsComponent",
         "//submodules/TelegramUI/Components/GlassBackgroundComponent",
+        "//submodules/Novagram/Search:NovagramSearch",
     ],
     visibility = [
         "//visibility:public",

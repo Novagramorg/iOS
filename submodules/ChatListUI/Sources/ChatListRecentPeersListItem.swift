@@ -8,6 +8,7 @@ import TelegramPresentationData
 import ChatListSearchRecentPeersNode
 import ContextUI
 import AccountContext
+import NovagramSearch // Novagram
 
 class ChatListRecentPeersListItem: ListViewItem {
     var neighborDescriptor: AnyEquatable {
@@ -144,6 +145,7 @@ class ChatListRecentPeersListItemNode: ListViewItemNode {
                             isPeerSelected: { _ in
                                 return false
                             }
+                            , peerFilter: { !NovagramSearchPrivacy.hidesPeer($0) } // Novagram: no vaulted chats in top peers
                         )
                         strongSelf.ready.set(peersNode.isReady)
                         strongSelf.peersNode = peersNode

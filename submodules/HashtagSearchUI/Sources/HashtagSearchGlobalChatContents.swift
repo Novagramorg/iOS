@@ -3,6 +3,7 @@ import UIKit
 import SwiftSignalKit
 import TelegramCore
 import AccountContext
+import NovagramSearch // Novagram
 
 final class HashtagSearchGlobalChatContents: ChatCustomContentsProtocol {
     private final class Impl {
@@ -84,6 +85,7 @@ final class HashtagSearchGlobalChatContents: ChatCustomContentsProtocol {
         
         private func updateHistoryView(updateType: EngineViewUpdateType) {
             var entries = self.sourceHistoryView?.entries ?? []
+            entries = NovagramSearchPrivacy.kept(entries, message: { $0.message }) // Novagram: hidden/locked chats stay out of search
             entries.sort(by: { $0.message.index < $1.message.index })
 
             let mergedHistoryView = EngineRawMessageHistoryView(tag: nil, namespaces: .just(Set([Namespaces.Message.Cloud])), entries: entries, holeEarlier: self.sourceHistoryView?.holeEarlier ?? false, holeLater: false, isLoading: false)
