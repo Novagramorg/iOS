@@ -308,7 +308,7 @@ Every V2 block-media kind lays out **flush** with the bubble interior (0 inset, 
 
 `InstantPageBlock.audio` renders in V2 as a control **styled exactly like the standard music message bubble** (`ChatMessageInteractiveFileNode`'s music layout) — a dedicated `InstantPageV2AudioContentNode`, NOT the V1 `InstantPageAudioNode` (which V2 used in the first iteration and which still backs V1's full-page Instant View). It replaces the earlier inert grey `.mediaPlaceholder(kind: .audio)`. Playback stays on `InstantPageMediaPlaylist`, with two deliberate behavior changes for the rich-message context: the shared playlist identity is **message-scoped** so concurrent rich-message audio bubbles don't collide, and rich-message audio files are fetched via a **message reference** (not the synthesized webpage) so a stale file reference can revalidate.
 
-Specs: [`2026-06-02-instantpage-v2-audio-design.md`](docs/superpowers/specs/2026-06-02-instantpage-v2-audio-design.md) (initial port) + [`2026-06-02-instantpage-v2-audio-file-style-design.md`](docs/superpowers/specs/2026-06-02-instantpage-v2-audio-file-style-design.md) (file-bubble styling). Plans: [`2026-06-02-instantpage-v2-audio.md`](docs/superpowers/plans/2026-06-02-instantpage-v2-audio.md) + [`2026-06-02-instantpage-v2-audio-file-style.md`](docs/superpowers/plans/2026-06-02-instantpage-v2-audio-file-style.md).
+Specs: `2026-06-02-instantpage-v2-audio-design.md` (initial port) + `2026-06-02-instantpage-v2-audio-file-style-design.md` (file-bubble styling). Plans: `2026-06-02-instantpage-v2-audio.md` + `2026-06-02-instantpage-v2-audio-file-style.md`. (not in the repo: none of the four was ever committed.)
 
 ### Where things live
 
@@ -433,8 +433,8 @@ downloaded/played on tap-to-gallery, and image auto-download ignored per-message
 low-level module also used by web Instant View / `BrowserUI`). HLS inline-range preloading and
 live-photo are deliberately **out of scope** (they fall back to tap-to-gallery).
 
-Spec: [`docs/superpowers/specs/2026-07-09-instantpage-v2-video-autodownload-autoplay-design.md`](docs/superpowers/specs/2026-07-09-instantpage-v2-video-autodownload-autoplay-design.md).
-Plan: [`docs/superpowers/plans/2026-07-09-instantpage-v2-video-autodownload-autoplay.md`](docs/superpowers/plans/2026-07-09-instantpage-v2-video-autodownload-autoplay.md).
+Spec: `docs/superpowers/specs/2026-07-09-instantpage-v2-video-autodownload-autoplay-design.md`.
+Plan: `docs/superpowers/plans/2026-07-09-instantpage-v2-video-autodownload-autoplay.md`. (not in the repo: neither was ever committed.)
 
 ### Where things live
 
@@ -761,7 +761,7 @@ markdown-send gate above.
 
 `InstantPageListItem` carries a first-class `checked: Bool?` — the **third** associated value of `.text(RichText, String?, Bool?)` / `.blocks([InstantPageBlock], String?, Bool?)`, orthogonal to the ordered-list `num` — representing a GitHub-style task-list checkbox. `nil` = not a checkbox item, `false` = unchecked, `true` = checked. Covers markdown parse, Postbox + FlatBuffers serialization, Telegram API transmission, display (V1 + V2), the edit round-trip, and previews.
 
-Spec: [`docs/superpowers/specs/2026-05-27-instantpage-list-checkbox-design.md`](docs/superpowers/specs/2026-05-27-instantpage-list-checkbox-design.md). Plan: [`docs/superpowers/plans/2026-05-27-instantpage-list-checkbox.md`](docs/superpowers/plans/2026-05-27-instantpage-list-checkbox.md).
+Spec: `docs/superpowers/specs/2026-05-27-instantpage-list-checkbox-design.md`. Plan: `docs/superpowers/plans/2026-05-27-instantpage-list-checkbox.md`. (not in the repo: deleted by upstream commit `b1f8b2f3c4` "Cleanup", 2026-06-02, which `main` no longer carries since the 2026-10-28 re-root. `git show b1f8b2f3c4^:docs/superpowers/<path>` reads them from the old refs or `~/Documents/Novagram-backups/Telegram-iOS-before-reroot-2026-10-28.bundle`.)
 
 ### Where things live
 
@@ -814,7 +814,7 @@ Non-obvious invariants:
 
 `InstantPageBlock.blockQuote` carries `(blocks: [InstantPageBlock], caption: RichText)` — a sequence of nested page blocks (paragraphs, headings, lists, code, even nested quotes), not the legacy text-only payload. `.pullQuote` is unchanged (still `(text: RichText, caption: RichText)`; the TL API has no `pullQuoteBlocks` constructor).
 
-Spec: [`docs/superpowers/specs/2026-05-29-instantpage-blockquote-blocks-design.md`](docs/superpowers/specs/2026-05-29-instantpage-blockquote-blocks-design.md).
+Spec: `docs/superpowers/specs/2026-05-29-instantpage-blockquote-blocks-design.md`. (not in the repo: deleted by upstream commit `b1f8b2f3c4` "Cleanup", 2026-06-02, which `main` no longer carries since the 2026-10-28 re-root. `git show b1f8b2f3c4^:docs/superpowers/<path>` reads them from the old refs or `~/Documents/Novagram-backups/Telegram-iOS-before-reroot-2026-10-28.bundle`.)
 
 ### Where things live
 
@@ -1687,3 +1687,65 @@ generic "Message".
   selection is active. The bubble re-applies a shown highlight after every layout,
   and a quote missing from a collapsed partial page expands Show more (fetching the full page if
   needed) and is highlighted there; the "quote not found" toast never fires for a partial page.
+
+## Overview (moved from the root CLAUDE.md, 2026-10-29)
+
+The root `CLAUDE.md` carried this overview until it passed its 150k-character limit; it is kept here verbatim.
+
+Typed markdown with structure the regular message-entity set can't represent (headings, lists, tables, formulas, nested blockquotes) is sent as a **rich message** — a `RichTextMessageAttribute` carrying an `InstantPage`, drawn by `ChatMessageRichDataBubbleContentNode` via the **InstantPage V2** renderer (with AI-streaming progressive reveal, inline custom emoji, and entity cases). The detailed architecture and non-obvious invariants — streaming reveal, V2 table/text-box layout, custom-emoji & entity round-trips, task-list checkboxes, nested blockquotes, thinking blocks, the markdown send / edit / copy / paste paths, and surfacing rich-message media through the shared-media/gallery/preview pipelines via `Message.effectiveMedia` — live in [`docs/instantpage-richtext.md`](instantpage-richtext.md).
+
+**Inline buttons & document blocks** — `textButton` (inline, inside `RichText`),
+`pageBlockButtonRow`, and `pageBlockDocument`, from the TL change that reshaped
+`keyboardButton`/`keyboardInlineButton` (first unifying the 16 per-behaviour constructors into two,
+then splitting `keyboardInlineButton` into its own `KeyboardInlineButton` type with a matching
+`keyboardInlineButtonRow` that `replyInlineMarkup.rows` carries). All three are modelled losslessly (Postbox + FlatBuffers +
+both Api directions) **and rendered in V2**; V1 Instant View still skips them. The server emits all
+three. `pageBlockDocument` is also produced client-side — the
+**RichText article editor produces it**: attaching a file (Files tab) makes a `MediaKind.document`
+block that sends as `InstantPageBlock.document`, and tapping a downloaded one in the bubble opens it
+via `openMessage(…, mediaSubject: .richTextMedia(fileId))`.
+
+The load-bearing invariants are in [`docs/instantpage-richtext.md`](instantpage-richtext.md)
+under "Inline buttons & document blocks". The ones that bite hardest: `textButton` follows the inline
+**formula** attachment path (real run-delegate ascent/descent, top-level item) and *not* the
+inline-image path; the attachment must carry its own measurements because the line-breaker cannot
+re-measure; interactive V2 items route taps through a **pageView closure** (`buttonTapped`, mirroring
+`checkboxTapped`) rather than `tapActionAtPoint`, and that closure carries a `Promise<Bool>` the
+tapped pill subscribes to for its loading shimmer; `InstantPageTheme.withUpdatedFontStyles`
+reconstructs field-by-field so omitting a colour there silently reverts it; the `InstantPageButton`
+FlatBuffers tables must live in `RichText.fbs` (include cycle); `ReplyMarkupButtonAction` is reused
+and therefore wider than the schema permits; two media sites fail *silently* for `.document`; and
+`InstantPageAnchorPath` must NOT recurse into `.buttonRow`. On the rendering side: a pill needs
+`clipsToBounds` or `cornerRadius` is drawn and then covered by the `draw(_:)` background bitmap
+(it renders as a rect); an inline pill's **type icon trails the label** rather than sitting in the
+corner (the pill is ~20pt tall, so a badge would be shaved by the capsule) and the pill is measured
+14pt wider to hold it — unconditional width, so it moves line breaks and the editor must reserve the
+identical amount; `attachment.ascent` is a *full* font ascent and must not be compared directly
+against `lineAscent`, which is the *reduced* `floor(ascender + descender)` box; and a width cap must
+travel as `inlineButtonMaxWidth`, forwarded through all 31 recursive
+`attributedStringForRichText` calls — `boundingWidth` is nil on the paragraph path and also drives
+the inline-image clamp. Deferred: markdown-edit data loss, tapping an already-downloaded document,
+and `checkboxFill`/`checkboxForeground` being misnamed (they are the `.primary` button colours).
+
+**Text Size** — a rich bubble follows Settings ▸ Appearance ▸ Text Size through ONE `contentScale`
+(`baseDisplaySize / 17`) passed to `layoutInstantPageV2`, applied once to the unscaled theme's fonts
+(whole-point floor) and once to `InstantPageMetrics` (pixel snap) — never to an already-scaled theme.
+Code, table and quote body stay equal at every step, so `codeBlockFontSize` is a whole-point floor, not
+a pixel snap. Tests pin the grid to 3x because the test process reports a 1x screen. Details in
+[`docs/instantpage-richtext.md`](instantpage-richtext.md) under "Text Size / content scale".
+
+**Unsupported blocks** — every block this build cannot decode arrives as
+`InstantPageBlock.unsupported`, and V2 now renders it as the shared "please update" pill from
+`submodules/TelegramUI/Components/UnsupportedContentPill`, which the chat's standalone
+unsupported-media bubble also draws (its constants are load-bearing for that bubble's appearance).
+A run of adjacent unsupported blocks collapses to one pill, and the chat wallpaper reaches the
+renderer through `InstantPageV2RenderContext.wallpaperBackgroundNode`. Details in
+[`docs/instantpage-richtext.md`](instantpage-richtext.md) under "Unsupported blocks".
+
+**Rich reply quotes** — a reply quoting a selection of a rich message sends `quote_rich`, one
+`RichText` per covered text node (`EngineMessageReplyQuote.richText`; `text`/`entities` are its
+derived flat form, so every quote consumer reads those unchanged). The pure core (node table,
+builder, the server's validation rule) is `TelegramCore/Sources/Utils/RichReplyQuote.swift`; the
+renderer stamps each laid-out run with its node and flat range so a selection maps to nodes. The
+node-id scheme is shared by the enumerator and the V2 layout and nothing checks the pair. Details
+in [`docs/instantpage-richtext.md`](instantpage-richtext.md) under "Rich reply quotes".
