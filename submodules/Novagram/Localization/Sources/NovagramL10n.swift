@@ -1095,16 +1095,6 @@ public struct NovagramL10n {
         )
     }
 
-    // Appended to the intro body (the Mac's about_searchHint).
-    public var about_searchHint: String {
-        pick(
-            en: "Inside a chat, search \"two words\" for the exact phrase or re: followed by a regular expression.",
-            uz: "Chat ichida aniq ibora uchun \"ikki so'z\" yoki re: va undan keyin regular expression yozib qidiring.",
-            ru: "В чате ищите \"два слова\" для точной фразы или re: с регулярным выражением.",
-            zh: "在聊天中搜索 \"两个词\" 可查找完整短语，或输入 re: 加正则表达式。"
-        )
-    }
-
     public var about_featuresHeader: String {
         pick(en: "FEATURES", uz: "IMKONIYATLAR", ru: "ВОЗМОЖНОСТИ", zh: "功能")
     }

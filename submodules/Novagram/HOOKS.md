@@ -7757,9 +7757,10 @@ upstream adds an argument to the final `combineLatest`, keep `novagramTranslated
 ## 📌 Search phrase and regex in a chat (2026-10-29)
 
 Feature 96, hooks #268–#271. Ours: `submodules/Novagram/Search/Sources/NovagramChatSearchFilter.swift`
-(`NovagramChatSearchFilter`, a port of the Mac's, on engine names, no Postbox). Hint `about_searchHint`
-(en/uz/ru word for word from the Mac, zh added) in `NovagramL10n.swift`, appended after `about_introBody` in
-`Novagram/Messenger/Sources/NovagramAboutController.swift`.
+(`NovagramChatSearchFilter`, a port of the Mac's, on engine names, no Postbox). How-to: two entries at the end of
+`allFeatureSpecs()` in `Novagram/Messenger/Sources/NovagramAboutController.swift`, "Exact phrase search in a chat"
+and "Regex search in a chat" (examples, a symbol cheat sheet, the limits), the same text as the Mac's About
+(owner, 2026-10-29). They replaced the one-sentence `about_searchHint` that was appended to the intro.
 
 - `"two words"`: the trimmed query is at least 3 characters, opens with `"`, `“`, `”` or `„`, closes with `"`, `“`
   or `”`, and the trimmed inner phrase is not empty. The server gets the phrase without the quotes; a message stays

@@ -845,6 +845,52 @@ private func allFeatureSpecs() -> [FeatureSpec] {
                 ru: "Выключать нечего — ссылка создаётся только тогда, когда вы её запросите.",
                 zh: "无需关闭：只有在你主动请求时才会生成链接。"
             )
+        ),
+        // Exact phrase search in a chat
+        FeatureSpec(
+            symbol: "quote.opening", color: .blue,
+            title: L3(en: "Exact phrase search in a chat", uz: "Chat ichida aniq ibora bo'yicha qidirish", ru: "Поиск точной фразы в чате", zh: "在聊天中搜索完整短语"),
+            enable: L3(
+                en: "Open a chat and start its search (tap the chat name at the top and choose Search, it can be in the ⋯ menu; in channels the magnifier button at the bottom right opens it too). Type the words inside double quotes, for example \"see you tomorrow\". Straight quotes \" \" and curly quotes “ ” both work.",
+                uz: "Chatni oching va uning qidiruvini oching (tepadagi chat nomiga bosing va Qidirish'ni tanlang, u ⋯ menyusida bo'lishi mumkin; kanallarda o'ng pastdagi lupa tugmasi ham qidiruvni ochadi). So'zlarni qo'shtirnoq ichida yozing, masalan \"ertaga ko'rishamiz\". Oddiy \" \" va egri “ ” qo'shtirnoqlarning ikkalasi ham ishlaydi.",
+                ru: "Откройте чат и запустите поиск по нему (нажмите на название чата вверху и выберите «Поиск», он может быть в меню ⋯; в каналах поиск открывает и кнопка с лупой справа внизу). Напишите слова в двойных кавычках, например \"увидимся завтра\". Подходят и прямые \" \", и типографские “ ” кавычки.",
+                zh: "打开聊天并开始在其中搜索（点按顶部的聊天名称并选择“搜索”，它可能在 ⋯ 菜单中；在频道中，右下角的放大镜按钮也可以打开搜索）。把词语写在双引号里，例如 \"明天见\"。直引号 \" \" 和弯引号 “ ” 都可以。"
+            ),
+            works: L3(
+                en: "Telegram first finds the messages that contain these words, then Novagram keeps only the ones where the words stand together in exactly this order. Upper and lower case and accents do not matter: \"Salom Dunyo\" also finds “salom dunyo”. The counter shows how many exact matches were found and the arrows jump between them; the list button at the bottom shows them all in one list, and more load as you scroll it.",
+                uz: "Telegram avval shu so'zlar bor xabarlarni topadi, keyin Novagram faqat so'zlar aynan shu tartibda yonma-yon turgan xabarlarni qoldiradi. Katta-kichik harf va urg'u belgilari farq qilmaydi: \"Salom Dunyo\" “salom dunyo”ni ham topadi. Hisoblagich nechta aniq moslik topilganini ko'rsatadi, strelkalar ular orasida yuradi; pastdagi ro'yxat tugmasi hammasini bitta ro'yxatda ko'rsatadi, pastga aylantirsangiz yana yuklanadi.",
+                ru: "Telegram сначала находит сообщения с этими словами, затем Novagram оставляет только те, где слова стоят рядом именно в этом порядке. Регистр и диакритика не важны: \"Salom Dunyo\" найдёт и «salom dunyo». Счётчик показывает, сколько точных совпадений найдено, стрелки переходят между ними; кнопка списка внизу показывает их все одним списком, при прокрутке загружаются ещё.",
+                zh: "Telegram 先找出包含这些词的消息，然后 Novagram 只保留这些词按此顺序紧挨在一起的消息。不区分大小写和重音符号：\"Salom Dunyo\" 也能找到“salom dunyo”。计数显示找到了多少条完全匹配，用箭头在它们之间跳转；底部的列表按钮会把它们全部列出，向下滚动会继续加载。"
+            ),
+            disable: L3(
+                en: "Nothing to turn off: type the words without quotes and the normal Telegram search runs.",
+                uz: "O'chiradigan narsa yo'q: so'zlarni qo'shtirnoqsiz yozsangiz, oddiy Telegram qidiruvi ishlaydi.",
+                ru: "Выключать нечего: напишите слова без кавычек, и сработает обычный поиск Telegram.",
+                zh: "无需关闭：不加引号输入词语即为普通的 Telegram 搜索。"
+            )
+        ),
+        // Regex search in a chat
+        FeatureSpec(
+            symbol: "chevron.left.forwardslash.chevron.right", color: .purple,
+            title: L3(en: "Regex search in a chat", uz: "Chat ichida regex bilan qidirish", ru: "Поиск по регулярному выражению в чате", zh: "在聊天中用正则表达式搜索"),
+            enable: L3(
+                en: "In a chat's search type re: and then a pattern, for example re:\\d{3}. The keyboard may write Re: — that works too. Examples:\n• re:\\d{3} — three digits in a row\n• re:^salom — messages that start with “salom”\n• re:rahmat$ — messages that end with “rahmat”\n• re:(salom|assalomu) — either of the two words\n• re:\\bkod\\b — the whole word “kod”, not “kodlar”\n• re:https?:// — messages with a link\n• re:\\+998\\d{9} — phone numbers like +998901234567\n• re:\\d{2}\\.\\d{2}\\.\\d{4} — dates like 29.10.2026",
+                uz: "Chat qidiruvida re: va undan keyin pattern yozing, masalan re:\\d{3}. Klaviatura Re: deb yozishi mumkin — bu ham ishlaydi. Misollar:\n• re:\\d{3} — ketma-ket uchta raqam\n• re:^salom — “salom” bilan boshlanadigan xabarlar\n• re:rahmat$ — “rahmat” bilan tugaydigan xabarlar\n• re:(salom|assalomu) — ikki so'zdan biri\n• re:\\bkod\\b — “kodlar” emas, aynan “kod” so'zi\n• re:https?:// — havolasi bor xabarlar\n• re:\\+998\\d{9} — +998901234567 kabi telefon raqamlar\n• re:\\d{2}\\.\\d{2}\\.\\d{4} — 29.10.2026 kabi sanalar",
+                ru: "В поиске чата напишите re: и затем шаблон, например re:\\d{3}. Клавиатура может написать Re: — так тоже работает. Примеры:\n• re:\\d{3} — три цифры подряд\n• re:^salom — сообщения, которые начинаются с «salom»\n• re:rahmat$ — сообщения, которые заканчиваются на «rahmat»\n• re:(salom|assalomu) — любое из двух слов\n• re:\\bkod\\b — именно слово «kod», а не «kodlar»\n• re:https?:// — сообщения со ссылкой\n• re:\\+998\\d{9} — номера вида +998901234567\n• re:\\d{2}\\.\\d{2}\\.\\d{4} — даты вида 29.10.2026",
+                zh: "在聊天搜索中输入 re: 再写规则，例如 re:\\d{3}。键盘可能会写成 Re:，同样有效。示例：\n• re:\\d{3} — 连续三个数字\n• re:^salom — 以“salom”开头的消息\n• re:rahmat$ — 以“rahmat”结尾的消息\n• re:(salom|assalomu) — 两个词中的任意一个\n• re:\\bkod\\b — 完整的单词“kod”，而不是“kodlar”\n• re:https?:// — 含链接的消息\n• re:\\+998\\d{9} — 形如 +998901234567 的电话号码\n• re:\\d{2}\\.\\d{2}\\.\\d{4} — 形如 29.10.2026 的日期"
+            ),
+            works: L3(
+                en: "Novagram reads the chat's latest messages, up to 2000, 100 at a time, and keeps those whose text or caption matches the pattern. Matches appear while it reads, and the counter shows how many were found so far. Upper and lower case do not matter. Symbols: . any character, \\d a digit, \\w a letter or digit, \\s a space, * zero or more times, + one or more times, ? optional, {3} exactly 3 times, ^ start of the message, $ end of the message, | or, ( ) a group, [abc] one of these characters, \\b a word edge. To find . + ? ( ) themselves, put \\ before them. A pattern with a mistake, like re:(salom, runs a normal search for the text after re:. A pattern that is too slow stops by itself.",
+                uz: "Novagram chatning oxirgi xabarlarini, ko'pi bilan 2000 tasini, 100 tadan o'qiydi va matni yoki izohi patternga mos keladiganlarini qoldiradi. Mosliklar o'qish davomida chiqib boradi, hisoblagich hozirgacha nechta topilganini ko'rsatadi. Katta-kichik harf farq qilmaydi. Belgilar: . istalgan bitta belgi, \\d raqam, \\w harf yoki raqam, \\s bo'sh joy, * nol yoki ko'p marta, + bir yoki ko'p marta, ? bo'lishi ham, bo'lmasligi ham mumkin, {3} aynan 3 marta, ^ xabar boshi, $ xabar oxiri, | yoki, ( ) guruh, [abc] shu belgilardan biri, \\b so'z chegarasi. . + ? ( ) belgilarining o'zini topish uchun oldiga \\ qo'ying. Xatosi bor pattern, masalan re:(salom, re: dan keyingi matn bo'yicha oddiy qidiruvni ishga tushiradi. Juda sekin pattern o'zi to'xtaydi.",
+                ru: "Novagram читает последние сообщения чата, до 2000, по 100 за раз, и оставляет те, чей текст или подпись подходит под шаблон. Совпадения появляются по мере чтения, а счётчик показывает, сколько найдено на данный момент. Регистр не важен. Символы: . любой символ, \\d цифра, \\w буква или цифра, \\s пробел, * ноль или больше раз, + один или больше раз, ? необязательно, {3} ровно 3 раза, ^ начало сообщения, $ конец сообщения, | или, ( ) группа, [abc] один из этих символов, \\b граница слова. Чтобы найти сами . + ? ( ), поставьте перед ними \\. Шаблон с ошибкой, например re:(salom, запускает обычный поиск по тексту после re:. Слишком медленный шаблон останавливается сам.",
+                zh: "Novagram 读取聊天中最近的消息（最多 2000 条，每次 100 条），保留文字或说明与规则匹配的消息。匹配结果边读边显示，计数显示目前已找到的数量。不区分大小写。符号：. 任意一个字符，\\d 数字，\\w 字母或数字，\\s 空格，* 零次或多次，+ 一次或多次，? 可有可无，{3} 正好 3 次，^ 消息开头，$ 消息结尾，| 或，( ) 分组，[abc] 其中任一字符，\\b 单词边界。要查找 . + ? ( ) 本身，请在前面加 \\。写错的规则（例如 re:(salom）会按 re: 后面的文字进行普通搜索。过慢的规则会自动停止。"
+            ),
+            disable: L3(
+                en: "Nothing to turn off: remove re: and the normal Telegram search runs. Closing the search stops the scan.",
+                uz: "O'chiradigan narsa yo'q: re: ni olib tashlasangiz, oddiy Telegram qidiruvi ishlaydi. Qidiruvni yopish skanni to'xtatadi.",
+                ru: "Выключать нечего: уберите re:, и сработает обычный поиск Telegram. Закрытие поиска останавливает проверку.",
+                zh: "无需关闭：去掉 re: 即为普通的 Telegram 搜索。关闭搜索会停止扫描。"
+            )
         )
     ]
 }
@@ -860,7 +906,7 @@ private func aboutFeatures(langCode: String) -> [AboutFeature] {
 // footer paragraph wraps cleanly under its row.
 //
 //   0          → intro
-//   1 …  99    → feature sections (allFeatureSpecs() currently has 33 entries)
+//   1 …  99    → feature sections (allFeatureSpecs() currently has 35 entries)
 //   100000     → closing footer
 
 private enum NovagramAboutEntry: ItemListNodeEntry {
@@ -973,7 +1019,7 @@ private func novagramAboutEntries(presentationData: PresentationData) -> [Novagr
 
     // Intro
     entries.append(.introHeader(l10n.about_introHeader))
-    entries.append(.introBody(l10n.about_introBody + " " + l10n.about_searchHint))
+    entries.append(.introBody(l10n.about_introBody))
 
     // Every Novagram feature — icon/title row + a three-part (Enable/How it works/Disable) body.
     for (index, feature) in aboutFeatures(langCode: langCode).enumerated() {
