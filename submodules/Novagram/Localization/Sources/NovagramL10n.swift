@@ -68,6 +68,36 @@ public struct NovagramL10n {
         }
     }
 
+    // MARK: - Search: Messages section filters (dates, unread, mentions)
+
+    public var search_fromDate: String {
+        pick(en: "From date…", uz: "Sanadan…", ru: "С даты…", zh: "起始日期…")
+    }
+
+    public var search_toDate: String {
+        pick(en: "To date…", uz: "Sanagacha…", ru: "По дату…", zh: "截止日期…")
+    }
+
+    public func search_fromDateValue(_ date: String) -> String {
+        pick(en: "From \(date)", uz: "\(date) dan", ru: "С \(date)", zh: "自 \(date)")
+    }
+
+    public func search_toDateValue(_ date: String) -> String {
+        pick(en: "To \(date)", uz: "\(date) gacha", ru: "По \(date)", zh: "至 \(date)")
+    }
+
+    public var search_clearDates: String {
+        pick(en: "Clear dates", uz: "Sanalarni tozalash", ru: "Сбросить даты", zh: "清除日期")
+    }
+
+    public var search_unreadOnly: String {
+        pick(en: "Unread only", uz: "Faqat o'qilmaganlar", ru: "Только непрочитанные", zh: "仅未读")
+    }
+
+    public var search_mentionsOnly: String {
+        pick(en: "Mentions only", uz: "Faqat mention'lar", ru: "Только упоминания", zh: "仅提及")
+    }
+
     // MARK: - Settings → Novagram screen
     // Section headers, item titles, item subtitles, section footers, generic on/off labels.
 

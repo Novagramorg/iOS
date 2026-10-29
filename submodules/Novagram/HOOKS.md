@@ -177,7 +177,7 @@ three calls and delete the two lines.
 
 ## 📋 Novagram features va hooklar (2026-10-10)
 
-> 1–44, 86, 89 va 91: Settings → Novagram Settings (ilovadagi tartibda). 45–85, 87, 88 va 92: Settings'dan tashqaridagi features.
+> 1–44, 86, 89 va 91: Settings → Novagram Settings (ilovadagi tartibda). 45–85, 87, 88, 92 va 93: Settings'dan tashqaridagi features.
 > Hooks: Telegram-owned fayllardagi barcha Novagram o'zgarishlari, feature bo'yicha. Har bir hookning kodi va anchor'i quyidagi 📌 bo'limlarda.
 
 ### 1. Novagram Settings
@@ -353,6 +353,7 @@ three calls and delete the two lines.
 #### Qidiruv
 
 92. **Qidiruvda yashirin va qulflangan chatlar**: yashirin chat (Secret Vault) global qidiruvning hech qayerida chiqmaydi (chat, xabar, top/recent, Channels/Apps tablari, peer chip'lari, hashtag/Posts, Downloads, galereya), yashirin ro'yxat ochiq bo'lsa ham. Qulflangan chat (Chat qulfi) nomi chiqadi, xabarlari chiqmaydi. Faqat joriy account.
+93. **Qidiruvda sana oralig'i**: MESSAGES sarlavhasidagi "From All Chats" menyusida "Sanadan…", "Sanagacha…" va "Sanalarni tozalash". Faqat xabarlar bo'limi (Posts/hashtag, Channels va Apps tablarida yo'q). Sarlavhada: `From All Chats · 01.10.26–29.10.26`. Hech narsa saqlanmaydi, qidiruv yopilsa tozalanadi.
 
 ---
 
@@ -496,6 +497,11 @@ three calls and delete the two lines.
 253. `ChatListSearchContainerNode.swift` (ChatListUI): `suggestedPeers` (peer filter chip'lari).
 254. `HashtagSearchGlobalChatContents.swift` (HashtagSearchUI): hashtag / public posts ro'yxati, boshlang'ich va har yuklangan sahifa (`updateHistoryView`).
 255. `ChatListUI/BUILD`, `HashtagSearchUI/BUILD`: `//submodules/Novagram/Search:NovagramSearch`.
+256. `ChatListSearchListPaneNode.swift` (ChatListUI): pane'ning `novagramFilter`i, init'dagi lokal nusxasi va `searchOptions`ni `restarting(...)` bilan o'rash (filtr o'zgarsa qidiruv birinchi sahifadan qayta boshlanadi).
+257. `ChatListSearchListPaneNode.swift` (ChatListUI): xabar qidiruvining ikkala chaqiruvi (birinchi sahifa va "load more") `novagramFilter.searchMessages(engine:...)` orqali: sanalar location'ga qo'shiladi.
+258. `ChatListSearchListPaneNode.swift` (ChatListUI): `.message`, `.messagePlaceholder`, `.emptyMessagesFooter` sarlavhasida faol filtrlar (`NovagramSearchFilter.headerTitle`).
+259. `ChatListSearchListPaneNode.swift` (ChatListUI): filtr `chatListInteraction`ga bog'lanadi (sarlavha uni shu orqali topadi).
+260. `ChatListSearchListPaneNode.swift` (ChatListUI): `openMessagesFilter` menyusining oxiriga bizning bandlar.
 
 #### Xabar eslatmasi
 
@@ -7639,3 +7645,31 @@ Not filtered on purpose: forum topics (`foundThreads`) only show inside the foru
 On an upstream update: the hooks sit next to upstream lines that rarely move (`filteredPeer`, the two
 `existing…Ids.insert`, `recentlySearchedPeers()`, `self.recentDisposable.set`). If `ChatListRecentEntryStableId`
 loses `.peerId(id, section)`, #250's sink closure stops compiling: rewrite it to read the entry's peer id.
+
+---
+
+## 📌 Search dates and filters (2026-10-29)
+
+Feature 93 (dates), hooks #256–#260. The code is in `submodules/Novagram/Search/Sources/NovagramSearchFilter.swift`
+(`NovagramSearchFilter`, one per search pane, nothing persisted). Strings: `search_*` in `NovagramL10n.swift`.
+
+- Menu: our items go after Telegram's scope items in the MESSAGES header's "From All Chats" menu, behind a separator:
+  "From date…" / "From 01.10.26", "To date…" / "To 29.10.26", "Clear dates" (only while a date is set). Not in the
+  Channels and Apps tabs (`isAvailable: self.key != .channels && self.key != .apps`).
+- Picker: Telegram's own `ChatScheduleTimeScreen(mode: .search)` (the "jump to date" calendar), pushed on the pane's
+  navigation controller. "From" = start of that day, "To" = next day's start − 1 s, local time zone; its
+  "Remove date" (time 0) clears that end.
+- Search: `dated(_:)` puts the range into `.general` (not `.globalPosts`) and `.peer` locations. A date typed into
+  the search bar (`options.date`) stays: the later start and the earlier end apply. "Load more" goes through the
+  same function, so paging keeps the range.
+- Header: `headerTitle(_:owner:strings:)` turns `From All Chats  <` into `From All Chats · 01.10.26–29.10.26  <`.
+  The item builder only has the pane's `ChatListNodeInteraction`, so the filter is linked to it (#259, a weak
+  `NSMapTable`). A filter change restarts the search, whose first value has no messages, so the section is rebuilt
+  with the new title.
+
+| File | Change |
+| --- | --- |
+| `ChatListUI/Sources/ChatListSearchListPaneNode.swift` | #256: `private let novagramFilter = NovagramSearchFilter()` after `private let key`; `let novagramFilter = self.novagramFilter` after `let currentRemotePeers = Atomic…`; `let searchOptions = novagramFilter.restarting(searchOptions)` right before `let foundItems: Signal<…> = combineLatest(…)`. #257: the two `context.engine.messages.searchMessages(location: searchLocation…, limit: 50)` / `(location: searchLocations[i]…, limit: 80)` calls are `novagramFilter.searchMessages(engine: context.engine, location: …)` (2 changed lines). #258: after each of the three `actionTitle = "\(filterTitle)  <"`: `actionTitle = NovagramSearchFilter.headerTitle(actionTitle, owner: interaction, strings: presentationData.strings)`. #259: `self.novagramFilter.attach(to: chatListInteraction)` after `chatListInteraction.isSearchMode = true`. #260: `items.append(contentsOf: self.novagramFilter.menuItems(…))` before `makeContextController` in `openMessagesFilter`. 9 added lines, 2 changed. |
+
+On an upstream update: if upstream changes the two `searchMessages` call lines, take theirs and put
+`novagramFilter.searchMessages(engine: context.engine, …)` back in place of `context.engine.messages.searchMessages(…)`.

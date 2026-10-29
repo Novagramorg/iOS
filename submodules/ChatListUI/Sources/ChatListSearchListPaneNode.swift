@@ -1206,6 +1206,7 @@ public enum ChatListSearchEntry: Comparable, Identifiable {
                                     filterTitle = presentationData.strings.ChatList_HeaderPublicPosts
                                 }
                                 actionTitle = "\(filterTitle)  <"
+                                actionTitle = NovagramSearchFilter.headerTitle(actionTitle, owner: interaction, strings: presentationData.strings) // Novagram
                             }
                         }
                         header = ChatListSearchItemHeader(type: headerType, theme: presentationData.theme, strings: presentationData.strings, actionTitle: actionTitle, action: actionTitle == nil ? nil : { sourceNode in
@@ -1300,6 +1301,7 @@ public enum ChatListSearchEntry: Comparable, Identifiable {
                         filterTitle = presentationData.strings.ChatList_HeaderPublicPosts
                     }
                     actionTitle = "\(filterTitle)  <"
+                    actionTitle = NovagramSearchFilter.headerTitle(actionTitle, owner: interaction, strings: presentationData.strings) // Novagram
                 }
 
                 let header: ChatListSearchItemHeader
@@ -1328,6 +1330,7 @@ public enum ChatListSearchEntry: Comparable, Identifiable {
                         filterTitle = presentationData.strings.ChatList_HeaderPublicPosts
                     }
                     actionTitle = "\(filterTitle)  <"
+                    actionTitle = NovagramSearchFilter.headerTitle(actionTitle, owner: interaction, strings: presentationData.strings) // Novagram
                 }
 
                 let header = ChatListSearchItemHeader(type: .messages(location: nil), theme: presentationData.theme, strings: presentationData.strings, actionTitle: actionTitle, action: actionTitle == nil ? nil : { sourceNode in
@@ -1711,6 +1714,7 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
     private var presentationData: PresentationData
     private let globalPeerSearchContext: GlobalPeerSearchContext?
     private let key: ChatListSearchPaneKey
+    private let novagramFilter = NovagramSearchFilter() // Novagram: Messages section dates and filters
     private let tagMask: EngineMessage.Tags?
     private let location: ChatListControllerLocation
     private let communityId: EnginePeer.Id?
@@ -2017,6 +2021,7 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
         self.recentListNode.isHidden = peersFilter.contains(.excludeRecent)
 
         let currentRemotePeers = Atomic<([FoundPeer], [FoundPeer], [AdPeer])?>(value: nil)
+        let novagramFilter = self.novagramFilter // Novagram
         let presentationDataPromise = self.presentationDataPromise
         let searchStatePromise = self.searchStatePromise
         let selectionPromise = self.selectedMessagesPromise
@@ -2178,6 +2183,7 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
 
         let communityId = self.communityId
 
+        let searchOptions = novagramFilter.restarting(searchOptions) // Novagram: a filter change restarts the search from page one
         let foundItems: Signal<([ChatListSearchEntry], Bool, String?)?, NoError> = combineLatest(queue: .mainQueue(), searchQuery, self.approvedGlobalPostQueryState.get(), searchOptions, self.searchScopePromise.get(), downloadItems, globalPostSearchStateType, isPremium)
         |> debounceOnMainThread
         |> mapToSignal { [weak self] query, approvedGlobalPostQueryState, options, searchScope, downloadItems, _, _ -> Signal<([ChatListSearchEntry], Bool, String?)?, NoError> in
@@ -2907,7 +2913,7 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                     searchSignals = [context.engine.messages.searchMessages(location: .general(scope: .globalPosts(allowPaidStars: approvedGlobalPostQueryState?.price), groupId: nil, tags: nil, minDate: nil, maxDate: nil, folderId: nil, communityId: nil), query: finalQuery, state: nil, limit: 50)]
                 } else {
                     searchSignals = searchLocations.map { searchLocation in
-                        return context.engine.messages.searchMessages(location: searchLocation, query: finalQuery, state: nil, limit: 50)
+                        return novagramFilter.searchMessages(engine: context.engine, location: searchLocation, query: finalQuery, state: nil, limit: 50) // Novagram
                     }
                 }
 
@@ -2935,7 +2941,7 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                                 }
                             }
                             if let _ = searchContext.loadMoreIndex {
-                                return context.engine.messages.searchMessages(location: searchLocations[i], query: finalQuery, state: searchContext.result.state, limit: 80)
+                                return novagramFilter.searchMessages(engine: context.engine, location: searchLocations[i], query: finalQuery, state: searchContext.result.state, limit: 80) // Novagram
                                 |> map { result, updatedState -> ChatListSearchMessagesResult in
                                     return ChatListSearchMessagesResult(query: finalQuery, messages: result.messages.map({ EngineMessage($0) }).sorted(by: { $0.index > $1.index }), readStates: result.readStates.mapValues { EnginePeerReadCounters(state: $0, isMuted: false) }, threadInfo: result.threadInfo, hasMore: !result.completed, totalCount: result.totalCount, state: updatedState)
                                 }
@@ -3743,6 +3749,7 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
         }, openUrl: { _ in
         })
         chatListInteraction.isSearchMode = true
+        self.novagramFilter.attach(to: chatListInteraction) // Novagram
 
         let listInteraction = ListMessageItemInteraction(openMessage: { [weak self] message, mode -> Bool in
             guard let strongSelf = self else {
@@ -5861,6 +5868,7 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                 f(.default)
                 self.searchScopePromise.set(.channels)
             })))
+            items.append(contentsOf: self.novagramFilter.menuItems(context: self.context, presentationData: self.presentationData, isAvailable: self.key != .channels && self.key != .apps, push: { [weak self] c in self?.navigationController?.pushViewController(c) })) // Novagram
             let contextController = makeContextController(presentationData: self.presentationData, source: .reference(ChatListSearchReferenceContentSource(sourceNode: sourceNode)), items: .single(ContextController.Items(content: .list(items))), gesture: nil)
             self.interaction.present(contextController, nil)
         })
