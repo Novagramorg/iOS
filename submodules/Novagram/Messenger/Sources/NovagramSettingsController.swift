@@ -13,6 +13,7 @@ import CallListUI
 import AppBundle
 import ComponentFlow
 import NovagramLocalization
+import NovagramSearch
 import NovagramBrand
 import NovagramUnreadReminder
 import NovagramChatLock
@@ -59,6 +60,7 @@ private enum NovagramEntry: ItemListNodeEntry {
     case roundVideoFromGallery(PresentationTheme, String, String, Bool, Bool)
     case forwardHideNames(PresentationTheme, String, String, Bool, Bool)
     case unlimitedPins(PresentationTheme, String, String, Bool, Bool)
+    case searchTranslate(PresentationTheme, String, String, Bool)
     case chatFooter(PresentationTheme, String)
 
     // — Interface Section —
@@ -180,7 +182,7 @@ private enum NovagramEntry: ItemListNodeEntry {
         switch self {
         case .chatHeader, .calls, .deletedMessages, .showViewFirstMessage, .showGhostMode, .longPressCameraSelection, .editedHistoryEnabled, .roundVideoFromGallery, .forwardHideNames, .chatFooter:
             return NovagramSection.chat.rawValue
-        case .interfaceHeader, .hideFolders, .showStories, .showMutualContactSymbol, .unlimitedPins, .interfaceFooter:
+        case .interfaceHeader, .hideFolders, .showStories, .showMutualContactSymbol, .unlimitedPins, .searchTranslate, .interfaceFooter:
             return NovagramSection.interface.rawValue
         case .messagingHeader, .textStyle, .autoText, .autoTranslate, .translateToggle, .translateMessages, .sendTranslateConfirm, .autoStickerEnabled, .heartEffectEnabled, .messagingFooter:
             return NovagramSection.messaging.rawValue
@@ -226,7 +228,8 @@ private enum NovagramEntry: ItemListNodeEntry {
         case .showStories:               return 12
         case .showMutualContactSymbol:   return 13
         case .unlimitedPins:             return 14
-        case .interfaceFooter:           return 15
+        case .searchTranslate:           return 15
+        case .interfaceFooter:           return 16
         // Messaging
         case .messagingHeader:           return 20
         case .textStyle:                 return 21
@@ -328,6 +331,8 @@ private enum NovagramEntry: ItemListNodeEntry {
             if case let .forwardHideNames(rhsTheme, rhsTitle, rhsText, rhsValue, rhsIsNew) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue, lhsIsNew == rhsIsNew { return true } else { return false }
         case let .unlimitedPins(lhsTheme, lhsTitle, lhsText, lhsValue, lhsIsNew):
             if case let .unlimitedPins(rhsTheme, rhsTitle, rhsText, rhsValue, rhsIsNew) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue, lhsIsNew == rhsIsNew { return true } else { return false }
+        case let .searchTranslate(lhsTheme, lhsTitle, lhsText, lhsValue):
+            if case let .searchTranslate(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
         case let .chatFooter(lhsTheme, lhsText):
             if case let .chatFooter(rhsTheme, rhsText) = rhs, lhsTheme === rhsTheme, lhsText == rhsText { return true } else { return false }
 
@@ -496,6 +501,7 @@ private enum NovagramEntry: ItemListNodeEntry {
         case let .showStories(_, title, _, _):              return (.stories, title)
         case let .showMutualContactSymbol(_, title, _, _):  return (.mutualContacts, title)
         case let .unlimitedPins(_, title, _, _, _):         return (.unlimitedPins, title)
+        case let .searchTranslate(_, title, _, _):          return (.searchTranslate, title)
 
         case let .deletedMessages(_, title, _, _):          return (.deletedMessages, title)
         case let .editedHistoryEnabled(_, title, _, _):     return (.editedHistory, title)
@@ -643,6 +649,12 @@ private enum NovagramEntry: ItemListNodeEntry {
             let badge: AnyComponent<Empty>? = isNew ? AnyComponent(NovagramNewBadgeComponent(langCode: langCode)) : nil
             return ItemListSwitchItem(presentationData: presentationData, icon: novagramSettingsIcon(systemName: "pin.circle.fill", color: .orange), title: title, text: text, titleBadgeComponent: badge, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateUnlimitedPins(val)
+            }, tag: self.novagramTag)
+        case let .searchTranslate(_, title, text, value):
+            let langCode = NovagramL10n.languageKey(for: presentationData.strings)
+            let badge: AnyComponent<Empty>? = AnyComponent(NovagramNewBadgeComponent(langCode: langCode))
+            return ItemListSwitchItem(presentationData: presentationData, icon: novagramSettingsIcon(systemName: "character.magnify", color: .teal), title: title, text: text, titleBadgeComponent: badge, value: value, sectionId: self.section, style: .blocks, updated: { val in
+                arguments.updateSearchTranslate(val)
             }, tag: self.novagramTag)
         case let .chatFooter(_, text):
             return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
@@ -1153,6 +1165,7 @@ private struct NovagramSettingsState: Equatable {
     var roundVideoFromGallery: Bool
     var forwardHideNames: Bool
     var unlimitedPins: Bool
+    var searchTranslate: Bool
     var showTranslateMessages: Bool
     var textStyle: String
     var autoTextEnabled: Bool
@@ -1218,6 +1231,7 @@ private struct NovagramSettingsState: Equatable {
         self.roundVideoFromGallery = UserDefaults(suiteName: "pro_messager")?.object(forKey: "round_video_from_gallery") as? Bool ?? false
         self.forwardHideNames = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "forward_hide_names") ?? false
         self.unlimitedPins = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "unlimited_pins") ?? false
+        self.searchTranslate = NovagramQueryTranslator.isEnabled
         self.showTranslateMessages = UserDefaults(suiteName: "pro_messager")?.object(forKey: "show_translate_messages") as? Bool ?? false
         self.textStyle = UserDefaults(suiteName: "pro_messager")?.string(forKey: "text_style") ?? "none"
         self.autoTextEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "auto_text_enabled") ?? false
@@ -1299,6 +1313,9 @@ private struct NovagramSettingsState: Equatable {
             return false
         }
         if lhs.unlimitedPins != rhs.unlimitedPins {
+            return false
+        }
+        if lhs.searchTranslate != rhs.searchTranslate {
             return false
         }
         if lhs.showTranslateMessages != rhs.showTranslateMessages {
@@ -1483,6 +1500,7 @@ private func novagramSettingsEntries(presentationData: PresentationData, state: 
     entries.append(.showStories(presentationData.theme, l10n.settings_interface_stories_title, l10n.settings_interface_stories_subtitle, state.showStories))
     entries.append(.showMutualContactSymbol(presentationData.theme, l10n.settings_interface_mutualSymbol_title, l10n.settings_interface_mutualSymbol_subtitle, state.showMutualContactSymbol))
     entries.append(.unlimitedPins(presentationData.theme, l10n.settings_interface_unlimitedPins_title, l10n.settings_interface_unlimitedPins_subtitle, state.unlimitedPins, true))
+    entries.append(.searchTranslate(presentationData.theme, l10n.settings_searchTranslate_title, l10n.settings_searchTranslate_subtitle, state.searchTranslate))
     entries.append(.interfaceFooter(presentationData.theme, l10n.settings_interface_footer))
 
     // ─── CHAT ───
@@ -1654,6 +1672,7 @@ private final class NovagramSettingsArguments {
     let updateRoundVideoFromGallery: (Bool) -> Void
     let updateForwardHideNames: (Bool) -> Void
     let updateUnlimitedPins: (Bool) -> Void
+    let updateSearchTranslate: (Bool) -> Void
     let updateTranslateMessages: (Bool) -> Void
     let openTranslationSettings: () -> Void
     let openTextStyleSettings: () -> Void
@@ -1694,7 +1713,7 @@ private final class NovagramSettingsArguments {
     let updateTranslateChatsUnlock: (Bool) -> Void
     let openCarPlay: () -> Void
 
-    init(openAccounts: @escaping () -> Void, openAbout: @escaping () -> Void, openNovagramBots: @escaping () -> Void, openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateEditedHistoryEnabled: @escaping (Bool) -> Void, updateRoundVideoFromGallery: @escaping (Bool) -> Void, updateForwardHideNames: @escaping (Bool) -> Void, updateUnlimitedPins: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateSttEnabled: @escaping (Bool) -> Void, openSttLanguageSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateEnableNovagramProxy: @escaping (Bool) -> Void, updateChatLockMaster: @escaping (Bool) -> Void, updateSecretVault: @escaping (Bool) -> Void, updateSecretVaultBiometric: @escaping (Bool) -> Void, updateWhiteThemeAccent: @escaping (Bool) -> Void, updateVoiceTranslate: @escaping (Bool) -> Void, updateAutoDownloadDisabled: @escaping (Bool) -> Void, updateSendTranslateConfirm: @escaping (Bool) -> Void, updateSendConfirmEnabled: @escaping (Bool) -> Void, updateAutoStickerEnabled: @escaping (Bool) -> Void, updateHeartEffectEnabled: @escaping (Bool) -> Void, updateReminderEnabled: @escaping (Bool) -> Void, openReminderTimeSettings: @escaping () -> Void, openReminderSoundSettings: @escaping () -> Void, addRecommendedFolders: @escaping () -> Void, openFolderStyle: @escaping () -> Void, updateChannelHistory: @escaping (Bool) -> Void, updateSettingsLinks: @escaping (Bool) -> Void, shareNovagramProLink: @escaping () -> Void, updateAutoAccept: @escaping (Bool) -> Void, updateAdminFolders: @escaping (Bool) -> Void, updateFoldersPrompt: @escaping (Bool) -> Void, updateShowAds: @escaping (Bool) -> Void, updateAdEventsOff: @escaping (Bool) -> Void, updateCurrencyRatesView: @escaping (Bool) -> Void, updateAdsPanel: @escaping (Bool) -> Void, updateStoryUnlock: @escaping (Bool) -> Void, updateTranslateChatsUnlock: @escaping (Bool) -> Void, openCarPlay: @escaping () -> Void) {
+    init(openAccounts: @escaping () -> Void, openAbout: @escaping () -> Void, openNovagramBots: @escaping () -> Void, openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateEditedHistoryEnabled: @escaping (Bool) -> Void, updateRoundVideoFromGallery: @escaping (Bool) -> Void, updateForwardHideNames: @escaping (Bool) -> Void, updateUnlimitedPins: @escaping (Bool) -> Void, updateSearchTranslate: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateSttEnabled: @escaping (Bool) -> Void, openSttLanguageSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateEnableNovagramProxy: @escaping (Bool) -> Void, updateChatLockMaster: @escaping (Bool) -> Void, updateSecretVault: @escaping (Bool) -> Void, updateSecretVaultBiometric: @escaping (Bool) -> Void, updateWhiteThemeAccent: @escaping (Bool) -> Void, updateVoiceTranslate: @escaping (Bool) -> Void, updateAutoDownloadDisabled: @escaping (Bool) -> Void, updateSendTranslateConfirm: @escaping (Bool) -> Void, updateSendConfirmEnabled: @escaping (Bool) -> Void, updateAutoStickerEnabled: @escaping (Bool) -> Void, updateHeartEffectEnabled: @escaping (Bool) -> Void, updateReminderEnabled: @escaping (Bool) -> Void, openReminderTimeSettings: @escaping () -> Void, openReminderSoundSettings: @escaping () -> Void, addRecommendedFolders: @escaping () -> Void, openFolderStyle: @escaping () -> Void, updateChannelHistory: @escaping (Bool) -> Void, updateSettingsLinks: @escaping (Bool) -> Void, shareNovagramProLink: @escaping () -> Void, updateAutoAccept: @escaping (Bool) -> Void, updateAdminFolders: @escaping (Bool) -> Void, updateFoldersPrompt: @escaping (Bool) -> Void, updateShowAds: @escaping (Bool) -> Void, updateAdEventsOff: @escaping (Bool) -> Void, updateCurrencyRatesView: @escaping (Bool) -> Void, updateAdsPanel: @escaping (Bool) -> Void, updateStoryUnlock: @escaping (Bool) -> Void, updateTranslateChatsUnlock: @escaping (Bool) -> Void, openCarPlay: @escaping () -> Void) {
         self.openAccounts = openAccounts
         self.openAbout = openAbout
         self.openNovagramBots = openNovagramBots
@@ -1710,6 +1729,7 @@ private final class NovagramSettingsArguments {
         self.updateRoundVideoFromGallery = updateRoundVideoFromGallery
         self.updateForwardHideNames = updateForwardHideNames
         self.updateUnlimitedPins = updateUnlimitedPins
+        self.updateSearchTranslate = updateSearchTranslate
         self.updateTranslateMessages = updateTranslateMessages
         self.openTranslationSettings = openTranslationSettings
         self.openTextStyleSettings = openTextStyleSettings
@@ -1900,6 +1920,13 @@ public func novagramSettingsController(context: AccountContext, highlightFeature
         updateState { state in
             var state = state
             state.unlimitedPins = value
+            return state
+        }
+    }, updateSearchTranslate: { value in
+        NovagramQueryTranslator.isEnabled = value
+        updateState { state in
+            var state = state
+            state.searchTranslate = value
             return state
         }
     }, updateTranslateMessages: { value in

@@ -114,7 +114,8 @@ public final class NovagramSearchFilter {
         location: SearchMessagesLocation,
         query: String,
         state: SearchMessagesState?,
-        limit: Int32
+        limit: Int32,
+        fills: Bool = true
     ) -> Signal<(SearchMessagesResult, SearchMessagesState), NoError> {
         let filterState = self.state
         let location = self.dated(location, state: filterState)
@@ -124,6 +125,9 @@ public final class NovagramSearchFilter {
         }
         let search = NovagramFilledSearch(engine: engine, location: location, query: query, limit: limit, filter: filterState)
         // Only a first page gets the extra loads: a short list cannot scroll to ask for more.
+        guard fills else {
+            return search.load(page: page, extraPagesLeft: 0, autoLoadsLeft: 0)
+        }
         return search.load(page: page, extraPagesLeft: novagramExtraPagesPerLoad, autoLoadsLeft: state == nil ? novagramAutoLoads : 0)
     }
 

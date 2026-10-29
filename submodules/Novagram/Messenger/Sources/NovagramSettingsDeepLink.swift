@@ -29,6 +29,7 @@ public enum NovagramSettingsFeature: String, CaseIterable {
     case stories = "stories"
     case mutualContacts = "mutual-contacts"
     case unlimitedPins = "unlimited-pins"
+    case searchTranslate = "search-translate"
 
     // Chat
     case deletedMessages = "deleted-messages"

@@ -462,6 +462,7 @@ public enum ChatListSearchEntry: Comparable, Identifiable {
         case downloading
         case recentlyDownloaded
         case publicPosts
+        case novagramTranslated(String) // Novagram: "Translated: …" section, its header title
     }
 
     case topic(EnginePeer, ChatListItemContent.ThreadInfo, Int, PresentationTheme, PresentationStrings, ChatListSearchSectionExpandType)
@@ -1174,6 +1175,7 @@ public enum ChatListSearchEntry: Comparable, Identifiable {
                         openClearRecentlyDownloaded()
                     })
                 case .index:
+                    if case let .novagramTranslated(title) = section { header = ChatListSearchItemHeader(type: .text(title, NovagramTranslatedSearch.headerId), theme: presentationData.theme, strings: presentationData.strings, actionTitle: nil, action: nil) } else // Novagram
                     if case .publicPosts = section {
                         if case .publicPosts = key {
                             header = ChatListSearchItemHeader(type: .publicPosts, theme: presentationData.theme, strings: presentationData.strings, actionTitle: nil, action: nil)
@@ -2816,6 +2818,7 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
             }
 
             let finalQuery = query ?? ""
+            let novagramTranslated = NovagramTranslatedSearch.section(filter: novagramFilter, engine: context.engine, query: query, isChatsTab: key == .chats, chatLocation: location, locations: searchLocations) // Novagram
             updateSearchContexts { _ in
                 return ([:], true)
             }
@@ -3065,9 +3068,10 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                 resolvedMessage,
                 fixedRecentlySearchedPeers,
                 foundThreads,
-                adsHiddenPromise.get()
+                adsHiddenPromise.get(),
+                novagramTranslated // Novagram
             )
-            |> map { accountPeer, foundLocalPeers, foundRemotePeers, foundRemoteMessages, foundPublicMessages, presentationData, searchState, selectionState, resolvedMessage, recentPeers, allAndFoundThreads, adsHidden -> ([ChatListSearchEntry], Bool, String?)? in
+            |> map { accountPeer, foundLocalPeers, foundRemotePeers, foundRemoteMessages, foundPublicMessages, presentationData, searchState, selectionState, resolvedMessage, recentPeers, allAndFoundThreads, adsHidden, novagramTranslated -> ([ChatListSearchEntry], Bool, String?)? in // Novagram
                 let isSearching = foundRemotePeers.3 || foundRemoteMessages.1 || foundPublicMessages.1
                 let novagramPrivacy = NovagramSearchPrivacyPass() // Novagram: hidden/locked chats stay out of search
                 let resolvedMessage = resolvedMessage.flatMap { novagramPrivacy.hidesMessage($0) ? nil : $0 } // Novagram
@@ -3481,6 +3485,9 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                         }
                     }
 
+                    for message in novagramTranslated?.rows(excluding: Set(foundRemoteMessages.0.flatMap { $0.messages.map(\.id) }), privacy: novagramPrivacy) ?? [] { // Novagram: "Translated: …" above Messages
+                        entries.append(.message(message, EngineRenderedPeer(message: message), nil, nil, presentationData, 0, nil, false, .index(message.index), nil, .novagramTranslated(novagramTranslated?.title(strings: presentationData.strings) ?? ""), false, nil, false, searchScope)) // Novagram
+                    } // Novagram
                     let hadAnySearchMessagesBefore = hadAnySearchMessages.with { $0 }
                     var existingMessageIds = Set<MessageId>()
                     if foundRemoteMessages.1 && (searchScope != .everywhere || hadAnySearchMessagesBefore) {

@@ -33,6 +33,7 @@ swift_library(
         "//submodules/AppBundle:AppBundle",
         "//submodules/ComponentFlow",
         "//submodules/Novagram/Localization:NovagramLocalization",
+        "//submodules/Novagram/Search:NovagramSearch",
         "//submodules/Novagram/AutoProxy:NovagramAutoProxy",
         "//submodules/Novagram/Brand:NovagramBrand",
         "//submodules/Novagram/UnreadReminder:NovagramUnreadReminder",

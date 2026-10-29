@@ -177,7 +177,7 @@ three calls and delete the two lines.
 
 ## 📋 Novagram features va hooklar (2026-10-10)
 
-> 1–44, 86, 89 va 91: Settings → Novagram Settings (ilovadagi tartibda). 45–85, 87, 88 va 92–94: Settings'dan tashqaridagi features.
+> 1–44, 86, 89 va 91: Settings → Novagram Settings (ilovadagi tartibda). 45–85, 87, 88 va 92–95: Settings'dan tashqaridagi features.
 > Hooks: Telegram-owned fayllardagi barcha Novagram o'zgarishlari, feature bo'yicha. Har bir hookning kodi va anchor'i quyidagi 📌 bo'limlarda.
 
 ### 1. Novagram Settings
@@ -355,6 +355,7 @@ three calls and delete the two lines.
 92. **Qidiruvda yashirin va qulflangan chatlar**: yashirin chat (Secret Vault) global qidiruvning hech qayerida chiqmaydi (chat, xabar, top/recent, Channels/Apps tablari, peer chip'lari, hashtag/Posts, Downloads, galereya), yashirin ro'yxat ochiq bo'lsa ham. Qulflangan chat (Chat qulfi) nomi chiqadi, xabarlari chiqmaydi. Faqat joriy account.
 93. **Qidiruvda sana oralig'i**: MESSAGES sarlavhasidagi "From All Chats" menyusida "Sanadan…", "Sanagacha…" va "Sanalarni tozalash". Faqat xabarlar bo'limi (Posts/hashtag, Channels va Apps tablarida yo'q). Sarlavhada: `From All Chats · 01.10.26–29.10.26`. Hech narsa saqlanmaydi, qidiruv yopilsa tozalanadi.
 94. **Faqat o'qilmaganlar / Faqat mention'lar**: o'sha menyuda ikkita toggle (yoqilganda ✓, ikkalasi birga ham ishlaydi). Natija qisqa bo'lsa keyingi sahifalar o'zi yuklanadi. Galereya va pleer ham shu ro'yxatni ko'rsatadi.
+95. **Tarjima qilingan so'rov bo'yicha qidirish**: Novagram Settings → Interfeys → "Tarjima qilingan so'rov bo'yicha ham qidirish" (`pro_messager` / `novagram_search_translate`, default o'chiq). Yoqilsa Chats tabidagi global qidiruv so'rovni `auto_translate_lang` tiliga (bo'lmasa `en`) tarjima qiladi va Messages ustida "Tarjima: …" bo'limini ko'rsatadi. So'rov Telegram'ning tarjima xizmatiga yuboriladi.
 
 ---
 
@@ -505,6 +506,11 @@ three calls and delete the two lines.
 260. `ChatListSearchListPaneNode.swift` (ChatListUI): `openMessagesFilter` menyusining oxiriga bizning bandlar.
 261. `MessagesData.swift` (TelegramCore): `EnginePeerReadCounters.isIncomingMessageRead(_:)` — "Faqat o'qilmaganlar" uchun (`state` fileprivate qoladi).
 262. `ChatListSearchListPaneNode.swift` (ChatListUI): filtr yoqiq va xabar qolmasa "All Chats"da ham bo'sh-natija footer'i chiqadi, sarlavha va menyu yo'qolmaydi.
+263. `ChatListSearchListPaneNode.swift` (ChatListUI): `ChatListSearchEntry.MessageSection`ga `case novagramTranslated(String)` (stable id `.messageId(id, section)` Messages bilan to'qnashmaydi).
+264. `ChatListSearchListPaneNode.swift` (ChatListUI): `item()`dagi `.index` header: bizning bo'lim `.text(title, NovagramTranslatedSearch.headerId)` sarlavhasini oladi.
+265. `ChatListSearchListPaneNode.swift` (ChatListUI): `finalQuery`dan keyin `NovagramTranslatedSearch.section(...)` signali (Messages bilan bir xil location va filtrlar).
+266. `ChatListSearchListPaneNode.swift` (ChatListUI): natijalar `combineLatest`ining 13-argumenti va map'ning `novagramTranslated` parametri.
+267. `ChatListSearchListPaneNode.swift` (ChatListUI): Messages siklidan oldin "Tarjima: …" qatorlari (har emission uchun yangi id Set'i bilan dedupe).
 
 #### Xabar eslatmasi
 
@@ -7699,3 +7705,37 @@ Two toggles after the dates (checkmark when on, both together = AND), shown in t
 | --- | --- |
 | `TelegramCore/Sources/TelegramEngine/Data/MessagesData.swift` | in `EnginePeerReadCounters`, before `hasEverRead`: a comment and `public func isIncomingMessageRead(_ index: EngineMessage.Index) -> Bool { self.state?.isIncomingMessageIndexRead(index) ?? true }` (#261). 5 lines. |
 | `ChatListUI/Sources/ChatListSearchListPaneNode.swift` | #262: in `case .everywhere:` of the no-messages `switch searchScope`, before `break`: `if novagramFilter.isActive { entries.append(.emptyMessagesFooter(presentationData, searchScope, query)) }`. Telegram shows that footer only for a narrowed scope; without it a filter that leaves no messages would also hide the header, and with it the only way to turn the filter off. 1 line. |
+
+---
+
+## 📌 Search translated query (2026-10-29)
+
+Feature 95, hooks #263–#267. Ours: `submodules/Novagram/Search/Sources/NovagramTranslatedSearch.swift`
+(`NovagramQueryTranslator`, `NovagramTranslatedMessages`, `NovagramTranslatedSearch`); the switch row in
+`Novagram/Messenger/Sources/NovagramSettingsController.swift` (Interface, last row before the footer, slug
+`search-translate` in `NovagramSettingsDeepLink.swift`); strings `settings_searchTranslate_*` and
+`search_translatedTitle` in `NovagramL10n.swift` (en/uz/ru word for word from the Mac). Same rules as the Mac
+(`NovagramQueryTranslator`):
+
+- Key `pro_messager` / `novagram_search_translate`, Bool, default off. While it is off `section(...)` returns
+  `.single(nil)` before any translate signal is built.
+- Target language `pro_messager` / `auto_translate_lang`, "en" when missing or empty.
+- Trimmed query, 3+ characters, not `#…` / `$…`; `engine.messages.translate(text:toLang:)` starts 600 ms late
+  (a new query cancels it); errors count as no translation; in-memory cache keyed by language + query, 200 entries,
+  then cleared; no section when the translation equals the query (case and whitespace ignored).
+- Only the Chats tab's common search: one `.general` location, no tags, no community, not `.globalPosts`, chat
+  list location `.chatList` (so never forum, peer-scoped or Saved Messages search, nor Channels / Apps / Media / …).
+- Results: one `NovagramSearchFilter.searchMessages(…, state: nil, limit: 20, fills: false)` on the Messages
+  section's location, so dates and Unread / Mentions apply (one page, no filling, no paging); privacy through the
+  emission's `NovagramSearchPrivacyPass`.
+- The signal emits nil at once, so the other sections never wait for it (a cached translation used to hold the
+  whole list back on the Mac).
+- Rows are deduped against the ids of `foundRemoteMessages` with a Set built in that emission. Nothing goes into
+  `searchContexts`, so the section is not in the gallery / player list and never in "load more".
+
+| File | Change |
+| --- | --- |
+| `ChatListUI/Sources/ChatListSearchListPaneNode.swift` | #263: `case novagramTranslated(String)` after `case recentlyDownloaded` in `MessageSection` (the title travels with the section, so the stable id differs from Messages'). #264: first line of `case .index:` in the `.message` item: `if case let .novagramTranslated(title) = section { header = ChatListSearchItemHeader(type: .text(title, NovagramTranslatedSearch.headerId), …) } else` (the next line, upstream's `if case .publicPosts = section {`, continues it). #265: `let novagramTranslated = NovagramTranslatedSearch.section(…)` after `let finalQuery = query ?? ""`. #266: `adsHiddenPromise.get()` → `adsHiddenPromise.get(),` plus a `novagramTranslated` line in the final `combineLatest`, and `, novagramTranslated` added to its map's parameters (2 changed lines, 1 added). #267: before `let hadAnySearchMessagesBefore`: a 3-line `for message in novagramTranslated?.rows(excluding: …, privacy: novagramPrivacy) ?? [] { entries.append(.message(…, .novagramTranslated(title), …)) }`. 7 added lines, 2 changed. |
+
+On an upstream update: #264's `} else` must stay directly above upstream's `if case .publicPosts = section {`; if
+upstream adds an argument to the final `combineLatest`, keep `novagramTranslated` last in both the list and the map.

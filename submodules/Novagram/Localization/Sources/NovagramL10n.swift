@@ -98,6 +98,23 @@ public struct NovagramL10n {
         pick(en: "Mentions only", uz: "Faqat mention'lar", ru: "Только упоминания", zh: "仅提及")
     }
 
+    public func search_translatedTitle(_ text: String) -> String {
+        pick(en: "Translated: \(text)", uz: "Tarjima: \(text)", ru: "Перевод: \(text)", zh: "翻译：\(text)")
+    }
+
+    public var settings_searchTranslate_title: String {
+        pick(en: "Search the translated query too", uz: "Tarjima qilingan so'rov bo'yicha ham qidirish", ru: "Искать и по переводу запроса", zh: "也按翻译后的查询搜索")
+    }
+
+    public var settings_searchTranslate_subtitle: String {
+        pick(
+            en: "Messages search also looks for the query translated into your translation language. The query is sent to Telegram's translation service.",
+            uz: "Xabarlar qidiruvi so'rovni tarjima tilingizga tarjima qilib ham qidiradi. So'rov Telegram'ning tarjima xizmatiga yuboriladi.",
+            ru: "Поиск по сообщениям также ищет запрос, переведённый на ваш язык перевода. Запрос отправляется в сервис перевода Telegram.",
+            zh: "消息搜索也会把查询翻译成你的翻译语言再搜索。查询会发送到 Telegram 的翻译服务。"
+        )
+    }
+
     // MARK: - Settings → Novagram screen
     // Section headers, item titles, item subtitles, section footers, generic on/off labels.
 
