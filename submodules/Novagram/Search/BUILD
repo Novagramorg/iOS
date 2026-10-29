@@ -12,9 +12,11 @@ swift_library(
     deps = [
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
         "//submodules/TelegramCore:TelegramCore",
+        "//submodules/AsyncDisplayKit:AsyncDisplayKit",
         "//submodules/Display:Display",
         "//submodules/AppBundle:AppBundle",
         "//submodules/ContextUI:ContextUI",
+        "//submodules/ChatListSearchItemHeader:ChatListSearchItemHeader",
         "//submodules/AccountContext:AccountContext",
         "//submodules/TelegramPresentationData:TelegramPresentationData",
         "//submodules/TelegramUI/Components/ChatScheduleTimeController:ChatScheduleTimeController",

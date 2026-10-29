@@ -102,6 +102,26 @@ public struct NovagramL10n {
         pick(en: "Translated: \(text)", uz: "Tarjima: \(text)", ru: "Перевод: \(text)", zh: "翻译：\(text)")
     }
 
+    public var search_savedTitle: String {
+        pick(en: "Saved searches", uz: "Saqlangan qidiruvlar", ru: "Сохранённые поиски", zh: "已保存的搜索")
+    }
+
+    public var search_savedPinned: String {
+        pick(en: "Pinned", uz: "Qadalgan", ru: "Закреплён", zh: "已置顶")
+    }
+
+    public var search_savedPin: String {
+        pick(en: "Pin", uz: "Qadash", ru: "Закрепить", zh: "置顶")
+    }
+
+    public var search_savedUnpin: String {
+        pick(en: "Unpin", uz: "Qadashni olish", ru: "Открепить", zh: "取消置顶")
+    }
+
+    public var search_savedRemove: String {
+        pick(en: "Remove", uz: "O'chirish", ru: "Удалить", zh: "移除")
+    }
+
     public var settings_searchTranslate_title: String {
         pick(en: "Search the translated query too", uz: "Tarjima qilingan so'rov bo'yicha ham qidirish", ru: "Искать и по переводу запроса", zh: "也按翻译后的查询搜索")
     }

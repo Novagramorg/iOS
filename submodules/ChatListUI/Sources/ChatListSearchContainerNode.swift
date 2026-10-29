@@ -353,6 +353,7 @@ public final class ChatListSearchContainerNode: SearchDisplayControllerContentNo
             self?.openAdInfo?(node, adPeer)
         })
         self.paneContainerNode.interaction = interaction
+        NovagramSavedSearchScope.setQueryHandler(owner: interaction, { [weak self] query in self?.search(filter: .chats, query: query) }) // Novagram: a saved search puts its text back
         
         self.paneContainerNode.currentPaneUpdated = { [weak self] key, transitionFraction, transition in
             guard let self, let key else {

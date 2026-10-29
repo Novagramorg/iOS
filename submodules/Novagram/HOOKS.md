@@ -357,6 +357,7 @@ three calls and delete the two lines.
 94. **Faqat o'qilmaganlar / Faqat mention'lar**: o'sha menyuda ikkita toggle (yoqilganda ✓, ikkalasi birga ham ishlaydi). Natija qisqa bo'lsa keyingi sahifalar o'zi yuklanadi. Galereya va pleer ham shu ro'yxatni ko'rsatadi.
 95. **Tarjima qilingan so'rov bo'yicha qidirish**: Novagram Settings → Interfeys → "Tarjima qilingan so'rov bo'yicha ham qidirish" (`pro_messager` / `novagram_search_translate`, default o'chiq). Yoqilsa Chats tabidagi global qidiruv so'rovni `auto_translate_lang` tiliga (bo'lmasa `en`) tarjima qiladi va Messages ustida "Tarjima: …" bo'limini ko'rsatadi. So'rov Telegram'ning tarjima xizmatiga yuboriladi.
 96. **Chat ichida aniq ibora va regex qidiruvi**: chat qidiruvida `"ikki so'z"` (to'g'ri yoki egri qo'shtirnoq) faqat shu iborani o'z ichiga olgan xabarlarni qoldiradi (katta-kichik harf va diakritika farqsiz); `re:pattern` chat tarixini ko'rib chiqadi (sahifasi 100, ko'pi bilan 2000 xabar) va regular expression mos kelganlarini ko'rsatadi, noto'g'ri pattern oddiy qidiruv bo'ladi. Hisoblagich topilganlar sonini ko'rsatadi. Oddiy so'rov avvalgidek bitta so'rov. Ko'rsatma: About Novagram kirish matnining oxirida.
+97. **Saqlangan va qadalgan qidiruvlar**: global qidiruvda natija (chat yoki xabar) ochilganda yozilgan so'rov saqlanadi (oxirgi 20 ta + cheklanmagan qadalganlar, har akkaunt alohida, `pro_messager` / `novagram_saved_searches_<peer id>`). Bo'sh qidiruv ekranida Recent ustida "Saqlangan qidiruvlar" bo'limi: avval qadalganlar ("Qadalgan" belgisi), keyin oxirgilar. Bosilsa matn qidiruv maydoniga qaytadi va qidiruv qayta ishlaydi; uzoq bosilsa "Qadash" / "Qadashni olish" va "O'chirish". Akkaunt logout bo'lsa (boshqa qurilmadan tugatilgan sessiya ham) o'chadi.
 
 ---
 
@@ -516,6 +517,12 @@ three calls and delete the two lines.
 269. `ChatControllerNode.swift` (TelegramUI): yuqori/pastki strelkalar chaqiradigan "load more" ham shu orqali.
 270. `ChatSearchResultsContollerNode.swift` (TelegramUI): natijalar ro'yxati ekranining `loadMore`i ham shu orqali.
 271. `TelegramUI/BUILD`: `//submodules/Novagram/Search:NovagramSearch`.
+272. `ChatListSearchListPaneNode.swift` (ChatListUI): `ChatListRecentEntry`ga `case novagramSavedSearch(NovagramSavedSearchRow)`, stable id `case novagramSavedSearch(String)`, va uning `stableId`, `==`, `<` (2 qator) va `item()` qatorlari.
+273. `ChatListSearchListPaneNode.swift` (ChatListUI): `let novagramSaved = NovagramSavedSearchScope(...)` (faqat asosiy chat ro'yxatining global qidiruvi).
+274. `ChatListSearchListPaneNode.swift` (ChatListUI): natija ochilganda so'rov saqlanadi: `peerSelected` (`addRecentlySearchedPeer` yonida), `messageSelected`, `ListMessageItemInteraction.openMessage`.
+275. `ChatListSearchListPaneNode.swift` (ChatListUI): Chats tabining bo'sh ekranida "Saqlangan qidiruvlar" qatorlari Recent (top peers'dan keyin) ustiga qo'yiladi, har emission uchun yangidan.
+276. `ChatListSearchContainerNode.swift` (ChatListUI): saqlangan qidiruv bosilsa `search(filter: .chats, query:)` (matn qidiruv maydoniga qaytadi).
+277. `AppDelegate.swift` (TelegramUI): `import NovagramSearch`; `NovagramSavedSearches.start(sharedContext:)` — logout bo'lgan akkauntning saqlangan qidiruvlari o'chadi.
 
 #### Xabar eslatmasi
 
@@ -7795,3 +7802,48 @@ browser bookmarks), the reaction-tag lookup in `ChatControllerNode` (`query: ""`
 On an upstream update: each hook is a drop-in for `self.context.engine.messages.searchMessages(` with the same
 arguments; if upstream changes a call, take theirs and put `NovagramChatSearchFilter.searchMessages(engine:
 self.context.engine, …)` back in its place.
+
+---
+
+## 📌 Search saved and pinned queries (2026-10-29)
+
+Feature 97, hooks #272–#277. Ours: `submodules/Novagram/Search/Sources/NovagramSavedSearches.swift` (the store, a
+port of the Mac's `NovagramSavedSearches` on engine names, no Postbox) and `NovagramSavedSearchItem.swift`
+(`NovagramSavedSearchScope`, `NovagramSavedSearchRow` and the list row). Strings `search_saved*` (en/uz/ru word for word
+from the Mac, zh added) in `NovagramL10n.swift`. New deps of `NovagramSearch`: AsyncDisplayKit, ChatListSearchItemHeader.
+
+- Storage, the same as the Mac (another session keeps both in sync, so never rename): suite `pro_messager`, key
+  `novagram_saved_searches_<accountPeerId.toInt64()>`, value JSON `{"accountRecordId": Int64, "pinned": [String],
+  "recent": [String]}` (default `JSONEncoder`). `recent` keeps 20, newest first; `pinned` has no limit, newest
+  first. A query is in one list only: pinning moves it out of recent, unpinning puts it at the top of recent.
+  Queries are trimmed and compared case-insensitively; an empty one is ignored.
+- Saving: when a result is opened from global search, the typed text (`searchQueryValue`, tokens are not part of
+  it) is saved: a peer (`peerSelected`, next to `addRecentlySearchedPeer`), a message (`messageSelected`) and a
+  links / files / music / voice row (`ListMessageItemInteraction.openMessage`). Only in the main chat list's search
+  (`NovagramSavedSearchScope`: location `.chatList`, empty peers filter, no community), so never from a peer picker,
+  a forum or Saved Messages search.
+- Section: on the Chats tab's empty search screen, after the top peers strip and above Recent, header "Saved
+  searches" (`ChatListSearchItemHeader` `.text`): pinned first (marked "Pinned" on the right), then recent. A tap
+  calls the handler the search container registered for the shared `ChatListSearchInteraction` (a weak
+  `NSMapTable`), which runs `search(filter: .chats, query:)`: the text goes back into the search field and the
+  search runs again. Text only, no tab, date or filter restore. A long press opens a context menu: Pin / Unpin,
+  Remove.
+- Per emission: the rows come from `NovagramSavedSearches.signal(accountPeerId:)` combined into `recentItems` and are
+  inserted into that emission's entries; nothing goes into the pane's cross-emission state.
+- Current account only: the pane reads and writes only `context.account.peerId`'s key.
+- Logout: `NovagramSavedSearches.start(sharedContext:)` watches `activeAccountContexts`; an account that leaves the
+  list was logged out, whatever the path (Settings → Log Out, the account list, a session ended from another device
+  through `account.loggedOut` in `ApplicationContext`, a forced logout from a push in `SharedNotificationManager`,
+  a deleted account), so `clear(accountRecordId:)` removes every key whose stored `accountRecordId` matches. This
+  is the Mac's remote-logout fix (`loggedOut` observer and log out of all accounts) without a hook per path.
+
+| File | Change |
+| --- | --- |
+| `ChatListUI/Sources/ChatListSearchListPaneNode.swift` | #272: `case novagramSavedSearch(String)` in `ChatListRecentEntryStableId`; `case novagramSavedSearch(NovagramSavedSearchRow)` in `ChatListRecentEntry`; one line each in `stableId`, `==`, `item()`; in `<` a `case .novagramSavedSearch: return false` in `.peer`'s inner switch and one lhs case line (after top peers, before everything else). #273: `let novagramSaved = NovagramSavedSearchScope(context:location:isPlainSearch: peersFilter.isEmpty && communityId == nil)` after `let novagramFilter = self.novagramFilter`. #274: `novagramSaved.record(…searchQueryValue)` after `addRecentlySearchedPeer` in `peerSelected`, after `interaction.openMessage(…)` in `messageSelected`, after `interaction.dismissInput()` in `ListMessageItemInteraction(openMessage:)`. #275: after the #250 `recentItems = recentItems \|> map { … }` line, a 3-line `if case .chats = key, novagramSaved.isEnabled, !peersFilter.contains(.excludeRecent) { recentItems = combineLatest(recentItems, novagramSaved.rows(…)) \|> map { … insert at 1 after `.topPeers`, else 0 … } }`. 14 lines. |
+| `ChatListUI/Sources/ChatListSearchContainerNode.swift` | #276: after `self.paneContainerNode.interaction = interaction`: `NovagramSavedSearchScope.setQueryHandler(owner: interaction, { [weak self] query in self?.search(filter: .chats, query: query) })`. 1 line. |
+| `TelegramUI/Sources/AppDelegate.swift` | #277: `import NovagramSearch` after `import NovagramCarPlay`; `NovagramSavedSearches.start(sharedContext:)` after `NovagramAnalyticsManager.shared.start(…)`. 2 lines. |
+
+On an upstream update: if `ChatListRecentEntry` gains a case, the `<` lhs line of #272 still compiles (it uses
+`else`), but `.peer`'s inner switch and the other switches need nothing more; a new `ChatListRecentEntry` switch
+elsewhere needs a `.novagramSavedSearch` case. If upstream renames `search(filter:query:)` on the search container,
+point #276 at the method that sets the search field text.

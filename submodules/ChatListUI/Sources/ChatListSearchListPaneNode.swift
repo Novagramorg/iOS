@@ -55,6 +55,7 @@ private func isIncludedCommunityContainer(_ peer: EnginePeer?, filter: ChatListN
 private enum ChatListRecentEntryStableId: Hashable {
     case topPeers
     case peerId(EnginePeer.Id, ChatListRecentEntry.Section)
+    case novagramSavedSearch(String) // Novagram
     case footer
 }
 
@@ -68,6 +69,7 @@ private enum ChatListRecentEntry: Comparable, Identifiable {
     case topPeers([EnginePeer], PresentationTheme, PresentationStrings)
     case peer(index: Int, peer: RecentlySearchedPeer, Section, PresentationTheme, PresentationStrings, PresentationDateTimeFormat, PresentationPersonNameOrder, PresentationPersonNameOrder, EngineGlobalNotificationSettings, PeerStoryStats?, Bool)
     case footer(PresentationTheme, String)
+    case novagramSavedSearch(NovagramSavedSearchRow) // Novagram
 
     var stableId: ChatListRecentEntryStableId {
         switch self {
@@ -75,6 +77,7 @@ private enum ChatListRecentEntry: Comparable, Identifiable {
             return .topPeers
         case let .peer(_, peer, section, _, _, _, _, _, _, _, _):
             return .peerId(peer.peer.peerId, section)
+        case let .novagramSavedSearch(row): return .novagramSavedSearch(row.stableKey) // Novagram
         case .footer:
             return .footer
         }
@@ -109,6 +112,7 @@ private enum ChatListRecentEntry: Comparable, Identifiable {
                 } else {
                     return false
                 }
+            case let .novagramSavedSearch(lhsRow): if case let .novagramSavedSearch(rhsRow) = rhs { return lhsRow == rhsRow } else { return false } // Novagram
         }
     }
 
@@ -124,9 +128,11 @@ private enum ChatListRecentEntry: Comparable, Identifiable {
                     return lhsIndex <= rhsIndex
                 case .footer:
                     return true
+                case .novagramSavedSearch: return false // Novagram: saved searches sit above Recent
                 }
             case .footer:
                 return false
+            case let .novagramSavedSearch(lhsRow): if case let .novagramSavedSearch(rhsRow) = rhs { return lhsRow.index < rhsRow.index } else if case .topPeers = rhs { return false } else { return true } // Novagram
         }
     }
 
@@ -396,6 +402,7 @@ private enum ChatListRecentEntry: Comparable, Identifiable {
             return ItemListTextItem(presentationData: ItemListPresentationData(theme: presentationData.theme, fontSize: presentationData.fontSize, strings: presentationData.strings, nameDisplayOrder: presentationData.nameDisplayOrder, dateTimeFormat: presentationData.dateTimeFormat), text: .markdown(text), sectionId: 0, linkAction: { _ in
                 openTopAppsInfo()
             }, style: .plain, textSize: .larger, textAlignment: .center, additionalInsets: UIEdgeInsets(top: 10.0, left: 0.0, bottom: 10.0, right: 0.0), additionalOuterInsets: UIEdgeInsets(top: 0.0, left: 0.0, bottom: -44.0, right: 0.0))
+        case let .novagramSavedSearch(row): return row.item() // Novagram
         }
     }
 }
@@ -2024,6 +2031,7 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
 
         let currentRemotePeers = Atomic<([FoundPeer], [FoundPeer], [AdPeer])?>(value: nil)
         let novagramFilter = self.novagramFilter // Novagram
+        let novagramSaved = NovagramSavedSearchScope(context: context, location: location, isPlainSearch: peersFilter.isEmpty && communityId == nil) // Novagram: saved searches (global search only)
         let presentationDataPromise = self.presentationDataPromise
         let searchStatePromise = self.searchStatePromise
         let selectionPromise = self.selectedMessagesPromise
@@ -3651,6 +3659,7 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
             switch location {
             case .chatList, .forum:
                 let _ = context.engine.peers.addRecentlySearchedPeer(peerId: peer.id).startStandalone()
+                novagramSaved.record(self?.searchQueryValue) // Novagram
             case .savedMessagesChats:
                 break
             }
@@ -3663,6 +3672,7 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
             interaction.dismissInput()
             if let strongSelf = self, let peer = message.peers[message.id.peerId] {
                 interaction.openMessage(EnginePeer(peer), threadId, message.id, strongSelf.key == .chats)
+                novagramSaved.record(strongSelf.searchQueryValue) // Novagram
             }
             self?.listNode?.clearHighlightAnimated(true)
         }, groupSelected: { _ in
@@ -3764,6 +3774,7 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                 return false
             }
             interaction.dismissInput()
+            novagramSaved.record(strongSelf.searchQueryValue) // Novagram
 
             let gallerySource: GalleryControllerItemSource
 
@@ -4623,6 +4634,9 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
         }
 
         recentItems = recentItems |> map { items in var items = items; items.entries = NovagramSearchPrivacy.kept(items.entries, peerId: { if case let .peerId(id, _) = $0.stableId { return id } else { return nil } }); return items } // Novagram
+        if case .chats = key, novagramSaved.isEnabled, !peersFilter.contains(.excludeRecent) { // Novagram: "Saved searches" above Recent, rebuilt per emission
+            recentItems = combineLatest(recentItems, novagramSaved.rows(appearance: presentationDataPromise.get() |> map { ($0.theme, $0.strings) }, owner: interaction, present: { interaction.present($0, nil) })) |> map { items, rows in var items = items; items.entries.insert(contentsOf: rows.map { .novagramSavedSearch($0) }, at: items.entries.first?.stableId == .topPeers ? 1 : 0); return items } // Novagram
+        } // Novagram
         self.recentDisposable.set((combineLatest(queue: .mainQueue(),
             presentationDataPromise.get(),
             recentItems
