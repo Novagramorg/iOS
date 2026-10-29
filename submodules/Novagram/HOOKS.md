@@ -360,6 +360,11 @@ three calls and delete the two lines.
 97. **Saqlangan va qadalgan qidiruvlar**: global qidiruvda natija (chat yoki xabar) ochilganda yozilgan so'rov saqlanadi (oxirgi 20 ta + cheklanmagan qadalganlar, har akkaunt alohida, `pro_messager` / `novagram_saved_searches_<peer id>`). Bo'sh qidiruv ekranida Recent ustida "Saqlangan qidiruvlar" bo'limi: avval qadalganlar ("Qadalgan" belgisi), keyin oxirgilar. Bosilsa matn qidiruv maydoniga qaytadi va qidiruv qayta ishlaydi; uzoq bosilsa "Qadash" / "Qadashni olish" va "O'chirish". Akkaunt logout bo'lsa (boshqa qurilmadan tugatilgan sessiya ham) o'chadi.
 98. **Qidiruv imkoniyatlari switch'i**: Novagram Settings → Qidiruv → "Qidiruv imkoniyatlari" (`pro_messager` / `novagram_search_features`, default yoqiq). O'chirilsa 93–97 ishlamaydi: "From All Chats" menyusida sana va filtrlar yo'q, chat ichida `"..."` va `re:` oddiy matn, saqlangan qidiruvlar bo'limi yashirin va yangisi saqlanmaydi (saqlanganlari o'chmaydi), tarjima bo'limi yo'q. 92 (yashirin va qulflangan chatlar) har doim ishlaydi. Telegram fayllarida hook yo'q.
 
+#### Qo'ng'iroqlar (2026-10-29)
+
+99. **Zaif signalda "Videomni o'chirish"**: 1:1 qo'ng'iroqda "Weak signal" yozuvi ~5 s uzluksiz turib, o'zimizning kamera videomiz yoqiq bo'lsa, yozuv tagida "Videomni o'chirish" tugmasi chiqadi (en "Turn off my video", Mac bilan bir xil). Bosilsa kamera tugmasidek videoni o'chiradi (`videoAction` → `toggleVideo()` → `call.disableVideo()`). Signal tiklansa yoki video o'chsa tugma yo'qoladi; ekran ulashishda chiqmaydi.
+100. **Qo'ng'iroqlarda kamroq trafik**: Novagram Settings → Qo'ng'iroqlar → "Qo'ng'iroqlarda kamroq trafik" (`pro_messager` / `novagram_call_data_saving`, default o'chiq, slug `call-data-saving`). Telegram'ning o'z sozlamasini boshqaradi (Data and Storage → Use less data for calls): yoqilsa "Always", o'chirilsa "Default". Switch jonli sozlamani ko'rsatadi (u yerda o'zgartirilsa bu yerda ham ko'rinadi); qo'ng'iroq sozlamani yaratilganda o'qiydi, shuning uchun keyingi qo'ng'iroqdan ishlaydi. Telegram fayllarida hook yo'q.
+
 ---
 
 ### 3. Hooks
@@ -609,6 +614,10 @@ three calls and delete the two lines.
 235. `PrivateCallScreen.swift` (CallScreen): kamera yoqilganda speaker tugmasi flip camera'dan keyin qoladi (5 ta tugma).
 236. `ButtonGroupView.swift` (CallScreen): 5 ta tugmada oraliq ekran eniga moslashadi (36pt dan 8pt gacha).
 237. `TelegramCallsUI/Tests/NovagramSpeakerReapplyTests.swift` (yangi fayl, upstream modul ichida): 232-hook uchun regression testlar.
+278. `PrivateCallScreen.swift` (CallScreen): `import NovagramCalls`.
+279. `PrivateCallScreen.swift` (CallScreen): `private let novagramTurnOffVideo = NovagramCallTurnOffVideo()` (`weakSignalView` dan keyin).
+280. `PrivateCallScreen.swift` (CallScreen): "Weak signal" if/else'dan keyin `self.novagramTurnOffVideo.update(...)`: zaif signalda "Videomni o'chirish" tugmasi (feature 99).
+281. `CallScreen/BUILD`: `//submodules/Novagram/Calls:NovagramCalls`.
 
 #### Bildirishnomalar
 
@@ -7872,3 +7881,47 @@ The privacy filter (feature 92, `NovagramSearchPrivacy`) never reads this switch
 and locked chats' messages stay hidden either way. A search that is already open keeps what it had; the switch applies
 to the next search (the pane builds its scope and filter once). The two About entries say how to turn it off.
 
+---
+
+## 📌 Call weak signal and data saver (2026-10-29)
+
+Features 99 and 100, ported from the Mac (`NovagramCallExtras.swift`, `NovagramCallDataSaving.swift`, NOVAGRAM_HOOKS.md
+"Call extras"); same keys, slug and wording. Hooks #278–#281.
+
+**99. "Turn off my video" on the Weak signal state.** No second banner: the button sits 8 pt under the existing
+`WeakSignalView` ("Weak signal", shown while `activeState.signalInfo.quality <= 0.2`, the smoothed `bars / 4` from
+`CallControllerNodeV2`), centred on it. `NovagramCallTurnOffVideo` (`submodules/Novagram/Calls`, target
+`NovagramCalls`) owns the button and a 5 s one-shot timer: the timer starts when the label appears, and the
+button shows once the label has been on screen that long while `params.state.localVideo != nil`. That is our camera
+video: `CallControllerNodeV2` sets `localVideo` to nil for a screencast, and the camera button reads the same value.
+The label going away (signal recovered, emoji key expanded) resets the timer; video off hides the button. The timer
+is needed because the screen does not relayout while the signal stays the same. A tap calls the screen's
+`videoAction`, the camera button's action (`toggleVideo()` → `call.disableVideo()`); no new call logic.
+`isAnimatedOutToGroupCall` hides it like the label. String: `NovagramL10n.call_turnOffMyVideo` (en/uz/ru as the
+Mac, plus zh).
+
+| File | Change |
+| --- | --- |
+| `TelegramUI/Components/Calls/CallScreen/Sources/PrivateCallScreen.swift` | #278: `import NovagramCalls // Novagram` after `import TelegramPresentationData`. #279: `private let novagramTurnOffVideo = NovagramCallTurnOffVideo() // Novagram` after `private var weakSignalView: WeakSignalView?`. #280: at the end of `update(params:transition:)`, right after the weak-signal `if … else { … }` block: `self.novagramTurnOffVideo.update(host: self, weakSignalView: self.weakSignalView, isOwnVideoOn: params.state.localVideo != nil, isHidden: self.isAnimatedOutToGroupCall, strings: params.state.strings, transition: transition, turnOffVideo: { [weak self] in self?.videoAction?() }) // Novagram`. 3 lines. |
+| `TelegramUI/Components/Calls/CallScreen/BUILD` | #281: `"//submodules/Novagram/Calls:NovagramCalls", # Novagram` at the end of `deps`. 1 line. `NovagramCalls` depends only on Display, ComponentFlow, TelegramPresentationData and NovagramLocalization, so there is no cycle; it must never depend on CallScreen or TelegramCallsUI. |
+
+On an upstream update: if the weak-signal block moves or `weakSignalView` is renamed, #280 follows it (it must run
+after the label's frame is set in the same pass). If `localVideo` starts carrying a screencast, add a screencast check
+to `isOwnVideoOn`.
+
+**100. "Use less data for calls".** No hook in a Telegram file. Novagram Settings → a new "CALLS" section
+(`NovagramSection.calls = 14`, stable ids 53–59 reserved, rows 53–54; the list is ordered by `sortId`, which is `stableId * 10` except
+the calls rows, 191–192, so the section sits right after SEARCH; a future "Call recording" switch goes here) with "Use less data for calls" (`pro_messager` / `novagram_call_data_saving`, Bool,
+default off, slug `call-data-saving`). `NovagramCallDataSaving` (Messenger) drives Telegram's own
+`VoiceCallSettings.dataSaving` through `updateVoiceCallSettingsSettingsInteractively`: on writes the key `true` and
+sets `.always`, off writes `false` and sets `.default`. The switch is ON while the live setting is `.always`
+(`accountManager.sharedData(keys: [ApplicationSpecificSharedDataKeys.voiceCallSettings])`), so Data and Storage → "Use
+less data for calls" and this switch always agree; the key only records the last tap here. `PresentationCallManager`
+reads the setting when a call is created, so a change applies from the next call (subtitle: "applies to new calls").
+The Mac's About screen has no entries for these, so iOS About has none either.
+
+Manual repro for regressions: (1) a video call on a bad network (Network Link Conditioner "Very Bad Network"):
+"Weak signal", then after ~5 s "Turn off my video" under it; tapping it turns our camera off like the camera button,
+and the button goes; it never shows on an audio call or a screencast. (2) Novagram Settings → Calls → Use less data
+for calls on: Data and Storage → Use less data for calls shows "Always"; change it there to "Never": the Novagram
+switch is off.

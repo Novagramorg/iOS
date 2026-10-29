@@ -8,6 +8,7 @@ import ComponentFlow
 import SwiftSignalKit
 import UIKitRuntimeUtils
 import TelegramPresentationData
+import NovagramCalls // Novagram
 
 public final class PrivateCallScreen: OverlayMaskContainerView, AVPictureInPictureControllerDelegate {
     public struct State: Equatable {
@@ -206,6 +207,7 @@ public final class PrivateCallScreen: OverlayMaskContainerView, AVPictureInPictu
     
     private var statusView: StatusView
     private var weakSignalView: WeakSignalView?
+    private let novagramTurnOffVideo = NovagramCallTurnOffVideo() // Novagram
     
     private var emojiView: KeyEmojiView?
     private var emojiTooltipView: EmojiTooltipView?
@@ -1546,5 +1548,6 @@ public final class PrivateCallScreen: OverlayMaskContainerView, AVPictureInPictu
                 })
             }
         }
+        self.novagramTurnOffVideo.update(host: self, weakSignalView: self.weakSignalView, isOwnVideoOn: params.state.localVideo != nil, isHidden: self.isAnimatedOutToGroupCall, strings: params.state.strings, transition: transition, turnOffVideo: { [weak self] in self?.videoAction?() }) // Novagram
     }
 }

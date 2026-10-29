@@ -152,6 +152,29 @@ public struct NovagramL10n {
         )
     }
 
+    // MARK: - Calls (same wording as the Mac's callDataSaving_* / callWeakNetwork_*)
+
+    public var settings_section_calls: String {
+        pick(en: "CALLS", uz: "QO'NG'IROQLAR", ru: "ЗВОНКИ", zh: "通话")
+    }
+
+    public var settings_callDataSaving_title: String {
+        pick(en: "Use less data for calls", uz: "Qo'ng'iroqlarda kamroq trafik", ru: "Экономия трафика в звонках", zh: "通话时使用更少流量")
+    }
+
+    public var settings_callDataSaving_subtitle: String {
+        pick(
+            en: "Lower audio and video quality; applies to new calls",
+            uz: "Ovoz va video sifati pasayadi; yangi qo'ng'iroqlarga ta'sir qiladi",
+            ru: "Ниже качество звука и видео; действует для новых звонков",
+            zh: "降低音频和视频质量；适用于新的通话"
+        )
+    }
+
+    public var call_turnOffMyVideo: String {
+        pick(en: "Turn off my video", uz: "Videomni o'chirish", ru: "Выключить моё видео", zh: "关闭我的视频")
+    }
+
     // MARK: - Settings → Novagram screen
     // Section headers, item titles, item subtitles, section footers, generic on/off labels.
 

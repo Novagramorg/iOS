@@ -69,6 +69,7 @@ swift_library(
         "//submodules/AppBundle",
         "//submodules/UIKitRuntimeUtils",
         "//submodules/TelegramPresentationData",
+        "//submodules/Novagram/Calls:NovagramCalls", # Novagram
     ],
     visibility = [
         "//visibility:public",
