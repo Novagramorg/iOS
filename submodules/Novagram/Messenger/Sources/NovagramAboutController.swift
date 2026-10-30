@@ -845,7 +845,16 @@ private func allFeatureSpecs() -> [FeatureSpec] {
                 ru: "Выключать нечего — ссылка создаётся только тогда, когда вы её запросите.",
                 zh: "无需关闭：只有在你主动请求时才会生成链接。"
             )
-        ),
+        )
+    ] + searchFeatureSpecs()
+}
+
+// The search entries are shown only while the Developer switch "Search features (beta)" is on.
+private func searchFeatureSpecs() -> [FeatureSpec] {
+    guard NovagramDeveloperFlags.isSearchFeaturesEnabled else {
+        return []
+    }
+    return [
         // Exact phrase search in a chat
         FeatureSpec(
             symbol: "quote.opening", color: .blue,

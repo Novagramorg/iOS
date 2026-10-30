@@ -103,6 +103,23 @@ public enum NovagramSettingsFeature: String, CaseIterable {
     // 10-tap gesture + admin login.
 }
 
+extension NovagramSettingsFeature {
+    /// False while the row is behind an off Developer beta switch (NovagramDeveloperFlags): the slug then
+    /// lands on the screen without scrolling or highlighting, like an unknown slug.
+    var isAvailable: Bool {
+        switch self {
+        case .searchFeatures, .searchTranslate:
+            return NovagramDeveloperFlags.isSearchFeaturesEnabled
+        case .callRecording, .callRecordingAuto, .callRecordings:
+            return NovagramDeveloperFlags.isCallRecordingEnabled
+        case .callDataSaving:
+            return NovagramDeveloperFlags.isCallDataSavingEnabled
+        default:
+            return true
+        }
+    }
+}
+
 /// Marks a settings row so the deep-link handler can scroll to it and the long-press menu can
 /// tell which feature was pressed. Consumed by `ItemListController.itemNode(forTag:)` and by
 /// `ItemListNodeState.ensureVisibleItemTag`.
@@ -155,9 +172,10 @@ public enum NovagramSettingsDeepLink {
         guard components.count > 1 else {
             return .screen
         }
-        guard let feature = NovagramSettingsFeature(rawValue: components[1].lowercased()) else {
+        guard let feature = NovagramSettingsFeature(rawValue: components[1].lowercased()), feature.isAvailable else {
             // Unknown slug (older build, typo, future feature) — still land on the screen rather
             // than falling through to Telegram's generic handler, which would silently do nothing.
+            // A slug whose row is behind an off Developer switch is treated the same way.
             return .screen
         }
         return .feature(feature)
