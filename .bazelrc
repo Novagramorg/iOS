@@ -32,5 +32,5 @@ common:macos --features=oso_prefix_is_pwd
 # --disk_cache at the ROOT ~/telegram-bazel-cache, where --repository_cache and
 # bazel-user-root/external also live, and the disk-cache GC then prunes those too. That corrupted
 # bazel_skylib three times on 2026-08-27 ("Every .bzl file must have a corresponding package").
-# The GC flags (20GB, 14 days) live in run.sh, publish.sh and release.sh instead, next to
+# The GC flags (35GB, 14 days) live in run.sh, publish.sh and release.sh instead, next to
 # --disk_cache="$CACHE_DIR/disk", which has been its own folder since 13.0.

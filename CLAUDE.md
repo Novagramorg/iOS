@@ -76,7 +76,7 @@ First clean build ≈ 10–12 min, cache-warm incremental ≈ 1–3 min, single-
 
 Measured 2026-10-13: a fresh output base with a warm disk cache builds in ~4 min, a no-op `run.sh` takes ~5 s, and a one-line change in a Novagram module takes ~38 s, most of it recompiling PeerInfoScreen and TelegramUI, which import it.
 
-- **Disk cache limit.** `run.sh`, `publish.sh` and `release.sh` cap `~/telegram-bazel-cache/disk` with `--experimental_disk_cache_gc_max_size=20G` and `--experimental_disk_cache_gc_max_age=14d`.
+- **Disk cache limit.** `run.sh`, `publish.sh` and `release.sh` cap `~/telegram-bazel-cache/disk` with `--experimental_disk_cache_gc_max_size=35G` and `--experimental_disk_cache_gc_max_age=14d` (35G since 2026-10-30: 20G could not hold both the simulator and the device outputs, so a device build recompiled everything).
   - Bazel trims the cache in the background about 5 min after a build, while its server is idle.
   - Using an entry refreshes its age (measured), so only entries unused for 14 days expire.
   - Never put these flags in `.bazelrc`; the comment there explains why.

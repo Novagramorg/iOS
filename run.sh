@@ -497,9 +497,9 @@ fi
     ${NOVAGRAM_ADS_ENVIRONMENT:+"--define=novagramAdsEnvironment=$NOVAGRAM_ADS_ENVIRONMENT"} \
     --disk_cache="$CACHE_DIR/disk" \
     `# keep the disk cache bounded: ~5 min after a build (Bazel server idle) it deletes` \
-    `# the least recently used entries over 20GB and anything unused for 14 days.` \
+    `# the least recently used entries over 35GB and anything unused for 14 days.` \
     `# Safe only because --disk_cache is its own folder; never point these at CACHE_DIR.` \
-    --experimental_disk_cache_gc_max_size=20G \
+    --experimental_disk_cache_gc_max_size=35G \
     --experimental_disk_cache_gc_max_age=14d \
     --repository_cache="$CACHE_DIR/repo-cache" \
     --experimental_repository_cache_hardlinks \
@@ -678,7 +678,10 @@ PYEOF
 
     step "iPhone'ga o'rnatilmoqda..."
     # devicectl install — overwrite mode by default, preserves app data
-    if ! xcrun devicectl device install app --device "$DEVICE_UDID" "$APP_PATH"; then
+    # Install the .ipa itself: the folder unzipped into /tmp failed on 2026-10-30 with "Failed to verify code
+    # signature of …/SwiftSignalKitFramework.framework : 0xe8008001" although codesign checked it as valid,
+    # while the same build's .ipa installed fine.
+    if ! xcrun devicectl device install app --device "$DEVICE_UDID" "${IPA_PATH:-$APP_PATH}"; then
         echo ""
         warn "Install fail bo'ldi. Eng ko'p uchraydigan sabab — provisioning profile yo'q."
         cat <<INSTRUCTIONS
