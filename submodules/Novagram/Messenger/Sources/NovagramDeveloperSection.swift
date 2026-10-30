@@ -22,13 +22,14 @@ public extension NSNotification.Name {
 /// Switches from the hidden Developer section (Novagram Settings) for features that are not public
 /// yet. They are per device and off by default. "Remove all ads", the first switch there, is read
 /// through `NovagramShowAdsGate`.
+///
+/// An unapproved feature is one switch, its own key, shown only here; on approval its rows move to
+/// their normal section. Call recording (`CallRecordingSettings`) and "Use less data for calls"
+/// (`NovagramCallDataSaving`) live here now and keep their keys in their own types.
 public enum NovagramDeveloperFlags {
     private static let udSuite = "pro_messager"
     private static let currencyRatesViewKey = "novagram_currency_rates_view"
     private static let adsPanelKey = "novagram_ads_panel"
-    // The beta gates for features that are not approved yet (same keys as the Mac). The call recording
-    // key lives in its own module, which read them without depending on this one.
-    private static let callDataSavingKey = "novagram_dev_call_data_saving"
     // TelegramCore reads this key directly (`novagramAdEventsOff()`), and the Mac app uses it too.
     private static let adEventsOffKey = "novagram_ads_events_off"
 
@@ -49,18 +50,6 @@ public enum NovagramDeveloperFlags {
     public static internal(set) var isAdsPanelEnabled: Bool {
         get { return self.value(forKey: self.adsPanelKey) }
         set { self.setValue(newValue, forKey: self.adsPanelKey) }
-    }
-
-    /// "Call recording (beta)": the call recording rows and the Record control (CallRecordingSettings).
-    public static internal(set) var isCallRecordingEnabled: Bool {
-        get { return CallRecordingSettings().isDeveloperEnabled }
-        set { self.setValue(newValue, forKey: CallRecordingSettings.developerFlagKey) }
-    }
-
-    /// "Use less data for calls (beta)": our shortcut row to Telegram's call data saving setting.
-    public static internal(set) var isCallDataSavingEnabled: Bool {
-        get { return self.value(forKey: self.callDataSavingKey) }
-        set { self.setValue(newValue, forKey: self.callDataSavingKey) }
     }
 
     /// Emits the current value, then again whenever a Developer switch flips. Main queue.
@@ -119,7 +108,9 @@ public enum NovagramDeveloperRole: String {
         case adEventsOff
         case currencyRatesView
         case adsPanel
+        // "Call recording" with its auto switch and the recordings list (CallRecordingSettings).
         case callRecording
+        // "Use less data for calls" (NovagramCallDataSaving).
         case callDataSaving
     }
 
@@ -162,11 +153,17 @@ public enum NovagramDeveloperRole: String {
         if !role.canUse(.adsPanel) && NovagramDeveloperFlags.isAdsPanelEnabled {
             NovagramDeveloperFlags.isAdsPanelEnabled = false
         }
-        if !role.canUse(.callRecording) && NovagramDeveloperFlags.isCallRecordingEnabled {
-            NovagramDeveloperFlags.isCallRecordingEnabled = false
+        if !role.canUse(.callRecording) {
+            let callRecording = CallRecordingSettings()
+            if callRecording.isEnabled || callRecording.isAutoEnabled {
+                callRecording.isEnabled = false
+                callRecording.isAutoEnabled = false
+                NotificationCenter.default.post(name: CallRecordingSettings.changedNotification, object: nil)
+            }
         }
-        if !role.canUse(.callDataSaving) && NovagramDeveloperFlags.isCallDataSavingEnabled {
-            NovagramDeveloperFlags.isCallDataSavingEnabled = false
+        if !role.canUse(.callDataSaving) {
+            // Only our key: Telegram's own data saving setting (Data and Storage) stays as the user set it.
+            NovagramCallDataSaving.clearKey()
         }
         NotificationCenter.default.post(name: .novagramDeveloperFlagsChanged, object: nil)
     }
@@ -336,24 +333,6 @@ enum NovagramDeveloperStrings {
         case "ru": return "Показывать рекламную панель Novagram"
         case "zh": return "显示 Novagram 广告面板"
         default:   return "Show the Novagram ads panel"
-        }
-    }
-
-    static func callRecordingTitle(langCode: String) -> String {
-        switch langCode {
-        case "uz": return "Qo'ng'iroqni yozib olish (beta)"
-        case "ru": return "Запись звонков (бета)"
-        case "zh": return "通话录音（测试版）"
-        default:   return "Call recording (beta)"
-        }
-    }
-
-    static func callDataSavingTitle(langCode: String) -> String {
-        switch langCode {
-        case "uz": return "Qo'ng'iroqlarda kam trafik (beta)"
-        case "ru": return "Экономия трафика в звонках (бета)"
-        case "zh": return "通话时节省流量（测试版）"
-        default:   return "Use less data for calls (beta)"
         }
     }
 

@@ -3,7 +3,7 @@ import SwiftSignalKit
 import TelegramCore
 import TelegramUIPreferences
 
-/// Novagram Settings → Calls → "Use less data for calls" (HOOKS.md, "Call weak signal and data saver").
+/// Novagram Settings → Developer → "Use less data for calls" (HOOKS.md, "Call weak signal and data saver").
 ///
 /// It drives Telegram's own setting (Data and Storage → Use less data for calls), not a second mechanism:
 /// on sets it to "Always", off back to "Default". The switch shows the live setting, so a change made in
@@ -22,6 +22,11 @@ enum NovagramCallDataSaving {
             return settings.dataSaving == .always
         }
         |> distinctUntilChanged
+    }
+
+    /// Turns our key off without touching Telegram's setting (a role that cannot see the switch logged in).
+    static func clearKey() {
+        UserDefaults(suiteName: suiteName)?.set(false, forKey: key)
     }
 
     static func set(_ isOn: Bool, accountManager: AccountManager<TelegramAccountManagerTypes>) {

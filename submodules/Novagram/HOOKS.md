@@ -268,6 +268,7 @@ three calls and delete the two lines.
 #### Reklama
 
 > Yashirin Developer bo'limi. Ochish uchun Settings pastidagi versiya qatorini 20 soniya bosib turing (2026-10-27).
+> Tasdiqlanmagan funksiyalar shu bo'limda bitta switch bo'lib turadi (faqat developer roli): "Call recording" (o'z CALL RECORDING bloki bilan) va "Use less data for calls" (#100). Menejer tasdiqlagach, o'z odatiy bo'limiga ko'chadi (2026-10-30).
 
 44. **Reklamani ko'rsatish**: kanal, bot, qidiruv va banner reklamalarini yoqadi yoki o'chiradi.
 91. **Reklama hodisalarini yubormaslik**: Novagram va Telegram reklamalarining ko'rish, bosish, harakat va video ochish hodisalari yuborilmaydi, shuning uchun bir marta ko'rsatiladigan reklama test paytida qayta chiqaveradi. Faqat shu qurilmada, default o'chiq (2026-10-29).
@@ -358,7 +359,7 @@ three calls and delete the two lines.
 #### Qo'ng'iroqlar (2026-10-29)
 
 99. **Zaif signalda "Videomni o'chirish"**: 1:1 qo'ng'iroqda "Weak signal" yozuvi ~5 s uzluksiz turib, o'zimizning kamera videomiz yoqiq bo'lsa, yozuv tagida "Videomni o'chirish" tugmasi chiqadi (en "Turn off my video", Mac bilan bir xil). Bosilsa kamera tugmasidek videoni o'chiradi (`videoAction` → `toggleVideo()` → `call.disableVideo()`). Signal tiklansa yoki video o'chsa tugma yo'qoladi; ekran ulashishda chiqmaydi.
-100. **Qo'ng'iroqlarda kamroq trafik**: Novagram Settings → Qo'ng'iroqlar → "Qo'ng'iroqlarda kamroq trafik" (`pro_messager` / `novagram_call_data_saving`, default o'chiq, slug `call-data-saving`). Telegram'ning o'z sozlamasini boshqaradi (Data and Storage → Use less data for calls): yoqilsa "Always", o'chirilsa "Default". Switch jonli sozlamani ko'rsatadi (u yerda o'zgartirilsa bu yerda ham ko'rinadi); qo'ng'iroq sozlamani yaratilganda o'qiydi, shuning uchun keyingi qo'ng'iroqdan ishlaydi. Telegram fayllarida hook yo'q.
+100. **Qo'ng'iroqlarda kamroq trafik**: Novagram Settings → Dasturchi (faqat developer roli, tasdiqlanmagan funksiya) → "Qo'ng'iroqlarda kamroq trafik" (`pro_messager` / `novagram_call_data_saving`, default o'chiq, slug `call-data-saving`). Telegram'ning o'z sozlamasini boshqaradi (Data and Storage → Use less data for calls): yoqilsa "Always", o'chirilsa "Default". Switch jonli sozlamani ko'rsatadi (u yerda o'zgartirilsa bu yerda ham ko'rinadi); qo'ng'iroq sozlamani yaratilganda o'qiydi, shuning uchun keyingi qo'ng'iroqdan ishlaydi. Telegram fayllarida hook yo'q.
 
 ---
 
@@ -7504,18 +7505,28 @@ events" (`novagram_ads_events_off`, 2026-10-29), "Show currency rates" (`novagra
 `NovagramDeveloperFlags` (`isAdEventsOff`, `isCurrencyRatesViewEnabled`, `isAdsPanelEnabled`, live `…Signal`s on
 `.novagramDeveloperFlagsChanged`). The rows have no deep link.
 
-**Beta gates (2026-10-30, Mac parity).** Two more switches, after "Novagram ads panel", for features the owner has
-not approved yet: "Call recording (beta)" (`novagram_dev_call_recording`) and "Use less data for calls (beta)"
-(`novagram_dev_call_data_saving`). `pro_messager`, Bool, missing key = off, so for everyone the features are hidden and
-behave as switched off; the user's own switch keeps its value and is never written by the gate. Developer role only:
-the director never sees them, and a director login turns both off (`NovagramDeveloperRole.didLogIn`, switch cases
-`.callRecording`, `.callDataSaving`). Each key is defined once, in the module that reads it, so Calls never imports
-Messenger: `CallRecordingSettings.developerFlagKey` (the call recording SDK), `NovagramDeveloperFlags.callDataSavingKey`
-(Messenger). `NovagramDeveloperFlags.isCallRecordingEnabled` / `isCallDataSavingEnabled` read through those modules
-and write with the usual `.novagramDeveloperFlagsChanged` post; Novagram Settings observes it and adds or drops the
-gated rows live. Rows: `NovagramEntry.developerBeta` (stable ids 100–101, sort 972–973, between the ads panel and the
-footer). A gated row's slug lands on the screen without scrolling, like an unknown slug
-(`NovagramSettingsFeature.isAvailable`). No Telegram file is involved. A third gate, "Search features (beta)"
+**Unapproved features (owner's rule, 2026-10-30).** An unapproved feature is ONE switch, its own key, shown only
+in the Developer section (no "(beta)" copy, no second gate, no row in a public section). When the manager approves it,
+its rows move to their normal section; that move is a separate change. Until 2026-10-30 these had a "(beta)" dev flag
+here (`novagram_dev_call_recording`, `novagram_dev_call_data_saving`) plus the user switch in a CALLS section; both
+flags and the CALLS section are gone, no migration (the app was not published with them).
+
+Now in the Developer section, developer role only (`NovagramDeveloperRole.Switch.callRecording` / `.callDataSaving`;
+the director never sees them):
+- "Use less data for calls" (`novagram_call_data_saving`, `NovagramEntry.callDataSaving`, section `.developer`,
+  stable id 54, sort 975: after "Novagram ads panel", before the Developer footer). Behaviour as in "Call weak signal
+  and data saver".
+- A **CALL RECORDING** sub-block after the Developer footer (`NovagramSection.developerCallRecording = 14`, header
+  `callRecordingHeader` / `settings_section_callRecording`, stable ids 53 and 55–58, sort 981–985): "Call recording"
+  (`novagram_call_recording`); while it is on, "Record every call automatically" (`novagram_call_recording_auto`) and
+  "Call recordings" (the list); then the call recording footer.
+
+A director login (`NovagramDeveloperRole.didLogIn`) writes `novagram_call_recording` and `novagram_call_recording_auto`
+off (posting `CallRecordingSettings.changedNotification`) and `novagram_call_data_saving` off through
+`NovagramCallDataSaving.clearKey()`, which never touches Telegram's `VoiceCallSettings.dataSaving`. The slugs
+`call-recording`, `call-recording-auto`, `call-recordings` and `call-data-saving` resolve only while the Developer
+section is revealed and the role can see the row (`NovagramSettingsFeature.isAvailable`); otherwise they land on the
+screen like an unknown slug. No Telegram file is involved. A third gate, "Search features (beta)"
 (`novagram_dev_search_features`), was removed on 2026-10-30 with the search features it gated.
 
 "Don't send ad events" (second row, right after "Remove all ads") stops every ad event, so an ad the backend
@@ -7698,10 +7709,10 @@ On an upstream update: if the weak-signal block moves or `weakSignalView` is ren
 after the label's frame is set in the same pass). If `localVideo` starts carrying a screencast, add a screencast check
 to `isOwnVideoOn`.
 
-**100. "Use less data for calls".** No hook in a Telegram file. Novagram Settings → a new "CALLS" section
-(`NovagramSection.calls = 14`, stable ids 53–59 reserved, rows 53–54; the list is ordered by `sortId`, which is `stableId * 10` except
-the calls rows, 191–192, so the section sits right after INTERFACE (it sat after SEARCH until 2026-10-30); a future "Call recording" switch goes here) with "Use less data for calls" (`pro_messager` / `novagram_call_data_saving`, Bool,
-default off, slug `call-data-saving`). `NovagramCallDataSaving` (Messenger) drives Telegram's own
+**100. "Use less data for calls".** No hook in a Telegram file. Unapproved, so it lives only in the Developer
+section, developer role only (see "Developer section: 20 s hold…"; until 2026-10-30 a CALLS section after INTERFACE plus a
+"(beta)" Developer gate `novagram_dev_call_data_saving`, both removed): "Use less data for calls" (`pro_messager` /
+`novagram_call_data_saving`, Bool, default off, slug `call-data-saving`). `NovagramCallDataSaving` (Messenger) drives Telegram's own
 `VoiceCallSettings.dataSaving` through `updateVoiceCallSettingsSettingsInteractively`: on writes the key `true` and
 sets `.always`, off writes `false` and sets `.default`. The switch is ON while the live setting is `.always`
 (`accountManager.sharedData(keys: [ApplicationSpecificSharedDataKeys.voiceCallSettings])`), so Data and Storage → "Use
@@ -7709,14 +7720,13 @@ less data for calls" and this switch always agree; the key only records the last
 reads the setting when a call is created, so a change applies from the next call (subtitle: "applies to new calls").
 The Mac's About screen has no entries for these, so iOS About has none either.
 
-**Developer gate (2026-10-30).** The "Use less data for calls" row and its `call-data-saving` slug show only while
-the Developer switch "Use less data for calls (beta)" (`novagram_dev_call_data_saving`) is on. The gate only hides our
-shortcut: Telegram's `VoiceCallSettings.dataSaving` (Data and Storage) is never read for the gate and never reset.
-When neither this gate nor "Call recording (beta)" is on, the whole CALLS section, header included, is hidden.
+**Role rule (2026-10-30).** A director login writes the key off (`NovagramCallDataSaving.clearKey()`) and never
+resets Telegram's `VoiceCallSettings.dataSaving`; the switch keeps showing the live setting. The slug resolves only
+while the Developer section is revealed for the developer role.
 
 Manual repro for regressions: (1) a video call on a bad network (Network Link Conditioner "Very Bad Network"):
 "Weak signal", then after ~5 s "Turn off my video" under it; tapping it turns our camera off like the camera button,
-and the button goes; it never shows on an audio call or a screencast. (2) Novagram Settings → Calls → Use less data
+and the button goes; it never shows on an audio call or a screencast. (2) Novagram Settings → Developer → Use less data
 for calls on: Data and Storage → Use less data for calls shows "Always"; change it there to "Never": the Novagram
 switch is off.
 
@@ -7785,21 +7795,21 @@ its tests (the old Bazel test target is gone).
 
 **Steps 4–7 (the call screen, settings, consent, auto-record, the result toast, the list). Hooks #286–#291.**
 
-Settings (Novagram Settings → CALLS, after "Use less data for calls"; `NovagramSettingsController`, stable ids 55–58, sort
-193–196): "Call recording" (`pro_messager` / `novagram_call_recording`, Bool, default off, slug `call-recording`, subtitle
+Settings (Novagram Settings → Developer → CALL RECORDING sub-block, developer role only, see "Developer section: 20 s
+hold…"; `NovagramSettingsController`, stable ids 53, 55–58, sort 981–985): "Call recording" (`pro_messager` / `novagram_call_recording`, Bool, default off, slug `call-recording`, subtitle
 "Adds a Record button to voice and video calls"); "Record every call automatically" (`novagram_call_recording_auto`, slug
-`call-recording-auto`, shown only while Call recording is on); "Call recordings" (slug `call-recordings`, shown while the
-switch is on or a file exists, label = file count, recounted on every `didAppear`) opening `NovagramCallRecordingsController`;
+`call-recording-auto`, shown only while Call recording is on); "Call recordings" (slug `call-recordings`, shown only while
+the switch is on, label = file count, recounted on every `didAppear`) opening `NovagramCallRecordingsController`;
 and a footer (`settings_callRecording_footer`: kept only on this device, Novagram sends "🔴 I'm recording this call" to
 the chat when a recording starts, the REC mark stays visible). The consent key is `novagram_call_recording_warned`. The Mac's
 `novagram_call_recording_folder` (a security-scoped bookmark there) is not used: files always go to the core's folder.
 The keys live in the SDK's `CallRecordingSettings` (same keys, `pro_messager` suite; until 2026-10-30 our `NovagramCallRecordingSettings`), read by TelegramCallsUI and NovagramMessenger.
 
-**Developer gate (2026-10-30).** The feature sits behind the Developer switch "Call recording (beta)"
-(`novagram_dev_call_recording`, missing key = off). `isEnabled` and `isAutoEnabled` (what the glue reads) are the gate
-AND the user's value; the user's values are `isUserEnabled` / `isUserAutoEnabled`, read and written by the Settings
-rows and by the glue's "consent cancelled → auto off". With the gate off: no recording rows or footer in Settings, the
-three slugs do not scroll, no Record capsule (the glue's `isAvailable` is false) and no auto-recording.
+**One switch (2026-10-30).** `CallRecordingSettings.isEnabled` / `isAutoEnabled` are the stored keys, read-write, with no
+second gate (SDK `e7ef07e`; the "(beta)" dev flag `novagram_dev_call_recording` and `isUserEnabled` / `isUserAutoEnabled` /
+`isDeveloperEnabled` are gone). The Settings rows, the glue (`isAvailable`, auto-record, "consent cancelled → auto off")
+all use them. A director login turns both keys off; the slugs resolve only for the developer role with the Developer
+section revealed.
 
 | File | Change |
 | --- | --- |
@@ -7868,8 +7878,16 @@ list texts (`callRecordings_*`) and the notice texts (`callRecording_noticeMessa
   Select, Clear All; Done and Select All / Deselect All while selecting; hidden when there are no recordings) and drives
   the SDK's `CallRecordingsListViewModel` (`filter`, `setSelecting`, `toggleSelectAll`, `requestClearAll`) with
   `environment.showsToolbar = false`: a SwiftUI `.toolbar` needs a SwiftUI navigation container, which a Telegram
-  `ViewController` does not have, so the SDK's own "⋯" never showed there. The select-mode Share / Delete (N) bar at the
-  bottom is the SDK's. Empty-state text depends on `CallRecordingSettings().isEnabled`.
+  `ViewController` does not have, so the SDK's own "⋯" never showed there. **The select-mode bar and the delete alerts are
+  Telegram's** (`environment.showsSelectionBar = false`, `environment.confirmDeletion` set): `ToolbarNode` with
+  `ToolbarTheme(rootControllerTheme:)` and its hairline, "Share" on the left (`selectedURLs`), "Delete (N)" in the accent
+  colour on the right (`requestDeleteSelected()`), above `layout.intrinsicInsets.bottom`; `textAlertController`
+  (Cancel / Delete) for one row, the selection and Clear All (also the filtered text), then `HapticFeedback().success()`.
+  Telegram's layout insets never reach UIKit's safe area, so the host sets the hosting controller's
+  `additionalSafeAreaInsets.bottom` (home indicator, plus the toolbar while selecting); the cards keep Telegram's 20 pt
+  side margin through the SDK's `listSideInset` (`contentMargins`, iOS 17+; iOS 15-16 add 4 pt of side safe area), and
+  on iOS 15 the `NovagramCallRecordingsHostingController` subclass lets the `UITableView`/`UICollectionView`
+  appearance proxy clear the List's background. Empty-state text depends on `CallRecordingSettings().isEnabled`.
 
 On an upstream update: #287 must stay the last line of `update(params:transition:)` (after #280: it reads the frames that pass
 set). If upstream renames `backButtonView`, `emojiView`, `emojiTooltipView`, `conferenceButtonView`, `titleView`, `statusView`,
@@ -7877,11 +7895,11 @@ set). If upstream renames `backButtonView`, `emojiView`, `emojiTooltipView`, `co
 If `CallControllerNodeV2.init` loses `conferenceAddParticipant`, #289 goes anywhere after `super.init()`. If
 `SharedCallAudioContext.audioDevice` or `PresentationCallImpl.video(isIncoming:)` change, fix `NovagramCallRecordingGlue`.
 
-Manual repro for regressions (simulator + a second phone): (1) Settings → Novagram → CALLS: "Call recording" off by default;
+Manual repro for regressions (simulator + a second phone): (1) Settings → Novagram → Developer → CALL RECORDING: "Call recording" off by default;
 turn it on: "Record every call automatically" and "Call recordings" appear. (2) Call the second phone: "● Record" at the top
 during ringing; tap it: the consent alert (first time only); Continue: red "● REC 00:01" ticking. (3) Answer on the second
 phone, talk, hang up: the REC capsule goes and "Call recording saved / Share" shows; Share opens the system sheet. (4) Settings →
-Calls → Call recordings: the file (name = peer + date, duration, size, waveform glyph); tap plays it; swipe → Delete → confirm.
+Developer → Call recordings: the file (name = peer + date, duration, size, waveform glyph); tap plays it; swipe → Delete → confirm.
 The second phone gets "🔴 I'm recording this call (Novagram)" in the chat (in the recorder's app language) as soon as REC
 starts; tap REC to stop and Record again: no second message in that call. (5) Turn on auto-record, call again: REC starts by
 itself as soon as it rings and the second phone gets the message once; tap to stop: it does not start again in that call.

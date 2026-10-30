@@ -70,8 +70,8 @@ public struct NovagramL10n {
 
     // MARK: - Calls (same wording as the Mac's callDataSaving_* / callWeakNetwork_*)
 
-    public var settings_section_calls: String {
-        pick(en: "CALLS", uz: "QO'NG'IROQLAR", ru: "ЗВОНКИ", zh: "通话")
+    public var settings_section_callRecording: String {
+        pick(en: "CALL RECORDING", uz: "QO'NG'IROQNI YOZIB OLISH", ru: "ЗАПИСЬ ЗВОНКОВ", zh: "通话录音")
     }
 
     public var settings_callDataSaving_title: String {

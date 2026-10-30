@@ -100,17 +100,20 @@ public enum NovagramSettingsFeature: String, CaseIterable {
 }
 
 extension NovagramSettingsFeature {
-    /// False while the row is behind an off Developer beta switch (NovagramDeveloperFlags): the slug then
-    /// lands on the screen without scrolling or highlighting, like an unknown slug.
+    /// False for a row that lives in the Developer section while that section is hidden or the logged-in
+    /// role cannot see the row: the slug then lands on the screen without scrolling or highlighting, like
+    /// an unknown slug.
     var isAvailable: Bool {
+        let item: NovagramDeveloperRole.Switch
         switch self {
         case .callRecording, .callRecordingAuto, .callRecordings:
-            return NovagramDeveloperFlags.isCallRecordingEnabled
+            item = .callRecording
         case .callDataSaving:
-            return NovagramDeveloperFlags.isCallDataSavingEnabled
+            item = .callDataSaving
         default:
             return true
         }
+        return NovagramDeveloperSection.isRevealed && NovagramDeveloperRole.current.canUse(item)
     }
 }
 

@@ -290,7 +290,7 @@ final class NovagramCallRecordingGlue {
             TextAlertAction(type: .genericAction, title: self.presentationData.strings.Common_Cancel, action: { [weak self] in
                 self?.isAsking = false
                 if isAuto {
-                    CallRecordingSettings().isUserAutoEnabled = false
+                    CallRecordingSettings().isAutoEnabled = false
                     NovagramCallRecordings.notifyChanged()
                 }
             }),
