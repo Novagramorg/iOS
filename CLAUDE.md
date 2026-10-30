@@ -44,6 +44,11 @@ submodules/Novagram/
 └── SpeechToText/      (NovagramSpeechToText)     — STT manager
 ```
 
+`submodules/Novagram/CallRecordingKit` is a git submodule: our public GPL call recording SDK
+(`Novagramorg/novagram-call-recording-kit-sdk`, shared with the Mac app), pinned by commit (no tags), owned by the iOS
+session, which may push SDK fixes to its `main`. Update it by moving the pin; keep Telegram types out of it (HOOKS.md,
+"Call recording").
+
 ## Build — ALWAYS use `./run.sh`
 
 The canonical simulator build is **`./run.sh`** (Bazel-based, no Xcode UI). It does config → build → install → launch in one step, uses fake codesigning + `disableProvisioningProfiles`, auto-tunes resources to the host hardware (M4 Pro 24GB → 10 jobs / ~18GB RAM), enables `--keep_going`, `--disk_cache`, `--repository_cache`, and the right Swift module-cache features.

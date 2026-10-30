@@ -7510,7 +7510,7 @@ not approved yet: "Call recording (beta)" (`novagram_dev_call_recording`) and "U
 behave as switched off; the user's own switch keeps its value and is never written by the gate. Developer role only:
 the director never sees them, and a director login turns both off (`NovagramDeveloperRole.didLogIn`, switch cases
 `.callRecording`, `.callDataSaving`). Each key is defined once, in the module that reads it, so Calls never imports
-Messenger: `NovagramCallRecordingSettings.developerFlagKey` (Calls), `NovagramDeveloperFlags.callDataSavingKey`
+Messenger: `CallRecordingSettings.developerFlagKey` (the call recording SDK), `NovagramDeveloperFlags.callDataSavingKey`
 (Messenger). `NovagramDeveloperFlags.isCallRecordingEnabled` / `isCallDataSavingEnabled` read through those modules
 and write with the usual `.novagramDeveloperFlagsChanged` post; Novagram Settings observes it and adds or drops the
 gated rows live. Rows: `NovagramEntry.developerBeta` (stable ids 100–101, sort 972–973, between the ads panel and the
@@ -7736,6 +7736,10 @@ push to (and `Novagramorg/tgcalls` does not exist). The parent repo does not tra
   `novagram-upstream-update.sh` takes the patch out before `git submodule update` moves a submodule and puts it back
   after; if it no longer applies the script stops (exit 3): re-apply the lines below by hand, `--save`, commit, `--finish`.
 
+Not every submodule is a patch: `submodules/Novagram/CallRecordingKit` is our own SDK (public, GPL), a normal submodule
+pinned by commit that we push to directly; it has no patch file and is never touched by `apply-submodule-patches.sh`
+("Call recording" below has the pin).
+
 ## 📌 Call recording (in progress, branch `feature/call-recording`, 2026-10-29)
 
 Owner: record 1:1 voice and video calls locally, Mac parity (macOS `NOVAGRAM_HOOKS.md`, "Local call recording",
@@ -7755,43 +7759,29 @@ samples and return at once. nil removes it.
 On an upstream update: the tap calls must stay the last statements before `return noErr` in both callbacks (after
 the tone mixing in `OnGetPlayoutData`). If upstream adds a second audio device path for 1:1 calls, it needs the tap too.
 
-**Ours (step 3, the recording core): `submodules/Novagram/CallRecording` (`//submodules/Novagram/CallRecording:NovagramCallRecording`,
-module `NovagramCallRecording`).** No UI, no strings, no Telegram-owned file touched. Deps: SwiftSignalKit, TelegramVoip and
-Apple frameworks only, because CallScreen / TelegramCallsUI will depend on it (never Display, TelegramPresentationData,
-AccountContext, TelegramCallsUI, CallScreen or Postbox).
+**The recording core is the public SDK `NovagramCallRecordingKit` (since 2026-10-30; it replaced our in-app module
+`//submodules/Novagram/CallRecording:NovagramCallRecording`, now deleted with its sources and tests).** A normal git
+submodule at `submodules/Novagram/CallRecordingKit` (`https://github.com/Novagramorg/novagram-call-recording-kit-sdk`,
+GPL-2.0-or-later, shared with the Mac app), pinned by commit, no tags: **`c9c508c`** (upstream `c4468bf` plus three iOS adoption fixes: `showsToolbar` and host-driven select mode, the `freeText` colour, the iOS row insets). Update it by moving the pin
+(`git -C submodules/Novagram/CallRecordingKit checkout <sha>`, commit the gitlink). Its root `BUILD` gives
+`//submodules/Novagram/CallRecordingKit:NovagramCallRecordingCore` and `:NovagramCallRecordingUI`; the SDK holds no
+Telegram type, so it never depends on a Telegram module. Its own README has the API; `swift test` in the SDK repo runs
+its tests (the old Bazel test target is gone).
 
-- `NovagramCallRecordingCenter.swift`: the public API. `NovagramCallAudioTap`, `NovagramCallRecordingSource` (peer name, the
-  `setAudioTap` closure, incoming/outgoing `VideoFrameData` signals, `isMuted`), `NovagramCallRecordingState`,
-  `NovagramCallRecordingError` and `NovagramCallRecordingCenter.shared` (`start` / `stop` / `state` / `isRecording` / `stopAll` /
-  `setLayout(callId:pipCorner:isSwapped:)`, keyed by the call's internal UUID).
-- `NovagramCallAudioRing.swift`: the real-time handoff. One preallocated slot ring per source (mic, playout); the tap only
-  `os_unfair_lock_trylock`s and drops the chunk on contention or when the ring is full.
-- `NovagramCallAudioMixer.swift`: downmix to mono, exact integer-position linear resampling to 48 kHz, mic FIFO popped per playout
-  chunk (playout is the master clock, zeros on underrun, silence while muted), clipped sum written to both channels.
-- `NovagramCallRecorder.swift`: one `AVAssetWriter` per recording, always an `.mp4` (AAC 48 kHz stereo 128 kbps and H.264
-  720x1280, also for voice calls, so video turned on later is recorded; while neither side has video one black frame every
-  0.5 s, from the first real frame up to 30 fps; a recording that never had a real frame is copied to an audio-only `.m4a`
-  at the end with `AVAssetExportSession` passthrough, the `.mp4` kept if that fails; no B-frames: with frame reordering `finishWriting` failed about one time in four, -11800 / -16341), `movieFragmentInterval` 2 s, a 30 fps timer that drains the rings and composes a video frame. The session starts at
-  the first audio chunk; audio times come from the sample count, video times from the host clock against the same start;
-  holes in the playout clock are filled with the mic alone so audio stays in sync with the video.
-- `NovagramCallVideoFrame.swift`: `VideoFrameData` → upright `CIImage` with the call screen's rotation and mirroring
-  (`AdaptedCallVideoSource` in `CallControllerNodeV2`); NV12 / I420 are copied into full-range 4:2:0 pixel buffers (I420 via vImage).
-- `NovagramCallVideoCompositor.swift`: the big video aspect-fit on black, the small one as a rounded picture-in-picture (28% of
-  the width) in the `NovagramCallVideoLayout`'s corner (default: other side big, ours top-right; `isSwapped` = ours big); a lone
-  side fills the frame; a side without a new frame for 4 s counts as camera off.
-- `NovagramCallRecordingStorage.swift`: the folder `<app container>/Library/Application Support/CallRecordings` (not Documents),
-  file names `<peer> yyyy-MM-dd HH.mm.mp4|m4a` (`/` and `:` become `-`, then ` 2`, ` 3`), `list()` newest first, `delete`.
-  A recording is written into `CallRecordings/.partial/<uuid>/<name>` and moved in after `finishWriting`; whatever a killed app
-  left in `.partial` is moved in once per process, before the first recording starts. The duration is kept in the
-  `uz.novagram.callrecording.duration` extended attribute.
-
-Threads: the center is main-thread API; the tap runs on the audio thread and touches only the rings; everything else runs on
-each recorder's own serial queue. `stop`'s completion runs on main; `stopAll`'s on a background queue, so
-`applicationWillTerminate` may block main waiting for it. A writer that fails on its own stops itself, keeps the fragments
-it wrote, and its error is what the next `stop` for that call returns. Tests: `//submodules/Novagram/CallRecording:NovagramCallRecordingTests`
-(file names, mixer at 48k/16k, mute, underrun, ring, rotation/mirroring, I420, and 3 s voice and video recordings read back
-with `AVURLAsset`). The Bazel test runner's simulator has no Metal device, so Core Image draws nothing there: the frame
-content check is skipped and orientation is tested on the transform itself. Run them with `bazel test` and run.sh's flags (`Make.py test` does not pass run.sh's `-no-warnings-as-errors`, which Swift 6.4 upstream code needs).
+- **In the SDK:** `CallRecordingCenter` (main-actor, one per app, no singleton) and `CallRecordingSession`, the
+  real-time audio tap ring, the mixer (48 kHz, mute), the recorder (one `.mp4`, `.m4a` when no video ever came, 2 s
+  fragments, no B-frames, black frames until the first real one), the frame conversion and the compositor (720x1280,
+  picture-in-picture corner, swap), `CallRecordingStorage` (`Library/Application Support/CallRecordings`, file names,
+  `.partial` recovery, the duration xattr), `CallRecordingSettings` (the keys below), `CallRecordingNoticePolicy`
+  (once per call, and the notice and failure texts), and `CallRecordingsListView` (the SwiftUI list and its strings).
+- **In the app (adapters):** `submodules/Novagram/Calls/Sources/NovagramCallRecordings.swift`, the app's one center
+  (`CallRecordingCenter(storage: .default)`) behind main-thread static methods (`start` / `stop` / `isRecording` /
+  `setLayout` / `state` as a Signal / `stopAll` / `storage` / `notifyChanged`); they enter the main actor with
+  `MainActor.assumeIsolated`, because Telegram's call code is not actor-annotated. The glue, the list and
+  `NovagramCallRecordingTermination` all use it. `NovagramCallRecordingVideoFrame.swift` (same folder):
+  `CallRecordingVideoFrame(telegram:)` from `OngoingGroupCallContext.VideoFrameData`, the old frame rotation and
+  mirroring rule. The ADM tap → `session.audioTap.appendPCM`, `isMuted` → `session.setMuted`, the layout poll →
+  `setLayout`, and the camera/screencast switch live in `NovagramCallRecordingGlue`.
 
 **Steps 4–7 (the call screen, settings, consent, auto-record, the result toast, the list). Hooks #286–#291.**
 
@@ -7803,7 +7793,7 @@ switch is on or a file exists, label = file count, recounted on every `didAppear
 and a footer (`settings_callRecording_footer`: kept only on this device, Novagram sends "🔴 I'm recording this call" to
 the chat when a recording starts, the REC mark stays visible). The consent key is `novagram_call_recording_warned`. The Mac's
 `novagram_call_recording_folder` (a security-scoped bookmark there) is not used: files always go to the core's folder.
-The keys live in `NovagramCallRecordingSettings` (`submodules/Novagram/Calls`), because TelegramCallsUI reads them too.
+The keys live in the SDK's `CallRecordingSettings` (same keys, `pro_messager` suite; until 2026-10-30 our `NovagramCallRecordingSettings`), read by TelegramCallsUI and NovagramMessenger.
 
 **Developer gate (2026-10-30).** The feature sits behind the Developer switch "Call recording (beta)"
 (`novagram_dev_call_recording`, missing key = off). `isEnabled` and `isAutoEnabled` (what the glue reads) are the gate
@@ -7815,16 +7805,18 @@ three slugs do not scroll, no Record capsule (the glue's `isAvailable` is false)
 | --- | --- |
 | `TelegramUI/Components/Calls/CallScreen/Sources/PrivateCallScreen.swift` | #286: `public let novagramRecord = NovagramCallRecordControl() // Novagram` right after #279 (`private let novagramTurnOffVideo …`). #287: the last line of `update(params:transition:)`, right after #280: `self.novagramRecord.update(host: self, insets: params.insets, centerX: contentCenterX, backButton: self.backButtonView, avoiding: [self.emojiView?.layer, self.emojiTooltipView?.layer, self.conferenceButtonView?.layer, self.titleView.layer, self.statusView.layer, self.weakSignalView?.layer, self.novagramTurnOffVideo.buttonLayer, self.avatarTransformLayer], controlsHidden: currentAreControlsHidden, isEmojiKeyExpanded: self.isEmojiKeyExpanded, isAnimatedOutToGroupCall: self.isAnimatedOutToGroupCall, strings: params.state.strings, transition: transition) // Novagram` (until 2026-10-30 one combined `isHidden:`; the control now decides visibility itself). 2 lines. `PrivateCallScreen.State` is not touched. |
 | `TelegramCallsUI/Sources/CallControllerNodeV2.swift` | #288: `private var novagramRecording: NovagramCallRecordingGlue? // Novagram` after `private var signalQualityTimer`. #289: in `init`, right before `self.callScreen.conferenceAddParticipant = {`: `self.novagramRecording = NovagramCallRecordingGlue(call: call, callScreen: self.callScreen, presentationData: presentationData) // Novagram` (the glue takes `callScreen.novagramRecord` itself and reads #300). 2 lines. |
-| `TelegramCallsUI/BUILD` | #290: `NovagramCalls`, `NovagramCallRecording` and `NovagramLocalization`, each with `# Novagram`, at the end of `deps`. 3 lines. |
+| `TelegramCallsUI/BUILD` | #290: `NovagramCalls`, `//submodules/Novagram/CallRecordingKit:NovagramCallRecordingCore` (until 2026-10-30 our `NovagramCallRecording`) and `NovagramLocalization`, each with `# Novagram`, at the end of `deps`. 3 lines. |
 | `TelegramUI/Sources/AppDelegate.swift` | #291: `NovagramCallRecordingTermination.stopAll() // Novagram` in `applicationWillTerminate`, after the `Logger` line. Finishes every running recording, waiting up to 3 s (+0.2 s), like the Mac's `stopForQuit`. 1 line, no new import (NovagramMessenger is already imported). |
 | `TelegramCallsUI/Sources/NovagramCallRecordingGlue.swift` (**ours**, a new file inside a Telegram module) | Connects a call to the core and the capsule. It lives in TelegramCallsUI because it needs `PresentationCallImpl`'s internal `sharedAudioContext.audioDevice` and `video(isIncoming:)`. Delete it together with #288/#289 if the feature goes. |
 
-Ours: `submodules/Novagram/Calls/Sources/NovagramCallRecordControl.swift` (the capsule), `NovagramCallRecordingSettings.swift`
-(keys), `NovagramCallTurnOffVideo.buttonLayer` (so the capsule keeps clear of that button);
-`submodules/Novagram/Messenger/Sources/NovagramCallRecordingsController.swift` (the list screen and
-`NovagramCallRecordingTermination`), the rows in `NovagramSettingsController.swift`, the slugs in
-`NovagramSettingsDeepLink.swift`; strings `settings_callRecording*`, `callRecordings_*`, `call_record*`, `call_rec`,
-`callRecording_*` in `NovagramL10n` (en/uz/ru as the Mac with "this iPhone", plus zh).
+Ours: `submodules/Novagram/Calls/Sources/NovagramCallRecordControl.swift` (the capsule), `NovagramCallRecordings.swift`
+(the center holder) and `NovagramCallRecordingVideoFrame.swift` (the frame adapter), `NovagramCallTurnOffVideo.buttonLayer`
+(so the capsule keeps clear of that button); `submodules/Novagram/Messenger/Sources/NovagramCallRecordingsController.swift`
+(the list screen hosting the SDK view, and `NovagramCallRecordingTermination`), the rows in
+`NovagramSettingsController.swift`, the slugs in `NovagramSettingsDeepLink.swift`; strings `settings_callRecording*`,
+`call_record*`, `call_rec`, `callRecording_*` in `NovagramL10n` (en/uz/ru as the Mac with "this iPhone", plus zh). The
+list texts (`callRecordings_*`) and the notice texts (`callRecording_noticeMessage` / `_noticeFailed`) moved into the SDK
+(`CallRecordingStrings`, `CallRecordingNoticePolicy`) word for word and were removed from `NovagramL10n`.
 
 - **Capsule** (`NovagramCallRecordControl`): "● Record" (dark translucent, red dot) when idle, a red "● REC 00:12" ticking every
   0.5 s while recording; a tap calls `toggle`. Placed in the back button's row, centred when free; else centred in the gap
@@ -7837,18 +7829,19 @@ Ours: `submodules/Novagram/Calls/Sources/NovagramCallRecordControl.swift` (the c
   status move off screen above, so the capsule keeps the back button's last row (never above `insets.top`). VoiceOver: "Record the call" / "Stop recording" + value "REC mm:ss".
 - **Glue** (`NovagramCallRecordingGlue`): the capsule is available while the switch is on or a recording runs, the call is not
   over, and the state allows it (outgoing: waiting/requesting onward; incoming: only from connecting, i.e. after the answer);
-  without `sharedAudioContext` (killswitch `ios_killswitch_disable_call_device`) it never shows. Start builds
-  `NovagramCallRecordingSource` (peer display title, `audioDevice.setAudioTap`, both sides' video followed live through
+  without `sharedAudioContext` (killswitch `ios_killswitch_disable_call_device`) it never shows. Start calls
+  `NovagramCallRecordings.start` (peer display title; `onDetach` removes the tap and the subscriptions) and feeds the
+  session (`audioDevice.setAudioTap` → `audioTap.appendPCM`, both sides' video followed live through
   `call.state` for every recording, so a camera turned off and on again, remote video arriving later or video in a voice
-  call is picked up; our side is the camera or, while we share the screen, #301; `isMuted`). First recording ever → consent alert (Cancel = no recording; on an auto
+  call is picked up; our side is the camera or, while we share the screen, #301; `isMuted` → `setMuted`). First recording ever → consent alert (Cancel = no recording; on an auto
   start it also turns auto-record off). Auto-record: once per call, at `.requesting(isRinging: true)` for outgoing (the
   ringback is recorded) or `.connecting/.active/.reconnecting` (incoming answered); any start or stop in the call blocks a
   second auto start. `.terminating/.terminated` and the glue's `deinit` stop the recording, so hang-up always finishes the
   file. **Not secret (2026-10-30, owner's decision after a legal/ToS review, Mac parity):** once
-  `NovagramCallRecordingCenter.start` returned true, the glue sends `callRecording_noticeMessage` ("🔴 I'm recording this call
+  `NovagramCallRecordings.start` returned a session, the glue sends `callRecording_noticeMessage` ("🔴 I'm recording this call
   (Novagram)", en/uz/ru/zh by the app language) to the call peer's 1:1 chat as a plain text message from the user, through
   `context.engine.messages.enqueueOutgoingMessage(to:replyTo:content: .text(…))`. Manual Record and auto-record alike, at most
-  once per call UUID (`NovagramCallRecordingNoticeLedger` in the core, static in the glue; a Stop then Record in the same call
+  once per call UUID (the SDK's `CallRecordingNoticePolicy`, static in the glue; a Stop then Record in the same call
   sends nothing more). Only a synchronous enqueue failure (no message id back) stops the recording: its file is deleted and
   `callRecording_noticeFailed` ("Couldn't notify the other person, so the call is not being recorded.") shown, and the next
   Record in that call sends the notice again. A later failed delivery (the chat's red "!") does not stop the recording,
@@ -7860,14 +7853,23 @@ Ours: `submodules/Novagram/Calls/Sources/NovagramCallRecordControl.swift` (the c
   `mainWindow.presentNative` (popover anchored to the window's container for iPad). The consent alert and every toast go to
   `mainWindow` on the `.calls` level: the call screen is presented there, and the call controller's own `present`
   (`.window(.root)`) would put them under it. So they show over the call screen and stay after it closes.
-- **List** (`NovagramCallRecordingsController`): a themed `.insetGrouped` `UITableView` (the ItemList rows without a peer have no
-  swipe-to-delete or multi-select), grouped by day like the call log: initials avatar, name over "Voice call · 1:14 · 638 KB",
-  time on the right; fonts follow Telegram's text size (`listsFontSize`), avatar top-aligned at accessibility sizes. Summary
-  "5 recordings · 817 KB" above, "stored only on this iPhone" footer below. Tap → `QLPreviewController`; swipe / long-press →
-  Share or Delete (confirmation alert → `NovagramCallRecordingStorage.delete`). The right navigation button is Telegram's
-  `MoreHeaderButton` + `ContextController` menu: filter All / Video / Voice (session only, animated regroup), Select
-  (multi-select with a `ToolbarNode`: Share, Delete (N)), Clear All (only the filtered recordings when a filter is on). Hidden
-  when there are no recordings. Empty-state text depends on `NovagramCallRecordingSettings.isEnabled`.
+- **List** (`NovagramCallRecordingsController`, since 2026-10-30 the SDK's SwiftUI `CallRecordingsListView` in a
+  `UIHostingController` inside the Telegram `ViewController`, framed under Telegram's navigation bar; the UIKit table,
+  `NovagramCallRecordingCell` and `NovagramCallRecordingName` are gone). Grouped by day like the call log: initials
+  avatar (`AvatarNode.gradientColors`), name over "Voice call · 1:14 · 638 KB", time on the right
+  (`stringForShortTimestamp`); day headers are Telegram's chat date headers (`Weekday_Today` / `Weekday_Yesterday` /
+  `Date_ChatDateHeader(Year)`), sizes `dataSizeString`; colours from `theme.list` (`freeTextColor` for the summary,
+  headers, footer and empty text, through the SDK's `freeText` token); fonts from `listsFontSize`
+  (`followsDynamicType` off). Summary "5 recordings · 817 KB" above, "stored only on this iPhone" footer below. Tap →
+  `QLPreviewController`; swipe / long-press → Share (`UIActivityViewController`, popover at the row on iPad) or Delete
+  (the SDK's confirmation). The SDK's strings are used in the app language (`NovagramL10n.languageKey`), with
+  Telegram's own words for Share, Delete, Cancel, Select, Done, Select All / Deselect All, Today, Yesterday.
+  **The menu stays in Telegram's navigation bar** (`MoreHeaderButton` + `ContextController`: filter All / Video / Voice,
+  Select, Clear All; Done and Select All / Deselect All while selecting; hidden when there are no recordings) and drives
+  the SDK's `CallRecordingsListViewModel` (`filter`, `setSelecting`, `toggleSelectAll`, `requestClearAll`) with
+  `environment.showsToolbar = false`: a SwiftUI `.toolbar` needs a SwiftUI navigation container, which a Telegram
+  `ViewController` does not have, so the SDK's own "⋯" never showed there. The select-mode Share / Delete (N) bar at the
+  bottom is the SDK's. Empty-state text depends on `CallRecordingSettings().isEnabled`.
 
 On an upstream update: #287 must stay the last line of `update(params:transition:)` (after #280: it reads the frames that pass
 set). If upstream renames `backButtonView`, `emojiView`, `emojiTooltipView`, `conferenceButtonView`, `titleView`, `statusView`,
@@ -7911,7 +7913,7 @@ moving and flip switches the camera on screen; the remote picture keeps moving; 
 **Layout, screen sharing and late video (2026-10-30). Hooks #299–#301.** The recording follows the call screen: the
 small window's corner (the user drags it to any corner) and the big/small swap (a tap on the small window). The glue reads
 #300 every 0.25 s while recording (a drag never calls the screen's `update`, so nothing can be pushed) and passes changes
-to `NovagramCallRecordingCenter.setLayout`, applied on the next frame. When we share our screen, our side of the recording
+to `NovagramCallRecordings.setLayout`, applied on the next frame. When we share our screen, our side of the recording
 is the screencast (#301) and it is the big picture (the other side goes into the corner): the screen shows no local video
 then, and the shared screen is unreadable as a thumbnail. `PrivateCallScreen.State` is not touched.
 
