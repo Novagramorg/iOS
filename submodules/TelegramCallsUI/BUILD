@@ -142,7 +142,7 @@ swift_library(
         "//submodules/TelegramUI/Components/AlertComponent/AlertInputFieldComponent",
         "//submodules/TelegramUI/Components/GlassControls",
         "//submodules/Novagram/Calls:NovagramCalls", # Novagram
-        "//submodules/Novagram/CallRecording:NovagramCallRecording", # Novagram
+        "//submodules/Novagram/CallRecordingKit:NovagramCallRecordingCore", # Novagram
         "//submodules/Novagram/Localization:NovagramLocalization", # Novagram
     ],
     visibility = [

@@ -7,6 +7,7 @@ import TelegramPresentationData
 import PresentationDataUtils
 import NovagramLocalization
 import NovagramCalls
+import NovagramCallRecordingCore
 
 // MARK: - Notification name
 
@@ -50,10 +51,10 @@ public enum NovagramDeveloperFlags {
         set { self.setValue(newValue, forKey: self.adsPanelKey) }
     }
 
-    /// "Call recording (beta)": the call recording rows and the Record control (NovagramCallRecordingSettings).
+    /// "Call recording (beta)": the call recording rows and the Record control (CallRecordingSettings).
     public static internal(set) var isCallRecordingEnabled: Bool {
-        get { return NovagramCallRecordingSettings.isDeveloperEnabled }
-        set { self.setValue(newValue, forKey: NovagramCallRecordingSettings.developerFlagKey) }
+        get { return CallRecordingSettings().isDeveloperEnabled }
+        set { self.setValue(newValue, forKey: CallRecordingSettings.developerFlagKey) }
     }
 
     /// "Use less data for calls (beta)": our shortcut row to Telegram's call data saving setting.

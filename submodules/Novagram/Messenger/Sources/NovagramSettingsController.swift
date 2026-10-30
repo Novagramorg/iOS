@@ -21,7 +21,7 @@ import NovagramSecretVault
 import NovagramStoryUnlock
 import NovagramPremiumUnlock
 import NovagramCalls
-import NovagramCallRecording
+import NovagramCallRecordingCore
 
 private enum NovagramSection: Int32 {
     case accounts = 5
@@ -1341,9 +1341,9 @@ private struct NovagramSettingsState: Equatable {
         self.forwardHideNames = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "forward_hide_names") ?? false
         self.unlimitedPins = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "unlimited_pins") ?? false
         // The user's own switches as stored; the Developer gates are applied by hiding the rows.
-        self.callRecording = NovagramCallRecordingSettings.isUserEnabled
-        self.callRecordingAuto = NovagramCallRecordingSettings.isUserAutoEnabled
-        self.callRecordingCount = NovagramCallRecordingStorage.list().count
+        self.callRecording = CallRecordingSettings().isUserEnabled
+        self.callRecordingAuto = CallRecordingSettings().isUserAutoEnabled
+        self.callRecordingCount = NovagramCallRecordings.storage.list().count
         self.showTranslateMessages = UserDefaults(suiteName: "pro_messager")?.object(forKey: "show_translate_messages") as? Bool ?? false
         self.textStyle = UserDefaults(suiteName: "pro_messager")?.string(forKey: "text_style") ?? "none"
         self.autoTextEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "auto_text_enabled") ?? false
@@ -2626,7 +2626,7 @@ public func novagramSettingsController(context: AccountContext, highlightFeature
         pushControllerImpl?(novagramCarPlayController(context: context))
     })
     arguments.updateCallRecording = { value in
-        NovagramCallRecordingSettings.isUserEnabled = value
+        CallRecordingSettings().isUserEnabled = value
         updateState { state in
             var state = state
             state.callRecording = value
@@ -2634,7 +2634,7 @@ public func novagramSettingsController(context: AccountContext, highlightFeature
         }
     }
     arguments.updateCallRecordingAuto = { value in
-        NovagramCallRecordingSettings.isUserAutoEnabled = value
+        CallRecordingSettings().isUserAutoEnabled = value
         updateState { state in
             var state = state
             state.callRecordingAuto = value
@@ -2669,8 +2669,8 @@ public func novagramSettingsController(context: AccountContext, highlightFeature
     }
     // Recordings are saved by calls and deleted on the list screen: recount them whenever Settings shows again.
     let refreshCallRecordings: () -> Void = {
-        let count = NovagramCallRecordingStorage.list().count
-        let isAutoEnabled = NovagramCallRecordingSettings.isUserAutoEnabled
+        let count = NovagramCallRecordings.storage.list().count
+        let isAutoEnabled = CallRecordingSettings().isUserAutoEnabled
         updateState { state in
             var state = state
             state.callRecordingCount = count
@@ -2685,7 +2685,7 @@ public func novagramSettingsController(context: AccountContext, highlightFeature
     let highlightTag: ItemListItemTag? = highlightFeature.map { NovagramSettingsItemTag(feature: $0) }
 
     // A call can turn auto-record off or save a recording while this screen stays open under the call UI.
-    let callRecordingObserver = NotificationCenter.default.addObserver(forName: NovagramCallRecordingSettings.changedNotification, object: nil, queue: .main) { _ in
+    let callRecordingObserver = NotificationCenter.default.addObserver(forName: CallRecordingSettings.changedNotification, object: nil, queue: .main) { _ in
         refreshCallRecordings()
     }
     // A Developer switch flipped (here, or a login turned the hidden ones off): add or drop the gated rows.
