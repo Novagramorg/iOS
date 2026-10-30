@@ -2,6 +2,7 @@
 #include <cstdint>
 
 #import "MediaUtils.h"
+#include "NovagramVideoSinkFanout.h" // Novagram
 
 #import "Instance.h"
 #import "InstanceImpl.h"
@@ -1505,6 +1506,7 @@ private:
 
     int _nextSinkId;
     NSMutableDictionary<NSNumber *, GroupCallVideoSink *> *_sinks;
+    std::shared_ptr<NovagramVideoSinkFanout> _novagramFanout; // Novagram
 }
 
 @end
@@ -1616,8 +1618,11 @@ tgcalls::VideoCaptureInterfaceObject *GetVideoCaptureAssumingSameThread(tgcalls:
     _sinks[@(sinkId)] = storedSink;
 
     auto sinkReference = [storedSink sink];
+    // Novagram: setOutput keeps one sink, so call recording took the camera from the call screen; every output now gets the frames (HOOKS.md, "Call recording").
+    if (!_novagramFanout) { _novagramFanout = std::make_shared<NovagramVideoSinkFanout>(); } // Novagram
+    _novagramFanout->add(sinkId, sinkReference); // Novagram
 
-    tgcalls::StaticThreads::getThreads()->getMediaThread()->PostTask([interface = _interface, sinkReference]() {
+    tgcalls::StaticThreads::getThreads()->getMediaThread()->PostTask([interface = _interface, sinkReference = std::static_pointer_cast<rtc::VideoSinkInterface<webrtc::VideoFrame>>(_novagramFanout)]() { // Novagram: the fan-out, not the single sink
         interface->setOutput(sinkReference);
     });
 
@@ -1630,6 +1635,7 @@ tgcalls::VideoCaptureInterfaceObject *GetVideoCaptureAssumingSameThread(tgcalls:
             }
 
             [strongSelf->_sinks removeObjectForKey:@(sinkId)];
+            if (strongSelf->_novagramFanout) { strongSelf->_novagramFanout->remove(sinkId); } // Novagram
         });
     }];
 }
@@ -1738,6 +1744,7 @@ tgcalls::VideoCaptureInterfaceObject *GetVideoCaptureAssumingSameThread(tgcalls:
     
     int _nextSinkId;
     NSMutableDictionary<NSNumber *, GroupCallVideoSink *> *_sinks;
+    std::shared_ptr<NovagramVideoSinkFanout> _novagramIncomingFanout; // Novagram
     
     rtc::scoped_refptr<webrtc::tgcalls_ios_adm::AudioDeviceModuleIOS> _currentAudioDeviceModule;
     rtc::Thread *_currentAudioDeviceModuleThread;
@@ -2438,7 +2445,10 @@ static void (*InternalVoipLoggingFunction)(NSString *) = NULL;
 
     if (_tgVoip) {
         if (isIncoming) {
-            _tgVoip->setIncomingVideoOutput([storedSink sink]);
+            // Novagram: the instance keeps one incoming sink; every output now gets the frames (HOOKS.md, "Call recording").
+            if (!_novagramIncomingFanout) { _novagramIncomingFanout = std::make_shared<NovagramVideoSinkFanout>(); } // Novagram
+            _novagramIncomingFanout->add(sinkId, [storedSink sink]); // Novagram
+            _tgVoip->setIncomingVideoOutput(_novagramIncomingFanout); // Novagram
         }
     }
 
@@ -2452,6 +2462,7 @@ static void (*InternalVoipLoggingFunction)(NSString *) = NULL;
             }
 
             [strongSelf->_sinks removeObjectForKey:@(sinkId)];
+            if (strongSelf->_novagramIncomingFanout) { strongSelf->_novagramIncomingFanout->remove(sinkId); } // Novagram
         }];
     }];
 }

@@ -8093,3 +8093,22 @@ Calls → Call recordings: the file (name = peer + date, duration, size, wavefor
 (6) Incoming call: no capsule while it rings; it appears after you answer (auto-record starts then). (7) A video call: the
 capsule never covers the back button, emoji key, name, status or "Weak signal", and hides with the controls when you tap the
 video.
+
+**Video fan-out (bug fix 2026-10-30). Hooks #292–#298.** A video recording froze the call screen's own camera
+picture (and flip seemed dead) on a real iPhone: `addVideoOutput` on the 1:1 camera capturer calls
+`VideoCaptureInterface::setOutput`, and `addVideoOutputWithIsIncoming:` calls `setIncomingVideoOutput`; both keep ONE
+sink, so the recorder's subscription replaced the screen's. `NovagramVideoSinkFanout` (ours, new file
+`TgVoipWebrtc/Sources/NovagramVideoSinkFanout.h`) is set once as that single sink and hands each frame to every
+added output (mutex-guarded map, the list is copied before delivery). Outputs are removed on dispose.
+
+| File | Change |
+| --- | --- |
+| `TgVoipWebrtc/Sources/OngoingCallThreadLocalContext.mm` | #292: `#include "NovagramVideoSinkFanout.h" // Novagram` after `#import "MediaUtils.h"`. #293: ivar `_novagramFanout` in `OngoingCallThreadLocalContextVideoCapturer` after `_sinks`. #294: in its `addVideoOutput:`, after `auto sinkReference = [storedSink sink];`: create the fan-out once, `add(sinkId, sinkReference)`, and the `PostTask` capture `sinkReference = std::static_pointer_cast<…>(_novagramFanout)` instead of the bare sink (3 lines + the capture list). #295: `_novagramFanout->remove(sinkId)` after `[strongSelf->_sinks removeObjectForKey:@(sinkId)]` in its dispose block. #296: ivar `_novagramIncomingFanout` in `OngoingCallThreadLocalContextWebrtc` after `_sinks`. #297: in `addVideoOutputWithIsIncoming:sink:` the line `_tgVoip->setIncomingVideoOutput([storedSink sink]);` became: create the fan-out once, `add(sinkId, [storedSink sink])`, `setIncomingVideoOutput(_novagramIncomingFanout)` (the instance holds a `weak_ptr`, the ivar keeps it alive). #298: `remove(sinkId)` in that dispose block. |
+
+Not changed on purpose: `makeOutgoingVideoView` / `makeIncomingVideoView` (the legacy view path) still call
+`setOutput` / `setIncomingVideoOutput` with their renderer directly and so replace the fan-out, as before; the next
+`addVideoOutput` puts the fan-out back. The new call screen uses only the signals.
+
+On an upstream update: if upstream makes these two methods add instead of replace (or adds a broadcaster), drop
+#292–#298 and the header. Manual repro: start a video call, turn on Call recording, press Record: our own preview keeps
+moving and flip switches the camera on screen; the remote picture keeps moving; the `.mp4` has both pictures.
