@@ -8,6 +8,7 @@ import Display
 import SwiftSignalKit
 import AccountContext
 import TelegramPresentationData
+import PresentationDataUtils
 import TelegramStringFormatting
 import TextFormat
 import ContextUI
@@ -25,6 +26,8 @@ import NovagramCallRecordingUI
 /// Telegram's navigation bar keeps the title and back button, and its "more" button opens Telegram's context menu with
 /// a filter (all / video / voice), Select and Clear All. They drive the SDK's view model; the SDK's own SwiftUI toolbar
 /// is off (`showsToolbar`), because SwiftUI toolbars need a SwiftUI navigation container this screen does not have.
+/// The select-mode bar is Telegram's `ToolbarNode` (Share / Delete (N)) and delete confirmations are Telegram alerts
+/// (`showsSelectionBar` off, `confirmDeletion` set), like the UIKit screen before it.
 public func novagramCallRecordingsController(context: AccountContext) -> ViewController {
     return NovagramCallRecordingsController(context: context)
 }
@@ -50,6 +53,10 @@ private final class NovagramCallRecordingsController: ViewController, QLPreviewC
     private static let subtitleFontSize: CGFloat = 14.0
     private static let timeFontSize: CGFloat = 15.0
     private static let freeTextFontSize: CGFloat = 13.0
+    // Telegram's item lists keep the cards 20 pt from the screen edges; SwiftUI's inset-grouped list uses 16.
+    private static let listSideInset: CGFloat = 20.0
+    private static let systemListSideInset: CGFloat = 16.0
+    private static let toolbarHeight: CGFloat = 44.0
 
     private let context: AccountContext
     private var presentationData: PresentationData
@@ -59,7 +66,10 @@ private final class NovagramCallRecordingsController: ViewController, QLPreviewC
     private let moreItem: UIBarButtonItem
     private var doneItem: UIBarButtonItem?
     private var selectAllItem: UIBarButtonItem?
-    private var hostingController: UIHostingController<CallRecordingsListView>?
+    private var hostingController: NovagramCallRecordingsHostingController?
+    private var toolbarNode: ToolbarNode?
+    private var lastLayout: ContainerViewLayout?
+    private var wasSelecting = false
 
     private var presentationDataDisposable: Disposable?
     private var modelObservation: AnyCancellable?
@@ -98,7 +108,7 @@ private final class NovagramCallRecordingsController: ViewController, QLPreviewC
         // objectWillChange fires before the model changes: read the new state on the next main-queue turn.
         self.modelObservation = self.model.objectWillChange.sink(receiveValue: { [weak self] _ in
             Queue.mainQueue().justDispatch {
-                self?.updateNavigationItems(animated: true)
+                self?.modelDidChange()
             }
         })
     }
@@ -115,7 +125,13 @@ private final class NovagramCallRecordingsController: ViewController, QLPreviewC
         self.displayNode = ASDisplayNode()
         self.displayNode.backgroundColor = self.presentationData.theme.list.blocksBackgroundColor
 
-        let hostingController = UIHostingController(rootView: self.makeListView())
+        if #available(iOS 16.0, *) {
+        } else {
+            // iOS 15 has no scrollContentBackground: clear the List's own scroll view, so the theme shows through.
+            UITableView.appearance(whenContainedInInstancesOf: [NovagramCallRecordingsHostingController.self]).backgroundColor = .clear
+            UICollectionView.appearance(whenContainedInInstancesOf: [NovagramCallRecordingsHostingController.self]).backgroundColor = .clear
+        }
+        let hostingController = NovagramCallRecordingsHostingController(rootView: self.makeListView())
         hostingController.view.backgroundColor = .clear
         self.addChild(hostingController)
         self.displayNode.view.addSubview(hostingController.view)
@@ -138,11 +154,38 @@ private final class NovagramCallRecordingsController: ViewController, QLPreviewC
 
     override func containerLayoutUpdated(_ layout: ContainerViewLayout, transition: ContainedViewLayoutTransition) {
         super.containerLayoutUpdated(layout, transition: transition)
-        // The list starts under Telegram's navigation bar; the hosting view keeps the bottom safe area itself.
+        self.lastLayout = layout
+        // The list starts under Telegram's navigation bar and runs to the screen bottom. Telegram's layout insets do
+        // not reach UIKit's safe area, so the hosting controller gets them as additional insets: the home indicator,
+        // plus the toolbar while selecting, so the last rows scroll above both.
         let navigationBarHeight = self.navigationLayout(layout: layout).navigationFrame.maxY
         let contentFrame = CGRect(x: 0.0, y: navigationBarHeight, width: layout.size.width, height: max(0.0, layout.size.height - navigationBarHeight))
-        if let view = self.hostingController?.view {
-            transition.updateFrame(view: view, frame: contentFrame)
+        if let hostingController = self.hostingController {
+            transition.updateFrame(view: hostingController.view, frame: contentFrame)
+            var insets = UIEdgeInsets()
+            insets.bottom = self.model.isSelecting ? self.toolbarFrame(layout: layout).height : layout.intrinsicInsets.bottom
+            if #available(iOS 17.0, *) {
+            } else {
+                // The SDK's contentMargins need iOS 17; before that, widen the side safe area instead.
+                let extra = NovagramCallRecordingsController.listSideInset - NovagramCallRecordingsController.systemListSideInset
+                insets.left = extra
+                insets.right = extra
+            }
+            if hostingController.additionalSafeAreaInsets != insets {
+                hostingController.additionalSafeAreaInsets = insets
+            }
+        }
+        self.layoutToolbar(layout: layout, transition: transition)
+    }
+
+    private func modelDidChange() {
+        self.updateNavigationItems(animated: true)
+        let isSelecting = self.model.isSelecting
+        if isSelecting != self.wasSelecting, let layout = self.lastLayout {
+            self.wasSelecting = isSelecting
+            self.containerLayoutUpdated(layout, transition: .animated(duration: 0.3, curve: .spring))
+        } else {
+            self.updateToolbar()
         }
     }
 
@@ -162,6 +205,8 @@ private final class NovagramCallRecordingsController: ViewController, QLPreviewC
             return
         }
         self.displayNode.backgroundColor = theme.list.blocksBackgroundColor
+        self.toolbarNode?.updateTheme(ToolbarTheme(rootControllerTheme: theme))
+        self.updateToolbar()
         self.hostingController?.rootView = self.makeListView()
     }
 
@@ -187,7 +232,8 @@ private final class NovagramCallRecordingsController: ViewController, QLPreviewC
             timeFontSize: floor(baseFontSize * NovagramCallRecordingsController.timeFontSize / reference),
             freeTextFontSize: floor(baseFontSize * NovagramCallRecordingsController.freeTextFontSize / reference),
             followsDynamicType: false,
-            freeText: Color(list.freeTextColor)
+            freeText: Color(list.freeTextColor),
+            listSideInset: NovagramCallRecordingsController.listSideInset
         )
         var environment = CallRecordingUIEnvironment(
             languageCode: NovagramL10n.languageKey(for: presentationData.strings),
@@ -201,6 +247,10 @@ private final class NovagramCallRecordingsController: ViewController, QLPreviewC
             }
         )
         environment.showsToolbar = false
+        environment.showsSelectionBar = false
+        environment.confirmDeletion = { [weak self] text, confirm in
+            self?.confirmDeletion(text: text, confirm: confirm)
+        }
         environment.strings = self.listStrings()
         let strings = presentationData.strings
         environment.dayHeader = { day in
@@ -328,6 +378,83 @@ private final class NovagramCallRecordingsController: ViewController, QLPreviewC
         self.model.toggleSelectAll()
     }
 
+    // MARK: - Selection toolbar
+
+    private func toolbarFrame(layout: ContainerViewLayout) -> CGRect {
+        let bottomInset = max(layout.intrinsicInsets.bottom, layout.safeInsets.bottom)
+        let height = NovagramCallRecordingsController.toolbarHeight + bottomInset
+        return CGRect(x: 0.0, y: layout.size.height - height, width: layout.size.width, height: height)
+    }
+
+    /// Telegram's bottom toolbar while selecting: slides in from below and out again.
+    private func layoutToolbar(layout: ContainerViewLayout, transition: ContainedViewLayoutTransition) {
+        var frame = self.toolbarFrame(layout: layout)
+        let isSelecting = self.model.isSelecting
+        if isSelecting {
+            if self.toolbarNode == nil {
+                let toolbarNode = ToolbarNode(theme: ToolbarTheme(rootControllerTheme: self.presentationData.theme), displaySeparator: true, left: { [weak self] in
+                    self?.shareSelected()
+                }, right: { [weak self] in
+                    self?.model.requestDeleteSelected()
+                })
+                toolbarNode.frame = frame.offsetBy(dx: 0.0, dy: frame.height)
+                self.toolbarNode = toolbarNode
+                self.displayNode.addSubnode(toolbarNode)
+            }
+        } else {
+            frame = frame.offsetBy(dx: 0.0, dy: frame.height)
+        }
+        guard let toolbarNode = self.toolbarNode else {
+            return
+        }
+        transition.updateFrame(node: toolbarNode, frame: frame, completion: { [weak self, weak toolbarNode] _ in
+            guard !isSelecting, let self, let toolbarNode, self.toolbarNode === toolbarNode, !self.model.isSelecting else {
+                return
+            }
+            toolbarNode.removeFromSupernode()
+            self.toolbarNode = nil
+        })
+        self.updateToolbar(layout: layout)
+    }
+
+    /// Share on the left, "Delete (N)" on the right, both off while nothing is selected.
+    private func updateToolbar(layout: ContainerViewLayout? = nil) {
+        guard let toolbarNode = self.toolbarNode, let layout = layout ?? self.lastLayout else {
+            return
+        }
+        let strings = self.presentationData.strings
+        let count = self.model.selection.count
+        let toolbar = Toolbar(
+            leftAction: ToolbarAction(title: strings.Conversation_ContextMenuShare, isEnabled: count > 0),
+            rightAction: ToolbarAction(title: self.listStrings().deleteSelectedButton(count), isEnabled: count > 0),
+            middleAction: nil
+        )
+        let bottomInset = max(layout.intrinsicInsets.bottom, layout.safeInsets.bottom)
+        toolbarNode.updateLayout(size: self.toolbarFrame(layout: layout).size, leftInset: layout.safeInsets.left, rightInset: layout.safeInsets.right, additionalSideInsets: UIEdgeInsets(), bottomInset: bottomInset, toolbar: toolbar, transition: .immediate)
+    }
+
+    private func shareSelected() {
+        var rect = CGRect.zero
+        if let toolbarView = self.toolbarNode?.view {
+            // The left half, where Share is, in window coordinates.
+            rect = toolbarView.convert(CGRect(x: 0.0, y: 0.0, width: toolbarView.bounds.width / 2.0, height: NovagramCallRecordingsController.toolbarHeight), to: nil)
+        }
+        self.share(self.model.selectedURLs, rect: rect)
+    }
+
+    /// Telegram's alert for every delete (one row, the selection, Clear All), and a success haptic after it.
+    private func confirmDeletion(text: String, confirm: @escaping @MainActor () -> Void) {
+        let strings = self.presentationData.strings
+        let alert = textAlertController(context: self.context, title: nil, text: text, actions: [
+            TextAlertAction(type: .genericAction, title: strings.Common_Cancel, action: {}),
+            TextAlertAction(type: .destructiveAction, title: strings.Common_Delete, action: {
+                confirm()
+                HapticFeedback().success()
+            })
+        ], dismissOnOutsideTap: false)
+        self.present(alert, in: .window(.root))
+    }
+
     // MARK: - Actions
 
     private func play(_ url: URL) {
@@ -386,6 +513,10 @@ private final class NovagramCallRecordingsController: ViewController, QLPreviewC
     func previewController(_ controller: QLPreviewController, previewItemAt index: Int) -> QLPreviewItem {
         return (self.previewURL ?? NovagramCallRecordings.storage.directory) as NSURL
     }
+}
+
+/// Its own class only so the iOS 15 appearance proxy can clear the List's background inside this screen alone.
+private final class NovagramCallRecordingsHostingController: UIHostingController<CallRecordingsListView> {
 }
 
 /// Anchors the menu to the "more" button, like Telegram's own screens (PeerInfoStoryGridScreen).

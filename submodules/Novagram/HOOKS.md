@@ -7772,7 +7772,7 @@ the tone mixing in `OnGetPlayoutData`). If upstream adds a second audio device p
 **The recording core is the public SDK `NovagramCallRecordingKit` (since 2026-10-30; it replaced our in-app module
 `//submodules/Novagram/CallRecording:NovagramCallRecording`, now deleted with its sources and tests).** A normal git
 submodule at `submodules/Novagram/CallRecordingKit` (`https://github.com/Novagramorg/novagram-call-recording-kit-sdk`,
-GPL-2.0-or-later, shared with the Mac app), pinned by commit, no tags: **`c9c508c`** (upstream `c4468bf` plus three iOS adoption fixes: `showsToolbar` and host-driven select mode, the `freeText` colour, the iOS row insets). Update it by moving the pin
+GPL-2.0-or-later, shared with the Mac app), pinned by commit, no tags: **`addbfcc`** (upstream `c4468bf` plus the iOS adoption fixes: `showsToolbar` and host-driven select mode, the `freeText` colour, the iOS row insets, then `showsSelectionBar` / `confirmDeletion` / `listSideInset` for Telegram's toolbar, alerts and margins). Update it by moving the pin
 (`git -C submodules/Novagram/CallRecordingKit checkout <sha>`, commit the gitlink). Its root `BUILD` gives
 `//submodules/Novagram/CallRecordingKit:NovagramCallRecordingCore` and `:NovagramCallRecordingUI`; the SDK holds no
 Telegram type, so it never depends on a Telegram module. Its own README has the API; `swift test` in the SDK repo runs
