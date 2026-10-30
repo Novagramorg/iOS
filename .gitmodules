@@ -38,3 +38,6 @@ url=../tgcalls.git
 [submodule "third-party/mtproto-engine"]
 	path = third-party/mtproto-engine
 	url = https://github.com/TelegramMessenger/mtproto-engine.git
+[submodule "submodules/Novagram/CallRecordingKit"]
+	path = submodules/Novagram/CallRecordingKit
+	url = https://github.com/Novagramorg/novagram-call-recording-kit-sdk.git
