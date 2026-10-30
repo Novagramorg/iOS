@@ -43,6 +43,7 @@ swift_library(
         "//submodules/Novagram/PremiumUnlock:NovagramPremiumUnlock",
         "//submodules/Novagram/Calls:NovagramCalls",
         "//submodules/Novagram/CallRecordingKit:NovagramCallRecordingCore",
+        "//submodules/Novagram/CallRecordingKit:NovagramCallRecordingUI",
     ],
     visibility = [
         "//visibility:public",
