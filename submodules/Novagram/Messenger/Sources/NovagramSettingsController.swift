@@ -21,6 +21,8 @@ import NovagramAutoProxy
 import NovagramSecretVault
 import NovagramStoryUnlock
 import NovagramPremiumUnlock
+import NovagramCalls
+import NovagramCallRecording
 
 private enum NovagramSection: Int32 {
     case accounts = 5
@@ -67,6 +69,10 @@ private enum NovagramEntry: ItemListNodeEntry {
     case searchTranslate(PresentationTheme, String, String, Bool)
     case callsHeader(String)
     case callDataSaving(PresentationTheme, String, String, Bool)
+    case callRecording(PresentationTheme, String, String, Bool)
+    case callRecordingAuto(PresentationTheme, String, String, Bool)
+    case callRecordings(PresentationTheme, String, String)
+    case callRecordingFooter(PresentationTheme, String)
     case chatFooter(PresentationTheme, String)
 
     // — Interface Section —
@@ -192,7 +198,7 @@ private enum NovagramEntry: ItemListNodeEntry {
             return NovagramSection.interface.rawValue
         case .searchHeader, .searchFeatures, .searchTranslate:
             return NovagramSection.search.rawValue
-        case .callsHeader, .callDataSaving:
+        case .callsHeader, .callDataSaving, .callRecording, .callRecordingAuto, .callRecordings, .callRecordingFooter:
             return NovagramSection.calls.rawValue
         case .messagingHeader, .textStyle, .autoText, .autoTranslate, .translateToggle, .translateMessages, .sendTranslateConfirm, .autoStickerEnabled, .heartEffectEnabled, .messagingFooter:
             return NovagramSection.messaging.rawValue
@@ -246,6 +252,10 @@ private enum NovagramEntry: ItemListNodeEntry {
         // Calls (53–59; a future "Call recording" switch goes here too)
         case .callsHeader:               return 53
         case .callDataSaving:            return 54
+        case .callRecording:             return 55
+        case .callRecordingAuto:         return 56
+        case .callRecordings:            return 57
+        case .callRecordingFooter:       return 58
         // Messaging
         case .messagingHeader:           return 20
         case .textStyle:                 return 21
@@ -329,6 +339,14 @@ private enum NovagramEntry: ItemListNodeEntry {
             return 19 * 10 + 1
         case .callDataSaving:
             return 19 * 10 + 2
+        case .callRecording:
+            return 19 * 10 + 3
+        case .callRecordingAuto:
+            return 19 * 10 + 4
+        case .callRecordings:
+            return 19 * 10 + 5
+        case .callRecordingFooter:
+            return 19 * 10 + 6
         default:
             return Int(self.stableId) * 10
         }
@@ -366,6 +384,14 @@ private enum NovagramEntry: ItemListNodeEntry {
             if case let .callsHeader(rhsText) = rhs, lhsText == rhsText { return true } else { return false }
         case let .callDataSaving(lhsTheme, lhsTitle, lhsText, lhsValue):
             if case let .callDataSaving(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
+        case let .callRecording(lhsTheme, lhsTitle, lhsText, lhsValue):
+            if case let .callRecording(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
+        case let .callRecordingAuto(lhsTheme, lhsTitle, lhsText, lhsValue):
+            if case let .callRecordingAuto(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
+        case let .callRecordings(lhsTheme, lhsTitle, lhsLabel):
+            if case let .callRecordings(rhsTheme, rhsTitle, rhsLabel) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsLabel == rhsLabel { return true } else { return false }
+        case let .callRecordingFooter(lhsTheme, lhsText):
+            if case let .callRecordingFooter(rhsTheme, rhsText) = rhs, lhsTheme === rhsTheme, lhsText == rhsText { return true } else { return false }
         case let .chatFooter(lhsTheme, lhsText):
             if case let .chatFooter(rhsTheme, rhsText) = rhs, lhsTheme === rhsTheme, lhsText == rhsText { return true } else { return false }
 
@@ -537,6 +563,9 @@ private enum NovagramEntry: ItemListNodeEntry {
         case let .searchFeatures(_, title, _, _):           return (.searchFeatures, title)
         case let .searchTranslate(_, title, _, _):          return (.searchTranslate, title)
         case let .callDataSaving(_, title, _, _):           return (.callDataSaving, title)
+        case let .callRecording(_, title, _, _):            return (.callRecording, title)
+        case let .callRecordingAuto(_, title, _, _):        return (.callRecordingAuto, title)
+        case let .callRecordings(_, title, _):              return (.callRecordings, title)
 
         case let .deletedMessages(_, title, _, _):          return (.deletedMessages, title)
         case let .editedHistoryEnabled(_, title, _, _):     return (.editedHistory, title)
@@ -707,6 +736,22 @@ private enum NovagramEntry: ItemListNodeEntry {
             return ItemListSwitchItem(presentationData: presentationData, icon: novagramSettingsIcon(systemName: "antenna.radiowaves.left.and.right", color: .green), title: title, text: text, titleBadgeComponent: badge, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateCallDataSaving(val)
             }, tag: self.novagramTag)
+        case let .callRecording(_, title, text, value):
+            let langCode = NovagramL10n.languageKey(for: presentationData.strings)
+            let badge: AnyComponent<Empty>? = AnyComponent(NovagramNewBadgeComponent(langCode: langCode))
+            return ItemListSwitchItem(presentationData: presentationData, icon: novagramSettingsIcon(systemName: "record.circle", color: .red), title: title, text: text, titleBadgeComponent: badge, value: value, sectionId: self.section, style: .blocks, updated: { val in
+                arguments.updateCallRecording(val)
+            }, tag: self.novagramTag)
+        case let .callRecordingAuto(_, title, text, value):
+            return ItemListSwitchItem(presentationData: presentationData, icon: novagramSettingsIcon(systemName: "arrow.triangle.2.circlepath", color: .red), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
+                arguments.updateCallRecordingAuto(val)
+            }, tag: self.novagramTag)
+        case let .callRecordings(_, title, label):
+            return ItemListDisclosureItem(presentationData: presentationData, icon: novagramSettingsIcon(systemName: "waveform", color: .orange), title: title, label: label, sectionId: self.section, style: .blocks, action: {
+                arguments.openCallRecordings()
+            }, tag: self.novagramTag)
+        case let .callRecordingFooter(_, text):
+            return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
         case let .chatFooter(_, text):
             return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
 
@@ -1217,6 +1262,9 @@ private struct NovagramSettingsState: Equatable {
     var forwardHideNames: Bool
     var unlimitedPins: Bool
     var searchFeatures: Bool
+    var callRecording: Bool
+    var callRecordingAuto: Bool
+    var callRecordingCount: Int
     var searchTranslate: Bool
     var showTranslateMessages: Bool
     var textStyle: String
@@ -1284,6 +1332,9 @@ private struct NovagramSettingsState: Equatable {
         self.forwardHideNames = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "forward_hide_names") ?? false
         self.unlimitedPins = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "unlimited_pins") ?? false
         self.searchFeatures = NovagramSearchFeatures.isEnabled
+        self.callRecording = NovagramCallRecordingSettings.isEnabled
+        self.callRecordingAuto = NovagramCallRecordingSettings.isAutoEnabled
+        self.callRecordingCount = NovagramCallRecordingStorage.list().count
         self.searchTranslate = NovagramQueryTranslator.isEnabled
         self.showTranslateMessages = UserDefaults(suiteName: "pro_messager")?.object(forKey: "show_translate_messages") as? Bool ?? false
         self.textStyle = UserDefaults(suiteName: "pro_messager")?.string(forKey: "text_style") ?? "none"
@@ -1369,6 +1420,9 @@ private struct NovagramSettingsState: Equatable {
             return false
         }
         if lhs.searchFeatures != rhs.searchFeatures {
+            return false
+        }
+        if lhs.callRecording != rhs.callRecording || lhs.callRecordingAuto != rhs.callRecordingAuto || lhs.callRecordingCount != rhs.callRecordingCount {
             return false
         }
         if lhs.searchTranslate != rhs.searchTranslate {
@@ -1570,6 +1624,15 @@ private func novagramSettingsEntries(presentationData: PresentationData, state: 
     // The switch shows Telegram's live call data saving setting (NovagramCallDataSaving).
     entries.append(.callsHeader(l10n.settings_section_calls))
     entries.append(.callDataSaving(presentationData.theme, l10n.settings_callDataSaving_title, l10n.settings_callDataSaving_subtitle, callDataSaving))
+    // Call recording: auto-record only while recording is on; the list while recording is on or a file exists.
+    entries.append(.callRecording(presentationData.theme, l10n.settings_callRecording_title, l10n.settings_callRecording_subtitle, state.callRecording))
+    if state.callRecording {
+        entries.append(.callRecordingAuto(presentationData.theme, l10n.settings_callRecordingAuto_title, l10n.settings_callRecordingAuto_subtitle, state.callRecordingAuto))
+    }
+    if state.callRecording || state.callRecordingCount > 0 {
+        entries.append(.callRecordings(presentationData.theme, l10n.settings_callRecordings_title, state.callRecordingCount > 0 ? "\(state.callRecordingCount)" : ""))
+    }
+    entries.append(.callRecordingFooter(presentationData.theme, l10n.settings_callRecording_footer))
 
     // ─── CHAT ───
     entries.append(.chatHeader(l10n.settings_section_chat))
@@ -1782,6 +1845,10 @@ private final class NovagramSettingsArguments {
     let updateStoryUnlock: (Bool) -> Void
     let updateTranslateChatsUnlock: (Bool) -> Void
     let openCarPlay: () -> Void
+    // Call recording rows, set after init (HOOKS.md, "Call recording").
+    var updateCallRecording: (Bool) -> Void = { _ in }
+    var updateCallRecordingAuto: (Bool) -> Void = { _ in }
+    var openCallRecordings: () -> Void = {}
 
     init(openAccounts: @escaping () -> Void, openAbout: @escaping () -> Void, openNovagramBots: @escaping () -> Void, openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateEditedHistoryEnabled: @escaping (Bool) -> Void, updateRoundVideoFromGallery: @escaping (Bool) -> Void, updateForwardHideNames: @escaping (Bool) -> Void, updateUnlimitedPins: @escaping (Bool) -> Void, updateSearchFeatures: @escaping (Bool) -> Void, updateSearchTranslate: @escaping (Bool) -> Void, updateCallDataSaving: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateSttEnabled: @escaping (Bool) -> Void, openSttLanguageSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateEnableNovagramProxy: @escaping (Bool) -> Void, updateChatLockMaster: @escaping (Bool) -> Void, updateSecretVault: @escaping (Bool) -> Void, updateSecretVaultBiometric: @escaping (Bool) -> Void, updateWhiteThemeAccent: @escaping (Bool) -> Void, updateVoiceTranslate: @escaping (Bool) -> Void, updateAutoDownloadDisabled: @escaping (Bool) -> Void, updateSendTranslateConfirm: @escaping (Bool) -> Void, updateSendConfirmEnabled: @escaping (Bool) -> Void, updateAutoStickerEnabled: @escaping (Bool) -> Void, updateHeartEffectEnabled: @escaping (Bool) -> Void, updateReminderEnabled: @escaping (Bool) -> Void, openReminderTimeSettings: @escaping () -> Void, openReminderSoundSettings: @escaping () -> Void, addRecommendedFolders: @escaping () -> Void, openFolderStyle: @escaping () -> Void, updateChannelHistory: @escaping (Bool) -> Void, updateSettingsLinks: @escaping (Bool) -> Void, shareNovagramProLink: @escaping () -> Void, updateAutoAccept: @escaping (Bool) -> Void, updateAdminFolders: @escaping (Bool) -> Void, updateFoldersPrompt: @escaping (Bool) -> Void, updateShowAds: @escaping (Bool) -> Void, updateAdEventsOff: @escaping (Bool) -> Void, updateCurrencyRatesView: @escaping (Bool) -> Void, updateAdsPanel: @escaping (Bool) -> Void, updateStoryUnlock: @escaping (Bool) -> Void, updateTranslateChatsUnlock: @escaping (Bool) -> Void, openCarPlay: @escaping () -> Void) {
         self.openAccounts = openAccounts
@@ -2563,6 +2630,36 @@ public func novagramSettingsController(context: AccountContext, highlightFeature
     }, openCarPlay: {
         pushControllerImpl?(novagramCarPlayController(context: context))
     })
+    arguments.updateCallRecording = { value in
+        NovagramCallRecordingSettings.isEnabled = value
+        updateState { state in
+            var state = state
+            state.callRecording = value
+            return state
+        }
+    }
+    arguments.updateCallRecordingAuto = { value in
+        NovagramCallRecordingSettings.isAutoEnabled = value
+        updateState { state in
+            var state = state
+            state.callRecordingAuto = value
+            return state
+        }
+    }
+    arguments.openCallRecordings = {
+        pushControllerImpl?(novagramCallRecordingsController(context: context))
+    }
+    // Recordings are saved by calls and deleted on the list screen: recount them whenever Settings shows again.
+    let refreshCallRecordings: () -> Void = {
+        let count = NovagramCallRecordingStorage.list().count
+        let isAutoEnabled = NovagramCallRecordingSettings.isAutoEnabled
+        updateState { state in
+            var state = state
+            state.callRecordingCount = count
+            state.callRecordingAuto = isAutoEnabled
+            return state
+        }
+    }
 
     // Feature #40 (part c): the long-press share menu names the row the user pressed, so it needs
     // the titles of the rows currently on screen. They are only known once the entries are built.
@@ -2610,6 +2707,7 @@ public func novagramSettingsController(context: AccountContext, highlightFeature
             refreshChatLockMaster()
             refreshSecretVault()
             refreshTranslateConfirmTarget()
+            refreshCallRecordings()
         })
         guard firstTime else { return }
 

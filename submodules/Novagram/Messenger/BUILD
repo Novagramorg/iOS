@@ -40,6 +40,8 @@ swift_library(
         "//submodules/Novagram/ChatLock:NovagramChatLock",
         "//submodules/Novagram/SecretVault:NovagramSecretVault",
         "//submodules/Novagram/PremiumUnlock:NovagramPremiumUnlock",
+        "//submodules/Novagram/Calls:NovagramCalls",
+        "//submodules/Novagram/CallRecording:NovagramCallRecording",
     ],
     visibility = [
         "//visibility:public",

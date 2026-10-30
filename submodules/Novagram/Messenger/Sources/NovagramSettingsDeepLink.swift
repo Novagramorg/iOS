@@ -36,6 +36,9 @@ public enum NovagramSettingsFeature: String, CaseIterable {
 
     // Calls (same slug as the Mac)
     case callDataSaving = "call-data-saving"
+    case callRecording = "call-recording"
+    case callRecordingAuto = "call-recording-auto"
+    case callRecordings = "call-recordings"
 
     // Chat
     case deletedMessages = "deleted-messages"
