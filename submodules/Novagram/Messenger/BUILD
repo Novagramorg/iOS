@@ -22,6 +22,7 @@ swift_library(
         "//submodules/TextFormat:TextFormat",
         "//submodules/AccountContext:AccountContext",
         "//submodules/TelegramPresentationData:TelegramPresentationData",
+        "//submodules/TelegramStringFormatting:TelegramStringFormatting",
         "//submodules/TelegramUIPreferences:TelegramUIPreferences",
         "//submodules/PresentationDataUtils:PresentationDataUtils",
         "//submodules/ItemListUI:ItemListUI",

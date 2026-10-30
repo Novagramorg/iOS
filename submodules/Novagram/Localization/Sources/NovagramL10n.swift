@@ -132,13 +132,51 @@ public struct NovagramL10n {
         )
     }
 
-    public var callRecordings_empty: String {
+    public var callRecordings_emptyTitle: String {
+        pick(en: "No recordings yet", uz: "Hali yozuvlar yo'q", ru: "Записей пока нет", zh: "还没有录音")
+    }
+
+    public var callRecordings_emptyText: String {
         pick(
-            en: "No call recordings yet. Turn on Call recording and tap Record during a call.",
-            uz: "Hali qo'ng'iroq yozuvlari yo'q. «Qo'ng'iroqni yozib olish»ni yoqing va qo'ng'iroq paytida «Yozish»ni bosing.",
-            ru: "Записей звонков пока нет. Включите «Запись звонков» и нажмите «Запись» во время звонка.",
-            zh: "还没有通话录音。打开“通话录音”，并在通话中点按“录制”。"
+            en: "Turn on Call recording and tap Record during a call.",
+            uz: "«Qo'ng'iroqni yozib olish»ni yoqing va qo'ng'iroq paytida «Yozish»ni bosing.",
+            ru: "Включите «Запись звонков» и нажмите «Запись» во время звонка.",
+            zh: "打开“通话录音”，并在通话中点按“录制”。"
         )
+    }
+
+    public var callRecordings_videoCall: String {
+        pick(en: "Video call", uz: "Video qo'ng'iroq", ru: "Видеозвонок", zh: "视频通话")
+    }
+
+    public var callRecordings_voiceCall: String {
+        pick(en: "Voice call", uz: "Ovozli qo'ng'iroq", ru: "Аудиозвонок", zh: "语音通话")
+    }
+
+    public var callRecordings_play: String {
+        pick(en: "Play", uz: "Ijro etish", ru: "Воспроизвести", zh: "播放")
+    }
+
+    // Summary above the list, e.g. "4 recordings · 24.6 MB · stored only on this iPhone".
+    public func callRecordings_summary(count: Int, size: String) -> String {
+        switch langCode {
+        case "uz": return "\(count) ta yozuv · \(size) · faqat shu iPhone'da saqlanadi"
+        case "ru": return "\(count) \(NovagramL10n.russianRecordingsWord(count)) · \(size) · хранятся только на этом iPhone"
+        case "zh": return "\(count) 条录音 · \(size) · 仅保存在这台 iPhone 上"
+        default:   return "\(count) \(count == 1 ? "recording" : "recordings") · \(size) · stored only on this iPhone"
+        }
+    }
+
+    private static func russianRecordingsWord(_ count: Int) -> String {
+        let mod10 = count % 10
+        let mod100 = count % 100
+        if mod10 == 1 && mod100 != 11 {
+            return "запись"
+        }
+        if (2...4).contains(mod10) && !(12...14).contains(mod100) {
+            return "записи"
+        }
+        return "записей"
     }
 
     public var callRecordings_deleteConfirm: String {
