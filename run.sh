@@ -397,6 +397,8 @@ fi
 # ─── Step 3: Bazel build ──────────────────────────────────────────────────────
 # Upstream's Postbox guard (Make.py runs it too): no new `import Postbox` / `.postbox` outside its allow lists.
 python3 build-system/Make/PostboxImportCheck.py . || err "PostboxImportCheck failed: use TelegramEngine instead of Postbox (HOOKS.md, \"Our modules off Postbox\")"
+# Our hooks inside submodules we cannot push to (tgcalls): patch files, re-applied before every build.
+submodules/Novagram/scripts/apply-submodule-patches.sh || err "apply-submodule-patches.sh failed: a submodule patch does not apply (HOOKS.md, \"Submodule patches\")"
 if [ "$MODE" = "simulator" ]; then
     step "Bazel build (${COMPILATION_MODE}_sim_arm64, simulator)..."
 else
@@ -592,8 +594,15 @@ for runtime, devices in data.get('devices', {}).items():
     OLD_BUNDLE=$(xcrun simctl get_app_container "$SIM_UDID" "$BUNDLE_ID" app 2>/dev/null || true)
     if [ -n "$OLD_BUNDLE" ] && [ -d "$OLD_BUNDLE" ]; then
         chmod -R u+w "$OLD_BUNDLE" 2>/dev/null || true
+        xcrun simctl install "$SIM_UDID" "$APP_PATH"
+    else
+        # First install on this simulator: simctl copies the read-only tree artifact's modes, then cannot write
+        # into its own copy (EACCES), so install from a writable copy.
+        INSTALL_STAGE=$(mktemp -d)
+        cp -R "$APP_PATH" "$INSTALL_STAGE/" && chmod -R u+w "$INSTALL_STAGE"
+        xcrun simctl install "$SIM_UDID" "$INSTALL_STAGE/$(basename "$APP_PATH")"
+        rm -rf "$INSTALL_STAGE"
     fi
-    xcrun simctl install "$SIM_UDID" "$APP_PATH"
 
     # WORKAROUND: simctl install on recent macOS (Sequoia/Tahoe) sometimes
     # fails to fully replace bundle contents when both source and existing

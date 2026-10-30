@@ -223,6 +223,8 @@ ok "Version: $VERSION  Build: $BUILD_NUMBER"
 # ─── Step 6: Bazel build (release, real-device arm64) ───────────────────────
 # Upstream's Postbox guard (Make.py runs it too): no new `import Postbox` / `.postbox` outside its allow lists.
 python3 build-system/Make/PostboxImportCheck.py . || err "PostboxImportCheck failed: use TelegramEngine instead of Postbox (HOOKS.md, \"Our modules off Postbox\")"
+# Our hooks inside submodules we cannot push to (tgcalls): patch files, re-applied before every build.
+submodules/Novagram/scripts/apply-submodule-patches.sh || err "apply-submodule-patches.sh failed: a submodule patch does not apply (HOOKS.md, \"Submodule patches\")"
 step "App Store build (release, -c opt)..."
 warn "Birinchi opt-build 30-45 daqiqa olishi mumkin (dbg-cache yordam bermaydi)."
 

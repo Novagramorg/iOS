@@ -7925,3 +7925,37 @@ Manual repro for regressions: (1) a video call on a bad network (Network Link Co
 and the button goes; it never shows on an audio call or a screencast. (2) Novagram Settings → Calls → Use less data
 for calls on: Data and Storage → Use less data for calls shows "Always"; change it there to "Never": the Novagram
 switch is off.
+
+## 📌 Submodule patches: our hooks inside tgcalls (2026-10-30)
+
+`submodules/TgVoipWebrtc/tgcalls` is a git submodule pinned to a `TelegramMessenger/tgcalls` commit, which we cannot
+push to (and `Novagramorg/tgcalls` does not exist). The parent repo does not track files inside it, and
+`git submodule update` resets them. So our lines there live as a patch file, the same idea as the Mac's
+`fork-patches/`:
+
+- `submodules/Novagram/patches/tgcalls.patch`: every Novagram line inside tgcalls (today only #285).
+- `submodules/Novagram/scripts/apply-submodule-patches.sh`: applies it (a no-op when already applied); `--unapply`
+  takes it out, `--save` writes the submodule's current diff back into the patch. **After editing a file inside
+  tgcalls, run `--save` and commit the patch**; the submodule itself always shows as modified (` m`) in
+  `git status`, that is expected and is never committed.
+- `run.sh`, `publish.sh` and `release.sh` run it right after `PostboxImportCheck.py`, so every build has the hooks.
+  `novagram-upstream-update.sh` takes the patch out before `git submodule update` moves a submodule and puts it back
+  after; if it no longer applies the script stops (exit 3): re-apply the lines below by hand, `--save`, commit, `--finish`.
+
+## 📌 Call recording (in progress, branch `feature/call-recording`, 2026-10-29)
+
+Owner: record 1:1 voice and video calls locally, Mac parity (macOS `NOVAGRAM_HOOKS.md`, "Local call recording",
+"Call extras"). Nothing is sent to the other side. Step 1 of 8: an audio tap in the call's audio device module
+that hands out the microphone PCM (after echo cancellation and noise suppression) and the playout PCM (the other
+side plus the call tones, so the ringback is recorded). The tap runs on the real-time audio thread and must copy the
+samples and return at once. nil removes it.
+
+| File | Change |
+| --- | --- |
+| `TelegramVoip/Sources/OngoingCallContext.swift` | #282: `OngoingCallContext.AudioDevice.setAudioTap(_:)` after `setTone(tone:)`, forwards to `SharedCallAudioDevice`. 5 lines. |
+| `TgVoipWebrtc/PublicHeaders/TgVoipWebrtc/OngoingCallThreadLocalContext.h` | #283: `- (void)setAudioTap:` on `SharedCallAudioDevice`, after `setTone:`. 4 lines. |
+| `TgVoipWebrtc/Sources/OngoingCallThreadLocalContext.mm` | #284: its implementation after `setTone:` (wraps the block in a `std::function`, sets it on `AudioDeviceModuleIOS` through `_audioDeviceModule->perform`, the same path as `setTone:`). 17 lines, `WEBRTC_IOS` only. |
+| `TgVoipWebrtc/tgcalls/…/tgcalls_audio_device_ios.h/.mm`, `tgcalls_audio_device_module_ios.h/.mm` (inside the submodule, kept in `patches/tgcalls.patch`) | #285: `NovagramAudioTap` typedef; `AudioDeviceIOS::setAudioTap` / `callAudioTap` (the audio thread only `try_lock`s, so it never waits; one buffer is skipped while a recording starts or stops); calls at the end of `OnDeliverRecordedData` (mic, `isPlayout` false) and `OnGetPlayoutData` (`isPlayout` true); `AudioDeviceModuleIOS::setAudioTap` keeps `lastAudioTap_` and re-sets it on a new `AudioDeviceIOS` after `Init()`, like `lastTone_`. 34 lines. |
+
+On an upstream update: the tap calls must stay the last statements before `return noErr` in both callbacks (after
+the tone mixing in `OnGetPlayoutData`). If upstream adds a second audio device path for 1:1 calls, it needs the tap too.

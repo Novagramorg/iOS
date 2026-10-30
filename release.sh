@@ -257,6 +257,8 @@ ok "Barcha 7 ta App Store profili joyiga ko'chirildi"
 # ─── Step: Bazel release build ───────────────────────────────────────────────
 # Upstream's Postbox guard (Make.py runs it too): no new `import Postbox` / `.postbox` outside its allow lists.
 python3 build-system/Make/PostboxImportCheck.py . || err "PostboxImportCheck failed: use TelegramEngine instead of Postbox (HOOKS.md, \"Our modules off Postbox\")"
+# Our hooks inside submodules we cannot push to (tgcalls): patch files, re-applied before every build.
+submodules/Novagram/scripts/apply-submodule-patches.sh || err "apply-submodule-patches.sh failed: a submodule patch does not apply (HOOKS.md, \"Submodule patches\")"
 step "Bazel release build (-c opt --ios_multi_cpus=arm64)..."
 
 # Generate variables.bzl from appstore-configuration.json

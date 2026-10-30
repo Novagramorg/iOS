@@ -121,9 +121,14 @@ update_moved_submodules() {
     moved="$(git submodule status | awk '/^[+-]/ { print $2 }')"
     [ -z "$moved" ] && return
     echo "updating submodules: $(echo "$moved" | tr '\n' ' ')"
+    # our patched submodules (tgcalls) must be clean before they move, then get the patch back
+    submodules/Novagram/scripts/apply-submodule-patches.sh --unapply >> "$LOG" 2>&1 \
+        || die "apply-submodule-patches.sh --unapply failed, see $LOG" 3
     for p in $moved; do
         git submodule update --init -- "$p" >> "$LOG" 2>&1 || die "git submodule update failed for $p, see $LOG" 3
     done
+    submodules/Novagram/scripts/apply-submodule-patches.sh >> "$LOG" 2>&1 \
+        || die "a submodule patch no longer applies: re-apply it by hand (HOOKS.md, \"Submodule patches\"), run apply-submodule-patches.sh --save, commit, then --finish" 3
 }
 
 build() {
