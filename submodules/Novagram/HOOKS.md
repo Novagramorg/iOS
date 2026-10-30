@@ -7530,6 +7530,21 @@ events" (`novagram_ads_events_off`, 2026-10-29), "Show currency rates" (`novagra
 `NovagramDeveloperFlags` (`isAdEventsOff`, `isCurrencyRatesViewEnabled`, `isAdsPanelEnabled`, live `…Signal`s on
 `.novagramDeveloperFlagsChanged`). The rows have no deep link.
 
+**Beta gates (2026-10-30, Mac parity).** Three more switches, after "Novagram ads panel", for features the owner has
+not approved yet: "Search features (beta)" (`novagram_dev_search_features`), "Call recording (beta)"
+(`novagram_dev_call_recording`) and "Use less data for calls (beta)" (`novagram_dev_call_data_saving`). `pro_messager`,
+Bool, missing key = off, so for everyone the features are hidden and behave as switched off; the user's own switch
+keeps its value and is never written by the gate. Developer role only: the director never sees them, and a director
+login turns all three off (`NovagramDeveloperRole.didLogIn`, switch cases `.searchFeatures`, `.callRecording`,
+`.callDataSaving`). Each key is defined once, in the module that reads it, so Calls and Search never import
+Messenger: `NovagramSearchFeatures.developerFlagKey` (Search), `NovagramCallRecordingSettings.developerFlagKey`
+(Calls), `NovagramDeveloperFlags.callDataSavingKey` (Messenger). `NovagramDeveloperFlags.isSearchFeaturesEnabled` /
+`isCallRecordingEnabled` / `isCallDataSavingEnabled` read through those modules and write with the usual
+`.novagramDeveloperFlagsChanged` post; Novagram Settings observes it and adds or drops the gated rows live. Rows:
+`NovagramEntry.developerBeta` (stable ids 99–101, sort 971–973, between the ads panel and the footer). A gated row's
+slug lands on the screen without scrolling, like an unknown slug (`NovagramSettingsFeature.isAvailable`). No
+Telegram file is involved.
+
 "Don't send ad events" (second row, right after "Remove all ads") stops every ad event, so an ad the backend
 shows once per user keeps showing while a developer tests it. Telegram's ads: the three `AdMessages.swift`
 guards (see "Developer switch \"Don't send ad events\" in sponsored-message reporting"). Novagram ads: no Telegram
@@ -7877,7 +7892,13 @@ slug `search-features`) and the translated-query switch, which moved there from 
 | `Search/Sources/NovagramSavedSearchItem.swift` | `NovagramSavedSearchScope.isEnabled` false: no section, nothing saved; the stored JSON stays |
 | `Search/Sources/NovagramTranslatedSearch.swift` | `translatedQuery` and `section` return nil: no section, no translate request |
 
-The privacy filter (feature 92, `NovagramSearchPrivacy`) never reads this switch: hidden chats stay out of search
+**Developer gate (2026-10-30).** `NovagramSearchFeatures.isEnabled`, which every gate above reads, is now
+`isDeveloperEnabled && isUserEnabled`: with the Developer switch "Search features (beta)" off everything above behaves
+as switched off. The user's switch is `isUserEnabled` (read and written only by the Settings row). With the gate off
+Novagram Settings has no SEARCH section, the `search-features` / `search-translate` slugs do not scroll, and About has
+no phrase/regex entries (`searchFeatureSpecs()` in `NovagramAboutController.swift`).
+
+The privacy filter (feature 92, `NovagramSearchPrivacy`) never reads this switch or the Developer gate: hidden chats stay out of search
 and locked chats' messages stay hidden either way. A search that is already open keeps what it had; the switch applies
 to the next search (the pane builds its scope and filter once). The two About entries say how to turn it off.
 
@@ -7919,6 +7940,11 @@ sets `.always`, off writes `false` and sets `.default`. The switch is ON while t
 less data for calls" and this switch always agree; the key only records the last tap here. `PresentationCallManager`
 reads the setting when a call is created, so a change applies from the next call (subtitle: "applies to new calls").
 The Mac's About screen has no entries for these, so iOS About has none either.
+
+**Developer gate (2026-10-30).** The "Use less data for calls" row and its `call-data-saving` slug show only while
+the Developer switch "Use less data for calls (beta)" (`novagram_dev_call_data_saving`) is on. The gate only hides our
+shortcut: Telegram's `VoiceCallSettings.dataSaving` (Data and Storage) is never read for the gate and never reset.
+When neither this gate nor "Call recording (beta)" is on, the whole CALLS section, header included, is hidden.
 
 Manual repro for regressions: (1) a video call on a bad network (Network Link Conditioner "Very Bad Network"):
 "Weak signal", then after ~5 s "Turn off my video" under it; tapping it turns our camera off like the camera button,
@@ -8005,6 +8031,12 @@ switch is on or a file exists, label = file count, recounted on every `didAppear
 and a footer with the consent/legal text. The consent key is `novagram_call_recording_warned`. The Mac's
 `novagram_call_recording_folder` (a security-scoped bookmark there) is not used: files always go to the core's folder.
 The keys live in `NovagramCallRecordingSettings` (`submodules/Novagram/Calls`), because TelegramCallsUI reads them too.
+
+**Developer gate (2026-10-30).** The feature sits behind the Developer switch "Call recording (beta)"
+(`novagram_dev_call_recording`, missing key = off). `isEnabled` and `isAutoEnabled` (what the glue reads) are the gate
+AND the user's value; the user's values are `isUserEnabled` / `isUserAutoEnabled`, read and written by the Settings
+rows and by the glue's "consent cancelled → auto off". With the gate off: no recording rows or footer in Settings, the
+three slugs do not scroll, no Record capsule (the glue's `isAvailable` is false) and no auto-recording.
 
 | File | Change |
 | --- | --- |
