@@ -175,6 +175,112 @@ public struct NovagramL10n {
         pick(en: "Turn off my video", uz: "Videomni o'chirish", ru: "Выключить моё видео", zh: "关闭我的视频")
     }
 
+    // MARK: - Call recording (Mac callRecording_*, adapted to iPhone)
+
+    public var settings_callRecording_title: String {
+        pick(en: "Call recording", uz: "Qo'ng'iroqni yozib olish", ru: "Запись звонков", zh: "通话录音")
+    }
+
+    public var settings_callRecording_subtitle: String {
+        pick(
+            en: "Adds a Record button to voice and video calls",
+            uz: "Ovozli va video qo'ng'iroqlarga «Yozish» tugmasini qo'shadi",
+            ru: "Добавляет кнопку «Запись» в аудио- и видеозвонки",
+            zh: "在语音和视频通话中添加“录制”按钮"
+        )
+    }
+
+    public var settings_callRecordingAuto_title: String {
+        pick(en: "Record every call automatically", uz: "Har bir qo'ng'iroqni avtomatik yozib olish", ru: "Записывать каждый звонок автоматически", zh: "自动录制每个通话")
+    }
+
+    public var settings_callRecordingAuto_subtitle: String {
+        pick(
+            en: "Starts when your call starts ringing or when you answer",
+            uz: "Qo'ng'iroq jiringlay boshlaganda yoki javob berganingizda boshlanadi",
+            ru: "Начинается, когда идёт вызов или когда вы отвечаете",
+            zh: "在你的呼叫开始响铃或你接听时开始"
+        )
+    }
+
+    public var settings_callRecordings_title: String {
+        pick(en: "Call recordings", uz: "Qo'ng'iroq yozuvlari", ru: "Записи звонков", zh: "通话录音文件")
+    }
+
+    public var settings_callRecording_footer: String {
+        pick(
+            en: "Recordings are made and kept only on this iPhone. Only you see the REC mark; the other person is not notified. Recording calls without the other person's consent is illegal in some countries.",
+            uz: "Yozuvlar faqat shu iPhone'da yaratiladi va saqlanadi. REC belgisini faqat siz ko'rasiz, suhbatdoshingizga xabar berilmaydi. Ba'zi mamlakatlarda suhbatdoshning roziligisiz qo'ng'iroqni yozib olish qonunga zid.",
+            ru: "Записи создаются и хранятся только на этом iPhone. Значок REC видите только вы, собеседник не получает уведомления. В некоторых странах запись звонков без согласия собеседника запрещена законом.",
+            zh: "录音只在这台 iPhone 上生成和保存。只有你能看到 REC 标记，对方不会收到通知。在某些国家，未经对方同意录制通话是违法的。"
+        )
+    }
+
+    public var callRecordings_empty: String {
+        pick(
+            en: "No call recordings yet. Turn on Call recording and tap Record during a call.",
+            uz: "Hali qo'ng'iroq yozuvlari yo'q. «Qo'ng'iroqni yozib olish»ni yoqing va qo'ng'iroq paytida «Yozish»ni bosing.",
+            ru: "Записей звонков пока нет. Включите «Запись звонков» и нажмите «Запись» во время звонка.",
+            zh: "还没有通话录音。打开“通话录音”，并在通话中点按“录制”。"
+        )
+    }
+
+    public var callRecordings_deleteConfirm: String {
+        pick(en: "Delete this recording?", uz: "Bu yozuv o'chirilsinmi?", ru: "Удалить эту запись?", zh: "删除这条录音？")
+    }
+
+    public var call_record: String {
+        pick(en: "Record", uz: "Yozish", ru: "Запись", zh: "录制")
+    }
+
+    public var call_rec: String { "REC" } // the universal recording mark, never translated
+
+    public var call_recordAccessibility: String {
+        pick(en: "Record the call", uz: "Qo'ng'iroqni yozib olish", ru: "Записать звонок", zh: "录制通话")
+    }
+
+    public var call_stopRecordingAccessibility: String {
+        pick(en: "Stop recording", uz: "Yozishni to'xtatish", ru: "Остановить запись", zh: "停止录制")
+    }
+
+    public var callRecording_warningTitle: String {
+        pick(en: "Record this call?", uz: "Qo'ng'iroq yozib olinsinmi?", ru: "Записать звонок?", zh: "录制此通话？")
+    }
+
+    public var callRecording_warningText: String {
+        pick(
+            en: "In some countries it is illegal to record a call without the other person's consent. Make sure you are allowed to record it. The recording stays on this iPhone.",
+            uz: "Ba'zi mamlakatlarda suhbatdoshning roziligisiz qo'ng'iroqni yozib olish qonunga zid. Yozib olishga ruxsatingiz borligiga ishonch hosil qiling. Yozuv faqat shu iPhone'da qoladi.",
+            ru: "В некоторых странах запись звонка без согласия собеседника запрещена законом. Убедитесь, что вам можно его записывать. Запись остаётся только на этом iPhone.",
+            zh: "在某些国家，未经对方同意录制通话是违法的。请确认你有权录制。录音只保存在这台 iPhone 上。"
+        )
+    }
+
+    public var callRecording_continue: String {
+        pick(en: "Continue", uz: "Davom etish", ru: "Продолжить", zh: "继续")
+    }
+
+    public var callRecording_saved: String {
+        pick(en: "Call recording saved", uz: "Qo'ng'iroq yozuvi saqlandi", ru: "Запись звонка сохранена", zh: "通话录音已保存")
+    }
+
+    public var callRecording_share: String {
+        pick(en: "Share", uz: "Ulashish", ru: "Поделиться", zh: "分享")
+    }
+
+    public var callRecording_failed: String {
+        pick(en: "Call recording failed", uz: "Qo'ng'iroqni yozib bo'lmadi", ru: "Не удалось записать звонок", zh: "通话录制失败")
+    }
+
+    public var callRecording_audioOnly: String {
+        pick(
+            en: "Video was turned on: this recording stays audio only",
+            uz: "Video yoqildi: bu yozuv faqat ovozli bo'lib qoladi",
+            ru: "Включено видео: эта запись останется только аудио",
+            zh: "视频已开启：本次录音仍只有音频"
+        )
+    }
+
     // MARK: - Settings → Novagram screen
     // Section headers, item titles, item subtitles, section footers, generic on/off labels.
 
