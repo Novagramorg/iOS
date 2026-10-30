@@ -95,6 +95,7 @@ final class CallControllerNodeV2: ViewControllerTracingNode, CallControllerNodeP
     private var notifyDismissedInteractivelyOnPanGestureApply: Bool = false
     
     private var signalQualityTimer: Foundation.Timer?
+    private var novagramRecording: NovagramCallRecordingGlue? // Novagram
     
     init(
         sharedContext: SharedAccountContext,
@@ -193,6 +194,7 @@ final class CallControllerNodeV2: ViewControllerTracingNode, CallControllerNodeP
             }
             self.restoreUIForPictureInPicture?(completion)
         }
+        self.novagramRecording = NovagramCallRecordingGlue(call: call, control: self.callScreen.novagramRecord, presentationData: presentationData) // Novagram
         self.callScreen.conferenceAddParticipant = { [weak self] in
             guard let self else {
                 return
