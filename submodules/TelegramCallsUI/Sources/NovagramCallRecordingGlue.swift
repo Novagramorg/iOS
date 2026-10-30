@@ -29,14 +29,22 @@ import NovagramLocalization
 /// - Video: both sides' video is followed for the whole recording, also in a voice call (the file is .mp4 if video was
 ///   ever on, .m4a otherwise). Our side is the camera, or our shared screen while we share it. The picture-in-picture
 ///   corner and the big/small swap follow the call screen; while we share our screen, the screen is big.
+/// - Never secret: once a recording really started, "🔴 I'm recording this call (Novagram)" goes to the 1:1 chat with
+///   the call's peer, in the app's language, at most once per call (`NovagramCallRecordingNoticeLedger`). If it cannot
+///   be enqueued, the recording is stopped, its file deleted and "Couldn't notify the other person…" shown; the next
+///   Record in that call then tries the notice again. A later failed delivery does not stop the recording (Mac parity).
 final class NovagramCallRecordingGlue {
     private static let savedToastTimeout: Double = 8.0
     // How often the call screen's picture-in-picture corner and swap are read while recording. Dragging the small
     // window does not update the screen, so it is read rather than pushed.
     private static let layoutPollInterval: Double = 0.25
+    // Which calls already sent the "I'm recording this call" message. Static, so a new call screen for the same call
+    // does not send it again. Main thread only.
+    private static var noticeLedger = NovagramCallRecordingNoticeLedger()
 
     private weak var call: PresentationCallImpl?
     private let callId: UUID
+    private let peerId: EnginePeer.Id
     private let isOutgoing: Bool
     private let context: AccountContext
     private let presentationData: PresentationData
@@ -54,6 +62,8 @@ final class NovagramCallRecordingGlue {
     // Set by the first start or stop in this call, so auto-record never starts a second time.
     private var didStartOnce = false
     private var isStopping = false
+    // Set when the notice failed: the stop that follows deletes the file instead of offering it.
+    private var discardRecording = false
     private var isAsking = false
     private var isCallOver = false
 
@@ -62,6 +72,7 @@ final class NovagramCallRecordingGlue {
         self.callScreen = callScreen
         self.call = call as? PresentationCallImpl
         self.callId = call.internalId
+        self.peerId = call.peerId
         self.isOutgoing = call.isOutgoing
         self.context = call.context
         self.presentationData = presentationData
@@ -129,6 +140,7 @@ final class NovagramCallRecordingGlue {
         case .terminating, .terminated:
             if !self.isCallOver {
                 self.isCallOver = true
+                NovagramCallRecordingGlue.noticeLedger.forget(callId: self.callId)
                 if self.recordingStart != nil || NovagramCallRecordingCenter.shared.isRecording(callId: self.callId) {
                     self.stop()
                 }
@@ -308,6 +320,44 @@ final class NovagramCallRecordingGlue {
         self.didStartOnce = true
         if !NovagramCallRecordingCenter.shared.start(callId: self.callId, source: source) {
             NovagramCallRecordingGlue.showResult(.failure(.writerFailed("start")), context: self.context, presentationData: self.presentationData)
+            return
+        }
+        self.sendNoticeIfNeeded()
+    }
+
+    // MARK: - Notice
+
+    /// "🔴 I'm recording this call (Novagram)" to the chat with the call's peer, once per call, through TelegramCore's
+    /// normal outgoing path (the same as a typed message). Only a failure to enqueue stops the recording.
+    private func sendNoticeIfNeeded() {
+        guard NovagramCallRecordingGlue.noticeLedger.beginSending(callId: self.callId) else {
+            return
+        }
+        let text = NovagramL10n(self.presentationData.strings).callRecording_noticeMessage
+        // Not tied to this object's lifetime: once asked for, the message is enqueued even if the screen goes.
+        let _ = (self.context.engine.messages.enqueueOutgoingMessage(to: self.peerId, replyTo: nil, content: .text(text, []))
+        |> deliverOnMainQueue).startStandalone(next: { [weak self] messageIds in
+            guard let self else {
+                return
+            }
+            guard (messageIds.first ?? nil) != nil else {
+                Logger.shared.log("NovagramCallRecording", "notice could not be enqueued")
+                self.noticeFailed()
+                return
+            }
+            NovagramCallRecordingGlue.noticeLedger.markEnqueued(callId: self.callId)
+        })
+    }
+
+    /// The other person could not be told: the call must not be recorded. A recording that runs is stopped and its
+    /// file deleted.
+    private func noticeFailed() {
+        NovagramCallRecordingGlue.noticeLedger.markFailed(callId: self.callId)
+        if self.recordingStart != nil || NovagramCallRecordingCenter.shared.isRecording(callId: self.callId) {
+            self.discardRecording = true
+            self.stop()
+        } else {
+            NovagramCallRecordingGlue.showNoticeFailed(context: self.context, presentationData: self.presentationData)
         }
     }
 
@@ -320,11 +370,18 @@ final class NovagramCallRecordingGlue {
         let context = self.context
         let presentationData = self.presentationData
         NovagramCallRecordingCenter.shared.stop(callId: self.callId, completion: { [weak self] result in
+            var discard = false
             if let self {
+                discard = self.discardRecording
+                self.discardRecording = false
                 self.isStopping = false
                 self.updateControl()
             }
-            NovagramCallRecordingGlue.showResult(result, context: context, presentationData: presentationData)
+            if discard {
+                NovagramCallRecordingGlue.discard(result, context: context, presentationData: presentationData)
+            } else {
+                NovagramCallRecordingGlue.showResult(result, context: context, presentationData: presentationData)
+            }
         })
     }
 
@@ -438,6 +495,27 @@ final class NovagramCallRecordingGlue {
                 return false
             })
         }
+        NovagramCallRecordingGlue.presentOverCall(controller, context: context)
+    }
+
+    /// After a failed notice: the file is deleted (the other person was not told), and the failure is shown.
+    private static func discard(_ result: Result<URL, NovagramCallRecordingError>, context: AccountContext, presentationData: PresentationData) {
+        if case let .success(url) = result {
+            do {
+                try NovagramCallRecordingStorage.delete(url)
+            } catch {
+                Logger.shared.log("NovagramCallRecording", "could not delete the unnotified recording: \(error)")
+            }
+        }
+        NovagramCallRecordingSettings.notifyChanged()
+        NovagramCallRecordingGlue.showNoticeFailed(context: context, presentationData: presentationData)
+    }
+
+    private static func showNoticeFailed(context: AccountContext, presentationData: PresentationData) {
+        let text = NovagramL10n(presentationData.strings).callRecording_noticeFailed
+        let controller = UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: text, timeout: nil, customUndoText: nil), elevatedLayout: false, action: { _ in
+            return false
+        })
         NovagramCallRecordingGlue.presentOverCall(controller, context: context)
     }
 

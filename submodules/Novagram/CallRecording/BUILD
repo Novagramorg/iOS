@@ -25,6 +25,8 @@ swift_library(
     deps = [
         ":NovagramCallRecording",
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
+        # Only for the notice text test; the core itself never depends on strings.
+        "//submodules/Novagram/Localization:NovagramLocalization",
     ],
 )
 

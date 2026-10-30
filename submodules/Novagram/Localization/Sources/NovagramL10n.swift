@@ -125,10 +125,10 @@ public struct NovagramL10n {
 
     public var settings_callRecording_footer: String {
         pick(
-            en: "Recordings are made and kept only on this iPhone. Only you see the REC mark; the other person is not notified. Recording calls without the other person's consent is illegal in some countries.",
-            uz: "Yozuvlar faqat shu iPhone'da yaratiladi va saqlanadi. REC belgisini faqat siz ko'rasiz, suhbatdoshingizga xabar berilmaydi. Ba'zi mamlakatlarda suhbatdoshning roziligisiz qo'ng'iroqni yozib olish qonunga zid.",
-            ru: "Записи создаются и хранятся только на этом iPhone. Значок REC видите только вы, собеседник не получает уведомления. В некоторых странах запись звонков без согласия собеседника запрещена законом.",
-            zh: "录音只在这台 iPhone 上生成和保存。只有你能看到 REC 标记，对方不会收到通知。在某些国家，未经对方同意录制通话是违法的。"
+            en: "Recordings are made and kept only on this device. When a recording starts, Novagram sends “🔴 I'm recording this call” to the chat, so the other person knows. The REC mark stays visible while recording.",
+            uz: "Yozuvlar faqat shu qurilmada yaratiladi va saqlanadi. Yozib olish boshlanganda Novagram chatga «🔴 Men bu qo'ng'iroqni yozib olyapman» xabarini yuboradi, shunda suhbatdoshingiz bundan xabardor bo'ladi. Yozib olish davomida REC belgisi ko'rinib turadi.",
+            ru: "Записи создаются и хранятся только на этом устройстве. Когда начинается запись, Novagram отправляет в чат «🔴 Я записываю этот звонок», чтобы собеседник знал об этом. Пока идёт запись, значок REC остаётся на экране.",
+            zh: "录音只在此设备上生成和保存。录制开始时，Novagram 会向聊天发送“🔴 我正在录制这次通话”，让对方知道。录制期间 REC 标记始终可见。"
         )
     }
 
@@ -295,10 +295,29 @@ public struct NovagramL10n {
 
     public var callRecording_warningText: String {
         pick(
-            en: "In some countries it is illegal to record a call without the other person's consent. Make sure you are allowed to record it. The recording stays on this iPhone.",
-            uz: "Ba'zi mamlakatlarda suhbatdoshning roziligisiz qo'ng'iroqni yozib olish qonunga zid. Yozib olishga ruxsatingiz borligiga ishonch hosil qiling. Yozuv faqat shu iPhone'da qoladi.",
-            ru: "В некоторых странах запись звонка без согласия собеседника запрещена законом. Убедитесь, что вам можно его записывать. Запись остаётся только на этом iPhone.",
-            zh: "在某些国家，未经对方同意录制通话是违法的。请确认你有权录制。录音只保存在这台 iPhone 上。"
+            en: "The other person will get a message in this chat that you are recording the call. In some countries recording without consent is illegal. The recording stays on this device.",
+            uz: "Suhbatdoshingizga shu chatda qo'ng'iroqni yozib olayotganingiz haqida xabar boradi. Ba'zi mamlakatlarda roziliksiz yozib olish qonunga zid. Yozuv faqat shu qurilmada qoladi.",
+            ru: "Собеседник получит в этом чате сообщение о том, что вы записываете звонок. В некоторых странах запись без согласия запрещена законом. Запись остаётся только на этом устройстве.",
+            zh: "对方会在此聊天中收到你正在录制通话的消息。在某些国家/地区，未经同意录音是违法的。录音只保存在此设备上。"
+        )
+    }
+
+    /// The chat message sent to the call's peer when a recording starts (once per call).
+    public var callRecording_noticeMessage: String {
+        pick(
+            en: "🔴 I'm recording this call (Novagram)",
+            uz: "🔴 Men bu qo'ng'iroqni yozib olyapman (Novagram)",
+            ru: "🔴 Я записываю этот звонок (Novagram)",
+            zh: "🔴 我正在录制这次通话（Novagram）"
+        )
+    }
+
+    public var callRecording_noticeFailed: String {
+        pick(
+            en: "Couldn't notify the other person, so the call is not being recorded.",
+            uz: "Suhbatdoshga xabar berib bo'lmadi, shuning uchun qo'ng'iroq yozilmayapti.",
+            ru: "Не удалось уведомить собеседника, поэтому звонок не записывается.",
+            zh: "无法通知对方，因此本次通话未被录制。"
         )
     }
 

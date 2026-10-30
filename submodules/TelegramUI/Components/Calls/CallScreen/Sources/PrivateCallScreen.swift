@@ -1551,6 +1551,6 @@ public final class PrivateCallScreen: OverlayMaskContainerView, AVPictureInPictu
             }
         }
         self.novagramTurnOffVideo.update(host: self, weakSignalView: self.weakSignalView, isOwnVideoOn: params.state.localVideo != nil, isHidden: self.isAnimatedOutToGroupCall, strings: params.state.strings, transition: transition, turnOffVideo: { [weak self] in self?.videoAction?() }) // Novagram
-        self.novagramRecord.update(host: self, insets: params.insets, centerX: contentCenterX, backButton: self.backButtonView, avoiding: [self.emojiView?.layer, self.emojiTooltipView?.layer, self.conferenceButtonView?.layer, self.titleView.layer, self.statusView.layer, self.weakSignalView?.layer, self.novagramTurnOffVideo.buttonLayer, self.avatarTransformLayer], isHidden: currentAreControlsHidden || self.isAnimatedOutToGroupCall || self.isEmojiKeyExpanded, strings: params.state.strings, transition: transition) // Novagram
+        self.novagramRecord.update(host: self, insets: params.insets, centerX: contentCenterX, backButton: self.backButtonView, avoiding: [self.emojiView?.layer, self.emojiTooltipView?.layer, self.conferenceButtonView?.layer, self.titleView.layer, self.statusView.layer, self.weakSignalView?.layer, self.novagramTurnOffVideo.buttonLayer, self.avatarTransformLayer], controlsHidden: currentAreControlsHidden, isEmojiKeyExpanded: self.isEmojiKeyExpanded, isAnimatedOutToGroupCall: self.isAnimatedOutToGroupCall, strings: params.state.strings, transition: transition) // Novagram
     }
 }

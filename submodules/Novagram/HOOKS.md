@@ -7739,7 +7739,8 @@ push to (and `Novagramorg/tgcalls` does not exist). The parent repo does not tra
 ## 📌 Call recording (in progress, branch `feature/call-recording`, 2026-10-29)
 
 Owner: record 1:1 voice and video calls locally, Mac parity (macOS `NOVAGRAM_HOOKS.md`, "Local call recording",
-"Call extras"). Nothing is sent to the other side. Step 1 of 8: an audio tap in the call's audio device module
+"Call extras"). The audio and video go nowhere but this device; the only thing the other side gets is the
+"recording" chat message (see "Not secret" below). Step 1 of 8: an audio tap in the call's audio device module
 that hands out the microphone PCM (after echo cancellation and noise suppression) and the playout PCM (the other
 side plus the call tones, so the ringback is recorded). The tap runs on the real-time audio thread and must copy the
 samples and return at once. nil removes it.
@@ -7799,7 +7800,8 @@ Settings (Novagram Settings → CALLS, after "Use less data for calls"; `Novagra
 "Adds a Record button to voice and video calls"); "Record every call automatically" (`novagram_call_recording_auto`, slug
 `call-recording-auto`, shown only while Call recording is on); "Call recordings" (slug `call-recordings`, shown while the
 switch is on or a file exists, label = file count, recounted on every `didAppear`) opening `NovagramCallRecordingsController`;
-and a footer with the consent/legal text. The consent key is `novagram_call_recording_warned`. The Mac's
+and a footer (`settings_callRecording_footer`: kept only on this device, Novagram sends "🔴 I'm recording this call" to
+the chat when a recording starts, the REC mark stays visible). The consent key is `novagram_call_recording_warned`. The Mac's
 `novagram_call_recording_folder` (a security-scoped bookmark there) is not used: files always go to the core's folder.
 The keys live in `NovagramCallRecordingSettings` (`submodules/Novagram/Calls`), because TelegramCallsUI reads them too.
 
@@ -7811,7 +7813,7 @@ three slugs do not scroll, no Record capsule (the glue's `isAvailable` is false)
 
 | File | Change |
 | --- | --- |
-| `TelegramUI/Components/Calls/CallScreen/Sources/PrivateCallScreen.swift` | #286: `public let novagramRecord = NovagramCallRecordControl() // Novagram` right after #279 (`private let novagramTurnOffVideo …`). #287: the last line of `update(params:transition:)`, right after #280: `self.novagramRecord.update(host: self, insets: params.insets, centerX: contentCenterX, backButton: self.backButtonView, avoiding: [self.emojiView?.layer, self.emojiTooltipView?.layer, self.conferenceButtonView?.layer, self.titleView.layer, self.statusView.layer, self.weakSignalView?.layer, self.novagramTurnOffVideo.buttonLayer, self.avatarTransformLayer], isHidden: currentAreControlsHidden \|\| self.isAnimatedOutToGroupCall \|\| self.isEmojiKeyExpanded, strings: params.state.strings, transition: transition) // Novagram`. 2 lines. `PrivateCallScreen.State` is not touched. |
+| `TelegramUI/Components/Calls/CallScreen/Sources/PrivateCallScreen.swift` | #286: `public let novagramRecord = NovagramCallRecordControl() // Novagram` right after #279 (`private let novagramTurnOffVideo …`). #287: the last line of `update(params:transition:)`, right after #280: `self.novagramRecord.update(host: self, insets: params.insets, centerX: contentCenterX, backButton: self.backButtonView, avoiding: [self.emojiView?.layer, self.emojiTooltipView?.layer, self.conferenceButtonView?.layer, self.titleView.layer, self.statusView.layer, self.weakSignalView?.layer, self.novagramTurnOffVideo.buttonLayer, self.avatarTransformLayer], controlsHidden: currentAreControlsHidden, isEmojiKeyExpanded: self.isEmojiKeyExpanded, isAnimatedOutToGroupCall: self.isAnimatedOutToGroupCall, strings: params.state.strings, transition: transition) // Novagram` (until 2026-10-30 one combined `isHidden:`; the control now decides visibility itself). 2 lines. `PrivateCallScreen.State` is not touched. |
 | `TelegramCallsUI/Sources/CallControllerNodeV2.swift` | #288: `private var novagramRecording: NovagramCallRecordingGlue? // Novagram` after `private var signalQualityTimer`. #289: in `init`, right before `self.callScreen.conferenceAddParticipant = {`: `self.novagramRecording = NovagramCallRecordingGlue(call: call, callScreen: self.callScreen, presentationData: presentationData) // Novagram` (the glue takes `callScreen.novagramRecord` itself and reads #300). 2 lines. |
 | `TelegramCallsUI/BUILD` | #290: `NovagramCalls`, `NovagramCallRecording` and `NovagramLocalization`, each with `# Novagram`, at the end of `deps`. 3 lines. |
 | `TelegramUI/Sources/AppDelegate.swift` | #291: `NovagramCallRecordingTermination.stopAll() // Novagram` in `applicationWillTerminate`, after the `Logger` line. Finishes every running recording, waiting up to 3 s (+0.2 s), like the Mac's `stopForQuit`. 1 line, no new import (NovagramMessenger is already imported). |
@@ -7828,8 +7830,11 @@ Ours: `submodules/Novagram/Calls/Sources/NovagramCallRecordControl.swift` (the c
   0.5 s while recording; a tap calls `toggle`. Placed in the back button's row, centred when free; else centred in the gap
   between the back button and the next element on its right (the emoji key) if it fits; else centred and moved down past
   everything it would cover (emoji key and its tooltip, title, status, weak signal label, Turn off my video, avatar). Elements
-  taller than half the screen (the full-screen video) are not obstacles. Hidden with the controls (video tap), while the emoji
-  key is expanded and on `isAnimatedOutToGroupCall`. VoiceOver: "Record the call" / "Stop recording" + value "REC mm:ss".
+  taller than half the screen (the full-screen video) are not obstacles. Visibility (`NovagramCallRecordControl.isVisible`):
+  the red REC capsule shows for the whole recording, also while the controls are hidden (video tap) and while the emoji key
+  is expanded; the idle "● Record" hides with the controls and while the emoji key is expanded; both hide on
+  `isAnimatedOutToGroupCall` and when the glue says the call is over. With the controls hidden the back button, title and
+  status move off screen above, so the capsule keeps the back button's last row (never above `insets.top`). VoiceOver: "Record the call" / "Stop recording" + value "REC mm:ss".
 - **Glue** (`NovagramCallRecordingGlue`): the capsule is available while the switch is on or a recording runs, the call is not
   over, and the state allows it (outgoing: waiting/requesting onward; incoming: only from connecting, i.e. after the answer);
   without `sharedAudioContext` (killswitch `ios_killswitch_disable_call_device`) it never shows. Start builds
@@ -7839,7 +7844,16 @@ Ours: `submodules/Novagram/Calls/Sources/NovagramCallRecordControl.swift` (the c
   start it also turns auto-record off). Auto-record: once per call, at `.requesting(isRinging: true)` for outgoing (the
   ringback is recorded) or `.connecting/.active/.reconnecting` (incoming answered); any start or stop in the call blocks a
   second auto start. `.terminating/.terminated` and the glue's `deinit` stop the recording, so hang-up always finishes the
-  file. A writer that fails on its own (state goes idle without our stop) is stopped to fetch its error → "Call recording
+  file. **Not secret (2026-10-30, owner's decision after a legal/ToS review, Mac parity):** once
+  `NovagramCallRecordingCenter.start` returned true, the glue sends `callRecording_noticeMessage` ("🔴 I'm recording this call
+  (Novagram)", en/uz/ru/zh by the app language) to the call peer's 1:1 chat as a plain text message from the user, through
+  `context.engine.messages.enqueueOutgoingMessage(to:replyTo:content: .text(…))`. Manual Record and auto-record alike, at most
+  once per call UUID (`NovagramCallRecordingNoticeLedger` in the core, static in the glue; a Stop then Record in the same call
+  sends nothing more). Only a synchronous enqueue failure (no message id back) stops the recording: its file is deleted and
+  `callRecording_noticeFailed` ("Couldn't notify the other person, so the call is not being recorded.") shown, and the next
+  Record in that call sends the notice again. A later failed delivery (the chat's red "!") does not stop the recording,
+  same as the Mac. No audible notice and no change to the call's audio path. The consent alert (`callRecording_warningText`)
+  says the other person will get that message. A writer that fails on its own (state goes idle without our stop) is stopped to fetch its error → "Call recording
   failed". (The old "this recording stays audio only" toast is gone: a voice recording now gets the video; the
   `callRecording_audioOnly` string is unused.)
 - **Result**: `UndoOverlayController` `.info` "Call recording saved" (8 s) with "Share" → `UIActivityViewController` through
@@ -7866,10 +7880,14 @@ turn it on: "Record every call automatically" and "Call recordings" appear. (2) 
 during ringing; tap it: the consent alert (first time only); Continue: red "● REC 00:01" ticking. (3) Answer on the second
 phone, talk, hang up: the REC capsule goes and "Call recording saved / Share" shows; Share opens the system sheet. (4) Settings →
 Calls → Call recordings: the file (name = peer + date, duration, size, waveform glyph); tap plays it; swipe → Delete → confirm.
-(5) Turn on auto-record, call again: REC starts by itself as soon as it rings; tap to stop: it does not start again in that call.
+The second phone gets "🔴 I'm recording this call (Novagram)" in the chat (in the recorder's app language) as soon as REC
+starts; tap REC to stop and Record again: no second message in that call. (5) Turn on auto-record, call again: REC starts by
+itself as soon as it rings and the second phone gets the message once; tap to stop: it does not start again in that call.
 (6) Incoming call: no capsule while it rings; it appears after you answer (auto-record starts then). (7) A video call: the
-capsule never covers the back button, emoji key, name, status or "Weak signal", and hides with the controls when you tap the
-video.
+capsule never covers the back button, emoji key, name, status or "Weak signal". Idle "● Record" hides with the controls when
+you tap the video; while recording, the red REC capsule stays (same row, under the status bar) while the controls fade, and
+also while the emoji key is expanded. (8) If the notice cannot be enqueued, Record shows "Couldn't notify the other person, so the call is not being
+recorded.", REC goes and no file is kept; a notice that only fails to deliver later (red "!" in the chat) keeps recording.
 
 **Video fan-out (bug fix 2026-10-30). Hooks #292–#298.** A video recording froze the call screen's own camera
 picture (and flip seemed dead) on a real iPhone: `addVideoOutput` on the 1:1 camera capturer calls

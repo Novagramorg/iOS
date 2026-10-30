@@ -14,6 +14,10 @@ import NovagramLocalization
 /// Placement: in the top row, centred on the screen when that spot is free; otherwise centred in the gap between the
 /// back button and the next element to its right (the emoji key) when it fits; otherwise centred under the top
 /// elements, moved down past whatever it would cover (emoji key, title, status, weak signal label, avatar).
+///
+/// Visibility: a recording is never secret, so the red "● REC" capsule stays on screen for the whole recording, also
+/// while the screen hides its controls (a tap on the video) or shows the expanded emoji key. The idle "● Record"
+/// button hides with them. Both go when the call moves to a group call or the glue says the call is over.
 public final class NovagramCallRecordControl: NSObject {
     private static let height: CGFloat = 28.0
     private static let sideInset: CGFloat = 11.0
@@ -40,7 +44,10 @@ public final class NovagramCallRecordControl: NSObject {
     private var centerX: CGFloat = 0.0
     private weak var backButton: CALayer?
     private var avoiding: [NovagramWeakLayer] = []
-    private var isHidden = false
+    private var controlsHidden = false
+    private var lastRowY: CGFloat?
+    private var isEmojiKeyExpanded = false
+    private var isAnimatedOutToGroupCall = false
     private var strings: NovagramL10n?
 
     private var button: HighlightableButton?
@@ -70,21 +77,39 @@ public final class NovagramCallRecordControl: NSObject {
 
     /// From every layout pass of the call screen, after all of its elements have their frames.
     /// `avoiding`: the screen's elements the capsule must not cover (nil and invisible ones are skipped).
-    public func update(host: UIView, insets: UIEdgeInsets, centerX: CGFloat, backButton: UIView, avoiding: [CALayer?], isHidden: Bool, strings: PresentationStrings, transition: ComponentTransition) {
+    /// `controlsHidden` / `isEmojiKeyExpanded` hide only the idle button; `isAnimatedOutToGroupCall` hides both.
+    public func update(host: UIView, insets: UIEdgeInsets, centerX: CGFloat, backButton: UIView, avoiding: [CALayer?], controlsHidden: Bool, isEmojiKeyExpanded: Bool, isAnimatedOutToGroupCall: Bool, strings: PresentationStrings, transition: ComponentTransition) {
         self.host = host
         self.insets = insets
         self.centerX = centerX
         self.backButton = backButton.layer
         self.avoiding = avoiding.compactMap { $0.flatMap(NovagramWeakLayer.init) }
-        self.isHidden = isHidden
+        self.controlsHidden = controlsHidden
+        self.isEmojiKeyExpanded = isEmojiKeyExpanded
+        self.isAnimatedOutToGroupCall = isAnimatedOutToGroupCall
         self.strings = NovagramL10n(strings)
         self.layout(transition: transition)
     }
 
     // MARK: - Layout
 
+    /// Pure, so the rule is easy to check: a running recording always shows its REC mark.
+    static func isVisible(isAvailable: Bool, isRecording: Bool, controlsHidden: Bool, isEmojiKeyExpanded: Bool, isAnimatedOutToGroupCall: Bool) -> Bool {
+        guard isAvailable, !isAnimatedOutToGroupCall else {
+            return false
+        }
+        if isRecording {
+            return true
+        }
+        return !controlsHidden && !isEmojiKeyExpanded
+    }
+
+    private var isVisible: Bool {
+        return NovagramCallRecordControl.isVisible(isAvailable: self.isAvailable, isRecording: self.recordingStart != nil, controlsHidden: self.controlsHidden, isEmojiKeyExpanded: self.isEmojiKeyExpanded, isAnimatedOutToGroupCall: self.isAnimatedOutToGroupCall)
+    }
+
     private func layout(transition: ComponentTransition) {
-        guard self.isAvailable, !self.isHidden, let host = self.host, let strings = self.strings else {
+        guard self.isVisible, let host = self.host, let strings = self.strings else {
             self.hideButton(transition: transition)
             return
         }
@@ -185,8 +210,11 @@ public final class NovagramCallRecordControl: NSObject {
         let rowY: CGFloat
         if let backFrame {
             rowY = floor(backFrame.midY - size.height * 0.5)
+            self.lastRowY = rowY
         } else {
-            rowY = self.insets.top + NovagramCallRecordControl.topRowOffset
+            // The controls are hidden: the back button, title and status moved off screen above. The REC capsule
+            // keeps the back button's last row, so it does not jump, and never goes above the status bar.
+            rowY = max(self.insets.top, self.lastRowY ?? (self.insets.top + NovagramCallRecordControl.topRowOffset))
         }
         let centered = CGRect(x: floor(self.centerX - size.width * 0.5), y: rowY, width: size.width, height: size.height)
         if isClear(centered) {
@@ -236,7 +264,7 @@ public final class NovagramCallRecordControl: NSObject {
         }
         button.isUserInteractionEnabled = false
         transition.setAlpha(view: button, alpha: 0.0, completion: { [weak self, weak button] completed in
-            guard completed, let self, let button, !self.isAvailable || self.isHidden else {
+            guard completed, let self, let button, !self.isVisible else {
                 return
             }
             button.removeFromSuperview()
