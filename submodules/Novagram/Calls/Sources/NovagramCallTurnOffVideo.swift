@@ -39,6 +39,11 @@ public final class NovagramCallTurnOffVideo: NSObject {
         self.delayTimer?.invalidate()
     }
 
+    /// The button's layer while it is on screen, so the Record control can keep clear of it.
+    public var buttonLayer: CALayer? {
+        return self.button?.layer
+    }
+
     /// Called from every layout pass of the call screen. `weakSignalView` is the screen's "Weak signal" label,
     /// nil while it is not shown.
     public func update(host: UIView, weakSignalView: UIView?, isOwnVideoOn: Bool, isHidden: Bool, strings: PresentationStrings, transition: ComponentTransition, turnOffVideo: @escaping () -> Void) {
