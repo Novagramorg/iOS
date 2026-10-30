@@ -1,5 +1,10 @@
 # HOOK_INVENTORY.md — Novagram re-port verification index
 
+> ⚠️ **Eskirgan (2026-06-12 holati, 62 hook).** 2026-10-30 da HOOKS.md'da #291 gacha hook bor. Manba —
+> `submodules/Novagram/HOOKS.md`. Upstream yangilanishda yo'qolgan hook'ni `novagram-upstream-update.sh` o'zi
+> topadi (har fayldagi `// Novagram` qatorlar soni, oldin → keyin). Bu faylga faqat `verify-hooks.sh` dagi
+> Apple-kritik anchor'lar uchun qarang.
+
 > **Sana:** 2026-06-12
 > **Manba:** `submodules/Novagram/HOOKS.md` dan olingan (derived).
 > **Maqsad:** Bu fayl — **re-port verification index**. U Novagram fork tomonidan o'zgartirilgan **har bir Telegram-owned (upstream) faylni** mashina o'qiy oladigan ko'rinishda sanab beradi. Upstream tree ustiga qayta merge / re-port qilinganda, quyidagi har bir hook qayta tiklanganini (yoki saqlanib qolganini) tekshirish uchun ishlatiladi.
