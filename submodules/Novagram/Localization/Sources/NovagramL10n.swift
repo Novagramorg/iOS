@@ -157,13 +157,105 @@ public struct NovagramL10n {
         pick(en: "Play", uz: "Ijro etish", ru: "Воспроизвести", zh: "播放")
     }
 
-    // Summary above the list, e.g. "4 recordings · 24.6 MB · stored only on this iPhone".
+    // Summary above the list, e.g. "4 recordings · 24.6 MB".
     public func callRecordings_summary(count: Int, size: String) -> String {
         switch langCode {
-        case "uz": return "\(count) ta yozuv · \(size) · faqat shu iPhone'da saqlanadi"
-        case "ru": return "\(count) \(NovagramL10n.russianRecordingsWord(count)) · \(size) · хранятся только на этом iPhone"
-        case "zh": return "\(count) 条录音 · \(size) · 仅保存在这台 iPhone 上"
-        default:   return "\(count) \(count == 1 ? "recording" : "recordings") · \(size) · stored only on this iPhone"
+        case "uz": return "\(count) ta yozuv · \(size)"
+        case "ru": return "\(count) \(NovagramL10n.russianRecordingsWord(count)) · \(size)"
+        case "zh": return "\(count) 条录音 · \(size)"
+        default:   return "\(count) \(NovagramL10n.englishRecordingsWord(count)) · \(size)"
+        }
+    }
+
+    private static func englishRecordingsWord(_ count: Int) -> String {
+        return count == 1 ? "recording" : "recordings"
+    }
+
+    // Footer under the list.
+    public var callRecordings_storageFooter: String {
+        pick(
+            en: "Recordings are stored only on this iPhone and are never uploaded.",
+            uz: "Yozuvlar faqat shu iPhone'da saqlanadi va hech qayerga yuklanmaydi.",
+            ru: "Записи хранятся только на этом iPhone и никуда не загружаются.",
+            zh: "录音只保存在这台 iPhone 上，绝不会上传。"
+        )
+    }
+
+    // Empty-state text when Call recording is already on.
+    public var callRecordings_emptyTextEnabled: String {
+        pick(
+            en: "Tap Record during a call to save it here.",
+            uz: "Qo'ng'iroq paytida «Yozish»ni bosing, yozuv shu yerda saqlanadi.",
+            ru: "Нажмите «Запись» во время звонка, и запись появится здесь.",
+            zh: "在通话中点按“录制”，录音会保存在这里。"
+        )
+    }
+
+    // The toolbar menu of the Call recordings screen.
+    public var callRecordings_menuAccessibility: String {
+        pick(en: "Options", uz: "Amallar", ru: "Действия", zh: "选项")
+    }
+
+    public var callRecordings_filterAll: String {
+        pick(en: "All Recordings", uz: "Barcha yozuvlar", ru: "Все записи", zh: "全部录音")
+    }
+
+    public var callRecordings_filterVideo: String {
+        pick(en: "Video Calls", uz: "Video qo'ng'iroqlar", ru: "Видеозвонки", zh: "视频通话")
+    }
+
+    public var callRecordings_filterVoice: String {
+        pick(en: "Voice Calls", uz: "Ovozli qo'ng'iroqlar", ru: "Аудиозвонки", zh: "语音通话")
+    }
+
+    public var callRecordings_clearAll: String {
+        pick(en: "Clear All", uz: "Hammasini o'chirish", ru: "Удалить все", zh: "全部清除")
+    }
+
+    // Shown in the list when the filter hides every recording.
+    public func callRecordings_filterEmpty(isVideo: Bool) -> String {
+        if isVideo {
+            return pick(en: "No video call recordings", uz: "Video qo'ng'iroq yozuvlari yo'q", ru: "Нет записей видеозвонков", zh: "没有视频通话录音")
+        }
+        return pick(en: "No voice call recordings", uz: "Ovozli qo'ng'iroq yozuvlari yo'q", ru: "Нет записей аудиозвонков", zh: "没有语音通话录音")
+    }
+
+    // "Delete 3 recordings?" for the selected rows.
+    public func callRecordings_deleteSelectedConfirm(count: Int) -> String {
+        switch langCode {
+        case "uz": return "\(count) ta yozuv o'chirilsinmi?"
+        case "ru": return "Удалить \(count) \(NovagramL10n.russianRecordingsWord(count))?"
+        case "zh": return "删除 \(count) 条录音？"
+        default:   return "Delete \(count) \(NovagramL10n.englishRecordingsWord(count))?"
+        }
+    }
+
+    // Clear All with no filter: every recording goes.
+    public func callRecordings_clearAllConfirm(count: Int, size: String) -> String {
+        let isOne = count == 1
+        switch langCode {
+        case "uz": return "\(isOne ? "" : "Barcha ")\(count) ta yozuv (\(size)) o'chirilsinmi? Buni qaytarib bo'lmaydi."
+        case "ru": return "Удалить \(isOne ? "" : "все ")\(count) \(NovagramL10n.russianRecordingsWord(count)) (\(size))? Это действие нельзя отменить."
+        case "zh": return "删除\(isOne ? "" : "全部 ")\(count) 条录音（\(size)）？此操作无法撤销。"
+        default:   return "Delete \(isOne ? "" : "all ")\(count) \(NovagramL10n.englishRecordingsWord(count)) (\(size))? This cannot be undone."
+        }
+    }
+
+    // Clear All while a filter is on: only the recordings the filter shows go.
+    public func callRecordings_clearFilteredConfirm(count: Int, size: String, isVideo: Bool) -> String {
+        switch langCode {
+        case "uz":
+            let kind = isVideo ? "video qo'ng'iroq" : "ovozli qo'ng'iroq"
+            return "\(count) ta \(kind) yozuvi (\(size)) o'chirilsinmi? Filtr yashirgan yozuvlar qoladi."
+        case "ru":
+            let kind = isVideo ? "видеозвонков" : "аудиозвонков"
+            return "Удалить \(count) \(NovagramL10n.russianRecordingsWord(count)) \(kind) (\(size))? Записи, скрытые фильтром, останутся."
+        case "zh":
+            let kind = isVideo ? "视频通话" : "语音通话"
+            return "删除 \(count) 条\(kind)录音（\(size)）？被筛选隐藏的录音会保留。"
+        default:
+            let kind = isVideo ? "video call" : "voice call"
+            return "Delete \(count) \(kind) \(NovagramL10n.englishRecordingsWord(count)) (\(size))? Recordings hidden by the filter are kept."
         }
     }
 

@@ -30,6 +30,7 @@ swift_library(
         "//submodules/PhoneNumberFormat:PhoneNumberFormat",
         "//submodules/OverlayStatusController:OverlayStatusController",
         "//submodules/ContextUI:ContextUI",
+        "//submodules/TelegramUI/Components/MoreHeaderButton",
         "//submodules/CallListUI:CallListUI",
         "//submodules/AppBundle:AppBundle",
         "//submodules/ComponentFlow",

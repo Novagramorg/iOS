@@ -7847,8 +7847,13 @@ Ours: `submodules/Novagram/Calls/Sources/NovagramCallRecordControl.swift` (the c
   `mainWindow` on the `.calls` level: the call screen is presented there, and the call controller's own `present`
   (`.window(.root)`) would put them under it. So they show over the call screen and stay after it closes.
 - **List** (`NovagramCallRecordingsController`): a themed `.insetGrouped` `UITableView` (the ItemList rows without a peer have no
-  swipe-to-delete): name, date · duration · size, `video.fill` / `waveform` glyph; tap → `QLPreviewController` (plays, has
-  Share); swipe → Delete → confirmation alert → `NovagramCallRecordingStorage.delete`. Empty-state text.
+  swipe-to-delete or multi-select), grouped by day like the call log: initials avatar, name over "Voice call · 1:14 · 638 KB",
+  time on the right; fonts follow Telegram's text size (`listsFontSize`), avatar top-aligned at accessibility sizes. Summary
+  "5 recordings · 817 KB" above, "stored only on this iPhone" footer below. Tap → `QLPreviewController`; swipe / long-press →
+  Share or Delete (confirmation alert → `NovagramCallRecordingStorage.delete`). The right navigation button is Telegram's
+  `MoreHeaderButton` + `ContextController` menu: filter All / Video / Voice (session only, animated regroup), Select
+  (multi-select with a `ToolbarNode`: Share, Delete (N)), Clear All (only the filtered recordings when a filter is on). Hidden
+  when there are no recordings. Empty-state text depends on `NovagramCallRecordingSettings.isEnabled`.
 
 On an upstream update: #287 must stay the last line of `update(params:transition:)` (after #280: it reads the frames that pass
 set). If upstream renames `backButtonView`, `emojiView`, `emojiTooltipView`, `conferenceButtonView`, `titleView`, `statusView`,
