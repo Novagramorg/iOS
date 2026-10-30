@@ -7959,3 +7959,38 @@ samples and return at once. nil removes it.
 
 On an upstream update: the tap calls must stay the last statements before `return noErr` in both callbacks (after
 the tone mixing in `OnGetPlayoutData`). If upstream adds a second audio device path for 1:1 calls, it needs the tap too.
+
+**Ours (step 3, the recording core): `submodules/Novagram/CallRecording` (`//submodules/Novagram/CallRecording:NovagramCallRecording`,
+module `NovagramCallRecording`).** No UI, no strings, no Telegram-owned file touched. Deps: SwiftSignalKit, TelegramVoip and
+Apple frameworks only, because CallScreen / TelegramCallsUI will depend on it (never Display, TelegramPresentationData,
+AccountContext, TelegramCallsUI, CallScreen or Postbox).
+
+- `NovagramCallRecordingCenter.swift`: the public API. `NovagramCallAudioTap`, `NovagramCallRecordingSource` (peer name, the
+  `setAudioTap` closure, incoming/outgoing `VideoFrameData` signals, `isMuted`, `isVideo`), `NovagramCallRecordingState`,
+  `NovagramCallRecordingError` and `NovagramCallRecordingCenter.shared` (`start` / `stop` / `state` / `isRecording` / `stopAll`,
+  keyed by the call's internal UUID).
+- `NovagramCallAudioRing.swift`: the real-time handoff. One preallocated slot ring per source (mic, playout); the tap only
+  `os_unfair_lock_trylock`s and drops the chunk on contention or when the ring is full.
+- `NovagramCallAudioMixer.swift`: downmix to mono, exact integer-position linear resampling to 48 kHz, mic FIFO popped per playout
+  chunk (playout is the master clock, zeros on underrun, silence while muted), clipped sum written to both channels.
+- `NovagramCallRecorder.swift`: one `AVAssetWriter` per recording (AAC 48 kHz stereo 128 kbps; plus H.264 720x1280 for video
+  calls, no B-frames: with frame reordering `finishWriting` failed about one time in four, -11800 / -16341), `movieFragmentInterval` 2 s, a 30 fps timer that drains the rings and composes a video frame. The session starts at
+  the first audio chunk; audio times come from the sample count, video times from the host clock against the same start;
+  holes in the playout clock are filled with the mic alone so audio stays in sync with the video.
+- `NovagramCallVideoFrame.swift`: `VideoFrameData` → upright `CIImage` with the call screen's rotation and mirroring
+  (`AdaptedCallVideoSource` in `CallControllerNodeV2`); NV12 / I420 are copied into full-range 4:2:0 pixel buffers (I420 via vImage).
+- `NovagramCallVideoCompositor.swift`: the other side aspect-fit on black, our video as a rounded picture-in-picture in the top-right
+  corner (28% of the width); a lone side fills the frame; a side without a new frame for 4 s counts as camera off.
+- `NovagramCallRecordingStorage.swift`: the folder `<app container>/Library/Application Support/CallRecordings` (not Documents),
+  file names `<peer> yyyy-MM-dd HH.mm.mp4|m4a` (`/` and `:` become `-`, then ` 2`, ` 3`), `list()` newest first, `delete`.
+  A recording is written into `CallRecordings/.partial/<uuid>/<name>` and moved in after `finishWriting`; whatever a killed app
+  left in `.partial` is moved in once per process, before the first recording starts. The duration is kept in the
+  `uz.novagram.callrecording.duration` extended attribute.
+
+Threads: the center is main-thread API; the tap runs on the audio thread and touches only the rings; everything else runs on
+each recorder's own serial queue. `stop`'s completion runs on main; `stopAll`'s on a background queue, so
+`applicationWillTerminate` may block main waiting for it. A writer that fails on its own stops itself, keeps the fragments
+it wrote, and its error is what the next `stop` for that call returns. Tests: `//submodules/Novagram/CallRecording:NovagramCallRecordingTests`
+(file names, mixer at 48k/16k, mute, underrun, ring, rotation/mirroring, I420, and 3 s voice and video recordings read back
+with `AVURLAsset`). The Bazel test runner's simulator has no Metal device, so Core Image draws nothing there: the frame
+content check is skipped and orientation is tested on the transform itself. Run them with `bazel test` and run.sh's flags (`Make.py test` does not pass run.sh's `-no-warnings-as-errors`, which Swift 6.4 upstream code needs).
