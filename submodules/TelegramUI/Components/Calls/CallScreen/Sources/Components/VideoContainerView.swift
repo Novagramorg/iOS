@@ -235,6 +235,7 @@ final class VideoContainerView: HighlightTrackingButton {
     private(set) var isFillingBounds: Bool = false
     
     private var minimizedPosition: MinimizedPosition = .bottomRight
+    var novagramMinimizedCorner: (isTop: Bool, isLeft: Bool) { return (self.minimizedPosition == .topLeft || self.minimizedPosition == .topRight, self.minimizedPosition == .topLeft || self.minimizedPosition == .bottomLeft) } // Novagram
     private var initialDragPosition: CGPoint?
     private var dragPosition: CGPoint?
     private var dragVelocity: CGPoint = CGPoint()

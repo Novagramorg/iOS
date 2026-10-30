@@ -194,7 +194,7 @@ final class CallControllerNodeV2: ViewControllerTracingNode, CallControllerNodeP
             }
             self.restoreUIForPictureInPicture?(completion)
         }
-        self.novagramRecording = NovagramCallRecordingGlue(call: call, control: self.callScreen.novagramRecord, presentationData: presentationData) // Novagram
+        self.novagramRecording = NovagramCallRecordingGlue(call: call, callScreen: self.callScreen, presentationData: presentationData) // Novagram
         self.callScreen.conferenceAddParticipant = { [weak self] in
             guard let self else {
                 return

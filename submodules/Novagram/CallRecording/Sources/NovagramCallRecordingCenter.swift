@@ -12,25 +12,22 @@ public struct NovagramCallRecordingSource {
     let incomingFrames: Signal<NovagramCallVideoFrame, NoError>?
     let outgoingFrames: Signal<NovagramCallVideoFrame, NoError>?
     let isMuted: Signal<Bool, NoError>
-    let isVideo: Bool
 
-    // `isVideo`: decided by the caller at start (our or the other side's video is active). A voice recording
-    // ignores the video signals.
+    // Both video signals are followed for the whole recording, also in a voice call: the file has video if either
+    // side ever had some and is audio-only (.m4a) otherwise.
     public init(
         peerName: String,
         setAudioTap: @escaping (NovagramCallAudioTap?) -> Void,
         incomingVideo: Signal<OngoingGroupCallContext.VideoFrameData, NoError>?,
         outgoingVideo: Signal<OngoingGroupCallContext.VideoFrameData, NoError>?,
-        isMuted: Signal<Bool, NoError>,
-        isVideo: Bool
+        isMuted: Signal<Bool, NoError>
     ) {
         self.init(
             peerName: peerName,
             setAudioTap: setAudioTap,
             incomingFrames: incomingVideo.flatMap { signal in signal |> map { NovagramCallVideoFrame($0) } },
             outgoingFrames: outgoingVideo.flatMap { signal in signal |> map { NovagramCallVideoFrame($0) } },
-            isMuted: isMuted,
-            isVideo: isVideo
+            isMuted: isMuted
         )
     }
 
@@ -40,15 +37,13 @@ public struct NovagramCallRecordingSource {
         setAudioTap: @escaping (NovagramCallAudioTap?) -> Void,
         incomingFrames: Signal<NovagramCallVideoFrame, NoError>?,
         outgoingFrames: Signal<NovagramCallVideoFrame, NoError>?,
-        isMuted: Signal<Bool, NoError>,
-        isVideo: Bool
+        isMuted: Signal<Bool, NoError>
     ) {
         self.peerName = peerName
         self.setAudioTap = setAudioTap
         self.incomingFrames = incomingFrames
         self.outgoingFrames = outgoingFrames
         self.isMuted = isMuted
-        self.isVideo = isVideo
     }
 }
 
@@ -99,12 +94,13 @@ public final class NovagramCallRecordingCenter {
             return false
         }
         let folder = NovagramCallRecordingStorage.directory
-        let fileName = NovagramCallRecordingStorage.fileName(peerName: source.peerName, date: Date(), isVideo: source.isVideo, in: folder)
+        // Written as .mp4; it becomes .m4a at the end if no video ever arrived.
+        let fileName = NovagramCallRecordingStorage.fileName(peerName: source.peerName, date: Date(), isVideo: true, in: folder)
         let partialFolder = NovagramCallRecordingStorage.partialDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let recorder: NovagramCallRecorder
         do {
             try FileManager.default.createDirectory(at: partialFolder, withIntermediateDirectories: true)
-            recorder = try NovagramCallRecorder(tempURL: partialFolder.appendingPathComponent(fileName), folder: folder, isVideo: source.isVideo)
+            recorder = try NovagramCallRecorder(tempURL: partialFolder.appendingPathComponent(fileName), folder: folder)
         } catch {
             try? FileManager.default.removeItem(at: partialFolder)
             return false
@@ -141,6 +137,13 @@ public final class NovagramCallRecordingCenter {
                 completion(result)
             }
         }
+    }
+
+    // Where the call screen's small picture is and whether its big and small videos are swapped. The recording's
+    // next frame follows it. Ignored for a call that is not being recorded.
+    public func setLayout(callId: UUID, pipCorner: NovagramCallPipCorner, isSwapped: Bool) {
+        assert(Thread.isMainThread)
+        self.recorders[callId]?.setLayout(NovagramCallVideoLayout(pipCorner: pipCorner, isSwapped: isSwapped))
     }
 
     public func state(callId: UUID) -> Signal<NovagramCallRecordingState, NoError> {

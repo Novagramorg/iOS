@@ -27,6 +27,14 @@ private final class TapHolder: @unchecked Sendable {
     }
 }
 
+// Which video frames a test recording gets.
+private enum VideoFeed {
+    case none
+    case wholeCall
+    // Only from the middle of the call on, like a camera turned on in a voice call.
+    case secondHalf
+}
+
 final class NovagramCallRecordingEndToEndTests: XCTestCase {
     private static let seconds = 3.0
     private static let chunkSeconds = 0.01
@@ -54,8 +62,8 @@ final class NovagramCallRecordingEndToEndTests: XCTestCase {
     }
 
     // Feeds 10 ms chunks in real time from a background thread, like the audio device: 48 kHz playout and 16 kHz
-    // microphone, plus a video frame on every third chunk.
-    private func feed(_ holder: TapHolder, incoming: ValuePipe<NovagramCallVideoFrame>?, outgoing: ValuePipe<NovagramCallVideoFrame>?) async {
+    // microphone, plus a video frame on every third chunk (from `firstVideoChunk` on).
+    private func feed(_ holder: TapHolder, incoming: ValuePipe<NovagramCallVideoFrame>?, outgoing: ValuePipe<NovagramCallVideoFrame>?, firstVideoChunk: Int = 0) async {
         let nv12 = self.makeNV12Frame()
         let native = self.makeNativeFrame()
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
@@ -82,7 +90,7 @@ final class NovagramCallRecordingEndToEndTests: XCTestCase {
                         playout.withUnsafeBufferPointer { tap($0.baseAddress!, 480, 1, 48000, true) }
                         mic.withUnsafeBufferPointer { tap($0.baseAddress!, 160, 1, 16000, false) }
                     }
-                    if chunk % 3 == 0 {
+                    if chunk % 3 == 0, chunk >= firstVideoChunk {
                         incoming?.putNext(nv12)
                         if let native {
                             outgoing?.putNext(native)
@@ -97,7 +105,7 @@ final class NovagramCallRecordingEndToEndTests: XCTestCase {
     }
 
     @MainActor
-    private func record(isVideo: Bool) async throws -> URL {
+    private func record(video: VideoFeed) async throws -> URL {
         let center = NovagramCallRecordingCenter.shared
         let holder = TapHolder()
         let incoming = ValuePipe<NovagramCallVideoFrame>()
@@ -107,8 +115,7 @@ final class NovagramCallRecordingEndToEndTests: XCTestCase {
             setAudioTap: { holder.set($0) },
             incomingFrames: incoming.signal(),
             outgoingFrames: outgoing.signal(),
-            isMuted: .single(false),
-            isVideo: isVideo
+            isMuted: .single(false)
         )
         let callId = UUID()
         var states: [NovagramCallRecordingState] = []
@@ -124,7 +131,15 @@ final class NovagramCallRecordingEndToEndTests: XCTestCase {
         XCTAssertFalse(center.start(callId: callId, source: source), "a second start for the same call is refused")
         XCTAssertNotNil(holder.current)
 
-        await self.feed(holder, incoming: isVideo ? incoming : nil, outgoing: isVideo ? outgoing : nil)
+        let chunkCount = Int(NovagramCallRecordingEndToEndTests.seconds / NovagramCallRecordingEndToEndTests.chunkSeconds)
+        switch video {
+        case .none:
+            await self.feed(holder, incoming: nil, outgoing: nil)
+        case .wholeCall:
+            await self.feed(holder, incoming: incoming, outgoing: outgoing)
+        case .secondHalf:
+            await self.feed(holder, incoming: incoming, outgoing: outgoing, firstVideoChunk: chunkCount / 2)
+        }
 
         let result = await withCheckedContinuation { (continuation: CheckedContinuation<Result<URL, NovagramCallRecordingError>, Never>) in
             center.stop(callId: callId) { result in
@@ -139,7 +154,9 @@ final class NovagramCallRecordingEndToEndTests: XCTestCase {
         let url = try result.get()
         XCTAssertEqual(url.deletingLastPathComponent().standardizedFileURL, NovagramCallRecordingStorage.directory.standardizedFileURL)
         XCTAssertTrue(url.lastPathComponent.hasPrefix("Test- Peer "))
-        XCTAssertEqual(url.pathExtension, isVideo ? "mp4" : "m4a")
+        XCTAssertEqual(url.pathExtension, video == .none ? "m4a" : "mp4")
+        let leftovers = (try? FileManager.default.contentsOfDirectory(atPath: NovagramCallRecordingStorage.partialDirectory.path)) ?? []
+        XCTAssertTrue(leftovers.isEmpty, "the partial folder is removed: \(leftovers)")
         return url
     }
 
@@ -178,7 +195,7 @@ final class NovagramCallRecordingEndToEndTests: XCTestCase {
 
     @MainActor
     func testVoiceRecordingWritesAacFile() async throws {
-        let url = try await self.record(isVideo: false)
+        let url = try await self.record(video: .none)
         defer {
             try? FileManager.default.removeItem(at: url)
         }
@@ -196,7 +213,7 @@ final class NovagramCallRecordingEndToEndTests: XCTestCase {
 
     @MainActor
     func testVideoRecordingWritesH264AndAacFile() async throws {
-        let url = try await self.record(isVideo: true)
+        let url = try await self.record(video: .wholeCall)
         defer {
             try? FileManager.default.removeItem(at: url)
         }
@@ -239,6 +256,27 @@ final class NovagramCallRecordingEndToEndTests: XCTestCase {
         XCTAssertLessThan(Int(corner.0) + Int(corner.1) + Int(corner.2), 60, "letterbox \(corner)")
     }
 
+    // A voice recording that gets video halfway (camera turned on): one .mp4 for the whole call, its video track
+    // from zero (black until the first frame) to the end.
+    @MainActor
+    func testVideoTurnedOnHalfwayKeepsWholeCallInMp4() async throws {
+        let url = try await self.record(video: .secondHalf)
+        defer {
+            try? FileManager.default.removeItem(at: url)
+        }
+        let asset = AVURLAsset(url: url)
+        try await self.checkAudioTrack(asset)
+        let tracks = try await asset.loadTracks(withMediaType: .video)
+        XCTAssertEqual(tracks.count, 1)
+        let track = try XCTUnwrap(tracks.first)
+        let timeRange = try await track.load(.timeRange)
+        XCTAssertEqual(timeRange.start.seconds, 0, accuracy: 0.05)
+        XCTAssertEqual(timeRange.duration.seconds, NovagramCallRecordingEndToEndTests.seconds, accuracy: 0.6)
+        let listed = NovagramCallRecordingStorage.list().first { $0.url.standardizedFileURL == url.standardizedFileURL }
+        XCTAssertEqual(listed?.isVideo, true)
+        XCTAssertEqual(listed?.duration ?? 0, NovagramCallRecordingEndToEndTests.seconds, accuracy: 0.3)
+    }
+
     @MainActor
     func testStopWithoutRecordingIsCancelled() async {
         let result = await withCheckedContinuation { (continuation: CheckedContinuation<Result<URL, NovagramCallRecordingError>, Never>) in
@@ -257,7 +295,7 @@ final class NovagramCallRecordingEndToEndTests: XCTestCase {
     @MainActor
     func testStopBeforeAnyAudioReportsNothingRecorded() async {
         let holder = TapHolder()
-        let source = NovagramCallRecordingSource(peerName: "Empty", setAudioTap: { holder.set($0) }, incomingFrames: nil, outgoingFrames: nil, isMuted: .single(false), isVideo: false)
+        let source = NovagramCallRecordingSource(peerName: "Empty", setAudioTap: { holder.set($0) }, incomingFrames: nil, outgoingFrames: nil, isMuted: .single(false))
         let callId = UUID()
         XCTAssertTrue(NovagramCallRecordingCenter.shared.start(callId: callId, source: source))
         let result = await withCheckedContinuation { (continuation: CheckedContinuation<Result<URL, NovagramCallRecordingError>, Never>) in

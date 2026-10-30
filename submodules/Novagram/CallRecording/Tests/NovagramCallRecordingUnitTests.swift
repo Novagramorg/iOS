@@ -288,4 +288,61 @@ final class NovagramCallVideoTests: XCTestCase {
         XCTAssertEqual(rect.width, (720 * 0.28).rounded())
         XCTAssertEqual(rect.height, (rect.width * 640 / 480).rounded())
     }
+
+    func testPictureInPictureFollowsTheFourCorners() {
+        let size = CGSize(width: 480, height: 640)
+        let width = CGFloat(NovagramCallVideoCompositor.width)
+        let height = CGFloat(NovagramCallVideoCompositor.height)
+        let margin = NovagramCallVideoCompositor.pipMargin
+        // Core Image is y up: the top of the picture is the high y.
+        let topLeft = NovagramCallVideoCompositor.pipRect(for: size, corner: .topLeft)
+        XCTAssertEqual(topLeft.minX, margin)
+        XCTAssertEqual(topLeft.maxY, height - margin)
+        let topRight = NovagramCallVideoCompositor.pipRect(for: size, corner: .topRight)
+        XCTAssertEqual(topRight.maxX, width - margin)
+        XCTAssertEqual(topRight.maxY, height - margin)
+        XCTAssertEqual(topRight, NovagramCallVideoCompositor.pipRect(for: size), "top-right stays the default")
+        let bottomLeft = NovagramCallVideoCompositor.pipRect(for: size, corner: .bottomLeft)
+        XCTAssertEqual(bottomLeft.minX, margin)
+        XCTAssertEqual(bottomLeft.minY, margin)
+        let bottomRight = NovagramCallVideoCompositor.pipRect(for: size, corner: .bottomRight)
+        XCTAssertEqual(bottomRight.maxX, width - margin)
+        XCTAssertEqual(bottomRight.minY, margin)
+        for rect in [topLeft, bottomLeft, bottomRight] {
+            XCTAssertEqual(rect.size, topRight.size, "only the position changes")
+        }
+    }
+
+    func testSwapPutsOurVideoBig() {
+        let normal = NovagramCallVideoCompositor.arrange(remote: "remote", local: "local", isSwapped: false)
+        XCTAssertEqual(normal.main, "remote")
+        XCTAssertEqual(normal.pip, "local")
+        let swapped = NovagramCallVideoCompositor.arrange(remote: "remote", local: "local", isSwapped: true)
+        XCTAssertEqual(swapped.main, "local")
+        XCTAssertEqual(swapped.pip, "remote")
+        // A lone side always fills the frame, swapped or not.
+        for isSwapped in [false, true] {
+            let remoteOnly = NovagramCallVideoCompositor.arrange(remote: "remote", local: nil, isSwapped: isSwapped)
+            XCTAssertEqual(remoteOnly.main, "remote")
+            XCTAssertNil(remoteOnly.pip)
+            let localOnly = NovagramCallVideoCompositor.arrange(remote: nil, local: "local", isSwapped: isSwapped)
+            XCTAssertEqual(localOnly.main, "local")
+            XCTAssertNil(localOnly.pip)
+        }
+    }
+
+    // Swapped with the pip bottom-left: our picture fills the frame and the other side's sits in that corner.
+    func testComposeUsesLayout() {
+        let canvas = NovagramCallVideoCompositor.canvas
+        let background = CIImage(color: CIColor(red: 0, green: 0, blue: 0)).cropped(to: canvas)
+        let remote = CIImage(color: CIColor(red: 1, green: 0, blue: 0)).cropped(to: CGRect(x: 0, y: 0, width: 640, height: 480))
+        let local = CIImage(color: CIColor(red: 0, green: 1, blue: 0)).cropped(to: CGRect(x: 0, y: 0, width: 720, height: 1280))
+        let layout = NovagramCallVideoLayout(pipCorner: .bottomLeft, isSwapped: true)
+        let composed = NovagramCallVideoCompositor.compose(remote: remote, local: local, layout: layout, background: background)
+        XCTAssertEqual(composed.extent, canvas)
+        let pip = NovagramCallVideoCompositor.pipRect(for: remote.extent.size, corner: .bottomLeft)
+        XCTAssertEqual(pip.minX, NovagramCallVideoCompositor.pipMargin)
+        XCTAssertEqual(pip.minY, NovagramCallVideoCompositor.pipMargin)
+        XCTAssertLessThan(pip.height, pip.width, "the pip keeps the landscape remote's aspect")
+    }
 }

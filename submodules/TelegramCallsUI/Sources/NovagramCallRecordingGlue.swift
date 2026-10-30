@@ -5,6 +5,7 @@ import SwiftSignalKit
 import TelegramCore
 import TelegramVoip
 import AccountContext
+import CallScreen
 import TelegramPresentationData
 import PresentationDataUtils
 import UndoUI
@@ -25,8 +26,14 @@ import NovagramLocalization
 ///   A manual Stop is not undone.
 /// - The recording stops when the call ends or the screen goes away; the file is always finished. The result shows as
 ///   a toast with a Share action.
+/// - Video: both sides' video is followed for the whole recording, also in a voice call (the file is .mp4 if video was
+///   ever on, .m4a otherwise). Our side is the camera, or our shared screen while we share it. The picture-in-picture
+///   corner and the big/small swap follow the call screen; while we share our screen, the screen is big.
 final class NovagramCallRecordingGlue {
     private static let savedToastTimeout: Double = 8.0
+    // How often the call screen's picture-in-picture corner and swap are read while recording. Dragging the small
+    // window does not update the screen, so it is read rather than pushed.
+    private static let layoutPollInterval: Double = 0.25
 
     private weak var call: PresentationCallImpl?
     private let callId: UUID
@@ -34,22 +41,25 @@ final class NovagramCallRecordingGlue {
     private let context: AccountContext
     private let presentationData: PresentationData
     private weak var control: NovagramCallRecordControl?
+    private weak var callScreen: PrivateCallScreen?
 
     private var stateDisposable: Disposable?
     private var recordingStateDisposable: Disposable?
+    private var layoutTimer: SwiftSignalKit.Timer?
+    private var sentLayout: NovagramCallVideoLayout?
 
     private var callState: PresentationCallState?
     private var peerName = ""
     private var recordingStart: Double?
-    private var recordingIsVideo = false
     // Set by the first start or stop in this call, so auto-record never starts a second time.
     private var didStartOnce = false
-    private var didShowAudioOnly = false
     private var isStopping = false
     private var isAsking = false
     private var isCallOver = false
 
-    init(call: PresentationCall, control: NovagramCallRecordControl, presentationData: PresentationData) {
+    init(call: PresentationCall, callScreen: PrivateCallScreen, presentationData: PresentationData) {
+        let control = callScreen.novagramRecord
+        self.callScreen = callScreen
         self.call = call as? PresentationCallImpl
         self.callId = call.internalId
         self.isOutgoing = call.isOutgoing
@@ -90,6 +100,7 @@ final class NovagramCallRecordingGlue {
     deinit {
         self.stateDisposable?.dispose()
         self.recordingStateDisposable?.dispose()
+        self.layoutTimer?.invalidate()
 
         // The screen went away while recording: finish the file anyway.
         let callId = self.callId
@@ -124,8 +135,8 @@ final class NovagramCallRecordingGlue {
             }
         default:
             self.autoStartIfNeeded(state)
-            self.noteVideoTurnedOnIfNeeded(state)
         }
+        self.updateLayout()
         self.updateControl()
     }
 
@@ -164,29 +175,59 @@ final class NovagramCallRecordingGlue {
         }
     }
 
-    private func noteVideoTurnedOnIfNeeded(_ state: PresentationCallState) {
-        guard self.recordingStart != nil, !self.recordingIsVideo, !self.didShowAudioOnly, NovagramCallRecordingGlue.isVideoActive(state) else {
-            return
-        }
-        self.didShowAudioOnly = true
-        let text = NovagramL10n(self.presentationData.strings).callRecording_audioOnly
-        NovagramCallRecordingGlue.presentOverCall(UndoOverlayController(presentationData: self.presentationData, content: .info(title: nil, text: text, timeout: nil, customUndoText: nil), elevatedLayout: false, action: { _ in
+    private static func isScreencastActive(_ state: PresentationCallState) -> Bool {
+        switch state.videoState {
+        case let .active(isScreencast, _), let .paused(isScreencast, _):
+            return isScreencast
+        case .notAvailable, .inactive:
             return false
-        }), context: self.context)
+        }
     }
 
-    private static func isVideoActive(_ state: PresentationCallState) -> Bool {
-        switch state.videoState {
-        case .active, .paused:
-            return true
-        case .notAvailable, .inactive:
-            break
+    // MARK: - Video layout
+
+    /// What the call screen shows, for the recording: the corner of its small window and whether it swapped the big
+    /// and small videos. While we share our screen, the screen (our side) is big. Sent only when it changes.
+    private func updateLayout() {
+        guard self.recordingStart != nil else {
+            return
         }
-        switch state.remoteVideoState {
-        case .active, .paused:
-            return true
-        case .inactive:
-            return false
+        let screen = self.callScreen?.novagramVideoLayout ?? (isPipTop: false, isPipLeft: false, isSwapped: false)
+        let pipCorner: NovagramCallPipCorner
+        switch (screen.isPipTop, screen.isPipLeft) {
+        case (true, true):
+            pipCorner = .topLeft
+        case (true, false):
+            pipCorner = .topRight
+        case (false, true):
+            pipCorner = .bottomLeft
+        case (false, false):
+            pipCorner = .bottomRight
+        }
+        let isScreencast = self.callState.map(NovagramCallRecordingGlue.isScreencastActive) ?? false
+        let layout = NovagramCallVideoLayout(pipCorner: pipCorner, isSwapped: isScreencast || screen.isSwapped)
+        guard layout != self.sentLayout else {
+            return
+        }
+        self.sentLayout = layout
+        NovagramCallRecordingCenter.shared.setLayout(callId: self.callId, pipCorner: layout.pipCorner, isSwapped: layout.isSwapped)
+    }
+
+    private func updateLayoutTimer() {
+        if self.recordingStart != nil {
+            guard self.layoutTimer == nil else {
+                return
+            }
+            self.sentLayout = nil
+            self.updateLayout()
+            let timer = SwiftSignalKit.Timer(timeout: NovagramCallRecordingGlue.layoutPollInterval, repeat: true, completion: { [weak self] in
+                self?.updateLayout()
+            }, queue: Queue.mainQueue())
+            self.layoutTimer = timer
+            timer.start()
+        } else {
+            self.layoutTimer?.invalidate()
+            self.layoutTimer = nil
         }
     }
 
@@ -204,6 +245,7 @@ final class NovagramCallRecordingGlue {
             // The writer stopped on its own (a failure): stop() hands out its error and the failure toast.
             self.stop()
         }
+        self.updateLayoutTimer()
         self.updateControl()
     }
 
@@ -254,22 +296,17 @@ final class NovagramCallRecordingGlue {
         guard !self.isCallOver, let impl = self.call, let audioDevice = impl.sharedAudioContext?.audioDevice else {
             return
         }
-        let isVideo = impl.isVideo || (self.callState.map(NovagramCallRecordingGlue.isVideoActive) ?? false)
         let source = NovagramCallRecordingSource(
             peerName: self.peerName.isEmpty ? "Call" : self.peerName,
             setAudioTap: { tap in
                 audioDevice.setAudioTap(tap)
             },
             incomingVideo: NovagramCallRecordingGlue.liveVideo(call: impl, isIncoming: true),
-            outgoingVideo: NovagramCallRecordingGlue.liveVideo(call: impl, isIncoming: false),
-            isMuted: impl.isMuted,
-            isVideo: isVideo
+            outgoingVideo: NovagramCallRecordingGlue.liveOutgoingVideo(call: impl),
+            isMuted: impl.isMuted
         )
         self.didStartOnce = true
-        if NovagramCallRecordingCenter.shared.start(callId: self.callId, source: source) {
-            self.recordingIsVideo = isVideo
-            self.didShowAudioOnly = false
-        } else {
+        if !NovagramCallRecordingCenter.shared.start(callId: self.callId, source: source) {
             NovagramCallRecordingGlue.showResult(.failure(.writerFailed("start")), context: self.context, presentationData: self.presentationData)
         }
     }
@@ -323,6 +360,48 @@ final class NovagramCallRecordingGlue {
                 return .complete()
             }
             return video
+        }
+    }
+
+    private enum OutgoingVideoKind {
+        case none
+        case camera
+        case screencast
+    }
+
+    /// Our side: the camera, or our shared screen while we share it (`requestScreencast` turns the camera off and
+    /// sends the screencast capturer instead). Follows the switch both ways; while there is neither it sends nothing.
+    private static func liveOutgoingVideo(call: PresentationCallImpl) -> Signal<OngoingGroupCallContext.VideoFrameData, NoError> {
+        return call.state
+        |> map { [weak call] state -> OutgoingVideoKind in
+            guard let call else {
+                return .none
+            }
+            switch state.videoState {
+            case let .active(isScreencast, _), let .paused(isScreencast, _):
+                if isScreencast {
+                    return call.novagramScreencastVideo != nil ? .screencast : .none
+                }
+                return call.video(isIncoming: false) != nil ? .camera : .none
+            case .notAvailable, .inactive:
+                return .none
+            }
+        }
+        |> distinctUntilChanged
+        |> mapToSignal { [weak call] kind -> Signal<OngoingGroupCallContext.VideoFrameData, NoError> in
+            guard let call else {
+                return .complete()
+            }
+            let video: Signal<OngoingGroupCallContext.VideoFrameData, NoError>?
+            switch kind {
+            case .none:
+                video = nil
+            case .camera:
+                video = call.video(isIncoming: false)
+            case .screencast:
+                video = call.novagramScreencastVideo
+            }
+            return video ?? .complete()
         }
     }
 

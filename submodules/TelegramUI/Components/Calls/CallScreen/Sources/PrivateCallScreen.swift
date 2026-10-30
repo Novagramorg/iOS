@@ -209,6 +209,7 @@ public final class PrivateCallScreen: OverlayMaskContainerView, AVPictureInPictu
     private var weakSignalView: WeakSignalView?
     private let novagramTurnOffVideo = NovagramCallTurnOffVideo() // Novagram
     public let novagramRecord = NovagramCallRecordControl() // Novagram
+    public var novagramVideoLayout: (isPipTop: Bool, isPipLeft: Bool, isSwapped: Bool) { let corner = self.videoContainerViews.first(where: { $0.key == .foreground })?.novagramMinimizedCorner ?? (isTop: false, isLeft: false); return (corner.isTop, corner.isLeft, self.swapLocalAndRemoteVideo) } // Novagram
     
     private var emojiView: KeyEmojiView?
     private var emojiTooltipView: EmojiTooltipView?

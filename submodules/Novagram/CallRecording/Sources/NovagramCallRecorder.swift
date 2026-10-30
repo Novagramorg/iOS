@@ -4,8 +4,11 @@ import CoreMedia
 import CoreImage
 import SwiftSignalKit
 
-// Records one call into an AVAssetWriter: one AAC track (both sides mixed), plus an H.264 track for video calls.
-// Timeline: the session starts at the first audio chunk (time zero); audio times come from the sample count,
+// Records one call into an AVAssetWriter: one AAC track (both sides mixed) and one H.264 track. Every recording
+// is written as an .mp4, so video turned on in the middle of a voice call is recorded too: while neither side has
+// video the track gets a black frame every half second (almost nothing once compressed), at the first real frame
+// it switches to up to 30 fps. A recording that never had a real frame is exported to an audio-only .m4a at the
+// end (the .mp4 is kept if that export fails). Timeline: the session starts at the first audio chunk (time zero); audio times come from the sample count,
 // video times from the host clock relative to the same start. All writer state lives on `queue`; the audio tap
 // only writes into the two rings, and the main thread only attaches, detaches and starts finishing.
 final class NovagramCallRecorder {
@@ -14,6 +17,8 @@ final class NovagramCallRecorder {
     static let audioBitRate = 128_000
     static let videoBitRate = 2_500_000
     static let videoFramesPerSecond = 30
+    // While neither side has video: one black frame per this many seconds.
+    static let idleVideoFrameInterval: Double = 0.5
     static let keyFrameInterval = 60
     static let fragmentInterval: Double = 2.0
     // A playout chunk this much later than the timeline expects means chunks were lost or playout stalled; the
@@ -34,7 +39,6 @@ final class NovagramCallRecorder {
 
     let tempURL: URL
     let folder: URL
-    let isVideo: Bool
     // Main thread: told once when the writer fails on its own.
     var onFailure: ((NovagramCallRecordingError) -> Void)?
 
@@ -44,8 +48,8 @@ final class NovagramCallRecorder {
 
     private let writer: AVAssetWriter
     private let audioInput: AVAssetWriterInput
-    private let videoInput: AVAssetWriterInput?
-    private let adaptor: AVAssetWriterInputPixelBufferAdaptor?
+    private let videoInput: AVAssetWriterInput
+    private let adaptor: AVAssetWriterInputPixelBufferAdaptor
     private let audioFormat: CMAudioFormatDescription
 
     // Main thread.
@@ -67,6 +71,11 @@ final class NovagramCallRecorder {
     private var remote = VideoSide()
     private var local = VideoSide()
     private var lastVideoTime: CMTime = .invalid
+    private var layout: NovagramCallVideoLayout = .standard
+    // Set by the first frame with a real picture on either side; without it the file ends up audio-only.
+    private var hasRealVideo = false
+    // The black frame written while neither side has video (one buffer, reused).
+    private var blackBuffer: CVPixelBuffer?
     private var failure: NovagramCallRecordingError?
     private var isFinishing = false
 
@@ -78,10 +87,9 @@ final class NovagramCallRecorder {
         var image: CIImage?
     }
 
-    init(tempURL: URL, folder: URL, isVideo: Bool) throws {
+    init(tempURL: URL, folder: URL) throws {
         self.tempURL = tempURL
         self.folder = folder
-        self.isVideo = isVideo
 
         guard let audioFormat = NovagramCallRecorder.makeAudioFormat() else {
             throw NovagramCallRecordingError.writerFailed("audio format")
@@ -89,32 +97,27 @@ final class NovagramCallRecorder {
         self.audioFormat = audioFormat
         let writer: AVAssetWriter
         do {
-            writer = try AVAssetWriter(outputURL: tempURL, fileType: isVideo ? .mp4 : .m4a)
+            writer = try AVAssetWriter(outputURL: tempURL, fileType: .mp4)
         } catch {
             throw NovagramCallRecordingError.writerFailed(error.localizedDescription)
         }
         // Movie fragments keep the file playable up to the last fragment if the app is killed.
         writer.movieFragmentInterval = CMTime(seconds: NovagramCallRecorder.fragmentInterval, preferredTimescale: 600)
 
-        if isVideo {
-            let input = AVAssetWriterInput(mediaType: .video, outputSettings: NovagramCallRecorder.videoSettings)
-            input.expectsMediaDataInRealTime = true
-            guard writer.canAdd(input) else {
-                throw NovagramCallRecordingError.writerFailed("video input")
-            }
-            writer.add(input)
-            self.videoInput = input
-            self.adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: input, sourcePixelBufferAttributes: [
-                kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
-                kCVPixelBufferWidthKey as String: NovagramCallVideoCompositor.width,
-                kCVPixelBufferHeightKey as String: NovagramCallVideoCompositor.height,
-                kCVPixelBufferIOSurfacePropertiesKey as String: [String: Any](),
-                kCVPixelBufferMetalCompatibilityKey as String: true
-            ])
-        } else {
-            self.videoInput = nil
-            self.adaptor = nil
+        let input = AVAssetWriterInput(mediaType: .video, outputSettings: NovagramCallRecorder.videoSettings)
+        input.expectsMediaDataInRealTime = true
+        guard writer.canAdd(input) else {
+            throw NovagramCallRecordingError.writerFailed("video input")
         }
+        writer.add(input)
+        self.videoInput = input
+        self.adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: input, sourcePixelBufferAttributes: [
+            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+            kCVPixelBufferWidthKey as String: NovagramCallVideoCompositor.width,
+            kCVPixelBufferHeightKey as String: NovagramCallVideoCompositor.height,
+            kCVPixelBufferIOSurfacePropertiesKey as String: [String: Any](),
+            kCVPixelBufferMetalCompatibilityKey as String: true
+        ])
 
         let audioSettings: [String: Any] = [
             AVFormatIDKey: kAudioFormatMPEG4AAC,
@@ -208,17 +211,15 @@ final class NovagramCallRecorder {
                 self?.isMuted = isMuted
             }
         }))
-        if self.isVideo {
-            if let incoming = source.incomingFrames {
-                self.disposables.add(incoming.start(next: { [weak self] frame in
-                    self?.receive(frame, isRemote: true)
-                }))
-            }
-            if let outgoing = source.outgoingFrames {
-                self.disposables.add(outgoing.start(next: { [weak self] frame in
-                    self?.receive(frame, isRemote: false)
-                }))
-            }
+        if let incoming = source.incomingFrames {
+            self.disposables.add(incoming.start(next: { [weak self] frame in
+                self?.receive(frame, isRemote: true)
+            }))
+        }
+        if let outgoing = source.outgoingFrames {
+            self.disposables.add(outgoing.start(next: { [weak self] frame in
+                self?.receive(frame, isRemote: false)
+            }))
         }
         let timer = DispatchSource.makeTimerSource(queue: self.queue)
         timer.schedule(deadline: .now() + NovagramCallRecorder.tickInterval, repeating: NovagramCallRecorder.tickInterval, leeway: .milliseconds(5))
@@ -238,6 +239,13 @@ final class NovagramCallRecorder {
             setAudioTap(nil)
         }
         self.disposables.dispose()
+    }
+
+    // What the call screen shows; the next composed frame uses it.
+    func setLayout(_ layout: NovagramCallVideoLayout) {
+        self.queue.async {
+            self.layout = layout
+        }
     }
 
     // MARK: - Recorder queue
@@ -262,7 +270,7 @@ final class NovagramCallRecorder {
             return
         }
         self.drainAudio(final: false)
-        if self.isVideo, self.startSeconds != nil {
+        if self.startSeconds != nil {
             self.writeVideoFrame()
         }
         self.checkWriter()
@@ -408,7 +416,7 @@ final class NovagramCallRecorder {
     }
 
     private func writeVideoFrame() {
-        guard let videoInput = self.videoInput, let adaptor = self.adaptor, let start = self.startSeconds, self.writer.status == .writing, videoInput.isReadyForMoreMediaData else {
+        guard let start = self.startSeconds, self.writer.status == .writing, self.videoInput.isReadyForMoreMediaData else {
             return
         }
         let now = NovagramCallHostClock.seconds(NovagramCallHostClock.now())
@@ -419,24 +427,53 @@ final class NovagramCallRecorder {
         }
         let remoteImage = self.currentImage(&self.remote, now: now)
         let localImage = self.currentImage(&self.local, now: now)
-        guard let pool = adaptor.pixelBufferPool else {
-            return
-        }
-        var pixelBuffer: CVPixelBuffer?
-        guard CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool, &pixelBuffer) == kCVReturnSuccess, let pixelBuffer else {
-            return
-        }
-        let compositor: NovagramCallVideoCompositor
-        if let current = self.compositor {
-            compositor = current
+        let pixelBuffer: CVPixelBuffer
+        if remoteImage == nil && localImage == nil {
+            // No video on either side: a black frame at the low rate.
+            if self.lastVideoTime.isValid, (time - self.lastVideoTime).seconds < NovagramCallRecorder.idleVideoFrameInterval {
+                return
+            }
+            if let blackBuffer = self.blackBuffer {
+                pixelBuffer = blackBuffer
+            } else {
+                guard let buffer = self.makePixelBuffer() else {
+                    return
+                }
+                self.currentCompositor().render(remote: nil, local: nil, into: buffer)
+                self.blackBuffer = buffer
+                pixelBuffer = buffer
+            }
         } else {
-            compositor = NovagramCallVideoCompositor()
-            self.compositor = compositor
+            guard let buffer = self.makePixelBuffer() else {
+                return
+            }
+            self.hasRealVideo = true
+            self.currentCompositor().render(remote: remoteImage, local: localImage, layout: self.layout, into: buffer)
+            pixelBuffer = buffer
         }
-        compositor.render(remote: remoteImage, local: localImage, into: pixelBuffer)
-        if adaptor.append(pixelBuffer, withPresentationTime: time) {
+        if self.adaptor.append(pixelBuffer, withPresentationTime: time) {
             self.lastVideoTime = time
         }
+    }
+
+    private func makePixelBuffer() -> CVPixelBuffer? {
+        guard let pool = self.adaptor.pixelBufferPool else {
+            return nil
+        }
+        var pixelBuffer: CVPixelBuffer?
+        guard CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool, &pixelBuffer) == kCVReturnSuccess else {
+            return nil
+        }
+        return pixelBuffer
+    }
+
+    private func currentCompositor() -> NovagramCallVideoCompositor {
+        if let compositor = self.compositor {
+            return compositor
+        }
+        let compositor = NovagramCallVideoCompositor()
+        self.compositor = compositor
+        return compositor
     }
 
     private func checkWriter() {
@@ -502,7 +539,7 @@ final class NovagramCallRecorder {
                 retries += 1
             }
             self.audioInput.markAsFinished()
-            self.videoInput?.markAsFinished()
+            self.videoInput.markAsFinished()
             let audioDuration = Double(self.framesWritten) / Double(NovagramCallRecorder.sampleRate)
             let videoDuration = self.lastVideoTime.isValid ? self.lastVideoTime.seconds + NovagramCallRecorder.tickInterval : 0
             let duration = max(audioDuration, videoDuration)
@@ -526,17 +563,56 @@ final class NovagramCallRecorder {
         return text
     }
 
-    private func completeFinishing(duration: Double, completion: (Result<URL, NovagramCallRecordingError>) -> Void) {
+    private func completeFinishing(duration: Double, completion: @escaping (Result<URL, NovagramCallRecordingError>) -> Void) {
         guard self.writer.status == .completed else {
             self.salvage()
             completion(.failure(.writerFailed(NovagramCallRecorder.describe(self.writer.error, stage: "finishing"))))
             return
         }
+        guard !self.hasRealVideo else {
+            self.moveIntoPlace(self.tempURL, duration: duration, completion: completion)
+            return
+        }
+        // No side ever had video: keep the audio alone as an .m4a; the .mp4 if that fails.
+        let audioURL = self.tempURL.deletingPathExtension().appendingPathExtension(NovagramCallRecordingStorage.audioExtension)
+        NovagramCallRecorder.exportAudio(from: self.tempURL, to: audioURL) { isExported in
+            self.queue.async {
+                if isExported {
+                    try? FileManager.default.removeItem(at: self.tempURL)
+                    self.moveIntoPlace(audioURL, duration: duration, completion: completion)
+                } else {
+                    try? FileManager.default.removeItem(at: audioURL)
+                    self.moveIntoPlace(self.tempURL, duration: duration, completion: completion)
+                }
+            }
+        }
+    }
+
+    private func moveIntoPlace(_ url: URL, duration: Double, completion: (Result<URL, NovagramCallRecordingError>) -> Void) {
         do {
-            let url = try NovagramCallRecordingStorage.moveIntoPlace(self.tempURL, folder: self.folder, duration: duration)
+            let url = try NovagramCallRecordingStorage.moveIntoPlace(url, folder: self.folder, duration: duration)
             completion(.success(url))
         } catch {
             completion(.failure(.writerFailed(error.localizedDescription)))
+        }
+    }
+
+    // Copies the audio track of `source` into an .m4a without re-encoding. `completion` runs on any queue.
+    static func exportAudio(from source: URL, to destination: URL, completion: @escaping (Bool) -> Void) {
+        let asset = AVURLAsset(url: source)
+        let composition = AVMutableComposition()
+        guard let audioTrack = asset.tracks(withMediaType: .audio).first,
+              let compositionTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid),
+              (try? compositionTrack.insertTimeRange(audioTrack.timeRange, of: audioTrack, at: .zero)) != nil,
+              let session = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetPassthrough) else {
+            completion(false)
+            return
+        }
+        try? FileManager.default.removeItem(at: destination)
+        session.outputURL = destination
+        session.outputFileType = .m4a
+        session.exportAsynchronously {
+            completion(session.status == .completed)
         }
     }
 }
