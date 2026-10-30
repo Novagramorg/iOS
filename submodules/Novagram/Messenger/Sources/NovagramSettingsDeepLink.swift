@@ -30,10 +30,6 @@ public enum NovagramSettingsFeature: String, CaseIterable {
     case mutualContacts = "mutual-contacts"
     case unlimitedPins = "unlimited-pins"
 
-    // Search
-    case searchFeatures = "search-features"
-    case searchTranslate = "search-translate"
-
     // Calls (same slug as the Mac)
     case callDataSaving = "call-data-saving"
     case callRecording = "call-recording"
@@ -108,8 +104,6 @@ extension NovagramSettingsFeature {
     /// lands on the screen without scrolling or highlighting, like an unknown slug.
     var isAvailable: Bool {
         switch self {
-        case .searchFeatures, .searchTranslate:
-            return NovagramDeveloperFlags.isSearchFeaturesEnabled
         case .callRecording, .callRecordingAuto, .callRecordings:
             return NovagramDeveloperFlags.isCallRecordingEnabled
         case .callDataSaving:

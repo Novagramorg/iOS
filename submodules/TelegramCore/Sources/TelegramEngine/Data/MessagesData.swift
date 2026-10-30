@@ -59,11 +59,6 @@ public struct EnginePeerReadCounters: Equatable {
         return state.isUnread
     }
     
-    // Novagram: search "Unread only" asks if one incoming message is read; `state` stays fileprivate (HOOKS.md #261).
-    public func isIncomingMessageRead(_ index: EngineMessage.Index) -> Bool { // Novagram
-        return self.state?.isIncomingMessageIndexRead(index) ?? true // Novagram
-    } // Novagram
-
     public var hasEverRead: Bool {
         guard let state = self.state else {
             return false

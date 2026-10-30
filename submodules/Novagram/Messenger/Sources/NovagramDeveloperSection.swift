@@ -6,7 +6,6 @@ import AccountContext
 import TelegramPresentationData
 import PresentationDataUtils
 import NovagramLocalization
-import NovagramSearch
 import NovagramCalls
 
 // MARK: - Notification name
@@ -26,8 +25,8 @@ public enum NovagramDeveloperFlags {
     private static let udSuite = "pro_messager"
     private static let currencyRatesViewKey = "novagram_currency_rates_view"
     private static let adsPanelKey = "novagram_ads_panel"
-    // The beta gates for features that are not approved yet (same keys as the Mac). The search and call
-    // recording keys live in their own modules, which read them without depending on this one.
+    // The beta gates for features that are not approved yet (same keys as the Mac). The call recording
+    // key lives in its own module, which read them without depending on this one.
     private static let callDataSavingKey = "novagram_dev_call_data_saving"
     // TelegramCore reads this key directly (`novagramAdEventsOff()`), and the Mac app uses it too.
     private static let adEventsOffKey = "novagram_ads_events_off"
@@ -49,12 +48,6 @@ public enum NovagramDeveloperFlags {
     public static internal(set) var isAdsPanelEnabled: Bool {
         get { return self.value(forKey: self.adsPanelKey) }
         set { self.setValue(newValue, forKey: self.adsPanelKey) }
-    }
-
-    /// "Search features (beta)": the whole Search section and every search extra (NovagramSearchFeatures).
-    public static internal(set) var isSearchFeaturesEnabled: Bool {
-        get { return NovagramSearchFeatures.isDeveloperEnabled }
-        set { self.setValue(newValue, forKey: NovagramSearchFeatures.developerFlagKey) }
     }
 
     /// "Call recording (beta)": the call recording rows and the Record control (NovagramCallRecordingSettings).
@@ -125,7 +118,6 @@ public enum NovagramDeveloperRole: String {
         case adEventsOff
         case currencyRatesView
         case adsPanel
-        case searchFeatures
         case callRecording
         case callDataSaving
     }
@@ -142,7 +134,7 @@ public enum NovagramDeveloperRole: String {
             switch item {
             case .adEventsOff, .adsPanel:
                 return true
-            case .removeAllAds, .currencyRatesView, .searchFeatures, .callRecording, .callDataSaving:
+            case .removeAllAds, .currencyRatesView, .callRecording, .callDataSaving:
                 return false
             }
         }
@@ -168,9 +160,6 @@ public enum NovagramDeveloperRole: String {
         }
         if !role.canUse(.adsPanel) && NovagramDeveloperFlags.isAdsPanelEnabled {
             NovagramDeveloperFlags.isAdsPanelEnabled = false
-        }
-        if !role.canUse(.searchFeatures) && NovagramDeveloperFlags.isSearchFeaturesEnabled {
-            NovagramDeveloperFlags.isSearchFeaturesEnabled = false
         }
         if !role.canUse(.callRecording) && NovagramDeveloperFlags.isCallRecordingEnabled {
             NovagramDeveloperFlags.isCallRecordingEnabled = false
@@ -346,15 +335,6 @@ enum NovagramDeveloperStrings {
         case "ru": return "Показывать рекламную панель Novagram"
         case "zh": return "显示 Novagram 广告面板"
         default:   return "Show the Novagram ads panel"
-        }
-    }
-
-    static func searchFeaturesTitle(langCode: String) -> String {
-        switch langCode {
-        case "uz": return "Qidiruv imkoniyatlari (beta)"
-        case "ru": return "Функции поиска (бета)"
-        case "zh": return "搜索功能（测试版）"
-        default:   return "Search features (beta)"
         }
     }
 

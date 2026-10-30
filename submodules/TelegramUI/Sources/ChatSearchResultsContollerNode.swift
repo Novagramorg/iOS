@@ -13,7 +13,6 @@ import ContextUI
 import ChatListSearchItemHeader
 import AnimationCache
 import MultiAnimationRenderer
-import NovagramSearch // Novagram
 
 private enum ChatListSearchEntryStableId: Hashable {
     case messageId(EngineMessage.Id)
@@ -339,7 +338,7 @@ class ChatSearchResultsControllerNode: ViewControllerTracingNode, ASScrollViewDe
     private func loadMore() {
         self.isLoadingMore = true
         
-        self.loadMoreDisposable.set((NovagramChatSearchFilter.searchMessages(engine: self.context.engine, location: self.location, query: self.searchQuery, state: self.searchState) // Novagram
+        self.loadMoreDisposable.set((self.context.engine.messages.searchMessages(location: self.location, query: self.searchQuery, state: self.searchState)
         |> deliverOnMainQueue).startStrict(next: { [weak self] (updatedResult, updatedState) in
             guard let strongSelf = self else {
                 return

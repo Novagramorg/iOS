@@ -177,7 +177,7 @@ three calls and delete the two lines.
 
 ## 📋 Novagram features va hooklar (2026-10-10)
 
-> 1–44, 86, 89 va 91: Settings → Novagram Settings (ilovadagi tartibda). 45–85, 87, 88 va 92–96: Settings'dan tashqaridagi features.
+> 1–44, 86, 89 va 91: Settings → Novagram Settings (ilovadagi tartibda). 45–85, 87, 88 va 92: Settings'dan tashqaridagi features. 93–98 olib tashlangan (2026-10-30).
 > Hooks: Telegram-owned fayllardagi barcha Novagram o'zgarishlari, feature bo'yicha. Har bir hookning kodi va anchor'i quyidagi 📌 bo'limlarda.
 
 ### 1. Novagram Settings
@@ -353,12 +353,7 @@ three calls and delete the two lines.
 #### Qidiruv
 
 92. **Qidiruvda yashirin va qulflangan chatlar**: yashirin chat (Secret Vault) global qidiruvning hech qayerida chiqmaydi (chat, xabar, top/recent, Channels/Apps tablari, peer chip'lari, hashtag/Posts, Downloads, galereya), yashirin ro'yxat ochiq bo'lsa ham. Qulflangan chat (Chat qulfi) nomi chiqadi, xabarlari chiqmaydi. Faqat joriy account.
-93. **Qidiruvda sana oralig'i**: MESSAGES sarlavhasidagi "From All Chats" menyusida "Sanadan…", "Sanagacha…" va "Sanalarni tozalash". Faqat xabarlar bo'limi (Posts/hashtag, Channels va Apps tablarida yo'q). Sarlavhada: `From All Chats · 01.10.26–29.10.26`. Hech narsa saqlanmaydi, qidiruv yopilsa tozalanadi.
-94. **Faqat o'qilmaganlar / Faqat mention'lar**: o'sha menyuda ikkita toggle (yoqilganda ✓, ikkalasi birga ham ishlaydi). Natija qisqa bo'lsa keyingi sahifalar o'zi yuklanadi. Galereya va pleer ham shu ro'yxatni ko'rsatadi.
-95. **Tarjima qilingan so'rov bo'yicha qidirish**: Novagram Settings → Qidiruv → "Tarjima qilingan so'rov bo'yicha ham qidirish" (faqat "Qidiruv imkoniyatlari" yoqiq bo'lganda ko'rinadi) (`pro_messager` / `novagram_search_translate`, default o'chiq). Yoqilsa Chats tabidagi global qidiruv so'rovni `auto_translate_lang` tiliga (bo'lmasa `en`) tarjima qiladi va Messages ustida "Tarjima: …" bo'limini ko'rsatadi. So'rov Telegram'ning tarjima xizmatiga yuboriladi.
-96. **Chat ichida aniq ibora va regex qidiruvi**: chat qidiruvida `"ikki so'z"` (to'g'ri yoki egri qo'shtirnoq) faqat shu iborani o'z ichiga olgan xabarlarni qoldiradi (katta-kichik harf va diakritika farqsiz); `re:pattern` chat tarixini ko'rib chiqadi (sahifasi 100, ko'pi bilan 2000 xabar) va regular expression mos kelganlarini ko'rsatadi, noto'g'ri pattern oddiy qidiruv bo'ladi. Hisoblagich topilganlar sonini ko'rsatadi. Oddiy so'rov avvalgidek bitta so'rov. Ko'rsatma: About Novagram'da ikkita bo'lim ("Exact phrase search in a chat", "Regex search in a chat": misollar va belgilar jadvali).
-97. **Saqlangan va qadalgan qidiruvlar**: global qidiruvda natija (chat yoki xabar) ochilganda yozilgan so'rov saqlanadi (oxirgi 20 ta + cheklanmagan qadalganlar, har akkaunt alohida, `pro_messager` / `novagram_saved_searches_<peer id>`). Bo'sh qidiruv ekranida Recent ustida "Saqlangan qidiruvlar" bo'limi: avval qadalganlar ("Qadalgan" belgisi), keyin oxirgilar. Bosilsa matn qidiruv maydoniga qaytadi va qidiruv qayta ishlaydi; uzoq bosilsa "Qadash" / "Qadashni olish" va "O'chirish". Akkaunt logout bo'lsa (boshqa qurilmadan tugatilgan sessiya ham) o'chadi.
-98. **Qidiruv imkoniyatlari switch'i**: Novagram Settings → Qidiruv → "Qidiruv imkoniyatlari" (`pro_messager` / `novagram_search_features`, default yoqiq). O'chirilsa 93–97 ishlamaydi: "From All Chats" menyusida sana va filtrlar yo'q, chat ichida `"..."` va `re:` oddiy matn, saqlangan qidiruvlar bo'limi yashirin va yangisi saqlanmaydi (saqlanganlari o'chmaydi), tarjima bo'limi yo'q. 92 (yashirin va qulflangan chatlar) har doim ishlaydi. Telegram fayllarida hook yo'q.
+93–98. *(olib tashlandi 2026-10-30, menejer qarori bilan: sana oralig'i, Faqat o'qilmaganlar / mention'lar, tarjima qilingan so'rov, chat ichida ibora / regex, saqlangan qidiruvlar va "Qidiruv imkoniyatlari" switch'i. Mantiq NovagramSearchKit SDK'da qoldi; ilovada UI va hook yo'q.)*
 
 #### Qo'ng'iroqlar (2026-10-29)
 
@@ -507,28 +502,7 @@ three calls and delete the two lines.
 253. `ChatListSearchContainerNode.swift` (ChatListUI): `suggestedPeers` (peer filter chip'lari).
 254. `HashtagSearchGlobalChatContents.swift` (HashtagSearchUI): hashtag / public posts ro'yxati, boshlang'ich va har yuklangan sahifa (`updateHistoryView`).
 255. `ChatListUI/BUILD`, `HashtagSearchUI/BUILD`: `//submodules/Novagram/Search:NovagramSearch`.
-256. `ChatListSearchListPaneNode.swift` (ChatListUI): pane'ning `novagramFilter`i, init'dagi lokal nusxasi va `searchOptions`ni `restarting(...)` bilan o'rash (filtr o'zgarsa qidiruv birinchi sahifadan qayta boshlanadi).
-257. `ChatListSearchListPaneNode.swift` (ChatListUI): xabar qidiruvining ikkala chaqiruvi (birinchi sahifa va "load more") `novagramFilter.searchMessages(engine:...)` orqali: sanalar location'ga qo'shiladi.
-258. `ChatListSearchListPaneNode.swift` (ChatListUI): `.message`, `.messagePlaceholder`, `.emptyMessagesFooter` sarlavhasida faol filtrlar (`NovagramSearchFilter.headerTitle`).
-259. `ChatListSearchListPaneNode.swift` (ChatListUI): filtr `chatListInteraction`ga bog'lanadi (sarlavha uni shu orqali topadi).
-260. `ChatListSearchListPaneNode.swift` (ChatListUI): `openMessagesFilter` menyusining oxiriga bizning bandlar.
-261. `MessagesData.swift` (TelegramCore): `EnginePeerReadCounters.isIncomingMessageRead(_:)` — "Faqat o'qilmaganlar" uchun (`state` fileprivate qoladi).
-262. `ChatListSearchListPaneNode.swift` (ChatListUI): filtr yoqiq va xabar qolmasa "All Chats"da ham bo'sh-natija footer'i chiqadi, sarlavha va menyu yo'qolmaydi.
-263. `ChatListSearchListPaneNode.swift` (ChatListUI): `ChatListSearchEntry.MessageSection`ga `case novagramTranslated(String)` (stable id `.messageId(id, section)` Messages bilan to'qnashmaydi).
-264. `ChatListSearchListPaneNode.swift` (ChatListUI): `item()`dagi `.index` header: bizning bo'lim `.text(title, NovagramTranslatedSearch.headerId)` sarlavhasini oladi.
-265. `ChatListSearchListPaneNode.swift` (ChatListUI): `finalQuery`dan keyin `NovagramTranslatedSearch.section(...)` signali (Messages bilan bir xil location va filtrlar).
-266. `ChatListSearchListPaneNode.swift` (ChatListUI): natijalar `combineLatest`ining 13-argumenti va map'ning `novagramTranslated` parametri.
-267. `ChatListSearchListPaneNode.swift` (ChatListUI): Messages siklidan oldin "Tarjima: …" qatorlari (har emission uchun yangi id Set'i bilan dedupe).
-268. `ChatControllerUpdateSearch.swift` (TelegramUI): chat qidiruvining birinchi sahifasi va "load more" (`loadMoreState`) `NovagramChatSearchFilter.searchMessages(engine:...)` orqali (ibora / `re:`).
-269. `ChatControllerNode.swift` (TelegramUI): yuqori/pastki strelkalar chaqiradigan "load more" ham shu orqali.
-270. `ChatSearchResultsContollerNode.swift` (TelegramUI): natijalar ro'yxati ekranining `loadMore`i ham shu orqali.
-271. `TelegramUI/BUILD`: `//submodules/Novagram/Search:NovagramSearch`.
-272. `ChatListSearchListPaneNode.swift` (ChatListUI): `ChatListRecentEntry`ga `case novagramSavedSearch(NovagramSavedSearchRow)`, stable id `case novagramSavedSearch(String)`, va uning `stableId`, `==`, `<` (2 qator) va `item()` qatorlari.
-273. `ChatListSearchListPaneNode.swift` (ChatListUI): `let novagramSaved = NovagramSavedSearchScope(...)` (faqat asosiy chat ro'yxatining global qidiruvi).
-274. `ChatListSearchListPaneNode.swift` (ChatListUI): natija ochilganda so'rov saqlanadi: `peerSelected` (`addRecentlySearchedPeer` yonida), `messageSelected`, `ListMessageItemInteraction.openMessage`.
-275. `ChatListSearchListPaneNode.swift` (ChatListUI): Chats tabining bo'sh ekranida "Saqlangan qidiruvlar" qatorlari Recent (top peers'dan keyin) ustiga qo'yiladi, har emission uchun yangidan.
-276. `ChatListSearchContainerNode.swift` (ChatListUI): saqlangan qidiruv bosilsa `search(filter: .chats, query:)` (matn qidiruv maydoniga qaytadi).
-277. `AppDelegate.swift` (TelegramUI): `import NovagramSearch`; `NovagramSavedSearches.start(sharedContext:)` — logout bo'lgan akkauntning saqlangan qidiruvlari o'chadi.
+256–277. *(olib tashlandi 2026-10-30: 93–98 feature'larining hooklari. Fayllar shu joylarda upstream matniga qaytgan.)*
 
 #### Xabar eslatmasi
 
@@ -7530,20 +7504,19 @@ events" (`novagram_ads_events_off`, 2026-10-29), "Show currency rates" (`novagra
 `NovagramDeveloperFlags` (`isAdEventsOff`, `isCurrencyRatesViewEnabled`, `isAdsPanelEnabled`, live `…Signal`s on
 `.novagramDeveloperFlagsChanged`). The rows have no deep link.
 
-**Beta gates (2026-10-30, Mac parity).** Three more switches, after "Novagram ads panel", for features the owner has
-not approved yet: "Search features (beta)" (`novagram_dev_search_features`), "Call recording (beta)"
-(`novagram_dev_call_recording`) and "Use less data for calls (beta)" (`novagram_dev_call_data_saving`). `pro_messager`,
-Bool, missing key = off, so for everyone the features are hidden and behave as switched off; the user's own switch
-keeps its value and is never written by the gate. Developer role only: the director never sees them, and a director
-login turns all three off (`NovagramDeveloperRole.didLogIn`, switch cases `.searchFeatures`, `.callRecording`,
-`.callDataSaving`). Each key is defined once, in the module that reads it, so Calls and Search never import
-Messenger: `NovagramSearchFeatures.developerFlagKey` (Search), `NovagramCallRecordingSettings.developerFlagKey`
-(Calls), `NovagramDeveloperFlags.callDataSavingKey` (Messenger). `NovagramDeveloperFlags.isSearchFeaturesEnabled` /
-`isCallRecordingEnabled` / `isCallDataSavingEnabled` read through those modules and write with the usual
-`.novagramDeveloperFlagsChanged` post; Novagram Settings observes it and adds or drops the gated rows live. Rows:
-`NovagramEntry.developerBeta` (stable ids 99–101, sort 971–973, between the ads panel and the footer). A gated row's
-slug lands on the screen without scrolling, like an unknown slug (`NovagramSettingsFeature.isAvailable`). No
-Telegram file is involved.
+**Beta gates (2026-10-30, Mac parity).** Two more switches, after "Novagram ads panel", for features the owner has
+not approved yet: "Call recording (beta)" (`novagram_dev_call_recording`) and "Use less data for calls (beta)"
+(`novagram_dev_call_data_saving`). `pro_messager`, Bool, missing key = off, so for everyone the features are hidden and
+behave as switched off; the user's own switch keeps its value and is never written by the gate. Developer role only:
+the director never sees them, and a director login turns both off (`NovagramDeveloperRole.didLogIn`, switch cases
+`.callRecording`, `.callDataSaving`). Each key is defined once, in the module that reads it, so Calls never imports
+Messenger: `NovagramCallRecordingSettings.developerFlagKey` (Calls), `NovagramDeveloperFlags.callDataSavingKey`
+(Messenger). `NovagramDeveloperFlags.isCallRecordingEnabled` / `isCallDataSavingEnabled` read through those modules
+and write with the usual `.novagramDeveloperFlagsChanged` post; Novagram Settings observes it and adds or drops the
+gated rows live. Rows: `NovagramEntry.developerBeta` (stable ids 100–101, sort 972–973, between the ads panel and the
+footer). A gated row's slug lands on the screen without scrolling, like an unknown slug
+(`NovagramSettingsFeature.isAvailable`). No Telegram file is involved. A third gate, "Search features (beta)"
+(`novagram_dev_search_features`), was removed on 2026-10-30 with the search features it gated.
 
 "Don't send ad events" (second row, right after "Remove all ads") stops every ad event, so an ad the backend
 shows once per user keeps showing while a developer tests it. Telegram's ads: the three `AdMessages.swift`
@@ -7658,8 +7631,13 @@ itself, take upstream's version and drop this entry.
 ## 📌 Search privacy (2026-10-29)
 
 Feature 92, hooks #248–#255. New module `submodules/Novagram/Search/` (`NovagramSearch`, deps TelegramCore,
-NovagramChatLock, NovagramSecretVault; no Postbox). It will also hold the later search features (dates, unread /
-mentions filters, translated query, in-chat phrase / regex).
+NovagramChatLock, NovagramSecretVault; no Postbox). The privacy filter is the only search feature left in the app.
+
+**Removed 2026-10-30 (manager's decision).** The later search features (date range, Unread only / Mentions only,
+translated query, in-chat "exact phrase" and `re:` regex, saved and pinned searches, the "Search features" switch and
+its Developer gate `novagram_dev_search_features`) were rejected and taken out of the app: their UI, hooks #256–#277,
+sources, strings and HOOKS.md sections are gone, and the Telegram files are back to upstream text there. Their logic
+lives on in the shared NovagramSearchKit SDK. The privacy filter was never gated and stays as it is.
 
 Rules (owner):
 
@@ -7694,216 +7672,6 @@ loses `.peerId(id, section)`, #250's sink closure stops compiling: rewrite it to
 
 ---
 
-## 📌 Search dates and filters (2026-10-29)
-
-Feature 93 (dates), hooks #256–#260. The code is in `submodules/Novagram/Search/Sources/NovagramSearchFilter.swift`
-(`NovagramSearchFilter`, one per search pane, nothing persisted). Strings: `search_*` in `NovagramL10n.swift`.
-
-- Menu: our items go after Telegram's scope items in the MESSAGES header's "From All Chats" menu, behind a separator:
-  "From date…" / "From 01.10.26", "To date…" / "To 29.10.26", "Clear dates" (only while a date is set). Not in the
-  Channels and Apps tabs (`isAvailable: self.key != .channels && self.key != .apps`).
-- Picker: Telegram's own `ChatScheduleTimeScreen(mode: .search)` (the "jump to date" calendar), pushed on the pane's
-  navigation controller. "From" = start of that day, "To" = next day's start − 1 s, local time zone; its
-  "Remove date" (time 0) clears that end.
-- Search: `dated(_:)` puts the range into `.general` (not `.globalPosts`) and `.peer` locations. A date typed into
-  the search bar (`options.date`) stays: the later start and the earlier end apply. "Load more" goes through the
-  same function, so paging keeps the range.
-- Header: `headerTitle(_:owner:strings:)` turns `From All Chats  <` into `From All Chats · 01.10.26–29.10.26  <`.
-  The item builder only has the pane's `ChatListNodeInteraction`, so the filter is linked to it (#259, a weak
-  `NSMapTable`). A filter change restarts the search, whose first value has no messages, so the section is rebuilt
-  with the new title.
-
-| File | Change |
-| --- | --- |
-| `ChatListUI/Sources/ChatListSearchListPaneNode.swift` | #256: `private let novagramFilter = NovagramSearchFilter()` after `private let key`; `let novagramFilter = self.novagramFilter` after `let currentRemotePeers = Atomic…`; `let searchOptions = novagramFilter.restarting(searchOptions)` right before `let foundItems: Signal<…> = combineLatest(…)`. #257: the two `context.engine.messages.searchMessages(location: searchLocation…, limit: 50)` / `(location: searchLocations[i]…, limit: 80)` calls are `novagramFilter.searchMessages(engine: context.engine, location: …)` (2 changed lines). #258: after each of the three `actionTitle = "\(filterTitle)  <"`: `actionTitle = NovagramSearchFilter.headerTitle(actionTitle, owner: interaction, strings: presentationData.strings)`. #259: `self.novagramFilter.attach(to: chatListInteraction)` after `chatListInteraction.isSearchMode = true`. #260: `items.append(contentsOf: self.novagramFilter.menuItems(…))` before `makeContextController` in `openMessagesFilter`. 9 added lines, 2 changed. |
-
-On an upstream update: if upstream changes the two `searchMessages` call lines, take theirs and put
-`novagramFilter.searchMessages(engine: context.engine, …)` back in place of `context.engine.messages.searchMessages(…)`.
-
-### Unread only / Mentions only (feature 94, hooks #261–#262)
-
-Two toggles after the dates (checkmark when on, both together = AND), shown in the header too
-(`… · Unread only · Mentions only`). No new pane line: the filtering runs inside the #257 calls, in
-`submodules/Novagram/Search/Sources/NovagramSearchFilledSearch.swift`.
-
-- Unread: an incoming message after the chat's max incoming read id. TelegramCore's merged search state keeps
-  `readStates` only for the last page's peers, so every filtered page reads `PeerReadCounters` for all its peers
-  through the engine and asks the new `isIncomingMessageRead(_:)` (a chat without a read state counts as read).
-- Mentions: the `.unseenPersonalMessage` tag or a `ConsumablePersonalMentionMessageAttribute`.
-- Reset: a toggle restarts the search (#256), so the list is rebuilt from page one with a new search state.
-- Filling: while fewer than 20 messages pass and the server is not completed, the next page is read, at most
-  5 extra pages per load. A first search may then show what it has and make up to 3 more loads by itself, because a
-  short list cannot scroll to ask for them. The pane's own "load more" keeps the last state and gets the same
-  5 extra pages.
-- The pane stores the filtered pages in `searchContexts` like any result, so the gallery / player list
-  (`foundMessages`) shows the same messages as the list.
-
-| File | Change |
-| --- | --- |
-| `TelegramCore/Sources/TelegramEngine/Data/MessagesData.swift` | in `EnginePeerReadCounters`, before `hasEverRead`: a comment and `public func isIncomingMessageRead(_ index: EngineMessage.Index) -> Bool { self.state?.isIncomingMessageIndexRead(index) ?? true }` (#261). 5 lines. |
-| `ChatListUI/Sources/ChatListSearchListPaneNode.swift` | #262: in `case .everywhere:` of the no-messages `switch searchScope`, before `break`: `if novagramFilter.isActive { entries.append(.emptyMessagesFooter(presentationData, searchScope, query)) }`. Telegram shows that footer only for a narrowed scope; without it a filter that leaves no messages would also hide the header, and with it the only way to turn the filter off. 1 line. |
-
----
-
-## 📌 Search translated query (2026-10-29)
-
-Feature 95, hooks #263–#267. Ours: `submodules/Novagram/Search/Sources/NovagramTranslatedSearch.swift`
-(`NovagramQueryTranslator`, `NovagramTranslatedMessages`, `NovagramTranslatedSearch`); the switch row in
-`Novagram/Messenger/Sources/NovagramSettingsController.swift` (Interface, last row before the footer, slug
-`search-translate` in `NovagramSettingsDeepLink.swift`); strings `settings_searchTranslate_*` and
-`search_translatedTitle` in `NovagramL10n.swift` (en/uz/ru word for word from the Mac). Same rules as the Mac
-(`NovagramQueryTranslator`):
-
-- Key `pro_messager` / `novagram_search_translate`, Bool, default off. While it is off `section(...)` returns
-  `.single(nil)` before any translate signal is built.
-- Target language `pro_messager` / `auto_translate_lang`, "en" when missing or empty.
-- Trimmed query, 3+ characters, not `#…` / `$…`; `engine.messages.translate(text:toLang:)` starts 600 ms late
-  (a new query cancels it); errors count as no translation; in-memory cache keyed by language + query, 200 entries,
-  then cleared; no section when the translation equals the query (case and whitespace ignored).
-- Only the Chats tab's common search: one `.general` location, no tags, no community, not `.globalPosts`, chat
-  list location `.chatList` (so never forum, peer-scoped or Saved Messages search, nor Channels / Apps / Media / …).
-- Results: one `NovagramSearchFilter.searchMessages(…, state: nil, limit: 20, fills: false)` on the Messages
-  section's location, so dates and Unread / Mentions apply (one page, no filling, no paging); privacy through the
-  emission's `NovagramSearchPrivacyPass`.
-- The signal emits nil at once, so the other sections never wait for it (a cached translation used to hold the
-  whole list back on the Mac).
-- Rows are deduped against the ids of `foundRemoteMessages` with a Set built in that emission. Nothing goes into
-  `searchContexts`, so the section is not in the gallery / player list and never in "load more".
-
-| File | Change |
-| --- | --- |
-| `ChatListUI/Sources/ChatListSearchListPaneNode.swift` | #263: `case novagramTranslated(String)` after `case recentlyDownloaded` in `MessageSection` (the title travels with the section, so the stable id differs from Messages'). #264: first line of `case .index:` in the `.message` item: `if case let .novagramTranslated(title) = section { header = ChatListSearchItemHeader(type: .text(title, NovagramTranslatedSearch.headerId), …) } else` (the next line, upstream's `if case .publicPosts = section {`, continues it). #265: `let novagramTranslated = NovagramTranslatedSearch.section(…)` after `let finalQuery = query ?? ""`. #266: `adsHiddenPromise.get()` → `adsHiddenPromise.get(),` plus a `novagramTranslated` line in the final `combineLatest`, and `, novagramTranslated` added to its map's parameters (2 changed lines, 1 added). #267: before `let hadAnySearchMessagesBefore`: a 3-line `for message in novagramTranslated?.rows(excluding: …, privacy: novagramPrivacy) ?? [] { entries.append(.message(…, .novagramTranslated(title), …)) }`. 7 added lines, 2 changed. |
-
-On an upstream update: #264's `} else` must stay directly above upstream's `if case .publicPosts = section {`; if
-upstream adds an argument to the final `combineLatest`, keep `novagramTranslated` last in both the list and the map.
-
----
-
-## 📌 Search phrase and regex in a chat (2026-10-29)
-
-Feature 96, hooks #268–#271. Ours: `submodules/Novagram/Search/Sources/NovagramChatSearchFilter.swift`
-(`NovagramChatSearchFilter`, a port of the Mac's, on engine names, no Postbox). How-to: two entries at the end of
-`allFeatureSpecs()` in `Novagram/Messenger/Sources/NovagramAboutController.swift`, "Exact phrase search in a chat"
-and "Regex search in a chat" (examples, a symbol cheat sheet, the limits), the same text as the Mac's About
-(owner, 2026-10-29). They replaced the one-sentence `about_searchHint` that was appended to the intro.
-
-- `"two words"`: the trimmed query is at least 3 characters, opens with `"`, `“`, `”` or `„`, closes with `"`, `“`
-  or `”`, and the trimmed inner phrase is not empty. The server gets the phrase without the quotes; a message stays
-  when its text contains the phrase (`.caseInsensitive`, `.diacriticInsensitive`).
-- `re:pattern`: the prefix is matched case-insensitively. The Mac takes lowercase `re:` only, but the iOS search
-  field capitalizes the first letter, so a typed `re:` arrives as `Re:` (seen on the simulator); `Re: invoice` is
-  therefore a regex scan for `invoice` here. The pattern is trimmed and not empty. The server query is empty (a channel then uses `getHistory`, other chats an empty
-  `messages.search`), 100 per page, at most 2000 messages scanned. Case-insensitive `NSRegularExpression`, each
-  message at most 50 ms (`enumerateMatches` with `.reportProgress`), each page at most 1 s, after which the search
-  counts as finished. An invalid pattern is a plain search for the text after `re:`. In a secret chat (local
-  search) an empty query finds nothing, so `re:` finds nothing there.
-- Any other query: `wrap` returns `search(query, state, limit)` unchanged, the same single request as before.
-- Filling: the search state is merged (each page returns every message so far). Filtering runs in a
-  cancellable signal on `Queue.concurrentDefaultQueue()`; messages already checked are not matched again. While a
-  request adds fewer than 10 new matches and the server is not done, the next page is read, at most 5 extra pages
-  per request. `totalCount` = matches loaded so far, so the header count shows them; `completed` = server done,
-  2000 scanned, page time limit hit or no progress.
-- Cache: the last 8 paging states (keyed by typed query + state) keep their result, match count, checked ids and
-  whether they finished, so "load more" continues the count and, once finished, returns the same result without
-  a request.
-- Cancellation: every hook's signal sits in a `MetaDisposable` / disposable that upstream replaces or disposes when
-  the query changes or the search closes; disposing stops the paging chain and the filter loop before its next
-  message.
-- Highlight: the in-message highlight still uses the typed query (`"…"` / `re:…`), so quoted and `re:` results are
-  not highlighted inside bubbles, the same as the Mac.
-- Upstream's first page subscribes to its search signal twice (`searchResult.set(search …)` and the
-  `searchDisposable`), so a filtered first page runs twice too; both write the same cache entry.
-
-| File | Change |
-| --- | --- |
-| `TelegramUI/Sources/ChatControllerUpdateSearch.swift` | `import NovagramSearch // Novagram`. #268: the first page `let search = self.context.engine.messages.searchMessages(location: searchState.location, query: searchState.query, state: nil, limit: limit)` and the `loadMoreState` call `searchDisposable.set((self.context.engine.messages.searchMessages(… state: loadMoreState, limit: limit)` call `NovagramChatSearchFilter.searchMessages(engine: self.context.engine, …)` with the same arguments. 1 added, 2 changed. |
-| `TelegramUI/Sources/ChatControllerNode.swift` | `import NovagramSearch // Novagram`. #269: `self.loadMoreSearchResultsDisposable = (NovagramChatSearchFilter.searchMessages(engine: self.context.engine, location: currentSearchState.location, query: currentSearchState.query, state: currentResultsState.state)` (the up/down arrows' load more). 1 added, 1 changed. |
-| `TelegramUI/Sources/ChatSearchResultsContollerNode.swift` | `import NovagramSearch // Novagram`. #270: `loadMore()`'s `self.loadMoreDisposable.set((NovagramChatSearchFilter.searchMessages(engine: self.context.engine, location: self.location, query: self.searchQuery, state: self.searchState)` (the list of results). 1 added, 1 changed. |
-| `TelegramUI/BUILD` | #271: `"//submodules/Novagram/Search:NovagramSearch"` after `NovagramCarPlay` (no cycle: ChatListUI, which TelegramUI imports, already depends on it). 1 line. |
-
-Not wrapped on purpose: `ChatHistorySearchContainerNode` (shared media / links search with a tag mask, and the
-browser bookmarks), the reaction-tag lookup in `ChatControllerNode` (`query: ""`, `centerId`) and
-`ChatControllerAdminBanUsers` (message count).
-
-On an upstream update: each hook is a drop-in for `self.context.engine.messages.searchMessages(` with the same
-arguments; if upstream changes a call, take theirs and put `NovagramChatSearchFilter.searchMessages(engine:
-self.context.engine, …)` back in its place.
-
----
-
-## 📌 Search saved and pinned queries (2026-10-29)
-
-Feature 97, hooks #272–#277. Ours: `submodules/Novagram/Search/Sources/NovagramSavedSearches.swift` (the store, a
-port of the Mac's `NovagramSavedSearches` on engine names, no Postbox) and `NovagramSavedSearchItem.swift`
-(`NovagramSavedSearchScope`, `NovagramSavedSearchRow` and the list row). Strings `search_saved*` (en/uz/ru word for word
-from the Mac, zh added) in `NovagramL10n.swift`. New deps of `NovagramSearch`: AsyncDisplayKit, ChatListSearchItemHeader.
-
-- Storage, the same as the Mac (another session keeps both in sync, so never rename): suite `pro_messager`, key
-  `novagram_saved_searches_<accountPeerId.toInt64()>`, value JSON `{"accountRecordId": Int64, "pinned": [String],
-  "recent": [String]}` (default `JSONEncoder`). `recent` keeps 20, newest first; `pinned` has no limit, newest
-  first. A query is in one list only: pinning moves it out of recent, unpinning puts it at the top of recent.
-  Queries are trimmed and compared case-insensitively; an empty one is ignored.
-- Saving: when a result is opened from global search, the typed text (`searchQueryValue`, tokens are not part of
-  it) is saved: a peer (`peerSelected`, next to `addRecentlySearchedPeer`), a message (`messageSelected`) and a
-  links / files / music / voice row (`ListMessageItemInteraction.openMessage`). Only in the main chat list's search
-  (`NovagramSavedSearchScope`: location `.chatList`, empty peers filter, no community), so never from a peer picker,
-  a forum or Saved Messages search.
-- Section: on the Chats tab's empty search screen, after the top peers strip and above Recent, header "Saved
-  searches" (`ChatListSearchItemHeader` `.text`): pinned first (marked "Pinned" on the right), then recent. A tap
-  calls the handler the search container registered for the shared `ChatListSearchInteraction` (a weak
-  `NSMapTable`), which runs `search(filter: .chats, query:)`: the text goes back into the search field and the
-  search runs again. Text only, no tab, date or filter restore. A long press opens a context menu: Pin / Unpin,
-  Remove.
-- Per emission: the rows come from `NovagramSavedSearches.signal(accountPeerId:)` combined into `recentItems` and are
-  inserted into that emission's entries; nothing goes into the pane's cross-emission state.
-- Current account only: the pane reads and writes only `context.account.peerId`'s key.
-- Logout: `NovagramSavedSearches.start(sharedContext:)` watches `activeAccountContexts`; an account that leaves the
-  list was logged out, whatever the path (Settings → Log Out, the account list, a session ended from another device
-  through `account.loggedOut` in `ApplicationContext`, a forced logout from a push in `SharedNotificationManager`,
-  a deleted account), so `clear(accountRecordId:)` removes every key whose stored `accountRecordId` matches. This
-  is the Mac's remote-logout fix (`loggedOut` observer and log out of all accounts) without a hook per path.
-
-| File | Change |
-| --- | --- |
-| `ChatListUI/Sources/ChatListSearchListPaneNode.swift` | #272: `case novagramSavedSearch(String)` in `ChatListRecentEntryStableId`; `case novagramSavedSearch(NovagramSavedSearchRow)` in `ChatListRecentEntry`; one line each in `stableId`, `==`, `item()`; in `<` a `case .novagramSavedSearch: return false` in `.peer`'s inner switch and one lhs case line (after top peers, before everything else). #273: `let novagramSaved = NovagramSavedSearchScope(context:location:isPlainSearch: peersFilter.isEmpty && communityId == nil)` after `let novagramFilter = self.novagramFilter`. #274: `novagramSaved.record(…searchQueryValue)` after `addRecentlySearchedPeer` in `peerSelected`, after `interaction.openMessage(…)` in `messageSelected`, after `interaction.dismissInput()` in `ListMessageItemInteraction(openMessage:)`. #275: after the #250 `recentItems = recentItems \|> map { … }` line, a 3-line `if case .chats = key, novagramSaved.isEnabled, !peersFilter.contains(.excludeRecent) { recentItems = combineLatest(recentItems, novagramSaved.rows(…)) \|> map { … insert at 1 after `.topPeers`, else 0 … } }`. 14 lines. |
-| `ChatListUI/Sources/ChatListSearchContainerNode.swift` | #276: after `self.paneContainerNode.interaction = interaction`: `NovagramSavedSearchScope.setQueryHandler(owner: interaction, { [weak self] query in self?.search(filter: .chats, query: query) })`. 1 line. |
-| `TelegramUI/Sources/AppDelegate.swift` | #277: `import NovagramSearch` after `import NovagramCarPlay`; `NovagramSavedSearches.start(sharedContext:)` after `NovagramAnalyticsManager.shared.start(…)`. 2 lines. |
-
-On an upstream update: if `ChatListRecentEntry` gains a case, the `<` lhs line of #272 still compiles (it uses
-`else`), but `.peer`'s inner switch and the other switches need nothing more; a new `ChatListRecentEntry` switch
-elsewhere needs a `.novagramSavedSearch` case. If upstream renames `search(filter:query:)` on the search container,
-point #276 at the method that sets the search field text.
-
----
-
-## 📌 Search features switch (2026-10-29)
-
-Feature 98. No hook in a Telegram file: every gate is inside our modules. Owner's idea (2026-10-29): one switch for
-the search extras. Settings → Novagram → a new "SEARCH" section (`NovagramSection.search`, stable ids 17–19, right
-after Interface) holds "Search features" (`pro_messager` / `novagram_search_features`, Bool, default ON, deep-link
-slug `search-features`) and the translated-query switch, which moved there from Interface and shows only while
-"Search features" is on (its key `novagram_search_translate` is unchanged).
-
-| File (ours) | Gate |
-| --- | --- |
-| `Search/Sources/NovagramSearchFeatures.swift` | the key and `isEnabled` (missing key = on) |
-| `Search/Sources/NovagramSearchFilter.swift` | `menuItems` returns `[]`: no dates / Unread only / Mentions only items |
-| `Search/Sources/NovagramChatSearchFilter.swift` | `wrap` passes the query through: `"..."` and `re:` are plain text |
-| `Search/Sources/NovagramSavedSearchItem.swift` | `NovagramSavedSearchScope.isEnabled` false: no section, nothing saved; the stored JSON stays |
-| `Search/Sources/NovagramTranslatedSearch.swift` | `translatedQuery` and `section` return nil: no section, no translate request |
-
-**Developer gate (2026-10-30).** `NovagramSearchFeatures.isEnabled`, which every gate above reads, is now
-`isDeveloperEnabled && isUserEnabled`: with the Developer switch "Search features (beta)" off everything above behaves
-as switched off. The user's switch is `isUserEnabled` (read and written only by the Settings row). With the gate off
-Novagram Settings has no SEARCH section, the `search-features` / `search-translate` slugs do not scroll, and About has
-no phrase/regex entries (`searchFeatureSpecs()` in `NovagramAboutController.swift`).
-
-The privacy filter (feature 92, `NovagramSearchPrivacy`) never reads this switch or the Developer gate: hidden chats stay out of search
-and locked chats' messages stay hidden either way. A search that is already open keeps what it had; the switch applies
-to the next search (the pane builds its scope and filter once). The two About entries say how to turn it off.
-
----
-
 ## 📌 Call weak signal and data saver (2026-10-29)
 
 Features 99 and 100, ported from the Mac (`NovagramCallExtras.swift`, `NovagramCallDataSaving.swift`, NOVAGRAM_HOOKS.md
@@ -7932,7 +7700,7 @@ to `isOwnVideoOn`.
 
 **100. "Use less data for calls".** No hook in a Telegram file. Novagram Settings → a new "CALLS" section
 (`NovagramSection.calls = 14`, stable ids 53–59 reserved, rows 53–54; the list is ordered by `sortId`, which is `stableId * 10` except
-the calls rows, 191–192, so the section sits right after SEARCH; a future "Call recording" switch goes here) with "Use less data for calls" (`pro_messager` / `novagram_call_data_saving`, Bool,
+the calls rows, 191–192, so the section sits right after INTERFACE (it sat after SEARCH until 2026-10-30); a future "Call recording" switch goes here) with "Use less data for calls" (`pro_messager` / `novagram_call_data_saving`, Bool,
 default off, slug `call-data-saving`). `NovagramCallDataSaving` (Messenger) drives Telegram's own
 `VoiceCallSettings.dataSaving` through `updateVoiceCallSettingsSettingsInteractively`: on writes the key `true` and
 sets `.always`, off writes `false` and sets `.default`. The switch is ON while the live setting is `.always`

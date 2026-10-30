@@ -6,7 +6,6 @@ import NovagramAnalytics
 import NovagramAutoProxy
 import NovagramMessenger
 import NovagramCarPlay
-import NovagramSearch // Novagram
 import UserNotifications
 import Intents
 import Postbox
@@ -1315,7 +1314,6 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         |> take(1)
         |> deliverOnMainQueue).start(next: { sharedApplicationContext in
             NovagramAnalyticsManager.shared.start(sharedContext: sharedApplicationContext.sharedContext)
-            NovagramSavedSearches.start(sharedContext: sharedApplicationContext.sharedContext) // Novagram: saved searches go when an account logs out
         })
 
         // Novagram Auto-Proxy — if the "Enable NovagramProxy" toggle is on, ensure a healthy
