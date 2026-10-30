@@ -9,6 +9,14 @@ public enum NovagramCallRecordingSettings {
     // Set once the first-recording consent alert was accepted.
     public static let warnedKey = "novagram_call_recording_warned"
 
+    /// Posted when a call changes a switch or saves a recording. Novagram Settings listens, because the call UI sits
+    /// in its own window level and closing it does not make the Settings screen appear again.
+    public static let changedNotification = Notification.Name("NovagramCallRecordingChanged")
+
+    public static func notifyChanged() {
+        NotificationCenter.default.post(name: self.changedNotification, object: nil)
+    }
+
     private static var defaults: UserDefaults? {
         return UserDefaults(suiteName: "pro_messager")
     }

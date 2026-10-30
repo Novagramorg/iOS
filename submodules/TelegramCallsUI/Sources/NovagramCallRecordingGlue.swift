@@ -235,6 +235,7 @@ final class NovagramCallRecordingGlue {
                 self?.isAsking = false
                 if isAuto {
                     NovagramCallRecordingSettings.isAutoEnabled = false
+                    NovagramCallRecordingSettings.notifyChanged()
                 }
             }),
             TextAlertAction(type: .defaultAction, title: l10n.callRecording_continue, action: { [weak self] in
@@ -335,6 +336,8 @@ final class NovagramCallRecordingGlue {
 
     /// "Call recording saved" with Share, or "Call recording failed".
     private static func showResult(_ result: Result<URL, NovagramCallRecordingError>, context: AccountContext, presentationData: PresentationData) {
+        // An open Settings screen recounts the recordings.
+        NovagramCallRecordingSettings.notifyChanged()
         let l10n = NovagramL10n(presentationData.strings)
         let controller: ViewController
         switch result {
@@ -348,8 +351,11 @@ final class NovagramCallRecordingGlue {
         case .failure(.cancelled):
             // stop() for a call that was not being recorded: nothing to report.
             return
-        case .failure:
-            controller = UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: l10n.callRecording_failed, timeout: nil, customUndoText: nil), elevatedLayout: false, action: { _ in
+        case let .failure(error):
+            Logger.shared.log("NovagramCallRecording", "recording failed: \(error)")
+            // No audio ever reached the tap (the call's audio unit did not start), so say that instead of a bare "failed".
+            let text = error == .nothingRecorded ? l10n.callRecording_nothingRecorded : l10n.callRecording_failed
+            controller = UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: text, timeout: nil, customUndoText: nil), elevatedLayout: false, action: { _ in
                 return false
             })
         }

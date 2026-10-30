@@ -272,6 +272,10 @@ public struct NovagramL10n {
         pick(en: "Call recording failed", uz: "Qo'ng'iroqni yozib bo'lmadi", ru: "Не удалось записать звонок", zh: "通话录制失败")
     }
 
+    public var callRecording_nothingRecorded: String {
+        pick(en: "Nothing was recorded: the call audio did not start", uz: "Hech narsa yozilmadi: qo'ng'iroq ovozi ishga tushmadi", ru: "Ничего не записано: звук звонка не запустился", zh: "未录到内容：通话音频未启动")
+    }
+
     public var callRecording_audioOnly: String {
         pick(
             en: "Video was turned on: this recording stays audio only",

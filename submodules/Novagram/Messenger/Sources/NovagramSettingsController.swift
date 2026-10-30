@@ -2666,12 +2666,20 @@ public func novagramSettingsController(context: AccountContext, highlightFeature
     let latestEntries = Atomic<[NovagramEntry]>(value: [])
     let highlightTag: ItemListItemTag? = highlightFeature.map { NovagramSettingsItemTag(feature: $0) }
 
+    // A call can turn auto-record off or save a recording while this screen stays open under the call UI.
+    let callRecordingObserver = NotificationCenter.default.addObserver(forName: NovagramCallRecordingSettings.changedNotification, object: nil, queue: .main) { _ in
+        refreshCallRecordings()
+    }
+
     let signal = combineLatest(
         context.sharedContext.presentationData,
         statePromise.get(),
         NovagramCarPlayStatus.signal(context: context),
         NovagramCallDataSaving.isOnSignal(accountManager: context.sharedContext.accountManager)
     ) |> deliverOnMainQueue
+        |> afterDisposed {
+            NotificationCenter.default.removeObserver(callRecordingObserver)
+        }
         |> map { presentationData, state, carPlayStatus, callDataSaving -> (ItemListControllerState, (ItemListNodeState, Any)) in
             let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Novagram"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
             let entries = novagramSettingsEntries(presentationData: presentationData, state: state, carPlayStatus: carPlayStatus, callDataSaving: callDataSaving)
