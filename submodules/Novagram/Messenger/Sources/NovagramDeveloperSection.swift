@@ -46,9 +46,10 @@ public enum NovagramDeveloperFlags {
         set { self.setValue(newValue, forKey: self.currencyRatesViewKey) }
     }
 
-    /// Show the Novagram ads panel.
+    /// Show the Novagram ads panel. Developer role only: a director who turned it on before it became
+    /// developer-only never logs in again, so the role is checked here and not only at login.
     public static internal(set) var isAdsPanelEnabled: Bool {
-        get { return self.value(forKey: self.adsPanelKey) }
+        get { return self.value(forKey: self.adsPanelKey) && NovagramDeveloperRole.current.canUse(.adsPanel) }
         set { self.setValue(newValue, forKey: self.adsPanelKey) }
     }
 
@@ -124,9 +125,9 @@ public enum NovagramDeveloperRole: String {
             return true
         case .director:
             switch item {
-            case .adEventsOff, .adsPanel:
+            case .adEventsOff:
                 return true
-            case .removeAllAds, .currencyRatesView, .callRecording, .callDataSaving:
+            case .removeAllAds, .currencyRatesView, .adsPanel, .callRecording, .callDataSaving:
                 return false
             }
         }

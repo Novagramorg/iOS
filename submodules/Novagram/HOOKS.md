@@ -7542,8 +7542,9 @@ Banner clicks and dismissals (`SDKBannerFeed`) are not affected. Strings: `Novag
 
 **Roles (2026-10-29).** The login decides what the section shows. `NovagramAdsAdminAuth.credentials` holds one
 digest per login (same salt and rounds), and `verify` returns its `NovagramDeveloperRole`: `developer` (the
-original login, every switch) or `director` (login `director`: "Don't send ad events" and "Novagram ads panel"
-only). The role is stored in `pro_messager` as `novagram_developer_role`; no stored role means `developer`, the
+original login, every switch) or `director` (login `director`: "Don't send ad events" only; "Novagram ads panel"
+is developer-only since 2026-10-31, owner's request, and `NovagramDeveloperFlags.isAdsPanelEnabled` checks the role
+itself, so a director whose panel was already on loses the panel and its Ads Analytics row without a new login). The role is stored in `pro_messager` as `novagram_developer_role`; no stored role means `developer`, the
 only login that existed before. On login `NovagramDeveloperRole.didLogIn` turns off every switch the role cannot
 see ("Remove all ads" back to ads shown, currency rates off), so a hidden switch never stays on. The rows are
 filtered by `role.canUse(_:)` in `novagramSettingsEntries`. The hidden Ads Analytics hold
