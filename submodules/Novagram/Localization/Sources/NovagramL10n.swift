@@ -70,10 +70,6 @@ public struct NovagramL10n {
 
     // MARK: - Calls (same wording as the Mac's callDataSaving_* / callWeakNetwork_*)
 
-    public var settings_section_callRecording: String {
-        pick(en: "CALL RECORDING", uz: "QO'NG'IROQNI YOZIB OLISH", ru: "ЗАПИСЬ ЗВОНКОВ", zh: "通话录音")
-    }
-
     public var settings_callDataSaving_title: String {
         pick(en: "Use less data for calls", uz: "Qo'ng'iroqlarda kamroq trafik", ru: "Экономия трафика в звонках", zh: "通话时使用更少流量")
     }
@@ -91,45 +87,10 @@ public struct NovagramL10n {
         pick(en: "Turn off my video", uz: "Videomni o'chirish", ru: "Выключить моё видео", zh: "关闭我的视频")
     }
 
-    // MARK: - Call recording (Mac callRecording_*, adapted to iPhone)
-
-    public var settings_callRecording_title: String {
-        pick(en: "Call recording", uz: "Qo'ng'iroqni yozib olish", ru: "Запись звонков", zh: "通话录音")
-    }
-
-    public var settings_callRecording_subtitle: String {
-        pick(
-            en: "Adds a Record button to voice and video calls",
-            uz: "Ovozli va video qo'ng'iroqlarga «Yozish» tugmasini qo'shadi",
-            ru: "Добавляет кнопку «Запись» в аудио- и видеозвонки",
-            zh: "在语音和视频通话中添加“录制”按钮"
-        )
-    }
-
-    public var settings_callRecordingAuto_title: String {
-        pick(en: "Record every call automatically", uz: "Har bir qo'ng'iroqni avtomatik yozib olish", ru: "Записывать каждый звонок автоматически", zh: "自动录制每个通话")
-    }
-
-    public var settings_callRecordingAuto_subtitle: String {
-        pick(
-            en: "Starts when your call starts ringing or when you answer",
-            uz: "Qo'ng'iroq jiringlay boshlaganda yoki javob berganingizda boshlanadi",
-            ru: "Начинается, когда идёт вызов или когда вы отвечаете",
-            zh: "在你的呼叫开始响铃或你接听时开始"
-        )
-    }
+    // MARK: - Call recording (the settings page texts are the SDK's CallRecordingSettingsStrings)
 
     public var settings_callRecordings_title: String {
         pick(en: "Call recordings", uz: "Qo'ng'iroq yozuvlari", ru: "Записи звонков", zh: "通话录音文件")
-    }
-
-    public var settings_callRecording_footer: String {
-        pick(
-            en: "Recordings are made and kept only on this device. When a recording starts, Novagram sends “🔴 I'm recording this call” to the chat, so the other person knows. The REC mark stays visible while recording.",
-            uz: "Yozuvlar faqat shu qurilmada yaratiladi va saqlanadi. Yozib olish boshlanganda Novagram chatga «🔴 Men bu qo'ng'iroqni yozib olyapman» xabarini yuboradi, shunda suhbatdoshingiz bundan xabardor bo'ladi. Yozib olish davomida REC belgisi ko'rinib turadi.",
-            ru: "Записи создаются и хранятся только на этом устройстве. Когда начинается запись, Novagram отправляет в чат «🔴 Я записываю этот звонок», чтобы собеседник знал об этом. Пока идёт запись, значок REC остаётся на экране.",
-            zh: "录音只在此设备上生成和保存。录制开始时，Novagram 会向聊天发送“🔴 我正在录制这次通话”，让对方知道。录制期间 REC 标记始终可见。"
-        )
     }
 
     public var call_record: String {
