@@ -702,7 +702,7 @@ three calls and delete the two lines.
 221. `AppDelegate.swift` (TelegramUI), `Telegram/BUILD`, `TelegramUI/BUILD`: UIScene life cycle (`NovagramSceneDelegate`), iOS 27 SDK bilan ilova ochilishi uchun. **13.0: olib tashlandi, upstream `SceneDelegate` (13a2694420); `Novagram/SceneLifecycle` o'chirildi.**
 222. `UIViewController+Navigation.m` (UIKitRuntimeUtils): iOS 27'da yashirin klaviatura API chaqirilmaydi, ilova ishga tushganda to'xtamaydi. **13.0: olib tashlandi, upstream 93af3a138e.**
 223. `publish.sh`, `release.sh`: App Store build uchun Swift 6.4 flag'lari.
-245. `Telegram/BUILD`, `TelegramUI/Resources/Fonts/`: Apple'ning SF Camera shrifti (`AremacFS-*.otf`) va `UIAppFonts` olib tashlangan (Apple upload ogohlantirishi, 2027-10-01 dan reject). `Font.with(design: .camera)` tizim shriftiga o'tadi.
+245. `Telegram/BUILD`, `TelegramUI/Resources/Fonts/`: Apple'ning SF Camera shrifti (`AremacFS-*.otf`) va `UIAppFonts` olib tashlangan (Apple upload ogohlantirishi, 2027-10-01 dan reject). `Font.with(design: .camera)` tizim shriftiga o'tadi. `TGCameraInterfaceAssets.m` (LegacyComponents) ham tizim shriftiga o'tadi: busiz chatdagi kamera ochilganda crash bo'lardi (2026-10-31).
 
 #### CarPlay
 
@@ -7629,6 +7629,11 @@ Upstream still ships them (checked at `fb0e62ba8a`, 2026-10-22).
 - `submodules/Display/Source/Font.swift` is **not** changed: its `.camera` case already falls back to
   `UIFont.systemFont(ofSize:weight:)` when the font is not found. Digit widths were measured: SF Camera's digits are
   proportional like SF Pro's, so recording timers do not start to jitter.
+- `submodules/LegacyComponents/Sources/TGCameraInterfaceAssets.m` (**UPSTREAM hook, 2026-10-31**): `regularFontOfSize:`
+  and `boldFontOfSize:` look the same font up by name with no fallback, so they returned nil and the attachment
+  menu's camera crashed on open (`TGCameraModeControl _createButtonForMode:title:` put the nil font into an
+  `NSDictionary`). Each `return` got `?: [UIFont systemFontOfSize:size weight:UIFontWeightRegular]` (`…Semibold`
+  for bold) plus one comment line. This covers the camera mode labels, the time code and the zoom view.
 - Users of `design: .camera`: camera mode labels and duration, voice/video recording timers, story location, link
   and weather stickers, the video chat camera preview, the sticker picker. They now draw in SF Pro.
 - `Telegram/Telegram-iOS/Info.plist` and `InfoBazel.plist` still list `SFCompactRounded-Semibold.otf`; neither file is

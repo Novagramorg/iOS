@@ -56,12 +56,13 @@ static NSString *TGCameraEncodeText(NSString *string, int key)
 
 + (UIFont *)regularFontOfSize:(CGFloat)size
 {
-    return [UIFont fontWithName:TGCameraEncodeText(@"TGDbnfsb.Sfhvmbs", -1) size:size];
+    // Novagram: the SF Camera font is not bundled any more, fall back to the system font like Font.swift does
+    return [UIFont fontWithName:TGCameraEncodeText(@"TGDbnfsb.Sfhvmbs", -1) size:size] ?: [UIFont systemFontOfSize:size weight:UIFontWeightRegular];
 }
 
 + (UIFont *)boldFontOfSize:(CGFloat)size
 {
-    return [UIFont fontWithName:TGCameraEncodeText(@"TGDbnfsb.Tfnjcpme", -1) size:size];
+    return [UIFont fontWithName:TGCameraEncodeText(@"TGDbnfsb.Tfnjcpme", -1) size:size] ?: [UIFont systemFontOfSize:size weight:UIFontWeightSemibold];
 }
 
 @end
