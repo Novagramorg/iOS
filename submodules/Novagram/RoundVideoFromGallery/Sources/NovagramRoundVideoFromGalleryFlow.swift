@@ -10,6 +10,7 @@ import AccountContext
 import LocalMediaResources
 import MediaEditor
 import NovagramLocalization
+import NovagramReviewPrompt
 
 // Novagram: pick a regular video from the photo library and send it as a round video note
 // (the circular "instant video" message). Mirrors how VideoMessageCameraScreen builds a
@@ -168,6 +169,7 @@ public final class NovagramRoundVideoFromGalleryFlow {
         )
 
         _ = enqueueMessages(account: context.account, peerId: peerId, messages: [message]).startStandalone()
+        NovagramReviewPrompt.record(.roundVideoFromGallery)
     }
 }
 

@@ -3,6 +3,7 @@ import Security
 import SwiftSignalKit
 import TelegramCore
 import AccountContext
+import NovagramReviewPrompt
 
 // Drives the two analytics counters of the Novagram Statistics API (through the NovagramServices
 // SDK, see NovagramStatisticsClient):
@@ -54,6 +55,8 @@ public final class NovagramAnalyticsManager {
         if !self.started {
             self.started = true
             self.observeAccounts(sharedContext: sharedContext)
+            // Rating prompt: a login restarts its 3-day start delay.
+            NovagramReviewPrompt.observeLogins(sharedContext: sharedContext)
         }
     }
 

@@ -108,6 +108,7 @@ swift_library(
         "//submodules/Novagram/UpdateCheck:NovagramUpdateCheck",
         "//submodules/Novagram/ChannelStats:NovagramChannelStats",
         "//submodules/Novagram/CurrencyRates:NovagramCurrencyRates",
+        "//submodules/Novagram/ReviewPrompt:NovagramReviewPrompt",
         "//submodules/ShareController",
         "//submodules/TelegramUI/Components/ShareWithPeersScreen",
         "//submodules/StatisticsUI",

@@ -79,6 +79,7 @@ import ChatRichTextEditorComposer
 import NovagramLocalization
 import NovagramSponsored
 import NovagramMessenger
+import NovagramReviewPrompt
 
 final class VideoNavigationControllerDropContentItem: NavigationControllerDropContentItem {
     let itemNode: OverlayMediaItemNode
@@ -5562,6 +5563,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 if let forwardMessageIds = self.chatPresentationInterfaceState.interfaceState.forwardMessageIds {
                     var attributes: [MessageAttribute] = []
                     attributes.append(ForwardOptionsMessageAttribute(hideNames: self.chatPresentationInterfaceState.interfaceState.forwardOptionsState?.hideNames == true, hideCaptions: self.chatPresentationInterfaceState.interfaceState.forwardOptionsState?.hideCaptions == true))
+                    if self.chatPresentationInterfaceState.interfaceState.forwardOptionsState?.hideNames == true, let peerId = self.chatLocation.peerId { NovagramReviewPrompt.forwardWithHiddenNamesSent(to: peerId) } // Novagram
 
                     var replyThreadId: Int64?
                     if case let .replyThread(replyThreadMessage) = self.chatPresentationInterfaceState.chatLocation {

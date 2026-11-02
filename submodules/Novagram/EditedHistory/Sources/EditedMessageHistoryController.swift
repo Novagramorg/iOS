@@ -8,6 +8,7 @@ import TelegramPresentationData
 import AccountContext
 import AppBundle
 import ContextUI
+import NovagramReviewPrompt
 import Markdown
 import PhotoResources
 
@@ -65,6 +66,7 @@ public final class EditedMessageHistoryController: ViewController {
     }
 
     override public func loadDisplayNode() {
+        NovagramReviewPrompt.record(.editedHistory)
         self.displayNode = self.listNode
         self.displayNodeDidLoad()
     }

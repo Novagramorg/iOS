@@ -68,6 +68,7 @@ import AlertHeaderComponent
 import AvatarComponent
 import NovagramSecretVault
 import NovagramForeignUserBlock
+import NovagramReviewPrompt
 
 private final class ContextControllerContentSourceImpl: ContextControllerContentSource {
     let controller: ViewController
@@ -2428,6 +2429,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         super.viewDidAppear(animated)
                 
         self.novagramSetupSecretVaultIfNeeded()
+        NovagramReviewPrompt.chatListDidAppear(controller: self, context: self.context, isSecretVaultList: self.novagramIsVaultList) // Novagram
 
         if self.powerSavingMonitoringDisposable == nil {
             self.powerSavingMonitoringDisposable = (self.context.sharedContext.automaticMediaDownloadSettings
@@ -6360,6 +6362,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                     return ChatPincodeManager.shared.verifyVault(code)
                 },
                 onSuccess: { [weak self] in
+                    NovagramReviewPrompt.record(.secretVaultUnlock)
                     self?.novagramPresentVaultList()
                 },
                 onForgot: { [weak self] in
@@ -7894,6 +7897,7 @@ private final class ChatListLocationContext {
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
                     let current = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "is_ghost_mode_active") ?? false
                     UserDefaults(suiteName: "pro_messager")?.set(!current, forKey: "is_ghost_mode_active")
+                    if !current { NovagramReviewPrompt.record(.ghostMode) }
                     self.updateGhostModeButton()
                     parentController.requestLayout(transition: .animated(duration: 0.2, curve: .spring))
                 }

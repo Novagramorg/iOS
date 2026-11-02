@@ -714,6 +714,20 @@ three calls and delete the two lines.
 230. `TelegramUI/BUILD`: `//submodules/Novagram/CarPlay:NovagramCarPlay` dep.
 231. `IntentHandler.swift`, `IntentMessages.swift` (SiriIntents): CarPlay'da tanlangan chat (`conversationIdentifiers`) to'g'ridan-to'g'ri o'qiladi (`unreadMessages(account:peerIds:)`), mute bo'lsa ham va 20 ta chatdan tashqarida bo'lsa ham.
 
+#### App Store baho so'rovi
+
+302. `ChatListController.swift` (ChatListUI): `import NovagramReviewPrompt`; `viewDidAppear` ichida `self.novagramSetupSecretVaultIfNeeded()` dan keyin `NovagramReviewPrompt.chatListDidAppear(...)`: Apple'ning tizim baho oynasi (SDK qoidalari bo'yicha).
+303. `ChatListController.swift` (ChatListUI): Ghost tugmasi yoqilganda (`if !current`) `record(.ghostMode)`.
+304. `ChatListController.swift` (ChatListUI): Secret Vault PIN to'g'ri bo'lsa (`onSuccess`) `record(.secretVaultUnlock)`.
+305. `ChatInterfaceStateContextMenus.swift` (TelegramUI): `import`; Translate menyusi bosilganda `record(.translateMessage)`.
+306. `ChatControllerForwardMessages.swift` (TelegramUI): `import`; "ismlarsiz forward" flag'i ishlatilganda `markForwardWithoutNames(to:)` (chat belgilanadi, sanalmaydi).
+307. `NavigateToChatController.swift` (TelegramUI): `import`; Chat Lock PIN to'g'ri bo'lsa `record(.chatLockUnlock)`.
+308. `ChatController.swift` (TelegramUI): `import`; ikkala "View First message" menyusida ham o'tishdan keyin `record(.viewFirstMessage)`.
+309. `StoryItemSetContainerComponent.swift` (StoryContainerScreen): `import`; story galereyaga saqlanib bo'lganda `record(.storySave)`.
+310. `PeerInfoSettingsItems.swift` (PeerInfoScreen): `import`; Support bo'limida "Novagram Features" (Tips) dan keyin "Rate Novagram" qatori (App Store'dagi sharh yozish sahifasi).
+311. `TelegramUI/BUILD`, `ChatListUI/BUILD`, `StoryContainerScreen/BUILD`, `PeerInfoScreen/BUILD`: `//submodules/Novagram/ReviewPrompt:NovagramReviewPrompt` dep.
+312. `ChatControllerNode.swift` (TelegramUI): `import`; forward yuborilayotganda nomlar yashirilgan bo'lsa `forwardWithHiddenNamesSent(to:)`: 306-belgi shu chatda bo'lsa, "ismsiz forward" sanaladi.
+
 ---
 
 ## 📌 AuthorizationUI module
@@ -7967,3 +7981,102 @@ call, Record, drag our small window to each corner and tap it to swap, hang up: 
 (2) Voice call, Record, turn the camera on, flip to the back camera, share the screen, stop sharing, hang up: one `.mp4`,
 black until the camera came on, then the camera, then our screen big with the other side in the corner. (3) Voice call,
 Record, hang up without video: an `.m4a` (waveform glyph).
+
+---
+
+## 📌 App Store rating prompt (2026-10-31)
+
+Owner's decisions: every user (no Developer-section gate, no age logic, no custom UI); Apple's system prompt only; the
+SDK's 11 counted features (`autoTranslate` and `callRecordingSaved` are not counted); the SDK's rules (5 successes of one
+feature, 3 days after the start, 14 days apart, once per app version, 5 new successes after every request).
+
+**SDK.** `submodules/Novagram/ReviewPromptKit` is a git submodule of the public GPL repo
+`Novagramorg/novagram-review-prompt-kit-sdk`, pinned by commit (`ee588de`, no tags), added exactly like
+`CallRecordingKit`: a `.gitmodules` entry plus the gitlink. Bazel label
+`//submodules/Novagram/ReviewPromptKit:NovagramReviewPromptCore`. Its README is the API reference (rules, storage,
+threading). Update it by moving the pin. Keep Telegram types out of it.
+
+**Module `submodules/Novagram/ReviewPrompt/` (`NovagramReviewPrompt`).** One app-wide `ReviewPromptCenter` on the SDK's
+`pro_messager` defaults (key `novagram_review_prompt_state`); `record(_:)` (any thread); `observeLogins(sharedContext:)`
+→ `noteFreshStart()` when a new account record appears (a login; an account switch only changes the live set and adds no
+record, which is why `NovagramAnalyticsManager.sendRegisterAccount` was not used: it also runs on account switches and
+reconciles); `chatListDidAppear(controller:context:isSecretVaultList:)`, the trigger; `appVersion` =
+`CFBundleShortVersionString (CFBundleVersion)`; the Settings row's title and action. It re-exports
+`NovagramReviewPromptCore` so call sites can write `record(.ghostMode)`. Every decision and result is logged with
+Telegram's `Logger`, tag `NovagramReviewPrompt` (`recorded <feature>: N total, M new, counted: …`,
+`request <result>, app version …`, `busy: <reason>`, `fresh start after a login`).
+
+`isBusy` (checked by the SDK before and again after its 2 s wait) is true when: the app is not active; a call is active
+(`sharedContext.callManager?.hasActiveCall`); the controller is the Secret Vault list; the chat list is not in a window;
+a UIKit modal is presented on the window's root; anything is in the chat list's `presentationContext`; the root
+navigation stack holds more than the tab bar (a chat, the vault list, an archive, a modal); a navigation overlay exists;
+or the window presents any other controller (alerts, sheets, menus).
+
+### Hooks in Telegram-owned files
+
+| File | Hook (placed after) |
+| --- | --- |
+| `ChatListUI/Sources/ChatListController.swift` | #302: `import NovagramReviewPrompt` after `import NovagramForeignUserBlock`. In `viewDidAppear`, after `self.novagramSetupSecretVaultIfNeeded()`: `NovagramReviewPrompt.chatListDidAppear(controller: self, context: self.context, isSecretVaultList: self.novagramIsVaultList) // Novagram`. 2 lines. |
+| same | #303: in `updateGhostModeButton()`'s button action, after `UserDefaults(suiteName: "pro_messager")?.set(!current, forKey: "is_ghost_mode_active")`: `if !current { NovagramReviewPrompt.record(.ghostMode) }` (only when turned ON). 1 line. |
+| same | #304: in `novagramOpenSecretVault()`, after `onSuccess: { [weak self] in`: `NovagramReviewPrompt.record(.secretVaultUnlock)`. 1 line. The forgot-PIN recovery path is not counted. |
+| `TelegramUI/Sources/ChatInterfaceStateContextMenus.swift` | #305: `import NovagramReviewPrompt` after `import NovagramSponsored`. In the Translate item, after `controllerInteraction.performTextSelectionAction(message, !isCopyProtected, NSAttributedString(string: messageText), messageEntities, .translate)`: `NovagramReviewPrompt.record(.translateMessage) // Novagram`. 2 lines. The shown result is not reachable with a thin hook: the system sheet (`.translationPresentation`) gives the app no result, and `TextProcessingScreen` keeps it in `TextProcessingTranslateContentComponent`'s state (shared with compose-mode translation and refreshed on every language change), so the menu action counts. |
+| `TelegramUI/Sources/ChatControllerForwardMessages.swift` | #306: `import NovagramReviewPrompt` after `import ChatMessagePaymentAlertController`. Inside `novagramForwardHideNamesOnce`'s `if once {`, after `defaults?.set(false, forKey: "forward_hide_names_once")`: `NovagramReviewPrompt.markForwardWithoutNames(to: peerId)`. 2 lines. Runs once a destination chat is picked and only when our "Forward without names" flag was set; it only marks the chat, the count happens on send (#312), so Telegram's own "Hide Sender's Names" switch is never counted. |
+| `TelegramUI/Sources/ChatControllerNode.swift` | #312: `import NovagramReviewPrompt` after `import NovagramMessenger`. In `sendCurrentMessage`, inside `if let forwardMessageIds = …`, right after `attributes.append(ForwardOptionsMessageAttribute(…))`: `if self.chatPresentationInterfaceState.interfaceState.forwardOptionsState?.hideNames == true, let peerId = self.chatLocation.peerId { NovagramReviewPrompt.forwardWithHiddenNamesSent(to: peerId) } // Novagram`. 2 lines. Counts only for a chat #306 marked. |
+| `TelegramUI/Sources/NavigateToChatController.swift` | #307: `import NovagramReviewPrompt` after `import NovagramChatLock`. In the chat-lock `onSuccess`, after `chatPincodeBypassPeerId = nil`: `NovagramReviewPrompt.record(.chatLockUnlock)`. 2 lines. |
+| `TelegramUI/Sources/ChatController.swift` | #308: `import NovagramReviewPrompt` after `import NovagramSponsored`. In the avatar menu's "View First message" item (gated by `show_view_first_message`), after `self?.navigateToMessage(messageLocation: .index(MessageIndex.absoluteLowerBound()), animated: true, forceInCurrentChat: true)`: `NovagramReviewPrompt.record(.viewFirstMessage) // Novagram`, and the same line after the same `navigateToMessage` call in the second "View First message" item (the `show_view_first_message` check further down, ~:6220). 3 lines. |
+| `TelegramUI/Components/Stories/StoryContainerScreen/Sources/StoryItemSetContainerComponent.swift` | #309: `import NovagramReviewPrompt` after `import NovagramStoryUnlock`. In `requestSave()`'s `completed:`, after `saveScreen.content = .completion(stringSaved)`: `NovagramReviewPrompt.record(.storySave) // Novagram`. 2 lines. |
+| `TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoSettingsItems.swift` | #310: `import NovagramReviewPrompt` after `import NovagramCurrencyRates`. After the `.support` item `id: 2` (`Settings_Tips`, "Novagram Features"): a `PeerInfoScreenDisclosureItem(id: 3, text: NovagramReviewPrompt.rateRowTitle(langCode: novagramLangCode), icon: novagramSettingsIcon(systemName: "star.fill", color: .yellow), action: { NovagramReviewPrompt.openWriteReview(context: context) })`. 4 lines. No "Send feedback" row ("Ask a Question" covers it). |
+| `TelegramUI/BUILD`, `ChatListUI/BUILD`, `TelegramUI/Components/Stories/StoryContainerScreen/BUILD`, `TelegramUI/Components/PeerInfo/PeerInfoScreen/BUILD` | #311: `"//submodules/Novagram/ReviewPrompt:NovagramReviewPrompt",` after `NovagramCarPlay`, `NovagramLocalization`, `NovagramStoryUnlock` and `NovagramCurrencyRates` respectively. |
+
+### Hooks in our own files (no index number)
+
+| File | Hook |
+| --- | --- |
+| `Novagram/Analytics/Sources/NovagramAnalyticsManager.swift` | `import NovagramReviewPrompt`; in `start(sharedContext:)`, after `self.observeAccounts(sharedContext: sharedContext)`: `NovagramReviewPrompt.observeLogins(sharedContext: sharedContext)` (once per launch). |
+| `Novagram/EditedHistory/Sources/EditedMessageHistoryController.swift` | `import`; first line of `loadDisplayNode()`: `record(.editedHistory)` (the history viewer is shown; the menu at `ChatInterfaceStateContextMenus.swift` only pushes it). |
+| `Novagram/SpeechToText/Sources/SpeechToTextManager.swift` | `import`; in `emitFinalText`, after `onTextUpdate?(rawText)` in the plain path: `record(.speechToText)` when the text is not empty; in the voice-translate handler's completion, after `self.onTextUpdate?(translatedText)`: `record(.voiceTranslate)` when the text changed (the handler falls back to the raw text on failure). |
+| `Novagram/RoundVideoFromGallery/Sources/NovagramRoundVideoFromGalleryFlow.swift` | `import`; after the `enqueueMessages(...)` of the round video: `record(.roundVideoFromGallery)`. |
+| `Novagram/{Analytics,EditedHistory,SpeechToText,RoundVideoFromGallery}/BUILD` | the `NovagramReviewPrompt` dep. |
+
+### On an upstream update
+
+- Every hook is one `record(...)` line in a success branch: if upstream moves the branch, follow it; never move a
+  `record` to the tap that starts the action. #303 must stay inside the "turned ON" check.
+- #302 must stay in `ChatListControllerImpl.viewDidAppear` (the natural break). If upstream renames `viewControllers`,
+  `overlayControllers`, `presentationContext` or `WindowHost.forEachController`, fix `busyReason` in our module, not
+  the hook.
+- #310: if upstream reorders the `.support` items, keep "Rate Novagram" right after the Tips ("Novagram Features") item
+  and keep `id: 3` unique in that section.
+- `ReviewPromptFeature` raw values are stored on users' devices (`successCounts`): never rename one.
+
+### Manual repro (simulator, development build)
+
+1. Note the data container: `xcrun simctl get_app_container <udid> ph.telegra.Telegraph data`.
+2. Write a state 4 days old with ghostMode at 4 (dates are seconds since 1970):
+   `xcrun simctl spawn <udid> defaults write <container>/Library/Preferences/pro_messager novagram_review_prompt_state -data <hex of {"formatVersion":1,"startDate":<now-4d>,"successCounts":{"ghostMode":4}}>`.
+3. Relaunch. The log shows `request skipped(notEnoughUse)` for the first chat-list appearance.
+4. Turn Ghost mode ON from the chat list header (`recorded ghostMode: 5 total, 5 new, counted: true`), then make the
+   chat list appear again (open a chat and go back, or switch tabs). After 2 s Apple's rating sheet shows and the log has
+   `request requested, app version <short> (<build>)`.
+5. Make the chat list appear once more: `request skipped(alreadyRequestedThisVersion)`, nothing shows.
+6. Settings tab: "Rate Novagram" (star icon) below "Novagram Features"; tapping it opens
+   `https://apps.apple.com/app/id6768202244?action=write-review`.
+7. Clean up: `defaults delete <container>/Library/Preferences/pro_messager novagram_review_prompt_state` and turn
+   Ghost mode back off.
+
+**Busy check and the window's top-level overlays (2026-11-02).** `AppDelegate` puts Telegram's overlay media
+controller and the in-app notification container into `mainWindow.topLevelOverlayControllers`; they stay in the
+window all the time. The first build treated every window controller as "busy", so the prompt never showed (device
+log: `busy: window controller OverlayMediaControllerImpl`, then `NotificationContainerController`).
+`windowPresentedController` now skips `sharedContext.mainWindow?.topLevelOverlayControllers` (read only, never set)
+and counts the overlay media one only while `hasNodes` (a video or mini player on screen). On an upstream update: if
+`AppDelegate` adds another permanent window controller outside that list, the prompt stops again; the Debug log
+names it. Verified on a phone (iPhone 13 Pro Max, iOS 26.6.1): seed → `request requested` and the sheet showed;
+relaunch → `skipped(notEnoughUse)`. Debug builds also print every decision (`print`, `#if DEBUG`), because
+Telegram's Logger writes only when the user turned logging on.
+
+**Device check (Debug builds only).** The SDK waits 3 days after the start, so a phone check uses a seed: launch a
+`run.sh -r` build with `xcrun devicectl device process launch --device <udid> --environment-variables
+'{"NOVAGRAM_REVIEW_PROMPT_SEED":"1"}' uz.fenixuz.app`. `NovagramReviewPrompt` then writes a state with the start
+4 days ago and Ghost mode at 5 before its first use, and the next chat-list visit asks. `#if DEBUG` only: rules_swift
+passes `-DDEBUG` in dbg builds, `publish.sh` builds opt, so the App Store build has no seed.

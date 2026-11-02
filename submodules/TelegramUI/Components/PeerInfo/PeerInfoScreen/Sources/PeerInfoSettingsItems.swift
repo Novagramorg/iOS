@@ -18,6 +18,7 @@ import NovagramAnalytics
 import NovagramUpdateCheck
 import NovagramChannelStats
 import NovagramCurrencyRates
+import NovagramReviewPrompt
 import WalletContext
 
 enum SettingsSection: Int, CaseIterable {
@@ -404,6 +405,9 @@ func settingsItems(data: PeerInfoScreenData?, context: AccountContext, presentat
     items[.support]!.append(PeerInfoScreenDisclosureItem(id: 2, text: presentationData.strings.Settings_Tips, icon: PresentationResourcesSettings.tips, action: {
         interaction.openSettings(.tips)
     }))
+    items[.support]!.append(PeerInfoScreenDisclosureItem(id: 3, text: NovagramReviewPrompt.rateRowTitle(langCode: novagramLangCode), icon: novagramSettingsIcon(systemName: "star.fill", color: .yellow), action: {
+        NovagramReviewPrompt.openWriteReview(context: context)
+    })) // Novagram: Rate Novagram (App Store write-review page)
     // Novagram: app version under the last section; a 20 s hold toggles the Developer section. See HOOKS.md.
     let novagramVersionItem = PeerInfoScreenCommentItem(id: 100, text: NovagramAppVersion.displayText)
     novagramVersionItem.novagramLongPressDuration = NovagramDeveloperSection.revealDuration

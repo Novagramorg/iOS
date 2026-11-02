@@ -149,6 +149,7 @@ import TextProcessingScreen
 import NovagramMessenger
 import NovagramLocalization
 import NovagramSponsored
+import NovagramReviewPrompt
 
 public final class ChatControllerOverlayPresentationData {
     public let expandData: (ASDisplayNode?, () -> Void)
@@ -4870,6 +4871,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                     }, action: { _, f in
                         f(.dismissWithoutContent)
                         self?.navigateToMessage(messageLocation: .index(MessageIndex.absoluteLowerBound()), animated: true, forceInCurrentChat: true)
+                        NovagramReviewPrompt.record(.viewFirstMessage) // Novagram
                     })))
                 }
                 items.append(.action(ContextMenuActionItem(text: isChannel ? strongSelf.presentationData.strings.Conversation_ContextMenuOpenChannel : strongSelf.presentationData.strings.Conversation_ContextMenuSendMessage, icon: { theme in
@@ -6215,6 +6217,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                             }, action: { _, f in
                                 f(.dismissWithoutContent)
                                 self?.navigateToMessage(messageLocation: .index(MessageIndex.absoluteLowerBound()), animated: true, forceInCurrentChat: true)
+                                NovagramReviewPrompt.record(.viewFirstMessage) // Novagram
                             })))
                         }
                         

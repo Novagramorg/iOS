@@ -47,6 +47,7 @@ import SaveProgressScreen
 import DirectMediaImageCache
 import PromptUI
 import NovagramStoryUnlock
+import NovagramReviewPrompt
 
 public final class StoryAvailableReactions: Equatable {
     let reactionItems: [ReactionItem]
@@ -6015,6 +6016,7 @@ public final class StoryItemSetContainerComponent: Component {
                     return
                 }
                 saveScreen.content = .completion(stringSaved)
+                NovagramReviewPrompt.record(.storySave) // Novagram
                 Queue.mainQueue().after(3.0, { [weak saveScreen] in
                     saveScreen?.dismiss()
                 })

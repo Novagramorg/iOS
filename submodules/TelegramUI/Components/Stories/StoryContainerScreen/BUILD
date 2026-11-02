@@ -11,6 +11,7 @@ swift_library(
     ],
     deps = [
         "//submodules/Novagram/StoryUnlock:NovagramStoryUnlock",
+        "//submodules/Novagram/ReviewPrompt:NovagramReviewPrompt",
         "//submodules/UrlWhitelist",
         "//submodules/Display",
         "//submodules/LottieSettings:LottieSettings",

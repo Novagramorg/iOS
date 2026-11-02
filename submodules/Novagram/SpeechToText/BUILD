@@ -10,6 +10,7 @@ swift_library(
         "-warnings-as-errors",
     ],
     deps = [
+        "//submodules/Novagram/ReviewPrompt:NovagramReviewPrompt",
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
         "//submodules/TelegramAudio:TelegramAudio",
         "//submodules/Novagram/Vosk:NovagramVosk",

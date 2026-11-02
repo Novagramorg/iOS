@@ -19,6 +19,7 @@ swift_library(
         "//submodules/Novagram/Sponsored:NovagramSponsored",
         "//submodules/Novagram/Search:NovagramSearch",
         "//submodules/Novagram/Localization:NovagramLocalization",
+        "//submodules/Novagram/ReviewPrompt:NovagramReviewPrompt",
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
         "//submodules/LottieSettings:LottieSettings",
         "//submodules/AsyncDisplayKit:AsyncDisplayKit",

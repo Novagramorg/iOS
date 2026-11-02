@@ -13,6 +13,7 @@ import PremiumUI
 import ReactionSelectionNode
 import TopMessageReactions
 import ChatMessagePaymentAlertController
+import NovagramReviewPrompt
 
 extension ChatControllerImpl {
     func forwardMessages(messageIds: [EngineMessage.Id], options: ChatInterfaceForwardOptionsState? = nil, resetCurrent: Bool = false) {
@@ -381,6 +382,7 @@ extension ChatControllerImpl {
                     let once = defaults?.bool(forKey: "forward_hide_names_once") ?? false
                     if once {
                         defaults?.set(false, forKey: "forward_hide_names_once")
+                        NovagramReviewPrompt.markForwardWithoutNames(to: peerId)
                     }
                     return once
                 }()

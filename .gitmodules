@@ -41,3 +41,6 @@ url=../tgcalls.git
 [submodule "submodules/Novagram/CallRecordingKit"]
 	path = submodules/Novagram/CallRecordingKit
 	url = https://github.com/Novagramorg/novagram-call-recording-kit-sdk.git
+[submodule "submodules/Novagram/ReviewPromptKit"]
+	path = submodules/Novagram/ReviewPromptKit
+	url = https://github.com/Novagramorg/novagram-review-prompt-kit-sdk.git

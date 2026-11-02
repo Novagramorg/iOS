@@ -4,6 +4,7 @@ import TelegramAudio
 import SwiftSignalKit
 import AVFoundation
 import NovagramVosk
+import NovagramReviewPrompt
 
 public final class SpeechToTextManager {
     private enum Backend {
@@ -289,6 +290,9 @@ public final class SpeechToTextManager {
         guard voiceTranslateOn, let handler = translateHandler, !rawText.isEmpty else {
             // Feature is off, no handler wired, or nothing was transcribed — emit as-is.
             onTextUpdate?(rawText)
+            if !rawText.isEmpty {
+                NovagramReviewPrompt.record(.speechToText)
+            }
             cleanupRecording()
             return
         }
@@ -301,6 +305,10 @@ public final class SpeechToTextManager {
             guard let self = self else { return }
             // handler guarantees a non-empty string on failure (falls back to rawText)
             self.onTextUpdate?(translatedText)
+            // The handler falls back to the raw text on failure, so only a changed text is a translation.
+            if translatedText != rawText {
+                NovagramReviewPrompt.record(.voiceTranslate)
+            }
             self.cleanupRecording()
         }
     }

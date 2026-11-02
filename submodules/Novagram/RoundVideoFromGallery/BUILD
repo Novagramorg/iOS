@@ -14,6 +14,7 @@ swift_library(
         "DeprecatedDeclaration",
     ],
     deps = [
+        "//submodules/Novagram/ReviewPrompt:NovagramReviewPrompt",
         "//submodules/Display:Display",
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
         "//submodules/TelegramCore:TelegramCore",

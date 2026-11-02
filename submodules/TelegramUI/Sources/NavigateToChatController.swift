@@ -21,6 +21,7 @@ import WallpaperGalleryScreen
 import ChatMessageNotificationItem
 import FaceScanScreen
 import NovagramChatLock
+import NovagramReviewPrompt
 
 /// Temporarily set to a peerId after successful pincode verification so the
 /// recursive navigateToChatControllerImpl call bypasses the lock gate.
@@ -45,6 +46,7 @@ public func navigateToChatControllerImpl(_ params: NavigateToChatControllerParam
                     navigateToChatControllerImpl(params)
                     // Clear bypass immediately after (pincode check is synchronous)
                     chatPincodeBypassPeerId = nil
+                    NovagramReviewPrompt.record(.chatLockUnlock)
                 }, onForgot: ChatPincodeManager.shared.isMasterEnabled() ? {
                     // Novagram #46: "Forgot pincode?" — verify the MASTER pincode to drop this chat's lock.
                     let masterMeta = ChatPincodeManager.shared.getMasterMetadata()

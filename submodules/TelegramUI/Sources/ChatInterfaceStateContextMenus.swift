@@ -40,6 +40,7 @@ import AdsReportScreen
 import NovagramEditedHistory
 import NovagramLocalization
 import NovagramSponsored
+import NovagramReviewPrompt
 import WalletContext
  
 private struct MessageContextMenuData {
@@ -1534,6 +1535,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                         }
                         
                         controllerInteraction.performTextSelectionAction(message, !isCopyProtected, NSAttributedString(string: messageText), messageEntities, .translate)
+                        NovagramReviewPrompt.record(.translateMessage) // Novagram
                         f(.default)
                     })))
                 }
