@@ -1,4 +1,6 @@
 import Foundation
+import CoreVideo
+import ImageIO
 import TelegramVoip
 import NovagramCallRecordingCore
 
@@ -31,6 +33,25 @@ extension CallRecordingVideoFrame {
             }
         }
         self.init(buffer: buffer, rotationQuarterTurns: CallRecordingVideoFrame.quarterTurns(orientation), mirrorHorizontally: mirrorHorizontally, mirrorVertically: mirrorVertically)
+    }
+
+    /// Our shared screen as the broadcast extension hands it to the app (`IpcGroupCallBufferAppContext.frames`), turned
+    /// the way the call sends it (`OngoingCallVideoCapturer.injectSampleBuffer`: left = 90, down = 180, right = 270).
+    /// The screencast capturer's own `video()` never fires: tgcalls' custom capturer feeds only the call, not its
+    /// output sinks.
+    public init(screencast pixelBuffer: CVPixelBuffer, orientation: CGImagePropertyOrientation) {
+        let quarterTurns: Int
+        switch orientation {
+        case .left:
+            quarterTurns = 1
+        case .down:
+            quarterTurns = 2
+        case .right:
+            quarterTurns = 3
+        default:
+            quarterTurns = 0
+        }
+        self.init(buffer: .pixelBuffer(pixelBuffer), rotationQuarterTurns: quarterTurns)
     }
 
     private static func quarterTurns(_ orientation: OngoingCallVideoOrientation) -> Int {

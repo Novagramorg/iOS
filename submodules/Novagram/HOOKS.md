@@ -7793,7 +7793,7 @@ the tone mixing in `OnGetPlayoutData`). If upstream adds a second audio device p
 **The recording core is the public SDK `NovagramCallRecordingKit` (since 2026-10-30; it replaced our in-app module
 `//submodules/Novagram/CallRecording:NovagramCallRecording`, now deleted with its sources and tests).** A normal git
 submodule at `submodules/Novagram/CallRecordingKit` (`https://github.com/Novagramorg/novagram-call-recording-kit-sdk`,
-GPL-2.0-or-later, shared with the Mac app), pinned by commit, no tags: **`d4291ae`** (2026-10-31: `CallRecordingSettingsStrings` for the settings page, list texts without device names; before it `addbfcc`: upstream `c4468bf` plus the iOS adoption fixes: `showsToolbar` and host-driven select mode, the `freeText` colour, the iOS row insets, then `showsSelectionBar` / `confirmDeletion` / `listSideInset` for Telegram's toolbar, alerts and margins). Update it by moving the pin
+GPL-2.0-or-later, shared with the Mac app), pinned by commit, no tags: **`e3637d7`** (2026-11-02: `CallRecordingVideoQuality`, the per-recording `configuration:` of `start` and the VIDEO QUALITY texts; before it `d4291ae`, 2026-10-31: `CallRecordingSettingsStrings` for the settings page, list texts without device names; before it `addbfcc`: upstream `c4468bf` plus the iOS adoption fixes: `showsToolbar` and host-driven select mode, the `freeText` colour, the iOS row insets, then `showsSelectionBar` / `confirmDeletion` / `listSideInset` for Telegram's toolbar, alerts and margins). Update it by moving the pin
 (`git -C submodules/Novagram/CallRecordingKit checkout <sha>`, commit the gitlink). Its root `BUILD` gives
 `//submodules/Novagram/CallRecordingKit:NovagramCallRecordingCore` and `:NovagramCallRecordingUI`; the SDK holds no
 Telegram type, so it never depends on a Telegram module. Its own README has the API; `swift test` in the SDK repo runs
@@ -7825,6 +7825,13 @@ has its own block with an explanation under it:
   and that the first recording asks for consent.
 - "Record every call automatically" (`novagram_call_recording_auto`, slug `call-recording-auto`, shown only while Call
   recording is on) + when it starts and that a stop is final for that call.
+- VIDEO QUALITY (since 2026-11-02, owner's request; shown only while Call recording is on): three rows with a
+  checkmark, `CallRecordingSettings.videoQuality` (`novagram_call_recording_video_quality`: `audio` / `saver` / `high`,
+  missing = `saver`): "Audio only" (the glue subscribes to no video, so the file is `.m4a` even in a video call),
+  "Battery saver (15 fps)" (15 fps at 1.25 Mbit/s, same 720x1280 picture) and "High (30 fps)" (30 fps at 2.5 Mbit/s,
+  the old behaviour). The footer says what each costs in battery and space and that it applies from the next
+  recording: the glue reads it at each start and passes `CallRecordingConfiguration(quality:)` through
+  `NovagramCallRecordings.start(…configuration:…)`; a running recording keeps its quality. No slug.
 - RECORDINGS: "Call recordings" (slug `call-recordings`, label = file count, recounted on every `didAppear`; **always
   shown**, so recordings stay reachable after the switch is off) opening `NovagramCallRecordingsController` + storage
   text (only on this device, never uploaded).
@@ -7970,14 +7977,25 @@ to `NovagramCallRecordings.setLayout`, applied on the next frame. When we share 
 is the screencast (#301) and it is the big picture (the other side goes into the corner): the screen shows no local video
 then, and the shared screen is unreadable as a thumbnail. `PrivateCallScreen.State` is not touched.
 
+**The screencast is read from the broadcast extension's frames, not from the capturer (bug fix 2026-11-02).** On a real
+iPhone the shared screen never reached the recording: the screencast capturer is tgcalls' `:ios_custom` capturer, and
+its `setOutput` goes to `VideoCapturerInterfaceImplReference setUncroppedSink:`, which on iOS forwards only to the camera
+capturer (`CustomExternalCapturer` pushes frames into the call's video source and has no output sink). So
+`screencastCapturer.video()` never fired and the recording kept our last camera frame (or black). #301 now hands out
+`IpcGroupCallBufferAppContext.frames` (a `ValuePipe`, so a second subscriber is fine; NV12 pixel buffers on the main queue,
+polled at 30 fps), the same frames `resetScreencastContext` injects into the call, and
+`CallRecordingVideoFrame(screencast:orientation:)` (`NovagramCallRecordingVideoFrame.swift`) turns them as
+`injectSampleBuffer` does (left 90, down 180, right 270). No tgcalls change. If upstream ever gives the custom capturer an
+output sink, #301 may go back to the capturer.
+
 | File | Change |
 | --- | --- |
 | `TelegramUI/Components/Calls/CallScreen/Sources/Components/VideoContainerView.swift` | #299: `var novagramMinimizedCorner: (isTop: Bool, isLeft: Bool) { … } // Novagram` right after `private var minimizedPosition: MinimizedPosition = .bottomRight` (reads the private `minimizedPosition`). 1 line. |
 | `TelegramUI/Components/Calls/CallScreen/Sources/PrivateCallScreen.swift` | #300: `public var novagramVideoLayout: (isPipTop: Bool, isPipLeft: Bool, isSwapped: Bool) { … } // Novagram` right after #286: the `.foreground` video container's #299 (that container is always the small one when both videos show; bottom-right when it does not exist, Telegram's default) and `swapLocalAndRemoteVideo`. 1 line. |
-| `TelegramCallsUI/Sources/PresentationCall.swift` | #301: `var novagramScreencastVideo: Signal<OngoingGroupCallContext.VideoFrameData, NoError>? { return self.isMovedToConference ? nil : self.screencastCapturer?.video() } // Novagram` right before `func video(isIncoming:)`. 1 line + a blank line. |
+| `TelegramCallsUI/Sources/PresentationCall.swift` | #301: `var novagramScreencastFrames: Signal<(CVPixelBuffer, CGImagePropertyOrientation), NoError>? { return self.isMovedToConference ? nil : self.screencastBufferServerContext?.frames } // Novagram` right before `func video(isIncoming:)`. 1 line + a blank line. Until 2026-11-02 it returned `screencastCapturer?.video()`, which never sends a frame (see below). |
 
 On an upstream update: if `VideoContainerView.MinimizedPosition` / `minimizedPosition`, `videoContainerViews`, its `.foreground`
-key, `swapLocalAndRemoteVideo` or `screencastCapturer` are renamed, follow the rename in #299–#301. Manual repro: (1) video
+key, `swapLocalAndRemoteVideo` or `screencastBufferServerContext` are renamed, follow the rename in #299–#301. Manual repro: (1) video
 call, Record, drag our small window to each corner and tap it to swap, hang up: the `.mp4` follows each move and swap.
 (2) Voice call, Record, turn the camera on, flip to the back camera, share the screen, stop sharing, hang up: one `.mp4`,
 black until the camera came on, then the camera, then our screen big with the other side in the corner. (3) Voice call,

@@ -18,9 +18,9 @@ public enum NovagramCallRecordings {
 
     /// Starts recording a call. `onDetach` runs once on the main thread when the recording stops (Stop, `stopAll` or
     /// the writer failing on its own): remove the audio tap and the video subscriptions there.
-    public static func start(callId: UUID, peerName: String, onDetach: @escaping () -> Void) throws -> CallRecordingSession {
+    public static func start(callId: UUID, peerName: String, configuration: CallRecordingConfiguration, onDetach: @escaping () -> Void) throws -> CallRecordingSession {
         return try MainActor.assumeIsolated {
-            return try self.center.start(callId: callId, peerName: peerName, onDetach: onDetach)
+            return try self.center.start(callId: callId, peerName: peerName, configuration: configuration, onDetach: onDetach)
         }
     }
 

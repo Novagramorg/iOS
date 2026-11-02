@@ -26,6 +26,8 @@ import NovagramLocalization
 ///   A manual Stop is not undone.
 /// - The recording stops when the call ends or the screen goes away; the file is always finished. The result shows as
 ///   a toast with a Share action.
+/// - Video quality (Settings → Call recording, `CallRecordingSettings.videoQuality`, read at each start): audio only
+///   takes no video at all (always .m4a); battery saver records 15 fps, high 30 fps.
 /// - Video: both sides' video is followed for the whole recording, also in a voice call (the file is .mp4 if video was
 ///   ever on, .m4a otherwise). Our side is the camera, or our shared screen while we share it. The picture-in-picture
 ///   corner and the big/small swap follow the call screen; while we share our screen, the screen is big.
@@ -313,9 +315,11 @@ final class NovagramCallRecordingGlue {
         self.didStartOnce = true
         // Removed in onDetach, which the SDK calls once when this recording stops for any reason.
         let subscriptions = DisposableSet()
+        // Read at each start: a change in Settings applies from the next recording.
+        let quality = CallRecordingSettings().videoQuality
         let session: CallRecordingSession
         do {
-            session = try NovagramCallRecordings.start(callId: self.callId, peerName: self.peerName.isEmpty ? "Call" : self.peerName, onDetach: {
+            session = try NovagramCallRecordings.start(callId: self.callId, peerName: self.peerName.isEmpty ? "Call" : self.peerName, configuration: CallRecordingConfiguration(quality: quality), onDetach: {
                 audioDevice.setAudioTap(nil)
                 subscriptions.dispose()
             })
@@ -324,13 +328,14 @@ final class NovagramCallRecordingGlue {
             NovagramCallRecordingGlue.showResult(.failure(.writerFailed("start")), context: self.context, presentationData: self.presentationData)
             return
         }
-        NovagramCallRecordingGlue.attach(session, call: impl, audioDevice: audioDevice, subscriptions: subscriptions)
+        NovagramCallRecordingGlue.attach(session, call: impl, audioDevice: audioDevice, recordsVideo: quality.recordsVideo, subscriptions: subscriptions)
         self.sendNoticeIfNeeded()
     }
 
     /// Feeds the session: the audio device's tap (mic and playout PCM on the real-time thread; `appendPCM` only copies
-    /// into a preallocated ring), mute, and both sides' live video for the whole recording.
-    private static func attach(_ session: CallRecordingSession, call: PresentationCallImpl, audioDevice: OngoingCallContext.AudioDevice, subscriptions: DisposableSet) {
+    /// into a preallocated ring), mute, and, unless the quality is audio only, both sides' live video for the whole
+    /// recording.
+    private static func attach(_ session: CallRecordingSession, call: PresentationCallImpl, audioDevice: OngoingCallContext.AudioDevice, recordsVideo: Bool, subscriptions: DisposableSet) {
         let tap = session.audioTap
         audioDevice.setAudioTap({ samples, frames, channels, sampleRate, isPlayout in
             tap.appendPCM(samples, frames: frames, channels: channels, sampleRate: sampleRate, isPlayout: isPlayout)
@@ -338,11 +343,15 @@ final class NovagramCallRecordingGlue {
         subscriptions.add(call.isMuted.start(next: { isMuted in
             session.setMuted(isMuted)
         }))
+        // Audio only: no video subscription at all, so the file is .m4a and no frame is converted.
+        guard recordsVideo else {
+            return
+        }
         subscriptions.add(NovagramCallRecordingGlue.liveVideo(call: call, isIncoming: true).start(next: { data in
             session.appendVideoFrame(CallRecordingVideoFrame(telegram: data), side: .remote)
         }))
-        subscriptions.add(NovagramCallRecordingGlue.liveOutgoingVideo(call: call).start(next: { data in
-            session.appendVideoFrame(CallRecordingVideoFrame(telegram: data), side: .local)
+        subscriptions.add(NovagramCallRecordingGlue.liveOutgoingVideo(call: call).start(next: { frame in
+            session.appendVideoFrame(frame, side: .local)
         }))
     }
 
@@ -451,7 +460,8 @@ final class NovagramCallRecordingGlue {
 
     /// Our side: the camera, or our shared screen while we share it (`requestScreencast` turns the camera off and
     /// sends the screencast capturer instead). Follows the switch both ways; while there is neither it sends nothing.
-    private static func liveOutgoingVideo(call: PresentationCallImpl) -> Signal<OngoingGroupCallContext.VideoFrameData, NoError> {
+    /// The screen comes from the broadcast extension's frames (#301), the same ones the call sends.
+    private static func liveOutgoingVideo(call: PresentationCallImpl) -> Signal<CallRecordingVideoFrame, NoError> {
         return call.state
         |> map { [weak call] state -> OutgoingVideoKind in
             guard let call else {
@@ -460,7 +470,7 @@ final class NovagramCallRecordingGlue {
             switch state.videoState {
             case let .active(isScreencast, _), let .paused(isScreencast, _):
                 if isScreencast {
-                    return call.novagramScreencastVideo != nil ? .screencast : .none
+                    return call.novagramScreencastFrames != nil ? .screencast : .none
                 }
                 return call.video(isIncoming: false) != nil ? .camera : .none
             case .notAvailable, .inactive:
@@ -468,20 +478,30 @@ final class NovagramCallRecordingGlue {
             }
         }
         |> distinctUntilChanged
-        |> mapToSignal { [weak call] kind -> Signal<OngoingGroupCallContext.VideoFrameData, NoError> in
+        |> mapToSignal { [weak call] kind -> Signal<CallRecordingVideoFrame, NoError> in
             guard let call else {
                 return .complete()
             }
-            let video: Signal<OngoingGroupCallContext.VideoFrameData, NoError>?
             switch kind {
             case .none:
-                video = nil
+                return .complete()
             case .camera:
-                video = call.video(isIncoming: false)
+                guard let video = call.video(isIncoming: false) else {
+                    return .complete()
+                }
+                return video
+                |> map { data -> CallRecordingVideoFrame in
+                    return CallRecordingVideoFrame(telegram: data)
+                }
             case .screencast:
-                video = call.novagramScreencastVideo
+                guard let frames = call.novagramScreencastFrames else {
+                    return .complete()
+                }
+                return frames
+                |> map { pixelBuffer, orientation -> CallRecordingVideoFrame in
+                    return CallRecordingVideoFrame(screencast: pixelBuffer, orientation: orientation)
+                }
             }
-            return video ?? .complete()
         }
     }
 

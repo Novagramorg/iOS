@@ -1781,7 +1781,7 @@ public final class PresentationCallImpl: PresentationCall {
         return self.debugInfoValue.get()
     }
     
-    var novagramScreencastVideo: Signal<OngoingGroupCallContext.VideoFrameData, NoError>? { return self.isMovedToConference ? nil : self.screencastCapturer?.video() } // Novagram
+    var novagramScreencastFrames: Signal<(CVPixelBuffer, CGImagePropertyOrientation), NoError>? { return self.isMovedToConference ? nil : self.screencastBufferServerContext?.frames } // Novagram
 
     func video(isIncoming: Bool) -> Signal<OngoingGroupCallContext.VideoFrameData, NoError>? {
         if self.isMovedToConference {

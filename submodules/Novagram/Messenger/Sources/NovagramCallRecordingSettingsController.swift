@@ -16,11 +16,13 @@ import NovagramCallRecordingCore
 private final class NovagramCallRecordingSettingsArguments {
     let updateEnabled: (Bool) -> Void
     let updateAuto: (Bool) -> Void
+    let updateQuality: (CallRecordingVideoQuality) -> Void
     let openRecordings: () -> Void
 
-    init(updateEnabled: @escaping (Bool) -> Void, updateAuto: @escaping (Bool) -> Void, openRecordings: @escaping () -> Void) {
+    init(updateEnabled: @escaping (Bool) -> Void, updateAuto: @escaping (Bool) -> Void, updateQuality: @escaping (CallRecordingVideoQuality) -> Void, openRecordings: @escaping () -> Void) {
         self.updateEnabled = updateEnabled
         self.updateAuto = updateAuto
+        self.updateQuality = updateQuality
         self.openRecordings = openRecordings
     }
 }
@@ -28,6 +30,7 @@ private final class NovagramCallRecordingSettingsArguments {
 private enum NovagramCallRecordingSettingsSection: Int32 {
     case record
     case auto
+    case quality
     case recordings
     case privacy
 }
@@ -38,6 +41,9 @@ private enum NovagramCallRecordingSettingsEntry: ItemListNodeEntry {
     case recordFooter(PresentationTheme, String)
     case auto(PresentationTheme, String, Bool)
     case autoFooter(PresentationTheme, String)
+    case qualityHeader(String)
+    case quality(PresentationTheme, CallRecordingVideoQuality, String, Bool)
+    case qualityFooter(PresentationTheme, String)
     case recordingsHeader(String)
     case recordings(PresentationTheme, String, String)
     case recordingsFooter(PresentationTheme, String)
@@ -50,6 +56,8 @@ private enum NovagramCallRecordingSettingsEntry: ItemListNodeEntry {
             return NovagramCallRecordingSettingsSection.record.rawValue
         case .auto, .autoFooter:
             return NovagramCallRecordingSettingsSection.auto.rawValue
+        case .qualityHeader, .quality, .qualityFooter:
+            return NovagramCallRecordingSettingsSection.quality.rawValue
         case .recordingsHeader, .recordings, .recordingsFooter:
             return NovagramCallRecordingSettingsSection.recordings.rawValue
         case .privacyHeader, .privacyText:
@@ -69,16 +77,23 @@ private enum NovagramCallRecordingSettingsEntry: ItemListNodeEntry {
             return 3
         case .autoFooter:
             return 4
-        case .recordingsHeader:
+        case .qualityHeader:
             return 5
-        case .recordings:
-            return 6
-        case .recordingsFooter:
-            return 7
-        case .privacyHeader:
-            return 8
-        case .privacyText:
+        case let .quality(_, quality, _, _):
+            // 6, 7, 8 in the order of the cases: audio only, battery saver, high.
+            return 6 + Int32(CallRecordingVideoQuality.allCases.firstIndex(of: quality) ?? 0)
+        case .qualityFooter:
             return 9
+        case .recordingsHeader:
+            return 10
+        case .recordings:
+            return 11
+        case .recordingsFooter:
+            return 12
+        case .privacyHeader:
+            return 13
+        case .privacyText:
+            return 14
         }
     }
 
@@ -94,6 +109,12 @@ private enum NovagramCallRecordingSettingsEntry: ItemListNodeEntry {
             if case let .auto(rhsTheme, rhsTitle, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsValue == rhsValue { return true } else { return false }
         case let .autoFooter(lhsTheme, lhsText):
             if case let .autoFooter(rhsTheme, rhsText) = rhs, lhsTheme === rhsTheme, lhsText == rhsText { return true } else { return false }
+        case let .qualityHeader(lhsText):
+            if case let .qualityHeader(rhsText) = rhs, lhsText == rhsText { return true } else { return false }
+        case let .quality(lhsTheme, lhsQuality, lhsTitle, lhsChecked):
+            if case let .quality(rhsTheme, rhsQuality, rhsTitle, rhsChecked) = rhs, lhsTheme === rhsTheme, lhsQuality == rhsQuality, lhsTitle == rhsTitle, lhsChecked == rhsChecked { return true } else { return false }
+        case let .qualityFooter(lhsTheme, lhsText):
+            if case let .qualityFooter(rhsTheme, rhsText) = rhs, lhsTheme === rhsTheme, lhsText == rhsText { return true } else { return false }
         case let .recordingsHeader(lhsText):
             if case let .recordingsHeader(rhsText) = rhs, lhsText == rhsText { return true } else { return false }
         case let .recordings(lhsTheme, lhsTitle, lhsLabel):
@@ -114,7 +135,7 @@ private enum NovagramCallRecordingSettingsEntry: ItemListNodeEntry {
     func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
         let arguments = arguments as! NovagramCallRecordingSettingsArguments
         switch self {
-        case let .recordHeader(text), let .recordingsHeader(text), let .privacyHeader(text):
+        case let .recordHeader(text), let .qualityHeader(text), let .recordingsHeader(text), let .privacyHeader(text):
             return ItemListSectionHeaderItem(presentationData: presentationData, text: text, sectionId: self.section)
         case let .record(_, title, value):
             return ItemListSwitchItem(presentationData: presentationData, title: title, value: value, sectionId: self.section, style: .blocks, updated: { value in
@@ -124,11 +145,15 @@ private enum NovagramCallRecordingSettingsEntry: ItemListNodeEntry {
             return ItemListSwitchItem(presentationData: presentationData, title: title, value: value, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.updateAuto(value)
             }, tag: NovagramSettingsItemTag(feature: .callRecordingAuto))
+        case let .quality(_, quality, title, checked):
+            return ItemListCheckboxItem(presentationData: presentationData, title: title, style: .left, checked: checked, zeroSeparatorInsets: false, sectionId: self.section, action: {
+                arguments.updateQuality(quality)
+            })
         case let .recordings(_, title, label):
             return ItemListDisclosureItem(presentationData: presentationData, title: title, label: label, sectionId: self.section, style: .blocks, action: {
                 arguments.openRecordings()
             }, tag: NovagramSettingsItemTag(feature: .callRecordings))
-        case let .recordFooter(_, text), let .autoFooter(_, text), let .recordingsFooter(_, text), let .privacyText(_, text):
+        case let .recordFooter(_, text), let .autoFooter(_, text), let .qualityFooter(_, text), let .recordingsFooter(_, text), let .privacyText(_, text):
             return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
         }
     }
@@ -137,11 +162,12 @@ private enum NovagramCallRecordingSettingsEntry: ItemListNodeEntry {
 private struct NovagramCallRecordingSettingsState: Equatable {
     var isEnabled: Bool
     var isAutoEnabled: Bool
+    var videoQuality: CallRecordingVideoQuality
     var recordingCount: Int
 
     static func current() -> NovagramCallRecordingSettingsState {
         let settings = CallRecordingSettings()
-        return NovagramCallRecordingSettingsState(isEnabled: settings.isEnabled, isAutoEnabled: settings.isAutoEnabled, recordingCount: NovagramCallRecordings.storage.list().count)
+        return NovagramCallRecordingSettingsState(isEnabled: settings.isEnabled, isAutoEnabled: settings.isAutoEnabled, videoQuality: settings.videoQuality, recordingCount: NovagramCallRecordings.storage.list().count)
     }
 }
 
@@ -151,10 +177,16 @@ private func novagramCallRecordingSettingsEntries(presentationData: Presentation
     entries.append(.recordHeader(strings.recordingHeader))
     entries.append(.record(theme, strings.recordTitle, state.isEnabled))
     entries.append(.recordFooter(theme, strings.recordFooter))
-    // Auto-record only takes effect while recording is on, so it shows only then.
+    // Auto-record and the video quality only take effect while recording is on, so they show only then.
     if state.isEnabled {
         entries.append(.auto(theme, strings.autoTitle, state.isAutoEnabled))
         entries.append(.autoFooter(theme, strings.autoFooter))
+        // The explanation under the choices says what each one costs in battery and space.
+        entries.append(.qualityHeader(strings.qualityHeader))
+        for quality in CallRecordingVideoQuality.allCases {
+            entries.append(.quality(theme, quality, strings.qualityTitle(quality), quality == state.videoQuality))
+        }
+        entries.append(.qualityFooter(theme, strings.qualityFooter))
     }
     // Always shown: recordings made earlier stay reachable after the switch is turned off.
     entries.append(.recordingsHeader(strings.recordingsHeader))
@@ -180,6 +212,9 @@ func novagramCallRecordingSettingsController(context: AccountContext, highlightF
         refreshState()
     }, updateAuto: { value in
         CallRecordingSettings().isAutoEnabled = value
+        refreshState()
+    }, updateQuality: { quality in
+        CallRecordingSettings().videoQuality = quality
         refreshState()
     }, openRecordings: {
         pushControllerImpl?(novagramCallRecordingsController(context: context))
