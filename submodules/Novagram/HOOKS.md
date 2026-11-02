@@ -702,6 +702,7 @@ three calls and delete the two lines.
 221. `AppDelegate.swift` (TelegramUI), `Telegram/BUILD`, `TelegramUI/BUILD`: UIScene life cycle (`NovagramSceneDelegate`), iOS 27 SDK bilan ilova ochilishi uchun. **13.0: olib tashlandi, upstream `SceneDelegate` (13a2694420); `Novagram/SceneLifecycle` o'chirildi.**
 222. `UIViewController+Navigation.m` (UIKitRuntimeUtils): iOS 27'da yashirin klaviatura API chaqirilmaydi, ilova ishga tushganda to'xtamaydi. **13.0: olib tashlandi, upstream 93af3a138e.**
 223. `publish.sh`, `release.sh`: App Store build uchun Swift 6.4 flag'lari.
+313. `run.sh`, `publish.sh`, `release.sh`: build oldidan `trim-bazel-disk-cache.sh 30` (Bazel disk keshiga qattiq chegara) va `refresh-bazel-xcode-repos.sh` (Xcode yangilansa Bazel'ning Xcode repo'larini qayta yaratadi). `run.sh` dagi `disk/cas` ni butunlay o'chirish olib tashlangan. 2026-11-02.
 245. `Telegram/BUILD`, `TelegramUI/Resources/Fonts/`: Apple'ning SF Camera shrifti (`AremacFS-*.otf`) va `UIAppFonts` olib tashlangan (Apple upload ogohlantirishi, 2027-10-01 dan reject). `Font.with(design: .camera)` tizim shriftiga o'tadi. `TGCameraInterfaceAssets.m` (LegacyComponents) ham tizim shriftiga o'tadi: busiz chatdagi kamera ochilganda crash bo'lardi (2026-10-31).
 
 #### CarPlay
@@ -8080,3 +8081,23 @@ Telegram's Logger writes only when the user turned logging on.
 '{"NOVAGRAM_REVIEW_PROMPT_SEED":"1"}' uz.fenixuz.app`. `NovagramReviewPrompt` then writes a state with the start
 4 days ago and Ghost mode at 5 before its first use, and the next chat-list visit asks. `#if DEBUG` only: rules_swift
 passes `-DDEBUG` in dbg builds, `publish.sh` builds opt, so the App Store build has no seed.
+
+## 📌 Build scripts: disk cache cap and Xcode updates (2026-11-02)
+
+Our own scripts, no Telegram file. `run.sh`, `publish.sh` and `release.sh` call two helpers before Bazel:
+
+- `submodules/Novagram/scripts/trim-bazel-disk-cache.sh 30`: hard cap on `~/telegram-bazel-cache/disk`. Bazel's own
+  limit (`--experimental_disk_cache_gc_max_size=35G`) is applied only while its server is idle; on 2026-10-31 the
+  cache reached 61GB and the disk filled. The script deletes the least recently used entries (oldest mtime; Bazel
+  refreshes an entry's mtime on use) down to 30GB, or 15GB while the disk has less than 25GB free. It replaced
+  `run.sh`'s emergency `rm -rf disk/cas` below 8GB free, which made the next build start from nothing.
+- `submodules/Novagram/scripts/refresh-bazel-xcode-repos.sh <bazel> <output_user_root> <developer dir>`: after an
+  in-place Xcode update (27.1 → 27.2), builds failed with "'27.2.0.27B52' is not an available Xcode version", then
+  "xcode-locator failed". `local_config_xcode` records no input that changes with Xcode, and rules_swift's
+  `system_sdk` extension result sits in the output base's `MODULE.bazel.lock`, keyed only on `DEVELOPER_DIR`. The
+  script keeps the last Xcode in `<output_user_root>/.novagram-xcode-version`; when it differs, it registers the
+  Xcode with LaunchServices, runs `bazel shutdown`, deletes those repos and markers and drops the cached extension
+  entry. The first run on a machine only records the Xcode.
+
+Verified 2026-11-02 with `./run.sh -r` and a faked older stamp: "Bazel disk cache is 47GB … now 30G", "Xcode changed
+(… 27A9275 -> … 27B52): re-creating Bazel's Xcode repos", build green in 35 s.

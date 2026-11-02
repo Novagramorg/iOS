@@ -13,7 +13,7 @@ source ~/.zshrc 2>/dev/null; python3 build-system/Make/Make.py --overrideXcodeVe
  --gitCodesigningType development --gitCodesigningUseCurrent --target //submodules/TextFormat:TextFormatTests
 ```
 
-The first app-side `ios_unit_test` is `//submodules/TextFormat:TextFormatTests` (the mention/date link codecs). An `ios_unit_test` here needs an `ios_test_runner` pinned to a real device/OS (e.g. `iPhone 17` / `26.5`) — the default runner picks an invalid device and the test process exits 15. **Run new targets via `--target`, not the default suite:** `Tests/AllTests` currently references a dangling `//submodules/TgVoipWebrtc:TgCallsTests`, so the default would fail to build until that suite is repaired.
+The first app-side `ios_unit_test` is `//submodules/TextFormat:TextFormatTests` (the mention/date link codecs). An `ios_unit_test` here needs an `ios_test_runner` pinned to a real device/OS (e.g. `iPhone 17` / `26.5`) — the default runner picks an invalid device and the test process exits 15. The 46 runners in upstream's BUILD files pin `os_version = "26.5"`; keep that pin (changing 46 Telegram files would conflict on every upstream update) and, on a machine without the iOS 26.5 simulator runtime, install it before testing: `xcodebuild -downloadPlatform iOS -buildVersion 26.5`. **Run new targets via `--target`, not the default suite:** `Tests/AllTests` currently references a dangling `//submodules/TgVoipWebrtc:TgCallsTests`, so the default would fail to build until that suite is repaired.
 
 Pure C++ units have host `cc_test`s that bypass Make.py entirely (macOS build, no codesigning):
 `./build-input/bazel-9.2.0-darwin-arm64 test //submodules/TgVoipWebrtc:streaming_audio_renderer_test --test_output=all`

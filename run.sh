@@ -102,10 +102,12 @@ cd "$SCRIPT_DIR"
 # ishga tushib, har build'ni sekin "noldan" build'ga aylantirardi. 8GB ga
 # tushirdik — bu real favqulodda klapan, har-build cache wipe emas.
 # Disk'ni arzon yo'l bilan bo'shating (qarang: pastdagi DISK eslatma).
+# 2026-11-02: instead of wiping `cas/`, a hard cap that drops only the least recently used entries, so the next build
+# stays fast. 30GB, or 15GB while the disk has less than 25GB free (HOOKS.md, "Build scripts: disk cache cap").
+submodules/Novagram/scripts/trim-bazel-disk-cache.sh 30
 AVAIL_GB=$(df -g . | awk 'NR==2 {print $4}')
 if [ "${AVAIL_GB:-999}" -lt 8 ] 2>/dev/null; then
-    warn "Disk juda kam (${AVAIL_GB}GB) — build cache (cas) favqulodda tozalanmoqda..."
-    rm -rf "$HOME/telegram-bazel-cache/disk/cas" 2>/dev/null
+    warn "Disk juda kam (${AVAIL_GB}GB) — eski install papkalari tozalanmoqda..."
     rm -rf /private/tmp/telegram-sim-app 2>/dev/null
     rm -rf /private/tmp/telegram-device-app 2>/dev/null
     ok "Tozalandi. $(df -h . | awk 'NR==2 {print $4}') bo'sh joy mavjud"
@@ -451,6 +453,8 @@ case "$XCODE_SHORT_VERSION" in
 esac
 XCODE_BAZEL_VERSION="$XCODE_SHORT_VERSION.$XCODE_BUILD_VERSION"
 ok "Xcode: $XCODE_BAZEL_VERSION"
+# after an Xcode update, re-create Bazel's Xcode repos (HOOKS.md, "Build scripts: disk cache cap")
+submodules/Novagram/scripts/refresh-bazel-xcode-repos.sh "$BAZEL_PATH" "$CACHE_DIR/bazel-user-root" "$XCODE_DEV_DIR"
 
 # Output base guard. Bazel never prunes its output base: every config ever built
 # (simulator, device, release, old flags or Xcode) stays there, which is how it

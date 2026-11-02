@@ -313,6 +313,10 @@ if [ -f "$SCRIPT_DIR/build-system/local-secrets.sh" ]; then
 fi
 [ -n "${NOVAGRAM_ADS_ENVIRONMENT:-}" ] || warn "NOVAGRAM_ADS_ENVIRONMENT bo'sh — Novagram reklamalari production bilan build bo'ladi."
 
+# disk cache cap and Xcode updates, as in run.sh (HOOKS.md, "Build scripts: disk cache cap")
+submodules/Novagram/scripts/trim-bazel-disk-cache.sh 30
+submodules/Novagram/scripts/refresh-bazel-xcode-repos.sh "$BAZEL_PATH" "$CACHE_DIR/bazel-user-root" "$DEVELOPER_DIR"
+
 "$BAZEL_PATH" \
     --output_user_root="$CACHE_DIR/bazel-user-root" \
     build \

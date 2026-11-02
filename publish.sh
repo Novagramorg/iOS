@@ -225,6 +225,9 @@ ok "Version: $VERSION  Build: $BUILD_NUMBER"
 python3 build-system/Make/PostboxImportCheck.py . || err "PostboxImportCheck failed: use TelegramEngine instead of Postbox (HOOKS.md, \"Our modules off Postbox\")"
 # Our hooks inside submodules we cannot push to (tgcalls): patch files, re-applied before every build.
 submodules/Novagram/scripts/apply-submodule-patches.sh || err "apply-submodule-patches.sh failed: a submodule patch does not apply (HOOKS.md, \"Submodule patches\")"
+# disk cache cap and Xcode updates, as in run.sh (HOOKS.md, "Build scripts: disk cache cap")
+submodules/Novagram/scripts/trim-bazel-disk-cache.sh 30
+submodules/Novagram/scripts/refresh-bazel-xcode-repos.sh "$BAZEL_PATH" "$CACHE_DIR/bazel-user-root" "$DEVELOPER_DIR"
 step "App Store build (release, -c opt)..."
 warn "Birinchi opt-build 30-45 daqiqa olishi mumkin (dbg-cache yordam bermaydi)."
 
