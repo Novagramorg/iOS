@@ -268,7 +268,7 @@ three calls and delete the two lines.
 #### Reklama
 
 > Yashirin Developer bo'limi. Ochish uchun Settings pastidagi versiya qatorini 20 soniya bosib turing (2026-10-27).
-> Tasdiqlanmagan funksiyalar shu bo'limda bitta switch bo'lib turadi (faqat developer roli): "Call recording" (bitta qator, o'z sahifasini ochadi: switch'lar, yozuvlar ro'yxati va har birining izohi) va "Use less data for calls" (#100). Menejer tasdiqlagach, o'z odatiy bo'limiga ko'chadi (2026-10-30).
+> Tasdiqlanmagan funksiyalar shu bo'limda bitta switch bo'lib turadi (faqat developer roli): hozir "Use less data for calls" (#100). Menejer tasdiqlagach, o'z odatiy bo'limiga ko'chadi (2026-10-30). "Call recording" 2026-11-02 da tasdiqlandi (iOS va macOS) va Chat bo'limiga ko'chdi: bitta qator, o'z sahifasini ochadi.
 
 44. **Reklamani ko'rsatish**: kanal, bot, qidiruv va banner reklamalarini yoqadi yoki o'chiradi.
 91. **Reklama hodisalarini yubormaslik**: Novagram va Telegram reklamalarining ko'rish, bosish, harakat va video ochish hodisalari yuborilmaydi, shuning uchun bir marta ko'rsatiladigan reklama test paytida qayta chiqaveradi. Faqat shu qurilmada, default o'chiq (2026-10-29).
@@ -7526,22 +7526,22 @@ its rows move to their normal section; that move is a separate change. Until 202
 here (`novagram_dev_call_recording`, `novagram_dev_call_data_saving`) plus the user switch in a CALLS section; both
 flags and the CALLS section are gone, no migration (the app was not published with them).
 
-Now in the Developer section, developer role only (`NovagramDeveloperRole.Switch.callRecording` / `.callDataSaving`;
-the director never sees them):
+Now in the Developer section, developer role only (`NovagramDeveloperRole.Switch.callDataSaving`; the director never
+sees it):
 - "Use less data for calls" (`novagram_call_data_saving`, `NovagramEntry.callDataSaving`, section `.developer`,
   stable id 54, sort 975: after "Novagram ads panel", before the Developer footer). Behaviour as in "Call weak signal
   and data saver".
-- "Call recording" (`NovagramEntry.callRecording`, section `.developer`, stable id 55, sort 976, before the Developer
-  footer): one row that opens the Call recording page with the switches, the list and their explanations ("Call
-  recording" below). Until 2026-10-31 it was a CALL RECORDING sub-block after the Developer footer
-  (`NovagramSection.developerCallRecording = 14`, now removed).
+- "Call recording" left the Developer section on 2026-11-02: the manager approved it for iOS and macOS. Its row
+  (`NovagramEntry.callRecording`, stable id 55) is now in the Chat section, sort 85 (after "Forward without names",
+  before the Chat footer), for every user and role; `NovagramDeveloperRole.Switch.callRecording` is gone. Before that it
+  was this one Developer row (sort 976), and until 2026-10-31 a CALL RECORDING sub-block
+  (`NovagramSection.developerCallRecording = 14`, removed).
 
-A director login (`NovagramDeveloperRole.didLogIn`) writes `novagram_call_recording` and `novagram_call_recording_auto`
-off (posting `CallRecordingSettings.changedNotification`) and `novagram_call_data_saving` off through
-`NovagramCallDataSaving.clearKey()`, which never touches Telegram's `VoiceCallSettings.dataSaving`. The slugs
-`call-recording`, `call-recording-auto`, `call-recordings` and `call-data-saving` resolve only while the Developer
-section is revealed and the role can see the row (`NovagramSettingsFeature.isAvailable`); otherwise they land on the
-screen like an unknown slug. No Telegram file is involved. A third gate, "Search features (beta)"
+A director login (`NovagramDeveloperRole.didLogIn`) writes `novagram_call_data_saving` off through
+`NovagramCallDataSaving.clearKey()`, which never touches Telegram's `VoiceCallSettings.dataSaving`; since 2026-11-02 it
+no longer touches the call recording keys. The slug `call-data-saving` resolves only while the Developer section is
+revealed and the role can see the row (`NovagramSettingsFeature.isAvailable`); otherwise it lands on the screen like an
+unknown slug. `call-recording`, `call-recording-auto` and `call-recordings` resolve for everyone. No Telegram file is involved. A third gate, "Search features (beta)"
 (`novagram_dev_search_features`), was removed on 2026-10-30 with the search features it gated.
 
 "Don't send ad events" (second row, right after "Remove all ads") stops every ad event, so an ad the backend
@@ -7816,10 +7816,10 @@ its tests (the old Bazel test target is gone).
 
 **Steps 4–7 (the call screen, settings, consent, auto-record, the result toast, the list). Hooks #286–#291.**
 
-Settings (since 2026-10-31, owner's request: like the system Settings' Camera page). The Developer section (developer
-role only, see "Developer section: 20 s hold…") has **one** row, "Call recording" (`NovagramSettingsController`, stable id
-55, sort 976, before the Developer footer; slug `call-recording`; value: a green "On" badge or "Off", like the CarPlay
-row). It opens `NovagramCallRecordingSettingsController` (`submodules/Novagram/Messenger/Sources/`), where every setting
+Settings (since 2026-10-31, owner's request: like the system Settings' Camera page). The Chat section of Novagram
+Settings (since 2026-11-02, approved; until then the hidden Developer section) has **one** row, "Call recording"
+(`NovagramSettingsController`, stable id 55, sort 85, before the Chat footer; slug `call-recording`; value: a green "On"
+badge or "Off", like the CarPlay row). It opens `NovagramCallRecordingSettingsController` (`submodules/Novagram/Messenger/Sources/`), where every setting
 has its own block with an explanation under it:
 - RECORDING: "Call recording" switch (`pro_messager` / `novagram_call_recording`, Bool, default off) + what Record does
   and that the first recording asks for consent.
@@ -7930,11 +7930,11 @@ set). If upstream renames `backButtonView`, `emojiView`, `emojiTooltipView`, `co
 If `CallControllerNodeV2.init` loses `conferenceAddParticipant`, #289 goes anywhere after `super.init()`. If
 `SharedCallAudioContext.audioDevice` or `PresentationCallImpl.video(isIncoming:)` change, fix `NovagramCallRecordingGlue`.
 
-Manual repro for regressions (simulator + a second phone): (1) Settings → Novagram → Developer: one "Call recording" row, "Off"; tap it: the Call recording page,
+Manual repro for regressions (simulator + a second phone): (1) Settings → Novagram → Chat section: one "Call recording" row, "Off"; tap it: the Call recording page,
 every block with its explanation; turn the switch on: "Record every call automatically" appears and the row in Developer says "On". (2) Call the second phone: "● Record" at the top
 during ringing; tap it: the consent alert (first time only); Continue: red "● REC 00:01" ticking. (3) Answer on the second
 phone, talk, hang up: the REC capsule goes and "Call recording saved / Share" shows; Share opens the system sheet. (4) Settings →
-Developer → Call recording → Call recordings: the file (name = peer + date, duration, size, waveform glyph); tap plays it; swipe → Delete → confirm.
+Novagram → Call recording → Call recordings: the file (name = peer + date, duration, size, waveform glyph); tap plays it; swipe → Delete → confirm.
 The second phone gets "🔴 I'm recording this call (Novagram)" in the chat (in the recorder's app language) as soon as REC
 starts; tap REC to stop and Record again: no second message in that call. (5) Turn on auto-record, call again: REC starts by
 itself as soon as it rings and the second phone gets the message once; tap to stop: it does not start again in that call.

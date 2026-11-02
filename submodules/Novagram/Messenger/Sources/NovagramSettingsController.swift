@@ -183,7 +183,7 @@ private enum NovagramEntry: ItemListNodeEntry {
 
     var section: ItemListSectionId {
         switch self {
-        case .chatHeader, .calls, .deletedMessages, .showViewFirstMessage, .showGhostMode, .longPressCameraSelection, .editedHistoryEnabled, .roundVideoFromGallery, .forwardHideNames, .chatFooter:
+        case .chatHeader, .calls, .deletedMessages, .showViewFirstMessage, .showGhostMode, .longPressCameraSelection, .editedHistoryEnabled, .roundVideoFromGallery, .forwardHideNames, .callRecording, .chatFooter:
             return NovagramSection.chat.rawValue
         case .interfaceHeader, .hideFolders, .showStories, .showMutualContactSymbol, .unlimitedPins, .interfaceFooter:
             return NovagramSection.interface.rawValue
@@ -205,7 +205,7 @@ private enum NovagramEntry: ItemListNodeEntry {
             return NovagramSection.reminder.rawValue
         case .featuresHeader, .addRecommendedFolders, .foldersPrompt, .adminFolders, .folderStyle, .channelHistoryButton, .settingsLinks, .autoAcceptRequests, .shareNovagramProLink, .storyUnlockEnabled, .translateChatsUnlock, .featuresFooter:
             return NovagramSection.features.rawValue
-        case .developerHeader, .showAds, .adEventsOff, .currencyRatesView, .adsPanel, .callDataSaving, .callRecording, .developerFooter:
+        case .developerHeader, .showAds, .adEventsOff, .currencyRatesView, .adsPanel, .callDataSaving, .developerFooter:
             return NovagramSection.developer.rawValue
         case .accountsHeader, .accountsManager, .aboutRow, .novagramBots:
             return NovagramSection.accounts.rawValue
@@ -310,14 +310,15 @@ private enum NovagramEntry: ItemListNodeEntry {
         }
     }
 
-    // The list is ordered by this, not by the array. The call rows keep their stable ids 54–55 but sit in
-    // the Developer section (ids 93–98, spread by 10), before the Developer footer.
+    // The list is ordered by this, not by the array. "Use less data for calls" keeps its stable id 54 but sits in
+    // the Developer section (ids 93–98, spread by 10), before the Developer footer. "Call recording" (id 55) is
+    // approved since 2026-11-02 and sits at the end of the Chat section, before the Chat footer (id 9).
     var sortId: Int {
         switch self {
         case .callDataSaving:
             return 97 * 10 + 5
         case .callRecording:
-            return 97 * 10 + 6
+            return 8 * 10 + 5
         default:
             return Int(self.stableId) * 10
         }
@@ -1534,6 +1535,9 @@ private func novagramSettingsEntries(presentationData: PresentationData, state: 
     entries.append(.longPressCameraSelection(presentationData.theme, l10n.settings_chat_camera_title, l10n.settings_chat_camera_subtitle, state.longPressCameraSelection))
     entries.append(.roundVideoFromGallery(presentationData.theme, l10n.settings_chat_roundVideoGallery_title, l10n.settings_chat_roundVideoGallery_subtitle, state.roundVideoFromGallery, true))
     entries.append(.forwardHideNames(presentationData.theme, l10n.settings_chat_forwardHideNames_title, l10n.settings_chat_forwardHideNames_subtitle, state.forwardHideNames, true))
+    // Call recording, approved 2026-11-02: one row for everyone; its switches, list and explanations are on its own page.
+    let callRecordingStrings = CallRecordingSettingsStrings(languageCode: langCode)
+    entries.append(.callRecording(presentationData.theme, callRecordingStrings.title, state.callRecording ? callRecordingStrings.on : callRecordingStrings.off, state.callRecording))
     entries.append(.chatFooter(presentationData.theme, l10n.settings_chat_footer))
 
     // ─── MESSAGING ───
@@ -1673,11 +1677,6 @@ private func novagramSettingsEntries(presentationData: PresentationData, state: 
         if role.canUse(.callDataSaving) {
             // "Use less data for calls": shows Telegram's live call data saving setting (NovagramCallDataSaving).
             entries.append(.callDataSaving(presentationData.theme, l10n.settings_callDataSaving_title, l10n.settings_callDataSaving_subtitle, callDataSaving))
-        }
-        if role.canUse(.callRecording) {
-            // Call recording, unapproved: one row here; its switches, list and explanations are on its own page.
-            let callRecordingStrings = CallRecordingSettingsStrings(languageCode: langCode)
-            entries.append(.callRecording(presentationData.theme, callRecordingStrings.title, state.callRecording ? callRecordingStrings.on : callRecordingStrings.off, state.callRecording))
         }
         entries.append(.developerFooter(presentationData.theme, NovagramDeveloperStrings.footer(langCode: langCode)))
     }
@@ -2520,7 +2519,6 @@ public func novagramSettingsController(context: AccountContext, highlightFeature
             state.adEventsOff = NovagramDeveloperFlags.isAdEventsOff
             state.currencyRatesViewEnabled = NovagramDeveloperFlags.isCurrencyRatesViewEnabled
             state.adsPanelEnabled = NovagramDeveloperFlags.isAdsPanelEnabled
-            // A login whose role cannot see call recording turned its switches off.
             state.callRecording = CallRecordingSettings().isEnabled
             return state
         }

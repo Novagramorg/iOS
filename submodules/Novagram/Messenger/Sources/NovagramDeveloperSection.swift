@@ -24,8 +24,8 @@ public extension NSNotification.Name {
 /// through `NovagramShowAdsGate`.
 ///
 /// An unapproved feature is one switch, its own key, shown only here; on approval its rows move to
-/// their normal section. Call recording (`CallRecordingSettings`) and "Use less data for calls"
-/// (`NovagramCallDataSaving`) live here now and keep their keys in their own types.
+/// their normal section. "Use less data for calls" (`NovagramCallDataSaving`) lives here now and keeps its key in
+/// its own type. Call recording was approved on 2026-11-02 and moved to the Chat section.
 public enum NovagramDeveloperFlags {
     private static let udSuite = "pro_messager"
     private static let currencyRatesViewKey = "novagram_currency_rates_view"
@@ -109,8 +109,6 @@ public enum NovagramDeveloperRole: String {
         case adEventsOff
         case currencyRatesView
         case adsPanel
-        // "Call recording" with its auto switch and the recordings list (CallRecordingSettings).
-        case callRecording
         // "Use less data for calls" (NovagramCallDataSaving).
         case callDataSaving
     }
@@ -127,7 +125,7 @@ public enum NovagramDeveloperRole: String {
             switch item {
             case .adEventsOff:
                 return true
-            case .removeAllAds, .currencyRatesView, .adsPanel, .callRecording, .callDataSaving:
+            case .removeAllAds, .currencyRatesView, .adsPanel, .callDataSaving:
                 return false
             }
         }
@@ -153,14 +151,6 @@ public enum NovagramDeveloperRole: String {
         }
         if !role.canUse(.adsPanel) && NovagramDeveloperFlags.isAdsPanelEnabled {
             NovagramDeveloperFlags.isAdsPanelEnabled = false
-        }
-        if !role.canUse(.callRecording) {
-            let callRecording = CallRecordingSettings()
-            if callRecording.isEnabled || callRecording.isAutoEnabled {
-                callRecording.isEnabled = false
-                callRecording.isAutoEnabled = false
-                NotificationCenter.default.post(name: CallRecordingSettings.changedNotification, object: nil)
-            }
         }
         if !role.canUse(.callDataSaving) {
             // Only our key: Telegram's own data saving setting (Data and Storage) stays as the user set it.

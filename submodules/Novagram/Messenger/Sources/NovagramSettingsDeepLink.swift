@@ -106,8 +106,6 @@ extension NovagramSettingsFeature {
     var isAvailable: Bool {
         let item: NovagramDeveloperRole.Switch
         switch self {
-        case .callRecording, .callRecordingAuto, .callRecordings:
-            item = .callRecording
         case .callDataSaving:
             item = .callDataSaving
         default:
