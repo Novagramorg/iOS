@@ -173,6 +173,8 @@ private enum NovagramEntry: ItemListNodeEntry {
     case adsPanel(PresentationTheme, String, String, Bool)
     // "Record calls without the chat message" (NovagramCallRecordingNotice.isOff)
     case callRecordingNoticeOff(PresentationTheme, String, String, Bool)
+    // "Save to Files" for voice messages and files (NovagramDeveloperFlags.isSaveToFilesEnabled)
+    case saveToFiles(PresentationTheme, String, String, Bool)
     case developerFooter(PresentationTheme, String)
 
     // — Accounts (Novagram multi-account) —
@@ -207,7 +209,7 @@ private enum NovagramEntry: ItemListNodeEntry {
             return NovagramSection.reminder.rawValue
         case .featuresHeader, .addRecommendedFolders, .foldersPrompt, .adminFolders, .folderStyle, .channelHistoryButton, .settingsLinks, .autoAcceptRequests, .shareNovagramProLink, .storyUnlockEnabled, .translateChatsUnlock, .featuresFooter:
             return NovagramSection.features.rawValue
-        case .developerHeader, .showAds, .adEventsOff, .currencyRatesView, .adsPanel, .callDataSaving, .callRecordingNoticeOff, .developerFooter:
+        case .developerHeader, .showAds, .adEventsOff, .currencyRatesView, .adsPanel, .callDataSaving, .callRecordingNoticeOff, .saveToFiles, .developerFooter:
             return NovagramSection.developer.rawValue
         case .accountsHeader, .accountsManager, .aboutRow, .novagramBots:
             return NovagramSection.accounts.rawValue
@@ -302,6 +304,7 @@ private enum NovagramEntry: ItemListNodeEntry {
         case .currencyRatesView:         return 96
         case .adsPanel:                  return 97
         case .callRecordingNoticeOff:    return 98
+        case .saveToFiles:               return 92
         case .developerFooter:           return 99
         // Accounts (rendered at the top of the list)
         case .accountsHeader:            return -2
@@ -322,6 +325,9 @@ private enum NovagramEntry: ItemListNodeEntry {
             return 97 * 10 + 5
         case .callRecording:
             return 8 * 10 + 5
+        case .saveToFiles:
+            // Stable id 92, shown after "Record calls without notice" (98) and before the footer (99).
+            return 98 * 10 + 5
         default:
             return Int(self.stableId) * 10
         }
@@ -492,6 +498,8 @@ private enum NovagramEntry: ItemListNodeEntry {
             if case let .adsPanel(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
         case let .callRecordingNoticeOff(lhsTheme, lhsTitle, lhsText, lhsValue):
             if case let .callRecordingNoticeOff(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
+        case let .saveToFiles(lhsTheme, lhsTitle, lhsText, lhsValue):
+            if case let .saveToFiles(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
         case let .developerFooter(lhsTheme, lhsText):
             if case let .developerFooter(rhsTheme, rhsText) = rhs, lhsTheme === rhsTheme, lhsText == rhsText { return true } else { return false }
 
@@ -1156,6 +1164,20 @@ private enum NovagramEntry: ItemListNodeEntry {
                 },
                 tag: self.novagramTag
             )
+        case let .saveToFiles(_, title, text, value):
+            return ItemListSwitchItem(
+                presentationData: presentationData,
+                icon: novagramSettingsIcon(systemName: "folder.fill", color: .blue),
+                title: title,
+                text: text,
+                value: value,
+                sectionId: self.section,
+                style: .blocks,
+                updated: { value in
+                    arguments.updateSaveToFiles(value)
+                },
+                tag: self.novagramTag
+            )
         case let .storyUnlockEnabled(_, title, text, value, isNew):
             let langCode = NovagramL10n.languageKey(for: presentationData.strings)
             let badge: AnyComponent<Empty>? = isNew ? AnyComponent(NovagramNewBadgeComponent(langCode: langCode)) : nil
@@ -1258,6 +1280,7 @@ private struct NovagramSettingsState: Equatable {
     var currencyRatesViewEnabled: Bool
     var adsPanelEnabled: Bool
     var callRecordingNoticeOff: Bool
+    var saveToFilesEnabled: Bool
     // Default false: hidden until the 20 s hold on the Settings version line reveals it
     var developerSectionRevealed: Bool
     // The login that revealed it decides which switches show
@@ -1324,6 +1347,7 @@ private struct NovagramSettingsState: Equatable {
         self.currencyRatesViewEnabled = NovagramDeveloperFlags.isCurrencyRatesViewEnabled
         self.adsPanelEnabled = NovagramDeveloperFlags.isAdsPanelEnabled
         self.callRecordingNoticeOff = NovagramCallRecordingNotice.isOff
+        self.saveToFilesEnabled = NovagramDeveloperFlags.isSaveToFilesEnabled
     }
 
     static func == (lhs: NovagramSettingsState, rhs: NovagramSettingsState) -> Bool {
@@ -1460,6 +1484,9 @@ private struct NovagramSettingsState: Equatable {
             return false
         }
         if lhs.callRecordingNoticeOff != rhs.callRecordingNoticeOff {
+            return false
+        }
+        if lhs.saveToFilesEnabled != rhs.saveToFilesEnabled {
             return false
         }
         if lhs.currencyRatesViewEnabled != rhs.currencyRatesViewEnabled {
@@ -1705,6 +1732,9 @@ private func novagramSettingsEntries(presentationData: PresentationData, state: 
         if role.canUse(.callRecordingNoticeOff) {
             entries.append(.callRecordingNoticeOff(presentationData.theme, NovagramDeveloperStrings.callRecordingNoticeOffTitle(langCode: langCode), NovagramDeveloperStrings.callRecordingNoticeOffTip(langCode: langCode), state.callRecordingNoticeOff))
         }
+        if role.canUse(.saveToFiles) {
+            entries.append(.saveToFiles(presentationData.theme, NovagramDeveloperStrings.saveToFilesTitle(langCode: langCode), NovagramDeveloperStrings.saveToFilesTip(langCode: langCode), state.saveToFilesEnabled))
+        }
         entries.append(.developerFooter(presentationData.theme, NovagramDeveloperStrings.footer(langCode: langCode)))
     }
 
@@ -1772,6 +1802,7 @@ private final class NovagramSettingsArguments {
     // The Call recording row, set after init (HOOKS.md, "Call recording").
     var openCallRecordingSettings: () -> Void = {}
     var updateCallRecordingNoticeOff: (Bool) -> Void = { _ in }
+    var updateSaveToFiles: (Bool) -> Void = { _ in }
 
     init(openAccounts: @escaping () -> Void, openAbout: @escaping () -> Void, openNovagramBots: @escaping () -> Void, openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateEditedHistoryEnabled: @escaping (Bool) -> Void, updateRoundVideoFromGallery: @escaping (Bool) -> Void, updateForwardHideNames: @escaping (Bool) -> Void, updateUnlimitedPins: @escaping (Bool) -> Void, updateCallDataSaving: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateSttEnabled: @escaping (Bool) -> Void, openSttLanguageSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateEnableNovagramProxy: @escaping (Bool) -> Void, updateChatLockMaster: @escaping (Bool) -> Void, updateSecretVault: @escaping (Bool) -> Void, updateSecretVaultBiometric: @escaping (Bool) -> Void, updateWhiteThemeAccent: @escaping (Bool) -> Void, updateVoiceTranslate: @escaping (Bool) -> Void, updateAutoDownloadDisabled: @escaping (Bool) -> Void, updateSendTranslateConfirm: @escaping (Bool) -> Void, updateSendConfirmEnabled: @escaping (Bool) -> Void, updateAutoStickerEnabled: @escaping (Bool) -> Void, updateHeartEffectEnabled: @escaping (Bool) -> Void, updateReminderEnabled: @escaping (Bool) -> Void, openReminderTimeSettings: @escaping () -> Void, openReminderSoundSettings: @escaping () -> Void, addRecommendedFolders: @escaping () -> Void, openFolderStyle: @escaping () -> Void, updateChannelHistory: @escaping (Bool) -> Void, updateSettingsLinks: @escaping (Bool) -> Void, shareNovagramProLink: @escaping () -> Void, updateAutoAccept: @escaping (Bool) -> Void, updateAdminFolders: @escaping (Bool) -> Void, updateFoldersPrompt: @escaping (Bool) -> Void, updateShowAds: @escaping (Bool) -> Void, updateAdEventsOff: @escaping (Bool) -> Void, updateCurrencyRatesView: @escaping (Bool) -> Void, updateAdsPanel: @escaping (Bool) -> Void, updateStoryUnlock: @escaping (Bool) -> Void, updateTranslateChatsUnlock: @escaping (Bool) -> Void, openCarPlay: @escaping () -> Void) {
         self.openAccounts = openAccounts
@@ -2548,6 +2579,14 @@ public func novagramSettingsController(context: AccountContext, highlightFeature
             return state
         }
     }
+    arguments.updateSaveToFiles = { value in
+        NovagramDeveloperFlags.isSaveToFilesEnabled = value
+        updateState { state in
+            var state = state
+            state.saveToFilesEnabled = value
+            return state
+        }
+    }
     let refreshDeveloperFlags: () -> Void = {
         updateState { state in
             var state = state
@@ -2556,6 +2595,7 @@ public func novagramSettingsController(context: AccountContext, highlightFeature
             state.currencyRatesViewEnabled = NovagramDeveloperFlags.isCurrencyRatesViewEnabled
             state.adsPanelEnabled = NovagramDeveloperFlags.isAdsPanelEnabled
             state.callRecordingNoticeOff = NovagramCallRecordingNotice.isOff
+            state.saveToFilesEnabled = NovagramDeveloperFlags.isSaveToFilesEnabled
             state.callRecording = CallRecordingSettings().isEnabled
             return state
         }

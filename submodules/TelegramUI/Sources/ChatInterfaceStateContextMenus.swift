@@ -41,6 +41,7 @@ import NovagramEditedHistory
 import NovagramLocalization
 import NovagramSponsored
 import NovagramReviewPrompt
+import NovagramMessenger
 import WalletContext
  
 private struct MessageContextMenuData {
@@ -1610,7 +1611,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         if !isCopyProtected {
             for media in message.effectiveMedia {
                 if let file = media as? TelegramMediaFile {
-                    if file.isMusic {
+                    if NovagramSaveToFiles.canSave(file) { // Novagram: also voice messages and files (Developer switch)
                         actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Conversation_SaveToFiles, icon: { theme in
                             return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Save"), color: theme.actionSheet.primaryTextColor)
                         }, action: { _, f in

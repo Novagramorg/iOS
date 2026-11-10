@@ -8,6 +8,7 @@ import OverlayStatusController
 import LegacyMediaPickerUI
 import SaveToCameraRoll
 import PresentationDataUtils
+import NovagramMessenger
 
 private func sanitizedFileNameComponent(_ value: String) -> String? {
     let result = (value as NSString).lastPathComponent.replacingOccurrences(of: "/", with: "_")
@@ -75,7 +76,7 @@ func saveMediaToFiles(context: AccountContext, fileReference: FileMediaReference
                 let audioUrl = URL(fileURLWithPath: symlinkPath)
                 let audioAsset = AVURLAsset(url: audioUrl)
                 
-                var fileExtension = "mp3"
+                var fileExtension = NovagramSaveToFiles.defaultExtension(fileReference.media) ?? "mp3" // Novagram
                 if let filename = fileReference.media.fileName {
                     if let value = sanitizedFileNameComponent((filename as NSString).pathExtension) {
                         fileExtension = value
@@ -110,6 +111,9 @@ func saveMediaToFiles(context: AccountContext, fileReference: FileMediaReference
                     if nameComponents.isEmpty, let filename = fileReference.media.fileName, let value = sanitizedFileNameComponent((filename as NSString).deletingPathExtension) {
                         nameComponents.append(value)
                     }
+                    if nameComponents.isEmpty, let value = NovagramSaveToFiles.fallbackBaseName(fileReference.media) { // Novagram: voice messages
+                        nameComponents.append(value)
+                    }
                 }
                 if !nameComponents.isEmpty {
                     let fileName = "\(nameComponents.joined(separator: " – ")).\(fileExtension)"
@@ -127,6 +131,7 @@ func saveMediaToFiles(context: AccountContext, fileReference: FileMediaReference
                 }
                 
                 let url = URL(fileURLWithPath: symlinkPath)
+                progressDisposable.dispose() // Novagram: close the loading overlay first, or the picker never shows after a download
                 let controller = legacyICloudFilePicker(theme: presentationData.theme, mode: .export, url: url, documentTypes: [], forceDarkTheme: false, dismissed: {}, completion: { _ in
                     
                 })

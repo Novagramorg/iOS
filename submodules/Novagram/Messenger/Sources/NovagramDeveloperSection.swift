@@ -30,6 +30,7 @@ public enum NovagramDeveloperFlags {
     private static let udSuite = "pro_messager"
     private static let currencyRatesViewKey = "novagram_currency_rates_view"
     private static let adsPanelKey = "novagram_ads_panel"
+    private static let saveToFilesKey = "novagram_save_to_files"
     // TelegramCore reads this key directly (`novagramAdEventsOff()`), and the Mac app uses it too.
     private static let adEventsOffKey = "novagram_ads_events_off"
 
@@ -51,6 +52,13 @@ public enum NovagramDeveloperFlags {
     public static internal(set) var isAdsPanelEnabled: Bool {
         get { return self.value(forKey: self.adsPanelKey) && NovagramDeveloperRole.current.canUse(.adsPanel) }
         set { self.setValue(newValue, forKey: self.adsPanelKey) }
+    }
+
+    /// "Save to Files" for voice messages and files in the message menu (NovagramSaveToFiles). Developer role only
+    /// until it is approved.
+    public static internal(set) var isSaveToFilesEnabled: Bool {
+        get { return self.value(forKey: self.saveToFilesKey) && NovagramDeveloperRole.current.canUse(.saveToFiles) }
+        set { self.setValue(newValue, forKey: self.saveToFilesKey) }
     }
 
     /// Emits the current value, then again whenever a Developer switch flips. Main queue.
@@ -113,6 +121,8 @@ public enum NovagramDeveloperRole: String {
         case callDataSaving
         // "Record calls without the chat message" (NovagramCallRecordingNotice).
         case callRecordingNoticeOff
+        // "Save to Files" for voice messages and files (NovagramSaveToFiles).
+        case saveToFiles
     }
 
     private static let udSuite = "pro_messager"
@@ -127,7 +137,7 @@ public enum NovagramDeveloperRole: String {
             switch item {
             case .adEventsOff, .callRecordingNoticeOff:
                 return true
-            case .removeAllAds, .currencyRatesView, .adsPanel, .callDataSaving:
+            case .removeAllAds, .currencyRatesView, .adsPanel, .callDataSaving, .saveToFiles:
                 return false
             }
         }
@@ -153,6 +163,9 @@ public enum NovagramDeveloperRole: String {
         }
         if !role.canUse(.adsPanel) && NovagramDeveloperFlags.isAdsPanelEnabled {
             NovagramDeveloperFlags.isAdsPanelEnabled = false
+        }
+        if !role.canUse(.saveToFiles) && NovagramDeveloperFlags.isSaveToFilesEnabled {
+            NovagramDeveloperFlags.isSaveToFilesEnabled = false
         }
         if !role.canUse(.callDataSaving) {
             // Only our key: Telegram's own data saving setting (Data and Storage) stays as the user set it.
@@ -348,6 +361,28 @@ enum NovagramDeveloperStrings {
             return "开启后，录制通话时不会向对方发送“🔴 我正在录制此通话”消息。仅限此设备。"
         default:
             return "On — recording a call does not send the \"🔴 I'm recording this call\" message to the other person. This device only."
+        }
+    }
+
+    static func saveToFilesTitle(langCode: String) -> String {
+        switch langCode {
+        case "uz": return "Fayllarga saqlash"
+        case "ru": return "Сохранение в Файлы"
+        case "zh": return "存储到文件"
+        default:   return "Save to Files"
+        }
+    }
+
+    static func saveToFilesTip(langCode: String) -> String {
+        switch langCode {
+        case "uz":
+            return "Ovozli xabar, musiqa yoki faylni bosib turganda «Fayllarga saqlash» chiqadi: shaxsiy chat, guruh va kanallarda. Nusxa olish taqiqlangan chatlarda chiqmaydi."
+        case "ru":
+            return "При долгом нажатии на голосовое, музыку или файл появляется «Сохранить в Файлы»: в личных чатах, группах и каналах. В чатах с запретом копирования не появляется."
+        case "zh":
+            return "长按语音消息、音乐或文件时显示“存储到文件”：适用于私聊、群组和频道。禁止复制的聊天中不显示。"
+        default:
+            return "Press and hold a voice message, music or a file to get \"Save to Files\": in private chats, groups and channels. Not in chats that forbid copying."
         }
     }
 
