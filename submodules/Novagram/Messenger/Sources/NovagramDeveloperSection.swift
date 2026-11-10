@@ -111,6 +111,8 @@ public enum NovagramDeveloperRole: String {
         case adsPanel
         // "Use less data for calls" (NovagramCallDataSaving).
         case callDataSaving
+        // "Record calls without the chat message" (NovagramCallRecordingNotice).
+        case callRecordingNoticeOff
     }
 
     private static let udSuite = "pro_messager"
@@ -123,7 +125,7 @@ public enum NovagramDeveloperRole: String {
             return true
         case .director:
             switch item {
-            case .adEventsOff:
+            case .adEventsOff, .callRecordingNoticeOff:
                 return true
             case .removeAllAds, .currencyRatesView, .adsPanel, .callDataSaving:
                 return false
@@ -324,6 +326,28 @@ enum NovagramDeveloperStrings {
         case "ru": return "Показывать рекламную панель Novagram"
         case "zh": return "显示 Novagram 广告面板"
         default:   return "Show the Novagram ads panel"
+        }
+    }
+
+    static func callRecordingNoticeOffTitle(langCode: String) -> String {
+        switch langCode {
+        case "uz": return "Qo'ng'iroqni xabar bermasdan yozish"
+        case "ru": return "Запись звонка без уведомления"
+        case "zh": return "录音时不发送通知"
+        default:   return "Record calls without notice"
+        }
+    }
+
+    static func callRecordingNoticeOffTip(langCode: String) -> String {
+        switch langCode {
+        case "uz":
+            return "Yoqilsa — qo'ng'iroq yozilganda suhbatdoshga \"🔴 I'm recording this call\" xabari yuborilmaydi. Faqat shu qurilmada."
+        case "ru":
+            return "Вкл — при записи звонка собеседнику не отправляется сообщение «🔴 Я записываю этот звонок». Только на этом устройстве."
+        case "zh":
+            return "开启后，录制通话时不会向对方发送“🔴 我正在录制此通话”消息。仅限此设备。"
+        default:
+            return "On — recording a call does not send the \"🔴 I'm recording this call\" message to the other person. This device only."
         }
     }
 

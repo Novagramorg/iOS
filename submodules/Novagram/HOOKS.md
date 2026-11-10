@@ -272,6 +272,7 @@ three calls and delete the two lines.
 
 44. **Reklamani ko'rsatish**: kanal, bot, qidiruv va banner reklamalarini yoqadi yoki o'chiradi.
 91. **Reklama hodisalarini yubormaslik**: Novagram va Telegram reklamalarining ko'rish, bosish, harakat va video ochish hodisalari yuborilmaydi, shuning uchun bir marta ko'rsatiladigan reklama test paytida qayta chiqaveradi. Faqat shu qurilmada, default o'chiq (2026-10-29).
+- **Qo'ng'iroqni xabar bermasdan yozish**: yoqilsa, qo'ng'iroq yozilganda suhbatdoshga "🔴 I'm recording this call" xabari yuborilmaydi. Developer va director rollari ko'radi. Faqat shu qurilmada, default o'chiq (`pro_messager` / `novagram_call_recording_notice_off`, `NovagramCallRecordingNotice.isOff`; glue `sendNoticeIfNeeded` boshida tekshiradi; 2026-11-10).
 
 ---
 
@@ -7897,7 +7898,11 @@ list texts (`callRecordings_*`) and the notice texts (`callRecording_noticeMessa
   sends nothing more). Only a synchronous enqueue failure (no message id back) stops the recording: its file is deleted and
   `callRecording_noticeFailed` ("Couldn't notify the other person, so the call is not being recorded.") shown, and the next
   Record in that call sends the notice again. A later failed delivery (the chat's red "!") does not stop the recording,
-  same as the Mac. No audible notice and no change to the call's audio path. The consent alert (`callRecording_warningText`)
+  same as the Mac. **Exception (2026-11-10):** the Developer switch "Record calls without notice" (developer and
+  director roles, `NovagramCallRecordingNotice.isOff`, key `novagram_call_recording_notice_off`, default off) makes
+  `sendNoticeIfNeeded` return before the ledger, so no message is sent. While it is on, the consent alert shows
+  `callRecording_warningTextNoNotice` and the Call recording page's PRIVACY block `callRecording_privacyTextNoNotice`
+  (both say no message is sent). No audible notice and no change to the call's audio path. The consent alert (`callRecording_warningText`)
   says the other person will get that message. A writer that fails on its own (state goes idle without our stop) is stopped to fetch its error → "Call recording
   failed". (The old "this recording stays audio only" toast is gone: a voice recording now gets the video; the
   `callRecording_audioOnly` string is unused.)

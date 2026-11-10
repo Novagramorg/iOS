@@ -120,6 +120,26 @@ public struct NovagramL10n {
         )
     }
 
+    /// The consent text while the Developer switch "Record calls without notice" is on: no chat message is sent.
+    public var callRecording_warningTextNoNotice: String {
+        pick(
+            en: "The other person will not get a message about the recording. In some countries recording without consent is illegal. The recording stays on this device.",
+            uz: "Suhbatdoshingizga yozib olish haqida xabar yuborilmaydi. Ba'zi mamlakatlarda roziliksiz yozib olish qonunga zid. Yozuv faqat shu qurilmada qoladi.",
+            ru: "Собеседник не получит сообщение о записи. В некоторых странах запись без согласия запрещена законом. Запись остаётся только на этом устройстве.",
+            zh: "对方不会收到有关录音的消息。在某些国家/地区，未经同意录音是违法的。录音只保存在此设备上。"
+        )
+    }
+
+    /// The Call recording page's privacy text while "Record calls without notice" is on.
+    public var callRecording_privacyTextNoNotice: String {
+        pick(
+            en: "\"Record calls without notice\" is on in the Developer section: no message is sent to the chat when a recording starts. The REC mark stays on screen while recording.",
+            uz: "Dasturchi bo'limida «Qo'ng'iroqni xabar bermasdan yozish» yoqilgan: yozib olish boshlanganda chatga xabar yuborilmaydi. Yozib olish davomida REC belgisi ekranda turadi.",
+            ru: "В разделе для разработчиков включена «Запись звонка без уведомления»: при начале записи сообщение в чат не отправляется. Пока идёт запись, значок REC остаётся на экране.",
+            zh: "开发者设置中已开启“录音时不发送通知”：开始录音时不会向聊天发送消息。录音期间 REC 标记始终显示在屏幕上。"
+        )
+    }
+
     public var callRecording_continue: String {
         pick(en: "Continue", uz: "Davom etish", ru: "Продолжить", zh: "继续")
     }

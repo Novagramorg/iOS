@@ -164,10 +164,12 @@ private struct NovagramCallRecordingSettingsState: Equatable {
     var isAutoEnabled: Bool
     var videoQuality: CallRecordingVideoQuality
     var recordingCount: Int
+    // Developer switch "Record calls without notice": the privacy text must not promise the chat message.
+    var isNoticeOff: Bool
 
     static func current() -> NovagramCallRecordingSettingsState {
         let settings = CallRecordingSettings()
-        return NovagramCallRecordingSettingsState(isEnabled: settings.isEnabled, isAutoEnabled: settings.isAutoEnabled, videoQuality: settings.videoQuality, recordingCount: NovagramCallRecordings.storage.list().count)
+        return NovagramCallRecordingSettingsState(isEnabled: settings.isEnabled, isAutoEnabled: settings.isAutoEnabled, videoQuality: settings.videoQuality, recordingCount: NovagramCallRecordings.storage.list().count, isNoticeOff: NovagramCallRecordingNotice.isOff)
     }
 }
 
@@ -193,7 +195,8 @@ private func novagramCallRecordingSettingsEntries(presentationData: Presentation
     entries.append(.recordings(theme, strings.recordingsTitle, state.recordingCount > 0 ? "\(state.recordingCount)" : ""))
     entries.append(.recordingsFooter(theme, strings.recordingsFooter))
     entries.append(.privacyHeader(strings.privacyHeader))
-    entries.append(.privacyText(theme, strings.privacyText))
+    let privacyText = state.isNoticeOff ? NovagramL10n(presentationData.strings).callRecording_privacyTextNoNotice : strings.privacyText
+    entries.append(.privacyText(theme, privacyText))
     return entries
 }
 

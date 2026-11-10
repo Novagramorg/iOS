@@ -81,3 +81,16 @@ public enum NovagramCallRecordings {
         NotificationCenter.default.post(name: CallRecordingSettings.changedNotification, object: nil)
     }
 }
+
+/// "Record calls without notice", a switch in the hidden Developer section (developer and director roles). While on,
+/// the call glue does not send the "🔴 I'm recording this call" chat message. Per device, off by default.
+public enum NovagramCallRecordingNotice {
+    private static let udSuite = "pro_messager"
+    // Stored; never rename.
+    private static let offKey = "novagram_call_recording_notice_off"
+
+    public static var isOff: Bool {
+        get { return UserDefaults(suiteName: self.udSuite)?.object(forKey: self.offKey) as? Bool ?? false }
+        set { UserDefaults(suiteName: self.udSuite)?.set(newValue, forKey: self.offKey) }
+    }
+}

@@ -288,7 +288,7 @@ final class NovagramCallRecordingGlue {
 
         self.isAsking = true
         let l10n = NovagramL10n(self.presentationData.strings)
-        let alert = textAlertController(context: self.context, title: l10n.callRecording_warningTitle, text: l10n.callRecording_warningText, actions: [
+        let alert = textAlertController(context: self.context, title: l10n.callRecording_warningTitle, text: NovagramCallRecordingNotice.isOff ? l10n.callRecording_warningTextNoNotice : l10n.callRecording_warningText, actions: [
             TextAlertAction(type: .genericAction, title: self.presentationData.strings.Common_Cancel, action: { [weak self] in
                 self?.isAsking = false
                 if isAuto {
@@ -362,6 +362,10 @@ final class NovagramCallRecordingGlue {
     private func sendNoticeIfNeeded() {
         // Only 1:1 calls with a user reach the glue; the recorder has just started.
         let isOneToOneUser = self.peerId.namespace == Namespaces.Peer.CloudUser
+        // Developer section: "Record calls without notice" sends nothing.
+        if NovagramCallRecordingNotice.isOff {
+            return
+        }
         guard NovagramCallRecordingGlue.noticeLedger.beginSending(callSessionId: self.callId, isOneToOneUser: isOneToOneUser, recorderDidStart: true) else {
             return
         }
