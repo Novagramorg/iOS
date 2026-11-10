@@ -38,6 +38,8 @@ private enum NovagramSection: Int32 {
     case developer = 10
     case secretVault = 11
     case carPlay = 12
+    // The search field at the top, and "nothing found" while searching
+    case search = 13
 }
 
 private func textStyleDisplayName(_ rawValue: String, l10n: NovagramL10n) -> String {
@@ -184,9 +186,14 @@ private enum NovagramEntry: ItemListNodeEntry {
     case aboutRow(PresentationTheme, String)
     // — Novagram Bots —
     case novagramBots(PresentationTheme, String)
+    // — Search — placeholder, query
+    case searchField(PresentationTheme, String, String)
+    case searchEmpty(PresentationTheme, String)
 
     var section: ItemListSectionId {
         switch self {
+        case .searchField, .searchEmpty:
+            return NovagramSection.search.rawValue
         case .chatHeader, .calls, .deletedMessages, .showViewFirstMessage, .showGhostMode, .longPressCameraSelection, .editedHistoryEnabled, .roundVideoFromGallery, .forwardHideNames, .callRecording, .chatFooter:
             return NovagramSection.chat.rawValue
         case .interfaceHeader, .hideFolders, .showStories, .showMutualContactSymbol, .unlimitedPins, .interfaceFooter:
@@ -313,6 +320,9 @@ private enum NovagramEntry: ItemListNodeEntry {
         case .aboutRow:                  return -3
         // Novagram Bots row — above About NovagramPro
         case .novagramBots:              return -4
+        // Search field — above everything
+        case .searchField:               return -20
+        case .searchEmpty:               return -19
         }
     }
 
@@ -511,6 +521,10 @@ private enum NovagramEntry: ItemListNodeEntry {
             if case let .aboutRow(rhsTheme, rhsTitle) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle { return true } else { return false }
         case let .novagramBots(lhsTheme, lhsTitle):
             if case let .novagramBots(rhsTheme, rhsTitle) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle { return true } else { return false }
+        case let .searchField(lhsTheme, lhsPlaceholder, lhsQuery):
+            if case let .searchField(rhsTheme, rhsPlaceholder, rhsQuery) = rhs, lhsTheme === rhsTheme, lhsPlaceholder == rhsPlaceholder, lhsQuery == rhsQuery { return true } else { return false }
+        case let .searchEmpty(lhsTheme, lhsText):
+            if case let .searchEmpty(rhsTheme, rhsText) = rhs, lhsTheme === rhsTheme, lhsText == rhsText { return true } else { return false }
         }
     }
 
@@ -592,6 +606,40 @@ private enum NovagramEntry: ItemListNodeEntry {
         return self.linkInfo?.feature
     }
 
+    // Search: the header text of a section header, nil for every other entry.
+    var searchHeaderText: String? {
+        switch self {
+        case let .accountsHeader(text), let .interfaceHeader(text), let .chatHeader(text), let .messagingHeader(text),
+             let .sttHeader(text), let .protectionHeader(text), let .appearanceHeader(text), let .developerHeader(text):
+            return text
+        case let .carPlayHeader(text, _), let .chatLockHeader(text, _), let .reminderHeader(text, _), let .featuresHeader(text, _):
+            return text
+        default:
+            return nil
+        }
+    }
+
+    // Search: a setting row's texts (title, subtitle), nil for headers, footers and info paragraphs.
+    // The developer rows have no link but are settings too, so they are found while that section is shown.
+    var searchTexts: [String]? {
+        switch self {
+        case let .showAds(_, title, text, _), let .adEventsOff(_, title, text, _), let .currencyRatesView(_, title, text, _), let .adsPanel(_, title, text, _), let .callRecordingNoticeOff(_, title, text, _), let .saveToFiles(_, title, text, _):
+            return [title, text]
+        default:
+            break
+        }
+        guard self.linkInfo != nil else {
+            return nil
+        }
+        // Every String the row carries: its title, its subtitle and the small labels ("On", a language).
+        guard let payload = Mirror(reflecting: self).children.first?.value else {
+            return nil
+        }
+        let values = Mirror(reflecting: payload).children.map(\.value)
+        let strings = (values.isEmpty ? [payload] : values).compactMap { $0 as? String }
+        return strings.isEmpty ? nil : strings
+    }
+
     var novagramTag: ItemListItemTag? {
         guard let feature = self.feature else {
             return nil
@@ -602,6 +650,15 @@ private enum NovagramEntry: ItemListNodeEntry {
     func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
         let arguments = arguments as! NovagramSettingsArguments
         switch self {
+        // ─── SEARCH ───
+        case let .searchField(_, placeholder, query):
+            return ItemListSingleLineInputItem(presentationData: presentationData, title: NSAttributedString(string: ""), text: query, placeholder: placeholder, type: .regular(capitalization: false, autocorrection: false), returnKeyType: .search, clearType: .always, sectionId: self.section, textUpdated: { text in
+                arguments.updateSearchQuery(text)
+            }, action: {
+                arguments.dismissSearchInput()
+            })
+        case let .searchEmpty(_, text):
+            return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
         // ─── ACCOUNTLAR ───
         case let .accountsHeader(text):
             return ItemListSectionHeaderItem(presentationData: presentationData, text: text, sectionId: self.section)
@@ -1803,6 +1860,9 @@ private final class NovagramSettingsArguments {
     var openCallRecordingSettings: () -> Void = {}
     var updateCallRecordingNoticeOff: (Bool) -> Void = { _ in }
     var updateSaveToFiles: (Bool) -> Void = { _ in }
+    // The search field at the top, set after init.
+    var updateSearchQuery: (String) -> Void = { _ in }
+    var dismissSearchInput: () -> Void = {}
 
     init(openAccounts: @escaping () -> Void, openAbout: @escaping () -> Void, openNovagramBots: @escaping () -> Void, openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateEditedHistoryEnabled: @escaping (Bool) -> Void, updateRoundVideoFromGallery: @escaping (Bool) -> Void, updateForwardHideNames: @escaping (Bool) -> Void, updateUnlimitedPins: @escaping (Bool) -> Void, updateCallDataSaving: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateSttEnabled: @escaping (Bool) -> Void, openSttLanguageSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateEnableNovagramProxy: @escaping (Bool) -> Void, updateChatLockMaster: @escaping (Bool) -> Void, updateSecretVault: @escaping (Bool) -> Void, updateSecretVaultBiometric: @escaping (Bool) -> Void, updateWhiteThemeAccent: @escaping (Bool) -> Void, updateVoiceTranslate: @escaping (Bool) -> Void, updateAutoDownloadDisabled: @escaping (Bool) -> Void, updateSendTranslateConfirm: @escaping (Bool) -> Void, updateSendConfirmEnabled: @escaping (Bool) -> Void, updateAutoStickerEnabled: @escaping (Bool) -> Void, updateHeartEffectEnabled: @escaping (Bool) -> Void, updateReminderEnabled: @escaping (Bool) -> Void, openReminderTimeSettings: @escaping () -> Void, openReminderSoundSettings: @escaping () -> Void, addRecommendedFolders: @escaping () -> Void, openFolderStyle: @escaping () -> Void, updateChannelHistory: @escaping (Bool) -> Void, updateSettingsLinks: @escaping (Bool) -> Void, shareNovagramProLink: @escaping () -> Void, updateAutoAccept: @escaping (Bool) -> Void, updateAdminFolders: @escaping (Bool) -> Void, updateFoldersPrompt: @escaping (Bool) -> Void, updateShowAds: @escaping (Bool) -> Void, updateAdEventsOff: @escaping (Bool) -> Void, updateCurrencyRatesView: @escaping (Bool) -> Void, updateAdsPanel: @escaping (Bool) -> Void, updateStoryUnlock: @escaping (Bool) -> Void, updateTranslateChatsUnlock: @escaping (Bool) -> Void, openCarPlay: @escaping () -> Void) {
         self.openAccounts = openAccounts
@@ -1864,6 +1924,45 @@ private final class NovagramSettingsArguments {
 /// `highlightFeature` is set only when the screen was opened from a per-feature deep link
 /// (`tg://settings/novagrampro/<slug>`). It scrolls that row into view and traces an outline
 /// around it. Opening Settings normally leaves it nil — no scrolling, no animation.
+/// The search field on top of the list; while a query is typed, only the matching rows under their section headers.
+/// The rows are the real ones, so a switch found by search flips right there.
+private func novagramSettingsSearchEntries(entries: [NovagramEntry], query: String, presentationData: PresentationData) -> [NovagramEntry] {
+    let l10n = NovagramL10n(presentationData.strings)
+    let searchField = NovagramEntry.searchField(presentationData.theme, l10n.settings_search_placeholder, query)
+    let words = NovagramSettingsSearch.words(query)
+    guard !words.isEmpty else {
+        return [searchField] + entries
+    }
+
+    var headers: [ItemListSectionId: NovagramEntry] = [:]
+    for entry in entries {
+        if entry.searchHeaderText != nil {
+            headers[entry.section] = entry
+        }
+    }
+    var result: [NovagramEntry] = [searchField]
+    var shownHeaders = Set<ItemListSectionId>()
+    for entry in entries {
+        guard let texts = entry.searchTexts else {
+            continue
+        }
+        let header = headers[entry.section]
+        guard NovagramSettingsSearch.matches(words: words, texts: texts + [header?.searchHeaderText].compactMap { $0 }) else {
+            continue
+        }
+        if let header, !shownHeaders.contains(entry.section) {
+            shownHeaders.insert(entry.section)
+            result.append(header)
+        }
+        result.append(entry)
+    }
+    if result.count == 1 {
+        result.append(.searchEmpty(presentationData.theme, l10n.settings_search_noResults))
+    }
+    // ItemList orders by sortId; the headers were appended next to their first row, so sort once.
+    return result.sorted(by: <)
+}
+
 public func novagramSettingsController(context: AccountContext, highlightFeature: NovagramSettingsFeature? = nil) -> ViewController {
     let statePromise = ValuePromise(NovagramSettingsState(), ignoreRepeated: true)
     let stateValue = Atomic(value: NovagramSettingsState())
@@ -2568,6 +2667,15 @@ public func novagramSettingsController(context: AccountContext, highlightFeature
     }, openCarPlay: {
         pushControllerImpl?(novagramCarPlayController(context: context))
     })
+    // The search field: the query is kept apart from the settings state, it only filters the rows.
+    let searchQueryPromise = ValuePromise<String>("", ignoreRepeated: true)
+    var dismissSearchInputImpl: (() -> Void)?
+    arguments.updateSearchQuery = { query in
+        searchQueryPromise.set(query)
+    }
+    arguments.dismissSearchInput = {
+        dismissSearchInputImpl?()
+    }
     arguments.openCallRecordingSettings = {
         pushControllerImpl?(novagramCallRecordingSettingsController(context: context))
     }
@@ -2628,16 +2736,18 @@ public func novagramSettingsController(context: AccountContext, highlightFeature
         context.sharedContext.presentationData,
         statePromise.get(),
         NovagramCarPlayStatus.signal(context: context),
-        NovagramCallDataSaving.isOnSignal(accountManager: context.sharedContext.accountManager)
+        NovagramCallDataSaving.isOnSignal(accountManager: context.sharedContext.accountManager),
+        searchQueryPromise.get()
     ) |> deliverOnMainQueue
         |> afterDisposed {
             NotificationCenter.default.removeObserver(callRecordingObserver)
             NotificationCenter.default.removeObserver(developerFlagsObserver)
         }
-        |> map { presentationData, state, carPlayStatus, callDataSaving -> (ItemListControllerState, (ItemListNodeState, Any)) in
+        |> map { presentationData, state, carPlayStatus, callDataSaving, searchQuery -> (ItemListControllerState, (ItemListNodeState, Any)) in
             let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Novagram"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
-            let entries = novagramSettingsEntries(presentationData: presentationData, state: state, carPlayStatus: carPlayStatus, callDataSaving: callDataSaving)
-            _ = latestEntries.swap(entries)
+            let allEntries = novagramSettingsEntries(presentationData: presentationData, state: state, carPlayStatus: carPlayStatus, callDataSaving: callDataSaving)
+            _ = latestEntries.swap(allEntries)
+            let entries = novagramSettingsSearchEntries(entries: allEntries, query: searchQuery, presentationData: presentationData)
             // ensureVisibleItemTag only reaches rows whose nodes already exist, so a row far down
             // the list also needs an index-based scroll. ItemListNodeState applies this on the
             // first transition only, which is exactly the arrive-from-a-link moment.
@@ -2658,6 +2768,9 @@ public func novagramSettingsController(context: AccountContext, highlightFeature
     }
     presentPincodeControllerImpl = { [weak controller] vc in
         controller?.view.window?.rootViewController?.present(vc, animated: true)
+    }
+    dismissSearchInputImpl = { [weak controller] in
+        controller?.view.endEditing(true)
     }
 
     controller.didAppear = { [weak controller] firstTime in

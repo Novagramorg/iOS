@@ -182,6 +182,15 @@ public struct NovagramL10n {
         pick(en: "Off", uz: "O'chirilgan", ru: "Отключено", zh: "关")
     }
 
+    // Search field at the top of Novagram settings
+    public var settings_search_placeholder: String {
+        pick(en: "Search settings", uz: "Sozlamalarni qidirish", ru: "Поиск настроек", zh: "搜索设置")
+    }
+
+    public var settings_search_noResults: String {
+        pick(en: "No settings found", uz: "Hech narsa topilmadi", ru: "Ничего не найдено", zh: "未找到设置")
+    }
+
     // Section headers (capitals)
     public var settings_section_interface: String {
         pick(en: "INTERFACE", uz: "INTERFEYS", ru: "ИНТЕРФЕЙС", zh: "界面")
@@ -433,6 +442,15 @@ public struct NovagramL10n {
 
     public var settings_chat_ghost_title: String {
         pick(en: "Ghost mode button", uz: "Ghost rejimi tugmasi", ru: "Кнопка режима «Призрак»", zh: "幽灵模式按钮")
+    }
+
+    // Chat-list header menu (story / ghost / proxy behind one button)
+    public var header_menu_ghost_turn_on: String {
+        pick(en: "Turn On Ghost Mode", uz: "Ghost rejimini yoqish", ru: "Включить режим «Призрак»", zh: "开启幽灵模式")
+    }
+
+    public var header_menu_ghost_turn_off: String {
+        pick(en: "Turn Off Ghost Mode", uz: "Ghost rejimini o'chirish", ru: "Выключить режим «Призрак»", zh: "关闭幽灵模式")
     }
 
     public var settings_chat_ghost_subtitle: String {

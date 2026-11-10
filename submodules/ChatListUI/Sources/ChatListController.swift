@@ -382,7 +382,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                     
                     self.primaryContext?.rightButton = NavigationBarComponent.Button(id: "compose",
                         content: .icon(imageName: "Chat List/ComposeIcon"),
-                        tint: .accent,
+                        requiresOwnSection: true, // Novagram: plain glass circle, not the accent one
                         action: { [weak self] _ in
                             self?.composePressed()
                         }
@@ -7118,7 +7118,7 @@ private final class ChatListLocationContext {
         if let rightButton = self.rightButton, !isVaultList {
             result.append(rightButton)
         }
-        // Novagram: story / ghost / proxy fold behind one chevron (NovagramHeaderFold) once there are two
+        // Novagram: story / ghost / proxy go behind one menu button (NovagramHeaderMenu) once there are two
         // or more of them, so they stop squeezing the title. Buttons are laid out right to left.
         var foldableButtons: [NavigationBarComponent.Button] = []
         if let storyButton = self.storyButton, !isVaultList {
@@ -7131,16 +7131,13 @@ private final class ChatListLocationContext {
             foldableButtons.append(proxyButton)
         }
         if foldableButtons.count >= 2 {
-            let isExpanded = NovagramHeaderFold.isExpanded
-            if isExpanded {
-                result.append(contentsOf: foldableButtons)
-            }
-            result.append(NavigationBarComponent.Button(id: "novagramHeaderFold",
-                content: .image(NovagramHeaderIcons.fold(isExpanded: isExpanded)),
-                action: { [weak self] _ in
+            result.append(NavigationBarComponent.Button(id: NovagramHeaderMenu.buttonId,
+                content: .image(NovagramHeaderMenu.icon(buttons: foldableButtons)),
+                action: { [weak self] sourceView in
+                    guard let self, let parentController = self.parentController else { return }
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    NovagramHeaderFold.isExpanded = !NovagramHeaderFold.isExpanded
-                    self?.parentController?.requestLayout(transition: .animated(duration: 0.3, curve: .spring))
+                    let strings = self.context.sharedContext.currentPresentationData.with { $0 }.strings
+                    parentController.openSideColumnOverflowMenu(sourceView: sourceView, items: NovagramHeaderMenu.items(buttons: foldableButtons, strings: strings))
                 }
             ))
         } else {
@@ -7598,7 +7595,7 @@ private final class ChatListLocationContext {
                 } else {
                     self.rightButton = NavigationBarComponent.Button(id: "compose",
                         content: .icon(imageName: "Chat List/ComposeIcon"),
-                        tint: .accent,
+                        requiresOwnSection: true, // Novagram: plain glass circle, not the accent one
                         action: { [weak self] _ in
                             self?.parentController?.composePressed()
                         }

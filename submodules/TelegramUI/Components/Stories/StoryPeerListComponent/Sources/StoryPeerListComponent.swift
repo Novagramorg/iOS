@@ -947,7 +947,10 @@ public final class StoryPeerListComponent: Component {
             // fits. Decided from where the layout is headed, so an animation in progress does not flip it midway.
             let targetCentralContentWidth = activityCollapsedContentWidth * targetActivityFraction + targetCollapsedContentWidth * (1.0 - targetActivityFraction) + titleContentSpacing + realTitleContentWidth
             let showsTitleText = StoryPeerListTitleLayout.showsTitleText(contentWidth: targetCentralContentWidth, minX: component.minTitleX, maxX: component.maxTitleX)
-            let titleTextFraction = max(self.titleTextFraction(showsTitleText, at: timestamp), min(1.0, max(0.0, collapsedState.maxFraction)))
+            // Novagram: on a small phone with many right buttons the expanded title does not fit either; it then goes
+            // without its text too, instead of running under the buttons.
+            let expandedShowsTitleText = StoryPeerListTitleLayout.showsTitleText(contentWidth: realTitleContentWidth, minX: component.minTitleX, maxX: component.maxTitleX)
+            let titleTextFraction = max(self.titleTextFraction(showsTitleText, at: timestamp), expandedShowsTitleText ? min(1.0, max(0.0, collapsedState.maxFraction)) : 0.0)
             let hiddenTitleWidth = titleSize.width * (1.0 - titleTextFraction)
             let titleWidth = collapsedState.titleWidth - hiddenTitleWidth
             let placedContentWidth = centralContentWidth - hiddenTitleWidth
@@ -1445,7 +1448,8 @@ public final class StoryPeerListComponent: Component {
             if self.sortedItems.isEmpty {
                 titleContentOffset = collapsedTitleOffset
             } else {
-                titleContentOffset = titleMinContentOffset.interpolate(to: ((itemLayout.containerSize.width - titleWidth) * 0.5) as CGFloat, amount: min(1.0, collapsedState.maxFraction) * (1.0 - collapsedState.activityFraction))
+                // Novagram: centred unless that would run into the right buttons (ghost + fold widen them).
+                titleContentOffset = titleMinContentOffset.interpolate(to: StoryPeerListTitleLayout.contentOrigin(containerWidth: itemLayout.containerSize.width, contentWidth: titleWidth, minX: component.minTitleX, maxX: component.maxTitleX), amount: min(1.0, collapsedState.maxFraction) * (1.0 - collapsedState.activityFraction))
                 titleContentOffset += -expandBoundsFraction * 4.0
             }
             

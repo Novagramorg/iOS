@@ -32,7 +32,7 @@ files on our side. Without it 37 files conflicted, with it 25, and most remainin
 | File | What changed upstream | Hook now |
 | --- | --- | --- |
 | `ChatListHeaderComponent/Sources/NavigationButtonComponent.swift` | deleted (`16b065d8d0`, one glass `NavigationBarComponent`) | gone; its `.systemIcon` / `.iconTinted` / `.iconOriginal` cases, the 28 pt clamp and the haptic are replaced by `NovagramHeaderIcons` (`Novagram/ForeignUserBlock/Sources/ChatList_NovagramHeaderIcons.swift`, images made once) |
-| `ChatListUI/Sources/ChatListController.swift` | header buttons are `NavigationBarComponent.Button` | `ghostModeButton` / the fold button are `NavigationBarComponent.Button(content: .image(NovagramHeaderIcons...))`, light haptic in their actions; the vault filter and `foldableButtons` stay in `rightButtons` |
+| `ChatListUI/Sources/ChatListController.swift` | header buttons are `NavigationBarComponent.Button` | `ghostModeButton` / the header menu button are `NavigationBarComponent.Button(content: .image(NovagramHeaderIcons...))`, light haptic in their actions; the vault filter and `foldableButtons` stay in `rightButtons` |
 | `TelegramUI/Sources/ChatControllerNode.swift` | the send loop moved into `chatComposerTextMessages` (TextFormat) | per piece: `NovagramOutgoingText.apply(text:entities:businessLinkSetup:)` (`Novagram/Messenger/Sources/NovagramOutgoingText.swift`) appends Auto Text, regenerates entities with upstream's rule and adds the Text Style entity |
 | `TelegramCore/Sources/State/AccountStateManagementUtils.swift` | `.EditMessage` merge moved into `mergedServerMessageUpdate` (also used by feed pages) | `novagramAppendEditHistory` runs on the merged message's attributes in `.EditMessage` only |
 | `TabBarUI/Sources/TabBarContollerNode.swift` | no search button in iPhone Duo's side placement | `search: sidePlacement != nil ? nil : { …always a search state… }()` |
@@ -303,7 +303,7 @@ three calls and delete the two lines.
 
 55. **Papka ikonkasini tanlash**: papka tahrirlash ekranida emoji ikonka tanlanadi (Premium'siz).
 56. **Cheksiz papka va teglar**: papka limiti oshirilgan, "Show Folder Tags" Premium'siz ishlaydi.
-57. **Header tugmalarini yig'ish**: Stories, Ghost va Proxy tugmalari 2 tadan ko'p bo'lsa bitta chevron ortiga yig'iladi.
+57. **Header tugmalari menyusi**: Stories, Ghost va Proxy tugmalari 2 tadan ko'p bo'lsa bitta menyu tugmasiga yig'iladi (icon + matn; Ghost yoqiq bo'lsa tugma binafsha ghost). 2026-11-05 gacha chevron fold edi.
 
 #### Multi-account
 
@@ -325,6 +325,7 @@ three calls and delete the two lines.
 66. **Novagram Bots**: kategoriyalarga bo'lingan foydali botlar katalogi.
 67. **Analytics**: Novagram foydalanuvchilari (qurilmalar) va faol accountlar soni.
 68. **Settings havolalari**: `tg://settings/novagrampro/<feature>` havolasi kerakli qatorni ochib, uni belgilab ko'rsatadi.
+101. **Novagram Settings qidiruvi**: Novagram Settings tepasida qidiruv maydoni; yozilgan so'zlar qator nomi, izohi yoki bo'lim sarlavhasida bo'lsa faqat o'sha qatorlar bo'lim sarlavhasi bilan qoladi (katta-kichik harf, diakritika va o'zbekcha apostroflar farq qilmaydi). Natijadagi qatorlar haqiqiy qatorlar, switch shu yerning o'zida yoqiladi. Hech narsa topilmasa "Hech narsa topilmadi". Kod: `Messenger/Sources/NovagramSettingsSearch.swift` + `NovagramSettingsController.swift` (`novagramSettingsSearchEntries`). Telegram fayllarida hook yo'q. 2026-11-09.
 69. **Ilova ikonkalari**: 7 ta Nova ikonka (Ko'k, Feruza, Binafsha, Pushti, To'q sariq, Qora, Qizil).
 70. **Imkoniyatlar ekrani (Tips)**: birinchi ishga tushishda asosiy imkoniyatlar bir marta ko'rsatiladi.
 71. **Yangilanish tekshiruvi**: App Store'da yangi versiya bo'lsa "Yangilanish mavjud" alerti chiqadi.
@@ -618,8 +619,10 @@ three calls and delete the two lines.
 155. `ApplicationContext.swift` (TelegramUI): birinchi launch'da Tips, keyingilarida App Store yangilanish tekshiruvi.
 156. `AppDelegate.swift` (TelegramUI), `ThemeSettingsAppIconItem.swift` (SettingsUI): 7 ta Nova ikonka va ularning lokalizatsiya qilingan nomlari.
 157. `Info.plist`, `Telegram/BUILD`, `Nova*Icon.alticon` (Telegram app): alternate ikonka fayllari.
-158. `ChatListController.swift` (ChatListUI): header (ghost, fold) va story kamera tugmalarida haptic, tugmalarning o'z action'ida (2026-10-28 dan).
+158. `ChatListController.swift` (ChatListUI): header (ghost, menyu) va story kamera tugmalarida haptic, tugmalarning o'z action'ida (2026-10-28 dan).
 159. `ItemListSwitchItem.swift` (ItemListUI): switch'dagi "NEW" badge joyi tuzatilgan.
+314. `ChatListController.swift` (ChatListUI): chatlar tepasidagi compose tugmasi ko'k (`tint: .accent`) emas, oddiy glass doira (`requiresOwnSection: true`), ikki joyda. 2026-11-05.
+315. `StoryPeerListComponent.swift` (StoryPeerListComponent): stories ochiq turganda "Chatlar" sarlavhasi `StoryPeerListTitleLayout.contentOrigin(...)` bilan joylanadi: o'ng tugmalarga yetmasa o'rtada qoladi, yetsa chapga suriladi (Ghost + fold tugmalari pill'ni o'rtadan o'tkazib yuborardi; 2026-11-05 dan fold o'rniga menyu). Kichik telefonda (iPhone 16) sarlavha band'ga umuman sig'masa, yig'ilgan holatdagidek "Chatlar" matni yashiriladi, emoji status qoladi (`expandedShowsTitleText`). 2026-11-05.
 224. `PeerInfoSettingsItems.swift` (PeerInfoScreen): Settings tab'ining eng pastida (`support` section ostida) ilova versiyasi — "Novagram 13.0 (85)". Matn `NovagramAppVersion.displayText` (UpdateCheck moduli), hook — `PeerInfoScreenCommentItem(id: 100, ...)` + `import NovagramUpdateCheck` (2026-10-12). 2026-10-27 dan: qatorni 20 s bosib turish Developer bo'limini ochadi/yashiradi (`novagramLongPressDuration` / `novagramLongPressAction` = `NovagramDeveloperSection`), batafsil pastda "Developer section".
 242. `PeerInfoScreenCommentItem.swift` (PeerInfoScreen): ixtiyoriy yashirin long press — item'da 2 ta `var` (`novagramLongPressDuration`, `novagramLongPressAction`), node `update`'ida `NovagramHiddenLongPress(view:recognizesSimultaneously: true)` + `import NovagramChannelStats` (2026-10-27, #224 uchun).
 243. `PeerInfoSettingsItems.swift` (PeerInfoScreen): Analytics ostida "Valyuta kurslari" qatori (id 4), faqat Developer switch "Show currency rates" yoqiq bo'lsa; `NovagramCurrencyRatesEntry.open(context:)` + `import NovagramCurrencyRates` (2026-10-27).
@@ -6732,18 +6735,23 @@ strings switch + the embedded bots JSON (`NovagramBotLocalizedText.zh` optional)
 SpeechToText, ContactsConsent, EditedHistory, UnreadReminder, Analytics. Device-language helpers
 (`Locale.current.languageCode`) get `"zh"` on a Chinese iPhone without any `zh.lproj`.
 
-### `submodules/ChatListUI/Sources/ChatListController.swift` (UPSTREAM hook) — header buttons fold
+### `submodules/ChatListUI/Sources/ChatListController.swift` (UPSTREAM hook) — header buttons menu
 
 `ChatListLocationContext.rightButtons`: after the compose button, the story / ghost / proxy buttons are collected
-into `foldableButtons`. With two or more of them, they are shown only while `NovagramHeaderFold.isExpanded`, followed
-by one `.systemIcon` chevron button (`id: "novagramHeaderFold"`) that flips the flag and calls
-`parentController?.requestLayout(...)` (the header re-reads `rightButtons` in `updateHeaderContent()`). With fewer
-than two, nothing changes (a plain [story][compose] header looks exactly like upstream). Buttons are laid out right
-to left, so the chevron is the leftmost item of the capsule and the hidden buttons slide out to its right.
+into `foldableButtons`. With two or more of them, they are replaced by one menu button
+(`id: NovagramHeaderMenu.buttonId`); its action calls `parentController.openSideColumnOverflowMenu(sourceView:items:)`
+(the iPhone Duo "…" menu, reused) with `NovagramHeaderMenu.items(buttons:strings:)`: one icon + text row per button,
+each running that button's own action. With fewer than two, nothing changes (a plain [story][compose] header looks
+exactly like upstream).
 
-`NovagramHeaderFold` (Novagram-owned, `submodules/Novagram/ForeignUserBlock/Sources/ChatList_NovagramHeaderFold.swift`,
-already a ChatListUI dep and imported by this file): `pro_messager` key `fenix_header_buttons_expanded`,
-default `false` = folded; chevron points left while folded, right while unfolded.
+`NovagramHeaderMenu` (Novagram-owned, `submodules/Novagram/ForeignUserBlock/Sources/ChatList_NovagramHeaderMenu.swift`):
+the menu button's icon is "…" (`ellipsis`), or the purple ghost while Ghost mode is on, so the state stays visible.
+Ghost rows read "Turn On/Off Ghost Mode" (`NovagramL10n.header_menu_ghost_turn_on/off`). The ghost ids
+`ghostMode-on` / `ghostMode-off` must match `updateGhostModeButton()`.
+
+2026-11-05: replaced the fold chevron (`NovagramHeaderFold`, removed). The fold's expanded buttons pushed the title
+under them on small phones. The old `pro_messager` key `fenix_header_buttons_expanded` is no longer read; it is left
+on devices (never rename or reuse it).
 
 ---
 

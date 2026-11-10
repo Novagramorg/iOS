@@ -82,4 +82,18 @@ final class StoryPeerListTitleLayoutTests: XCTestCase {
         XCTAssertTrue(StoryPeerListTitleLayout.showsTitleText(contentWidth: 232.0, minX: 120.0, maxX: 360.0))
         XCTAssertFalse(StoryPeerListTitleLayout.showsTitleText(contentWidth: 233.0, minX: 120.0, maxX: 360.0))
     }
+
+    // Novagram (2026-11-05): with the stories expanded the title used to be centred in the row whatever the buttons
+    // were. The compose circle plus a story/ghost/fold pill reach past the middle of a 402 pt row, so the centred
+    // "Chatlar" and its emoji status ran under the pill. Placed by `contentOrigin`, it ends clear of the buttons.
+    func test_contentOrigin_expandedTitleStaysClearOfWideRightButtons() {
+        let width: CGFloat = 402.0
+        let minX: CGFloat = 75.0
+        let maxX: CGFloat = 214.0
+        let titleWidth: CGFloat = 104.0
+        XCTAssertGreaterThan((width + titleWidth) * 0.5, maxX, "a centred title would overlap the buttons")
+        let origin = self.origin(titleWidth, width: width, minX: minX, maxX: maxX)
+        XCTAssertLessThanOrEqual(origin + titleWidth, maxX - StoryPeerListTitleLayout.trailingMargin)
+        XCTAssertGreaterThanOrEqual(origin, minX + StoryPeerListTitleLayout.leadingMargin)
+    }
 }

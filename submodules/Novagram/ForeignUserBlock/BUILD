@@ -13,6 +13,9 @@ swift_library(
         "//submodules/TelegramCore:TelegramCore",
         "//submodules/AccountContext:AccountContext",
         "//submodules/AppBundle:AppBundle",
+        "//submodules/TelegramPresentationData:TelegramPresentationData",
+        "//submodules/TelegramUI/Components/NavigationBarComponent:NavigationBarComponent",
+        "//submodules/Novagram/Localization:NovagramLocalization",
     ],
     visibility = [
         "//visibility:public",
