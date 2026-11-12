@@ -209,6 +209,7 @@ public final class PrivateCallScreen: OverlayMaskContainerView, AVPictureInPictu
     private var weakSignalView: WeakSignalView?
     private let novagramTurnOffVideo = NovagramCallTurnOffVideo() // Novagram
     public let novagramRecord = NovagramCallRecordControl() // Novagram
+    public let novagramVoiceChanger = NovagramCallVoiceChangerControl() // Novagram (HOOKS.md, "Voice changer")
     public var novagramVideoLayout: (isPipTop: Bool, isPipLeft: Bool, isSwapped: Bool) { let corner = self.videoContainerViews.first(where: { $0.key == .foreground })?.novagramMinimizedCorner ?? (isTop: false, isLeft: false); return (corner.isTop, corner.isLeft, self.swapLocalAndRemoteVideo) } // Novagram
     
     private var emojiView: KeyEmojiView?
@@ -1552,5 +1553,6 @@ public final class PrivateCallScreen: OverlayMaskContainerView, AVPictureInPictu
         }
         self.novagramTurnOffVideo.update(host: self, weakSignalView: self.weakSignalView, isOwnVideoOn: params.state.localVideo != nil, isHidden: self.isAnimatedOutToGroupCall, strings: params.state.strings, transition: transition, turnOffVideo: { [weak self] in self?.videoAction?() }) // Novagram
         self.novagramRecord.update(host: self, insets: params.insets, centerX: contentCenterX, backButton: self.backButtonView, avoiding: [self.emojiView?.layer, self.emojiTooltipView?.layer, self.conferenceButtonView?.layer, self.titleView.layer, self.statusView.layer, self.weakSignalView?.layer, self.novagramTurnOffVideo.buttonLayer, self.avatarTransformLayer], controlsHidden: currentAreControlsHidden, isEmojiKeyExpanded: self.isEmojiKeyExpanded, isAnimatedOutToGroupCall: self.isAnimatedOutToGroupCall, strings: params.state.strings, transition: transition) // Novagram
+        self.novagramVoiceChanger.update(host: self, insets: params.insets, backButton: self.backButtonView, avoiding: [self.emojiView?.layer, self.emojiTooltipView?.layer, self.conferenceButtonView?.layer, self.titleView.layer, self.statusView.layer, self.weakSignalView?.layer, self.novagramTurnOffVideo.buttonLayer, self.novagramRecord.buttonLayer, self.avatarTransformLayer], controlsHidden: currentAreControlsHidden, isEmojiKeyExpanded: self.isEmojiKeyExpanded, isAnimatedOutToGroupCall: self.isAnimatedOutToGroupCall, strings: params.state.strings, transition: transition) // Novagram
     }
 }

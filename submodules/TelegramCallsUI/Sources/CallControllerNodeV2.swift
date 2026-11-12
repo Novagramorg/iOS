@@ -18,6 +18,7 @@ import TelegramVoip
 import MetalEngine
 import DeviceAccess
 import LibYuvBinding
+import NovagramVoiceChangerUI // Novagram
 
 final class CallControllerNodeV2: ViewControllerTracingNode, CallControllerNodeProtocol {
     private struct PanGestureState {
@@ -195,6 +196,7 @@ final class CallControllerNodeV2: ViewControllerTracingNode, CallControllerNodeP
             self.restoreUIForPictureInPicture?(completion)
         }
         self.novagramRecording = NovagramCallRecordingGlue(call: call, callScreen: self.callScreen, presentationData: presentationData) // Novagram
+        self.callScreen.novagramVoiceChanger.pressed = { [weak self] in guard let self else { return }; NovagramVoiceChangerUI.presentPicker(context: self.call.context, forCall: true, present: { controller, _ in self.present?(controller) }) } // Novagram (HOOKS.md, "Voice changer")
         self.callScreen.conferenceAddParticipant = { [weak self] in
             guard let self else {
                 return

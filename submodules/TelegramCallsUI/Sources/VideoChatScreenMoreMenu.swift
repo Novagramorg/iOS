@@ -19,6 +19,7 @@ import TelegramPresentationData
 import ComponentFlow
 import MultilineTextComponent
 import AVFoundation
+import NovagramVoiceChangerUI // Novagram
 
 private func resolvedEmojiKey(data: Data) -> [String] {
     let resolvedKey = stringForEmojiHashOfData(data, 4) ?? []
@@ -208,6 +209,7 @@ extension VideoChatScreenComponent.View {
                 c?.pushItems(items: .single(ContextController.Items(content: .list(self.contextMenuAudioItems()))))
             })))
         }
+        if let item = NovagramVoiceChangerUI.groupCallMenuItem(context: currentCall.accountContext, strings: environment.strings, present: { [weak self] c, a in self?.environment?.controller()?.present(c, in: .window(.root), with: a as? ViewControllerPresentationArguments) }) { items.append(.action(item)) } // Novagram (HOOKS.md, "Voice changer")
         
         if canManageCall && !isConference {
             let text: String

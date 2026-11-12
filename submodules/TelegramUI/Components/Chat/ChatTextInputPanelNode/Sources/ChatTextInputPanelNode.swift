@@ -62,6 +62,7 @@ import RasterizedCompositionComponent
 import RichTextEditorUIKit
 import VideoMessageCameraScreen
 import NovagramSpeechToText
+import NovagramVoiceChangerUI // Novagram
 import NovagramLocalization
 import NovagramRoundVideoFromGallery
 import RichTextEditorCore
@@ -262,6 +263,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     
     public var viewOnce = false
     public let viewOnceButton: ChatRecordingViewOnceButtonNode
+    public let novagramVoiceChangerButton = NovagramVoiceChangerRecordButtonNode() // Novagram (HOOKS.md, "Voice changer")
     public let recordMoreButton: ChatRecordingViewOnceButtonNode
     
     // MARK: - Speech to Text
@@ -1177,11 +1179,13 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         self.viewOnceButton.addTarget(self, action: #selector(self.viewOncePressed), forControlEvents: [.touchUpInside])
         self.recordMoreButton.addTarget(self, action: #selector(self.recordMorePressed), forControlEvents: [.touchUpInside])
+        self.novagramVoiceChangerButton.pressed = { [weak self] in guard let self, let context = self.context else { return }; NovagramVoiceChangerUI.openFromRecording(context: context, isRecording: self.presentationInterfaceState?.inputTextPanelState.mediaRecordingState != nil, pause: { self.interfaceInteraction?.stopMediaRecording() }, resume: { [weak self] in self?.interfaceInteraction?.resumeMediaRecording() }, present: { self.interfaceInteraction?.presentController($0, $1) }) } // Novagram
         
         self.view.addSubview(self.recordMoreButton.view)
         
         if let viewForOverlayContent = self.viewForOverlayContent {
             viewForOverlayContent.addSubnode(self.viewOnceButton)
+            viewForOverlayContent.addSubnode(self.novagramVoiceChangerButton) // Novagram
         }
     }
 
@@ -3872,6 +3876,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         } else {
             self.viewOnceButton.isHidden = true
         }
+        self.novagramVoiceChangerButton.update(theme: interfaceState.theme, strings: interfaceState.strings, viewOnceFrame: viewOnceButtonFrame, isRecordingUIVisible: viewOnceIsVisible, viewOnceIsHidden: self.viewOnceButton.isHidden, transition: transition) // Novagram
         
         let recordMoreSize = self.recordMoreButton.update(theme: interfaceState.theme)
         let recordMoreButtonFrame = CGRect(origin: CGPoint(x: width - rightInset - 50.0 - UIScreenPixel, y: -52.0), size: recordMoreSize)

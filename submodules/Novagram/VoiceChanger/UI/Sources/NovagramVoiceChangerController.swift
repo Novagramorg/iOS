@@ -93,7 +93,9 @@ private enum NovagramVoiceChangerEntry: ItemListNodeEntry {
         case let .header(text), let .settingsHeader(text):
             return ItemListSectionHeaderItem(presentationData: presentationData, text: text, sectionId: self.section)
         case let .effect(_, id, title, subtitle, checked):
-            let icon = UIImage(systemName: NovagramVoiceChangerStrings.symbol(id))?.withTintColor(presentationData.theme.list.itemAccentColor, renderingMode: .alwaysOriginal)
+            // The row draws its icon from the bitmap, which ignores a symbol's tint, so the colour is baked in.
+            let symbol = UIImage(systemName: NovagramVoiceChangerStrings.symbol(id), withConfiguration: UIImage.SymbolConfiguration(pointSize: 20.0, weight: .regular))
+            let icon = generateTintedImage(image: symbol, color: presentationData.theme.list.itemAccentColor)
             return ItemListCheckboxItem(presentationData: presentationData, icon: icon, iconSize: CGSize(width: 24.0, height: 24.0), title: title, subtitle: subtitle, style: .right, checked: checked, zeroSeparatorInsets: false, sectionId: self.section, action: {
                 arguments.select(id)
             })
@@ -152,14 +154,16 @@ private func novagramVoiceChangerEntries(state: NovagramVoiceChangerState, forCa
     return entries
 }
 
-/// The effects page for voice messages (`forCall` false) or calls.
-public func novagramVoiceChangerController(context: AccountContext, forCall: Bool) -> ViewController {
+/// The effects page for voice messages (`forCall` false) or calls. `asSheet`: opened over a chat or a call rather
+/// than pushed in Settings, so it gets a close button instead of Back.
+public func novagramVoiceChangerController(context: AccountContext, forCall: Bool, asSheet: Bool = false) -> ViewController {
     let choice = forCall ? NovagramVoiceChanger.calls : NovagramVoiceChanger.messages
     let statePromise = ValuePromise(NovagramVoiceChangerState(presetId: choice.presetId, params: choice.params), ignoreRepeated: true)
     let refreshState: () -> Void = {
         statePromise.set(NovagramVoiceChangerState(presetId: choice.presetId, params: choice.params))
     }
     var presentControllerImpl: ((ViewController) -> Void)?
+    var dismissImpl: (() -> Void)?
 
     // A small sheet of choices, the current one ticked.
     let presentChoices: (String, [(String, Bool, () -> Void)]) -> Void = { title, options in
@@ -237,7 +241,7 @@ public func novagramVoiceChangerController(context: AccountContext, forCall: Boo
         |> deliverOnMainQueue
         |> map { presentationData, state -> (ItemListControllerState, (ItemListNodeState, Any)) in
             let langCode = NovagramL10n.languageKey(for: presentationData.strings)
-            let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text(NovagramVoiceChangerStrings.title(langCode)), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
+            let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text(NovagramVoiceChangerStrings.title(langCode)), leftNavigationButton: asSheet ? ItemListNavigationButton(content: .icon(.close), style: .regular, enabled: true, action: { dismissImpl?() }) : nil, rightNavigationButton: nil, backNavigationButton: asSheet ? nil : ItemListBackButton(title: presentationData.strings.Common_Back))
             let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: novagramVoiceChangerEntries(state: state, forCall: forCall, langCode: langCode), style: .blocks)
             return (controllerState, (listState, arguments))
         }
@@ -245,6 +249,9 @@ public func novagramVoiceChangerController(context: AccountContext, forCall: Boo
     let controller = ItemListController(context: context, state: signal)
     presentControllerImpl = { [weak controller] c in
         controller?.present(c, in: .window(.root))
+    }
+    dismissImpl = { [weak controller] in
+        controller?.dismiss()
     }
     return controller
 }

@@ -63,6 +63,11 @@ public final class NovagramCallRecordControl: NSObject {
         self.timer?.invalidate()
     }
 
+    /// The capsule's layer while it is on screen, so the voice changer button can keep clear of it.
+    public var buttonLayer: CALayer? {
+        return self.button?.superview != nil ? self.button?.layer : nil
+    }
+
     /// `isAvailable`: the control may show (recording is switched on or running, and the call is in a state that
     /// allows it). `recordingStart`: `CFAbsoluteTimeGetCurrent()` when the running recording started, nil when idle.
     public func setState(isAvailable: Bool, recordingStart: Double?) {

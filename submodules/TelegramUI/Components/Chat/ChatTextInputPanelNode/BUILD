@@ -87,6 +87,7 @@ swift_library(
         "//submodules/Novagram/SpeechToText:NovagramSpeechToText",
         "//submodules/Novagram/Localization:NovagramLocalization",
         "//submodules/Novagram/RoundVideoFromGallery:NovagramRoundVideoFromGallery",
+        "//submodules/Novagram/VoiceChanger/UI:NovagramVoiceChangerUI", # Novagram
         "//submodules/TelegramUI/Components/RichTextEditor:RichTextEditorCore",
     ],
     visibility = [

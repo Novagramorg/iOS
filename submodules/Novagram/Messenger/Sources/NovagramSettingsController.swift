@@ -23,6 +23,7 @@ import NovagramPremiumUnlock
 import NovagramCalls
 import NovagramCallRecordingCore
 import NovagramVoiceChanger
+import NovagramVoiceChangerUI
 
 private enum NovagramSection: Int32 {
     case accounts = 5

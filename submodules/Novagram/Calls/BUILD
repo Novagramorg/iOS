@@ -16,6 +16,7 @@ swift_library(
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
         "//submodules/TelegramVoip:TelegramVoip",
         "//submodules/Novagram/CallRecordingKit:NovagramCallRecordingCore",
+        "//submodules/Novagram/VoiceChanger:NovagramVoiceChanger",
     ],
     visibility = ["//visibility:public"],
 )

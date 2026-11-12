@@ -274,7 +274,7 @@ three calls and delete the two lines.
 91. **Reklama hodisalarini yubormaslik**: Novagram va Telegram reklamalarining ko'rish, bosish, harakat va video ochish hodisalari yuborilmaydi, shuning uchun bir marta ko'rsatiladigan reklama test paytida qayta chiqaveradi. Faqat shu qurilmada, default o'chiq (2026-10-29).
 - **Qo'ng'iroqni xabar bermasdan yozish**: yoqilsa, qo'ng'iroq yozilganda suhbatdoshga "🔴 I'm recording this call" xabari yuborilmaydi. Developer va director rollari ko'radi. Faqat shu qurilmada, default o'chiq (`pro_messager` / `novagram_call_recording_notice_off`, `NovagramCallRecordingNotice.isOff`; glue `sendNoticeIfNeeded` boshida tekshiradi; 2026-11-10).
 - **Fayllarga saqlash** (tasdiqlanmagan, faqat developer roli): ovozli xabar, musiqa va faylni bosib turganda «Save to Files» chiqadi (shaxsiy chat, guruh, kanal). Nusxa olish taqiqlangan chatlarda chiqmaydi. Default o'chiq (`pro_messager` / `novagram_save_to_files`, `NovagramDeveloperFlags.isSaveToFilesEnabled`; 2026-11-10). Qoidalar: `submodules/Novagram/Messenger/Sources/NovagramSaveToFiles.swift`. Hook'lar (har biri 1 qator, `// Novagram`): `TelegramUI/Sources/ChatInterfaceStateContextMenus.swift` (`file.isMusic` → `NovagramSaveToFiles.canSave(file)` + `import NovagramMessenger`), `TelegramUI/Sources/ChatController.swift` `saveMediaToFiles` (`mediaFile.isMusic` → `NovagramSaveToFiles.canSave(mediaFile)`), `TelegramUI/Sources/SaveMediaToFiles.swift` (`fileExtension` default `NovagramSaveToFiles.defaultExtension` — ovoz `.ogg`; nomsiz faylga `fallbackBaseName` — "Voice message <sana>"; + `import NovagramMessenger`). Yana shu faylda: picker ochilishidan oldin `progressDisposable.dispose()` — yuklash spinneri yopilmasa, yuklanmagan fayl uchun Files oynasi chiqmay spinner abadiy turardi (Telegram'ning musiqa uchun ham bo'lgan xatosi; 2026-11-10).
-- **Ovoz o'zgartirgich** (tasdiqlanmagan, faqat developer roli; 2026-11-12): Android'dagi bilan bir xil 15 effekt + 4 yozish tezligi. Ovozli xabar va qo'ng'iroq (guruh qo'ng'iroq ham) uchun alohida tanlov. Developer bo'limida bitta switch (`pro_messager` / `novagram_voice_changer`), yoqilganda ostida "Ovozli xabarlar" va "Qo'ng'iroqlar" sahifalari. Tanlovlar `novagram_voice_changer_*` va `novagram_voice_changer_call_*` kalitlarida. Hook'lar #313–318, batafsil: "Voice changer" bo'limi.
+- **Ovoz o'zgartirgich** (tasdiqlanmagan, faqat developer roli; 2026-11-12): Android'dagi bilan bir xil 15 effekt + 4 yozish tezligi. Ovozli xabar va qo'ng'iroq (guruh qo'ng'iroq ham) uchun alohida tanlov. Developer bo'limida bitta switch (`pro_messager` / `novagram_voice_changer`), yoqilganda ostida "Ovozli xabarlar" va "Qo'ng'iroqlar" sahifalari. Tanlovlar `novagram_voice_changer_*` va `novagram_voice_changer_call_*` kalitlarida. Hook'lar #313–325, batafsil: "Voice changer" bo'limi.
 
 ---
 
@@ -743,6 +743,13 @@ three calls and delete the two lines.
 316. `OngoingCallThreadLocalContext.mm` (TgVoipWebrtc): `#import <NovagramVoiceDSP/NovagramVoiceDSP.h>` (`TdBinding` dan keyin); `WrappedAudioDeviceModuleIOS::RecordedDataIsAvailable` ning ikkala overload'ida `_mutex.Lock()` dan oldin `audioSamples = nv_call_process(audioSamples, nSamples, nBytesPerSample, nChannels, samplesPerSec);` — effekt o'chiq yoki format 16-bit mono bo'lmasa o'sha pointer qaytadi.
 317. `AppDelegate.swift` (TelegramUI): `import NovagramVoiceChanger`; `NovagramSharedDefaults.syncShowDeletedMessages()` dan keyin `NovagramVoiceChanger.syncCallChoice()` (qo'ng'iroq tanlovi C tomonga, keyin har o'zgarishda modul o'zi yuboradi).
 318. `TelegramUI/BUILD`: `//submodules/Novagram/VoiceChanger:NovagramVoiceChanger`; `TgVoipWebrtc/BUILD` (`TgVoipWebrtc` objc_library deps, `wamr` dan keyin): `//submodules/Novagram/VoiceChangerKit:NovagramVoiceDSP`.
+319. `ChatTextInputPanelNode.swift` (ChatTextInputPanelNode): `import NovagramVoiceChangerUI` (`NovagramSpeechToText` dan keyin); `viewOnceButton` dan keyin `public let novagramVoiceChangerButton = NovagramVoiceChangerRecordButtonNode()`.
+320. `ChatTextInputPanelNode.swift`: init'da `recordMoreButton.addTarget(...)` dan keyin bitta qator `self.novagramVoiceChangerButton.pressed = { ... NovagramVoiceChangerUI.openFromRecording(...) }` (yozilayotgan bo'lsa `stopMediaRecording` bilan pauza, ro'yxat yopilganda `resumeMediaRecording`); `viewForOverlayContent.addSubnode(self.viewOnceButton)` dan keyin `addSubnode(self.novagramVoiceChangerButton)`.
+321. `ChatTextInputPanelNode.swift`: layout'da `viewOnceButton.isHidden` if/else'dan keyin bitta qator `self.novagramVoiceChangerButton.update(theme:strings:viewOnceFrame: viewOnceButtonFrame, isRecordingUIVisible: viewOnceIsVisible, viewOnceIsHidden: self.viewOnceButton.isHidden, transition:)`: view-once ko'rinadigan holatda (lock qilingan ovoz yozish yoki preview) uning ustida, view-once yo'q chatlarda uning o'rnida; switch o'chiq bo'lsa ko'rinmaydi.
+322. `PrivateCallScreen.swift` (CallScreen): `novagramRecord` dan keyin `public let novagramVoiceChanger = NovagramCallVoiceChangerControl()`; `update(params:transition:)` oxirida #287 dan keyin bitta qator `self.novagramVoiceChanger.update(host:insets:backButton:avoiding: [... #287 ro'yxati + self.novagramRecord.buttonLayer], controlsHidden:isEmojiKeyExpanded:isAnimatedOutToGroupCall:strings:transition:)`.
+323. `CallControllerNodeV2.swift` (TelegramCallsUI): `import NovagramVoiceChangerUI` (`LibYuvBinding` dan keyin); #289 dan keyin bitta qator `self.callScreen.novagramVoiceChanger.pressed = { ... NovagramVoiceChangerUI.presentPicker(context: self.call.context, forCall: true, present: { controller, _ in self.present?(controller) }) }`.
+324. `VideoChatScreenMoreMenu.swift` (TelegramCallsUI): `import NovagramVoiceChangerUI` (`AVFoundation` dan keyin); "Audio" (`VoiceChat_ContextAudio`) bandidan keyin bitta qator `if let item = NovagramVoiceChangerUI.groupCallMenuItem(...) { items.append(.action(item)) }` (switch o'chiq bo'lsa nil).
+325. `ChatTextInputPanelNode/BUILD`, `TelegramCallsUI/BUILD`: `//submodules/Novagram/VoiceChanger/UI:NovagramVoiceChangerUI` dep.
 
 ---
 
@@ -8159,10 +8166,21 @@ is one switch in the Developer section (developer role only; a director login tu
 - `submodules/Novagram/VoiceChanger/` (`NovagramVoiceChanger`, Foundation only): the settings (`pro_messager`
   suite), the gate, `syncCallChoice()` (one atomic value read by the call's audio thread, so a change during a call
   applies at once) and the recorder's effect wrapper.
-- `submodules/Novagram/Messenger/Sources/NovagramVoiceChangerController.swift`: the effects pages and strings.
+- `submodules/Novagram/VoiceChanger/UI/` (`NovagramVoiceChangerUI`): the effects pages and strings (moved here from
+  Messenger on 2026-11-12 so the chat input panel and the call screens can open them), the round button above the
+  lock (`NovagramVoiceChangerRecordButtonNode`, the view-once button's look), `openFromRecording` and the group call
+  menu row. Opened over a chat or a call the page is a modal sheet with a close button. Its icons are SF Symbols
+  tinted into the bitmap (`generateTintedImage`): `ItemListCheckboxItem` draws the bitmap, so a symbol's own tint
+  showed black.
+- `submodules/Novagram/Calls/Sources/NovagramCallVoiceChangerControl.swift`: the round button on the 1:1 call screen,
+  at the right of the back button's row, moved down past the emoji key and the other top elements.
 - Voice messages: hooks #313–315 in `ManagedAudioRecorder.swift` (48 kHz mono Int16, before the Opus encoder).
-  Unlike Android there is no voice-changer button on the recording UI yet; the choice is made in Settings.
+  The button above the lock (#319–321) shows while a locked voice message is recorded or previewed. A tap during
+  recording pauses it (Telegram's own pause: the part so far becomes the preview), opens the list, and goes on when
+  the list closes (`resumeMediaRecording`, 0.3 s later); the next part is a new recorder context, so it gets the new
+  effect. A recording shorter than 0.5 s is dropped by Telegram on pause, so a tap in the first half second ends it.
 - Calls: hook #316 changes the microphone's 10 ms buffers in `WrappedAudioDeviceModuleIOS` before every audio
-  transport (1:1 and group calls). The call screen has no button yet: change the effect in Settings during a call.
+  transport (1:1 and group calls). 1:1 call screen: the round button (#322–323); group calls: a row in the "..." menu
+  under Audio (#324). Both open the calls page; a change applies to the running call at once.
   Mono 16-bit only, like Android. The effect is rebuilt (allocations) on the audio thread only when the choice changes.
 - When the switch is off, `makeRecorderEffect` returns nil and the call choice is OFF: nothing touches any audio.
