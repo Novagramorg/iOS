@@ -20,7 +20,6 @@ swift_library(
         "//submodules/ProgressNavigationButtonNode:ProgressNavigationButtonNode",
         "//submodules/AuthorizationUtils:AuthorizationUtils",
         "//submodules/AnimatedStickerNode:AnimatedStickerNode",
-        "//submodules/LottieSettings:LottieSettings",
         "//submodules/TelegramAnimatedStickerNode:TelegramAnimatedStickerNode",
         "//submodules/SolidRoundedButtonNode:SolidRoundedButtonNode",
         "//submodules/Novagram/Localization:NovagramLocalization",

@@ -14,6 +14,10 @@ final class StoryPeerListTitleLayoutTests: XCTestCase {
     private let wideMinX: CGFloat = 75.0
     private let wideMaxX: CGFloat = 282.0
 
+    // iPhone 18 Pro with a proxy: the proxy button joins the capsule on the right, which takes the band's right side in
+    // by the button's width.
+    private let proxyMaxX: CGFloat = 238.0
+
     private func origin(_ contentWidth: CGFloat, width: CGFloat, minX: CGFloat, maxX: CGFloat) -> CGFloat {
         return StoryPeerListTitleLayout.contentOrigin(containerWidth: width, contentWidth: contentWidth, minX: minX, maxX: maxX)
     }
@@ -83,17 +87,34 @@ final class StoryPeerListTitleLayoutTests: XCTestCase {
         XCTAssertFalse(StoryPeerListTitleLayout.showsTitleText(contentWidth: 233.0, minX: 120.0, maxX: 360.0))
     }
 
-    // Novagram (2026-11-05): with the stories expanded the title used to be centred in the row whatever the buttons
-    // were. The compose circle plus a story/ghost/fold pill reach past the middle of a 402 pt row, so the centred
-    // "Chatlar" and its emoji status ran under the pill. Placed by `contentOrigin`, it ends clear of the buttons.
-    func test_contentOrigin_expandedTitleStaysClearOfWideRightButtons() {
-        let width: CGFloat = 402.0
-        let minX: CGFloat = 75.0
-        let maxX: CGFloat = 214.0
-        let titleWidth: CGFloat = 104.0
-        XCTAssertGreaterThan((width + titleWidth) * 0.5, maxX, "a centred title would overlap the buttons")
-        let origin = self.origin(titleWidth, width: width, minX: minX, maxX: maxX)
-        XCTAssertLessThanOrEqual(origin + titleWidth, maxX - StoryPeerListTitleLayout.trailingMargin)
-        XCTAssertGreaterThanOrEqual(origin, minX + StoryPeerListTitleLayout.leadingMargin)
+    // Expanded stories leave the title alone on its row. Without a proxy it is centred in the row, as it was.
+    func test_expandedTitle_centredWithRoom() {
+        let origin = StoryPeerListTitleLayout.expandedTitleOrigin(containerWidth: self.wideWidth, titleWidth: 80.0, minX: self.wideMinX, maxX: self.wideMaxX)
+        XCTAssertEqual(origin, 161.0)
+    }
+
+    // With a proxy, the centred title (and the status after it) would run under the right buttons (issue #8): it stands
+    // between the buttons instead, as the collapsed content does.
+    func test_expandedTitle_staysClearOfTheProxyButton() {
+        let titleWidth: CGFloat = 80.0
+        let origin = StoryPeerListTitleLayout.expandedTitleOrigin(containerWidth: self.wideWidth, titleWidth: titleWidth, minX: self.wideMinX, maxX: self.proxyMaxX)
+        XCTAssertLessThanOrEqual(origin + titleWidth, self.proxyMaxX - StoryPeerListTitleLayout.trailingMargin)
+        XCTAssertGreaterThanOrEqual(origin, self.wideMinX + StoryPeerListTitleLayout.leadingMargin)
+        XCTAssertEqual(origin, StoryPeerListTitleLayout.contentOrigin(containerWidth: self.wideWidth, contentWidth: titleWidth, minX: self.wideMinX, maxX: self.proxyMaxX))
+    }
+
+    // On a narrow phone (iPhone 16e) the band is narrow even without a proxy, and the expanded title follows the same
+    // balanced rule as the collapsed content: it leaves the row's centre once it comes within the ramp of the right
+    // buttons. Plain "Chats" (47 pt) is only 6.5 pt inside the band's margin when centred, so it moves about 32 pt left
+    // of centre; with an emoji status (73 pt) it would overlap them centred, so it stands in the middle of the band.
+    func test_expandedTitle_narrowPhoneWithoutProxy_followsTheBalancedRule() {
+        let centred = (self.narrowWidth - 47.0) * 0.5
+        let plain = StoryPeerListTitleLayout.expandedTitleOrigin(containerWidth: self.narrowWidth, titleWidth: 47.0, minX: self.narrowMinX, maxX: self.narrowMaxX)
+        XCTAssertEqual(centred, 171.5)
+        XCTAssertEqual(plain, 139.55, accuracy: 0.01)
+
+        let withStatus = StoryPeerListTitleLayout.expandedTitleOrigin(containerWidth: self.narrowWidth, titleWidth: 73.0, minX: self.narrowMinX, maxX: self.narrowMaxX)
+        XCTAssertEqual(withStatus, 116.0)
+        XCTAssertLessThanOrEqual(withStatus + 73.0, self.narrowMaxX - StoryPeerListTitleLayout.trailingMargin)
     }
 }

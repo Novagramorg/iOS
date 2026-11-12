@@ -7,6 +7,7 @@ import TelegramPresentationData
 import TextNodeWithEntities
 import AccountContext
 import NovagramChannelStats
+import TextFormat
 
 final class PeerInfoScreenDisclosureItem: PeerInfoScreenItem {
     enum Label {
@@ -36,6 +37,21 @@ final class PeerInfoScreenDisclosureItem: PeerInfoScreenItem {
             }
         }
         
+        /// VoiceOver: the label as read. An attributed label draws its currency glyph as a custom emoji over a "*"
+        /// placeholder; the placeholder is not a word.
+        var accessibilityText: String {
+            if case let .attributedText(text) = self {
+                let mutable = NSMutableAttributedString(attributedString: text)
+                text.enumerateAttribute(ChatTextInputAttributes.customEmoji, in: NSRange(location: 0, length: text.length), options: [.reverse]) { value, range, _ in
+                    if value != nil {
+                        mutable.deleteCharacters(in: range)
+                    }
+                }
+                return accessibilityDisplayedText(mutable)
+            }
+            return self.text
+        }
+        
         var badgeColor: UIColor? {
             switch self {
             case .none, .text, .coloredText, .image, .attributedText, .labelBadge:
@@ -57,9 +73,11 @@ final class PeerInfoScreenDisclosureItem: PeerInfoScreenItem {
     let hasArrow: Bool
     let longPressDuration: TimeInterval
     let longPressAction: (() -> Void)?
+    /// What VoiceOver reads for the label when it is not words (a "!" warning badge).
+    let labelAccessibilityText: String?
     let action: (() -> Void)?
     
-    init(id: AnyHashable, label: Label = .none, additionalBadgeLabel: String? = nil, additionalBadgeIcon: UIImage? = nil, text: String, titleColor: UIColor? = nil, icon: UIImage? = nil, iconSignal: Signal<UIImage?, NoError>? = nil, hasArrow: Bool = true, longPressDuration: TimeInterval = 0.0, longPressAction: (() -> Void)? = nil, action: (() -> Void)?) {
+    init(id: AnyHashable, label: Label = .none, additionalBadgeLabel: String? = nil, additionalBadgeIcon: UIImage? = nil, text: String, titleColor: UIColor? = nil, icon: UIImage? = nil, iconSignal: Signal<UIImage?, NoError>? = nil, hasArrow: Bool = true, labelAccessibilityText: String? = nil, longPressDuration: TimeInterval = 0.0, longPressAction: (() -> Void)? = nil, action: (() -> Void)?) {
         self.id = id
         self.label = label
         self.additionalBadgeLabel = additionalBadgeLabel
@@ -71,6 +89,7 @@ final class PeerInfoScreenDisclosureItem: PeerInfoScreenItem {
         self.hasArrow = hasArrow
         self.longPressDuration = longPressDuration
         self.longPressAction = longPressAction
+        self.labelAccessibilityText = labelAccessibilityText
         self.action = action
     }
     
@@ -394,7 +413,17 @@ private final class PeerInfoScreenDisclosureItemNode: PeerInfoScreenItemNode {
         }
         
         self.activateArea.accessibilityLabel = item.text
-        self.activateArea.accessibilityValue = item.label.text
+        // The value is everything the row shows besides its title: a title badge ("NEW") and the label.
+        var accessibilityValues: [String] = []
+        if let additionalBadgeLabel = item.additionalBadgeLabel, !additionalBadgeLabel.isEmpty {
+            accessibilityValues.append(additionalBadgeLabel)
+        }
+        let labelAccessibilityText = item.labelAccessibilityText ?? item.label.accessibilityText
+        if !labelAccessibilityText.isEmpty {
+            accessibilityValues.append(labelAccessibilityText)
+        }
+        self.activateArea.accessibilityValue = accessibilityValues.joined(separator: ", ")
+        self.activateArea.applyPeerInfoRowAction(item.action)
         
         transition.updateFrame(node: self.labelBadgeNode, frame: labelBadgeNodeFrame)
         if self.labelNode.bounds.size != labelFrame.size {

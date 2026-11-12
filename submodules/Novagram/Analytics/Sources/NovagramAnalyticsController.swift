@@ -7,7 +7,6 @@ import SwiftSignalKit
 import TelegramPresentationData
 import TelegramStringFormatting
 import AnimatedStickerNode
-import LottieSettings
 import TelegramAnimatedStickerNode
 import AccountContext
 import PresentationDataUtils
@@ -253,7 +252,7 @@ private final class DuckStickerContainerView: UIView {
     private let duckNode: AnimatedStickerNode
 
     init() {
-        self.duckNode = DefaultAnimatedStickerNodeImpl(lottieSettings: .noAccountFallback)
+        self.duckNode = DefaultAnimatedStickerNodeImpl()
         self.duckNode.setup(source: AnimatedStickerNodeLocalFileSource(name: "BroadcastGroup"), width: 448, height: 448, playbackMode: .loop, mode: .direct(cachePathPrefix: nil))
         self.duckNode.visibility = true
 

@@ -12,7 +12,6 @@ swift_library(
     deps = [
         "//submodules/Novagram/SecretVault:NovagramSecretVault",
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
-        "//submodules/LottieSettings:LottieSettings",
         "//submodules/AsyncDisplayKit:AsyncDisplayKit",
         "//submodules/Display:Display",
         "//submodules/TelegramCore:TelegramCore",

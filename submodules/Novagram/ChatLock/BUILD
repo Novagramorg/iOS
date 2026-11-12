@@ -14,7 +14,6 @@ swift_library(
         "//submodules/TelegramCore:TelegramCore",
         "//submodules/TelegramPresentationData:TelegramPresentationData",
         "//submodules/AnimatedStickerNode:AnimatedStickerNode",
-        "//submodules/LottieSettings:LottieSettings",
         "//submodules/TelegramAnimatedStickerNode:TelegramAnimatedStickerNode",
     ],
     visibility = [

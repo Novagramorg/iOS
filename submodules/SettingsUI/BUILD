@@ -18,7 +18,6 @@ swift_library(
     deps = [
         "//submodules/Novagram/PremiumUnlock:NovagramPremiumUnlock",
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
-        "//submodules/LottieSettings:LottieSettings",
         "//submodules/AsyncDisplayKit:AsyncDisplayKit",
         "//submodules/Display:Display",
         "//submodules/TelegramCore:TelegramCore",
@@ -144,6 +143,7 @@ swift_library(
         "//submodules/TelegramUI/Components/SliderComponent",
         "//submodules/TelegramUI/Components/AlertComponent",
         "//submodules/TelegramUI/Components/AlertComponent/AlertInputFieldComponent",
+        "//submodules/TelegramUI/Components/AlertComponent/AlertCheckComponent",
         "//submodules/TelegramUI/Components/EdgeEffect",
         "//submodules/TelegramUI/Components/AvatarEditorScreen",
         "//submodules/TelegramUI/Components/Settings/PeerSelectionScreen",

@@ -13,7 +13,6 @@ swift_library(
         "//submodules/Novagram/SecretVault:NovagramSecretVault",
         "//submodules/Novagram/ChatLock:NovagramChatLock",
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
-        "//submodules/LottieSettings:LottieSettings",
         "//submodules/AsyncDisplayKit:AsyncDisplayKit",
         "//submodules/Display:Display",
         "//submodules/TelegramCore:TelegramCore",

@@ -54,3 +54,72 @@ internal func isNovagramRetainedDeletedMessage(transaction: Transaction, id: Mes
     }
     return message.attributes.contains(where: { $0 is DeletedMessageAttribute })
 }
+
+// Novagram: "show deleted messages" in the update replay (HOOKS.md, "Show deleted messages"). Upstream split the old
+// replayFinalState into ReplayContext's apply* functions (State/Sync, 13.2); their first line calls these. A message
+// we still have gets a DeletedMessageAttribute and stays; only the rest is deleted. Returns false when the setting is
+// off, and the caller then runs upstream's code.
+extension ReplayContext {
+    private func novagramMarkDeleted(_ message: Message) {
+        var newAttributes = message.attributes.filter { !($0 is DeletedMessageAttribute) }
+        newAttributes.append(DeletedMessageAttribute(timestamp: Int32(Date().timeIntervalSince1970)))
+        let storeForwardInfo = message.forwardInfo.flatMap(StoreMessageForwardInfo.init)
+        self.transaction.updateMessage(message.id, update: { _ in
+            return .update(StoreMessage(id: message.id, customStableId: nil, globallyUniqueId: message.globallyUniqueId, groupingKey: message.groupingKey, threadId: message.threadId, timestamp: message.timestamp, flags: StoreMessageFlags(message.flags), tags: message.tags, globalTags: message.globalTags, localTags: message.localTags, forwardInfo: storeForwardInfo, authorId: message.author?.id, text: message.text, attributes: newAttributes, media: message.media))
+        })
+    }
+
+    func novagramApplyDeleteMessagesWithGlobalIds(_ ids: [Int32]) -> Bool {
+        guard isNovagramShowDeletedMessagesEnabled else {
+            return false
+        }
+        var retainedMessageIds: Set<MessageId> = []
+        for messageId in self.transaction.messageIdsForGlobalIds(ids) {
+            if let message = self.transaction.getMessage(messageId) {
+                if !message.attributes.contains(where: { $0 is DeletedMessageAttribute }) {
+                    self.novagramMarkDeleted(message)
+                }
+                retainedMessageIds.insert(messageId)
+            }
+        }
+        let actuallyDeletedGlobalIds = ids.filter { globalId in
+            !self.transaction.messageIdsForGlobalIds([globalId]).contains(where: { retainedMessageIds.contains($0) })
+        }
+        var resourceIds: [MediaResourceId] = []
+        self.transaction.deleteMessagesWithGlobalIds(actuallyDeletedGlobalIds, forEachMedia: { media in
+            addMessageMediaResourceIdsToRemove(media: media, resourceIds: &resourceIds)
+        })
+        if !resourceIds.isEmpty {
+            let _ = self.mediaBox.removeCachedResources(Array(Set(resourceIds)), force: true).start()
+        }
+        self.deletedMessageIds.append(contentsOf: actuallyDeletedGlobalIds.map { .global($0) })
+        self.deletedMessageIds.append(contentsOf: retainedMessageIds.map { .messageId($0) })
+        return true
+    }
+
+    func novagramApplyDeleteMessages(_ ids: [MessageId]) -> Bool {
+        guard isNovagramShowDeletedMessagesEnabled else {
+            return false
+        }
+        var actuallyDeletedIds: [MessageId] = []
+        var retainedMessageIds: Set<MessageId> = []
+        for id in ids {
+            if let message = self.transaction.getMessage(id) {
+                if !message.attributes.contains(where: { $0 is DeletedMessageAttribute }) {
+                    self.novagramMarkDeleted(message)
+                }
+                retainedMessageIds.insert(id)
+            } else {
+                actuallyDeletedIds.append(id)
+            }
+        }
+        if !actuallyDeletedIds.isEmpty {
+            _internal_deleteMessages(transaction: self.transaction, mediaBox: self.mediaBox, ids: actuallyDeletedIds, manualAddMessageThreadStatsDifference: { id, _, remove in
+                self.addMessageThreadStatsDifference(threadKey: id, remove: remove, addedMessagePeer: nil, addedMessageId: nil, isOutgoing: false)
+            })
+        }
+        self.deletedMessageIds.append(contentsOf: actuallyDeletedIds.map { .messageId($0) })
+        self.deletedMessageIds.append(contentsOf: retainedMessageIds.map { .messageId($0) })
+        return true
+    }
+}

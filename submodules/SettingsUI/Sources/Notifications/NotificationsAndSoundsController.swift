@@ -15,6 +15,7 @@ import TelegramNotices
 import NotificationSoundSelectionUI
 import TelegramStringFormatting
 import NotificationPeerExceptionController
+import AlertComponent
 
 private struct CounterTagSettings: OptionSet {
     var rawValue: Int32
@@ -739,12 +740,12 @@ public func notificationsAndSoundsController(context: AccountContext, exceptions
         }).start()
     }, resetNotifications: {
         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-        let actionSheet = ActionSheetController(presentationData: presentationData)
-        actionSheet.setItemGroups([ActionSheetItemGroup(items: [
-            ActionSheetTextItem(title: presentationData.strings.Notifications_ResetAllNotificationsText),
-            ActionSheetButtonItem(title: presentationData.strings.Notifications_Reset, color: .destructive, action: { [weak actionSheet] in
-                actionSheet?.dismissAnimated()
-                
+        let controller = AlertScreen(
+            context: context,
+            configuration: AlertScreen.Configuration(actionAlignment: .vertical),
+            text: presentationData.strings.Notifications_ResetAllNotificationsText,
+            actions: [
+                .init(title: presentationData.strings.Notifications_Reset, type: .defaultDestructive, action: {
                 let modifyPeers = context.engine.peers.resetAllPeerNotificationSettings()
                 let updateGlobal = updateGlobalNotificationSettingsInteractively(postbox: context.account.postbox, { _ in
                     return GlobalNotificationSettingsSet.defaultSettings
@@ -752,13 +753,11 @@ public func notificationsAndSoundsController(context: AccountContext, exceptions
                 let reset = resetPeerNotificationSettings(network: context.account.network)
                 let signal = combineLatest(modifyPeers, updateGlobal, reset)
                 let _ = signal.start()
-            })
-        ]), ActionSheetItemGroup(items: [
-            ActionSheetButtonItem(title: presentationData.strings.Common_Cancel, color: .accent, font: .bold, action: { [weak actionSheet] in
-                actionSheet?.dismissAnimated()
-            })
-        ])])
-        presentControllerImpl?(actionSheet, nil)
+                }),
+                .init(title: presentationData.strings.Common_Cancel)
+            ]
+        )
+        presentControllerImpl?(controller, nil)
     }, openAppSettings: {
         context.sharedContext.applicationBindings.openSettings()
     }, updateJoinedNotifications: { value in

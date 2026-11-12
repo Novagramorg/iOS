@@ -51,6 +51,22 @@ session, which may push SDK fixes to its `main`. Update it by moving the pin; ke
 voice changer, same sound as Android) follows the same rules (HOOKS.md, "Voice changer"). Our SDKs carry no external
 dependency: borrowed code is copied in, trimmed and credited in `CREDITS.md`.
 
+## Upstream subsystem guides and rules (Telegram 13.2, 2026-11-12)
+
+Telegram split its notes into a `CLAUDE.md` beside each subsystem's code (Claude Code loads one when files under its
+directory are read; e.g. `submodules/TelegramCore/Sources/State/CLAUDE.md`, `build-system/Make/CLAUDE.md`). Read the
+one beside the code you change. Three rules from them that break silently:
+
+- **The system ICU: only the SDK's headers are public.** `libicucore` functions not declared in
+  `$SDK/usr/include/unicode/*.h` (`unumf_*`, `udat_*`, `ucol_*`, `ubidi_*`, `uloc_*`, …) link but get the build
+  rejected by App Store review. Never declare an ICU function by hand; `build-system/Make/ICUImportCheck.py` fails
+  `Make.py build` on such an import.
+- **A failing iOS test run must not sit in `simctl diagnose`.** `MODULE.bazel` patches xctestrunner for it
+  (`build-system/bazel-patches/CLAUDE.md`); if a failing run stalls after `Test Suite … failed`, check
+  `pgrep -fl "simctl diagnose"`.
+- **The update replay lives in `TelegramCore/Sources/State/Sync/`** (`ReplayContext.apply*`); the old
+  `AccountStateManagementUtils.swift` is gone. Our replay hooks are one-line calls there (HOOKS.md).
+
 ## Build — ALWAYS use `./run.sh`
 
 The canonical simulator build is **`./run.sh`** (Bazel-based, no Xcode UI). It does config → build → install → launch in one step, uses fake codesigning + `disableProvisioningProfiles`, auto-tunes resources to the host hardware (M4 Pro 24GB → 10 jobs / ~18GB RAM), enables `--keep_going`, `--disk_cache`, `--repository_cache`, and the right Swift module-cache features.

@@ -345,10 +345,14 @@ final class ManagedAudioRecorderContext {
                 Logger.shared.log("ManagedAudioRecorder", "Failed to deserialize JSON")
                 return
             }
-            let success = self.oggWriter.resume(with: self.dataItem, encoderState: stateDict)
-            if !success {
+            // A draft's compressed data is the finished stream, which the paused encoder state does not match;
+            // appending re-encodes it into a fresh writer instead.
+            if !self.oggWriter.resume(with: self.dataItem, encoderState: stateDict) {
+                self.oggWriter = TGOggOpusWriter()
+                if !self.oggWriter.beginAppend(with: self.dataItem) {
                 Logger.shared.log("ManagedAudioRecorder", "Failed to resume OggWriter")
                 return
+            }
             }
         } else {
             self.oggWriter.begin(with: self.dataItem)
@@ -699,8 +703,23 @@ final class ManagedAudioRecorderContext {
     }
     
     func takeData() -> RecordedAudioData? {
-        // Novagram: voice changer tail (HOOKS.md, "Voice changer")
-        if let effect = self.novagramVoiceEffect { self.novagramVoiceEffect = nil; effect.drain(into: { self.processAndDisposeAudioBuffer($0) }) }
+        // Novagram: voice changer tail; the effect stays for a resumed recording (HOOKS.md, "Voice changer")
+        self.novagramVoiceEffect?.drain(into: { self.processAndDisposeAudioBuffer($0) })
+        // writeFrame(nil) finishes the stream for good: the writer drops every later frame. Finish a copy and
+        // put the live writer back from its paused state, so a resumed recording keeps appending.
+        let liveState = self.oggWriter.pause()
+        let liveData = self.dataItem.data()
+        defer {
+            let dataItem: TGDataItem = TGDataItem(data: liveData)
+            let oggWriter = TGOggOpusWriter()
+            if oggWriter.resume(with: dataItem, encoderState: liveState) {
+                self.dataItem = dataItem
+                self.oggWriter = oggWriter
+            } else {
+                Logger.shared.log("ManagedAudioRecorder", "Failed to restore OggWriter after taking data")
+            }
+        }
+
         if self.oggWriter.writeFrame(nil, frameByteCount: 0) {
             let scaledSamplesMemory = malloc(100 * 2)!
             let scaledSamples: UnsafeMutablePointer<Int16> = scaledSamplesMemory.assumingMemoryBound(to: Int16.self)

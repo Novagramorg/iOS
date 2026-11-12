@@ -123,3 +123,5 @@ _push-audit-2026-08-07/
 submodules/TelegramApi/Sources/SwiftPMGenerated/
 submodules/TelegramApi/ObjC/SwiftPMGenerated/
 submodules/TelegramApi/Tests/SwiftPMGenerated/
+/Telegram.app/
+build/accessibility/

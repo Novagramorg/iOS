@@ -89,7 +89,7 @@ func novagramManagedChatListHole(postbox: Postbox, network: Network, accountPeer
 // which bots can't call (BOT_METHOD_INVALID); the fetch errors on the first try (maxRetries: 0) so the
 // hole is never removed and the chat view stays stuck on it, never rendering the received messages. For a
 // bot we REMOVE the hole so the chat opens and shows the locally-received messages. Normal accounts fetch.
-func novagramManagedMessageHistoryHole(accountPeerId: PeerId, network: Network, postbox: Postbox, hole: MessageHistoryViewPeerHole, direction: MessageHistoryViewRelativeHoleDirection, space: MessageHistoryHoleOperationSpace, count: Int) -> Signal<Never, NoError> {
+func novagramManagedMessageHistoryHole(accountPeerId: PeerId, network: Network, postbox: Postbox, hole: MessageHistoryViewPeerHole, direction: MessageHistoryViewRelativeHoleDirection, space: MessageHistoryHoleOperationSpace, count: Int, pendingReferences: PendingMessageReferences) -> Signal<Never, NoError> {
     return postbox.transaction { transaction -> Bool in
         return novagramIsBotSession(transaction: transaction, accountPeerId: accountPeerId)
     }
@@ -101,7 +101,7 @@ func novagramManagedMessageHistoryHole(accountPeerId: PeerId, network: Network, 
             }
             |> ignoreValues
         } else {
-            return fetchMessageHistoryHole(accountPeerId: accountPeerId, source: .network(network), postbox: postbox, peerInput: .direct(peerId: hole.peerId, threadId: hole.threadId), namespace: hole.namespace, direction: direction, space: space, count: count)
+            return fetchMessageHistoryHole(accountPeerId: accountPeerId, source: .network(network), postbox: postbox, peerInput: .direct(peerId: hole.peerId, threadId: hole.threadId), namespace: hole.namespace, direction: direction, space: space, count: count, pendingReferences: pendingReferences)
             |> ignoreValues
         }
     }

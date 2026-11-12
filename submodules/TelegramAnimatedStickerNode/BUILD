@@ -22,7 +22,6 @@ swift_library(
         "//submodules/Tuples:Tuples",
         "//submodules/AnimatedStickerNode:AnimatedStickerNode",
         "//submodules/LottieBinding:LottieBinding",
-        "//submodules/LottieSettings:LottieSettings",
         "//submodules/YuvConversion:YuvConversion",
         "//submodules/GZip:GZip",
         "//submodules/ManagedFile:ManagedFile",
