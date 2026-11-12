@@ -98,6 +98,7 @@ public class ContactsController: ViewController {
         self.statusBar.statusBarStyle = self.presentationData.theme.rootController.statusBarStyle.style
         
         self.title = self.presentationData.strings.Contacts_Title
+        self.novagramSetupTabBarItem() // Novagram: Contacts is a tab (HOOKS.md, Contacts tab)
         
         self.navigationItem.backBarButtonItem = UIBarButtonItem(title: self.presentationData.strings.Common_Back, style: .plain, target: nil, action: nil)
         
@@ -143,7 +144,19 @@ public class ContactsController: ViewController {
         self.statusBar.statusBarStyle = self.presentationData.theme.rootController.statusBarStyle.style
         
         self.title = self.presentationData.strings.Contacts_Title
+        self.novagramSetupTabBarItem() // Novagram: Contacts is a tab (HOOKS.md, Contacts tab)
         self.navigationItem.backBarButtonItem = UIBarButtonItem(title: self.presentationData.strings.Common_Back, style: .plain, target: nil, action: nil)
+    }
+    
+    // Novagram: the tab bar waits for every tab's image before the app shows its first screen, so a Contacts tab
+    // without one leaves the window empty. Telegram 13.2 dropped this when it removed the tab.
+    private func novagramSetupTabBarItem() {
+        self.tabBarItemContextActionType = .always
+        self.tabBarItem.title = self.presentationData.strings.Contacts_Title
+        let icon = (useSpecialTabBarIcons() ? UIImage(bundleImageName: "Chat List/Tabs/Holiday/IconContacts") : nil) ?? UIImage(bundleImageName: "Chat List/Tabs/IconContacts")
+        self.tabBarItem.image = icon
+        self.tabBarItem.selectedImage = icon
+        self.tabBarItem.animationName = self.presentationData.reduceMotion ? nil : "TabContacts"
     }
     
     override public func loadDisplayNode() {

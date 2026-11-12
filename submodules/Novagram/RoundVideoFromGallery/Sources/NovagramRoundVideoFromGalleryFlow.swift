@@ -96,6 +96,7 @@ public final class NovagramRoundVideoFromGalleryFlow {
             cropRotation: 0.0,
             cropMirroring: false,
             cropOrientation: nil,
+            cropPerspective: .zero,
             gradientColors: nil,
             videoTrimRange: trimRange,
             videoBounce: false,

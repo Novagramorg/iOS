@@ -8184,3 +8184,28 @@ is one switch in the Developer section (developer role only; a director login tu
   under Audio (#324). Both open the calls page; a change applies to the running call at once.
   Mono 16-bit only, like Android. The effect is rebuilt (allocations) on the audio thread only when the choice changes.
 - When the switch is off, `makeRecorderEffect` returns nil and the call choice is OFF: nothing touches any audio.
+
+## 📌 Telegram 13.2 merge (upstream `24638bc69b`, 2026-11-12)
+
+What moved, and where each hook lives now. Older sections above still name the old places; this list wins.
+
+| Hook | Upstream change | Now |
+| --- | --- | --- |
+| Deleted messages, edit history, bot session (`AccountStateManagementUtils.swift`, gone) | the update replay was split into `ReplayContext.apply*` in `TelegramCore/Sources/State/Sync/` | `StateReplay+Messages.swift`: `applyAddMessages` (3 bot-session lines around `transaction.addMessages`), `applyDeleteMessagesWithGlobalIds` / `applyDeleteMessages` (first line calls `novagramApplyDelete…`, logic in `Novagram/NovagramShowDeletedMessages.swift`), `applyEditMessage` (`novagramAppendEditHistory` on the merged message) |
+| Bot-session history hole (`ManagedMessageHistoryHoles.swift`) | `fetchMessageHistoryHole` takes `pendingReferences` | passed through `novagramManagedMessageHistoryHole(…, pendingReferences:)` (`NovagramBotSession.swift`) |
+| Contacts tab (`TelegramRootController.swift`) | Telegram removed the Contacts tab; Contacts opens from Settings (pushed, with a back button); News moved before Chats | tab kept: strong `contactsController` property, stored in `init`, tab order Contacts, Calls, News, Chats; `openContacts()` selects the tab and falls back to upstream's push (bot sessions have no tab) |
+| Contacts header (`ContactsControllerNode.swift`) | always a back button, Sort moved right | as a tab (`switchToChatsController != nil`): no back button, Sort on the left |
+| Settings ▸ Contacts row (`PeerInfoSettingsItems.swift`) | upstream added its own row (id 21, with the "!" badge) | ours (id 5) dropped, upstream's row kept |
+| Audio route menu (`CallController.swift`) | the action sheet became `callAudioRouteContextMenuItems` | `noteAudioOutputChosenByUser` in `selectOutput` |
+| Voice changer drain (`ManagedAudioRecorder.takeData`) | `takeData()` no longer ends the stream: a paused recording resumes | the drain keeps the effect (no `= nil`), so a resumed recording stays changed; echo/cave presets leave their 1 s tail at the pause |
+| rlottie, `LottieSettings` | removed, tlottie renders everything | `lottieSettings: .noAccountFallback` dropped (phone entry, BotTokenLogin, ChatLock, Analytics), BUILD deps removed |
+| Round video camera (`LegacyCamera.swift`) | `configure(…, captureMode:)`, `cameraRecordsRoundVideoInPreviewOrientation` | our `switchAudio:` + `markPositionChange` kept beside them |
+| Story title (`StoryPeerListComponent.swift` + test) | upstream's `expandedTitleOrigin` keeps the title clear of the right buttons (same fix) | ours dropped for upstream's |
+| STT button (`ChatTextInputPanelNode.swift`) | new agent layout sets the field insets | STT button hidden in the agent layout; layout call after the new action-button positioning |
+| Secret vault toolbar (`ChatListController.swift`) | Delete got a destructive colour, `init` got `isSideList` | `extraAction: novagramVaultExtra` and `novagramIsVaultList` after them |
+| `PeerInfoScreenDisclosureItem` | `labelAccessibilityText` | our `titleColor`, `longPressDuration`, `longPressAction` kept |
+| `build-system/appstore-configuration.json` | upstream still tracks Telegram's | ours stays untracked (gitignored); the merge overwrote the local file, rebuilt by hand |
+| `novagram-upstream-update.sh` | — | after `git submodule sync`, tgcalls' url is set back to `TelegramMessenger/tgcalls` (its relative url pointed at a non-existent `Novagramorg/tgcalls`) |
+| Contacts tab icon (`ContactsController.swift`) | upstream dropped the controller's `tabBarItem` setup with the tab | `novagramSetupTabBarItem()` (title, icon, `TabContacts` animation) from `init` and `updateThemeAndStrings`. **Without an image the tab bar never reports ready and the app stays on a white window after launch** (seen on the first 13.2 build). The "!" contacts-access badge is now only on Settings ▸ Contacts (upstream) |
+| Settings ▸ Contacts (`PeerInfoScreen.swift`, `PeerInfoScreenSettingsActions.swift`, `PresentationResourcesSettings.swift`) | upstream added the same `.contacts` case, action and icon | ours removed; upstream's push (with a back button) is used |
+| Round video from gallery (`NovagramRoundVideoFromGalleryFlow.swift`) | `MediaEditorValues` takes `cropPerspective` | `.zero` |

@@ -118,6 +118,10 @@ upstream_report() { # $1 = old snapshot, $2 = new snapshot, $3 = hook counts of 
 update_moved_submodules() {
     local moved p
     git submodule sync >> "$LOG" 2>&1 || die "git submodule sync failed, see $LOG" 3
+    # tgcalls has a relative url (../tgcalls.git), which sync resolves against our origin; Novagramorg/tgcalls does
+    # not exist, so fetch it from Telegram's repo
+    git config submodule.submodules/TgVoipWebrtc/tgcalls.url https://github.com/TelegramMessenger/tgcalls.git
+    git -C submodules/TgVoipWebrtc/tgcalls remote set-url origin https://github.com/TelegramMessenger/tgcalls.git 2> /dev/null
     moved="$(git submodule status | awk '/^[+-]/ { print $2 }')"
     [ -z "$moved" ] && return
     echo "updating submodules: $(echo "$moved" | tr '\n' ' ')"
