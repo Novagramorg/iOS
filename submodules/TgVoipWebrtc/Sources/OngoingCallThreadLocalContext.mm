@@ -50,6 +50,8 @@
 #include <atomic>
 
 #import <TdBinding/TdBinding.h>
+// Novagram: voice changer (HOOKS.md, "Voice changer")
+#import <NovagramVoiceDSP/NovagramVoiceDSP.h>
 
 @implementation OngoingCallConnectionDescription
 
@@ -495,6 +497,8 @@ public:
         bool keyPressed,
         uint32_t& newMicLevel
     ) override {
+        // Novagram: voice changer (HOOKS.md, "Voice changer")
+        audioSamples = nv_call_process(audioSamples, nSamples, nBytesPerSample, nChannels, samplesPerSec);
         _mutex.Lock();
         if (!_audioTransports.empty()) {
             for (size_t i = 0; i < _audioTransports.size(); i++) {
@@ -529,6 +533,8 @@ public:
         uint32_t& newMicLevel,
         absl::optional<int64_t> estimatedCaptureTimeNS
     ) override {
+        // Novagram: voice changer (HOOKS.md, "Voice changer")
+        audioSamples = nv_call_process(audioSamples, nSamples, nBytesPerSample, nChannels, samplesPerSec);
         _mutex.Lock();
         if (!_audioTransports.empty()) {
             for (size_t i = 0; i < _audioTransports.size(); i++) {

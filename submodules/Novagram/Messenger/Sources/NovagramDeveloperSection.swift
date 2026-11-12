@@ -8,6 +8,7 @@ import PresentationDataUtils
 import NovagramLocalization
 import NovagramCalls
 import NovagramCallRecordingCore
+import NovagramVoiceChanger
 
 // MARK: - Notification name
 
@@ -123,6 +124,8 @@ public enum NovagramDeveloperRole: String {
         case callRecordingNoticeOff
         // "Save to Files" for voice messages and files (NovagramSaveToFiles).
         case saveToFiles
+        // The voice changer (NovagramVoiceChanger).
+        case voiceChanger
     }
 
     private static let udSuite = "pro_messager"
@@ -137,7 +140,7 @@ public enum NovagramDeveloperRole: String {
             switch item {
             case .adEventsOff, .callRecordingNoticeOff:
                 return true
-            case .removeAllAds, .currencyRatesView, .adsPanel, .callDataSaving, .saveToFiles:
+            case .removeAllAds, .currencyRatesView, .adsPanel, .callDataSaving, .saveToFiles, .voiceChanger:
                 return false
             }
         }
@@ -166,6 +169,9 @@ public enum NovagramDeveloperRole: String {
         }
         if !role.canUse(.saveToFiles) && NovagramDeveloperFlags.isSaveToFilesEnabled {
             NovagramDeveloperFlags.isSaveToFilesEnabled = false
+        }
+        if !role.canUse(.voiceChanger) && NovagramVoiceChanger.isEnabled {
+            NovagramVoiceChanger.isEnabled = false
         }
         if !role.canUse(.callDataSaving) {
             // Only our key: Telegram's own data saving setting (Data and Storage) stays as the user set it.

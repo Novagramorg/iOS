@@ -6,6 +6,7 @@ import NovagramAnalytics
 import NovagramAutoProxy
 import NovagramMessenger
 import NovagramCarPlay
+import NovagramVoiceChanger
 import UserNotifications
 import Intents
 import Postbox
@@ -1307,6 +1308,8 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         // own copy. Running this every launch also backfills users who had the toggle on before
         // the mirror existed.
         NovagramSharedDefaults.syncShowDeletedMessages()
+        // Novagram: hand the calls' voice changer choice to the call audio (HOOKS.md, "Voice changer")
+        NovagramVoiceChanger.syncCallChoice()
 
         // Novagram Analytics — once the shared context is ready, count this device (once per
         // physical device) and observe account contexts to count new account registrations.

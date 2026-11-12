@@ -274,6 +274,7 @@ three calls and delete the two lines.
 91. **Reklama hodisalarini yubormaslik**: Novagram va Telegram reklamalarining ko'rish, bosish, harakat va video ochish hodisalari yuborilmaydi, shuning uchun bir marta ko'rsatiladigan reklama test paytida qayta chiqaveradi. Faqat shu qurilmada, default o'chiq (2026-10-29).
 - **Qo'ng'iroqni xabar bermasdan yozish**: yoqilsa, qo'ng'iroq yozilganda suhbatdoshga "🔴 I'm recording this call" xabari yuborilmaydi. Developer va director rollari ko'radi. Faqat shu qurilmada, default o'chiq (`pro_messager` / `novagram_call_recording_notice_off`, `NovagramCallRecordingNotice.isOff`; glue `sendNoticeIfNeeded` boshida tekshiradi; 2026-11-10).
 - **Fayllarga saqlash** (tasdiqlanmagan, faqat developer roli): ovozli xabar, musiqa va faylni bosib turganda «Save to Files» chiqadi (shaxsiy chat, guruh, kanal). Nusxa olish taqiqlangan chatlarda chiqmaydi. Default o'chiq (`pro_messager` / `novagram_save_to_files`, `NovagramDeveloperFlags.isSaveToFilesEnabled`; 2026-11-10). Qoidalar: `submodules/Novagram/Messenger/Sources/NovagramSaveToFiles.swift`. Hook'lar (har biri 1 qator, `// Novagram`): `TelegramUI/Sources/ChatInterfaceStateContextMenus.swift` (`file.isMusic` → `NovagramSaveToFiles.canSave(file)` + `import NovagramMessenger`), `TelegramUI/Sources/ChatController.swift` `saveMediaToFiles` (`mediaFile.isMusic` → `NovagramSaveToFiles.canSave(mediaFile)`), `TelegramUI/Sources/SaveMediaToFiles.swift` (`fileExtension` default `NovagramSaveToFiles.defaultExtension` — ovoz `.ogg`; nomsiz faylga `fallbackBaseName` — "Voice message <sana>"; + `import NovagramMessenger`). Yana shu faylda: picker ochilishidan oldin `progressDisposable.dispose()` — yuklash spinneri yopilmasa, yuklanmagan fayl uchun Files oynasi chiqmay spinner abadiy turardi (Telegram'ning musiqa uchun ham bo'lgan xatosi; 2026-11-10).
+- **Ovoz o'zgartirgich** (tasdiqlanmagan, faqat developer roli; 2026-11-12): Android'dagi bilan bir xil 15 effekt + 4 yozish tezligi. Ovozli xabar va qo'ng'iroq (guruh qo'ng'iroq ham) uchun alohida tanlov. Developer bo'limida bitta switch (`pro_messager` / `novagram_voice_changer`), yoqilganda ostida "Ovozli xabarlar" va "Qo'ng'iroqlar" sahifalari. Tanlovlar `novagram_voice_changer_*` va `novagram_voice_changer_call_*` kalitlarida. Hook'lar #313–318, batafsil: "Voice changer" bo'limi.
 
 ---
 
@@ -733,6 +734,15 @@ three calls and delete the two lines.
 310. `PeerInfoSettingsItems.swift` (PeerInfoScreen): `import`; Support bo'limida "Novagram Features" (Tips) dan keyin "Rate Novagram" qatori (App Store'dagi sharh yozish sahifasi).
 311. `TelegramUI/BUILD`, `ChatListUI/BUILD`, `StoryContainerScreen/BUILD`, `PeerInfoScreen/BUILD`: `//submodules/Novagram/ReviewPrompt:NovagramReviewPrompt` dep.
 312. `ChatControllerNode.swift` (TelegramUI): `import`; forward yuborilayotganda nomlar yashirilgan bo'lsa `forwardWithHiddenNamesSent(to:)`: 306-belgi shu chatda bo'lsa, "ismsiz forward" sanaladi.
+
+#### Ovoz o'zgartirgich
+
+313. `ManagedAudioRecorder.swift` (TelegramUI): `import NovagramVoiceChanger`; `ManagedAudioRecorderContext`'da `audioBuffer` dan keyin `private var novagramVoiceEffect = NovagramVoiceChanger.makeRecorderEffect(sampleRate: 48000)` (o'chiq bo'lsa nil).
+314. `ManagedAudioRecorder.swift` (TelegramUI): `processAndDisposeAudioBuffer` ichida `if !self.processSamples { return }` dan keyin bitta qator: `if let effect = self.novagramVoiceEffect, effect.process(buffer, into: { self.processAndDisposeAudioBuffer($0) }) { return }`. Effekt chiqargan ovoz yangi buffer bo'lib shu funksiyaga qaytadi (ichkarida effekt o'tkazib yuboradi), shuning uchun waveform, taymer va uzunlik o'zgargan ovozdan hisoblanadi.
+315. `ManagedAudioRecorder.swift` (TelegramUI): `takeData()` boshida bitta qator: effekt nil qilinadi va uning qoldig'i (`drain`: echo/reverb so'nishi, pitch shifter ushlab turgan namunalar) o'sha yo'l bilan yoziladi.
+316. `OngoingCallThreadLocalContext.mm` (TgVoipWebrtc): `#import <NovagramVoiceDSP/NovagramVoiceDSP.h>` (`TdBinding` dan keyin); `WrappedAudioDeviceModuleIOS::RecordedDataIsAvailable` ning ikkala overload'ida `_mutex.Lock()` dan oldin `audioSamples = nv_call_process(audioSamples, nSamples, nBytesPerSample, nChannels, samplesPerSec);` — effekt o'chiq yoki format 16-bit mono bo'lmasa o'sha pointer qaytadi.
+317. `AppDelegate.swift` (TelegramUI): `import NovagramVoiceChanger`; `NovagramSharedDefaults.syncShowDeletedMessages()` dan keyin `NovagramVoiceChanger.syncCallChoice()` (qo'ng'iroq tanlovi C tomonga, keyin har o'zgarishda modul o'zi yuboradi).
+318. `TelegramUI/BUILD`: `//submodules/Novagram/VoiceChanger:NovagramVoiceChanger`; `TgVoipWebrtc/BUILD` (`TgVoipWebrtc` objc_library deps, `wamr` dan keyin): `//submodules/Novagram/VoiceChanger/Core:NovagramVoiceDSP`.
 
 ---
 
@@ -8133,3 +8143,24 @@ Our own scripts, no Telegram file. `run.sh`, `publish.sh` and `release.sh` call 
 
 Verified 2026-11-02 with `./run.sh -r` and a faked older stamp: "Bazel disk cache is 47GB … now 30G", "Xcode changed
 (… 27A9275 -> … 27B52): re-creating Bazel's Xcode repos", build green in 35 s.
+
+## 📌 Voice changer (2026-11-12)
+
+A port of the Android app's voice changer (`Novagramorg/android`, `org/fenixuz/voice/`): the same 15 effects, the
+same 4 tape speeds, the same preset ids (stored, never renumber), gains and settings steps. Not approved yet, so it
+is one switch in the Developer section (developer role only; a director login turns it off).
+
+- `submodules/Novagram/VoiceChanger/Core/` (`NovagramVoiceDSP`, plain C, no Telegram or Apple framework, its own
+  `Package.swift`, so it can become a public SDK): `VoiceEffect` + formant warp + robot/whisper STFT + Freeverb +
+  the call queue, ported line by line. No external dependency (owner rule): pitch shift and tape speed are
+  `NovagramPitchShift.c/.h`, our trimmed copy of Sonic with its Apache 2.0 notice kept; origin in `CREDITS.md`. Host test: `./build-input/bazel-9.2.0-darwin-arm64 test //submodules/Novagram/VoiceChanger/Core:NovagramVoiceDSPTests`.
+- `submodules/Novagram/VoiceChanger/` (`NovagramVoiceChanger`, Foundation only): the settings (`pro_messager`
+  suite), the gate, `syncCallChoice()` (one atomic value read by the call's audio thread, so a change during a call
+  applies at once) and the recorder's effect wrapper.
+- `submodules/Novagram/Messenger/Sources/NovagramVoiceChangerController.swift`: the effects pages and strings.
+- Voice messages: hooks #313–315 in `ManagedAudioRecorder.swift` (48 kHz mono Int16, before the Opus encoder).
+  Unlike Android there is no voice-changer button on the recording UI yet; the choice is made in Settings.
+- Calls: hook #316 changes the microphone's 10 ms buffers in `WrappedAudioDeviceModuleIOS` before every audio
+  transport (1:1 and group calls). The call screen has no button yet: change the effect in Settings during a call.
+  Mono 16-bit only, like Android. The effect is rebuilt (allocations) on the audio thread only when the choice changes.
+- When the switch is off, `makeRecorderEffect` returns nil and the call choice is OFF: nothing touches any audio.

@@ -22,6 +22,7 @@ import NovagramStoryUnlock
 import NovagramPremiumUnlock
 import NovagramCalls
 import NovagramCallRecordingCore
+import NovagramVoiceChanger
 
 private enum NovagramSection: Int32 {
     case accounts = 5
@@ -177,6 +178,10 @@ private enum NovagramEntry: ItemListNodeEntry {
     case callRecordingNoticeOff(PresentationTheme, String, String, Bool)
     // "Save to Files" for voice messages and files (NovagramDeveloperFlags.isSaveToFilesEnabled)
     case saveToFiles(PresentationTheme, String, String, Bool)
+    // Voice changer (NovagramVoiceChanger.isEnabled) and, while on, its two effect pages
+    case voiceChanger(PresentationTheme, String, String, Bool)
+    case voiceChangerMessages(PresentationTheme, String, String)
+    case voiceChangerCalls(PresentationTheme, String, String)
     case developerFooter(PresentationTheme, String)
 
     // — Accounts (Novagram multi-account) —
@@ -216,7 +221,7 @@ private enum NovagramEntry: ItemListNodeEntry {
             return NovagramSection.reminder.rawValue
         case .featuresHeader, .addRecommendedFolders, .foldersPrompt, .adminFolders, .folderStyle, .channelHistoryButton, .settingsLinks, .autoAcceptRequests, .shareNovagramProLink, .storyUnlockEnabled, .translateChatsUnlock, .featuresFooter:
             return NovagramSection.features.rawValue
-        case .developerHeader, .showAds, .adEventsOff, .currencyRatesView, .adsPanel, .callDataSaving, .callRecordingNoticeOff, .saveToFiles, .developerFooter:
+        case .developerHeader, .showAds, .adEventsOff, .currencyRatesView, .adsPanel, .callDataSaving, .callRecordingNoticeOff, .saveToFiles, .voiceChanger, .voiceChangerMessages, .voiceChangerCalls, .developerFooter:
             return NovagramSection.developer.rawValue
         case .accountsHeader, .accountsManager, .aboutRow, .novagramBots:
             return NovagramSection.accounts.rawValue
@@ -312,6 +317,9 @@ private enum NovagramEntry: ItemListNodeEntry {
         case .adsPanel:                  return 97
         case .callRecordingNoticeOff:    return 98
         case .saveToFiles:               return 92
+        case .voiceChanger:              return 56
+        case .voiceChangerMessages:      return 57
+        case .voiceChangerCalls:         return 58
         case .developerFooter:           return 99
         // Accounts (rendered at the top of the list)
         case .accountsHeader:            return -2
@@ -338,6 +346,13 @@ private enum NovagramEntry: ItemListNodeEntry {
         case .saveToFiles:
             // Stable id 92, shown after "Record calls without notice" (98) and before the footer (99).
             return 98 * 10 + 5
+        case .voiceChanger:
+            // Stable ids 56–58, shown after "Save to Files" and before the footer (99).
+            return 98 * 10 + 6
+        case .voiceChangerMessages:
+            return 98 * 10 + 7
+        case .voiceChangerCalls:
+            return 98 * 10 + 8
         default:
             return Int(self.stableId) * 10
         }
@@ -510,6 +525,12 @@ private enum NovagramEntry: ItemListNodeEntry {
             if case let .callRecordingNoticeOff(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
         case let .saveToFiles(lhsTheme, lhsTitle, lhsText, lhsValue):
             if case let .saveToFiles(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
+        case let .voiceChanger(lhsTheme, lhsTitle, lhsText, lhsValue):
+            if case let .voiceChanger(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
+        case let .voiceChangerMessages(lhsTheme, lhsTitle, lhsLabel):
+            if case let .voiceChangerMessages(rhsTheme, rhsTitle, rhsLabel) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsLabel == rhsLabel { return true } else { return false }
+        case let .voiceChangerCalls(lhsTheme, lhsTitle, lhsLabel):
+            if case let .voiceChangerCalls(rhsTheme, rhsTitle, rhsLabel) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsLabel == rhsLabel { return true } else { return false }
         case let .developerFooter(lhsTheme, lhsText):
             if case let .developerFooter(rhsTheme, rhsText) = rhs, lhsTheme === rhsTheme, lhsText == rhsText { return true } else { return false }
 
@@ -623,8 +644,10 @@ private enum NovagramEntry: ItemListNodeEntry {
     // The developer rows have no link but are settings too, so they are found while that section is shown.
     var searchTexts: [String]? {
         switch self {
-        case let .showAds(_, title, text, _), let .adEventsOff(_, title, text, _), let .currencyRatesView(_, title, text, _), let .adsPanel(_, title, text, _), let .callRecordingNoticeOff(_, title, text, _), let .saveToFiles(_, title, text, _):
+        case let .showAds(_, title, text, _), let .adEventsOff(_, title, text, _), let .currencyRatesView(_, title, text, _), let .adsPanel(_, title, text, _), let .callRecordingNoticeOff(_, title, text, _), let .saveToFiles(_, title, text, _), let .voiceChanger(_, title, text, _):
             return [title, text]
+        case let .voiceChangerMessages(_, title, label), let .voiceChangerCalls(_, title, label):
+            return [title, label]
         default:
             break
         }
@@ -1235,6 +1258,28 @@ private enum NovagramEntry: ItemListNodeEntry {
                 },
                 tag: self.novagramTag
             )
+        case let .voiceChanger(_, title, text, value):
+            return ItemListSwitchItem(
+                presentationData: presentationData,
+                icon: novagramSettingsIcon(systemName: "waveform.circle.fill", color: .blue),
+                title: title,
+                text: text,
+                value: value,
+                sectionId: self.section,
+                style: .blocks,
+                updated: { value in
+                    arguments.updateVoiceChanger(value)
+                },
+                tag: self.novagramTag
+            )
+        case let .voiceChangerMessages(_, title, label):
+            return ItemListDisclosureItem(presentationData: presentationData, icon: novagramSettingsIcon(systemName: "mic.circle.fill", color: .blue), title: title, label: label, sectionId: self.section, style: .blocks, action: {
+                arguments.openVoiceChanger(false)
+            })
+        case let .voiceChangerCalls(_, title, label):
+            return ItemListDisclosureItem(presentationData: presentationData, icon: novagramSettingsIcon(systemName: "phone.circle.fill", color: .green), title: title, label: label, sectionId: self.section, style: .blocks, action: {
+                arguments.openVoiceChanger(true)
+            })
         case let .storyUnlockEnabled(_, title, text, value, isNew):
             let langCode = NovagramL10n.languageKey(for: presentationData.strings)
             let badge: AnyComponent<Empty>? = isNew ? AnyComponent(NovagramNewBadgeComponent(langCode: langCode)) : nil
@@ -1338,6 +1383,9 @@ private struct NovagramSettingsState: Equatable {
     var adsPanelEnabled: Bool
     var callRecordingNoticeOff: Bool
     var saveToFilesEnabled: Bool
+    var voiceChangerEnabled: Bool
+    var voiceChangerMessagesPreset: Int
+    var voiceChangerCallsPreset: Int
     // Default false: hidden until the 20 s hold on the Settings version line reveals it
     var developerSectionRevealed: Bool
     // The login that revealed it decides which switches show
@@ -1405,6 +1453,9 @@ private struct NovagramSettingsState: Equatable {
         self.adsPanelEnabled = NovagramDeveloperFlags.isAdsPanelEnabled
         self.callRecordingNoticeOff = NovagramCallRecordingNotice.isOff
         self.saveToFilesEnabled = NovagramDeveloperFlags.isSaveToFilesEnabled
+        self.voiceChangerEnabled = NovagramVoiceChanger.isEnabled
+        self.voiceChangerMessagesPreset = NovagramVoiceChanger.messages.presetId
+        self.voiceChangerCallsPreset = NovagramVoiceChanger.calls.presetId
     }
 
     static func == (lhs: NovagramSettingsState, rhs: NovagramSettingsState) -> Bool {
@@ -1544,6 +1595,9 @@ private struct NovagramSettingsState: Equatable {
             return false
         }
         if lhs.saveToFilesEnabled != rhs.saveToFilesEnabled {
+            return false
+        }
+        if lhs.voiceChangerEnabled != rhs.voiceChangerEnabled || lhs.voiceChangerMessagesPreset != rhs.voiceChangerMessagesPreset || lhs.voiceChangerCallsPreset != rhs.voiceChangerCallsPreset {
             return false
         }
         if lhs.currencyRatesViewEnabled != rhs.currencyRatesViewEnabled {
@@ -1792,6 +1846,13 @@ private func novagramSettingsEntries(presentationData: PresentationData, state: 
         if role.canUse(.saveToFiles) {
             entries.append(.saveToFiles(presentationData.theme, NovagramDeveloperStrings.saveToFilesTitle(langCode: langCode), NovagramDeveloperStrings.saveToFilesTip(langCode: langCode), state.saveToFilesEnabled))
         }
+        if role.canUse(.voiceChanger) {
+            entries.append(.voiceChanger(presentationData.theme, NovagramVoiceChangerStrings.title(langCode), NovagramVoiceChangerStrings.switchTip(langCode), state.voiceChangerEnabled))
+            if state.voiceChangerEnabled {
+                entries.append(.voiceChangerMessages(presentationData.theme, NovagramVoiceChangerStrings.voiceMessages(langCode), NovagramVoiceChangerStrings.presetName(state.voiceChangerMessagesPreset, langCode)))
+                entries.append(.voiceChangerCalls(presentationData.theme, NovagramVoiceChangerStrings.calls(langCode), NovagramVoiceChangerStrings.presetName(state.voiceChangerCallsPreset, langCode)))
+            }
+        }
         entries.append(.developerFooter(presentationData.theme, NovagramDeveloperStrings.footer(langCode: langCode)))
     }
 
@@ -1860,6 +1921,9 @@ private final class NovagramSettingsArguments {
     var openCallRecordingSettings: () -> Void = {}
     var updateCallRecordingNoticeOff: (Bool) -> Void = { _ in }
     var updateSaveToFiles: (Bool) -> Void = { _ in }
+    // Voice changer (HOOKS.md, "Voice changer"), set after init.
+    var updateVoiceChanger: (Bool) -> Void = { _ in }
+    var openVoiceChanger: (Bool) -> Void = { _ in }
     // The search field at the top, set after init.
     var updateSearchQuery: (String) -> Void = { _ in }
     var dismissSearchInput: () -> Void = {}
@@ -2695,6 +2759,12 @@ public func novagramSettingsController(context: AccountContext, highlightFeature
             return state
         }
     }
+    arguments.updateVoiceChanger = { value in
+        NovagramVoiceChanger.isEnabled = value
+    }
+    arguments.openVoiceChanger = { forCall in
+        pushControllerImpl?(novagramVoiceChangerController(context: context, forCall: forCall))
+    }
     let refreshDeveloperFlags: () -> Void = {
         updateState { state in
             var state = state
@@ -2704,6 +2774,9 @@ public func novagramSettingsController(context: AccountContext, highlightFeature
             state.adsPanelEnabled = NovagramDeveloperFlags.isAdsPanelEnabled
             state.callRecordingNoticeOff = NovagramCallRecordingNotice.isOff
             state.saveToFilesEnabled = NovagramDeveloperFlags.isSaveToFilesEnabled
+            state.voiceChangerEnabled = NovagramVoiceChanger.isEnabled
+            state.voiceChangerMessagesPreset = NovagramVoiceChanger.messages.presetId
+            state.voiceChangerCallsPreset = NovagramVoiceChanger.calls.presetId
             state.callRecording = CallRecordingSettings().isEnabled
             return state
         }
@@ -2731,6 +2804,10 @@ public func novagramSettingsController(context: AccountContext, highlightFeature
     let developerFlagsObserver = NotificationCenter.default.addObserver(forName: .novagramDeveloperFlagsChanged, object: nil, queue: .main) { _ in
         refreshDeveloperFlags()
     }
+    // The voice changer's switch, or an effect picked on its pages: update the rows' labels.
+    let voiceChangerObserver = NotificationCenter.default.addObserver(forName: NovagramVoiceChanger.changedNotification, object: nil, queue: .main) { _ in
+        refreshDeveloperFlags()
+    }
 
     let signal = combineLatest(
         context.sharedContext.presentationData,
@@ -2742,6 +2819,7 @@ public func novagramSettingsController(context: AccountContext, highlightFeature
         |> afterDisposed {
             NotificationCenter.default.removeObserver(callRecordingObserver)
             NotificationCenter.default.removeObserver(developerFlagsObserver)
+            NotificationCenter.default.removeObserver(voiceChangerObserver)
         }
         |> map { presentationData, state, carPlayStatus, callDataSaving, searchQuery -> (ItemListControllerState, (ItemListNodeState, Any)) in
             let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Novagram"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))

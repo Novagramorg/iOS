@@ -10,6 +10,7 @@ import OpusBinding
 import ChatPresentationInterfaceState
 import AudioWaveform
 import FFMpegBinding
+import NovagramVoiceChanger
 
 private let kOutputBus: UInt32 = 0
 private let kInputBus: UInt32 = 1
@@ -163,6 +164,8 @@ final class ManagedAudioRecorderContext {
     private var oggWriter: TGOggOpusWriter
     private var dataItem: TGDataItem
     private var audioBuffer = Data()
+    // Novagram: voice changer, nil when off (HOOKS.md, "Voice changer")
+    private var novagramVoiceEffect = NovagramVoiceChanger.makeRecorderEffect(sampleRate: 48000)
     
     private let audioUnit = Atomic<AudioUnit?>(value: nil)
     
@@ -581,6 +584,8 @@ final class ManagedAudioRecorderContext {
         if !self.processSamples {
             return
         }
+        // Novagram: voice changer (HOOKS.md, "Voice changer")
+        if let effect = self.novagramVoiceEffect, effect.process(buffer, into: { self.processAndDisposeAudioBuffer($0) }) { return }
         
         let millisecondsPerPacket = 60
         let encoderPacketSizeInBytes = 16000 / 1000 * millisecondsPerPacket * 2
@@ -694,6 +699,8 @@ final class ManagedAudioRecorderContext {
     }
     
     func takeData() -> RecordedAudioData? {
+        // Novagram: voice changer tail (HOOKS.md, "Voice changer")
+        if let effect = self.novagramVoiceEffect { self.novagramVoiceEffect = nil; effect.drain(into: { self.processAndDisposeAudioBuffer($0) }) }
         if self.oggWriter.writeFrame(nil, frameByteCount: 0) {
             let scaledSamplesMemory = malloc(100 * 2)!
             let scaledSamples: UnsafeMutablePointer<Int16> = scaledSamplesMemory.assumingMemoryBound(to: Int16.self)
