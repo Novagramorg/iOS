@@ -47,7 +47,9 @@ submodules/Novagram/
 `submodules/Novagram/CallRecordingKit` is a git submodule: our public GPL call recording SDK
 (`Novagramorg/novagram-call-recording-kit-sdk`, shared with the Mac app), pinned by commit (no tags), owned by the iOS
 session, which may push SDK fixes to its `main`. Update it by moving the pin; keep Telegram types out of it (HOOKS.md,
-"Call recording").
+"Call recording"). `submodules/Novagram/VoiceChangerKit` (`Novagramorg/novagram-voice-changer-kit-sdk`, the plain-C
+voice changer, same sound as Android) follows the same rules (HOOKS.md, "Voice changer"). Our SDKs carry no external
+dependency: borrowed code is copied in, trimmed and credited in `CREDITS.md`.
 
 ## Build — ALWAYS use `./run.sh`
 
@@ -141,6 +143,7 @@ a green build: [`AGENTS.md`](AGENTS.md), "Visual features and animations" (`simc
 `tools/animation_sheet.py` for labelled frame sheets, per-frame numbers and per-element tracks in points).
 
 ## Code Style Guidelines
+
 - **Naming**: PascalCase for types, camelCase for variables/methods
 - **Imports**: Group and sort imports at the top of files
 - **Error Handling**: Properly handle errors with appropriate redaction of sensitive data
@@ -149,6 +152,7 @@ a green build: [`AGENTS.md`](AGENTS.md), "Visual features and animations" (`simc
 - **Documentation**: Document public APIs with comments
 
 ## Project Structure
+
 - Core launch and application extensions code is in `Telegram/` directory
 - Most code is organized into libraries in `submodules/`
 - External code is located in `third-party/`
@@ -221,7 +225,7 @@ Three measured facts that are invisible from the code and each cost an investiga
   out of process), so nil must mean "no keyboard surface", never a missing window.
 - **An app can never place a window above the keyboard.** `UIRemoteKeyboardWindow` is at level
   `1e7 + 1` and `-[UIWindow _adjustedWindowLevelFromLevel:]` clamps app windows to `1e7`. Content that
-  must appear over the keyboard has to be parented *into* the keyboard window — which is what
+  must appear over the keyboard has to be parented _into_ the keyboard window — which is what
   `NavigationController`'s `globalOverlayContainerParent` and `GlobalOverlayPresentationContext` do.
 - **A layer that renders nothing receives no real touches**, although `-hitTest:` still returns it:
   `backgroundColor` unassigned (`layer.backgroundColor == nil`) and no `contents` means taps never

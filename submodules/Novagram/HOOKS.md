@@ -742,7 +742,7 @@ three calls and delete the two lines.
 315. `ManagedAudioRecorder.swift` (TelegramUI): `takeData()` boshida bitta qator: effekt nil qilinadi va uning qoldig'i (`drain`: echo/reverb so'nishi, pitch shifter ushlab turgan namunalar) o'sha yo'l bilan yoziladi.
 316. `OngoingCallThreadLocalContext.mm` (TgVoipWebrtc): `#import <NovagramVoiceDSP/NovagramVoiceDSP.h>` (`TdBinding` dan keyin); `WrappedAudioDeviceModuleIOS::RecordedDataIsAvailable` ning ikkala overload'ida `_mutex.Lock()` dan oldin `audioSamples = nv_call_process(audioSamples, nSamples, nBytesPerSample, nChannels, samplesPerSec);` — effekt o'chiq yoki format 16-bit mono bo'lmasa o'sha pointer qaytadi.
 317. `AppDelegate.swift` (TelegramUI): `import NovagramVoiceChanger`; `NovagramSharedDefaults.syncShowDeletedMessages()` dan keyin `NovagramVoiceChanger.syncCallChoice()` (qo'ng'iroq tanlovi C tomonga, keyin har o'zgarishda modul o'zi yuboradi).
-318. `TelegramUI/BUILD`: `//submodules/Novagram/VoiceChanger:NovagramVoiceChanger`; `TgVoipWebrtc/BUILD` (`TgVoipWebrtc` objc_library deps, `wamr` dan keyin): `//submodules/Novagram/VoiceChanger/Core:NovagramVoiceDSP`.
+318. `TelegramUI/BUILD`: `//submodules/Novagram/VoiceChanger:NovagramVoiceChanger`; `TgVoipWebrtc/BUILD` (`TgVoipWebrtc` objc_library deps, `wamr` dan keyin): `//submodules/Novagram/VoiceChangerKit:NovagramVoiceDSP`.
 
 ---
 
@@ -8150,10 +8150,12 @@ A port of the Android app's voice changer (`Novagramorg/android`, `org/fenixuz/v
 same 4 tape speeds, the same preset ids (stored, never renumber), gains and settings steps. Not approved yet, so it
 is one switch in the Developer section (developer role only; a director login turns it off).
 
-- `submodules/Novagram/VoiceChanger/Core/` (`NovagramVoiceDSP`, plain C, no Telegram or Apple framework, its own
-  `Package.swift`, so it can become a public SDK): `VoiceEffect` + formant warp + robot/whisper STFT + Freeverb +
-  the call queue, ported line by line. No external dependency (owner rule): pitch shift and tape speed are
-  `NovagramPitchShift.c/.h`, our trimmed copy of Sonic with its Apache 2.0 notice kept; origin in `CREDITS.md`. Host test: `./build-input/bazel-9.2.0-darwin-arm64 test //submodules/Novagram/VoiceChanger/Core:NovagramVoiceDSPTests`.
+- `submodules/Novagram/VoiceChangerKit` (git submodule, public GPL SDK `Novagramorg/novagram-voice-changer-kit-sdk`,
+  pinned by commit like CallRecordingKit; this session owns it): `NovagramVoiceDSP`, plain C, no Telegram or Apple
+  framework. `VoiceEffect` + formant warp + robot/whisper STFT + Freeverb + the call queue, ported line by line. No
+  external dependency (owner rule): pitch shift and tape speed are `NovagramPitchShift.c/.h`, our trimmed copy of
+  Sonic with its Apache 2.0 notice kept; origin in `CREDITS.md`. Update it by moving the pin. Host test:
+  `./build-input/bazel-9.2.0-darwin-arm64 test //submodules/Novagram/VoiceChangerKit:NovagramVoiceDSPTests`.
 - `submodules/Novagram/VoiceChanger/` (`NovagramVoiceChanger`, Foundation only): the settings (`pro_messager`
   suite), the gate, `syncCallChoice()` (one atomic value read by the call's audio thread, so a change during a call
   applies at once) and the recorder's effect wrapper.

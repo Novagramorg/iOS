@@ -303,7 +303,7 @@ objc_library(
         "//third-party/td:TdBinding",
         "//third-party/wamr:wamr",
         # Novagram: voice changer in calls (HOOKS.md, "Voice changer")
-        "//submodules/Novagram/VoiceChanger/Core:NovagramVoiceDSP",
+        "//submodules/Novagram/VoiceChangerKit:NovagramVoiceDSP",
     ],
     sdk_frameworks = [
         "Foundation",
