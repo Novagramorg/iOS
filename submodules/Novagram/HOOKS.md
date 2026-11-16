@@ -367,7 +367,7 @@ three calls and delete the two lines.
 
 #### Yangi alifbo (2026-11-16)
 
-101. **Yangi alifbo**: Novagram Settings → Xabarlar → "Yangi alifbo" (YANGI belgisi bilan, slug `new-alphabet`). Sahifada uchta switch va bitta vosita: "Yangi alifboda yuborish" (`novagram_uzscript_send_new`) o'zbekcha kirill yoki eski lotin matnni Ş Ç Ö Ğ bilan yuboradi; "Chatlarni yangi alifboda ko'rsatish" (`novagram_uzscript_read_new`) kelgan va ketgan xabarlarni faqat ekranda o'giradi; "Lotin ↔ Кирилл" (`novagram_uzscript_chat_menu`) foydalanuvchi profilining "…" menyusida bitta band chiqaradi ("Lotin → Кирилл" / "Кирилл → Lotin"), u shu chatga yuboriladigan xabarlarni kirillga o'giradi (chat tanlovi umumiy switchdan ustun). "Matnni o'girish" vositasi: matn joylanadi, yozuv aniqlanadi, Yangi lotin / Eski lotin / Кирилл tanlanadi, natija nusxalanadi. Hammasi default o'chiq (`pro_messager`). Rus va ingliz matnga tegilmaydi; link, mention, hashtag, kod, custom emoji o'zgarmaydi, xavfsiz map qilib bo'lmasa matn o'girilmay ketadi.
+101. **Yangi alifbo**: Novagram Settings → Xabarlar → "Yangi alifbo" (YANGI belgisi bilan, slug `new-alphabet`). Sahifada uchta switch va bitta vosita: "Yangi alifboda yuborish" (`novagram_uzscript_send_new`) o'zbekcha kirill yoki eski lotin matnni Ş Ç Ö Ğ bilan yuboradi; "Chatlarni yangi alifboda ko'rsatish" (`novagram_uzscript_read_new`) kelgan va ketgan xabarlarni faqat ekranda o'giradi; "Lotin ↔ Кирилл" (`novagram_uzscript_chat_menu`) foydalanuvchi profilining "…" menyusida bitta "Yozuv" bandini chiqaradi; u ichki ro'yxat ochadi: Odatiy / Kirill / Eski lotin / Yangi lotin, joriy tanlov ✓ bilan. Tanlov shu chatga yuboriladigan xabarlar yozuvini belgilaydi (umumiy switchdan ustun, "Odatiy" = tanlov yo'q). "Matnni o'girish" vositasi: matn joylanadi, yozuv aniqlanadi, Yangi lotin / Eski lotin / Кирилл tanlanadi, natija nusxalanadi. Hammasi default o'chiq (`pro_messager`). Rus va ingliz matnga tegilmaydi; link, mention, hashtag, kod, custom emoji o'zgarmaydi, xavfsiz map qilib bo'lmasa matn o'girilmay ketadi.
 
 ---
 
@@ -759,7 +759,7 @@ three calls and delete the two lines.
 
 326. `ChatMessageTextBubbleContentNode.swift` (ChatMessageTextBubbleContentNode): `import NovagramUzScript` (`WalletContext` dan keyin); tarjima/summary bloki tugagach, `isSuspiciousPeer` filtridan oldin 2 qator: izoh + `(rawText, messageEntities) = NovagramUzScriptDisplay.apply(text: rawText, entities: messageEntities, messageId: item.message.id, originalText: item.message.text)`. Entity keshidan (`currentCachedChatMessageText`) oldin turadi, shuning uchun kesh o'girilgan matn bilan solishtiradi. Matn xabarning o'z matnidan farq qilsa (tarjima, summary, tahrir jarayoni, invoice, story) hech narsa qilmaydi.
 327. `ChatMessageTextBubbleContentNode/BUILD`: `//submodules/Novagram/UzScript:NovagramUzScript` dep (`StreamingTextReveal` dan keyin).
-328. `PeerInfoScreenPerformButtonAction.swift` (PeerInfoScreen): `import NovagramMessenger` (`WalletSendScreen` dan keyin); foydalanuvchi profilining "…" menyusida "Novagram Info" bandidan oldin 2 qator: izoh + `if let item = NovagramUzScriptChatMenu.item(peer: peer, presentationData: strongSelf.presentationData, present: { c in strongSelf.controller?.present(c, in: .window(.root)) }) { items.append(item) }` ("Lotin ↔ Кирилл" switch o'chiq bo'lsa yoki bot bo'lsa nil).
+328. `PeerInfoScreenPerformButtonAction.swift` (PeerInfoScreen): `import NovagramMessenger` (`WalletSendScreen` dan keyin); foydalanuvchi profilining "…" menyusida "Novagram Info" bandidan oldin 2 qator: izoh + `if let item = NovagramUzScriptChatMenu.item(peer: peer, accountPeerId: strongSelf.context.account.peerId, presentationData: strongSelf.presentationData, present: { c in strongSelf.controller?.present(c, in: .window(.root)) }) { items.append(item) }`. Band "Yozuv" ichki ro'yxatini Telegram'ning `c?.pushItems(...)` mexanizmi bilan ochadi (Orqaga bandi bilan); mantiq `NovagramUzScriptChatMenu.swift` da. "Lotin ↔ Кирилл" switch o'chiq bo'lsa, bot yoki Saved Messages bo'lsa nil.
 329. `ChatControllerNode.swift` (TelegramUI): mavjud `NovagramOutgoingText.apply(...)` qatoriga `peerId: self.chatLocation.peerId` argumenti qo'shildi (chatning o'z yozuvi uchun); izohda "Yangi alifbo". Yangi qator yo'q.
 
 ---
@@ -8228,7 +8228,7 @@ O'zbek lotin alifbosini o'zgartirish haqidagi qonun (21.10.2026 imzolangan, 22.0
 Owner tasdiqlagan, hamma uchun (Developer bo'limisiz). Hamma o'girish telefonda, SDK ichida.
 
 - **SDK.** `submodules/Novagram/UzScriptKit` — ochiq GPL repo `Novagramorg/novagram-uzscript-kit-sdk` git submodule,
-  commit bilan pin qilingan (`e3e696c`, teg yo'q), CallRecordingKit kabi: `.gitmodules` yozuvi + gitlink. Yangilash =
+  commit bilan pin qilingan (`f489414`, teg yo'q), CallRecordingKit kabi: `.gitmodules` yozuvi + gitlink. Yangilash =
   pin'ni surish. Label `//submodules/Novagram/UzScriptKit:NovagramUzScriptCore`. Konvertor, aniqlash (`isUzbek`: rus/ingliz matnga
   tegmaydi), sozlamalar (`UzScriptSettings`, `pro_messager`: `novagram_uzscript_send_new`, `novagram_uzscript_read_new`,
   `novagram_uzscript_chat_menu`, chat bo'yicha yozuv) va sahifa matnlari (`UzScriptStrings`, uz/en/ru/zh, boshqa til en ga tushadi). Telegram
