@@ -11,6 +11,7 @@ url=https://github.com/bazelbuild/rules_swift.git
 [submodule "submodules/TgVoipWebrtc/tgcalls"]
 	path = submodules/TgVoipWebrtc/tgcalls
 url=../tgcalls.git
+	ignore = dirty
 [submodule "third-party/libvpx/libvpx"]
 	path = third-party/libvpx/libvpx
 	url = https://github.com/webmproject/libvpx.git
