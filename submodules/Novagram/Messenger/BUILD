@@ -46,6 +46,8 @@ swift_library(
         "//submodules/Novagram/CallRecordingKit:NovagramCallRecordingUI",
         "//submodules/Novagram/VoiceChanger:NovagramVoiceChanger",
         "//submodules/Novagram/VoiceChanger/UI:NovagramVoiceChangerUI",
+        "//submodules/Novagram/UzScript:NovagramUzScript",
+        "//submodules/Novagram/UzScriptKit:NovagramUzScriptCore",
     ],
     visibility = [
         "//visibility:public",

@@ -5570,8 +5570,8 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                     let textMessages = chatComposerTextMessages(effectiveInputText: effectiveInputText, businessLinkSetup: isBusinessLinkSetup)
                     for (pieceText, pieceEntities) in textMessages.pieces {
                         do {
-                            // Novagram: Auto Text and the default Text Style from Novagram Settings (HOOKS.md).
-                            let (text, entities) = NovagramOutgoingText.apply(text: pieceText, entities: pieceEntities, businessLinkSetup: isBusinessLinkSetup)
+                            // Novagram: Yangi alifbo, Auto Text and the default Text Style from Novagram Settings (HOOKS.md).
+                            let (text, entities) = NovagramOutgoingText.apply(text: pieceText, entities: pieceEntities, businessLinkSetup: isBusinessLinkSetup, peerId: self.chatLocation.peerId)
                             var attributes: [MessageAttribute] = []
                             if !entities.isEmpty {
                                 attributes.append(TextEntitiesMessageAttribute(entities: entities))

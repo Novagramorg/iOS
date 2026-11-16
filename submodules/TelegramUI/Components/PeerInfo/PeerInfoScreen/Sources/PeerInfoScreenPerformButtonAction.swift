@@ -14,6 +14,7 @@ import TelegramNotices
 import AlertComponent
 import WalletContext
 import WalletSendScreen
+import NovagramMessenger
 
 extension PeerInfoScreenNode {
     func performButtonAction(key: PeerInfoHeaderButtonKey, buttonNode: PeerInfoHeaderButtonNode?, gesture: ContextGesture?) {
@@ -909,6 +910,8 @@ extension PeerInfoScreenNode {
                         })))
                     }
 
+                    // Novagram: "Yangi alifbo" per-chat Cyrillic/Latin sending, above Novagram Info (HOOKS.md).
+                    if let item = NovagramUzScriptChatMenu.item(peer: peer, presentationData: strongSelf.presentationData, present: { c in strongSelf.controller?.present(c, in: .window(.root)) }) { items.append(item) }
                     items.append(.action(ContextMenuActionItem(text: "Novagram Info", icon: { theme in
                         generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Info"), color: theme.contextMenu.primaryColor)
                     }, action: { c, _ in

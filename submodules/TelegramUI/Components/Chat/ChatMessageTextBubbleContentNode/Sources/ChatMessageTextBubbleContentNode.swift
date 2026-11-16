@@ -28,6 +28,7 @@ import InteractiveTextComponent
 import ShimmeringMask
 import StreamingTextReveal
 import WalletContext
+import NovagramUzScript
 
 private final class CachedChatMessageText {
     let text: String
@@ -428,6 +429,8 @@ public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
                 }
                 
                 
+                // Novagram: "Yangi alifbo" shows the text in the new Uzbek alphabet, on screen only (HOOKS.md).
+                (rawText, messageEntities) = NovagramUzScriptDisplay.apply(text: rawText, entities: messageEntities, messageId: item.message.id, originalText: item.message.text)
                 if incoming && item.associatedData.isSuspiciousPeer, let entities = messageEntities {
                     messageEntities = entities.filter(\.isShownFromSuspiciousPeer)
                 }

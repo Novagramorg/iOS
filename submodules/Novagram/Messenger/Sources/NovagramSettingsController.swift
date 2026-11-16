@@ -22,6 +22,7 @@ import NovagramStoryUnlock
 import NovagramPremiumUnlock
 import NovagramCalls
 import NovagramCallRecordingCore
+import NovagramUzScriptCore
 import NovagramVoiceChanger
 import NovagramVoiceChangerUI
 
@@ -86,6 +87,8 @@ private enum NovagramEntry: ItemListNodeEntry {
     case translateMessages(PresentationTheme, String)
     // isNew: true — Feature #37 Send-Translate 2-tap confirm
     case sendTranslateConfirm(PresentationTheme, String, String, Bool, Bool)
+    // "Yangi alifbo": opens its page (title, isNew). HOOKS.md, "Yangi alifbo".
+    case newAlphabet(PresentationTheme, String, Bool)
     // Feature #30: Sticker auto-add after text message
     case autoStickerEnabled(PresentationTheme, String, String, Bool)
     // Feature #34: Heart effect auto-attach to sent messages
@@ -204,7 +207,7 @@ private enum NovagramEntry: ItemListNodeEntry {
             return NovagramSection.chat.rawValue
         case .interfaceHeader, .hideFolders, .showStories, .showMutualContactSymbol, .unlimitedPins, .interfaceFooter:
             return NovagramSection.interface.rawValue
-        case .messagingHeader, .textStyle, .autoText, .autoTranslate, .translateToggle, .translateMessages, .sendTranslateConfirm, .autoStickerEnabled, .heartEffectEnabled, .messagingFooter:
+        case .messagingHeader, .textStyle, .autoText, .autoTranslate, .translateToggle, .translateMessages, .sendTranslateConfirm, .newAlphabet, .autoStickerEnabled, .heartEffectEnabled, .messagingFooter:
             return NovagramSection.messaging.rawValue
         case .sttHeader, .sttEnabled, .sttLanguage, .voiceTranslate:
             return NovagramSection.stt.rawValue
@@ -260,6 +263,7 @@ private enum NovagramEntry: ItemListNodeEntry {
         case .translateToggle:           return 24
         case .translateMessages:         return 25
         case .sendTranslateConfirm:      return 26
+        case .newAlphabet:               return 100
         case .autoStickerEnabled:        return 27
         case .heartEffectEnabled:        return 28
         case .messagingFooter:           return 29
@@ -344,6 +348,9 @@ private enum NovagramEntry: ItemListNodeEntry {
             return 97 * 10 + 5
         case .callRecording:
             return 8 * 10 + 5
+        case .newAlphabet:
+            // Stable id 100, shown right after "Ask to translate on send" (26).
+            return 26 * 10 + 5
         case .saveToFiles:
             // Stable id 92, shown after "Record calls without notice" (98) and before the footer (99).
             return 98 * 10 + 5
@@ -411,6 +418,8 @@ private enum NovagramEntry: ItemListNodeEntry {
             if case let .translateToggle(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
         case let .translateMessages(lhsTheme, lhsTitle):
             if case let .translateMessages(rhsTheme, rhsTitle) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle { return true } else { return false }
+        case let .newAlphabet(lhsTheme, lhsTitle, lhsIsNew):
+            if case let .newAlphabet(rhsTheme, rhsTitle, rhsIsNew) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsIsNew == rhsIsNew { return true } else { return false }
         case let .sendTranslateConfirm(lhsTheme, lhsTitle, lhsText, lhsValue, lhsIsNew):
             if case let .sendTranslateConfirm(rhsTheme, rhsTitle, rhsText, rhsValue, rhsIsNew) = rhs,
                lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue, lhsIsNew == rhsIsNew { return true } else { return false }
@@ -585,6 +594,7 @@ private enum NovagramEntry: ItemListNodeEntry {
         case let .translateToggle(_, title, _, _):          return (.translateButton, title)
         case let .translateMessages(_, title):              return (.translateLanguage, title)
         case let .sendTranslateConfirm(_, title, _, _, _):  return (.translateOnSend, title)
+        case let .newAlphabet(_, title, _):                 return (.newAlphabet, title)
         case let .autoStickerEnabled(_, title, _, _):       return (.autoSticker, title)
         case let .heartEffectEnabled(_, title, _, _):       return (.heartEffect, title)
 
@@ -822,6 +832,11 @@ private enum NovagramEntry: ItemListNodeEntry {
                 },
                 tag: self.novagramTag
             )
+        case let .newAlphabet(_, title, isNew):
+            let langCode = NovagramL10n.languageKey(for: presentationData.strings)
+            return ItemListDisclosureItem(presentationData: presentationData, icon: novagramSettingsIcon(systemName: "character.textbox", color: .blue), title: title, titleBadge: isNew ? NovagramNewBadgeLabel.headerText(langCode: langCode) : nil, label: "", sectionId: self.section, style: .blocks, action: {
+                arguments.openNewAlphabet()
+            }, tag: self.novagramTag)
         case let .autoStickerEnabled(_, title, text, value):
             // Feature #30: Sticker auto-add — sends the last saved sticker after each text message
             return ItemListSwitchItem(presentationData: presentationData, icon: novagramSettingsIcon(systemName: "face.smiling.inverse", color: .orange), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
@@ -1722,6 +1737,8 @@ private func novagramSettingsEntries(presentationData: PresentationData, state: 
     let sendConfirmTarget = NovagramSendTranslate.languageName(code: state.translateConfirmTargetLanguage, appLangCode: langCode)
     let sendConfirmSubtitle = NovagramSendTranslateStrings.toggleSubtitle(langCode: langCode) + "\n" + NovagramSendTranslateStrings.targetLine(sendConfirmTarget, langCode: langCode)
     entries.append(.sendTranslateConfirm(presentationData.theme, sendConfirmTitle, sendConfirmSubtitle, state.translateConfirmEnabled, false))
+    // "Yangi alifbo" (approved 2026-11-16): one row for everyone, its switches and the Convert tool are on its page.
+    entries.append(.newAlphabet(presentationData.theme, UzScriptStrings(languageCode: langCode).title, true))
 
     // Feature #30: Sticker auto-add toggle
     entries.append(.autoStickerEnabled(presentationData.theme, NovagramAutoStickerStrings.toggleTitle(langCode: langCode), NovagramAutoStickerStrings.toggleSubtitle(langCode: langCode), state.autoStickerEnabled))
@@ -1920,6 +1937,8 @@ private final class NovagramSettingsArguments {
     let openCarPlay: () -> Void
     // The Call recording row, set after init (HOOKS.md, "Call recording").
     var openCallRecordingSettings: () -> Void = {}
+    // The "Yangi alifbo" row, set after init (HOOKS.md, "Yangi alifbo").
+    var openNewAlphabet: () -> Void = {}
     var updateCallRecordingNoticeOff: (Bool) -> Void = { _ in }
     var updateSaveToFiles: (Bool) -> Void = { _ in }
     // Voice changer (HOOKS.md, "Voice changer"), set after init.
@@ -2743,6 +2762,9 @@ public func novagramSettingsController(context: AccountContext, highlightFeature
     }
     arguments.openCallRecordingSettings = {
         pushControllerImpl?(novagramCallRecordingSettingsController(context: context))
+    }
+    arguments.openNewAlphabet = {
+        pushControllerImpl?(novagramNewAlphabetController(context: context))
     }
     arguments.updateCallRecordingNoticeOff = { value in
         NovagramCallRecordingNotice.isOff = value

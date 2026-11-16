@@ -365,6 +365,10 @@ three calls and delete the two lines.
 99. **Zaif signalda "Videomni o'chirish"**: 1:1 qo'ng'iroqda "Weak signal" yozuvi ~5 s uzluksiz turib, o'zimizning kamera videomiz yoqiq bo'lsa, yozuv tagida "Videomni o'chirish" tugmasi chiqadi (en "Turn off my video", Mac bilan bir xil). Bosilsa kamera tugmasidek videoni o'chiradi (`videoAction` → `toggleVideo()` → `call.disableVideo()`). Signal tiklansa yoki video o'chsa tugma yo'qoladi; ekran ulashishda chiqmaydi.
 100. **Qo'ng'iroqlarda kamroq trafik**: Novagram Settings → Dasturchi (faqat developer roli, tasdiqlanmagan funksiya) → "Qo'ng'iroqlarda kamroq trafik" (`pro_messager` / `novagram_call_data_saving`, default o'chiq, slug `call-data-saving`). Telegram'ning o'z sozlamasini boshqaradi (Data and Storage → Use less data for calls): yoqilsa "Always", o'chirilsa "Default". Switch jonli sozlamani ko'rsatadi (u yerda o'zgartirilsa bu yerda ham ko'rinadi); qo'ng'iroq sozlamani yaratilganda o'qiydi, shuning uchun keyingi qo'ng'iroqdan ishlaydi. Telegram fayllarida hook yo'q.
 
+#### Yangi alifbo (2026-11-16)
+
+101. **Yangi alifbo**: Novagram Settings → Xabarlar → "Yangi alifbo" (YANGI belgisi bilan, slug `new-alphabet`). Sahifada uchta switch va bitta vosita: "Yangi alifboda yuborish" (`novagram_uzscript_send_new`) o'zbekcha kirill yoki eski lotin matnni Ş Ç Ö Ğ bilan yuboradi; "Chatlarni yangi alifboda ko'rsatish" (`novagram_uzscript_read_new`) kelgan va ketgan xabarlarni faqat ekranda o'giradi; "Lotin ↔ Кирилл" (`novagram_uzscript_chat_menu`) foydalanuvchi profilining "…" menyusida bitta band chiqaradi ("Lotin → Кирилл" / "Кирилл → Lotin"), u shu chatga yuboriladigan xabarlarni kirillga o'giradi (chat tanlovi umumiy switchdan ustun). "Matnni o'girish" vositasi: matn joylanadi, yozuv aniqlanadi, Yangi lotin / Eski lotin / Кирилл tanlanadi, natija nusxalanadi. Hammasi default o'chiq (`pro_messager`). Rus va ingliz matnga tegilmaydi; link, mention, hashtag, kod, custom emoji o'zgarmaydi, xavfsiz map qilib bo'lmasa matn o'girilmay ketadi.
+
 ---
 
 ### 3. Hooks
@@ -750,6 +754,13 @@ three calls and delete the two lines.
 323. `CallControllerNodeV2.swift` (TelegramCallsUI): `import NovagramVoiceChangerUI` (`LibYuvBinding` dan keyin); #289 dan keyin bitta qator `self.callScreen.novagramVoiceChanger.pressed = { ... NovagramVoiceChangerUI.presentPicker(context: self.call.context, forCall: true, present: { controller, _ in self.present?(controller) }) }`.
 324. `VideoChatScreenMoreMenu.swift` (TelegramCallsUI): `import NovagramVoiceChangerUI` (`AVFoundation` dan keyin); "Audio" (`VoiceChat_ContextAudio`) bandidan keyin bitta qator `if let item = NovagramVoiceChangerUI.groupCallMenuItem(...) { items.append(.action(item)) }` (switch o'chiq bo'lsa nil).
 325. `ChatTextInputPanelNode/BUILD`, `TelegramCallsUI/BUILD`: `//submodules/Novagram/VoiceChanger/UI:NovagramVoiceChangerUI` dep.
+
+#### Yangi alifbo (2026-11-16)
+
+326. `ChatMessageTextBubbleContentNode.swift` (ChatMessageTextBubbleContentNode): `import NovagramUzScript` (`WalletContext` dan keyin); tarjima/summary bloki tugagach, `isSuspiciousPeer` filtridan oldin 2 qator: izoh + `(rawText, messageEntities) = NovagramUzScriptDisplay.apply(text: rawText, entities: messageEntities, messageId: item.message.id, originalText: item.message.text)`. Entity keshidan (`currentCachedChatMessageText`) oldin turadi, shuning uchun kesh o'girilgan matn bilan solishtiradi. Matn xabarning o'z matnidan farq qilsa (tarjima, summary, tahrir jarayoni, invoice, story) hech narsa qilmaydi.
+327. `ChatMessageTextBubbleContentNode/BUILD`: `//submodules/Novagram/UzScript:NovagramUzScript` dep (`StreamingTextReveal` dan keyin).
+328. `PeerInfoScreenPerformButtonAction.swift` (PeerInfoScreen): `import NovagramMessenger` (`WalletSendScreen` dan keyin); foydalanuvchi profilining "…" menyusida "Novagram Info" bandidan oldin 2 qator: izoh + `if let item = NovagramUzScriptChatMenu.item(peer: peer, presentationData: strongSelf.presentationData, present: { c in strongSelf.controller?.present(c, in: .window(.root)) }) { items.append(item) }` ("Lotin ↔ Кирилл" switch o'chiq bo'lsa yoki bot bo'lsa nil).
+329. `ChatControllerNode.swift` (TelegramUI): mavjud `NovagramOutgoingText.apply(...)` qatoriga `peerId: self.chatLocation.peerId` argumenti qo'shildi (chatning o'z yozuvi uchun); izohda "Yangi alifbo". Yangi qator yo'q.
 
 ---
 
@@ -8209,3 +8220,47 @@ What moved, and where each hook lives now. Older sections above still name the o
 | Contacts tab icon (`ContactsController.swift`) | upstream dropped the controller's `tabBarItem` setup with the tab | `novagramSetupTabBarItem()` (title, icon, `TabContacts` animation) from `init` and `updateThemeAndStrings`. **Without an image the tab bar never reports ready and the app stays on a white window after launch** (seen on the first 13.2 build). The "!" contacts-access badge is now only on Settings ▸ Contacts (upstream) |
 | Settings ▸ Contacts (`PeerInfoScreen.swift`, `PeerInfoScreenSettingsActions.swift`, `PresentationResourcesSettings.swift`) | upstream added the same `.contacts` case, action and icon | ours removed; upstream's push (with a back button) is used |
 | Round video from gallery (`NovagramRoundVideoFromGalleryFlow.swift`) | `MediaEditorValues` takes `cropPerspective` | `.zero` |
+
+
+## 📌 Yangi alifbo (2026-11-16)
+
+O'zbek lotin alifbosini o'zgartirish haqidagi qonun (21.10.2026 imzolangan, 22.04.2027 dan kuchga kiradi) uchun.
+Owner tasdiqlagan, hamma uchun (Developer bo'limisiz). Hamma o'girish telefonda, SDK ichida.
+
+- **SDK.** `submodules/Novagram/UzScriptKit` — ochiq GPL repo `Novagramorg/novagram-uzscript-kit-sdk` git submodule,
+  commit bilan pin qilingan (`560e2fa`, teg yo'q), CallRecordingKit kabi: `.gitmodules` yozuvi + gitlink. Yangilash =
+  pin'ni surish. Label `//submodules/Novagram/UzScriptKit:NovagramUzScriptCore`. Konvertor, aniqlash (`isUzbek`: rus/ingliz matnga
+  tegmaydi), sozlamalar (`UzScriptSettings`, `pro_messager`: `novagram_uzscript_send_new`, `novagram_uzscript_read_new`,
+  `novagram_uzscript_chat_menu`, chat bo'yicha yozuv) va sahifa matnlari (`UzScriptStrings`, uz/en/ru/zh, boshqa til en ga tushadi). Telegram
+  turlari unga kirmaydi.
+- **Modul `submodules/Novagram/UzScript/` (`NovagramUzScript`)**, faqat TelegramCore + SDK, Postbox yo'q (bubble
+  unga bog'liq, shuning uchun kichik):
+  - `NovagramUzScriptEntityText`: matn + entity'larni o'giradi. Himoyalangan entity'lar (Url, TextUrl, Mention,
+    TextMention, Hashtag, BotCommand, Email, PhoneNumber, Code, Pre, BankCard, TonAddress, CustomEmoji, FormattedDate,
+    Custom/cashtag) `protectedRanges` bo'lib ketadi; har bir entity `mapRange` orqali qayta joylanadi. Himoyalangan
+    entity matni o'zgarsa yoki range chegaradan chiqsa — nil, ya'ni matn o'girilmaydi.
+  - `NovagramUzScriptOutgoing.apply(text:entities:peerId:)`: chatning o'z yozuvi (profil menyusi) bo'lsa o'sha,
+    bo'lmasa switch yoqiq bo'lsa yangi lotin. Attributed string'ning atributlari (custom emoji ham) map qilingan
+    range'larga ko'chiriladi; custom emoji / attachment belgisi o'zgarsa bo'lak o'girilmay yuboriladi.
+  - `NovagramUzScriptDisplay.apply(...)` (#326): `NSCache` (message id bo'yicha, manba matn va entity'lar
+    tekshiriladi), shuning uchun scroll tez qoladi.
+- **O'z fayllarimiz:** `Messenger/Sources/NovagramOutgoingText.swift` — `apply(...)` ning birinchi qadami
+  `NovagramUzScriptOutgoing.apply` (Auto Text va Text Style'dan oldin, shuning uchun faqat foydalanuvchi matni
+  o'giriladi), yangi `peerId:` parametri (default nil). `NovagramSettingsController.swift` — `.newAlphabet` qatori
+  (stable id 100, sortId 265: "Ask to translate on send" dan keyin, YANGI badge `titleBadge`), `openNewAlphabet`.
+  `NovagramSettingsDeepLink.swift` — `newAlphabet = "new-alphabet"` (hech qachon o'zgartirilmaydi).
+  `NovagramNewAlphabetController.swift` — sahifa va "Matnni o'girish" vositasi (ItemList). `NovagramUzScriptChatMenu.swift`
+  — profil menyusi bandi. Matnlar to'g'ridan-to'g'ri `UzScriptStrings` dan. `Messenger/BUILD` — ikki dep.
+- **Chatlar qachon yangilanadi:** ko'rsatish switchi o'zgarganda ochiq chat darhol qayta chizilmaydi; yangi layout
+  (chatni qayta ochish, scroll bilan yangi qatorlar) uni oladi. Sozlamalar Settings tabida, shuning uchun odatda
+  chat qayta ochiladi.
+- **Faqat matnli xabarlar yuboriladi o'girilib:** media caption, tahrir va scheduled yo'llari `NovagramOutgoingText`
+  orqali o'tmaydi (v1).
+
+### Upstream update'da
+
+- #326 tarjima/summary blokidan keyin va entity keshidan oldin qolishi shart; upstream `rawText` / `messageEntities`
+  nomini o'zgartirsa, yangi nomlarga moslang. Kesh o'girilmagan matn bilan solishtirsa, switch yoqilganda eski
+  layout qaytadi.
+- #328 foydalanuvchi profilining (`.user`) "…" menyusida "Novagram Info" dan oldin turadi.
+- #329: `chatComposerTextMessages` qatori o'zgarsa, `peerId:` argumentini saqlang.

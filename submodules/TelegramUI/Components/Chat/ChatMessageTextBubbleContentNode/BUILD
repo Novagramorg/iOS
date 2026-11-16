@@ -40,6 +40,7 @@ swift_library(
         "//submodules/TelegramUI/Components/InteractiveTextComponent",
         "//submodules/TelegramUI/Components/ShimmeringMask",
         "//submodules/TelegramUI/Components/StreamingTextReveal:StreamingTextReveal",
+        "//submodules/Novagram/UzScript:NovagramUzScript",
     ],
     visibility = [
         "//visibility:public",

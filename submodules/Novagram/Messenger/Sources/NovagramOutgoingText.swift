@@ -1,16 +1,19 @@
 import Foundation
 import TelegramCore
 import TextFormat
+import NovagramUzScript
 
-/// What Novagram Settings change in every outgoing text piece: Auto Text is appended and the default Text Style
-/// covers the whole piece. Applied to each piece the composer split the input into (`chatComposerTextMessages`),
-/// as it was before Telegram moved that split into TextFormat.
+/// What Novagram Settings change in every outgoing text piece: "Yangi alifbo" converts it to the new Uzbek
+/// alphabet, Auto Text is appended and the default Text Style covers the whole piece. Applied to each piece the
+/// composer split the input into (`chatComposerTextMessages`), as it was before Telegram moved that split into
+/// TextFormat.
 public enum NovagramOutgoingText {
     private static let udSuite = "pro_messager"
 
-    public static func apply(text: NSAttributedString, entities: [MessageTextEntity], businessLinkSetup: Bool) -> (text: NSAttributedString, entities: [MessageTextEntity]) {
-        var text = text
-        var entities = entities
+    /// `peerId`: the chat the piece goes to, for its own "Yangi alifbo" script (profile menu "Lotin → Кирилл").
+    public static func apply(text: NSAttributedString, entities: [MessageTextEntity], businessLinkSetup: Bool, peerId: EnginePeer.Id? = nil) -> (text: NSAttributedString, entities: [MessageTextEntity]) {
+        // "Yangi alifbo" first, so only the user's own text is converted and Auto Text stays as written.
+        var (text, entities) = NovagramUzScriptOutgoing.apply(text: text, entities: entities, peerId: peerId)
         let defaults = UserDefaults(suiteName: self.udSuite)
 
         let autoContent = (defaults?.string(forKey: "auto_text_content") ?? "").trimmingCharacters(in: .whitespacesAndNewlines)

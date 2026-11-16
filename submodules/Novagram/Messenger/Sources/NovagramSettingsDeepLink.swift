@@ -52,6 +52,7 @@ public enum NovagramSettingsFeature: String, CaseIterable {
     case translateButton = "translate-button"
     case translateLanguage = "translate-language"
     case translateOnSend = "translate-on-send"
+    case newAlphabet = "new-alphabet"
     case autoSticker = "auto-sticker"
     case heartEffect = "heart-effect"
 
