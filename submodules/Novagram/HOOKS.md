@@ -8228,7 +8228,7 @@ O'zbek lotin alifbosini o'zgartirish haqidagi qonun (21.10.2026 imzolangan, 22.0
 Owner tasdiqlagan, hamma uchun (Developer bo'limisiz). Hamma o'girish telefonda, SDK ichida.
 
 - **SDK.** `submodules/Novagram/UzScriptKit` — ochiq GPL repo `Novagramorg/novagram-uzscript-kit-sdk` git submodule,
-  commit bilan pin qilingan (`560e2fa`, teg yo'q), CallRecordingKit kabi: `.gitmodules` yozuvi + gitlink. Yangilash =
+  commit bilan pin qilingan (`f8c9488`, teg yo'q), CallRecordingKit kabi: `.gitmodules` yozuvi + gitlink. Yangilash =
   pin'ni surish. Label `//submodules/Novagram/UzScriptKit:NovagramUzScriptCore`. Konvertor, aniqlash (`isUzbek`: rus/ingliz matnga
   tegmaydi), sozlamalar (`UzScriptSettings`, `pro_messager`: `novagram_uzscript_send_new`, `novagram_uzscript_read_new`,
   `novagram_uzscript_chat_menu`, chat bo'yicha yozuv) va sahifa matnlari (`UzScriptStrings`, uz/en/ru/zh, boshqa til en ga tushadi). Telegram
