@@ -25,6 +25,14 @@ import NovagramAds
 public enum NovagramSponsored {
     static let logger = Logger(subsystem: "uz.fenixuz.app", category: "NovagramAds")
     static let opaqueIdPrefix = "novagram:"
+
+    /// Ad request trace: persisted in the system log (notice level, Console / sysdiagnose) and in the
+    /// app's own log file (Settings → Debug → send logs), so a missing request can be followed on a
+    /// real device. Never logs the key or a full random_id (`masked`).
+    static func trace(_ message: String) {
+        logger.notice("\(message, privacy: .public)")
+        TelegramCore.Logger.shared.log("NovagramAds", message)
+    }
     static let registry = NovagramAdsRegistry()
 
     /// The environment compiled in from `--define=novagramAdsEnvironment`; production when the value is
@@ -111,7 +119,7 @@ public enum NovagramSponsored {
                 source = isEmpty(value) ? "none" : "telegram"
             }
             if lastSource.swap(source) != source {
-                logger.debug("\(surface, privacy: .public) source=\(source, privacy: .public)\(isPremium ? " (premium)" : "", privacy: .public)")
+                trace("\(surface) source=\(source)\(isPremium ? " (premium)" : "")")
             }
             return value
         }
@@ -123,6 +131,7 @@ public enum NovagramSponsored {
     /// The account's session, created (and started) on first use with the account's targeting.
     static func session(context: AccountContext) -> Signal<SDKAdsSession?, NoError> {
         guard let client = registry.client else {
+            trace("session: skipped, no SDK client")
             return .single(nil)
         }
         let userId = self.userId(context)
@@ -133,6 +142,7 @@ public enum NovagramSponsored {
         return context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: context.account.peerId))
         |> map { accountPeer -> SDKAdsSession? in
             let targeting = self.targeting(context: context, accountPeer: accountPeer)
+            trace("session: new for account \(masked(String(userId))) country=\(targeting.phoneCountry ?? "nil") lang=\(targeting.lang ?? "nil") app=\(targeting.appVersion ?? "nil")")
             return registry.session(userId: userId, client: client, targeting: targeting)
         }
     }
@@ -160,14 +170,19 @@ public enum NovagramSponsored {
         let served = session(context: context)
         |> mapToSignal { session -> Signal<SDKServedAd?, NoError> in
             guard let session else {
+                trace("\(slot.placement): request skipped, no session")
                 return .single(nil)
             }
+            trace("\(slot.placement): request →")
+            let started = CFAbsoluteTimeGetCurrent()
             return novagramAsyncSignal {
-                return await session.ad(for: slot)
+                let served = await session.ad(for: slot)
+                let ms = Int((CFAbsoluteTimeGetCurrent() - started) * 1000)
+                trace("\(slot.placement): response in \(ms) ms: \(served == nil ? "no ad" : "ad \(masked(served?.ad.randomId ?? ""))")")
+                return served
             }
         }
         |> map { served -> SDKServedAd? in
-            logger.debug("\(slot.placement, privacy: .public): \(served == nil ? "no ad" : "ad served", privacy: .public)")
             if let served {
                 registry.remember(served, userId: userId)
             }
@@ -184,6 +199,9 @@ public enum NovagramSponsored {
 
     /// Mirrors `source` while ads are allowed; emits `empty` while the hidden "Remove all ads" toggle is on.
     static func gated<T>(empty: T, _ source: Signal<T, NoError>) -> Signal<T, NoError> {
+        if !NovagramShowAdsGate.isEnabled {
+            trace("gate: \"Remove all ads\" is on — ads hidden, no requests from this surface")
+        }
         return NovagramShowAdsGate.gate(empty: empty, source: source)
     }
 
@@ -234,7 +252,7 @@ public enum NovagramSponsored {
         if self.skipEvent("video_open", token: token) {
             return true
         }
-        logger.debug("video_open → novagram \(masked(token), privacy: .public)")
+        trace("video_open → novagram \(masked(token))")
         guard let entry = registry.served(token: token), let session = registry.existingSession(userId: entry.userId) else {
             return true
         }
@@ -266,7 +284,7 @@ public enum NovagramSponsored {
         guard NovagramDeveloperFlags.isAdEventsOff else {
             return false
         }
-        logger.info("\(event, privacy: .public) → not sent (developer: ad events off) \(masked(token), privacy: .public)")
+        trace("\(event) → not sent (developer: ad events off) \(masked(token))")
         return true
     }
 
@@ -275,9 +293,9 @@ public enum NovagramSponsored {
             return
         }
         guard let entry = registry.served(token: token), registry.markViewed(token: token), let session = registry.existingSession(userId: entry.userId) else {
-            return
+            return // unknown token, already viewed, or no session
         }
-        logger.debug("view → novagram \(masked(token), privacy: .public)")
+        trace("view → novagram \(masked(token))")
         let served = entry.ad
         Task {
             await session.recordView(served)
@@ -292,8 +310,9 @@ public enum NovagramSponsored {
             }
             return
         }
-        logger.debug("click → novagram \(masked(token), privacy: .public)")
+        trace("click → novagram \(masked(token))")
         guard let entry = registry.served(token: token), let session = registry.existingSession(userId: entry.userId) else {
+            trace("click not sent: ad \(masked(token)) unknown to this launch or no session")
             if let open {
                 Queue.mainQueue().async(open)
             }
@@ -324,7 +343,7 @@ public enum NovagramSponsored {
         Task {
             let outcome = await session.report(served, reason: reason)
             if !outcome.isDelivered {
-                logger.info("report not delivered: \(String(describing: outcome), privacy: .public)")
+                trace("report not delivered") // no error text: it could carry a URL
             }
         }
     }
@@ -391,6 +410,10 @@ final class NovagramAdsRegistry: @unchecked Sendable {
         // The registry is created on the first use of the core — at app start by the chat-list banner
         // source — so GalleryUI / bubble components find the implementation through the bridge.
         NovagramSponsoredBridge.provider = NovagramAdsBridgeProvider()
+        // The Developer section's read-only ads check (NovagramMessenger cannot import this module).
+        NovagramAdsCheck.provider = { production, lang in
+            return await NovagramAdsCheckRunner.run(production: production, lang: lang)
+        }
     }
 
     private func withLock<T>(_ body: () -> T) -> T {
@@ -406,6 +429,7 @@ final class NovagramAdsRegistry: @unchecked Sendable {
             if !self.clientResolved {
                 self.clientResolved = true
                 self.clientValue = SDKClient(configuration: SDKConfiguration(environment: NovagramSponsored.environment))
+                NovagramSponsored.trace("client: environment=\(NovagramSponsored.environment.rawValue) build=\(NovagramSponsoredGeneratedEnvironment.name.isEmpty ? "(empty → production)" : NovagramSponsoredGeneratedEnvironment.name) client=\(self.clientValue == nil ? "NIL — no ad requests will be made" : "ok")")
             }
             return self.clientValue
         }
@@ -441,7 +465,7 @@ final class NovagramAdsRegistry: @unchecked Sendable {
             // The SDK logger never receives the key and masks random_id (debug level, Console only).
             var configuration = SDKAdsSessionConfiguration.default
             configuration.logger = { message in
-                NovagramSponsored.logger.debug("\(message, privacy: .public)")
+                NovagramSponsored.trace("sdk: \(message)")
             }
             let session = SDKAdsSession(client: client, userId: userId, targeting: targeting, configuration: configuration)
             self.sessions[userId] = session

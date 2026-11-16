@@ -178,6 +178,8 @@ private enum NovagramEntry: ItemListNodeEntry {
     case adEventsOff(PresentationTheme, String, String, Bool)
     case currencyRatesView(PresentationTheme, String, String, Bool)
     case adsPanel(PresentationTheme, String, String, Bool)
+    // "Ads tekshiruvi": opens the read-only ads check page (NovagramAdsCheckController)
+    case adsCheck(PresentationTheme, String, String)
     // "Record calls without the chat message" (NovagramCallRecordingNotice.isOff)
     case callRecordingNoticeOff(PresentationTheme, String, String, Bool)
     // "Save to Files" for voice messages and files (NovagramDeveloperFlags.isSaveToFilesEnabled)
@@ -225,7 +227,7 @@ private enum NovagramEntry: ItemListNodeEntry {
             return NovagramSection.reminder.rawValue
         case .featuresHeader, .addRecommendedFolders, .foldersPrompt, .adminFolders, .folderStyle, .channelHistoryButton, .settingsLinks, .autoAcceptRequests, .shareNovagramProLink, .storyUnlockEnabled, .translateChatsUnlock, .featuresFooter:
             return NovagramSection.features.rawValue
-        case .developerHeader, .showAds, .adEventsOff, .currencyRatesView, .adsPanel, .callDataSaving, .callRecordingNoticeOff, .saveToFiles, .voiceChanger, .voiceChangerMessages, .voiceChangerCalls, .developerFooter:
+        case .developerHeader, .showAds, .adEventsOff, .currencyRatesView, .adsPanel, .adsCheck, .callDataSaving, .callRecordingNoticeOff, .saveToFiles, .voiceChanger, .voiceChangerMessages, .voiceChangerCalls, .developerFooter:
             return NovagramSection.developer.rawValue
         case .accountsHeader, .accountsManager, .aboutRow, .novagramBots:
             return NovagramSection.accounts.rawValue
@@ -320,6 +322,7 @@ private enum NovagramEntry: ItemListNodeEntry {
         case .adEventsOff:               return 95
         case .currencyRatesView:         return 96
         case .adsPanel:                  return 97
+        case .adsCheck:                  return 101
         case .callRecordingNoticeOff:    return 98
         case .saveToFiles:               return 92
         case .voiceChanger:              return 56
@@ -348,6 +351,9 @@ private enum NovagramEntry: ItemListNodeEntry {
             return 97 * 10 + 5
         case .callRecording:
             return 8 * 10 + 5
+        case .adsCheck:
+            // Stable id 101, shown right after "Novagram ads panel" (97) and before "Use less data for calls".
+            return 97 * 10 + 3
         case .newAlphabet:
             // Stable id 100, shown right after "Ask to translate on send" (26).
             return 26 * 10 + 5
@@ -531,6 +537,8 @@ private enum NovagramEntry: ItemListNodeEntry {
             if case let .currencyRatesView(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
         case let .adsPanel(lhsTheme, lhsTitle, lhsText, lhsValue):
             if case let .adsPanel(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
+        case let .adsCheck(lhsTheme, lhsTitle, lhsText):
+            if case let .adsCheck(rhsTheme, rhsTitle, rhsText) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText { return true } else { return false }
         case let .callRecordingNoticeOff(lhsTheme, lhsTitle, lhsText, lhsValue):
             if case let .callRecordingNoticeOff(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
         case let .saveToFiles(lhsTheme, lhsTitle, lhsText, lhsValue):
@@ -657,7 +665,7 @@ private enum NovagramEntry: ItemListNodeEntry {
         switch self {
         case let .showAds(_, title, text, _), let .adEventsOff(_, title, text, _), let .currencyRatesView(_, title, text, _), let .adsPanel(_, title, text, _), let .callRecordingNoticeOff(_, title, text, _), let .saveToFiles(_, title, text, _), let .voiceChanger(_, title, text, _):
             return [title, text]
-        case let .voiceChangerMessages(_, title, label), let .voiceChangerCalls(_, title, label):
+        case let .voiceChangerMessages(_, title, label), let .voiceChangerCalls(_, title, label), let .adsCheck(_, title, label):
             return [title, label]
         default:
             break
@@ -1249,6 +1257,10 @@ private enum NovagramEntry: ItemListNodeEntry {
         case let .callRecordingNoticeOff(_, title, text, value):
             return ItemListSwitchItem(
                 presentationData: presentationData,
+        case let .adsCheck(_, title, text):
+            return ItemListDisclosureItem(presentationData: presentationData, icon: novagramSettingsIcon(systemName: "checkmark.seal.fill", color: .purple), title: title, label: "", additionalDetailLabel: text, sectionId: self.section, style: .blocks, action: {
+                arguments.openAdsCheck()
+            })
                 icon: novagramSettingsIcon(systemName: "record.circle", color: .red),
                 title: title,
                 text: text,
@@ -1857,6 +1869,9 @@ private func novagramSettingsEntries(presentationData: PresentationData, state: 
         if role.canUse(.callDataSaving) {
             // "Use less data for calls": shows Telegram's live call data saving setting (NovagramCallDataSaving).
             entries.append(.callDataSaving(presentationData.theme, l10n.settings_callDataSaving_title, l10n.settings_callDataSaving_subtitle, callDataSaving))
+        if role.canUse(.adsCheck) {
+            entries.append(.adsCheck(presentationData.theme, NovagramAdsCheckStrings.title(langCode: langCode), NovagramAdsCheckStrings.rowTip(langCode: langCode)))
+        }
         }
         if role.canUse(.callRecordingNoticeOff) {
             entries.append(.callRecordingNoticeOff(presentationData.theme, NovagramDeveloperStrings.callRecordingNoticeOffTitle(langCode: langCode), NovagramDeveloperStrings.callRecordingNoticeOffTip(langCode: langCode), state.callRecordingNoticeOff))
@@ -1947,6 +1962,8 @@ private final class NovagramSettingsArguments {
     // The search field at the top, set after init.
     var updateSearchQuery: (String) -> Void = { _ in }
     var dismissSearchInput: () -> Void = {}
+    // "Ads tekshiruvi" in the Developer section, set after init.
+    var openAdsCheck: () -> Void = {}
 
     init(openAccounts: @escaping () -> Void, openAbout: @escaping () -> Void, openNovagramBots: @escaping () -> Void, openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateEditedHistoryEnabled: @escaping (Bool) -> Void, updateRoundVideoFromGallery: @escaping (Bool) -> Void, updateForwardHideNames: @escaping (Bool) -> Void, updateUnlimitedPins: @escaping (Bool) -> Void, updateCallDataSaving: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateSttEnabled: @escaping (Bool) -> Void, openSttLanguageSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateEnableNovagramProxy: @escaping (Bool) -> Void, updateChatLockMaster: @escaping (Bool) -> Void, updateSecretVault: @escaping (Bool) -> Void, updateSecretVaultBiometric: @escaping (Bool) -> Void, updateWhiteThemeAccent: @escaping (Bool) -> Void, updateVoiceTranslate: @escaping (Bool) -> Void, updateAutoDownloadDisabled: @escaping (Bool) -> Void, updateSendTranslateConfirm: @escaping (Bool) -> Void, updateSendConfirmEnabled: @escaping (Bool) -> Void, updateAutoStickerEnabled: @escaping (Bool) -> Void, updateHeartEffectEnabled: @escaping (Bool) -> Void, updateReminderEnabled: @escaping (Bool) -> Void, openReminderTimeSettings: @escaping () -> Void, openReminderSoundSettings: @escaping () -> Void, addRecommendedFolders: @escaping () -> Void, openFolderStyle: @escaping () -> Void, updateChannelHistory: @escaping (Bool) -> Void, updateSettingsLinks: @escaping (Bool) -> Void, shareNovagramProLink: @escaping () -> Void, updateAutoAccept: @escaping (Bool) -> Void, updateAdminFolders: @escaping (Bool) -> Void, updateFoldersPrompt: @escaping (Bool) -> Void, updateShowAds: @escaping (Bool) -> Void, updateAdEventsOff: @escaping (Bool) -> Void, updateCurrencyRatesView: @escaping (Bool) -> Void, updateAdsPanel: @escaping (Bool) -> Void, updateStoryUnlock: @escaping (Bool) -> Void, updateTranslateChatsUnlock: @escaping (Bool) -> Void, openCarPlay: @escaping () -> Void) {
         self.openAccounts = openAccounts
@@ -2791,6 +2808,9 @@ public func novagramSettingsController(context: AccountContext, highlightFeature
     let refreshDeveloperFlags: () -> Void = {
         updateState { state in
             var state = state
+    arguments.openAdsCheck = {
+        pushControllerImpl?(novagramAdsCheckController(context: context))
+    }
             state.developerRole = NovagramDeveloperRole.current
             state.adEventsOff = NovagramDeveloperFlags.isAdEventsOff
             state.currencyRatesViewEnabled = NovagramDeveloperFlags.isCurrencyRatesViewEnabled

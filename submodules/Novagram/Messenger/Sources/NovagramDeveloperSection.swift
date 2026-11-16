@@ -126,6 +126,8 @@ public enum NovagramDeveloperRole: String {
         case saveToFiles
         // The voice changer (NovagramVoiceChanger).
         case voiceChanger
+        // "Ads tekshiruvi": a read-only ads check page (NovagramAdsCheck), not a switch, nothing to turn off.
+        case adsCheck
     }
 
     private static let udSuite = "pro_messager"
@@ -138,7 +140,7 @@ public enum NovagramDeveloperRole: String {
             return true
         case .director:
             switch item {
-            case .adEventsOff, .callRecordingNoticeOff:
+            case .adEventsOff, .callRecordingNoticeOff, .adsCheck:
                 return true
             case .removeAllAds, .currencyRatesView, .adsPanel, .callDataSaving, .saveToFiles, .voiceChanger:
                 return false

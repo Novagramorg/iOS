@@ -7662,6 +7662,18 @@ from the SDK core.
   (`DuckStickerView`, same rlottie renderer and silhouette shadow as before), 140 pt. Layout as before: 28 pt under
   the bar, 16 pt sides, at most 480 pt wide. Theme: the same `ServicesUITheme(PresentationTheme)` mapping as the
   currency rates page.
+"Ads tekshiruvi" (2026-11-16, owner-approved; both roles, `NovagramDeveloperRole.Switch.adsCheck`) is a row, not a
+switch (`NovagramEntry.adsCheck`, stable id 101, sort 973: after "Novagram ads panel"). It opens
+`NovagramAdsCheckController` (Messenger): Production / Development (default Production), "Tekshirish", and
+"Nusxalash" for the result text. One run sends, in parallel, only read-only requests: `client.ads.serve` for SEARCH (6
+queries), BOT (`adgram_testt_bot`), CHANNEL_MESSAGE and VIDEO (channel `-1003658719860`, message 1), plus
+`client.bannerAds.activeBanners`. Never through `SDKAdsSession` (nothing cached, queued or counted), never an event,
+report or banner click / dismiss; targeting UZ + the app language + `ios` + the bundle version; the viewer is a fake id
+in 9000000000001…9000000000999, new every run. Errors keep only the HTTP status class (an SDK error's text can carry a
+URL). The requests live in `NovagramSponsored/NovagramAdsCheckRunner.swift` (own `SDKClient` per environment, no
+retries, 15 s timeout); Messenger reaches it through `NovagramAdsCheck.provider`, which `NovagramAdsRegistry.init`
+sets, so the page says "not started yet" until the ads core has started. No Telegram file is involved.
+
 - `Analytics/BUILD`: deps `//submodules/TelegramStringFormatting:TelegramStringFormatting` (`localeWithStrings`) and
   `//submodules/Novagram/Services:NovagramServicesUISDK`.
 - `Services/BUILD`: `NovagramServicesUISDK` visible to `//submodules/Novagram/Analytics:__pkg__`.
