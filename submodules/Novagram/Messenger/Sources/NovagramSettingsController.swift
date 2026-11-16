@@ -1254,13 +1254,13 @@ private enum NovagramEntry: ItemListNodeEntry {
                 },
                 tag: self.novagramTag
             )
-        case let .callRecordingNoticeOff(_, title, text, value):
-            return ItemListSwitchItem(
-                presentationData: presentationData,
         case let .adsCheck(_, title, text):
             return ItemListDisclosureItem(presentationData: presentationData, icon: novagramSettingsIcon(systemName: "checkmark.seal.fill", color: .purple), title: title, label: "", additionalDetailLabel: text, sectionId: self.section, style: .blocks, action: {
                 arguments.openAdsCheck()
             })
+        case let .callRecordingNoticeOff(_, title, text, value):
+            return ItemListSwitchItem(
+                presentationData: presentationData,
                 icon: novagramSettingsIcon(systemName: "record.circle", color: .red),
                 title: title,
                 text: text,
@@ -1866,12 +1866,12 @@ private func novagramSettingsEntries(presentationData: PresentationData, state: 
         if role.canUse(.adsPanel) {
             entries.append(.adsPanel(presentationData.theme, NovagramDeveloperStrings.adsPanelTitle(langCode: langCode), NovagramDeveloperStrings.adsPanelTip(langCode: langCode), state.adsPanelEnabled))
         }
-        if role.canUse(.callDataSaving) {
-            // "Use less data for calls": shows Telegram's live call data saving setting (NovagramCallDataSaving).
-            entries.append(.callDataSaving(presentationData.theme, l10n.settings_callDataSaving_title, l10n.settings_callDataSaving_subtitle, callDataSaving))
         if role.canUse(.adsCheck) {
             entries.append(.adsCheck(presentationData.theme, NovagramAdsCheckStrings.title(langCode: langCode), NovagramAdsCheckStrings.rowTip(langCode: langCode)))
         }
+        if role.canUse(.callDataSaving) {
+            // "Use less data for calls": shows Telegram's live call data saving setting (NovagramCallDataSaving).
+            entries.append(.callDataSaving(presentationData.theme, l10n.settings_callDataSaving_title, l10n.settings_callDataSaving_subtitle, callDataSaving))
         }
         if role.canUse(.callRecordingNoticeOff) {
             entries.append(.callRecordingNoticeOff(presentationData.theme, NovagramDeveloperStrings.callRecordingNoticeOffTitle(langCode: langCode), NovagramDeveloperStrings.callRecordingNoticeOffTip(langCode: langCode), state.callRecordingNoticeOff))
@@ -1959,11 +1959,11 @@ private final class NovagramSettingsArguments {
     // Voice changer (HOOKS.md, "Voice changer"), set after init.
     var updateVoiceChanger: (Bool) -> Void = { _ in }
     var openVoiceChanger: (Bool) -> Void = { _ in }
+    // "Ads tekshiruvi" in the Developer section, set after init.
+    var openAdsCheck: () -> Void = {}
     // The search field at the top, set after init.
     var updateSearchQuery: (String) -> Void = { _ in }
     var dismissSearchInput: () -> Void = {}
-    // "Ads tekshiruvi" in the Developer section, set after init.
-    var openAdsCheck: () -> Void = {}
 
     init(openAccounts: @escaping () -> Void, openAbout: @escaping () -> Void, openNovagramBots: @escaping () -> Void, openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateEditedHistoryEnabled: @escaping (Bool) -> Void, updateRoundVideoFromGallery: @escaping (Bool) -> Void, updateForwardHideNames: @escaping (Bool) -> Void, updateUnlimitedPins: @escaping (Bool) -> Void, updateCallDataSaving: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateSttEnabled: @escaping (Bool) -> Void, openSttLanguageSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateEnableNovagramProxy: @escaping (Bool) -> Void, updateChatLockMaster: @escaping (Bool) -> Void, updateSecretVault: @escaping (Bool) -> Void, updateSecretVaultBiometric: @escaping (Bool) -> Void, updateWhiteThemeAccent: @escaping (Bool) -> Void, updateVoiceTranslate: @escaping (Bool) -> Void, updateAutoDownloadDisabled: @escaping (Bool) -> Void, updateSendTranslateConfirm: @escaping (Bool) -> Void, updateSendConfirmEnabled: @escaping (Bool) -> Void, updateAutoStickerEnabled: @escaping (Bool) -> Void, updateHeartEffectEnabled: @escaping (Bool) -> Void, updateReminderEnabled: @escaping (Bool) -> Void, openReminderTimeSettings: @escaping () -> Void, openReminderSoundSettings: @escaping () -> Void, addRecommendedFolders: @escaping () -> Void, openFolderStyle: @escaping () -> Void, updateChannelHistory: @escaping (Bool) -> Void, updateSettingsLinks: @escaping (Bool) -> Void, shareNovagramProLink: @escaping () -> Void, updateAutoAccept: @escaping (Bool) -> Void, updateAdminFolders: @escaping (Bool) -> Void, updateFoldersPrompt: @escaping (Bool) -> Void, updateShowAds: @escaping (Bool) -> Void, updateAdEventsOff: @escaping (Bool) -> Void, updateCurrencyRatesView: @escaping (Bool) -> Void, updateAdsPanel: @escaping (Bool) -> Void, updateStoryUnlock: @escaping (Bool) -> Void, updateTranslateChatsUnlock: @escaping (Bool) -> Void, openCarPlay: @escaping () -> Void) {
         self.openAccounts = openAccounts
@@ -2805,12 +2805,12 @@ public func novagramSettingsController(context: AccountContext, highlightFeature
     arguments.openVoiceChanger = { forCall in
         pushControllerImpl?(novagramVoiceChangerController(context: context, forCall: forCall))
     }
-    let refreshDeveloperFlags: () -> Void = {
-        updateState { state in
-            var state = state
     arguments.openAdsCheck = {
         pushControllerImpl?(novagramAdsCheckController(context: context))
     }
+    let refreshDeveloperFlags: () -> Void = {
+        updateState { state in
+            var state = state
             state.developerRole = NovagramDeveloperRole.current
             state.adEventsOff = NovagramDeveloperFlags.isAdEventsOff
             state.currencyRatesViewEnabled = NovagramDeveloperFlags.isCurrencyRatesViewEnabled
