@@ -744,6 +744,7 @@ three calls and delete the two lines.
 313. `ManagedAudioRecorder.swift` (TelegramUI): `import NovagramVoiceChanger`; `ManagedAudioRecorderContext`'da `audioBuffer` dan keyin `private var novagramVoiceEffect = NovagramVoiceChanger.makeRecorderEffect(sampleRate: 48000)` (o'chiq bo'lsa nil).
 314. `ManagedAudioRecorder.swift` (TelegramUI): `processAndDisposeAudioBuffer` ichida `if !self.processSamples { return }` dan keyin bitta qator: `if let effect = self.novagramVoiceEffect, effect.process(buffer, into: { self.processAndDisposeAudioBuffer($0) }) { return }`. Effekt chiqargan ovoz yangi buffer bo'lib shu funksiyaga qaytadi (ichkarida effekt o'tkazib yuboradi), shuning uchun waveform, taymer va uzunlik o'zgargan ovozdan hisoblanadi.
 315. `ManagedAudioRecorder.swift` (TelegramUI): `takeData()` boshida bitta qator: effekt nil qilinadi va uning qoldig'i (`drain`: echo/reverb so'nishi, pitch shifter ushlab turgan namunalar) o'sha yo'l bilan yoziladi.
+315a. `ManagedAudioRecorder.swift` (TelegramUI): `ManagedAudioRecorderContext.resume()` da `self.start()` dan oldin bitta qator `self.novagramVoiceEffect = NovagramVoiceChanger.makeRecorderEffect(sampleRate: 48000)`: pauzadan keyin davom etgan qism pauza paytida tanlangan effektni oladi (13.2 dan beri davom etish o'sha context'da bo'ladi; bu qatorsiz yangi tanlov faqat keyingi xabarda ishlardi). 2026-11-18.
 316. `OngoingCallThreadLocalContext.mm` (TgVoipWebrtc): `#import <NovagramVoiceDSP/NovagramVoiceDSP.h>` (`TdBinding` dan keyin); `WrappedAudioDeviceModuleIOS::RecordedDataIsAvailable` ning ikkala overload'ida `_mutex.Lock()` dan oldin `audioSamples = nv_call_process(audioSamples, nSamples, nBytesPerSample, nChannels, samplesPerSec);` — effekt o'chiq yoki format 16-bit mono bo'lmasa o'sha pointer qaytadi.
 317. `AppDelegate.swift` (TelegramUI): `import NovagramVoiceChanger`; `NovagramSharedDefaults.syncShowDeletedMessages()` dan keyin `NovagramVoiceChanger.syncCallChoice()` (qo'ng'iroq tanlovi C tomonga, keyin har o'zgarishda modul o'zi yuboradi).
 318. `TelegramUI/BUILD`: `//submodules/Novagram/VoiceChanger:NovagramVoiceChanger`; `TgVoipWebrtc/BUILD` (`TgVoipWebrtc` objc_library deps, `wamr` dan keyin): `//submodules/Novagram/VoiceChangerKit:NovagramVoiceDSP`.
@@ -8202,8 +8203,9 @@ is one switch in the Developer section (developer role only; a director login tu
 - Voice messages: hooks #313–315 in `ManagedAudioRecorder.swift` (48 kHz mono Int16, before the Opus encoder).
   The button above the lock (#319–321) shows while a locked voice message is recorded or previewed. A tap during
   recording pauses it (Telegram's own pause: the part so far becomes the preview), opens the list, and goes on when
-  the list closes (`resumeMediaRecording`, 0.3 s later); the next part is a new recorder context, so it gets the new
-  effect. A recording shorter than 0.5 s is dropped by Telegram on pause, so a tap in the first half second ends it.
+  the list closes (`resumeMediaRecording`, 0.3 s later). Since 13.2 the next part runs in the same recorder
+  context, so `resume()` rebuilds the effect from the current choice (hook #315a); without it the new choice only
+  reached the next message (seen 2026-11-18). A recording shorter than 0.5 s is dropped by Telegram on pause, so a tap in the first half second ends it.
 - Calls: hook #316 changes the microphone's 10 ms buffers in `WrappedAudioDeviceModuleIOS` before every audio
   transport (1:1 and group calls). 1:1 call screen: the round button (#322–323); group calls: a row in the "..." menu
   under Audio (#324). Both open the calls page; a change applies to the running call at once.
@@ -8222,7 +8224,7 @@ What moved, and where each hook lives now. Older sections above still name the o
 | Contacts header (`ContactsControllerNode.swift`) | always a back button, Sort moved right | as a tab (`switchToChatsController != nil`): no back button, Sort on the left |
 | Settings ▸ Contacts row (`PeerInfoSettingsItems.swift`) | upstream added its own row (id 21, with the "!" badge) | ours (id 5) dropped, upstream's row kept |
 | Audio route menu (`CallController.swift`) | the action sheet became `callAudioRouteContextMenuItems` | `noteAudioOutputChosenByUser` in `selectOutput` |
-| Voice changer drain (`ManagedAudioRecorder.takeData`) | `takeData()` no longer ends the stream: a paused recording resumes | the drain keeps the effect (no `= nil`), so a resumed recording stays changed; echo/cave presets leave their 1 s tail at the pause |
+| Voice changer drain (`ManagedAudioRecorder.takeData`) | `takeData()` no longer ends the stream: a paused recording resumes | the drain keeps the effect (no `= nil`); `resume()` makes a new one from the current choice (#315a), so a change during the pause applies; echo/cave presets leave their 1 s tail at the pause |
 | rlottie, `LottieSettings` | removed, tlottie renders everything | `lottieSettings: .noAccountFallback` dropped (phone entry, BotTokenLogin, ChatLock, Analytics), BUILD deps removed |
 | Round video camera (`LegacyCamera.swift`) | `configure(…, captureMode:)`, `cameraRecordsRoundVideoInPreviewOrientation` | our `switchAudio:` + `markPositionChange` kept beside them |
 | Story title (`StoryPeerListComponent.swift` + test) | upstream's `expandedTitleOrigin` keeps the title clear of the right buttons (same fix) | ours dropped for upstream's |

@@ -525,6 +525,8 @@ final class ManagedAudioRecorderContext {
             }
         }
         
+        // Novagram: voice changer, a resumed part takes the effect chosen during the pause (HOOKS.md, "Voice changer")
+        self.novagramVoiceEffect = NovagramVoiceChanger.makeRecorderEffect(sampleRate: 48000)
         self.start()
     }
     
