@@ -203,7 +203,7 @@ private enum NovagramEntry: ItemListNodeEntry {
         switch self {
         case .searchField, .searchEmpty:
             return NovagramSection.search.rawValue
-        case .chatHeader, .calls, .deletedMessages, .showViewFirstMessage, .showGhostMode, .longPressCameraSelection, .editedHistoryEnabled, .roundVideoFromGallery, .forwardHideNames, .callRecording, .voiceChanger, .chatFooter:
+        case .chatHeader, .calls, .deletedMessages, .showViewFirstMessage, .showGhostMode, .longPressCameraSelection, .editedHistoryEnabled, .roundVideoFromGallery, .forwardHideNames, .callRecording, .voiceChanger, .saveToFiles, .chatFooter:
             return NovagramSection.chat.rawValue
         case .interfaceHeader, .hideFolders, .showStories, .showMutualContactSymbol, .unlimitedPins, .interfaceFooter:
             return NovagramSection.interface.rawValue
@@ -225,7 +225,7 @@ private enum NovagramEntry: ItemListNodeEntry {
             return NovagramSection.reminder.rawValue
         case .featuresHeader, .addRecommendedFolders, .foldersPrompt, .adminFolders, .folderStyle, .channelHistoryButton, .settingsLinks, .autoAcceptRequests, .shareNovagramProLink, .storyUnlockEnabled, .translateChatsUnlock, .featuresFooter:
             return NovagramSection.features.rawValue
-        case .developerHeader, .showAds, .adEventsOff, .currencyRatesView, .adsPanel, .adsCheck, .callDataSaving, .callRecordingNoticeOff, .saveToFiles, .developerFooter:
+        case .developerHeader, .showAds, .adEventsOff, .currencyRatesView, .adsPanel, .adsCheck, .callDataSaving, .callRecordingNoticeOff, .developerFooter:
             return NovagramSection.developer.rawValue
         case .accountsHeader, .accountsManager, .aboutRow, .novagramBots:
             return NovagramSection.accounts.rawValue
@@ -354,8 +354,8 @@ private enum NovagramEntry: ItemListNodeEntry {
             // Stable id 100, shown right after "Ask to translate on send" (26).
             return 26 * 10 + 5
         case .saveToFiles:
-            // Stable id 92, shown after "Record calls without notice" (98) and before the footer (99).
-            return 98 * 10 + 5
+            // Approved 2026-11-18: end of the Chat section, after Voice changer (86), before the Chat footer (90).
+            return 8 * 10 + 7
         case .voiceChanger:
             // Approved 2026-11-18: end of the Chat section, right after Call recording (85), before the Chat footer (90).
             return 8 * 10 + 6
@@ -576,6 +576,7 @@ private enum NovagramEntry: ItemListNodeEntry {
         // "call-recording-auto" and "call-recordings" are rows of the Call recording page now (see didAppear).
         case let .callRecording(_, title, _, _):            return (.callRecording, title)
         case let .voiceChanger(_, title, _, _):             return (.voiceChanger, title)
+        case let .saveToFiles(_, title, _, _):              return (.saveToFiles, title)
 
         case let .deletedMessages(_, title, _, _):          return (.deletedMessages, title)
         case let .editedHistoryEnabled(_, title, _, _):     return (.editedHistory, title)
@@ -1702,6 +1703,8 @@ private func novagramSettingsEntries(presentationData: PresentationData, state: 
     entries.append(.callRecording(presentationData.theme, callRecordingStrings.title, state.callRecording ? callRecordingStrings.on : callRecordingStrings.off, state.callRecording))
     // Voice changer, approved 2026-11-18: one public row; its switch and the two effect pages are on its own page.
     entries.append(.voiceChanger(presentationData.theme, NovagramVoiceChangerStrings.title(langCode), state.voiceChangerEnabled ? NovagramVoiceChangerStrings.on(langCode) : NovagramVoiceChangerStrings.off(langCode), state.voiceChangerEnabled))
+    // Save to Files, approved 2026-11-18: public now, no longer in the Developer section.
+    entries.append(.saveToFiles(presentationData.theme, NovagramDeveloperStrings.saveToFilesTitle(langCode: langCode), NovagramDeveloperStrings.saveToFilesTip(langCode: langCode), state.saveToFilesEnabled))
     entries.append(.chatFooter(presentationData.theme, l10n.settings_chat_footer))
 
     // ─── MESSAGING ───
@@ -1849,9 +1852,6 @@ private func novagramSettingsEntries(presentationData: PresentationData, state: 
         }
         if role.canUse(.callRecordingNoticeOff) {
             entries.append(.callRecordingNoticeOff(presentationData.theme, NovagramDeveloperStrings.callRecordingNoticeOffTitle(langCode: langCode), NovagramDeveloperStrings.callRecordingNoticeOffTip(langCode: langCode), state.callRecordingNoticeOff))
-        }
-        if role.canUse(.saveToFiles) {
-            entries.append(.saveToFiles(presentationData.theme, NovagramDeveloperStrings.saveToFilesTitle(langCode: langCode), NovagramDeveloperStrings.saveToFilesTip(langCode: langCode), state.saveToFilesEnabled))
         }
         entries.append(.developerFooter(presentationData.theme, NovagramDeveloperStrings.footer(langCode: langCode)))
     }

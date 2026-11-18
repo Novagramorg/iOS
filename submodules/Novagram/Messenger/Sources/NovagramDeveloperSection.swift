@@ -54,10 +54,9 @@ public enum NovagramDeveloperFlags {
         set { self.setValue(newValue, forKey: self.adsPanelKey) }
     }
 
-    /// "Save to Files" for voice messages and files in the message menu (NovagramSaveToFiles). Developer role only
-    /// until it is approved.
+    /// "Save to Files" for voice messages and files in the message menu (NovagramSaveToFiles). Public since 2026-11-18.
     public static internal(set) var isSaveToFilesEnabled: Bool {
-        get { return self.value(forKey: self.saveToFilesKey) && NovagramDeveloperRole.current.canUse(.saveToFiles) }
+        get { return self.value(forKey: self.saveToFilesKey) }
         set { self.setValue(newValue, forKey: self.saveToFilesKey) }
     }
 
@@ -121,8 +120,6 @@ public enum NovagramDeveloperRole: String {
         case callDataSaving
         // "Record calls without the chat message" (NovagramCallRecordingNotice).
         case callRecordingNoticeOff
-        // "Save to Files" for voice messages and files (NovagramSaveToFiles).
-        case saveToFiles
         // "Ads tekshiruvi": a read-only ads check page (NovagramAdsCheck), not a switch, nothing to turn off.
         case adsCheck
     }
@@ -139,7 +136,7 @@ public enum NovagramDeveloperRole: String {
             switch item {
             case .adEventsOff, .callRecordingNoticeOff, .adsCheck:
                 return true
-            case .removeAllAds, .currencyRatesView, .adsPanel, .callDataSaving, .saveToFiles:
+            case .removeAllAds, .currencyRatesView, .adsPanel, .callDataSaving:
                 return false
             }
         }
@@ -165,9 +162,6 @@ public enum NovagramDeveloperRole: String {
         }
         if !role.canUse(.adsPanel) && NovagramDeveloperFlags.isAdsPanelEnabled {
             NovagramDeveloperFlags.isAdsPanelEnabled = false
-        }
-        if !role.canUse(.saveToFiles) && NovagramDeveloperFlags.isSaveToFilesEnabled {
-            NovagramDeveloperFlags.isSaveToFilesEnabled = false
         }
         if !role.canUse(.callDataSaving) {
             // Only our key: Telegram's own data saving setting (Data and Storage) stays as the user set it.
