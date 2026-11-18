@@ -272,13 +272,20 @@ public final class ChatPincodeViewController: ViewController {
             biometricButton.widthAnchor.constraint(equalToConstant: 60),
             biometricButton.heightAnchor.constraint(equalToConstant: 60),
 
-            // "Forgot pincode?" — sits just above the biometric button. The biometric
-            // button is hidden in most verify flows, so this usually floats near the bottom.
+            // "Forgot pincode?" / "Reset Chat Lock" — kept below the number pad so it never
+            // overlaps the "0" key, and otherwise pulled up toward the (often hidden) biometric
+            // button. The below-pad guard is required; the pull toward the biometric yields to it.
             forgotButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            forgotButton.bottomAnchor.constraint(equalTo: biometricButton.topAnchor, constant: -20),
+            forgotButton.topAnchor.constraint(greaterThanOrEqualTo: numberPadView.bottomAnchor, constant: 16),
             forgotButton.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 24),
             forgotButton.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -24)
         ])
+
+        // Position the button up near the biometric button, but only as far as the below-pad
+        // guard above allows, so a hidden biometric button can't drag it onto the number pad.
+        let forgotBottom = forgotButton.bottomAnchor.constraint(equalTo: biometricButton.topAnchor, constant: -20)
+        forgotBottom.priority = .defaultHigh
+        forgotBottom.isActive = true
     }
 
     // MARK: - Sub-view builders

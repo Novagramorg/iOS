@@ -6397,6 +6397,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                     return ChatPincodeManager.shared.verifyVault(code)
                 },
                 onSuccess: { [weak self] in
+                    SecretVaultManager.shared.markSessionUnlocked()
                     NovagramReviewPrompt.record(.secretVaultUnlock)
                     self?.novagramPresentVaultList()
                 },

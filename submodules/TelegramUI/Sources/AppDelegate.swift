@@ -7,6 +7,7 @@ import NovagramAutoProxy
 import NovagramMessenger
 import NovagramCarPlay
 import NovagramVoiceChanger
+import NovagramSecretVault
 import UserNotifications
 import Intents
 import Postbox
@@ -2154,6 +2155,8 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
     }
 
     func handleDidEnterBackground() {
+        // Novagram: re-lock the Secret Vault so opening a hidden chat needs the passcode again (HOOKS.md, "Secret Vault")
+        SecretVaultManager.shared.relock()
         let _ = (self.sharedContextPromise.get()
         |> take(1)
         |> deliverOnMainQueue).start(next: { sharedApplicationContext in

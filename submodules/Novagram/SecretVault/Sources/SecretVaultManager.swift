@@ -63,6 +63,36 @@ public final class SecretVaultManager {
         self.lock.unlock()
     }
 
+    // MARK: - Session unlock
+
+    // The vault is locked again every time the app leaves the foreground. Opening the
+    // vault list (or any vaulted chat through the navigation gate) marks it unlocked for
+    // the rest of this foreground session, so routes other than the vault list — a mention
+    // tap, a shared t.me link, a forwarded message — also need the passcode while locked,
+    // yet never prompt twice once the user is past it. In-memory only (never persisted).
+    private var sessionUnlocked = false
+
+    /// True while the vault has been unlocked in the current foreground session.
+    public var isSessionUnlocked: Bool {
+        self.lock.lock()
+        defer { self.lock.unlock() }
+        return self.sessionUnlocked
+    }
+
+    /// Called after a successful vault passcode / biometric check.
+    public func markSessionUnlocked() {
+        self.lock.lock()
+        self.sessionUnlocked = true
+        self.lock.unlock()
+    }
+
+    /// Re-locks the vault; called when the app enters the background.
+    public func relock() {
+        self.lock.lock()
+        self.sessionUnlocked = false
+        self.lock.unlock()
+    }
+
     // MARK: - Vaulted set
 
     public func isVaulted(_ peerId: EnginePeer.Id) -> Bool {

@@ -21,6 +21,7 @@ import WallpaperGalleryScreen
 import ChatMessageNotificationItem
 import FaceScanScreen
 import NovagramChatLock
+import NovagramSecretVault
 import NovagramReviewPrompt
 
 /// Temporarily set to a peerId after successful pincode verification so the
@@ -28,6 +29,55 @@ import NovagramReviewPrompt
 private var chatPincodeBypassPeerId: EnginePeer.Id? = nil
 
 public func navigateToChatControllerImpl(_ params: NavigateToChatControllerParams) {
+    // MARK: - Secret Vault navigation gate (Novagram, HOOKS.md "Secret Vault")
+    // The vault only hides its chats from the list and search. Any other route to a
+    // vaulted peer — a mention tap, a shared t.me link, a forwarded message — would open
+    // the conversation without the vault passcode, defeating it. Require the vault to be
+    // unlocked in this session (re-locked on background) before opening, exactly as the
+    // vault list does; once past it the session flag keeps later opens from re-prompting.
+    // Runs before the per-chat pincode gate so a chat that is both vaulted and locked
+    // prompts each once, in order, without re-firing.
+    if case let .peer(vaultPeer) = params.chatLocation {
+        let vaultPeerId = vaultPeer.id
+        if SecretVaultManager.shared.isEnabled && SecretVaultManager.shared.isVaulted(vaultPeerId) && !SecretVaultManager.shared.isSessionUnlocked {
+            let presentationData = params.context.sharedContext.currentPresentationData.with { $0 }
+            let metadata = ChatPincodeManager.shared.getVaultMetadata()
+            weak var weakVaultNav: UINavigationController?
+            let openAfterUnlock: () -> Void = {
+                SecretVaultManager.shared.markSessionUnlocked()
+                navigateToChatControllerImpl(params)
+            }
+            let vaultVC = ChatPincodeViewController(
+                mode: .verify(passwordType: metadata.passwordType, biometricEnabled: metadata.biometricEnabled, onVerify: { code in
+                    ChatPincodeManager.shared.verifyVault(code)
+                }, onSuccess: {
+                    openAfterUnlock()
+                }, onForgot: {
+                    // Forgot the vault passcode: recover via the device owner (Face ID / passcode).
+                    SecretVaultBiometric.authenticateDeviceOwner(reason: SecretVaultStrings.recoveryReason) { success in
+                        guard success else {
+                            return
+                        }
+                        weakVaultNav?.dismiss(animated: true) {
+                            openAfterUnlock()
+                        }
+                    }
+                }),
+                presentationData: presentationData
+            )
+            let vaultNav = UINavigationController(rootViewController: vaultVC)
+            vaultNav.setNavigationBarHidden(true, animated: false)
+            vaultNav.modalPresentationStyle = .fullScreen
+            weakVaultNav = vaultNav
+            if let topVC = params.navigationController.viewControllers.last as? ViewController {
+                topVC.present(vaultNav, animated: true)
+            } else {
+                params.navigationController.present(vaultNav, animated: true)
+            }
+            return
+        }
+    }
+
     // MARK: - Per-chat pincode protection
     if case let .peer(peer) = params.chatLocation {
         let targetPeerId = peer.id
