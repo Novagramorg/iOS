@@ -273,6 +273,14 @@ public enum NovagramVoiceChangerStrings {
         return pick(l, en: "Voice changer", uz: "Ovoz o'zgartirgich", ru: "Изменение голоса", zh: "变声器")
     }
 
+    public static func on(_ l: String) -> String {
+        return pick(l, en: "On", uz: "Yoniq", ru: "Вкл", zh: "开")
+    }
+
+    public static func off(_ l: String) -> String {
+        return pick(l, en: "Off", uz: "O'chiq", ru: "Выкл", zh: "关")
+    }
+
     public static func voiceMessages(_ l: String) -> String {
         return pick(l, en: "Voice messages", uz: "Ovozli xabarlar", ru: "Голосовые сообщения", zh: "语音消息")
     }
@@ -289,7 +297,7 @@ public enum NovagramVoiceChangerStrings {
             zh: "用另一种声音录制语音消息和通话：机器人、女声、童声等。在下方选择效果。")
     }
 
-    static func voiceMessagesFooter(_ l: String) -> String {
+    public static func voiceMessagesFooter(_ l: String) -> String {
         return pick(l,
             en: "Record voice messages in another voice: robot, woman, child and more.",
             uz: "Ovozli xabarni boshqa ovozda yozing: robot, ayol, bola va boshqalar.",
@@ -297,7 +305,7 @@ public enum NovagramVoiceChangerStrings {
             zh: "用另一种声音录制语音消息：机器人、女声、童声等。")
     }
 
-    static func callsFooter(_ l: String) -> String {
+    public static func callsFooter(_ l: String) -> String {
         return pick(l,
             en: "Speak in another voice in calls and group calls. A change applies at once, also during a call.",
             uz: "Qo'ng'iroq va guruh qo'ng'iroqlarida boshqa ovozda gapiring. O'zgarish darhol, qo'ng'iroq paytida ham ishlaydi.",

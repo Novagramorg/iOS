@@ -56,6 +56,11 @@ public enum NovagramSettingsFeature: String, CaseIterable {
     case autoSticker = "auto-sticker"
     case heartEffect = "heart-effect"
 
+    // Voice changer (its switch + two effect pages are on its own page now)
+    case voiceChanger = "voice-changer"
+    case voiceChangerMessages = "voice-changer-messages"
+    case voiceChangerCalls = "voice-changer-calls"
+
     // Voice → text
     case voiceToText = "voice-to-text"
     case voiceLanguage = "voice-language"
