@@ -1488,6 +1488,15 @@ if let adAttribute = message.adAttribute, NovagramAdMenu.presentIfOurs(opaqueId:
 }
 ```
 
+5. `openNoAdsDemo` (~line 5507), right after `guard let self` (2026-11-21). The channel bubble's X (`ChatMessageBubbleItemNode` close / side button) calls `openNoAdsDemo()` without the message, so the hook looks at the visible ad: OUR ad is hidden locally (`hideIfOurs`) instead of opening Telegram's Premium screen or turning Telegram's ads off.
+
+```swift
+// Novagram: the X on OUR channel ad hides it locally instead of opening Telegram's Premium screen.
+var novagramAdHidden = false
+self.chatDisplayNode.historyNode.forEachVisibleMessageItemNode { itemView in if !novagramAdHidden, let adAttribute = itemView.item?.message.adAttribute { novagramAdHidden = NovagramSponsored.hideIfOurs(opaqueId: adAttribute.opaqueId) } }
+if novagramAdHidden { return }
+```
+
 ### `submodules/TelegramUI/Sources/ChatInterfaceStateContextMenus.swift` — channel ad menu
 
 1. Import (after `import NovagramLocalization`, ~line 42): `import NovagramSponsored`.
@@ -1569,8 +1578,8 @@ Same shape as the v1 `.novagramAdPeer` hooks, but the row now sits where the con
 
 1. Import (after `import FetchManagerImpl`): `import NovagramSponsored`.
 2. `ChatListSearchEntryStableId`: `case novagramAdPeerId(EnginePeer.Id)`.
-3. `ChatListSearchEntry`: `case novagramAdPeer(EnginePeer, String, Int, PresentationTheme, PresentationStrings, ChatListSearchSectionExpandType, String?)` (peer, random_id token, index, theme, strings, global expand type, query) — handled in `stableId`, `==`, `<` (lhs case after `.localPeer`, before `.adPeer`; added to `.localPeer`'s `return true` group and to `.adPeer` / `.globalPeer`'s `return false` groups) and `item(...)`: `ContactsPeerItem` with `isAd: true` (Telegram's localized "Ad" pill + menu button), header `.globalPeers`, tap → `NovagramSearchAds.recordClick(token:thenOpen:)` whose `thenOpen` calls `interaction.peerSelected` (the click is queued first, contract §4.4), ad button → `NovagramSearchAds.presentMenu` (About / Report, presented with `interaction.present`), `visibilityUpdated` → `NovagramSearchAds.recordView`.
-4. `foundRemotePeers` tuple widened to `(…, Bool, NovagramPromotedPeer?)`; in the `.chats` branch (~line 2758) the result of `searchAdPeers(query:)` goes through `NovagramSearchAds.adPeers(context:query:telegramAdPeers:)` (product rule: OUR promoted peer after the ~0.5 s debounce for normalized queries of 3–32 characters, resolved with `resolvePeerByName`; Telegram's ad peers only when ours is empty, never for Premium; ([], nil) at once so results never wait). Every other branch passes `nil`. Fixes "two ads in search" (ours + Telegram's `@novas`).
+3. `ChatListSearchEntry`: `case novagramAdPeer(EnginePeer, String, Int, PresentationTheme, PresentationStrings, ChatListSearchSectionExpandType, String?, String)` (peer, random_id token, index, theme, strings, global expand type, query, status suffix — 2026-11-21: the row shows `status: .addressName(suffix)` = "@username, N subscribers" like Telegram's ad row; the suffix comes from `NovagramSearchAds.statusSuffix(_:foundPeers:strings:)`) — handled in `stableId`, `==`, `<` (lhs case after `.localPeer`, before `.adPeer`; added to `.localPeer`'s `return true` group and to `.adPeer` / `.globalPeer`'s `return false` groups) and `item(...)`: `ContactsPeerItem` with `isAd: true` (Telegram's localized "Ad" pill + menu button), header `.globalPeers`, tap → `NovagramSearchAds.recordClick(token:thenOpen:)` whose `thenOpen` calls `interaction.peerSelected` (the click is queued first, contract §4.4), ad button → `NovagramSearchAds.presentMenu` (About / Report, presented with `interaction.present`), `visibilityUpdated` → `NovagramSearchAds.recordView`.
+4. `foundRemotePeers` tuple widened to `(…, Bool, NovagramPromotedPeer?)`; in the `.chats` branch (~line 2758) — since 2026-11-21 `combineLatest(searchRemotePeers(...), NovagramSearchAds.adPeers(...))`, so the ad request runs alongside `contacts.search` instead of after it (stock: `searchRemotePeers |> mapToSignal { searchAdPeers }`) — the result of `searchAdPeers(query:)` goes through `NovagramSearchAds.adPeers(context:query:telegramAdPeers:)` (product rule: OUR promoted peer after the ~0.5 s debounce for normalized queries of 3–32 characters, resolved with `resolvePeerByName`; Telegram's ad peers only when ours is empty, never for Premium; ([], nil) at once so results never wait). Every other branch passes `nil`. Fixes "two ads in search" (ours + Telegram's `@novas`).
 5. Entry insert right before `if !adsHidden { for peer in foundRemotePeers.2 {`: `.novagramAdPeer(...)` when `foundRemotePeers.4` is set, not already listed (`existingPeerIds`) and passes `filteredPeer`. Not gated by `adsHidden` (ads for everyone).
 
 ### `submodules/TelegramUI/Components/GlobalControlPanelsContext/Sources/GlobalControlPanelsContext.swift` — banner producer + dismiss
@@ -1680,6 +1689,8 @@ Next to the other `--define`s:
 ```
 
 `release.sh` did not source `local-secrets.sh` before; it now does (after the "Resurs" line) and warns when `NOVAGRAM_ADS_ENVIRONMENT` is empty (the build then uses production). Its other behaviour is unchanged.
+
+**Release guard (2026-11-21, after build 89 shipped with development):** `release.sh` (after that warning) and `publish.sh` (after "API credentials") stop with `err` (exit 1) when `NOVAGRAM_ADS_ENVIRONMENT` is set to anything but `production`; empty still means production and passes. `publish.sh` prints `Ads muhiti: …`. The Developer section's Ads check page shows which server this build uses (`NovagramAdsCheck.buildIsProduction`, set beside its `provider`) and starts on that environment.
 
 ### BUILD dependency additions
 
@@ -7505,6 +7516,11 @@ macOS mirrors this in `NovagramChannelStatsEntry.registerSettingsRowClick(window
   `longPressDuration:` / `longPressAction: NovagramChannelStatsEntry.revealAction(context:authorize: NovagramAdsAdminGate.requestAccess)`; after the Analytics item (id 1) a `if NovagramChannelStatsEntry.isRowVisible(context:)`
   block appends the "Ads Analytics" item (id 3, `megaphone.fill` icon, `NovagramSettingsSectionStrings.adsAnalyticsRowTitle`);
   since 2026-10-27 the Developer switch "Novagram ads panel" (`NovagramDeveloperFlags.isAdsPanelEnabled`, iOS 16+) shows it too.
+  **Removed 2026-11-21 (owner's request):** the "Ads Analytics" row (id 3), its 20 s hold on "Novagram Settings"
+  (`longPressDuration` / `longPressAction` are no longer passed) and the `NovagramChannelStatsEntry.refreshing` wrap in
+  `PeerInfoScreen.swift` are gone, together with the Developer switch "Novagram ads panel" (`isAdsPanelEnabled`,
+  `adsPanelSignal`, `NovagramDeveloperRole.Switch.adsPanel`). The ChannelStats module and the BUILD dep stay
+  (the ListItems files still import it); the row can no longer be opened from Settings.
 - `Sources/PeerInfoScreen.swift`: `import NovagramChannelStats`; the settings data signal is wrapped as
   `NovagramChannelStatsEntry.refreshing(peerInfoScreenSettingsData(...))` so the list rebuilds when the row flips.
 - `Sources/ListItems/PeerInfoScreenDisclosureItem.swift`: optional `longPressDuration` / `longPressAction`
@@ -7620,7 +7636,7 @@ moved to SDK 1.2.0 and gained `NovagramServicesUI.xcframework` (`NovagramService
 only); both are iOS-only copies of the SDK's `-static` builds and passed `generate-secrets.sh --scan` (0 hits).
 SwiftUI stays a weak load (checked with `otool -l`).
 
-"Novagram ads panel" shows the "Ads Analytics" row (id 3, the Insights ads panel) in the Settings tab on iOS 16+,
+(Removed 2026-11-21, see the PeerInfoScreen hooks.) "Novagram ads panel" showed the "Ads Analytics" row (id 3, the Insights ads panel) in the Settings tab on iOS 16+,
 in addition to the hidden 20 s hold on "Novagram Settings" (`PeerInfoSettingsItems.swift`:
 `NovagramChannelStatsEntry.isRowVisible(context:) || NovagramDeveloperFlags.isAdsPanelEnabled`). The Settings data
 signal is wrapped in `NovagramDeveloperFlags.refreshing`, which watches both the currency rates and the ads panel

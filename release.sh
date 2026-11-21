@@ -312,6 +312,10 @@ if [ -f "$SCRIPT_DIR/build-system/local-secrets.sh" ]; then
     source "$SCRIPT_DIR/build-system/local-secrets.sh"
 fi
 [ -n "${NOVAGRAM_ADS_ENVIRONMENT:-}" ] || warn "NOVAGRAM_ADS_ENVIRONMENT bo'sh — Novagram reklamalari production bilan build bo'ladi."
+# release builds must never ship the development ads backend (build 89 did)
+if [ -n "${NOVAGRAM_ADS_ENVIRONMENT:-}" ] && [ "$NOVAGRAM_ADS_ENVIRONMENT" != "production" ]; then
+    err "NOVAGRAM_ADS_ENVIRONMENT=$NOVAGRAM_ADS_ENVIRONMENT — reliz faqat production bilan. local-secrets.sh ni tuzating yoki NOVAGRAM_ADS_ENVIRONMENT=production bering."
+fi
 
 # disk cache cap and Xcode updates, as in run.sh (HOOKS.md, "Build scripts: disk cache cap")
 submodules/Novagram/scripts/trim-bazel-disk-cache.sh 30

@@ -42,6 +42,7 @@ private enum NovagramAdsCheckTone: Equatable {
 private enum NovagramAdsCheckEntry: ItemListNodeEntry {
     case environmentHeader(String)
     case environment(Bool, String, Bool)
+    case environmentFooter(String)
     case run(String, Bool)
     case runFooter(String)
     case resultHeader(String)
@@ -52,7 +53,7 @@ private enum NovagramAdsCheckEntry: ItemListNodeEntry {
 
     var section: ItemListSectionId {
         switch self {
-        case .environmentHeader, .environment:
+        case .environmentHeader, .environment, .environmentFooter:
             return NovagramAdsCheckSection.environment.rawValue
         case .run, .runFooter:
             return NovagramAdsCheckSection.run.rawValue
@@ -69,10 +70,12 @@ private enum NovagramAdsCheckEntry: ItemListNodeEntry {
             return 0
         case let .environment(production, _, _):
             return production ? 1 : 2
-        case .run:
+        case .environmentFooter:
             return 3
-        case .runFooter:
+        case .run:
             return 4
+        case .runFooter:
+            return 5
         case .resultHeader:
             return 10
         case let .slot(index, _, _, _, _):
@@ -105,7 +108,7 @@ private enum NovagramAdsCheckEntry: ItemListNodeEntry {
             return ItemListActionItem(presentationData: presentationData, title: title, kind: running ? .disabled : .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: {
                 arguments.run()
             })
-        case let .runFooter(text), let .resultFooter(text), let .notReady(text):
+        case let .environmentFooter(text), let .runFooter(text), let .resultFooter(text), let .notReady(text):
             return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
         case let .slot(_, title, label, tone, detail):
             let theme = presentationData.theme
@@ -132,7 +135,8 @@ private enum NovagramAdsCheckEntry: ItemListNodeEntry {
 }
 
 private struct NovagramAdsCheckState: Equatable {
-    var production = true
+    // Starts on the environment this build uses.
+    var production = NovagramAdsCheck.buildIsProduction ?? true
     var running = false
     var report: NovagramAdsCheckReport?
     var notReady = false
@@ -143,6 +147,7 @@ private func novagramAdsCheckEntries(state: NovagramAdsCheckState, langCode: Str
     entries.append(.environmentHeader(NovagramAdsCheckStrings.environmentHeader(langCode: langCode)))
     entries.append(.environment(true, "Production", state.production))
     entries.append(.environment(false, "Development", !state.production))
+    entries.append(.environmentFooter(NovagramAdsCheckStrings.buildEnvironment(production: NovagramAdsCheck.buildIsProduction, langCode: langCode)))
 
     let runTitle = state.running ? NovagramAdsCheckStrings.running(langCode: langCode) : NovagramAdsCheckStrings.run(langCode: langCode)
     entries.append(.run(runTitle, state.running))

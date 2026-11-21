@@ -5508,6 +5508,10 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             guard let self else {
                 return
             }
+            // Novagram: the X on OUR channel ad hides it locally instead of opening Telegram's Premium screen.
+            var novagramAdHidden = false
+            self.chatDisplayNode.historyNode.forEachVisibleMessageItemNode { itemView in if !novagramAdHidden, let adAttribute = itemView.item?.message.adAttribute { novagramAdHidden = NovagramSponsored.hideIfOurs(opaqueId: adAttribute.opaqueId) } }
+            if novagramAdHidden { return }
             if self.context.isPremium {
                 self.present(UndoOverlayController(presentationData: self.presentationData, content: .actionSucceeded(title: nil, text: self.presentationData.strings.ReportAd_Hidden, cancel: nil, destructive: false), elevatedLayout: false, action: { _ in
                     return true

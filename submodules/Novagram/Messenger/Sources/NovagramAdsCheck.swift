@@ -75,6 +75,9 @@ public enum NovagramAdsCheck {
     /// Runs the check (`production` picks the environment, `lang` is the app language for targeting).
     /// Set by NovagramSponsored when its ads core starts; nil until then.
     public static var provider: ((_ production: Bool, _ lang: String) async -> NovagramAdsCheckReport)?
+    /// The environment THIS build sends its ad requests to (true = production), set together with
+    /// `provider`; nil until the ads core starts.
+    public static var buildIsProduction: Bool?
 }
 
 // MARK: - Text
@@ -83,6 +86,9 @@ public enum NovagramAdsCheck {
 func novagramAdsCheckText(_ report: NovagramAdsCheckReport, langCode: String) -> String {
     let nameWidth = 18
     var lines: [String] = [NovagramAdsCheckStrings.reportHeader(report, langCode: langCode)]
+    if let buildIsProduction = NovagramAdsCheck.buildIsProduction {
+        lines.append("build: " + NovagramAdsCheckStrings.environmentName(production: buildIsProduction))
+    }
     for result in report.slots {
         let name = NovagramAdsCheckStrings.slotName(result.slot, langCode: langCode)
         let padded = name.count < nameWidth ? name + String(repeating: " ", count: nameWidth - name.count) : name + " "
@@ -222,6 +228,20 @@ enum NovagramAdsCheckStrings {
         case "ru": return "Модуль рекламы ещё не запущен. Откройте список чатов и попробуйте снова."
         case "zh": return "广告模块尚未启动。请打开聊天列表后重试。"
         default:   return "The ads module has not started yet. Open the chat list and try again."
+        }
+    }
+
+    /// Which backend this build itself uses; development in a release build means ads vanish for users.
+    static func buildEnvironment(production: Bool?, langCode: String) -> String {
+        guard let production else {
+            return self.notReady(langCode: langCode)
+        }
+        let name = self.environmentName(production: production)
+        switch langCode {
+        case "uz": return "Bu build reklamani \(name) serveridan so'raydi."
+        case "ru": return "Эта сборка запрашивает рекламу у сервера \(name)."
+        case "zh": return "此版本向 \(name) 服务器请求广告。"
+        default:   return "This build requests ads from the \(name) server."
         }
     }
 

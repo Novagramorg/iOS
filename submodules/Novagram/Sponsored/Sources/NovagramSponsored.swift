@@ -103,7 +103,9 @@ public enum NovagramSponsored {
     /// (`<surface> source=novagram|telegram|none`, debug level) whenever it changes.
     static func oursFirst<Ours, Value>(context: AccountContext, surface: String, ours: Signal<Ours?, NoError>, fallback: Signal<Value, NoError>, empty: Value, isEmpty: @escaping (Value) -> Bool, map transform: @escaping (Ours) -> Value) -> Signal<Value, NoError> {
         let lastSource = Atomic<String?>(value: nil)
-        let combined = combineLatest(self.slot(ours), fallback, self.isPremium(context: context))
+        // The fallback starts empty, so OUR ad shows as soon as it is ready instead of waiting for
+        // Telegram's answer (Telegram's value is used only when ours is .none anyway).
+        let combined = combineLatest(self.slot(ours), .single(empty) |> then(fallback), self.isPremium(context: context))
         |> map { ours, fallback, isPremium -> Value in
             let value: Value
             let source: String
@@ -414,6 +416,7 @@ final class NovagramAdsRegistry: @unchecked Sendable {
         NovagramAdsCheck.provider = { production, lang in
             return await NovagramAdsCheckRunner.run(production: production, lang: lang)
         }
+        NovagramAdsCheck.buildIsProduction = NovagramSponsored.environment == .production
     }
 
     private func withLock<T>(_ body: () -> T) -> T {

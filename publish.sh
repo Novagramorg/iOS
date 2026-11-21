@@ -78,6 +78,11 @@ if [ "$API_ID" = "0" ]; then
     err "API_ID yo'q. build-system/local-secrets.sh ni tekshiring."
 fi
 ok "API credentials: $API_ID"
+# release builds must never ship the development ads backend (build 89 did)
+if [ -n "${NOVAGRAM_ADS_ENVIRONMENT:-}" ] && [ "$NOVAGRAM_ADS_ENVIRONMENT" != "production" ]; then
+    err "NOVAGRAM_ADS_ENVIRONMENT=$NOVAGRAM_ADS_ENVIRONMENT — reliz faqat production bilan. local-secrets.sh ni tuzating yoki NOVAGRAM_ADS_ENVIRONMENT=production bering."
+fi
+ok "Ads muhiti: ${NOVAGRAM_ADS_ENVIRONMENT:-production}"
 
 # ─── Step 2: Distribution profillarni o'rnatish ─────────────────────────────
 step "Distribution profillarni o'rnatish..."
