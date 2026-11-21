@@ -116,7 +116,6 @@ import EdgeEffect
 import Pasteboard
 import AccountPeerContextItem
 import UrlWhitelist
-import NovagramChannelStats
 import NovagramMessenger
 import SideColumnLayout
 import NavigationBarNode
@@ -2234,7 +2233,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                 return data?.hasSecretValues ?? false
             }
                         
-            screenData = NovagramDeveloperFlags.refreshing(NovagramChannelStatsEntry.refreshing(peerInfoScreenSettingsData(context: context, peerId: peerId, accountsAndPeers: self.accountsAndPeers.get(), activeSessionsContextAndCount: self.activeSessionsContextAndCount.get(), notificationExceptions: self.notificationExceptions.get(), privacySettings: self.privacySettings.get(), archivedStickerPacks: self.archivedPacks.get(), hasPassport: hasPassport, starsContext: starsContext, tonContext: tonContext)))
+            screenData = NovagramDeveloperFlags.refreshing(peerInfoScreenSettingsData(context: context, peerId: peerId, accountsAndPeers: self.accountsAndPeers.get(), activeSessionsContextAndCount: self.activeSessionsContextAndCount.get(), notificationExceptions: self.notificationExceptions.get(), privacySettings: self.privacySettings.get(), archivedStickerPacks: self.archivedPacks.get(), hasPassport: hasPassport, starsContext: starsContext, tonContext: tonContext))
             
             self.headerNode.displayCopyContextMenu = { [weak self] node, copyPhone, copyUsername in
                 guard let strongSelf = self, let data = strongSelf.data, case let .user(user) = data.peer else {

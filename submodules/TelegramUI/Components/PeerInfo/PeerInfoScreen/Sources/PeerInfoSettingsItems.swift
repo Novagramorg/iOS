@@ -16,7 +16,6 @@ import NovagramLocalization
 import NovagramMessenger
 import NovagramAnalytics
 import NovagramUpdateCheck
-import NovagramChannelStats
 import NovagramCurrencyRates
 import NovagramReviewPrompt
 import WalletContext
@@ -272,7 +271,7 @@ func settingsItems(data: PeerInfoScreenData?, context: AccountContext, presentat
     // Novagram Settings Item — gold title + gold flame icon so the brand row stands out in Settings.
     let novagramGold: UIColor = presentationData.theme.overallDarkAppearance ? UIColor(rgb: 0xFFCC33) : UIColor(rgb: 0xC8951A)
     let novagramLangCode = NovagramL10n.languageKey(for: presentationData.strings)
-    items[.novagramMessenger]!.append(PeerInfoScreenDisclosureItem(id: 0, text: NovagramSettingsSectionStrings.settingsRowTitle(langCode: novagramLangCode), titleColor: novagramGold, icon: novagramSettingsIcon(systemName: "flame.fill", color: .gold), longPressDuration: NovagramChannelStatsEntry.revealDuration, longPressAction: NovagramChannelStatsEntry.revealAction(context: context, authorize: NovagramAdsAdminGate.requestAccess), action: {
+    items[.novagramMessenger]!.append(PeerInfoScreenDisclosureItem(id: 0, text: NovagramSettingsSectionStrings.settingsRowTitle(langCode: novagramLangCode), titleColor: novagramGold, icon: novagramSettingsIcon(systemName: "flame.fill", color: .gold), action: {
         interaction.openSettings(.novagramMessenger)
     }))
     items[.novagramMessenger]!.append(PeerInfoScreenDisclosureItem(id: 2, text: NovagramSettingsSectionStrings.botsRowTitle(langCode: novagramLangCode), icon: novagramSettingsIcon(systemName: "bolt.circle.fill", color: .teal), action: {
@@ -285,17 +284,6 @@ func settingsItems(data: PeerInfoScreenData?, context: AccountContext, presentat
     if NovagramDeveloperFlags.isCurrencyRatesViewEnabled {
         items[.novagramMessenger]!.append(PeerInfoScreenDisclosureItem(id: 4, text: NovagramCurrencyRatesEntry.rowTitle(langCode: novagramLangCode), icon: novagramSettingsIcon(systemName: "dollarsign.circle.fill", color: .green), action: {
             NovagramCurrencyRatesEntry.open(context: context)
-        }))
-    }
-    // Novagram: the Ads Analytics row (the ads panel) also shows while the Developer switch "Novagram ads
-    // panel" is on; iOS 16+ only, like the hidden reveal. See HOOKS.md.
-    var novagramShowsAdsPanel = NovagramChannelStatsEntry.isRowVisible(context: context)
-    if #available(iOS 16.0, *), NovagramDeveloperFlags.isAdsPanelEnabled {
-        novagramShowsAdsPanel = true
-    }
-    if novagramShowsAdsPanel {
-        items[.novagramMessenger]!.append(PeerInfoScreenDisclosureItem(id: 3, text: NovagramSettingsSectionStrings.adsAnalyticsRowTitle(langCode: novagramLangCode), icon: novagramSettingsIcon(systemName: "megaphone.fill", color: .violet), action: {
-            NovagramChannelStatsEntry.present(context: context)
         }))
     }
 

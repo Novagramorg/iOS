@@ -29,7 +29,6 @@ public extension NSNotification.Name {
 public enum NovagramDeveloperFlags {
     private static let udSuite = "pro_messager"
     private static let currencyRatesViewKey = "novagram_currency_rates_view"
-    private static let adsPanelKey = "novagram_ads_panel"
     private static let saveToFilesKey = "novagram_save_to_files"
     // TelegramCore reads this key directly (`novagramAdEventsOff()`), and the Mac app uses it too.
     private static let adEventsOffKey = "novagram_ads_events_off"
@@ -47,13 +46,6 @@ public enum NovagramDeveloperFlags {
         set { self.setValue(newValue, forKey: self.currencyRatesViewKey) }
     }
 
-    /// Show the Novagram ads panel. Developer role only: a director who turned it on before it became
-    /// developer-only never logs in again, so the role is checked here and not only at login.
-    public static internal(set) var isAdsPanelEnabled: Bool {
-        get { return self.value(forKey: self.adsPanelKey) && NovagramDeveloperRole.current.canUse(.adsPanel) }
-        set { self.setValue(newValue, forKey: self.adsPanelKey) }
-    }
-
     /// "Save to Files" for voice messages and files in the message menu (NovagramSaveToFiles). Public since 2026-11-18.
     public static internal(set) var isSaveToFilesEnabled: Bool {
         get { return self.value(forKey: self.saveToFilesKey) }
@@ -65,15 +57,11 @@ public enum NovagramDeveloperFlags {
         return self.signal { self.isCurrencyRatesViewEnabled }
     }
 
-    public static var adsPanelSignal: Signal<Bool, NoError> {
-        return self.signal { self.isAdsPanelEnabled }
-    }
-
-    /// Re-emits the signal's latest value whenever the currency rates or the ads panel switch flips.
+    /// Re-emits the signal's latest value whenever the currency rates switch flips.
     /// Folded into the Settings data signal, so the Settings list adds or drops those rows live.
     public static func refreshing<T>(_ signal: Signal<T, NoError>) -> Signal<T, NoError> {
-        return combineLatest(queue: Queue.mainQueue(), signal, self.currencyRatesViewSignal, self.adsPanelSignal)
-        |> map { value, _, _ in
+        return combineLatest(queue: Queue.mainQueue(), signal, self.currencyRatesViewSignal)
+        |> map { value, _ in
             return value
         }
     }
@@ -115,7 +103,6 @@ public enum NovagramDeveloperRole: String {
         case removeAllAds
         case adEventsOff
         case currencyRatesView
-        case adsPanel
         // "Use less data for calls" (NovagramCallDataSaving).
         case callDataSaving
         // "Record calls without the chat message" (NovagramCallRecordingNotice).
@@ -136,7 +123,7 @@ public enum NovagramDeveloperRole: String {
             switch item {
             case .adEventsOff, .callRecordingNoticeOff, .adsCheck:
                 return true
-            case .removeAllAds, .currencyRatesView, .adsPanel, .callDataSaving:
+            case .removeAllAds, .currencyRatesView, .callDataSaving:
                 return false
             }
         }
@@ -159,9 +146,6 @@ public enum NovagramDeveloperRole: String {
         }
         if !role.canUse(.currencyRatesView) && NovagramDeveloperFlags.isCurrencyRatesViewEnabled {
             NovagramDeveloperFlags.isCurrencyRatesViewEnabled = false
-        }
-        if !role.canUse(.adsPanel) && NovagramDeveloperFlags.isAdsPanelEnabled {
-            NovagramDeveloperFlags.isAdsPanelEnabled = false
         }
         if !role.canUse(.callDataSaving) {
             // Only our key: Telegram's own data saving setting (Data and Storage) stays as the user set it.
@@ -320,23 +304,6 @@ enum NovagramDeveloperStrings {
         }
     }
 
-    static func adsPanelTitle(langCode: String) -> String {
-        switch langCode {
-        case "uz": return "Novagram reklama paneli"
-        case "ru": return "Рекламная панель Novagram"
-        case "zh": return "Novagram 广告面板"
-        default:   return "Novagram ads panel"
-        }
-    }
-
-    static func adsPanelTip(langCode: String) -> String {
-        switch langCode {
-        case "uz": return "Novagram reklama panelini ko'rsatish"
-        case "ru": return "Показывать рекламную панель Novagram"
-        case "zh": return "显示 Novagram 广告面板"
-        default:   return "Show the Novagram ads panel"
-        }
-    }
 
     static func callRecordingNoticeOffTitle(langCode: String) -> String {
         switch langCode {
