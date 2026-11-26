@@ -1,0 +1,197 @@
+# Copyright 2022 The Bazel Authors. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""Tests for interoperability with `cc_library`-specific features."""
+
+load("@bazel_skylib//rules:build_test.bzl", "build_test")
+load(
+    "//test/rules:action_command_line_test.bzl",
+    "make_action_command_line_test_rule",
+)
+load(
+    "//test/rules:action_inputs_test.bzl",
+    "action_inputs_test",
+    "make_action_inputs_test_rule",
+)
+load("//test/rules:provider_test.bzl", "provider_test")
+
+explicit_interface_indexstore_command_line_test = make_action_command_line_test_rule(
+    config_settings = {
+        "//command_line_option:features": [
+            "swift.index_while_building",
+        ],
+    },
+)
+
+explicit_interface_indexstore_inputs_test = make_action_inputs_test_rule(
+    config_settings = {
+        "//command_line_option:features": [
+            "swift.index_while_building",
+        ],
+    },
+)
+
+explicit_swift_module_map_test = make_action_command_line_test_rule(
+    config_settings = {
+        "//command_line_option:features": [
+            "swift.use_explicit_swift_module_map",
+        ],
+    },
+)
+
+explicit_swift_module_map_inputs_test = make_action_inputs_test_rule(
+    config_settings = {
+        "//command_line_option:features": [
+            "swift.use_explicit_swift_module_map",
+        ],
+    },
+)
+
+def module_interface_test_suite(name, tags = []):
+    """Test suite for features that compile Swift module interfaces.
+
+    Args:
+        name: The base name to be used in targets created by this macro.
+        tags: Additional tags to apply to each test.
+    """
+    all_tags = [name] + tags
+
+    # Verify that a `swift_binary` builds properly when depending on a
+    # `swift_import` target that references a `.swiftinterface` file.
+    build_test(
+        name = "{}_swift_binary_imports_swiftinterface".format(name),
+        targets = [
+            "//test/fixtures/module_interface:client",
+        ],
+        tags = all_tags,
+    )
+
+    build_test(
+        name = "{}_swift_binary_imports_transitive_swiftinterface".format(name),
+        targets = [
+            "//test/fixtures/module_interface:transitive_client",
+        ],
+        tags = all_tags,
+    )
+
+    build_test(
+        name = "{}_swift_imports_with_same_module_name_do_not_conflict".format(name),
+        targets = [
+            "//test/fixtures/module_interface:toy_module",
+            "//test/fixtures/module_interface:toy_module_duplicate",
+        ],
+        tags = all_tags,
+    )
+
+    # Verify that `.swiftinterface` file is emitted when the `library_evolution`
+    # attribute is true.
+    provider_test(
+        name = "{}_swift_library_with_evolution_emits_swiftinterface".format(name),
+        expected_files = [
+            "test/fixtures/module_interface/library/ToyModule.swiftinterface",
+            "*",
+        ],
+        field = "files",
+        provider = "DefaultInfo",
+        tags = all_tags,
+        target_under_test = "//test/fixtures/module_interface/library:toy_module_library",
+    )
+
+    # Verify that `.swiftinterface` file is not emitted when the
+    # `library_evolution` attribute is false.
+    provider_test(
+        name = "{}_swift_library_without_evolution_emits_no_swiftinterface".format(name),
+        expected_files = [
+            "-test/fixtures/module_interface/library/ToyModuleNoEvolution.swiftinterface",
+            "*",
+        ],
+        field = "files",
+        provider = "DefaultInfo",
+        tags = all_tags,
+        target_under_test = "//test/fixtures/module_interface/library:toy_module_library_without_library_evolution",
+    )
+
+    explicit_swift_module_map_test(
+        name = "{}_explicit_swift_module_map_test".format(name),
+        tags = all_tags,
+        expected_argv = [
+            "-explicit-swift-module-map-file $(BIN_DIR)/test/fixtures/module_interface/toy_module.swift-explicit-module-map.json",
+        ],
+        not_expected_argv = [
+            "-Xfrontend",
+        ],
+        mnemonic = "SwiftCompileModuleInterface",
+        target_under_test = "//test/fixtures/module_interface:toy_module",
+    )
+
+    # Test that dependency swiftinterface files are included as action inputs
+    action_inputs_test(
+        name = "{}_dependencies_included_as_inputs".format(name),
+        tags = all_tags,
+        mnemonic = "SwiftCompileModuleInterface",
+        expected_inputs = [
+            "ToyModule.swiftinterface",
+        ],
+        target_under_test = "//test/fixtures/module_interface:toy_module",
+    )
+
+    action_inputs_test(
+        name = "{}_transitive_dependencies_included_as_inputs".format(name),
+        tags = all_tags,
+        mnemonic = "SwiftCompileModuleInterface",
+        expected_inputs = [
+            "ToyModule.swiftinterface",
+            "DependentToyModule.swiftinterface",
+        ],
+        target_under_test = "//test/fixtures/module_interface:dependent_toy_module",
+    )
+
+    explicit_interface_indexstore_command_line_test(
+        name = "{}_explicit_interface_indexstore_command_line_test".format(name),
+        tags = all_tags,
+        expected_argv = [
+            "-index-store-path $(BIN_DIR)/test/fixtures/module_interface/toy_module.swiftinterface.indexstore",
+            "-explicit-interface-module-build",
+            "-Xwrapped-swift=-explicit-compile-module-from-interface=$(BIN_DIR)/test/fixtures/module_interface/library/toy_outputs/ToyModule.swiftinterface",
+        ],
+        mnemonic = "SwiftCompileModuleInterface",
+        target_under_test = "//test/fixtures/module_interface:toy_module",
+    )
+
+    explicit_interface_indexstore_inputs_test(
+        name = "{}_explicit_interface_indexstore_inputs_test".format(name),
+        tags = all_tags,
+        mnemonic = "SwiftCompileModuleInterface",
+        expected_inputs = [
+            "ToyModule.swiftinterface",
+        ],
+        target_under_test = "//test/fixtures/module_interface:toy_module",
+    )
+
+    explicit_swift_module_map_inputs_test(
+        name = "{}_explicit_swift_module_map_dependencies_included_as_inputs".format(name),
+        tags = all_tags,
+        mnemonic = "SwiftCompileModuleInterface",
+        expected_inputs = [
+            "ToyModule.swiftinterface",
+            "DependentToyModule.swiftinterface",
+            "dependent_toy_module.swift-explicit-module-map.json",
+        ],
+        target_under_test = "//test/fixtures/module_interface:dependent_toy_module",
+    )
+
+    native.test_suite(
+        name = name,
+        tags = all_tags,
+    )

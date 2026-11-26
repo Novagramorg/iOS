@@ -1,0 +1,373 @@
+# Copyright 2019 The Bazel Authors. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""Definitions for autoconfiguring Swift toolchains.
+
+At this time, only the Linux toolchain uses this capability. The Xcode toolchain
+determines which
+features are supported using Xcode version checks in xcode_toolchain.bzl.
+"""
+
+load(
+    ":feature_names.bzl",
+    "SWIFT_FEATURE_CODEVIEW_DEBUG_INFO",
+    "SWIFT_FEATURE_DEBUG_PREFIX_MAP",
+    "SWIFT_FEATURE_DECLARE_SWIFTSOURCEINFO",
+    "SWIFT_FEATURE_EMIT_SWIFTDOC",
+    "SWIFT_FEATURE_LLD_GC_WORKAROUND",
+    "SWIFT_FEATURE_MODULE_MAP_NO_PRIVATE_HEADERS",
+    "SWIFT_FEATURE_NO_EMBED_DEBUG_MODULE",
+    "SWIFT_FEATURE_USE_AUTOLINK_EXTRACT",
+    "SWIFT_FEATURE_USE_MODULE_WRAP",
+)
+
+def _scratch_file(repository_ctx, temp_dir, name, content = ""):
+    """Creates and returns a scratch file with the given name and content.
+
+    Args:
+        repository_ctx: The repository context.
+        temp_dir: The `path` to the temporary directory where the file should be
+            created.
+        name: The name of the scratch file.
+        content: The text to write into the scratch file.
+
+    Returns:
+        The `path` to the file that was created.
+    """
+    path = temp_dir.get_child(name)
+    repository_ctx.file(path, content)
+    return path
+
+def _swift_succeeds(repository_ctx, swiftc_path, *args):
+    """Returns True if an invocation of the Swift compiler is successful.
+
+    Args:
+        repository_ctx: The repository context.
+        swiftc_path: The `path` to the `swiftc` executable to spawn.
+        *args: Zero or more arguments to pass to `swiftc` on the command line.
+
+    Returns:
+        True if the invocation was successful (a zero exit code); otherwise,
+        False.
+    """
+    swift_result = repository_ctx.execute([swiftc_path] + list(args))
+    return swift_result.return_code == 0
+
+def _check_supports_lld_gc_workaround(repository_ctx, swiftc_path, temp_dir):
+    """Returns True if lld is being used and it supports nostart-stop-gc."""
+    source_file = _scratch_file(
+        repository_ctx,
+        temp_dir,
+        "main.swift",
+        """\
+print("Hello")
+""",
+    )
+    return _swift_succeeds(
+        repository_ctx,
+        swiftc_path,
+        source_file,
+        "-use-ld=lld",
+        "-Xlinker",
+        "-z",
+        "-Xlinker",
+        "nostart-stop-gc",
+    )
+
+def _write_swift_version(repository_ctx, swiftc_path):
+    """Write a file containing the current Swift version info
+
+    This is used to encode the current version of Swift as an input for caching
+
+    Args:
+        repository_ctx: The repository context.
+        swiftc_path: The `path` to the `swiftc` executable.
+
+    Returns:
+        The written file containing the version info
+    """
+    result = repository_ctx.execute([swiftc_path, "-version"])
+    contents = "unknown"
+    parsed = "0.0"
+    if result.return_code == 0:
+        contents = result.stdout.strip()
+
+        # Swift version 6.3.1 (swift-6.3.1-RELEASE) -> 6.3.1
+        # Swift version 6.4-dev -> 6.4
+        parsed = (
+            contents.splitlines()[0]
+                .split("Swift version")[-1]
+                .strip()
+                .split(" ")[0]
+                .split("-")[0]
+                .strip()
+        ) or "0.0"
+
+    filename = "swift_version"
+    repository_ctx.file(filename, contents, executable = False)
+    return filename, parsed
+
+def _compute_feature_values(repository_ctx, swiftc_path):
+    """Computes a list of supported/unsupported features by running checks.
+
+    The result of this function is a list of feature names that can be provided
+    as the `features` attribute of a toolchain rule. That is, enabled features
+    are represented by the feature name itself, and unsupported features are
+    represented as a hyphen ("-") followed by the feature name.
+
+    Args:
+        repository_ctx: The repository context.
+        swiftc_path: The `path` to the `swiftc` executable.
+
+    Returns:
+        A list of feature strings that can be provided as the `features`
+        attribute of a toolchain rule.
+    """
+    feature_values = []
+    for feature, checker in _FEATURE_CHECKS.items():
+        # Create a scratch directory in which the check function can write any
+        # files that it needs to pass to `swiftc`.
+        mktemp_result = repository_ctx.execute([
+            "mktemp",
+            "-d",
+            "tmp.autoconfiguration.XXXXXXXXXX",
+        ])
+        temp_dir = repository_ctx.path(mktemp_result.stdout.strip())
+
+        if checker(repository_ctx, swiftc_path, temp_dir):
+            feature_values.append(feature)
+        else:
+            feature_values.append("-{}".format(feature))
+
+        # Clean up the scratch directory.
+        # TODO(allevato): Replace with `repository_ctx.delete` once it's
+        # released.
+        repository_ctx.execute(["rm", "-r", temp_dir])
+
+    return feature_values
+
+# Features whose support should be checked and the functions used to check them.
+# A check function has the following signature:
+#
+#     def <function_name>(repository_ctx, swiftc_path, temp_dir)
+#
+# Where `swiftc_path` and `temp_dir` are `path` structures denoting the path to
+# the `swiftc` executable and a scratch directory, respectively. The function
+# should return True if the feature is supported.
+_FEATURE_CHECKS = {
+    SWIFT_FEATURE_LLD_GC_WORKAROUND: _check_supports_lld_gc_workaround,
+}
+
+def _normalized_linux_cpu(cpu):
+    if cpu in ("amd64"):
+        return "x86_64"
+    return cpu
+
+def _normalized_windows_cpu(cpu):
+    """Normalizes a host CPU name to the value Swift uses on Windows.
+
+    The returned value is used both as the toolchain's `arch` and as the
+    architecture component of the Swift SDK's library layout (for example
+    `usr/lib/swift/windows/x86_64`) and the target triple.
+    """
+    cpu = cpu.lower()
+    if cpu in ("amd64", "x86_64", "x64"):
+        return "x86_64"
+    if cpu in ("arm64", "aarch64"):
+        return "aarch64"
+    if cpu in ("x86", "i686"):
+        return "i686"
+    return cpu
+
+def _resolve_toolchain_root(repository_ctx, swiftc_path):
+    """Returns the Swift toolchain root directory for `swiftc_path`.
+
+    Swiftly installs a symlink that is changed based on the active toolchain.
+    This resolves that symlink to the actual toolchain directory.
+    """
+    result = repository_ctx.execute([swiftc_path, "-print-target-info"])
+    if result.return_code != 0:
+        fail("Failed to run '{} -print-target-info': {}".format(
+            swiftc_path,
+            result.stderr,
+        ))
+    runtime_resource_path = json.decode(result.stdout)["paths"]["runtimeResourcePath"]
+    return repository_ctx.path(runtime_resource_path).dirname.dirname
+
+def _create_linux_toolchain(*, repository_ctx):
+    """Creates BUILD targets for the Swift toolchain on Linux.
+
+    Args:
+      repository_ctx: The repository rule context.
+    """
+    path_to_swiftc = repository_ctx.which("swiftc")
+    if not path_to_swiftc:
+        return """\
+# No 'swiftc' executable found in $PATH. Not auto-generating a Linux Swift \
+toolchain.
+"""
+
+    root = _resolve_toolchain_root(repository_ctx, path_to_swiftc)
+    feature_values = _compute_feature_values(repository_ctx, path_to_swiftc)
+    version_file, parsed_version = _write_swift_version(repository_ctx, path_to_swiftc)
+
+    # TODO: This should be removed so that private headers can be used with
+    # explicit modules, but the build targets for CgRPC need to be cleaned up
+    # first because they contain C++ code.
+    feature_values.append(SWIFT_FEATURE_MODULE_MAP_NO_PRIVATE_HEADERS)
+    feature_values.append(SWIFT_FEATURE_USE_AUTOLINK_EXTRACT)
+    feature_values.append(SWIFT_FEATURE_USE_MODULE_WRAP)
+
+    return """\
+swift_toolchain(
+    name = "linux-toolchain",
+    arch = "{cpu}",
+    features = [{feature_list}],
+    os = "linux",
+    root = "{root}",
+    parsed_version = "{parsed_version}",
+    version_file = "{version_file}",
+)
+""".format(
+        cpu = _normalized_linux_cpu(repository_ctx.os.arch),
+        feature_list = ", ".join([
+            '"{}"'.format(feature)
+            for feature in feature_values
+        ]),
+        root = root,
+        parsed_version = parsed_version,
+        version_file = version_file,
+    )
+
+def _python_executable_works(repository_ctx, python_bin):
+    """Returns True if `python_bin` is a real, runnable Python 3 interpreter.
+
+    On Windows, `python3.exe`/`python.exe` found on `PATH` are frequently the
+    Microsoft Store "App execution alias" stubs rather than real interpreters:
+    when run non-interactively they print a message pointing at the Store and
+    exit nonzero. Probe the candidate so those stubs are skipped in favor of a
+    working interpreter later on `PATH`. We also confirm it is Python 3, since
+    the caller needs the Python 3 `plistlib` API.
+    """
+    result = repository_ctx.execute(
+        [python_bin, "-c", "import sys; print('ok' if sys.version_info[0] == 3 else 'no')"],
+    )
+    return result.return_code == 0 and result.stdout.strip() == "ok"
+
+def _get_python_bin(repository_ctx):
+    if "PYTHON_BIN_PATH" in repository_ctx.os.environ:
+        return repository_ctx.os.environ.get("PYTHON_BIN_PATH").strip()
+    for name in ("python3.exe", "python3", "python.exe", "python"):
+        candidate = repository_ctx.which(name)
+        if candidate and _python_executable_works(repository_ctx, candidate):
+            return candidate
+    return None
+
+def _create_windows_toolchain(*, repository_ctx):
+    """Creates BUILD targets for the Swift toolchain on Linux.
+
+    Args:
+      repository_ctx: The repository rule context.
+    """
+    path_to_swiftc = repository_ctx.which("swiftc.exe")
+    if not path_to_swiftc:
+        return """\
+# No 'swiftc.exe' executable found in $PATH. Not auto-generating a Windows \
+Swift toolchain.
+"""
+
+    root = path_to_swiftc.dirname.dirname
+    arch = _normalized_windows_cpu(repository_ctx.os.arch)
+    enabled_features = [
+        SWIFT_FEATURE_CODEVIEW_DEBUG_INFO,
+        SWIFT_FEATURE_DECLARE_SWIFTSOURCEINFO,
+        SWIFT_FEATURE_DEBUG_PREFIX_MAP,
+        SWIFT_FEATURE_EMIT_SWIFTDOC,
+        SWIFT_FEATURE_NO_EMBED_DEBUG_MODULE,
+        SWIFT_FEATURE_MODULE_MAP_NO_PRIVATE_HEADERS,
+    ]
+    disabled_features = []
+
+    version_file, parsed_version = _write_swift_version(repository_ctx, path_to_swiftc)
+
+    # Normalize SDKROOT to forward slashes with no trailing separator: the raw
+    # environment value typically ends in a backslash, which is both invalid at
+    # the end of a Python raw-string literal (used below) and produces doubled
+    # separators when joined.
+    sdkroot = repository_ctx.os.environ["SDKROOT"].replace("\\", "/").rstrip("/")
+
+    info_plist = sdkroot + "/../../../Info.plist"
+    python_bin = _get_python_bin(repository_ctx)
+    if not python_bin:
+        fail("Could not find a working Python 3 interpreter on PATH; it is " +
+             "required to read the XCTest version from the Swift SDK's Info.plist.")
+    xctest_version = repository_ctx.execute([
+        python_bin,
+        "-c",
+        "import plistlib; " +
+        "print(plistlib.load(open(r'{}', 'rb'))['DefaultProperties']['XCTEST_VERSION'])".format(info_plist),
+    ])
+
+    env = {
+        "Path": repository_ctx.os.environ["Path"] if "Path" in repository_ctx.os.environ else repository_ctx.os.environ["PATH"],
+        "ProgramData": repository_ctx.os.environ.get("ProgramData", "C:\\ProgramData"),
+    }
+
+    return """\
+swift_toolchain(
+  name = "windows-toolchain",
+  arch = "{arch}",
+  features = [{features}],
+  os = "windows",
+  root = "{root}",
+  parsed_version = "{parsed_version}",
+  version_file = "{version_file}",
+  env = {env},
+  sdkroot = "{sdkroot}",
+  tool_executable_suffix = ".exe",
+  xctest_version = "{xctest_version}",
+)
+""".format(
+        arch = arch,
+        features = ", ".join(['"{}"'.format(feature) for feature in enabled_features] + ['"-{}"'.format(feature) for feature in disabled_features]),
+        root = root,
+        env = env,
+        parsed_version = parsed_version,
+        sdkroot = sdkroot,
+        xctest_version = xctest_version.stdout.rstrip(),
+        version_file = version_file,
+    )
+
+def _swift_autoconfiguration_impl(repository_ctx):
+    repository_ctx.file(
+        "BUILD",
+        "\n".join([
+            """\
+load(
+    "@rules_swift//swift/toolchains:swift_toolchain.bzl",
+    "swift_toolchain",
+)
+
+package(default_visibility = ["//visibility:public"])
+""",
+            _create_windows_toolchain(repository_ctx = repository_ctx),
+            _create_linux_toolchain(repository_ctx = repository_ctx),
+        ]),
+    )
+
+swift_autoconfiguration = repository_rule(
+    environ = ["CC", "PATH", "ProgramData", "Path"],
+    implementation = _swift_autoconfiguration_impl,
+    local = True,
+)

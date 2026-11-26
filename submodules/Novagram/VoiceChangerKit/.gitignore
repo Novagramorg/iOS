@@ -1,0 +1,7 @@
+.build/
+.swiftpm/
+DerivedData/
+.DS_Store
+Package.resolved
+# Rendered listening samples (swift run nvc-render)
+samples/

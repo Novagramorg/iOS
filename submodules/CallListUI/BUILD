@@ -1,0 +1,42 @@
+load("//submodules/Novagram:novagram_module.bzl", "novagram_prebuilt_archive", "novagram_prebuilt_library")
+load("@build_bazel_rules_swift//swift:swift.bzl", "swift_library")
+
+novagram_prebuilt_library(
+    name = "CallListUI",
+    module_name = "CallListUI",
+    deps = [
+        "//submodules/Novagram/SecretVault:NovagramSecretVault",
+        "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
+        "//submodules/AsyncDisplayKit:AsyncDisplayKit",
+        "//submodules/Display:Display",
+        "//submodules/TelegramCore:TelegramCore",
+        "//submodules/TelegramPresentationData:TelegramPresentationData",
+        "//submodules/TelegramUIPreferences:TelegramUIPreferences",
+        "//submodules/AccountContext:AccountContext",
+        "//submodules/ItemListUI:ItemListUI",
+        "//submodules/AvatarNode:AvatarNode",
+        "//submodules/TelegramStringFormatting:TelegramStringFormatting",
+        "//submodules/AlertUI:AlertUI",
+        "//submodules/PresentationDataUtils:PresentationDataUtils",
+        "//submodules/TelegramNotices:TelegramNotices",
+        "//submodules/MergeLists:MergeLists",
+        "//submodules/ChatListSearchItemHeader:ChatListSearchItemHeader",
+        "//submodules/PeerOnlineMarkerNode:PeerOnlineMarkerNode",
+        "//submodules/ContextUI:ContextUI",
+        "//submodules/TelegramBaseController:TelegramBaseController",
+        "//submodules/AnimatedStickerNode:AnimatedStickerNode",
+        "//submodules/TelegramAnimatedStickerNode:TelegramAnimatedStickerNode",
+        "//submodules/ItemListPeerActionItem",
+        "//submodules/InviteLinksUI",
+        "//submodules/UndoUI",
+        "//submodules/TelegramCallsUI",
+        "//submodules/TelegramUI/Components/EdgeEffect",
+        "//submodules/ComponentFlow",
+        "//submodules/Components/ComponentDisplayAdapters",
+        "//submodules/TelegramUI/Components/GlassBackgroundComponent",
+        "//submodules/TelegramUI/Components/SideColumnLayout",
+    ],
+    visibility = [
+        "//visibility:public",
+    ],
+)

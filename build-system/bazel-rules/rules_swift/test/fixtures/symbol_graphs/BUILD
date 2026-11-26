@@ -1,0 +1,101 @@
+load(
+    "//swift:swift_extract_symbol_graph.bzl",
+    "swift_extract_symbol_graph",
+)
+load(
+    "//swift:swift_library.bzl",
+    "swift_library",
+)
+load("//test:transitions.bzl", "transition_binary")
+load(
+    "//test/fixtures:common.bzl",
+    "FIXTURE_TAGS",
+)
+
+package(
+    default_testonly = True,
+    default_visibility = ["//test:__subpackages__"],
+)
+
+licenses(["notice"])
+
+swift_library(
+    name = "some_module",
+    srcs = ["SomeModule.swift"],
+    module_name = "SomeModule",
+    tags = FIXTURE_TAGS,
+)
+
+swift_library(
+    name = "some_module_with_extension",
+    srcs = ["SomeModuleWithExtension.swift"],
+    module_name = "SomeModuleWithExtension",
+    tags = FIXTURE_TAGS,
+)
+
+swift_library(
+    name = "importing_module",
+    srcs = ["ImportingModule.swift"],
+    module_name = "ImportingModule",
+    tags = FIXTURE_TAGS,
+    deps = [":some_module"],
+)
+
+swift_library(
+    name = "sqlite_importing_module",
+    srcs = ["SQLiteImportingModule.swift"],
+    module_name = "SQLiteImportingModule",
+    tags = FIXTURE_TAGS,
+)
+
+swift_extract_symbol_graph(
+    name = "some_module_symbol_graph",
+    tags = FIXTURE_TAGS,
+    targets = [":some_module"],
+)
+
+swift_extract_symbol_graph(
+    name = "some_module_symbol_graph_with_extension_block_symbols",
+    emit_extension_block_symbols = "1",
+    tags = FIXTURE_TAGS,
+    targets = [":some_module_with_extension"],
+)
+
+swift_extract_symbol_graph(
+    name = "importing_module_symbol_graph",
+    tags = FIXTURE_TAGS,
+    targets = [":importing_module"],
+)
+
+swift_extract_symbol_graph(
+    name = "sqlite_importing_module_symbol_graph",
+    tags = FIXTURE_TAGS,
+    targets = [":sqlite_importing_module"],
+)
+
+swift_extract_symbol_graph(
+    name = "all_symbol_graphs",
+    tags = FIXTURE_TAGS,
+    targets = [
+        ":importing_module",
+        ":some_module",
+    ],
+)
+
+# Verifies that symbol graph extraction can load a default precompiled system
+# module in a build that uses explicit modules.
+transition_binary(
+    name = "sqlite_importing_module_symbol_graph_explicit_modules",
+    tags = FIXTURE_TAGS,
+    target = ":sqlite_importing_module_symbol_graph",
+    target_compatible_with = select({
+        "//test:apple_build_tests_enabled": [],
+        "//conditions:default": ["@platforms//:incompatible"],
+    }),
+    transitive_features = [
+        "swift.add_default_precompiled_modules",
+        "swift.emit_c_module",
+        "swift.use_c_modules",
+        "swift.use_explicit_swift_module_map",
+    ],
+)

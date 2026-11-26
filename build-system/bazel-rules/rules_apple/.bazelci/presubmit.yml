@@ -1,0 +1,56 @@
+---
+x_defaults:
+  # YAML has a feature for "repeated nodes", BazelCI is fine with extra nodes
+  # it doesn't know about; so that is used to avoid repeating common subparts.
+  common: &common
+    platform: macos_arm64
+    shell_commands:
+      - xcodebuild -downloadComponent metalToolchain
+    build_targets:
+      - "examples/..."
+      - "test/..."
+      - "tools/..."
+    build_flags:
+      - --config=ci
+    test_targets:
+      - "examples/..."
+      - "test/..."
+      - "tools/..."
+    test_flags:
+      - --config=ci
+    include_json_profile:
+      - build
+      - test
+
+# NOTE: To avoid listing the same things for build_flags/test_flags for each
+# of these tasks, they are listed in the .bazelrc instead.
+tasks:
+  macos_8.0.1:
+    name: "8.0.1"
+    bazel: 8.0.1
+    <<: *common
+
+  macos_8.x:
+    name: "8.x"
+    bazel: 8.x
+    <<: *common
+
+  macos_9.x:
+    name: "9.x"
+    bazel: 9.x
+    <<: *common
+
+  macos_last_green:
+    name: "Last Green Bazel"
+    # TODO: use last_green when we fix issues, this is the removal of incompatible_enable_apple_toolchain_resolution
+    bazel: 49f430d594662938d1a04e2c2a29f215d74f7f61
+    <<: *common
+
+  doc_tests:
+    name: "Doc tests"
+    bazel: 9.x # TODO: use last_green when we fix issues
+    platform: ubuntu2004
+    test_targets:
+    - "doc/..."
+
+buildifier: 8.5.1

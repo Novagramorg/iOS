@@ -1,0 +1,56 @@
+load("//submodules/Novagram:novagram_module.bzl", "novagram_module")
+
+novagram_module(
+    name = "NovagramMessenger",
+    module_name = "NovagramMessenger",
+    srcs = glob([
+        "Sources/**/*.swift",
+    ], allow_empty = True),
+    copts = [
+        "-warnings-as-errors",
+        # Novagram: min iOS 15 surfaces iOS-14/15 deprecations here; the APIs still work, so keep
+        # every other warning fatal and downgrade only this group. Must follow -warnings-as-errors.
+        "-Wwarning",
+        "DeprecatedDeclaration",
+    ],
+    deps = [
+        "//submodules/Novagram/StoryUnlock:NovagramStoryUnlock",
+        "//submodules/AsyncDisplayKit:AsyncDisplayKit",
+        "//submodules/Display:Display",
+        "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
+        "//submodules/TelegramCore:TelegramCore",
+        "//submodules/TextFormat:TextFormat",
+        "//submodules/AccountContext:AccountContext",
+        "//submodules/TelegramPresentationData:TelegramPresentationData",
+        "//submodules/TelegramStringFormatting:TelegramStringFormatting",
+        "//submodules/TelegramUIPreferences:TelegramUIPreferences",
+        "//submodules/PresentationDataUtils:PresentationDataUtils",
+        "//submodules/ItemListUI:ItemListUI",
+        "//submodules/AvatarNode:AvatarNode",
+        "//submodules/PhoneNumberFormat:PhoneNumberFormat",
+        "//submodules/OverlayStatusController:OverlayStatusController",
+        "//submodules/ContextUI:ContextUI",
+        "//submodules/TelegramUI/Components/MoreHeaderButton",
+        "//submodules/CallListUI:CallListUI",
+        "//submodules/AppBundle:AppBundle",
+        "//submodules/ComponentFlow",
+        "//submodules/Novagram/Localization:NovagramLocalization",
+        "//submodules/Novagram/Folders:NovagramFolders",
+        "//submodules/Novagram/AutoProxy:NovagramAutoProxy",
+        "//submodules/Novagram/Brand:NovagramBrand",
+        "//submodules/Novagram/UnreadReminder:NovagramUnreadReminder",
+        "//submodules/Novagram/ChatLock:NovagramChatLock",
+        "//submodules/Novagram/SecretVault:NovagramSecretVault",
+        "//submodules/Novagram/PremiumUnlock:NovagramPremiumUnlock",
+        "//submodules/Novagram/Calls:NovagramCalls",
+        "//submodules/Novagram/CallRecordingKit:NovagramCallRecordingCore",
+        "//submodules/Novagram/CallRecordingKit:NovagramCallRecordingUI",
+        "//submodules/Novagram/VoiceChanger:NovagramVoiceChanger",
+        "//submodules/Novagram/VoiceChanger/UI:NovagramVoiceChangerUI",
+        "//submodules/Novagram/UzScript:NovagramUzScript",
+        "//submodules/Novagram/UzScriptKit:NovagramUzScriptCore",
+    ],
+    visibility = [
+        "//visibility:public",
+    ],
+)

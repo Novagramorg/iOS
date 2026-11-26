@@ -1,0 +1,36 @@
+load("//submodules/Novagram:novagram_module.bzl", "novagram_prebuilt_archive", "novagram_prebuilt_library")
+load("@build_bazel_rules_swift//swift:swift.bzl", "swift_library")
+
+novagram_prebuilt_library(
+    name = "HashtagSearchUI",
+    module_name = "HashtagSearchUI",
+    deps = [
+        "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
+        "//submodules/AsyncDisplayKit:AsyncDisplayKit",
+        "//submodules/Display:Display",
+        "//submodules/TelegramCore:TelegramCore",
+        "//submodules/TelegramPresentationData:TelegramPresentationData",
+        "//submodules/AccountContext:AccountContext",
+        "//submodules/TelegramBaseController:TelegramBaseController",
+        "//submodules/ChatListUI:ChatListUI",
+        "//submodules/SegmentedControlNode:SegmentedControlNode",
+        "//submodules/ListMessageItem:ListMessageItem",
+        "//submodules/ChatListSearchItemHeader:ChatListSearchItemHeader",
+        "//submodules/TelegramUI/Components/AnimationCache:AnimationCache",
+        "//submodules/TelegramUI/Components/MultiAnimationRenderer:MultiAnimationRenderer",
+        "//submodules/ComponentFlow",
+        "//submodules/Components/MultilineTextComponent",
+        "//submodules/Components/BundleIconComponent",
+        "//submodules/TelegramUI/Components/Stories/StorySetIndicatorComponent",
+        "//submodules/TelegramUI/Components/PeerInfo/PeerInfoVisualMediaPaneNode",
+        "//submodules/TelegramUI/Components/AnimatedTextComponent",
+        "//submodules/Components/BlurredBackgroundComponent",
+        "//submodules/UIKitRuntimeUtils",
+        "//submodules/TelegramUI/Components/HorizontalTabsComponent",
+        "//submodules/TelegramUI/Components/GlassBackgroundComponent",
+        "//submodules/Novagram/Search:NovagramSearch",
+    ],
+    visibility = [
+        "//visibility:public",
+    ],
+)

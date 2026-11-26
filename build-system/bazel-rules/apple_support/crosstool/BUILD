@@ -1,0 +1,78 @@
+load("//rules:apple_genrule.bzl", "apple_genrule")
+load(":universal_exec_tool.bzl", "force_exec", "universal_exec_tool")
+
+package(default_visibility = ["//visibility:public"])
+
+# Files which shouldn't be publicly visible and dependencies of all objc_* or ios_* rules should be excluded.
+exports_files(glob(
+    ["**"],
+))
+
+apple_genrule(
+    name = "generate_layering_check_modulemap",
+    outs = ["layering_check.modulemap"],
+    cmd = "$(location generate-modulemap.sh) > $(OUTS)",
+    tags = ["manual"],
+    tools = ["generate-modulemap.sh"],
+)
+
+# TODO: Remove when we drop bazel 7.x
+force_exec(
+    name = "exec_layering_check_modulemap",
+    target = ":generate_layering_check_modulemap",
+)
+
+universal_exec_tool(
+    name = "exec_wrapped_clang",
+    srcs = ["wrapped_clang.cc"],
+    out = "wrapped_clang",
+)
+
+universal_exec_tool(
+    name = "exec_wrapped_clang_pp",
+    srcs = ["wrapped_clang.cc"],
+    out = "wrapped_clang_pp",
+)
+
+universal_exec_tool(
+    name = "exec_libtool",
+    srcs = ["libtool.cc"],
+    out = "libtool",
+)
+
+# TODO: Attempt to remove need for wrapper
+genrule(
+    name = "exec_strip.target_config",
+    srcs = ["strip.sh"],
+    outs = ["strip"],
+    cmd = "cp $(SRCS) $(OUTS)",
+)
+
+force_exec(
+    name = "exec_strip",
+    target = ":exec_strip.target_config",
+)
+
+genrule(
+    name = "exec_llvm_profdata.target_config",
+    srcs = ["llvm-profdata.sh"],
+    outs = ["llvm-profdata"],
+    cmd = "cp $(SRCS) $(OUTS)",
+)
+
+force_exec(
+    name = "exec_llvm_profdata",
+    target = ":exec_llvm_profdata.target_config",
+)
+
+genrule(
+    name = "exec_llvm_cov.target_config",
+    srcs = ["llvm-cov.sh"],
+    outs = ["llvm-cov"],
+    cmd = "cp $(SRCS) $(OUTS)",
+)
+
+force_exec(
+    name = "exec_llvm_cov",
+    target = ":exec_llvm_cov.target_config",
+)

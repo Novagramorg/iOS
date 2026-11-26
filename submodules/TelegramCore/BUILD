@@ -1,0 +1,35 @@
+load("//submodules/Novagram:novagram_module.bzl", "novagram_prebuilt_archive", "novagram_prebuilt_library")
+load("@build_bazel_rules_swift//swift:swift.bzl", "swift_library")
+load("@build_bazel_rules_apple//apple:ios.bzl", "ios_unit_test")
+load("@build_bazel_rules_apple//apple/testing/default_runner:ios_test_runner.bzl", "ios_test_runner")
+
+novagram_prebuilt_library(
+    name = "TelegramCore",
+    module_name = "TelegramCore",
+    deps = [
+        "//submodules/TelegramApi:TelegramApi",
+        "//submodules/MtProtoKit:MtProtoKit",
+        "//submodules/MediaPreuploadRegistry:MediaPreuploadRegistry",
+        "//submodules/WebProxyTransport:WebProxyTransport",
+        "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
+        "//submodules/Postbox:Postbox",
+        "//submodules/CloudData:CloudData",
+        "//submodules/EncryptionProvider:EncryptionProvider",
+        "//submodules/CryptoUtils:CryptoUtils",
+        "//submodules/NetworkLogging:NetworkLogging",
+        "//submodules/Reachability:Reachability",
+        "//submodules/ManagedFile:ManagedFile",
+        "//submodules/Utils/RangeSet:RangeSet",
+        "//submodules/Utils/DarwinDirStat",
+        "//submodules/Emoji",
+        "//submodules/TelegramCore/FlatBuffers",
+        "//submodules/TelegramCore/FlatSerialization",
+        "//submodules/MurMurHash32",
+    ],
+    visibility = [
+        "//visibility:public",
+    ],
+)
+
+
+

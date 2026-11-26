@@ -1,0 +1,819 @@
+# Copyright 2022 The Bazel Authors. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""Support methods for Apple framework import rules."""
+
+load("@bazel_skylib//lib:paths.bzl", "paths")
+load("@rules_cc//cc/common:cc_common.bzl", "cc_common")
+load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
+load(
+    "@rules_swift//swift:providers.bzl",
+    "create_clang_module_inputs",
+    "create_swift_module_context",
+    "create_swift_module_inputs",
+)
+load(
+    "@rules_swift//swift:swift.bzl",
+    "SwiftInfo",
+    "swift_common",
+)
+load("@rules_swift//swift:swift_interop_info.bzl", "create_swift_interop_info")
+load("//apple:providers.bzl", "AppleFrameworkImportInfo")
+load("//apple:utils.bzl", "group_files_by_directory")
+load("//apple/internal:providers.bzl", "new_appleframeworkimportinfo")
+load("//apple/internal/utils:bundle_paths.bzl", "bundle_paths")
+load("//apple/internal/utils:defines.bzl", "defines")
+load("//apple/internal/utils:files.bzl", "files")
+
+def _cc_info_with_dependencies(
+        *,
+        actions,
+        additional_cc_infos = [],
+        alwayslink = False,
+        cc_toolchain,
+        ctx,
+        deps,
+        disabled_features,
+        features,
+        framework_includes = [],
+        header_imports,
+        kind,
+        label,
+        libraries,
+        linkopts = [],
+        includes = [],
+        swiftinterface_imports = [],
+        swiftmodule_imports = [],
+        is_framework = True):
+    """Returns a new CcInfo which includes transitive Cc dependencies.
+
+    Args:
+        actions: The actions provider from `ctx.actions`.
+        additional_cc_infos: List of additinal CcInfo providers to use for a merged compilation contexts.
+        alwayslink: Boolean to indicate if force_load_library should be set for static frameworks.
+        cc_toolchain: CcToolchainInfo provider for current target.
+        ctx: The Starlark context for a rule target being built.
+        deps: List of dependencies for a given target to retrieve transitive CcInfo providers.
+        disabled_features: List of features to be disabled for cc_common.compile
+        features: List of features to be enabled for cc_common.compile.
+        framework_includes: List of Apple framework search paths (defaults to: []).
+        header_imports: List of imported header files.
+        includes: List of included headers search paths (defaults to: []).
+        kind: whether the framework is "static" or "dynamic".
+        label: Label of the target being built.
+        libraries: The list of framework libraries.
+        linkopts: List of linker flags strings to propagate as linker input.
+        swiftinterface_imports: List of imported Swift interface files to include
+            during build phase, but aren't processed in any way.
+        swiftmodule_imports: List of imported Swift module files to include during build phase,
+            but aren't processed in any way.
+        is_framework: Whether the target is a framework vs library.
+    Returns:
+        CcInfo provider.
+    """
+    all_cc_infos = [dep[CcInfo] for dep in deps] + additional_cc_infos
+    dep_compilation_contexts = [cc_info.compilation_context for cc_info in all_cc_infos]
+
+    feature_configuration = cc_common.configure_features(
+        ctx = ctx,
+        cc_toolchain = cc_toolchain,
+        language = "objc",
+        requested_features = features,
+        unsupported_features = disabled_features,
+    )
+
+    (compilation_context, _compilation_outputs) = cc_common.compile(
+        name = label.name,
+        actions = actions,
+        feature_configuration = feature_configuration,
+        cc_toolchain = cc_toolchain,
+        public_hdrs = header_imports,
+        textual_hdrs = swiftmodule_imports + swiftinterface_imports,
+        framework_includes = framework_includes if is_framework else [],
+        includes = includes,
+        compilation_contexts = dep_compilation_contexts,
+        language = "objc",
+    )
+
+    linking_contexts = [cc_info.linking_context for cc_info in all_cc_infos]
+
+    if kind == "static":
+        libraries_to_link = _libraries_to_link_for_static_framework(
+            actions = actions,
+            alwayslink = alwayslink,
+            libraries = libraries,
+        )
+    else:
+        libraries_to_link = libraries_to_link_for_dynamic_framework(
+            actions = actions,
+            cc_toolchain = cc_toolchain,
+            feature_configuration = feature_configuration,
+            libraries = libraries,
+        )
+    linking_contexts.append(
+        cc_common.create_linking_context(
+            linker_inputs = depset([
+                cc_common.create_linker_input(
+                    owner = label,
+                    libraries = depset(libraries_to_link),
+                    user_link_flags = linkopts,
+                ),
+            ]),
+        ),
+    )
+
+    linking_context = cc_common.merge_linking_contexts(
+        linking_contexts = linking_contexts,
+    )
+
+    return CcInfo(
+        compilation_context = compilation_context,
+        linking_context = linking_context,
+    )
+
+def _classify_file_imports(config_vars, import_files):
+    """Classifies a list of imported files based on extension, and paths.
+
+    This support method is used to classify import files for Apple frameworks and XCFrameworks.
+    Any file that does not match any known extension will be added to an bundling_imports bucket.
+
+    Args:
+        config_vars: A dictionary of configuration variables from ctx.var.
+        import_files: List of File to classify.
+    Returns:
+        A struct containing classified import files by categories:
+            - header_imports: Objective-C(++) header imports.
+            - module_map_imports: Clang modulemap imports.
+            - swift_module_imports: Swift module imports.
+            - swift_interface_imports: Swift module interface imports.
+            - dsym_imports: dSYM imports.
+            - bundling_imports: Unclassified imports.
+    """
+    bundling_imports = []
+    binary_imports = []
+    dsym_imports = []
+    header_imports = []
+    module_map_imports = []
+    swift_module_imports = []
+    swift_interface_imports = []
+    for file in import_files:
+        # Extension matching
+        file_extension = file.extension
+        if file_extension == "h":
+            header_imports.append(file)
+            continue
+        if file_extension == "modulemap":
+            # With the flip of `--incompatible_objc_framework_cleanup`, the
+            # `objc_library` implementation in Bazel no longer passes module
+            # maps as inputs to the compile actions, so that `@import`
+            # statements for user-provided framework no longer work in a
+            # sandbox. This trap door allows users to continue using `@import`
+            # statements for imported framework by adding module map to
+            # header_imports so that they are included in Obj-C compilation but
+            # they aren't processed in any way.
+            if defines.bool_value(
+                config_vars = config_vars,
+                define_name = "apple.incompatible.objc_framework_propagate_modulemap",
+                default = False,
+            ):
+                header_imports.append(file)
+            module_map_imports.append(file)
+            continue
+        if file_extension == "swiftmodule":
+            swift_module_imports.append(file)
+            continue
+        if file_extension == "swiftinterface" and ".framework.dSYM/" not in file.short_path:
+            swift_interface_imports.append(file)
+            continue
+        if file_extension in ["swiftdoc", "swiftsourceinfo"]:
+            # Ignore swiftdoc files, they don't matter in the build, only for IDEs.
+            continue
+        if file_extension == "a":
+            binary_imports.append(file)
+            continue
+        if ".framework.dSYM/" in file.short_path:
+            dsym_imports.append(file)
+            continue
+
+        # Path matching
+        framework_relative_path = file.short_path.split(".framework/")[-1]
+        if framework_relative_path.startswith("Headers/"):
+            header_imports.append(file)
+            continue
+        if framework_relative_path.startswith("Modules/") and framework_relative_path.endswith(".abi.json"):
+            # Ignore abi.json files, as they don't matter in the build, and are most commonly used to detect source-breaking API changes during the evolution of a Swift library.
+            # See: https://github.com/swiftlang/swift/blob/main/lib/DriverTool/swift_api_digester_main.cpp
+            continue
+
+        # Unknown file type, sending to unknown (i.e. resources, Info.plist, etc.)
+        bundling_imports.append(file)
+
+    return struct(
+        binary_imports = binary_imports,
+        dsym_imports = dsym_imports,
+        header_imports = header_imports,
+        module_map_imports = module_map_imports,
+        swift_interface_imports = swift_interface_imports,
+        swift_module_imports = swift_module_imports,
+        bundling_imports = bundling_imports,
+    )
+
+def _classify_framework_imports(config_vars, framework_imports):
+    """Classify a list of files referencing an Apple framework.
+
+    Args:
+        config_vars: A dictionary (String to String) of configuration variables. Can be from ctx.var.
+        framework_imports: List of File for an imported Apple framework.
+    Returns:
+        A struct containing classified framework import files by categories:
+            - bundle_name: The framework bundle name infered by filepaths.
+            - binary_imports: Apple framework binary imports.
+            - bundling_imports: Apple framework bundle imports.
+            - header_imports: Apple framework header imports.
+            - module_map_imports: Apple framework modulemap imports.
+            - swift_module_imports: Apple framework swiftmodule imports.
+            - swift_interface_imports: Apple framework Swift module interface imports.
+    """
+    framework_imports_by_category = _classify_file_imports(config_vars, framework_imports)
+
+    bundle_name = None
+    bundling_imports = []
+    binary_imports = []
+    for file in framework_imports_by_category.bundling_imports:
+        # Infer framework bundle name and binary
+        parent_dir_name = paths.basename(file.dirname)
+        is_bundle_root_file = parent_dir_name.endswith(".framework")
+        if is_bundle_root_file:
+            bundle_name, _ = paths.split_extension(parent_dir_name)
+            if file.basename == bundle_name:
+                binary_imports.append(file)
+                continue
+
+        bundling_imports.append(file)
+
+    # TODO: Enable these checks once static library support works with them
+    # if not bundle_name:
+    #     fail("Could not infer Apple framework name from unclassified framework import files.")
+    # if not binary_imports:
+    #     fail("Could not find Apple framework binary from framework import files.")
+
+    return struct(
+        bundle_name = bundle_name,
+        binary_imports = binary_imports,
+        bundling_imports = bundling_imports,
+        dsym_imports = framework_imports_by_category.dsym_imports,
+        header_imports = framework_imports_by_category.header_imports,
+        module_map_imports = framework_imports_by_category.module_map_imports,
+        swift_interface_imports = framework_imports_by_category.swift_interface_imports,
+        swift_module_imports = framework_imports_by_category.swift_module_imports,
+    )
+
+def libraries_to_link_for_dynamic_framework(
+        *,
+        actions,
+        cc_toolchain,
+        feature_configuration,
+        libraries):
+    """Return a list of library_to_link's for a dynamic framework.
+
+    Args:
+        actions: The actions provider from `ctx.actions`.
+        cc_toolchain: CcToolchainInfo provider for current target.
+        feature_configuration: The cc enabled features.
+        libraries: List of dynamic libraries.
+
+    Returns:
+        A list of library_to_link's.
+    """
+    libraries_to_link = []
+    for library in libraries:
+        library_to_link = cc_common.create_library_to_link(
+            actions = actions,
+            cc_toolchain = cc_toolchain,
+            feature_configuration = feature_configuration,
+            dynamic_library = library,
+        )
+        libraries_to_link.append(library_to_link)
+
+    return libraries_to_link
+
+def _libraries_to_link_for_static_framework(
+        *,
+        actions,
+        alwayslink,
+        libraries):
+    """Return a list of library_to_link's for a static framework.
+
+    Args:
+        actions: The actions provider from `ctx.actions`.
+        alwayslink: Whather the libraries should be always linked.
+        libraries: List of static libraries.
+
+    Returns:
+        A list of library_to_link's.
+    """
+    libraries_to_link = []
+    for library in libraries:
+        library_to_link = cc_common.create_library_to_link(
+            actions = actions,
+            alwayslink = alwayslink,
+            static_library = library,
+        )
+        libraries_to_link.append(library_to_link)
+
+    return libraries_to_link
+
+def _framework_import_info_with_dependencies(
+        *,
+        build_archs,
+        deps,
+        debug_info_binaries = [],
+        dsyms = [],
+        framework_imports = []):
+    """Returns AppleFrameworkImportInfo containing transitive framework imports and build archs.
+
+    Args:
+        build_archs: List of supported architectures for the imported framework.
+        deps: List of transitive dependencies of the current target.
+        debug_info_binaries: List of debug info binaries for the imported Framework.
+        dsyms: List of dSYM files for the imported Framework.
+        framework_imports: List of files to bundle for the imported framework.
+    Returns:
+        AppleFrameworkImportInfo provider.
+    """
+    transitive_framework_imports = [
+        dep[AppleFrameworkImportInfo].framework_imports
+        for dep in deps
+        if (AppleFrameworkImportInfo in dep and
+            hasattr(dep[AppleFrameworkImportInfo], "framework_imports"))
+    ]
+
+    return new_appleframeworkimportinfo(
+        build_archs = depset(build_archs),
+        debug_info_binaries = depset(debug_info_binaries),
+        dsym_imports = depset(dsyms),
+        framework_imports = depset(
+            framework_imports,
+            transitive = transitive_framework_imports,
+        ),
+    )
+
+def _get_swiftinterface_files_with_target_triplet_if_enabled(
+        *,
+        target_triplet,
+        swift_interface_imports,
+        features):
+    swiftinterface_files = []
+    if (
+        (
+            "apple._import_framework_via_swiftinterface" in features or
+            "swift.use_c_modules" in features
+        ) and
+        swift_interface_imports
+    ):
+        swiftinterface_files = _get_swift_module_files_with_target_triplet(
+            swift_module_files = swift_interface_imports,
+            target_triplet = target_triplet,
+        )
+    return swiftinterface_files
+
+def _get_swift_module_files_with_target_triplet(target_triplet, swift_module_files):
+    """Filters Swift module files for a target triplet.
+
+    Traverses a list of Swift module files (.swiftdoc, .swiftinterface, .swiftmodule) and selects
+    the effective files based on target triplet. This method supports filtering for multiple
+    Swift module directories (e.g. XCFramework bundles).
+
+    Args:
+        target_triplet: Effective target triplet from CcToolchainInfo provider.
+        swift_module_files: List of Swift module files to filter using target triplet.
+    Returns:
+        List of Swift module files for given target_triplet.
+    """
+    files_by_module = group_files_by_directory(
+        files = swift_module_files,
+        extensions = ["swiftmodule"],
+        attr = "swift_module_files",
+    )
+
+    filtered_files = []
+    for _module, module_files in files_by_module.items():
+        # Environment suffix is stripped for device interfaces.
+        environment = ""
+        if target_triplet.environment != "device":
+            environment = "-" + target_triplet.environment
+
+        module_files_list = module_files.to_list()
+        target_triplet_name = "{architecture}-{vendor}-{os}{environment}".format(
+            architecture = target_triplet.architecture,
+            environment = environment,
+            os = target_triplet.os,
+            vendor = target_triplet.vendor,
+        )
+
+        for file_name in [
+            target_triplet_name,
+            target_triplet_name + ".private",
+            target_triplet.architecture,
+            target_triplet.architecture + ".private",
+        ]:
+            matching_file = files.get_file_with_name(
+                files = module_files_list,
+                name = file_name,
+            )
+            if matching_file:
+                filtered_files.append(matching_file)
+
+    return filtered_files
+
+def _get_dsym_binaries(dsym_imports):
+    """Returns a list of Files of all imported dSYM binaries."""
+    return [
+        file
+        for file in dsym_imports
+        if file.basename.lower() != "info.plist"
+    ]
+
+def _get_debug_info_binaries(dsym_binaries, framework_binaries):
+    """Return the list of files that provide debug info."""
+    all_binaries_dict = {}
+
+    for file in dsym_binaries:
+        dsym_bundle_path = bundle_paths.farthest_parent(
+            file.short_path,
+            "framework.dSYM",
+        )
+        dsym_bundle_basename = paths.basename(dsym_bundle_path)
+        framework_basename = dsym_bundle_basename.rstrip(".dSYM")
+        if framework_basename not in all_binaries_dict:
+            all_binaries_dict[framework_basename] = file
+
+    for file in framework_binaries:
+        if ".framework/" not in file.short_path:
+            continue
+        framework_path = bundle_paths.farthest_parent(
+            file.short_path,
+            "framework",
+        )
+        framework_basename = paths.basename(framework_path)
+        if framework_basename not in all_binaries_dict:
+            all_binaries_dict[framework_basename] = file
+
+    return all_binaries_dict.values()
+
+def _has_versioned_framework_files(framework_files):
+    """Returns True if there are any versioned framework files (i.e. under Versions/ directory).
+
+    Args:
+        framework_files: List of File references for imported framework or XCFramework files.
+    Returns:
+        True if framework files include any versioned frameworks. False otherwise.
+    """
+    for f in framework_files:
+        if ".framework/Versions/" in f.short_path:
+            return True
+    return False
+
+def _swift_info_from_module_interface(
+        *,
+        actions,
+        ctx,
+        deps,
+        disabled_features,
+        features,
+        framework_includes = [],
+        hdrs = [],
+        includes = [],
+        module_maps = [],
+        module_name,
+        rule_label,  # @unused
+        swift_toolchains,
+        swiftinterface_files):
+    """Returns SwiftInfo provider for a pre-compiled Swift module compiling it's interface file.
+
+    Args:
+        actions: The actions provider from `ctx.actions`.
+        ctx: The Starlark context for a rule target being built.
+        deps: List of dependencies for a given target to retrieve transitive CcInfo providers.
+        disabled_features: List of features to be disabled for cc_common.compile
+        features: List of features to be enabled for cc_common.compile.
+        framework_includes: List of framework search paths to be used during compilation. Defaults to [].
+        hdrs: List of header files for the underlying C module, if it has one.
+        includes: List of header search paths to be used during compilation. Defaults to [].
+        module_maps: List of all module map files for the underlying C module, if any.
+        module_name: Swift module name.
+        rule_label: The label of the rule being built.
+        swift_toolchains: The Swift and C++ toolchains for the current target.
+        swiftinterface_files: List of `.swiftinterface` Files for the module. If a
+            `.private.swiftinterface` is present, it is compiled so downstream
+            `@_spi` imports can resolve SPI declarations. All entries are
+            declared as action inputs so the compiler can resolve sibling
+            references in the sandbox.
+    Returns:
+        A SwiftInfo provider.
+    """
+    feature_configuration = swift_common.configure_features(
+        ctx = ctx,
+        toolchains = swift_toolchains,
+        requested_features = features,
+        unsupported_features = disabled_features,
+    )
+    direct_compilation_context = cc_common.create_compilation_context(
+        headers = depset(hdrs + swiftinterface_files),
+        framework_includes = depset(framework_includes),
+        includes = depset(includes),
+    )
+    merged_compilation_context = cc_common.merge_compilation_contexts(
+        compilation_contexts = [
+            dep[CcInfo].compilation_context
+            for dep in deps
+            if CcInfo in dep
+        ] + [direct_compilation_context],
+    )
+    swift_infos = [dep[SwiftInfo] for dep in deps if SwiftInfo in dep]
+
+    precompiled_module_contexts = _precompile_module_maps(
+        actions = actions,
+        cc_compilation_context = merged_compilation_context,
+        ctx = ctx,
+        feature_configuration = feature_configuration,
+        is_framework = bool(framework_includes),
+        module_maps = module_maps if hdrs else [],
+        module_name = module_name,
+        swift_infos = swift_infos,
+        swift_toolchains = swift_toolchains,
+    )
+
+    compile_result = swift_common.compile_module_interface(
+        actions = actions,
+        additional_inputs = swiftinterface_files,
+        compilation_contexts = [merged_compilation_context],
+        feature_configuration = feature_configuration,
+        is_framework = bool(framework_includes),
+        module_name = module_name,
+        swiftinterface_file = _preferred_swiftinterface(swiftinterface_files),
+        # TODO: Ideally we would pass through precompiled_module_contexts in the clang_module parameter
+        swift_infos = swift_infos + [SwiftInfo(modules = precompiled_module_contexts)],
+        target_name = ctx.label.name,
+        toolchains = swift_toolchains,
+    )
+    module_context = compile_result.module_context
+
+    return SwiftInfo(
+        modules = [module_context] + precompiled_module_contexts,
+        swift_infos = swift_infos,
+    )
+
+def _swift_info_from_swiftmodule(
+        *,
+        actions,
+        cc_info,
+        ctx,
+        deps,
+        disabled_features,
+        features,
+        framework_includes = [],
+        module_maps = [],
+        module_name,
+        swift_toolchains,
+        swiftmodule_files):
+    """Returns SwiftInfo provider for an imported binary Swift module.
+
+    Args:
+        actions: The actions provider from `ctx.actions`.
+        cc_info: CcInfo for the imported framework.
+        ctx: The Starlark context for a rule target being built.
+        deps: List of dependencies for a given target to retrieve transitive SwiftInfo providers.
+        disabled_features: List of features to be disabled for swift_common.configure_features.
+        features: List of features to be enabled for swift_common.configure_features.
+        framework_includes: List of framework search paths to be used during compilation. Defaults to [].
+        module_maps: List of all module map files for the underlying C module, if any.
+        module_name: Swift module name.
+        swift_toolchains: All Swift toolchains for the current target.
+        swiftmodule_files: List of `.swiftmodule` Files for the module.
+    Returns:
+        A SwiftInfo provider, or None if no `.swiftmodule` file was provided.
+    """
+    if not swiftmodule_files:
+        return None
+
+    feature_configuration = swift_common.configure_features(
+        ctx = ctx,
+        toolchains = swift_toolchains,
+        requested_features = features,
+        unsupported_features = disabled_features,
+    )
+    swift_infos = [dep[SwiftInfo] for dep in deps if SwiftInfo in dep]
+    primary_module_map = _primary_module_map(module_maps)
+    precompiled_module_contexts = _precompile_module_maps(
+        actions = actions,
+        cc_compilation_context = cc_info.compilation_context,
+        ctx = ctx,
+        feature_configuration = feature_configuration,
+        is_framework = bool(framework_includes),
+        module_maps = module_maps,
+        module_name = module_name,
+        swift_infos = swift_infos,
+        swift_toolchains = swift_toolchains,
+    )
+
+    if precompiled_module_contexts:
+        clang_module = precompiled_module_contexts[0].clang
+        extra_module_contexts = precompiled_module_contexts[1:]
+    else:
+        clang_module = create_clang_module_inputs(
+            compilation_context = cc_info.compilation_context,
+            module_map = primary_module_map,
+        )
+        extra_module_contexts = []
+
+    module_context = create_swift_module_context(
+        name = module_name,
+        clang = clang_module,
+        is_framework = bool(framework_includes),
+        swift = create_swift_module_inputs(
+            swiftdoc = None,
+            swiftinterface = None,
+            swiftmodule = swiftmodule_files[0],
+        ),
+    )
+
+    return SwiftInfo(
+        modules = [module_context] + extra_module_contexts,
+        swift_infos = swift_infos,
+    )
+
+def _swift_info_from_module_maps(
+        *,
+        actions,
+        cc_info,
+        ctx,
+        deps,
+        disabled_features,
+        features,
+        framework_includes = [],
+        module_maps = [],
+        module_name,
+        swift_toolchains):
+    """Returns SwiftInfo for imported Clang modules that need explicit module providers."""
+    if not _has_private_module_map(module_maps):
+        return None
+
+    feature_configuration = swift_common.configure_features(
+        ctx = ctx,
+        toolchains = swift_toolchains,
+        requested_features = features,
+        unsupported_features = disabled_features,
+    )
+    swift_infos = [dep[SwiftInfo] for dep in deps if SwiftInfo in dep]
+    module_contexts = _precompile_module_maps(
+        actions = actions,
+        cc_compilation_context = cc_info.compilation_context,
+        ctx = ctx,
+        feature_configuration = feature_configuration,
+        is_framework = bool(framework_includes),
+        module_maps = module_maps,
+        module_name = module_name,
+        swift_infos = swift_infos,
+        swift_toolchains = swift_toolchains,
+    )
+    if not module_contexts:
+        return None
+
+    return SwiftInfo(
+        modules = module_contexts,
+        swift_infos = swift_infos,
+    )
+
+def _preferred_swiftinterface(swiftinterface_files):
+    """Returns the Swift interface file to compile for an imported framework."""
+    for swiftinterface in swiftinterface_files:
+        if swiftinterface.basename.endswith(".private.swiftinterface"):
+            return swiftinterface
+    return swiftinterface_files[0]
+
+def _precompile_module_maps(
+        *,
+        actions,
+        cc_compilation_context,
+        ctx,
+        feature_configuration,
+        is_framework,
+        module_maps,
+        module_name,
+        swift_infos,
+        swift_toolchains):
+    """Precompiles a framework's Clang module maps and returns Swift module contexts."""
+    primary_module_map = _primary_module_map(module_maps)
+    if not primary_module_map:
+        return []
+
+    module_contexts = []
+    extra_module_maps = [m for m in module_maps if m != primary_module_map]
+    compiled_modules = {}
+
+    # Private modules must be compiled after the public module, with the public
+    # module provided as a dependency.
+    for module_map in [primary_module_map] + extra_module_maps:
+        current_module_name = _module_name_for_module_map(module_name, module_map)
+
+        # Ignore duplicate modulemaps caused by symlinks in macOS frameworks.
+        if current_module_name in compiled_modules:
+            continue
+        compiled_modules[current_module_name] = True
+        current_swift_infos = swift_infos + [SwiftInfo(modules = module_contexts)]
+
+        clang_result = swift_common.precompile_clang_module(
+            actions = actions,
+            cc_compilation_context = cc_compilation_context,
+            feature_configuration = feature_configuration,
+            module_map_file = module_map,
+            module_name = current_module_name,
+            swift_infos = current_swift_infos,
+            toolchains = swift_toolchains,
+            target_name = "{}_{}".format(ctx.label.name, current_module_name),
+        )
+        if clang_result:
+            current_clang_module = clang_result.clang_module
+        else:
+            current_clang_module = create_clang_module_inputs(
+                compilation_context = cc_compilation_context,
+                module_map = module_map,
+            )
+
+        module_contexts.append(
+            create_swift_module_context(
+                name = current_module_name,
+                clang = current_clang_module,
+                is_framework = is_framework,
+            ),
+        )
+
+    return module_contexts
+
+def _module_name_for_module_map(module_name, module_map):
+    """Returns the Swift module name represented by a framework module map."""
+    if module_map.basename == "module.private.modulemap":
+        return module_name + "_Private"
+    return module_name
+
+def _has_private_module_map(module_maps):
+    """Returns True if the imported framework has a private module map."""
+    for module_map in module_maps:
+        if module_map.basename == "module.private.modulemap":
+            return True
+    return False
+
+def _primary_module_map(module_maps):
+    """Returns the public module map for an imported framework, if present."""
+    for module_map in module_maps:
+        if module_map.basename == "module.modulemap":
+            return module_map
+    return module_maps[0] if module_maps else None
+
+def _swift_interop_info_with_dependencies(deps, module_name, module_map_imports):
+    """Return a Swift interop provider for the framework.
+
+    When a framework import doesn't ship a module map, rules_swift can still
+    synthesize one from the propagated headers as long as SwiftInteropInfo is
+    present. Prefer the public module map when one exists, but continue
+    returning the provider when it doesn't so imported Objective-C frameworks
+    and XCFrameworks remain visible to Swift.
+    """
+
+    # Assume that there is only a single module map file.
+    module_map = _primary_module_map(module_map_imports)
+
+    return create_swift_interop_info(
+        module_map = module_map,
+        module_name = module_name,
+        swift_infos = [dep[SwiftInfo] for dep in deps if SwiftInfo in dep],
+    )
+
+framework_import_support = struct(
+    cc_info_with_dependencies = _cc_info_with_dependencies,
+    classify_file_imports = _classify_file_imports,
+    classify_framework_imports = _classify_framework_imports,
+    framework_import_info_with_dependencies = _framework_import_info_with_dependencies,
+    get_swift_module_files_with_target_triplet = _get_swift_module_files_with_target_triplet,
+    get_dsym_binaries = _get_dsym_binaries,
+    get_debug_info_binaries = _get_debug_info_binaries,
+    get_swiftinterface_files_with_target_triplet_if_enabled = _get_swiftinterface_files_with_target_triplet_if_enabled,
+    has_private_module_map = _has_private_module_map,
+    has_versioned_framework_files = _has_versioned_framework_files,
+    swift_info_from_module_interface = _swift_info_from_module_interface,
+    swift_info_from_module_maps = _swift_info_from_module_maps,
+    swift_info_from_swiftmodule = _swift_info_from_swiftmodule,
+    swift_interop_info_with_dependencies = _swift_interop_info_with_dependencies,
+)

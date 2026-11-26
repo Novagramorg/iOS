@@ -1,0 +1,133 @@
+fastlane/README.md
+fastlane/report.xml
+fastlane/test_output/*
+fastlane/fastlanematch
+build/*
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+xcuserdata
+*.xccheckout
+*.xcscmblueprint
+*.moved-aside
+DerivedData
+*.hmap
+*.ipa
+*.xcuserstate
+.DS_Store
+*.dSYM
+*.dSYM.zip
+*.ipa
+*/xcuserdata/*
+buck-out/*
+.buckd/*
+tools/buck
+tools/bazel
+AppBinary.xcworkspace/*
+Project.xcodeproj/*
+Watch/Watch.xcodeproj/*
+AppBundle.xcworkspace/*
+*.xcworkspace
+*.xcodeproj
+!*_Xcode.xcodeproj
+.idea
+*/.idea/*
+submodules/MtProtoKit/TON/macOS/lib/libtonlibjson.0.5.dylib
+submodules/MtProtoKit/TON/macOS/lib/libtonlibjson.dylib
+submodules/MtProtoKit/TON/macOS/lib/cmake/Tonlib/TonlibConfig.cmake
+submodules/MtProtoKit/TON/macOS/lib/cmake/Tonlib/TonlibConfigVersion.cmake
+submodules/MtProtoKit/TON/macOS/lib/cmake/Tonlib/TonlibTargets-release.cmake
+submodules/MtProtoKit/TON/macOS/lib/cmake/Tonlib/TonlibTargets.cmake
+submodules/MtProtoKit/TON/macOS/lib/fift/Asm.fif
+submodules/MtProtoKit/TON/macOS/lib/fift/Fift.fif
+submodules/MtProtoKit/TON/macOS/lib/fift/Lisp.fif
+submodules/MtProtoKit/TON/macOS/lib/fift/Lists.fif
+submodules/MtProtoKit/TON/macOS/lib/fift/Stack.fif
+submodules/MtProtoKit/TON/macOS/lib/fift/TonUtil.fif
+# bazel's per-workspace convenience symlinks, incl. `bazel-<worktree-dir>` (machine-specific:
+# it points into the output base, which moved wholesale with the Bazel 9.2.0 migration).
+/bazel-*
+bazel-bin
+bazel-bin/*
+bazel-genfiles
+bazel-genfiles/*
+bazel-out
+bazel-out/*
+bazel-telegram-ios
+bazel-telegram-ios/*
+bazel-testlogs
+bazel-testlogs/*
+xcodeproj.bazelrc
+*/*.swp
+*.swp
+build-input/*
+**/*.pyc
+*.pyc
+submodules/OpusBinding/SharedHeaders/*
+submodules/FFMpegBinding/SharedHeaders/*
+submodules/OpenSSLEncryptionProvider/SharedHeaders/*
+submodules/TelegramCore/FlatSerialization/Sources/*
+.build/**
+**/.build/**
+/.claude/
+**/.claude/settings.local.json
+/buildbox/*
+**/node_modules/
+tools/sim-watcher/dist/
+.mcp.json
+PROJECT_LOG.md
+FENIXUZ_PLAN.md
+WEBSITE_AUDIT_FENIXUZ.md
+APP_STORE_METADATA.md
+.playwright-mcp/
+.telegram-fz-llc-backup/
+
+# === Novagram fork: local-only secrets and tooling ===
+# Personal Telegram API credentials (api_id / api_hash) — never commit.
+# Each developer must obtain their own from https://my.telegram.org/apps
+# and copy build-system/template_minimal_development_configuration.json as a starting point.
+build-system/my-config.json
+build-system/my-device-config.json
+build-system/appstore-configuration.json
+build-system/appcenter-configuration.json
+build-system/local-secrets.sh
+build-system/example-configuration/variables.bzl
+
+# Local-only metadata / tooling drafts
+fastlane/
+
+# App Store screenshot/privacy assets (large binaries, not source)
+screenshots/
+fenixuz-privacy-fullpage.png
+
+# NovagramProxy — paid Webshare proxy credentials, never commit (fork is public)
+submodules/Novagram/AutoProxy/Resources/russia_proxies.txt
+submodules/Novagram/AutoProxy/Resources/*_proxies.txt
+
+# Novagram: real App Store credentials live only on this machine
+build-system/appstore-configuration.json
+build-system/appcenter-configuration.json
+
+# 127-agent push audit transcripts (39 MB of subagent logs, kept locally)
+_push-audit-2026-08-07/
+
+# local secrets for tools and AI agents, never commit
+.env
+.env.*
+# Generated from swift_scheme.tl by generate-swiftpm.sh for SwiftPM builds (Bazel generates its own).
+submodules/TelegramApi/Sources/SwiftPMGenerated/
+submodules/TelegramApi/ObjC/SwiftPMGenerated/
+submodules/TelegramApi/Tests/SwiftPMGenerated/
+/Telegram.app/
+build/accessibility/
+
+# Novagram prebuilt modules (scripts/novagram-sdk-export.sh); only public snapshots carry them
+submodules/Novagram/**/Prebuilt/
+
+# Telegram packages with our changes, prebuilt for the public copy (novagram-sdk-export.sh --hidden)
+/.novagram-prebuilt/

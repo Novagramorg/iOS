@@ -1,0 +1,8 @@
+{
+  "images" : [
+    { "idiom" : "universal", "scale" : "1x" },
+    { "filename" : "NovagramAdLogo@2x.png", "idiom" : "universal", "scale" : "2x" },
+    { "filename" : "NovagramAdLogo@3x.png", "idiom" : "universal", "scale" : "3x" }
+  ],
+  "info" : { "author" : "xcode", "version" : 1 }
+}
